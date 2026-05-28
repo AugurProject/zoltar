@@ -29,6 +29,7 @@ import type {
 	ZoltarUniverseSummary,
 } from './contracts.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import type { ForkAuctionStageView } from '../lib/forkAuction.js'
 import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
@@ -669,6 +670,7 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	embedInCard?: boolean
 	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
 	previewPool?: ListedSecurityPool | undefined
+	stageView: ForkAuctionStageView
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 	truthAuctionReadClient?: Pick<ReadClient, 'readContract'> | undefined

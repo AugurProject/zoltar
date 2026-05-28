@@ -6,7 +6,7 @@ import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
-import { AUCTION_TIME_SECONDS, deriveHasForkActivity } from '../lib/forkAuction.js'
+import { AUCTION_TIME_SECONDS, deriveHasForkActivity, getForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '../types/contracts.js'
@@ -218,11 +218,13 @@ function createTruthAuctionReadClient(
 }
 
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
+	const forkAuctionDetails = overrides.forkAuctionDetails ?? createForkAuctionDetails()
+	const previewPool = overrides.previewPool
 	return {
 		accountState: createAccountState(),
 		embedInCard: false,
 		forkAuctionActiveAction: undefined,
-		forkAuctionDetails: createForkAuctionDetails(),
+		forkAuctionDetails,
 		forkAuctionError: undefined,
 		forkAuctionForm: createForkAuctionForm(),
 		forkAuctionResult: undefined,
@@ -241,6 +243,17 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onRefundLosingBids: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
+		previewPool,
+		stageView:
+			overrides.stageView ??
+			getForkAuctionStageView({
+				claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
+				forkOutcome: forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome ?? 'none',
+				migratedRep: forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep ?? 0n,
+				systemState: forkAuctionDetails?.systemState ?? previewPool?.systemState ?? 'operational',
+				truthAuction: forkAuctionDetails?.truthAuction,
+				truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
+			}),
 		showHeader: false,
 		showSecurityPoolAddressInput: false,
 		truthAuctionReadClient: createTruthAuctionReadClient(),
@@ -281,10 +294,10 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This pool is operational. If it is a child universe, the fork and auction path has completed.')).toBeNull()
-		expect(documentQueries.queryByText('Fork Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Fork Workflow' })).not.toBeNull()
+		expect(documentQueries.queryByRole('tablist', { name: 'Fork lifecycle stages' })).toBeNull()
 
 		const summaries = Array.from(document.body.querySelectorAll('summary')).map(node => node.textContent?.trim() ?? '')
-		expect(summaries).not.toContain('Pool Context')
 		expect(summaries).toContain('Live Snapshot')
 	})
 
@@ -315,26 +328,23 @@ describe('ForkAuctionSection', () => {
 	})
 
 	test('gates fork stage write buttons through the shared action matrix', async () => {
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps()))
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ stageView: 'initiate' })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Initiate' }))
-		})
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Initiate Pool Fork')
 		expectTransactionButtonDisabled(document.body, 'Fork Universe Directly')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Auction' }))
+			render(h(ForkAuctionSection, createProps({ stageView: 'auction' })), renderedComponent.container)
 		})
 		expectTransactionButtonDisabled(document.body, 'Start Truth Auction')
 		expectTransactionButtonDisabled(document.body, 'Submit Bid')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Settlement' }))
+			render(h(ForkAuctionSection, createProps({ stageView: 'settlement' })), renderedComponent.container)
 		})
 		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction')
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
@@ -349,6 +359,7 @@ describe('ForkAuctionSection', () => {
 				createProps({
 					disabled: true,
 					disabledMessage: 'This pool is currently operational, so fork and truth auction actions are read only.',
+					stageView: 'migration',
 				}),
 			),
 		)
@@ -362,13 +373,33 @@ describe('ForkAuctionSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Migrate Escalation Deposits')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Auction' }))
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						disabled: true,
+						disabledMessage: 'This pool is currently operational, so fork and truth auction actions are read only.',
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
 		})
 		expectTransactionButtonDisabled(document.body, 'Start Truth Auction')
 		expectTransactionButtonDisabled(document.body, 'Submit Bid')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Settlement' }))
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						disabled: true,
+						disabledMessage: 'This pool is currently operational, so fork and truth auction actions are read only.',
+						stageView: 'settlement',
+					}),
+				),
+				renderedComponent.container,
+			)
 		})
 		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction')
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
@@ -430,13 +461,13 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const poolContextAccordion = documentQueries.getByText('Pool Context').closest('.read-only-detail-accordion')
-		if (!(poolContextAccordion instanceof HTMLElement)) throw new Error('Expected pool context accordion to render')
-		const poolContextMetrics = poolContextAccordion.querySelector('.fork-summary-grid')
-		if (!(poolContextMetrics instanceof HTMLElement)) throw new Error('Expected pool context metrics to render')
+		const workflowSection = documentQueries.getByRole('heading', { name: 'Fork Workflow' }).closest('section')
+		if (!(workflowSection instanceof HTMLElement)) throw new Error('Expected fork workflow section to render')
+		const workflowMetrics = workflowSection.querySelector('.fork-summary-grid')
+		if (!(workflowMetrics instanceof HTMLElement)) throw new Error('Expected fork workflow metrics to render')
 
-		expect(getMetricValue(poolContextMetrics, 'Fork Type')).toBe('Not chosen yet')
-		expect(getMetricValue(poolContextMetrics, 'Fork Outcome')).toBe('Not chosen yet')
+		expect(getMetricValue(workflowMetrics, 'Fork Type')).toBe('Not chosen yet')
+		expect(getMetricValue(workflowMetrics, 'Fork Outcome')).toBe('Not chosen yet')
 		expect(documentQueries.queryByText('Parent/Zoltar fork')).toBeNull()
 	})
 
@@ -537,14 +568,10 @@ describe('ForkAuctionSection', () => {
 				migrationEndsAt: 200n,
 				systemState: 'forkMigration',
 			},
+			stageView: 'auction',
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Auction' }))
-		})
 
 		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Migration is still active. Truth auction can start once migration ends.')
 
@@ -621,15 +648,12 @@ describe('ForkAuctionSection', () => {
 				refundBidIndex: '1',
 				refundTick: '9',
 			},
+			stageView: 'settlement',
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Settlement' }))
-		})
-
 		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction', 'Truth auction is still ongoing.')
 		expectTransactionButtonEnabled(document.body, 'Refund Losing Bid')
 		expect(documentQueries.queryByRole('button', { name: 'Settle Finalized Bid' })).toBeNull()
@@ -764,7 +788,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('auto-advances the selected lifecycle tab when refreshed pool state moves forward', async () => {
+	test('renders the controlled fork stage view across refreshed pool states', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -773,6 +797,7 @@ describe('ForkAuctionSection', () => {
 						...createForkAuctionDetails(),
 						systemState: 'forkMigration',
 					},
+					stageView: 'migration',
 				}),
 			),
 		)
@@ -793,6 +818,7 @@ describe('ForkAuctionSection', () => {
 							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
 							truthAuctionStartedAt: 1n,
 						},
+						stageView: 'auction',
 					}),
 				}),
 				renderedComponent.container,
@@ -820,6 +846,7 @@ describe('ForkAuctionSection', () => {
 							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
 							truthAuctionStartedAt: 1n,
 						},
+						stageView: 'settlement',
 					}),
 				}),
 				renderedComponent.container,
@@ -1071,14 +1098,11 @@ describe('ForkAuctionSection', () => {
 						truthAuctionStartedAt: 1n,
 					},
 					truthAuctionReadClient,
+					stageView: 'auction',
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('tab', { name: 'Auction' }))
-		})
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
@@ -1493,14 +1517,11 @@ describe('ForkAuctionSection', () => {
 						truthAuctionStartedAt: 1n,
 					},
 					truthAuctionReadClient,
+					stageView: 'settlement',
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('tab', { name: 'Settlement' }))
-		})
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
@@ -1547,14 +1568,11 @@ describe('ForkAuctionSection', () => {
 						truthAuctionStartedAt: 1n,
 					},
 					truthAuctionReadClient,
+					stageView: 'settlement',
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('tab', { name: 'Settlement' }))
-		})
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {

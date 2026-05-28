@@ -1,14 +1,22 @@
 import { sameAddress } from './address.js'
 import { assertNever } from './assert.js'
 import { formatDuration, formatRoundedCurrencyBalance } from './formatters.js'
+import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, type ForkAuctionStageView } from './forkAuction.js'
 import type { LoadableValueState } from './loadState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
 import { getTimeRemaining } from './time.js'
 import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
-import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
-export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork' | 'staged-operations' | 'price-oracle'
-export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits', 'fork', 'staged-operations', 'price-oracle']
+import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
+
+export type SelectedPoolForkStageView = 'fork-trigger' | 'fork-migration' | 'fork-auction' | 'fork-settlement'
+export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | SelectedPoolForkStageView | 'staged-operations' | 'price-oracle'
+
+export const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits']
+export const SELECTED_POOL_FORK_STAGE_VIEWS: readonly SelectedPoolForkStageView[] = ['fork-trigger', 'fork-migration', 'fork-auction', 'fork-settlement']
+export const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle']
+export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_FORK_STAGE_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
+
 export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 	switch (view) {
 		case 'vaults':
@@ -19,8 +27,14 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 			return 'Reporting'
 		case 'withdraw-escalation-deposits':
 			return 'Withdraw Escalation Deposits'
-		case 'fork':
-			return 'Fork'
+		case 'fork-trigger':
+			return 'Trigger'
+		case 'fork-migration':
+			return 'Migration'
+		case 'fork-auction':
+			return 'Auction'
+		case 'fork-settlement':
+			return 'Settlement'
 		case 'staged-operations':
 			return 'Staged Operations'
 		case 'price-oracle':
@@ -37,6 +51,102 @@ export function resolveSelectedPoolView(value: string | undefined): SelectedPool
 		return value
 	})()
 	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', SELECTED_POOL_VIEWS)
+}
+
+export function isSelectedPoolForkStageView(view: SelectedPoolView): view is SelectedPoolForkStageView {
+	switch (view) {
+		case 'fork-trigger':
+		case 'fork-migration':
+		case 'fork-auction':
+		case 'fork-settlement':
+			return true
+		default:
+			return false
+	}
+}
+
+export function getForkStageViewForSelectedPoolView(view: SelectedPoolForkStageView): ForkAuctionStageView {
+	switch (view) {
+		case 'fork-trigger':
+			return 'initiate'
+		case 'fork-migration':
+			return 'migration'
+		case 'fork-auction':
+			return 'auction'
+		case 'fork-settlement':
+			return 'settlement'
+		default:
+			return assertNever(view)
+	}
+}
+
+export function getSelectedPoolViewForForkStage(stage: ForkAuctionStageView): SelectedPoolForkStageView {
+	switch (stage) {
+		case 'initiate':
+			return 'fork-trigger'
+		case 'migration':
+			return 'fork-migration'
+		case 'auction':
+			return 'fork-auction'
+		case 'settlement':
+			return 'fork-settlement'
+		default:
+			return assertNever(stage)
+	}
+}
+
+export function getSelectedPoolForkWorkflowView({
+	forkAuctionDetails,
+	selectedPool,
+}: {
+	forkAuctionDetails:
+		| {
+				claimingAvailable: boolean
+				forkOutcome: ListedSecurityPool['forkOutcome']
+				migratedRep: bigint
+				systemState: SecurityPoolSystemState
+				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
+				truthAuctionStartedAt: bigint
+		  }
+		| undefined
+	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
+}) {
+	if (forkAuctionDetails !== undefined)
+		return getSelectedPoolViewForForkStage(
+			getForkAuctionStageView({
+				claimingAvailable: forkAuctionDetails.claimingAvailable,
+				forkOutcome: forkAuctionDetails.forkOutcome,
+				migratedRep: forkAuctionDetails.migratedRep,
+				systemState: forkAuctionDetails.systemState,
+				truthAuction: forkAuctionDetails.truthAuction,
+				truthAuctionStartedAt: forkAuctionDetails.truthAuctionStartedAt,
+			}),
+		)
+	if (selectedPool === undefined) return 'fork-trigger'
+	return getSelectedPoolViewForForkStage(
+		getForkAuctionStageView({
+			forkOutcome: selectedPool.forkOutcome,
+			migratedRep: selectedPool.migratedRep,
+			systemState: selectedPool.systemState,
+			truthAuctionStartedAt: selectedPool.truthAuctionStartedAt,
+		}),
+	)
+}
+
+export function getSelectedPoolForkStageRailStatus({ currentView, view }: { currentView: SelectedPoolForkStageView | undefined; view: SelectedPoolForkStageView }) {
+	if (currentView === undefined) return undefined
+	const stage = getForkStageViewForSelectedPoolView(view)
+	const currentStage = getForkStageViewForSelectedPoolView(currentView)
+	const stageOrder = getForkAuctionStageOrder(stage)
+	const currentStageOrder = getForkAuctionStageOrder(currentStage)
+	if (stageOrder === currentStageOrder) return 'Current'
+	if (stageOrder < currentStageOrder) return 'Completed'
+	return 'Available later'
+}
+
+export function getSelectedPoolForkStageCurrentLabel(view: SelectedPoolForkStageView | undefined) {
+	if (view === undefined) return undefined
+	return getForkAuctionStageLabel(getForkStageViewForSelectedPoolView(view))
 }
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch

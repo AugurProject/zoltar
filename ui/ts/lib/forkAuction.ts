@@ -14,6 +14,20 @@ const PRICE_PRECISION = 10n ** 18n
 
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'
 
+const FORK_AUCTION_STAGE_LABELS: Record<ForkAuctionStageView, string> = {
+	initiate: 'Trigger',
+	migration: 'Migration',
+	auction: 'Auction',
+	settlement: 'Settlement',
+}
+
+const FORK_AUCTION_STAGE_ORDER: Record<ForkAuctionStageView, number> = {
+	initiate: 0,
+	migration: 1,
+	auction: 2,
+	settlement: 3,
+}
+
 type ForkAuctionStageSource = {
 	claimingAvailable?: boolean
 	forkOutcome: ForkOutcomeKey
@@ -46,6 +60,14 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 
 export function getForkStageDescription(details: ForkAuctionDetails) {
 	return getForkStageDescriptionForState(details.systemState)
+}
+
+export function getForkAuctionStageLabel(stage: ForkAuctionStageView) {
+	return FORK_AUCTION_STAGE_LABELS[stage]
+}
+
+export function getForkAuctionStageOrder(stage: ForkAuctionStageView) {
+	return FORK_AUCTION_STAGE_ORDER[stage]
 }
 
 export function deriveHasForkActivity(source: ForkActivitySource) {
