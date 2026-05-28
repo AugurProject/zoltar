@@ -32,7 +32,6 @@ export type SecurityPoolActionId =
 	| 'finalizeTruthAuction'
 	| 'refundLosingBids'
 	| 'claimAuctionProceeds'
-	| 'withdrawBids'
 
 export type SecurityPoolActionState = {
 	enabled: boolean

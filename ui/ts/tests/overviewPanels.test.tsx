@@ -44,6 +44,8 @@ describe('OverviewPanels', () => {
 			repUsdcPrice: undefined,
 			repUsdcSource: undefined,
 			repUsdcSourceUrl: undefined,
+			universeForkTime: undefined,
+			universeHasForked: false,
 			universeLabel: 'Genesis universe',
 			universePresentation: undefined,
 			universeRepBalance: undefined,
@@ -171,6 +173,16 @@ describe('OverviewPanels', () => {
 		fireEvent.click(refreshButton)
 
 		expect(onRefreshRepPrices).toHaveBeenCalledTimes(1)
+	})
+
+	test('surfaces a forked Zoltar status in the operations header', async () => {
+		const documentQueries = await renderOverviewPanels({
+			universeForkTime: 123n,
+			universeHasForked: true,
+		})
+
+		expect(documentQueries.getByText('Forked')).toBeDefined()
+		expect(document.body.textContent?.includes('Zoltar forked on')).toBe(true)
 	})
 
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {

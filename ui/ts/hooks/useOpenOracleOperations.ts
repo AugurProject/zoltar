@@ -640,7 +640,10 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				return await submitInitialOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), reportDetails.reportId, submission.amount1, submission.amount2, parseBytes32Input(openOracleForm.value.stateHash, 'State hash'))
 			},
 			'Failed to submit initial report',
-			{ formatErrorMessage: formatOpenOracleInitialReportWriteErrorMessage },
+			{
+				formatErrorMessage: formatOpenOracleInitialReportWriteErrorMessage,
+				refreshInitialReportTokenAccessOnSuccess: true,
+			},
 		)
 
 	const wrapWethForInitialReport = async () =>
@@ -697,7 +700,10 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				)
 			},
 			'Failed to dispute report',
-			{ formatErrorMessage: formatOpenOracleDisputeWriteErrorMessage },
+			{
+				formatErrorMessage: formatOpenOracleDisputeWriteErrorMessage,
+				refreshInitialReportTokenAccessOnSuccess: true,
+			},
 		)
 
 	useEffect(() => {

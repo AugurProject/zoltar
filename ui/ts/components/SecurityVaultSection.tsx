@@ -451,7 +451,7 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
-			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP' description='Review the selected vault, then deposit REP.'>
+			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP'>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before depositing REP.</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -513,13 +513,7 @@ export function SecurityVaultSection({
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								Cancel
 							</button>
-							<TransactionActionButton
-								idleLabel='Create / Deposit REP'
-								pendingLabel='Depositing REP...'
-								onClick={onDepositRep}
-								pending={securityVaultActiveAction === 'depositRep'}
-								availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
-							/>
+							<TransactionActionButton idleLabel='Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }} />
 						</div>
 					</>
 				)}
@@ -765,13 +759,7 @@ export function SecurityVaultSection({
 					disabled={!approveRepEnabled}
 				/>
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Create / Deposit REP'
-						pendingLabel='Depositing REP...'
-						onClick={onDepositRep}
-						pending={securityVaultActiveAction === 'depositRep'}
-						availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
-					/>
+					<TransactionActionButton idleLabel='Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }} />
 				</div>
 				{(() => {
 					if (repBalanceGap !== undefined && repBalanceGap > 0n) return <ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />

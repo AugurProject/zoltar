@@ -1,5 +1,5 @@
-import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex } from 'viem'
-import type { MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
+import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type Hex } from 'viem'
+import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 
 type IntegerLike = bigint | number
 
@@ -225,6 +225,11 @@ export function getReportingOutcomeKey(outcome: bigint | number): ReportingOutco
 		default:
 			return 'none'
 	}
+}
+
+export function getForkOutcomeKey(outcome: bigint | number, parentSecurityPoolAddress: Address): ForkOutcomeKey {
+	if (parentSecurityPoolAddress === zeroAddress) return 'none'
+	return getReportingOutcomeKey(outcome)
 }
 
 export function getEscalationSideLabel(key: ReportingOutcomeKey) {

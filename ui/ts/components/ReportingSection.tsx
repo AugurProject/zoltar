@@ -29,6 +29,7 @@ import {
 	getLeadingEscalationOutcome,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
+	getRemainingSelectedOutcomeContributionCapacity,
 	getSelectedOutcomeRewardWindowFillTimestamp,
 	getReportingTimerPreview,
 	isReportingClosed,
@@ -53,6 +54,12 @@ const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using preset
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = 'Select an outcome side above to enable reporting.'
+const NO_SELECTED_SIDE_CAPACITY_REASON = 'No remaining contribution capacity is available on the selected side.'
+const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = 'Remaining selected-side capacity is below the minimum report bond.'
+const FORK_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or open the Fork workflow if Zoltar is already forked.'
+const FORK_TRIGGERED_WITHDRAW_REASON = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or continue in the Fork workflow once Zoltar is already forked.'
+const FORK_ALREADY_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.'
+const FORK_ALREADY_TRIGGERED_WITHDRAW_REASON = 'Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in the Fork workflow.'
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active')
 		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
@@ -151,7 +158,7 @@ function getReportingStagePresentation({
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'Escalation reached non-decision. Continue in the Fork workflow; this panel does not have a final-resolution action.',
+				detail: FORK_TRIGGERED_REPORT_REASON,
 				key: 'escalation-fork-triggered',
 				label: 'Fork Triggered',
 				tone: 'default',
@@ -209,9 +216,12 @@ export function ReportingSection({
 	accountState,
 	currentTimestamp,
 	embedInCard = false,
+	forkAlreadyTriggered = false,
 	loadingReportingDetails,
 	lockedReason,
 	onLoadReporting,
+	onOpenForkWorkflow,
+	onTriggerZoltarFork,
 	onReportOutcome,
 	onReportingFormChange,
 	onWithdrawEscalation,
@@ -224,6 +234,8 @@ export function ReportingSection({
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
+	triggerZoltarForkAvailability,
+	triggerZoltarForkPending = false,
 }: ReportingSectionProps) {
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const [pendingWithdrawOutcome, setPendingWithdrawOutcome] = useState<ReportingOutcomeKey | undefined>(undefined)
@@ -239,18 +251,33 @@ export function ReportingSection({
 	const showWithdrawOnly = mode === 'withdraw-only'
 	const reportingReady = marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? marketDetails.endTime <= effectiveCurrentTimestamp : undefined
 	const preOpenLockedReason = lockedReason ?? (reportingReady === false && marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp) : undefined)
+	const reportingStageKey = deriveSecurityPoolReportingStage({
+		reportingDetails: effectiveReportingDetails,
+		reportingReady,
+	})
 	const reportingState = evaluateSecurityPoolState({
-		reportingStage: deriveSecurityPoolReportingStage({
-			reportingDetails: effectiveReportingDetails,
-			reportingReady,
-		}),
+		reportingStage: reportingStageKey,
 		universeHasForked: false,
 	})
 	const reportOutcomeEnabled = reportingState.actions.reportOutcome.enabled
 	const withdrawEscalationEnabled = reportingState.actions.withdrawEscalation.enabled
-	const reportControlsLockedReason = showFullReporting ? pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined) : preOpenLockedReason
+	let reportLifecycleReason: string | undefined
+	if (reportingStageKey === 'forkTriggered') {
+		reportLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON
+	} else if (reportingStageKey === 'timedOut') {
+		reportLifecycleReason = 'Escalation has ended. Refresh reporting to view the finalized outcome before withdrawing deposits.'
+	} else if (reportingStageKey === 'resolved') {
+		reportLifecycleReason = 'Escalation is already resolved.'
+	}
+	const reportControlsLockedReason = showFullReporting ? pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
-	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined)
+	let withdrawLifecycleReason: string | undefined
+	if (reportingStageKey === 'forkTriggered') {
+		withdrawLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_WITHDRAW_REASON : FORK_TRIGGERED_WITHDRAW_REASON
+	} else if (reportingStageKey === 'activeLocked') {
+		withdrawLifecycleReason = 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.'
+	}
+	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, withdrawLifecycleReason)
 	const withdrawControlsLocked = !withdrawEscalationEnabled || withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -338,9 +365,37 @@ export function ReportingSection({
 		)
 	}
 	const projectedReportingPreview = getProjectedReportingPreview()
-	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
+	const reportButtonLabel = selectedOutcome === undefined ? 'Report On Selected Side' : `Report ${selectedOutcomeLabel}`
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
+	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
+	const maxContributionAmount = (() => {
+		if (selectedOutcome === undefined) return { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
+		if (effectiveReportingDetails === undefined) return { amount: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
+		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep === undefined) return { amount: undefined, reason: 'Loading available vault REP.' }
+		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep <= 0n) return { amount: undefined, reason: 'No unlocked vault REP available for reporting.' }
+		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amount: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
+		if (effectiveReportingDetails.status === 'not-started') {
+			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerVaultAvailableEscalationRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerVaultAvailableEscalationRep : remainingSelectedOutcomeCapacity
+			if (cappedAmount < effectiveReportingDetails.startBond) return { amount: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
+			return {
+				amount: cappedAmount,
+				reason: undefined,
+			}
+		}
+		const selectedSide = effectiveReportingDetails.sides.find(side => side.key === selectedOutcome)
+		if (selectedSide === undefined) return { amount: undefined, reason: 'Selected side is unavailable.' }
+		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThreshold - selectedSide.balance)
+		if (maxContributionPreview.actualDepositAmount === undefined) return { amount: undefined, reason: maxContributionPreview.reason }
+		let cappedAmount = maxContributionPreview.actualDepositAmount
+		if (cappedAmount > effectiveReportingDetails.viewerVaultAvailableEscalationRep) cappedAmount = effectiveReportingDetails.viewerVaultAvailableEscalationRep
+		if (remainingSelectedOutcomeCapacity !== undefined && cappedAmount > remainingSelectedOutcomeCapacity) cappedAmount = remainingSelectedOutcomeCapacity
+		if (cappedAmount < effectiveReportingDetails.startBond) return { amount: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
+		return {
+			amount: cappedAmount,
+			reason: undefined,
+		}
+	})()
 	const presetReasons = reportControlsLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage =
@@ -350,6 +405,7 @@ export function ReportingSection({
 			accountAddress: accountState.address,
 			contributionPreviewReason: reportContributionPreview?.reason,
 			isMainnet,
+			remainingSelectedOutcomeCapacity,
 			reportAmount: reportingForm.reportAmount,
 			reportingStatus,
 			selectedOutcome,
@@ -371,6 +427,20 @@ export function ReportingSection({
 	}
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && reportingStatus !== 'missing' && withdrawableSides.length === 0
+	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && onOpenForkWorkflow !== undefined
+	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
+	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }
+	const forkTriggeredActions =
+		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
+			<div className='actions'>
+				{showTriggerZoltarForkAction ? <TransactionActionButton idleLabel='Trigger Zoltar Fork' pendingLabel='Triggering Zoltar fork...' onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} /> : undefined}
+				{showForkWorkflowAction ? (
+					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
+						Open Fork Workflow
+					</button>
+				) : undefined}
+			</div>
+		)
 
 	const handleWithdrawEscalation = (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => {
 		setPendingWithdrawOutcome(outcome)
@@ -398,6 +468,13 @@ export function ReportingSection({
 				reportingDetails: effectiveReportingDetails,
 			})
 		: undefined
+	const resolvedReportingStage =
+		reportingStage?.key === 'escalation-fork-triggered' && forkAlreadyTriggered
+			? {
+					...reportingStage,
+					detail: FORK_ALREADY_TRIGGERED_REPORT_REASON,
+				}
+			: reportingStage
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined || reportingOpenNotice !== undefined)
 	const latestReportingAction =
 		reportingResult === undefined
@@ -432,7 +509,7 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStage} /> : <p className='notice success'>{reportingOpenNotice}</p>}
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={resolvedReportingStage} /> : <p className='notice success'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 
@@ -492,10 +569,26 @@ export function ReportingSection({
 							Available unlocked vault REP for reporting: <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
 						</p>
 					)}
-					<label className='field'>
-						<span>Report / Contribution Amount (REP)</span>
-						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
-					</label>
+					<div className='field'>
+						<label htmlFor='reporting-contribution-amount'>
+							<span>Contribution Amount (REP)</span>
+						</label>
+						<div className='field-inline'>
+							<FormInput id='reporting-contribution-amount' className='field-inline-input' value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
+							<button
+								className='quiet field-inline-action'
+								type='button'
+								onClick={() => {
+									if (maxContributionAmount.amount === undefined) return
+									onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amount) })
+								}}
+								disabled={reportControlsLocked || maxContributionAmount.amount === undefined}
+								title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
+							>
+								Max
+							</button>
+						</div>
+					</div>
 
 					<div className='actions'>
 						<button
@@ -544,6 +637,7 @@ export function ReportingSection({
 
 			{showWithdrawOnly ? (
 				<SectionBlock title='Withdraw Escalation Deposits'>
+					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_WITHDRAW_REASON : FORK_TRIGGERED_WITHDRAW_REASON}</p> : undefined}
 					{loadingReportingDetails ? (
 						<p className='detail'>
 							<LoadingText>Loading escalation deposits...</LoadingText>
@@ -629,6 +723,7 @@ export function ReportingSection({
 					})}
 				</SectionBlock>
 			) : undefined}
+			{forkTriggeredActions}
 
 			<ErrorNotice message={reportingError} />
 		</>

@@ -16,7 +16,6 @@ import {
 	refundTruthAuctionBid,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
-	withdrawTruthAuctionBids,
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -40,7 +39,10 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const { state: forkAuctionForm, setState: setForkAuctionForm } = useFormState<ForkAuctionFormState>(getDefaultForkAuctionFormState())
 	const forkAuctionResult = useSignal<ForkAuctionActionResult | undefined>(undefined)
 	const forkAuctionLoad = useLoadController()
-	const getPendingTitle = (actionName: ForkAuctionActionResult['action']) => actionName.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
+	const getPendingTitle = (actionName: ForkAuctionActionResult['action']) => {
+		if (actionName === 'claimAuctionProceeds') return 'Settle Finalized Bid'
+		return actionName.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
+	}
 	const getSuccessTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} submitted`
 	const getFailureTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} failed`
 
@@ -174,10 +176,17 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		await runForkAuctionAction(
 			'claimAuctionProceeds',
 			async (walletAddress, details) => {
-				const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.vaultAddress, walletAddress, 'Vault address')
-				return await claimSecurityPoolAuctionProceeds(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, vaultAddress, parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Bid index'))
+				const bidderAddress = resolveOptionalAddressInput(forkAuctionForm.value.settlementAddress, walletAddress, 'Bidder address')
+				return await claimSecurityPoolAuctionProceeds(
+					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+					details.securityPoolAddress,
+					details.universeId,
+					bidderAddress,
+					parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Settlement bid tick'),
+					parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Settlement bid index'),
+				)
 			},
-			'Failed to claim auction proceeds',
+			'Failed to settle finalized bid',
 		)
 
 	const forkUniverse = async () =>
@@ -186,25 +195,6 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 			async (walletAddress, details) =>
 				await forkUniverseDirectly(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseBigIntInput(forkAuctionForm.value.directForkUniverseId, 'Fork universe ID'), parseBigIntInput(forkAuctionForm.value.directForkQuestionId, 'Fork question ID'), details.securityPoolAddress),
 			'Failed to fork universe directly',
-		)
-
-	const withdrawBids = async () =>
-		await runForkAuctionAction(
-			'withdrawBids',
-			async (walletAddress, details) => {
-				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
-				const withdrawFor = resolveOptionalAddressInput(forkAuctionForm.value.withdrawForAddress, walletAddress, 'Withdraw-for address')
-				return await withdrawTruthAuctionBids(
-					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
-					details.securityPoolAddress,
-					details.universeId,
-					truthAuctionAddress,
-					withdrawFor,
-					parseBigIntInput(forkAuctionForm.value.withdrawTick, 'Withdraw tick'),
-					parseBigIntInput(forkAuctionForm.value.withdrawBidIndex, 'Withdraw bid index'),
-				)
-			},
-			'Failed to withdraw bids',
 		)
 
 	return {
@@ -228,7 +218,6 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		setForkAuctionForm,
 		startTruthAuction,
 		submitBid,
-		withdrawBids,
 		finalizeTruthAuction,
 	}
 }

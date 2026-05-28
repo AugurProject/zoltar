@@ -4,6 +4,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
+import { TimestampValue } from './TimestampValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
@@ -21,6 +22,8 @@ export function OverviewPanels({
 	repUsdcPrice,
 	repUsdcSource,
 	repUsdcSourceUrl,
+	universeForkTime,
+	universeHasForked,
 	universePresentation,
 	universeLabel,
 	universeRepBalance,
@@ -30,10 +33,25 @@ export function OverviewPanels({
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
+	const operationsHeaderDescription = (() => {
+		if (!universeHasForked) return undefined
+		if (universeForkTime === undefined) return 'Zoltar has forked.'
+		return (
+			<>
+				Zoltar forked on <TimestampValue timestamp={universeForkTime} />.
+			</>
+		)
+	})()
 	return (
 		<section className='overview-shell'>
 			<article className='overview-panel overview-wallet-panel'>
-				<RouteHeader eyebrow='Operations' title='Augur PLACEHOLDER' actions={accountState.address === undefined ? <TransactionActionButton idleLabel='Connect wallet' pendingLabel='Connecting...' onClick={onConnect} pending={isConnectingWallet} /> : undefined} />
+				<RouteHeader
+					actions={accountState.address === undefined ? <TransactionActionButton idleLabel='Connect wallet' pendingLabel='Connecting...' onClick={onConnect} pending={isConnectingWallet} /> : undefined}
+					badge={universeHasForked ? <span className='badge warn'>Forked</span> : undefined}
+					description={operationsHeaderDescription}
+					eyebrow='Operations'
+					title='Augur PLACEHOLDER'
+				/>
 				<DataGrid className='overview-inline-metrics' columns='auto'>
 					<MetricField className='overview-address-metric' label='Address'>
 						{(() => {

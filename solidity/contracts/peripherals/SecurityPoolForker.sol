@@ -157,6 +157,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		uint248 universe = securityPool.universeId();
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
+		require(securityPool.systemState() != SystemState.PoolForked, 'Security pool fork already initiated');
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
 		require(address(escalationGame) == address(0x0) || escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
 		ReputationToken rep = securityPool.repToken();
@@ -329,6 +330,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		uint256 repToFork = repBalanceAfter - repBalanceBefore;
 		if (repToFork > 0) rep.transfer(address(migrationProxy), repToFork);
 		migrationProxy.forkUniverse(securityPool.questionId());
+		initiateSecurityPoolFork(securityPool);
 	}
 
 	// Settles finalized truth-auction bids through the forker-owned auction.

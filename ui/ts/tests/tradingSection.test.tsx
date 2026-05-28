@@ -6,6 +6,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
+import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
@@ -32,9 +33,10 @@ function createMarketDetails(): MarketDetails {
 }
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
+	const selectedPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		lastOraclePrice: undefined,
@@ -57,6 +59,10 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		vaultCount: 0n,
 		vaults: [],
 		...overrides,
+	}
+	return {
+		...selectedPool,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
 	}
 }
 

@@ -2,6 +2,7 @@ import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractF
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
+import { deriveHasForkActivity } from './lib/forkAuction.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
 import { getWethAddress } from './lib/uniswapQuoter.js'
@@ -53,6 +54,7 @@ import type {
 } from './types/contracts.js'
 import {
 	getEscalationSideLabel,
+	getForkOutcomeKey,
 	getMinBigintValue,
 	getQuestionIdHex,
 	getReportingOutcomeKey,
@@ -1077,6 +1079,13 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const forkDataTuple: ForkDataTuple = forkData
 	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
+	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
+	const hasForkActivity = deriveHasForkActivity({
+		forkOutcome,
+		migratedRep,
+		systemState,
+		truthAuctionStartedAt,
+	})
 	const universeForkTime =
 		truthAuctionStartedAt > 0n
 			? undefined
@@ -1177,8 +1186,9 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		claimingAvailable: systemState === 'operational' && truthAuctionAddress !== zeroAddress,
 		completeSetCollateralAmount,
 		currentTime: block.timestamp,
-		forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
+		forkOutcome,
 		forkOwnSecurityPool,
+		hasForkActivity,
 		marketDetails,
 		migratedRep,
 		migrationEndsAt,
@@ -1611,13 +1621,22 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 			])
 			const forkDataTuple: ForkDataTuple = forkData
 			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
+			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
+			const poolSystemState = getSecurityPoolSystemState(systemState)
+			const hasForkActivity = deriveHasForkActivity({
+				forkOutcome,
+				migratedRep,
+				systemState: poolSystemState,
+				truthAuctionStartedAt,
+			})
 			const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
 			const totalRepDeposit = vaults.reduce((sum, vault) => sum + vault.repDepositShare, 0n)
 			return {
 				completeSetCollateralAmount,
 				currentRetentionRate,
-				forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
+				forkOutcome,
 				forkOwnSecurityPool,
+				hasForkActivity,
 				lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
 				lastOracleSettlementTimestamp: lastSettlementTimestamp,
 				managerAddress,
@@ -1628,7 +1647,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				questionId: getQuestionIdHex(questionId),
 				securityMultiplier,
 				securityPoolAddress,
-				systemState: getSecurityPoolSystemState(systemState),
+				systemState: poolSystemState,
 				totalRepDeposit,
 				totalSecurityBondAllowance,
 				truthAuctionAddress,
@@ -1809,20 +1828,6 @@ export async function forkZoltarUniverse(client: WriteClient, universeId: bigint
 		questionId: getQuestionIdHex(questionId),
 		universeId,
 	} satisfies ZoltarForkActionResult
-}
-export async function withdrawTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, withdrawFor: Address, tick: bigint, bidIndex: bigint) {
-	const hash = await writeContractAndWait(client, () => ({
-		address: truthAuctionAddress,
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'withdrawBids',
-		args: [withdrawFor, [{ tick, bidIndex }]],
-	}))
-	return {
-		action: 'withdrawBids',
-		hash,
-		securityPoolAddress,
-		universeId,
-	} satisfies ForkAuctionActionResult
 }
 export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)

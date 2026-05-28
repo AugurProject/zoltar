@@ -104,12 +104,10 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 		repMigrationOutcomes: 'yes',
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
+		settlementAddress: '',
 		submitBidAmount: '0',
 		submitBidTick: '0',
 		vaultAddress: '',
-		withdrawBidIndex: '0',
-		withdrawForAddress: '',
-		withdrawTick: '0',
 	}
 }
 

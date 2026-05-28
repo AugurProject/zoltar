@@ -8,6 +8,7 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -67,9 +68,10 @@ function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> =
 }
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
+	const selectedPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		lastOraclePrice: 3n * 10n ** 18n,
@@ -92,6 +94,10 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		vaultCount: 1n,
 		vaults: [createTargetVaultSummary()],
 		...overrides,
+	}
+	return {
+		...selectedPool,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
 	}
 }
 

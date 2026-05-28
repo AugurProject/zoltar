@@ -103,12 +103,10 @@ export type ForkAuctionFormState = {
 	repMigrationOutcomes: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey
+	settlementAddress: string
 	submitBidAmount: string
 	submitBidTick: string
 	vaultAddress: string
-	withdrawBidIndex: string
-	withdrawForAddress: string
-	withdrawTick: string
 }
 
 export type ZoltarMigrationFormState = {

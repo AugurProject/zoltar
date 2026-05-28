@@ -8,7 +8,7 @@ import { formatCurrencyBalance } from '../lib/formatters.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome, parseRepAmountInput } from '../lib/marketForm.js'
-import { previewReportingContribution } from '../lib/reportingDomain.js'
+import { getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -139,6 +139,11 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
 				if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
 				if (!latestDetails.viewerVaultExists) throw new Error('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
+				const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)
+				if (contributionPreview.actualDepositAmount > remainingSelectedOutcomeCapacity) {
+					if (remainingSelectedOutcomeCapacity === 0n) throw new Error('No remaining contribution capacity is available on the selected side.')
+					throw new Error(`Only ${formatCurrencyBalance(remainingSelectedOutcomeCapacity)} REP remains before the selected side reaches the threshold.`)
+				}
 				const availableVaultRep = latestDetails.viewerVaultAvailableEscalationRep ?? 0n
 				if (contributionPreview.actualDepositAmount > availableVaultRep) throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
 

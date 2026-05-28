@@ -1,8 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, type Address, type Hash, type Hex } from 'viem'
-import { getOpenOracleAddress, loadEscalationDeposits, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
+import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex } from 'viem'
+import { getOpenOracleAddress, loadAllSecurityPools, loadEscalationDeposits, loadForkAuctionDetails, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
+import { getForkOutcomeKey } from '../contracts/helpers.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient } from '../types/contracts.js'
 
@@ -13,11 +14,29 @@ const transactionHash = '0x00000000000000000000000000000000000000000000000000000
 
 type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
+type MockLoaderClient = Parameters<typeof loadAllSecurityPools>[0]
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 type MockReadContractHandler = (request: MockReadContractRequest) => Promise<unknown>
+type MockLoaderMulticallRequest = Parameters<MockLoaderClient['multicall']>[0]
+type MockLoaderMulticallHandler = (request: MockLoaderMulticallRequest) => Promise<unknown>
+
+function getContractFunctionName(contract: unknown) {
+	if (typeof contract !== 'object' || contract === null || !('functionName' in contract)) throw new Error('Unexpected multicall contract')
+	const functionName = contract.functionName
+	if (typeof functionName !== 'string') throw new Error('Unexpected multicall contract')
+	return functionName
+}
+
+function createBlockWithTimestamp(timestamp: bigint) {
+	return { timestamp }
+}
 
 function createReadContractStub(handler: MockReadContractHandler): ReadClient['readContract'] {
 	return async request => (await handler(request as MockReadContractRequest)) as never
+}
+
+function createMulticallStub(handler: MockLoaderMulticallHandler): MockLoaderClient['multicall'] {
+	return async request => (await handler(request as MockLoaderMulticallRequest)) as never
 }
 
 function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void): MockWriteClient {
@@ -43,6 +62,14 @@ function createMockReadClient(readContract: MockReadContractHandler): MockReadCl
 	}
 }
 
+function createMockLoaderClient({ getBlock, multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {
+	return {
+		getBlock,
+		multicall: createMulticallStub(multicall),
+		readContract: createReadContractStub(readContract),
+	} as unknown as MockLoaderClient
+}
+
 describe('contracts helpers', () => {
 	test('migrateSharesFromUniverse sorts target outcomes before submission without deduplicating', async () => {
 		let capturedData: Hex | undefined
@@ -63,6 +90,87 @@ describe('contracts helpers', () => {
 		expect(decodedCall.functionName).toBe('migrate')
 		expect(decodedCall.args?.[1]).toEqual([3n, 7n, 7n])
 		expect(result.targetOutcomeIndexes).toEqual([3n, 7n, 7n])
+	})
+
+	test('getForkOutcomeKey treats the default root-pool fork outcome as none', () => {
+		expect(getForkOutcomeKey(0n, getAddress('0x0000000000000000000000000000000000000000'))).toBe('none')
+		expect(getForkOutcomeKey(0n, securityPoolAddress)).toBe('invalid')
+		expect(getForkOutcomeKey(1n, securityPoolAddress)).toBe('yes')
+	})
+
+	test('loadForkAuctionDetails keeps the default root-pool fork outcome unset and inactive', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(5n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				if (getContractFunctionName(firstContract) === 'questionId') {
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 3n]
+				}
+				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const details = await loadForkAuctionDetails(client, securityPoolAddress)
+
+		expect(details.parentSecurityPoolAddress).toBe(zeroAddress)
+		expect(details.forkOutcome).toBe('none')
+		expect(details.hasForkActivity).toBe(false)
+	})
+
+	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: securityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') return 0n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const pools = await loadAllSecurityPools(client)
+		const [pool] = pools
+		if (pool === undefined) throw new Error('Expected one security pool')
+
+		expect(pool.parent).toBe(zeroAddress)
+		expect(pool.forkOutcome).toBe('none')
+		expect(pool.hasForkActivity).toBe(false)
 	})
 
 	test('settleOracleReport sends settle with an explicit gas limit', async () => {
