@@ -272,7 +272,7 @@ describe('reportingDomain', () => {
 		})
 	})
 
-	test('getMinimumOutcomeChangeContribution is unavailable when the selected side cannot lead within remaining room', () => {
+	test('getMinimumOutcomeChangeContribution falls back to the remaining threshold room when the selected side cannot take the lead', () => {
 		const details = createReportingDetails({
 			nonDecisionThreshold: rep(20n),
 			sides: [
@@ -284,8 +284,8 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
-			amount: undefined,
-			reason: 'Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.',
+			amount: rep(1n),
+			reason: undefined,
 		})
 	})
 

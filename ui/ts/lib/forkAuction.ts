@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
+import type { ForkAuctionDetails, ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { parseBigIntInput } from './marketForm.js'
@@ -16,12 +16,14 @@ export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settl
 
 type ForkAuctionStageSource = {
 	claimingAvailable?: boolean
-	forkOutcome: ReportingOutcomeKey | 'none'
+	forkOutcome: ForkOutcomeKey
 	migratedRep: bigint
 	systemState: SecurityPoolSystemState
 	truthAuction?: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 	truthAuctionStartedAt: bigint
 }
+
+type ForkActivitySource = Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'>
 
 export function getOutcomeActionLabel(outcome: ReportingOutcomeKey) {
 	return getReportingOutcomeLabel(outcome)
@@ -46,8 +48,12 @@ export function getForkStageDescription(details: ForkAuctionDetails) {
 	return getForkStageDescriptionForState(details.systemState)
 }
 
-export function hasForkActivity(pool: Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'>) {
-	return pool.systemState !== 'operational' || pool.truthAuctionStartedAt > 0n || pool.migratedRep > 0n || pool.forkOutcome !== 'none'
+export function deriveHasForkActivity(source: ForkActivitySource) {
+	return source.systemState !== 'operational' || source.truthAuctionStartedAt > 0n || source.migratedRep > 0n || source.forkOutcome !== 'none'
+}
+
+export function hasForkActivity(pool: ForkActivitySource) {
+	return deriveHasForkActivity(pool)
 }
 
 export function getForkAuctionStageView(source: ForkAuctionStageSource): ForkAuctionStageView {

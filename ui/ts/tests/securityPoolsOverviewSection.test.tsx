@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@testing-library/dom'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
+import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -41,9 +42,10 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 }
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
+	const securityPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		lastOraclePrice: undefined,
@@ -66,6 +68,10 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		vaultCount: 0n,
 		vaults: [],
 		...overrides,
+	}
+	return {
+		...securityPool,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(securityPool),
 	}
 }
 

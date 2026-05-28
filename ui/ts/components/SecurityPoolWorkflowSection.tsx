@@ -41,19 +41,40 @@ import {
 	type SelectedPoolView,
 } from '../lib/securityPoolWorkflow.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
-import { hasForkActivity } from '../lib/forkAuction.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingLockedUntilMessage } from '../lib/reporting.js'
+import { getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
-import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '../types/contracts.js'
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
+
+function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
+	if (selectedPool === undefined) return undefined
+	if (forkAuctionDetails === undefined) return selectedPool
+	return {
+		...selectedPool,
+		completeSetCollateralAmount: forkAuctionDetails.completeSetCollateralAmount,
+		hasForkActivity: forkAuctionDetails.hasForkActivity,
+		forkOutcome: forkAuctionDetails.forkOutcome,
+		forkOwnSecurityPool: forkAuctionDetails.forkOwnSecurityPool,
+		marketDetails: forkAuctionDetails.marketDetails,
+		migratedRep: forkAuctionDetails.migratedRep,
+		questionOutcome: forkAuctionDetails.questionOutcome,
+		securityPoolAddress: forkAuctionDetails.securityPoolAddress,
+		systemState: forkAuctionDetails.systemState,
+		truthAuctionAddress: forkAuctionDetails.truthAuctionAddress,
+		truthAuctionStartedAt: forkAuctionDetails.truthAuctionStartedAt,
+		universeId: forkAuctionDetails.universeId,
+	}
+}
+
 function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAllowance' | 'withdrawRep') {
 	switch (operation) {
 		case 'liquidation':
@@ -139,21 +160,43 @@ export function SecurityPoolWorkflowSection({
 		questionOutcome: selectedPoolQuestionOutcome,
 		systemState: selectedPoolState,
 	})
-	const selectedPoolStateModel = evaluateSecurityPoolState({
-		lifecycleState: deriveSecurityPoolLifecycleState({
-			questionOutcome: selectedPoolQuestionOutcome,
-			systemState: selectedPoolState,
-		}),
-		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
-	})
-	const selectedPoolHasForkActivity = (() => {
-		if (selectedPool !== undefined) return hasForkActivity(selectedPool)
-		if (currentForkAuctionDetails !== undefined) return hasForkActivity(currentForkAuctionDetails)
-
-		return false
-	})()
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
 	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
+	const selectedPoolReportingStage = deriveSecurityPoolReportingStage({
+		reportingDetails: currentReportingDetails,
+		reportingReady,
+	})
+	const selectedPoolHasActualForkActivity = currentForkAuctionDetails?.hasForkActivity ?? selectedPool?.hasForkActivity ?? false
+	const selectedPoolLifecycleState =
+		selectedPoolReportingStage === 'forkTriggered' && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'
+			? 'poolForked'
+			: deriveSecurityPoolLifecycleState({
+					questionOutcome: selectedPoolQuestionOutcome,
+					systemState: selectedPoolState,
+				})
+	const selectedPoolStateModel = evaluateSecurityPoolState({
+		lifecycleState: selectedPoolLifecycleState,
+		reportingStage: selectedPoolReportingStage,
+		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
+	})
+	const triggerZoltarForkReason = (() => {
+		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolHasActualForkActivity) {
+			return 'Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.'
+		}
+		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolState !== 'operational') {
+			return 'This pool has already entered its fork workflow. Continue in the Fork tab.'
+		}
+		return 'Triggering a Zoltar fork is not available in the current pool state.'
+	})()
+	const triggerZoltarForkAvailability = {
+		disabled: !(selectedPoolReportingStage === 'forkTriggered' && !selectedPoolHasActualForkActivity && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'),
+		reason: triggerZoltarForkReason,
+	}
+	const selectedPoolHasForkActivity = (() => {
+		if (selectedPoolReportingStage === 'forkTriggered') return true
+		return selectedPoolHasActualForkActivity
+	})()
+	const showSelectedPoolForkSummaryMetrics = selectedPoolHasActualForkActivity || (selectedPoolStateModel.lifecycleState !== 'operational' && selectedPoolReportingStage !== 'forkTriggered')
 	const reportingLockedReason = (() => {
 		if (reportingReady) return undefined
 		if (marketDetails === undefined) return 'Reporting opens after market end.'
@@ -168,6 +211,9 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolExists: selectedPool !== undefined,
 		selectedPoolUniverseMismatch,
 	})
+	const shouldRefreshSelectedPoolReporting =
+		showSelectedPoolWorkflowDetails &&
+		(sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || ((view === 'reporting' || view === 'withdraw-escalation-deposits') && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
 	const selectedPoolWorkflowGuardMessage = getSelectedPoolWorkflowGuardMessage({
 		hasSelectedPoolAddress,
 		selectedPoolLookupState,
@@ -212,10 +258,12 @@ export function SecurityPoolWorkflowSection({
 	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingOutcomeRefreshHash = useRef<string | undefined>(undefined)
+	const lastVaultStatusRefreshHash = useRef<string | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
+	const lastForkAuctionOutcomeRefreshHash = useRef<string | undefined>(undefined)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: currentPoolOracleManagerDetails?.pendingOperation,
 		selectedVaultAddress,
@@ -228,6 +276,12 @@ export function SecurityPoolWorkflowSection({
 		securityPoolOverviewResult,
 	})
 	const loadedSelectedPool = effectiveSelectedPool
+	const selectedPoolSummaryPool = buildSelectedPoolSummaryPool({
+		forkAuctionDetails: currentForkAuctionDetails,
+		selectedPool: loadedSelectedPool,
+	})
+	const selectedPoolForkOwnSecurityPool = selectedPoolSummaryPool?.forkOwnSecurityPool
+	const selectedPoolForkOutcome = selectedPoolSummaryPool?.forkOutcome
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
@@ -317,7 +371,9 @@ export function SecurityPoolWorkflowSection({
 		void securityVault.onLoadSecurityVault()
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
-		if ((view !== 'reporting' && view !== 'withdraw-escalation-deposits') || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
+		const shouldAutoloadReportingForFork = view === 'fork' && !selectedPoolHasActualForkActivity && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'
+		const shouldAutoloadReportingForCurrentView = view === 'reporting' || view === 'withdraw-escalation-deposits' || shouldAutoloadReportingForFork
+		if (!shouldAutoloadReportingForCurrentView || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
 			return
 		}
@@ -328,7 +384,19 @@ export function SecurityPoolWorkflowSection({
 		if (lastReportingAutoLoadKey.current === reportingAutoLoadKey) return
 		lastReportingAutoLoadKey.current = reportingAutoLoadKey
 		void reporting.onLoadReporting()
-	}, [normalizedReportingFormPoolAddress, normalizedSelectedPoolAddress, reporting.loadingReportingDetails, reporting.onLoadReporting, reporting.reportingDetails?.securityPoolAddress, reportingReady, showSelectedPoolWorkflowDetails, view])
+	}, [
+		normalizedReportingFormPoolAddress,
+		normalizedSelectedPoolAddress,
+		reporting.loadingReportingDetails,
+		reporting.onLoadReporting,
+		reporting.reportingDetails?.securityPoolAddress,
+		reportingReady,
+		selectedPoolHasActualForkActivity,
+		selectedPoolQuestionOutcome,
+		selectedPoolState,
+		showSelectedPoolWorkflowDetails,
+		view,
+	])
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (view !== 'fork' || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
@@ -348,6 +416,33 @@ export function SecurityPoolWorkflowSection({
 		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.reportingResult, securityVault.onLoadSecurityVault, showSelectedPoolWorkflowDetails])
 	useEffect(() => {
+		const nextForkAuctionResult = forkAuction.forkAuctionResult
+		const forkAuctionRefreshHash = nextForkAuctionResult?.hash
+		if (forkAuctionRefreshHash === undefined) {
+			lastForkAuctionOutcomeRefreshHash.current = undefined
+			return
+		}
+		if (nextForkAuctionResult === undefined) return
+		if (lastForkAuctionOutcomeRefreshHash.current === forkAuctionRefreshHash) return
+		lastForkAuctionOutcomeRefreshHash.current = forkAuctionRefreshHash
+		void onRefreshSelectedPoolData(nextForkAuctionResult.securityPoolAddress)
+		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault')) {
+			void securityVault.onLoadSecurityVault()
+		}
+		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation')) void reporting.onLoadReporting()
+	}, [forkAuction.forkAuctionResult, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
+	useEffect(() => {
+		const vaultStatusRefreshHash = securityVault.securityVaultResult?.action === 'depositRep' || securityVault.securityVaultResult?.action === 'redeemRep' ? securityVault.securityVaultResult.hash : undefined
+		if (vaultStatusRefreshHash === undefined) {
+			lastVaultStatusRefreshHash.current = undefined
+			return
+		}
+		if (lastVaultStatusRefreshHash.current === vaultStatusRefreshHash) return
+		lastVaultStatusRefreshHash.current = vaultStatusRefreshHash
+		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
+		if (shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
+	}, [onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting])
+	useEffect(() => {
 		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
 		if (queuedOperationHash === undefined) {
 			lastImmediateQueuedOperationRefreshHash.current = undefined
@@ -358,8 +453,22 @@ export function SecurityPoolWorkflowSection({
 		if (lastImmediateQueuedOperationRefreshHash.current === queuedOperationHash) return
 		lastImmediateQueuedOperationRefreshHash.current = queuedOperationHash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
+		if (securityVault.securityVaultResult?.action === 'queueWithdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
-	}, [currentPoolOracleManagerDetails, hasLoadedCurrentVault, loadingPoolOracleManager, onRefreshSelectedPoolData, queuedVaultOperation, securityVault.onLoadSecurityVault, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+	}, [
+		currentPoolOracleManagerDetails,
+		hasLoadedCurrentVault,
+		loadingPoolOracleManager,
+		onRefreshSelectedPoolData,
+		queuedVaultOperation,
+		reporting.onLoadReporting,
+		securityVault.onLoadSecurityVault,
+		securityVault.securityVaultResult,
+		selectedPool?.securityPoolAddress,
+		shouldRefreshSelectedPoolReporting,
+		showSelectedPoolWorkflowDetails,
+		view,
+	])
 	useEffect(() => {
 		const liquidationRefreshKey = securityPoolOverviewResult?.action !== 'queueLiquidation' || liquidationNoticeState === undefined || liquidationNoticeState === 'submitted' ? undefined : `${securityPoolOverviewResult.hash}:${liquidationNoticeState}`
 		if (liquidationRefreshKey === undefined) {
@@ -383,8 +492,9 @@ export function SecurityPoolWorkflowSection({
 		if (lastExecutedOperationRefreshHash.current === poolPriceOracleResult.hash) return
 		lastExecutedOperationRefreshHash.current = poolPriceOracleResult.hash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
+		if (poolPriceOracleResult.stagedExecution?.operation === 'withdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
-	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, reporting.onLoadReporting, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails, view])
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
 			<StickyObjectContext
@@ -412,10 +522,10 @@ export function SecurityPoolWorkflowSection({
 						/>
 					</div>
 				</div>
-				{loadedSelectedPool === undefined ? undefined : (
+				{selectedPoolSummaryPool === undefined ? undefined : (
 					<div className='selected-pool-context-summary'>
 						<div className='selected-pool-context-overview'>
-							<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={loadedSelectedPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
+							<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
 								<MetricField label='Open Oracle Price' valueTagName='span'>
 									<OpenOraclePriceValue
 										currentTimestamp={currentTimestamp}
@@ -424,10 +534,10 @@ export function SecurityPoolWorkflowSection({
 										priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
 									/>
 								</MetricField>
-								{loadedSelectedPool.systemState === 'operational' ? undefined : (
+								{!showSelectedPoolForkSummaryMetrics ? undefined : (
 									<>
-										<MetricField label='Fork Mode'>{loadedSelectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
-										<MetricField label='Fork Outcome'>{loadedSelectedPool.forkOutcome}</MetricField>
+										<MetricField label='Fork Mode'>{selectedPoolForkOwnSecurityPool === true ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
+										<MetricField label='Fork Outcome'>{selectedPoolForkOutcome === undefined ? '—' : getReportingOutcomeLabel(selectedPoolForkOutcome)}</MetricField>
 									</>
 								)}
 								{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
@@ -595,12 +705,17 @@ export function SecurityPoolWorkflowSection({
 										{...reporting}
 										currentTimestamp={currentTimestamp}
 										embedInCard
+										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
 										lockedReason={reportingLockedReason}
 										mode='full-reporting'
+										onOpenForkWorkflow={() => onSelectedPoolViewChange('fork')}
+										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}
+										triggerZoltarForkAvailability={triggerZoltarForkAvailability}
+										triggerZoltarForkPending={forkAuction.forkAuctionActiveAction === 'forkWithOwnEscalation'}
 									/>
 								) : undefined}
 
@@ -609,12 +724,17 @@ export function SecurityPoolWorkflowSection({
 										{...reporting}
 										currentTimestamp={currentTimestamp}
 										embedInCard
+										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
 										lockedReason={reportingLockedReason}
 										mode='withdraw-only'
+										onOpenForkWorkflow={() => onSelectedPoolViewChange('fork')}
+										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}
+										triggerZoltarForkAvailability={triggerZoltarForkAvailability}
+										triggerZoltarForkPending={forkAuction.forkAuctionActiveAction === 'forkWithOwnEscalation'}
 									/>
 								) : undefined}
 
@@ -626,6 +746,7 @@ export function SecurityPoolWorkflowSection({
 										disabledMessage={forkWorkflowDisabled ? 'This pool is currently operational, so fork and truth auction actions are read only.' : undefined}
 										embedInCard
 										forkAuctionDetails={currentForkAuctionDetails}
+										lifecycleStateOverride={selectedPoolLifecycleState}
 										previewPool={selectedPool}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}

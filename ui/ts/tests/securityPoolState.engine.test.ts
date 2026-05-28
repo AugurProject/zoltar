@@ -51,7 +51,6 @@ describe('security pool state engine', () => {
 				'finalizeTruthAuction',
 				'refundLosingBids',
 				'claimAuctionProceeds',
-				'withdrawBids',
 			]),
 		)
 		expectActionBlocked(model, 'redeemRep')

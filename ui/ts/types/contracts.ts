@@ -19,8 +19,9 @@ export type DeploymentStepId =
 	| 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
+export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
-export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds' | 'forkUniverse' | 'withdrawBids'
+export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds' | 'forkUniverse'
 export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 export type StagedOracleOperation = {
 	amount: bigint
@@ -245,7 +246,8 @@ export type OpenOracleReportDetails = {
 export type ListedSecurityPool = {
 	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
-	forkOutcome: ReportingOutcomeKey | 'none'
+	hasForkActivity: boolean
+	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined
 	lastOracleSettlementTimestamp: bigint
@@ -428,7 +430,8 @@ export type ForkAuctionDetails = {
 	claimingAvailable: boolean
 	completeSetCollateralAmount: bigint
 	currentTime: bigint
-	forkOutcome: ReportingOutcomeKey | 'none'
+	hasForkActivity: boolean
+	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	marketDetails: MarketDetails
 	migratedRep: bigint

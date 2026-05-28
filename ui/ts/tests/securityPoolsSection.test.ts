@@ -7,6 +7,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
+import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
@@ -145,12 +146,10 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 			repMigrationOutcomes: '',
 			securityPoolAddress: '',
 			selectedOutcome: 'yes',
+			settlementAddress: '',
 			submitBidAmount: '',
 			submitBidTick: '',
 			vaultAddress: '',
-			withdrawBidIndex: '',
-			withdrawForAddress: '',
-			withdrawTick: '',
 		},
 		forkAuctionResult: undefined,
 		loadingForkAuctionDetails: false,
@@ -168,7 +167,6 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onRefundLosingBids: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
-		onWithdrawBids: () => undefined,
 		...overrides,
 	}
 }
@@ -193,9 +191,10 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 }
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
+	const selectedPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		lastOraclePrice: undefined,
@@ -218,6 +217,10 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		vaultCount: 3n,
 		vaults: [],
 		...overrides,
+	}
+	return {
+		...selectedPool,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
 	}
 }
 

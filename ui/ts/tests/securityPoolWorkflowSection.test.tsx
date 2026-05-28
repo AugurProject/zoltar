@@ -7,6 +7,7 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import type { AccountState } from '../types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
@@ -186,12 +187,10 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 			repMigrationOutcomes: '',
 			securityPoolAddress: '',
 			selectedOutcome: 'yes',
+			settlementAddress: '',
 			submitBidAmount: '',
 			submitBidTick: '',
 			vaultAddress: '',
-			withdrawBidIndex: '',
-			withdrawForAddress: '',
-			withdrawTick: '',
 		},
 		forkAuctionResult: undefined,
 		loadingForkAuctionDetails: false,
@@ -209,17 +208,17 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onRefundLosingBids: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
-		onWithdrawBids: () => undefined,
 		...overrides,
 	}
 }
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
-	return {
+	const forkAuctionDetails: ForkAuctionDetails = {
 		auctionedSecurityBondAllowance: 0n,
 		claimingAvailable: false,
 		completeSetCollateralAmount: 0n,
 		currentTime: 3n,
+		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		marketDetails: createMarketDetails(),
@@ -235,6 +234,10 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 		truthAuctionStartedAt: 0n,
 		universeId: 1n,
 		...overrides,
+	}
+	return {
+		...forkAuctionDetails,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(forkAuctionDetails),
 	}
 }
 
@@ -258,9 +261,10 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 }
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
+	const selectedPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		lastOraclePrice: undefined,
@@ -283,6 +287,10 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		vaultCount: 0n,
 		vaults: [],
 		...overrides,
+	}
+	return {
+		...selectedPool,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
 	}
 }
 
@@ -329,6 +337,13 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		trading: createTradingProps(),
 		...overrides,
 	}
+}
+
+function getMetricValue(container: HTMLElement, label: string) {
+	const labelElement = within(container).getByText(label)
+	const metricValue = labelElement.parentElement?.querySelector('.metric-field-value')
+	if (!(metricValue instanceof HTMLElement)) throw new Error(`Missing metric value for ${label}`)
+	return metricValue.textContent
 }
 
 describe('SecurityPoolWorkflowSection', () => {
@@ -1166,6 +1181,61 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(loadSecurityVaultCalls).toEqual([undefined])
 	})
 
+	test('refreshes loaded reporting after depositing REP into the selected vault', async () => {
+		const refreshSelectedPoolCalls: Array<string | undefined> = []
+		const reportingLoadCalls: string[] = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshSelectedPoolCalls.push(securityPoolAddressInput)
+					},
+					reporting: createReportingProps({
+						onLoadReporting: () => {
+							reportingLoadCalls.push('refresh')
+						},
+						reportingDetails: {
+							completeSetCollateralAmount: 1n,
+							currentTime: 3n,
+							forkThreshold: 10n,
+							marketDetails: createMarketDetails({ endTime: 0n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							startBond: 1n,
+							status: 'not-started',
+							universeId: 1n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 0n,
+							viewerVaultRepDepositShare: 12_000n,
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
+						securityVaultResult: {
+							action: 'depositRep',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000df',
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshSelectedPoolCalls).toEqual([selectedPoolAddress])
+		expect(reportingLoadCalls).toEqual(['refresh'])
+	})
+
 	test('refreshes the selected pool and loaded vault after a liquidation resolves as queued', async () => {
 		const refreshSelectedPoolCalls: Array<string | undefined> = []
 		const loadSecurityVaultCalls: Array<string | undefined> = []
@@ -1368,6 +1438,74 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(refreshSelectedPoolCalls).toEqual([selectedPoolAddress])
 		expect(loadSecurityVaultCalls).toEqual([undefined])
+	})
+
+	test('refreshes loaded reporting after executing a staged REP withdrawal', async () => {
+		const refreshSelectedPoolCalls: Array<string | undefined> = []
+		const reportingLoadCalls: string[] = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshSelectedPoolCalls.push(securityPoolAddressInput)
+					},
+					poolPriceOracleResult: {
+						action: 'executeStagedOperation',
+						hash: '0x00000000000000000000000000000000000000000000000000000000000000cf',
+						stagedExecution: {
+							errorMessage: undefined,
+							operation: 'withdrawRep',
+							operationId: 15n,
+							success: true,
+						},
+					},
+					reporting: createReportingProps({
+						onLoadReporting: () => {
+							reportingLoadCalls.push('refresh')
+						},
+						reportingDetails: {
+							completeSetCollateralAmount: 1n,
+							currentTime: 3n,
+							forkThreshold: 10n,
+							marketDetails: createMarketDetails({ endTime: 0n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							startBond: 1n,
+							status: 'not-started',
+							universeId: 1n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 0n,
+							viewerVaultRepDepositShare: 12_000n,
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshSelectedPoolCalls).toEqual([selectedPoolAddress])
+		expect(reportingLoadCalls).toEqual(['refresh'])
 	})
 
 	test('does not refresh the selected pool after a failed staged operation execution', async () => {
@@ -1831,7 +1969,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(document.body.textContent?.includes('Projected profit if this side wins')).toBe(false)
 
-		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe(expectedLockedReason)
 	})
@@ -1877,7 +2015,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
 	})
@@ -2121,6 +2259,79 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 	})
 
+	test('opens the fork workflow directly from the non-decision withdraw panel', async () => {
+		const selectedViews: string[] = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					onSelectedPoolViewChange: view => {
+						selectedViews.push(view ?? '')
+					},
+					reporting: createReportingProps({
+						reportingDetails: {
+							activationTime: 120n,
+							bindingCapital: 10n,
+							completeSetCollateralAmount: 1n,
+							currentRequiredBond: 2n,
+							currentTime: 150n,
+							escalationEndTime: 300n,
+							escalationGameAddress: zeroAddress,
+							forkThreshold: 40n,
+							hasReachedNonDecision: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							sides: [
+								{ balance: 7n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{
+									balance: 20n,
+									deposits: [],
+									key: 'yes',
+									label: 'Yes',
+									userDeposits: [
+										{
+											amount: 1n,
+											cumulativeAmount: 1n,
+											depositIndex: 0n,
+											depositor: zeroAddress,
+										},
+									],
+								},
+								{ balance: 20n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+							startBond: 1n,
+							status: 'active',
+							totalCost: 40n,
+							universeId: 1n,
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultRepDepositShare: 12_000n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
+					selectedPoolView: 'withdraw-escalation-deposits',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Fork Workflow' }))
+		})
+
+		expect(selectedViews).toEqual(['fork'])
+	})
+
 	test('shows only the shared question card when the fork tab is active', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -2138,6 +2349,232 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
 		expect(documentQueries.getByRole('heading', { name: 'Lifecycle' })).not.toBeNull()
+	})
+
+	test('unlocks the fork workflow and relabels the pool when escalation reaches non-decision', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					reporting: createReportingProps({
+						reportingDetails: {
+							activationTime: 120n,
+							bindingCapital: 10n,
+							completeSetCollateralAmount: 1n,
+							currentRequiredBond: 2n,
+							currentTime: 150n,
+							escalationEndTime: 300n,
+							escalationGameAddress: zeroAddress,
+							forkThreshold: 40n,
+							hasReachedNonDecision: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							sides: [
+								{ balance: 7n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+							startBond: 1n,
+							status: 'active',
+							totalCost: 40n,
+							universeId: 1n,
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultRepDepositShare: 12_000n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
+					selectedPoolView: 'fork',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
+		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
+		const selectedPoolSummaryQueries = within(selectedPoolSummary)
+		expect(documentQueries.getByText('Pool Forked')).not.toBeNull()
+		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
+		expect(selectedPoolSummaryQueries.queryByText('Fork Mode')).toBeNull()
+		expect(selectedPoolSummaryQueries.queryByText('Fork Outcome')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Fork Trigger' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
+	})
+
+	test('shows Trigger Zoltar Fork in the reporting workflow after non-decision', async () => {
+		let triggerZoltarForkCalls = 0
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						onForkWithOwnEscalation: () => {
+							triggerZoltarForkCalls += 1
+						},
+					}),
+					reporting: createReportingProps({
+						reportingDetails: {
+							activationTime: 120n,
+							bindingCapital: 10n,
+							completeSetCollateralAmount: 1n,
+							currentRequiredBond: 2n,
+							currentTime: 150n,
+							escalationEndTime: 300n,
+							escalationGameAddress: zeroAddress,
+							forkThreshold: 40n,
+							hasReachedNonDecision: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							sides: [
+								{ balance: 7n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+							startBond: 1n,
+							status: 'active',
+							totalCost: 40n,
+							universeId: 1n,
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultRepDepositShare: 12_000n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
+					selectedPoolView: 'reporting',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expectTransactionButtonEnabled(document.body, 'Trigger Zoltar Fork')
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
+		})
+
+		expect(triggerZoltarForkCalls).toBe(1)
+	})
+
+	test('hides Trigger Zoltar Fork after the pool has already entered its fork workflow and keeps Open Fork Workflow available', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps(),
+					reporting: createReportingProps({
+						reportingDetails: {
+							activationTime: 120n,
+							bindingCapital: 10n,
+							completeSetCollateralAmount: 1n,
+							currentRequiredBond: 2n,
+							currentTime: 150n,
+							escalationEndTime: 300n,
+							escalationGameAddress: zeroAddress,
+							forkThreshold: 40n,
+							hasReachedNonDecision: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							sides: [
+								{ balance: 7n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+							startBond: 1n,
+							status: 'active',
+							totalCost: 40n,
+							universeId: 1n,
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultRepDepositShare: 12_000n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ forkOutcome: 'yes', marketDetails: createMarketDetails({ endTime: 2n }), migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+					selectedPoolView: 'reporting',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Open Fork Workflow' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.')).toBe(true)
+	})
+
+	test('prefers fresh fork-auction activity over stale pool-list state on the fork tab', async () => {
+		let reportingLoadCalls = 0
+		const selectedPoolAddress = zeroAddress
+		const freshTruthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionDetails: createForkAuctionDetails({
+							completeSetCollateralAmount: 2n,
+							forkOutcome: 'yes',
+							forkOwnSecurityPool: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							migratedRep: 5n,
+							securityPoolAddress: selectedPoolAddress,
+							systemState: 'operational',
+							truthAuctionAddress: freshTruthAuctionAddress,
+						}),
+					}),
+					reporting: createReportingProps({
+						onLoadReporting: () => {
+							reportingLoadCalls += 1
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ completeSetCollateralAmount: 0n, marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational', truthAuctionAddress: zeroAddress })],
+					selectedPoolView: 'fork',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
+		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
+		const selectedPoolSummaryQueries = within(selectedPoolSummary)
+		expect(reportingLoadCalls).toBe(0)
+		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
+		expect(selectedPoolSummaryQueries.getByText('Fork Mode')).not.toBeNull()
+		expect(selectedPoolSummaryQueries.getByText('Fork Outcome')).not.toBeNull()
+		expect(getMetricValue(selectedPoolSummary, 'Fork Mode')).toBe('Own escalation fork')
+		expect(getMetricValue(selectedPoolSummary, 'Fork Outcome')).toBe('Yes')
+		expect(selectedPoolSummaryQueries.getByRole('button', { name: `Copy address ${freshTruthAuctionAddress}` })).not.toBeNull()
 	})
 
 	test('autoloads reporting once after the reporting form pool matches the selected pool', async () => {
@@ -2262,6 +2699,52 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(reportingLoadCalls).toBe(1)
 	})
 
+	test('autoloads reporting from the fork tab once when it needs non-decision state', async () => {
+		let reportingLoadCalls = 0
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000c1')
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: selectedPoolAddress,
+			reporting: createReportingProps({
+				onLoadReporting: () => {
+					reportingLoadCalls += 1
+				},
+				reportingForm: {
+					reportAmount: '',
+					securityPoolAddress: selectedPoolAddress,
+					selectedOutcome: 'yes',
+					selectedWithdrawDepositIndexesByOutcome: {
+						invalid: [],
+						yes: [],
+						no: [],
+					},
+				},
+			}),
+			securityPoolAddress: selectedPoolAddress,
+			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
+			selectedPoolView: 'fork',
+		})
+
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(reportingLoadCalls).toBe(1)
+
+		await act(async () => {
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />
+				</ChainTimestampContext.Provider>,
+				renderedComponent.container,
+			)
+		})
+
+		expect(reportingLoadCalls).toBe(1)
+	})
+
 	test('re-arms reporting autoload after leaving and re-entering the reporting tab', async () => {
 		let reportingLoadCalls = 0
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
@@ -2352,5 +2835,134 @@ describe('SecurityPoolWorkflowSection', () => {
 		})
 
 		expect(forkLoadCalls).toBe(2)
+	})
+
+	test('refreshes the selected pool and current vault after finalized auction settlement', async () => {
+		const selectedPoolAddress = zeroAddress
+		let refreshedPoolAddress: string | undefined
+		let vaultLoadCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionResult: {
+							action: 'claimAuctionProceeds',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000ca',
+							securityPoolAddress: selectedPoolAddress,
+							universeId: 1n,
+						},
+					}),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshedPoolAddress = securityPoolAddressInput
+					},
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: () => {
+							vaultLoadCalls += 1
+						},
+						securityVaultDetails: createSecurityVaultDetails({
+							securityPoolAddress: selectedPoolAddress,
+							vaultAddress: zeroAddress,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'fork',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
+		expect(vaultLoadCalls).toBe(1)
+	})
+
+	test('reloads reporting after migrating escalation deposits in the fork workflow', async () => {
+		const selectedPoolAddress = zeroAddress
+		let reportingLoadCalls = 0
+		let refreshedPoolAddress: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: selectedPoolAddress,
+						forkAuction: createForkAuctionProps({
+							forkAuctionResult: {
+								action: 'migrateEscalationDeposits',
+								hash: '0x00000000000000000000000000000000000000000000000000000000000000cb',
+								securityPoolAddress: selectedPoolAddress,
+								universeId: 1n,
+							},
+						}),
+						onRefreshSelectedPoolData: securityPoolAddressInput => {
+							refreshedPoolAddress = securityPoolAddressInput
+						},
+						reporting: createReportingProps({
+							onLoadReporting: () => {
+								reportingLoadCalls += 1
+							},
+							reportingDetails: {
+								activationTime: 0n,
+								bindingCapital: 0n,
+								completeSetCollateralAmount: 0n,
+								currentRequiredBond: 0n,
+								currentTime: 1n,
+								escalationEndTime: 2n,
+								escalationGameAddress: zeroAddress,
+								forkThreshold: 0n,
+								hasReachedNonDecision: false,
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								nonDecisionThreshold: 0n,
+								questionOutcome: 'none',
+								resolution: 'none',
+								securityPoolAddress: selectedPoolAddress,
+								sides: [
+									{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+									{ balance: 0n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+									{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+								],
+								startBond: 0n,
+								status: 'active',
+								totalCost: 0n,
+								universeId: 1n,
+								viewerVaultAvailableEscalationRep: 0n,
+								viewerVaultExists: true,
+								viewerVaultLockedRepInEscalationGame: 0n,
+								viewerVaultRepDepositShare: 0n,
+								withdrawalEnabled: false,
+								withdrawalState: 'not-finalized',
+							},
+							reportingForm: {
+								reportAmount: '',
+								securityPoolAddress: selectedPoolAddress,
+								selectedOutcome: 'yes',
+								selectedWithdrawDepositIndexesByOutcome: {
+									invalid: [],
+									yes: [],
+									no: [],
+								},
+							},
+						}),
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
+		expect(reportingLoadCalls).toBe(1)
 	})
 })

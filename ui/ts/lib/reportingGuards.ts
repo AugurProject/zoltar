@@ -9,6 +9,7 @@ export function getReportingReportGuardMessage({
 	accountAddress,
 	contributionPreviewReason,
 	isMainnet,
+	remainingSelectedOutcomeCapacity,
 	reportAmount,
 	reportingStatus,
 	selectedOutcome,
@@ -20,6 +21,7 @@ export function getReportingReportGuardMessage({
 	accountAddress: Address | undefined
 	contributionPreviewReason: string | undefined
 	isMainnet: boolean
+	remainingSelectedOutcomeCapacity: bigint | undefined
 	reportAmount: string
 	reportingStatus: ReportingStatus
 	selectedOutcome: ReportingOutcomeKey | undefined
@@ -37,6 +39,10 @@ export function getReportingReportGuardMessage({
 	if (!viewerVaultExists) return 'Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.'
 	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would be locked for this report.'
 	if (viewerVaultAvailableEscalationRep === undefined) return 'Loading available vault REP.'
+	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {
+		if (remainingSelectedOutcomeCapacity === 0n) return 'No remaining contribution capacity is available on the selected side.'
+		return `Only ${formatCurrencyBalance(remainingSelectedOutcomeCapacity)} REP remains before the selected side reaches the threshold.`
+	}
 	if (actualDepositAmount > viewerVaultAvailableEscalationRep) return `Need ${formatCurrencyBalance(actualDepositAmount - viewerVaultAvailableEscalationRep)} more unlocked REP in your vault before reporting.`
 	return undefined
 }

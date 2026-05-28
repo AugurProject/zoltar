@@ -153,6 +153,14 @@ export function getEscalationDepositClaimAmount(details: ReportingDetails | unde
 	if (resolvedOutcome !== outcome) return 0n
 	return getWinningEscalationDepositClaimAmount(details, outcome, deposit)
 }
+
+export function getRemainingSelectedOutcomeContributionCapacity(details: ReportingDetails, outcome: ReportingOutcomeKey) {
+	if (details.status === 'not-started') return details.nonDecisionThreshold
+	const selectedSide = details.sides.find(side => side.key === outcome)
+	if (selectedSide === undefined) return 0n
+	return details.nonDecisionThreshold > selectedSide.balance ? details.nonDecisionThreshold - selectedSide.balance : 0n
+}
+
 export function getReportingTimerPreview(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingTimerPreview | undefined {
 	if (amount <= 0n) return undefined
 	const hypotheticalDuration = computeHypotheticalBindingDuration(details.startBond, details.nonDecisionThreshold, amount)
@@ -207,11 +215,18 @@ export function getMinimumOutcomeChangeContribution(details: ActiveReportingDeta
 	const amount = roundUpToRepUnit(enteredAmount)
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
 	const effectiveAmount = amount > availableRoom ? availableRoom : amount
-	if (availableRoom === 0n || selectedSide.balance + effectiveAmount <= largestOtherBalance)
+	if (availableRoom === 0n)
 		return {
 			amount: undefined,
-			reason: 'Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.',
+			reason: 'No remaining contribution capacity is available on the selected side.',
 		}
+	if (selectedSide.balance + effectiveAmount <= largestOtherBalance) {
+		const cappedEnteredAmount = details.startBond > availableRoom ? details.startBond : availableRoom
+		return {
+			amount: roundUpToRepUnit(cappedEnteredAmount),
+			reason: undefined,
+		}
+	}
 	return { amount, reason: undefined }
 }
 export function getReportingMinimumOutcomeChangeContribution(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {

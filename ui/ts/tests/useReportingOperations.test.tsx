@@ -11,6 +11,7 @@ import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type UseReportingOperations = typeof import('../hooks/useReportingOperations.js')['useReportingOperations']
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
+const REP = 10n ** 18n
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -194,6 +195,85 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
 		expect(requireHookState(hookState).reportingDetails?.viewerVaultAvailableEscalationRep).toBe(8n)
 		expect(requireHookState(hookState).reportingDetails?.viewerVaultRepDepositShare).toBe(10n)
+	})
+
+	test('reportOutcome blocks pre-start contributions that would exceed the remaining selected-side threshold capacity', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
+		const latestDetails: ReportingDetails = {
+			completeSetCollateralAmount: 1n,
+			currentTime: 150n,
+			forkThreshold: 40n * REP,
+			marketDetails: {
+				answerUnit: '',
+				createdAt: 1n,
+				description: 'Question description',
+				displayValueMax: 100n,
+				displayValueMin: 0n,
+				endTime: 100n,
+				exists: true,
+				marketType: 'binary',
+				numTicks: 2n,
+				outcomeLabels: ['Yes', 'No'],
+				questionId: '0x01',
+				startTime: 1n,
+				title: 'Will this resolve?',
+			},
+			nonDecisionThreshold: 20n * REP,
+			questionOutcome: 'none',
+			resolution: 'none',
+			securityPoolAddress,
+			startBond: 1n * REP,
+			status: 'not-started',
+			universeId: 1n,
+			withdrawalEnabled: false,
+			withdrawalState: 'not-finalized',
+			viewerVaultAvailableEscalationRep: 8n * REP,
+			viewerVaultExists: true,
+			viewerVaultLockedRepInEscalationGame: 0n,
+			viewerVaultRepDepositShare: 8n * REP,
+		}
+		const loadReportingDetails = mock(async () => latestDetails)
+		const reportOutcomeInSecurityPool = mock(async () => {
+			throw new Error('reportOutcomeInSecurityPool should not be called when the remaining selected-side threshold capacity is exhausted')
+		})
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool,
+			withdrawEscalationFromSecurityPool: mock(async () => {
+				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(useReportingOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				reportAmount: '25',
+				securityPoolAddress,
+				selectedOutcome: 'yes',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+
+		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
+		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
+		expect(requireHookState(hookState).reportingResult).toBeUndefined()
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the threshold')
 	})
 
 	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {

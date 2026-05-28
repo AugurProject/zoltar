@@ -28,6 +28,7 @@ import type {
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
+import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
@@ -271,6 +272,8 @@ export type OverviewPanelsProps = {
 	walletBootstrapComplete: boolean
 	universeRepBalance: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
+	universeForkTime?: bigint | undefined
+	universeHasForked?: boolean | undefined
 	universePresentation: UserMessagePresentation | undefined
 	universeLabel: string
 	isRefreshing: boolean
@@ -593,11 +596,16 @@ export type ReportingRouteContentProps = {
 export type ReportingSectionProps = ReportingRouteContentProps & {
 	currentTimestamp?: bigint | undefined
 	embedInCard?: boolean
+	forkAlreadyTriggered?: boolean | undefined
 	lockedReason?: string | undefined
 	mode?: 'full-reporting' | 'withdraw-only'
+	onOpenForkWorkflow?: (() => void) | undefined
+	onTriggerZoltarFork?: (() => void) | undefined
 	previewMarketDetails?: MarketDetails | undefined
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
+	triggerZoltarForkAvailability?: ActionAvailability | undefined
+	triggerZoltarForkPending?: boolean | undefined
 }
 
 export type TradingRouteContentProps = {
@@ -652,7 +660,6 @@ export type ForkAuctionRouteContentProps = {
 	onRefundLosingBids: () => void
 	onStartTruthAuction: () => void
 	onSubmitBid: () => void
-	onWithdrawBids: () => void
 }
 
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
@@ -660,6 +667,7 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	disabled?: boolean
 	disabledMessage?: string | undefined
 	embedInCard?: boolean
+	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
 	previewPool?: ListedSecurityPool | undefined
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean

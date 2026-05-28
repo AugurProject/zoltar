@@ -172,7 +172,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -852,7 +851,6 @@ describe('Peripherals Contract Test Suite', () => {
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
@@ -905,7 +903,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getLastPrice(client, childManagerAddress), await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 'child manager should inherit the parent price')
 	})
 
-	test('forkZoltarWithOwnEscalationGame ignores stray REP already sitting on the forker', async () => {
+	test('forkZoltarWithOwnEscalationGame auto-initiates the pool fork and ignores stray REP already sitting on the forker', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const strayRep = 7n * 10n ** 18n
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
@@ -917,13 +915,13 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'forkWithOwnEscalationGame should auto-initiate the parent pool fork')
 		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'repAtFork should only track the parent pool REP after the own-game fork')
 	})
 
-	test('initiateSecurityPoolFork ignores stray REP transferred to the forker after the own-game fork', async () => {
+	test('initiateSecurityPoolFork reverts after the own-game fork and ignores stray REP transferred to the forker', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const strayRep = 9n * 10n ** 18n
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
@@ -935,9 +933,10 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Security pool fork already initiated/)
 
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
 		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
 	})
 
@@ -1183,8 +1182,6 @@ describe('Peripherals Contract Test Suite', () => {
 		const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 		const burnAmount = zoltarForkThreshold / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
@@ -1335,7 +1332,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -1647,7 +1643,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -1684,7 +1679,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'parent pool should enter PoolForked after the universe fork is activated')
 		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, 1n), /Zoltar has forked/)
@@ -1722,7 +1716,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		const parentVaultBeforeEscalationMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
@@ -1748,7 +1741,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -1774,7 +1766,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -1824,7 +1815,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -2100,7 +2090,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2131,7 +2120,6 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Fork the security pool
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -2190,7 +2178,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2248,7 +2235,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2375,7 +2361,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2422,7 +2407,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2464,7 +2448,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2515,7 +2498,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2613,10 +2595,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
-		// Step 1: Initiate the security pool fork separately
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-
-		// Verify fork state
+		// Verify the own-game fork left the parent pool fully initialized for migration
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(forkData.repAtFork, repBalanceInGenesisPool - burnAmount, 'rep at fork does not match')
@@ -2687,7 +2666,6 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Fork and migrate
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2735,7 +2713,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 

@@ -18,9 +18,10 @@ type UsePriceOracleManagerParameters = {
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
+	refreshState: () => Promise<void>
 }
 
-export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
+export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const poolOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
@@ -69,6 +70,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 					},
 					refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
+						await refreshState()
 						await loadPoolOracleManager(managerAddress)
 					},
 					setErrorMessage: message => {
@@ -119,6 +121,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 					},
 					refreshErrorFallback: 'Staged operation execution succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
+						await refreshState()
 						await loadPoolOracleManager(managerAddress)
 					},
 					setErrorMessage: message => {

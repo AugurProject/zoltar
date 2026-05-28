@@ -268,7 +268,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create / Deposit REP')
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
 		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')

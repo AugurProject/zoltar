@@ -21,7 +21,7 @@ describe('security pool action matrix data', () => {
 		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.initiate, ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'])
 		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.migration, ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'startTruthAuction'])
 		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.auction, ['submitBid', 'finalizeTruthAuction', 'refundLosingBids'])
-		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.settlement, ['claimAuctionProceeds', 'withdrawBids'])
+		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.settlement, ['claimAuctionProceeds'])
 		expectActionSet(UNIVERSE_FORKED_ENABLE, ['migrateShares'])
 		expectActionSet(UNIVERSE_FORKED_DISABLE, ['createCompleteSet', 'redeemCompleteSet', 'redeemShares'])
 	})

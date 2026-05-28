@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
+import { useEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { AppHeaderShell } from './components/AppHeaderShell.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
@@ -91,6 +92,7 @@ export function App() {
 		createMarket,
 		forkZoltar,
 		hasLoadedZoltarQuestions,
+		loadZoltarForkAccess,
 		loadingZoltarForkAccess,
 		loadingZoltarQuestionCount,
 		loadingZoltarQuestions,
@@ -251,7 +253,6 @@ export function App() {
 		setForkAuctionForm,
 		startTruthAuction,
 		submitBid,
-		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
 	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
@@ -259,6 +260,8 @@ export function App() {
 		await refreshState()
 		refreshRepPrices()
 	}
+	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
+	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isSupportedAppChain(accountState.chainId)
@@ -291,6 +294,8 @@ export function App() {
 		repUsdcPrice,
 		repUsdcSource,
 		repUsdcSourceUrl,
+		universeForkTime: zoltarUniverse?.forkTime,
+		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation,
 		universeLabel,
 		universeRepBalance: zoltarForkRepBalance,
@@ -343,6 +348,26 @@ export function App() {
 		setSecurityPoolAddress(securityPoolAddress)
 		navigate('security-pools')
 	}
+	useEffect(() => {
+		const securityVaultRepRefreshHash = securityVaultResult?.action === 'depositRep' || securityVaultResult?.action === 'redeemRep' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true) ? securityVaultResult.hash : undefined
+		if (securityVaultRepRefreshHash === undefined) {
+			lastSecurityVaultRepRefreshHash.current = undefined
+			return
+		}
+		if (lastSecurityVaultRepRefreshHash.current === securityVaultRepRefreshHash) return
+		lastSecurityVaultRepRefreshHash.current = securityVaultRepRefreshHash
+		void loadZoltarForkAccess()
+	}, [loadZoltarForkAccess, securityVaultResult])
+	useEffect(() => {
+		const stagedVaultRepRefreshHash = poolPriceOracleResult?.action === 'executeStagedOperation' && poolPriceOracleResult.stagedExecution?.success === true && poolPriceOracleResult.stagedExecution.operation === 'withdrawRep' ? poolPriceOracleResult.hash : undefined
+		if (stagedVaultRepRefreshHash === undefined) {
+			lastStagedVaultRepRefreshHash.current = undefined
+			return
+		}
+		if (lastStagedVaultRepRefreshHash.current === stagedVaultRepRefreshHash) return
+		lastStagedVaultRepRefreshHash.current = stagedVaultRepRefreshHash
+		void loadZoltarForkAccess()
+	}, [loadZoltarForkAccess, poolPriceOracleResult])
 	useAppRouteEffects({
 		accountAddress: accountState.address,
 		augurPlaceHolderDeploymentMissing,
@@ -511,7 +536,6 @@ export function App() {
 				onRefundLosingBids: () => void refundLosingBids(),
 				onStartTruthAuction: () => void startTruthAuction(),
 				onSubmitBid: () => void submitBid(),
-				onWithdrawBids: () => void withdrawBids(),
 			},
 			liquidationAmount,
 			liquidationMaxAmount,
