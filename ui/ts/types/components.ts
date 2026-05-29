@@ -655,8 +655,8 @@ export type ForkAuctionRouteContentProps = {
 	onForkWithOwnEscalation: () => void
 	onInitiateFork: () => void
 	onLoadForkAuction: () => void
-	onMigrateEscalationDeposits: () => void
-	onMigrateRepToZoltar: () => void
+	onMigrateEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
+	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
 	onRefundLosingBids: () => void
 	onStartTruthAuction: () => void
@@ -668,8 +668,14 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	disabled?: boolean
 	disabledMessage?: string | undefined
 	embedInCard?: boolean
+	forkMigrationReadClient?: Pick<ReadClient, 'readContract'> | undefined
 	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
+	loadingReportingDetails?: boolean
+	onReportingFormChange?: ((update: Partial<ReportingFormState>) => void) | undefined
 	previewPool?: ListedSecurityPool | undefined
+	reportingDetails?: ReportingDetails | undefined
+	reportingForm?: ReportingFormState | undefined
+	securityPools?: ListedSecurityPool[] | undefined
 	stageView: ForkAuctionStageView
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean

@@ -8,14 +8,15 @@ import { zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
 import { AUCTION_TIME_SECONDS, deriveHasForkActivity, getForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
-import type { AccountState, ForkAuctionFormState } from '../types/app.js'
-import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '../types/contracts.js'
+import type { AccountState, ForkAuctionFormState, ReportingFormState } from '../types/app.js'
+import type { ActiveReportingDetails, EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
 const ETH = 10n ** 18n
+const REP = 10n ** 18n
 type TruthAuctionReadContractRequest = Parameters<ReadClient['readContract']>[0]
 type TruthAuctionReadContractHandler = (request: TruthAuctionReadContractRequest) => Promise<unknown>
 
@@ -72,6 +73,20 @@ function createMarketDetails(): MarketDetails {
 	}
 }
 
+function rep(value: bigint) {
+	return value * REP
+}
+
+function createDeposit(overrides: Partial<EscalationDeposit> = {}): EscalationDeposit {
+	return {
+		amount: rep(1n),
+		cumulativeAmount: rep(1n),
+		depositIndex: 0n,
+		depositor: zeroAddress,
+		...overrides,
+	}
+}
+
 function createForkAuctionDetails(): ForkAuctionDetails {
 	const forkAuctionDetails: ForkAuctionDetails = {
 		auctionedSecurityBondAllowance: 10n,
@@ -97,6 +112,55 @@ function createForkAuctionDetails(): ForkAuctionDetails {
 	return {
 		...forkAuctionDetails,
 		hasForkActivity: deriveHasForkActivity(forkAuctionDetails),
+	}
+}
+
+function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
+	return {
+		reportAmount: '',
+		securityPoolAddress: zeroAddress,
+		selectedOutcome: undefined,
+		selectedWithdrawDepositIndexesByOutcome: {
+			invalid: [],
+			yes: [],
+			no: [],
+		},
+		...overrides,
+	}
+}
+
+function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+	return {
+		activationTime: 120n,
+		bindingCapital: rep(10n),
+		completeSetCollateralAmount: 1n,
+		currentRequiredBond: rep(20n),
+		currentTime: 150n,
+		escalationEndTime: 300n,
+		escalationGameAddress: zeroAddress,
+		forkThreshold: rep(40n),
+		hasReachedNonDecision: true,
+		marketDetails: createMarketDetails(),
+		nonDecisionThreshold: rep(20n),
+		questionOutcome: 'none',
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		sides: [
+			{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+			{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+		],
+		startBond: rep(3n),
+		status: 'active',
+		totalCost: rep(20n),
+		universeId: 1n,
+		viewerVaultAvailableEscalationRep: rep(10n),
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: rep(1n),
+		viewerVaultRepDepositShare: rep(11n),
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		...overrides,
 	}
 }
 
@@ -217,6 +281,23 @@ function createTruthAuctionReadClient(
 	}
 }
 
+function createForkMigrationReadClient(
+	readContract: TruthAuctionReadContractHandler = async request => {
+		if (request.functionName === 'getChildUniverseId') return 11n
+		if (request.functionName === 'getMigrationProxyAddress') return '0x00000000000000000000000000000000000000aa'
+		if (request.functionName === 'getRepToken') return '0x00000000000000000000000000000000000000bb'
+		if (request.functionName === 'balanceOf') {
+			if ((request.args?.[0] ?? zeroAddress) === '0x00000000000000000000000000000000000000aa') return 5n * ETH
+			return 0n
+		}
+		throw new Error(`Unexpected fork migration read: ${String(request.functionName)}`)
+	},
+): Pick<ReadClient, 'readContract'> {
+	return {
+		readContract: createReadContractStub(readContract),
+	}
+}
+
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
 	const forkAuctionDetails = overrides.forkAuctionDetails ?? createForkAuctionDetails()
 	const previewPool = overrides.previewPool
@@ -228,7 +309,9 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		forkAuctionError: undefined,
 		forkAuctionForm: createForkAuctionForm(),
 		forkAuctionResult: undefined,
+		forkMigrationReadClient: createForkMigrationReadClient(),
 		loadingForkAuctionDetails: false,
+		loadingReportingDetails: false,
 		onClaimAuctionProceeds: () => undefined,
 		onCreateChildUniverse: () => undefined,
 		onFinalizeTruthAuction: () => undefined,
@@ -237,13 +320,17 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onForkWithOwnEscalation: () => undefined,
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
-		onMigrateEscalationDeposits: () => undefined,
-		onMigrateRepToZoltar: () => undefined,
+		onMigrateEscalationDeposits: (_outcome, _depositIndexes) => undefined,
+		onMigrateRepToZoltar: _outcomes => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,
+		onReportingFormChange: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
 		previewPool,
+		reportingDetails: undefined,
+		reportingForm: createReportingForm(),
+		securityPools: [],
 		stageView:
 			overrides.stageView ??
 			getForkAuctionStageView({
@@ -296,7 +383,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('This pool is operational. If it is a child universe, the fork and auction path has completed.')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
 		expect(documentQueries.queryByRole('tablist', { name: 'Fork lifecycle stages' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Live Snapshot' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Live Snapshot' })).toBeNull()
 	})
 
 	test('shows migration preview content before any fork activity exists', async () => {
@@ -319,47 +406,43 @@ describe('ForkAuctionSection', () => {
 
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Trigger' })).toBeNull()
-		expect(document.body.textContent?.includes('This pool is currently operational. Migration controls become meaningful once the pool has forked.')).toBe(true)
+		expect(documentQueries.queryByRole('button', { name: 'Refresh fork' })).toBeNull()
+		expect(document.body.textContent?.includes('This pool is currently operational. Migration controls become meaningful once the pool has forked.')).toBe(false)
 		expect(getMetricValue(migrationSection, 'Fork Type')).toBe('Unavailable until fork')
 	})
 
-	test('launches create child universe in a focused modal', async () => {
-		let createChildUniverseCallCount = 0
+	test('keeps migration actions available while gating later-stage writes through the shared action matrix', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
 				createProps({
-					onCreateChildUniverse: () => {
-						createChildUniverseCallCount += 1
-					},
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaults: [
+							{
+								lockedRepInEscalationGame: rep(1n),
+								repDepositShare: rep(2n),
+								securityBondAllowance: 1n * ETH,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					reportingDetails: createReportingDetails(),
+					stageView: 'migration',
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
-		const modal = await waitFor(() => documentQueries.getByRole('dialog'))
-		const modalQueries = within(modal)
-		expect(modalQueries.getByText('Create Child Universe')).not.toBeNull()
-		expect(modalQueries.getByText('Selected Outcome')).not.toBeNull()
-
-		fireEvent.click(modalQueries.getByRole('button', { name: 'Create Yes Child Universe' }))
-
-		expect(createChildUniverseCallCount).toBe(1)
-	})
-
-	test('keeps migration actions available while gating later-stage writes through the shared action matrix', async () => {
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ stageView: 'migration' })))
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
 
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Create child universe')
-		expectTransactionButtonEnabled(document.body, 'Migrate Pool REP')
-		expectTransactionButtonEnabled(document.body, 'Migrate Vault')
-		expectTransactionButtonEnabled(document.body, 'Migrate Escalation Deposits')
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault')
+			expectTransactionButtonDisabled(document.body, 'Migrate Selected Yes Deposits', 'Select at least one deposit to migrate or use the all-deposits action below.')
+			expectTransactionButtonEnabled(document.body, 'Migrate All Yes Deposits')
+		})
 
 		await act(() => {
 			render(h(ForkAuctionSection, createProps({ stageView: 'auction' })), renderedComponent.container)
@@ -391,10 +474,9 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 
-		expectTransactionButtonDisabled(document.body, 'Create child universe')
-		expectTransactionButtonDisabled(document.body, 'Migrate Pool REP')
 		expectTransactionButtonDisabled(document.body, 'Migrate Vault')
-		expectTransactionButtonDisabled(document.body, 'Migrate Escalation Deposits')
+		expectTransactionButtonDisabled(document.body, 'Migrate Selected Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Migrate All Yes Deposits')
 
 		await act(() => {
 			render(
@@ -431,7 +513,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Withdraw Bids' })).toBeNull()
 	})
 
-	test('shows wallet migration balances and separates pool REP migration from vault migration', async () => {
+	test('shows wallet migration balances and moves escalation migration onto deposit selection rows', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -453,6 +535,25 @@ describe('ForkAuctionSection', () => {
 							},
 						],
 					}),
+					reportingDetails: createReportingDetails({
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{
+								balance: rep(5n),
+								deposits: [],
+								key: 'yes',
+								label: 'Yes',
+								userDeposits: [
+									createDeposit({
+										amount: rep(2n),
+										cumulativeAmount: rep(3n),
+										depositIndex: 1n,
+									}),
+								],
+							},
+							{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
 					stageView: 'migration',
 				}),
 			),
@@ -470,13 +571,12 @@ describe('ForkAuctionSection', () => {
 		expect(within(migrationBalancesSection).getByRole('heading', { name: 'Migrate Vault' })).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('heading', { name: 'Migrate Escalation Deposits' })).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Vault' })).not.toBeNull()
-		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Escalation Deposits' })).not.toBeNull()
-		expect(within(migrationBalancesSection).getByText('Escalation Deposit Indexes')).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Selected Yes Deposits' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate All Yes Deposits' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('checkbox', { name: /Deposit #1/i })).not.toBeNull()
 		expect(within(migrationBalancesSection).queryByText('Vault Address')).toBeNull()
-		expect(documentQueries.getAllByRole('heading', { name: 'Migrate Pool REP' }).length).toBe(1)
-		expect(documentQueries.getByRole('heading', { name: 'Migrate Pool REP' })).not.toBeNull()
-		expect(documentQueries.getByText('Target Child Outcomes')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Migrate Pool REP' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Create Child Universe' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Migrate Pool REP' })).toBeNull()
 	})
 
 	test('prefers the live chain timestamp over the loaded snapshot for migration time left', async () => {
@@ -493,6 +593,126 @@ describe('ForkAuctionSection', () => {
 
 		expect(document.body.textContent?.includes(formatDuration(200n - 100n))).toBe(false)
 		expect(document.body.textContent?.includes(formatDuration(200n - 150n))).toBe(true)
+	})
+
+	test('uses the selected escalation-deposit checkboxes to drive migration actions', async () => {
+		const reportingFormUpdates: Partial<ReportingFormState>[] = []
+		const migrateEscalationCalls: Array<{ depositIndexes: bigint[] | undefined; outcome: string }> = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					reportingDetails: createReportingDetails({
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{
+								balance: rep(5n),
+								deposits: [],
+								key: 'yes',
+								label: 'Yes',
+								userDeposits: [createDeposit({ amount: rep(2n), cumulativeAmount: rep(2n), depositIndex: 0n }), createDeposit({ amount: rep(3n), cumulativeAmount: rep(5n), depositIndex: 1n })],
+							},
+							{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
+					reportingForm: createReportingForm(),
+					onMigrateEscalationDeposits: (outcome, depositIndexes) => {
+						migrateEscalationCalls.push({ depositIndexes, outcome })
+					},
+					onReportingFormChange: update => {
+						reportingFormUpdates.push(update)
+					},
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('checkbox', { name: /Deposit #1/i }))
+
+		expect(reportingFormUpdates).toContainEqual({
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [],
+				yes: [1n],
+				no: [],
+			},
+		})
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						reportingDetails: createReportingDetails({
+							sides: [
+								{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{
+									balance: rep(5n),
+									deposits: [],
+									key: 'yes',
+									label: 'Yes',
+									userDeposits: [createDeposit({ amount: rep(2n), cumulativeAmount: rep(2n), depositIndex: 0n }), createDeposit({ amount: rep(3n), cumulativeAmount: rep(5n), depositIndex: 1n })],
+								},
+								{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+						}),
+						reportingForm: createReportingForm({
+							selectedWithdrawDepositIndexesByOutcome: {
+								invalid: [],
+								yes: [1n],
+								no: [],
+							},
+						}),
+						onMigrateEscalationDeposits: (outcome, depositIndexes) => {
+							migrateEscalationCalls.push({ depositIndexes, outcome })
+						},
+						onReportingFormChange: update => {
+							reportingFormUpdates.push(update)
+						},
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate Selected Yes Deposits' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate All Yes Deposits' }))
+
+		expect(migrateEscalationCalls).toEqual([
+			{ depositIndexes: [1n], outcome: 'yes' },
+			{ depositIndexes: [0n, 1n], outcome: 'yes' },
+		])
+	})
+
+	test('requires pool REP migration before vault migration when the selected child has not been seeded', async () => {
+		const migrateRepCalls: Array<string[] | undefined> = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkMigrationReadClient: createForkMigrationReadClient(async request => {
+						if (request.functionName === 'getChildUniverseId') return 11n
+						if (request.functionName === 'getMigrationProxyAddress') return '0x00000000000000000000000000000000000000aa'
+						if (request.functionName === 'getRepToken') return '0x00000000000000000000000000000000000000bb'
+						if (request.functionName === 'balanceOf') return 0n
+						throw new Error(`Unexpected fork migration read: ${String(request.functionName)}`)
+					}),
+					onMigrateRepToZoltar: outcomes => {
+						migrateRepCalls.push(outcomes)
+					},
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Migrate pool REP to the Yes child pool before moving vault balances.')
+		})
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Pool REP To Yes' }))
+		expect(migrateRepCalls).toEqual([['yes']])
 	})
 
 	test('renders latest fork action status outside action rows', async () => {
@@ -513,8 +733,38 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
+		expect(documentQueries.getByText('Vault Migrated')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Latest Fork / Auction Action' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Latest Fork / Auction Action' }).closest('.actions')).toBeNull()
+	})
+
+	test('disables wallet migration actions once the connected wallet has no migration balances left', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaultCount: 1n,
+						vaults: [
+							{
+								lockedRepInEscalationGame: 0n,
+								repDepositShare: 0n,
+								securityBondAllowance: 0n,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'No REP collateral or security bond allowance remains to migrate for the connected wallet.')
+		expectTransactionButtonDisabled(document.body, 'Migrate Selected Yes Deposits', 'No locked REP remains to migrate for the connected wallet.')
+		expectTransactionButtonDisabled(document.body, 'Migrate All Yes Deposits', 'No locked REP remains to migrate for the connected wallet.')
 	})
 
 	test('does not imply a concrete fork type before a fork path is chosen after non-decision', async () => {
@@ -799,7 +1049,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Settlement Available')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Settlement Overview' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Bidder Address').length).toBeGreaterThan(0)
 		expectTransactionButtonDisabled(document.body, 'Settle Finalized Bid', 'Enter a valid settlement bid tick.')
 

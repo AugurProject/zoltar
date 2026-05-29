@@ -3,14 +3,12 @@ import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { type Address, isAddress, zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
-import { ActionLauncherCard } from './ActionLauncherCard.js'
-import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
-import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
@@ -21,18 +19,19 @@ import { TimestampValue } from './TimestampValue.js'
 import { TruthAuctionDepthChart, type TruthAuctionDepthPoint } from './TruthAuctionDepthChart.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
-import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickSummary } from '../contracts.js'
+import { loadForkOutcomeMigrationSeedStatus, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickSummary } from '../contracts.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getTimeRemaining, getTruthAuctionBidGuardMessage, type ForkAuctionStageView } from '../lib/forkAuction.js'
+import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getTimeRemaining, getTruthAuctionBidGuardMessage, type ForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { getEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ForkAuctionActionResult, ListedSecurityPool, ReadClient, TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
-import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
+import type { ForkAuctionSectionProps } from '../types/components.js'
 const UNKNOWN_VALUE = '—'
 const UNAVAILABLE_UNTIL_FORK = 'Unavailable until fork'
 const TRUTH_AUCTION_TICK_PAGE_SIZE = 25
@@ -95,6 +94,8 @@ type TruthAuctionViewerBidSummary = {
 	winningCount: number
 }
 
+type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
+
 function getTruthAuctionWindow(startedAt: bigint | undefined) {
 	if (startedAt === undefined || startedAt === 0n) return undefined
 	return {
@@ -143,9 +144,87 @@ function getForkAuctionActionLabel(actionName: ForkAuctionActionResult['action']
 	return humanizeForkAuctionAction(actionName)
 }
 
+function getForkAuctionOutcomePresentation(result: ForkAuctionActionResult | undefined) {
+	if (result === undefined) return undefined
+
+	const dismissKey = `${result.action}:${result.hash}:outcome`
+	switch (result.action) {
+		case 'migrateVault':
+			return {
+				detail: 'Parent-pool REP collateral and security bond allowance were migrated into the selected child pool.',
+				dismissKey,
+				nextStep: 'Open the child-universe pool to inspect the migrated vault balances.',
+				title: 'Vault Migrated',
+			}
+		case 'migrateEscalationDeposits':
+			return {
+				detail: 'Locked escalation REP was migrated into the selected child pool.',
+				dismissKey,
+				nextStep: 'Refresh the child-universe pool to inspect the migrated balances.',
+				title: 'Escalation Deposits Migrated',
+			}
+		case 'migrateRepToZoltar':
+			return {
+				detail: 'Parent-pool REP was migrated into the selected child outcomes.',
+				dismissKey,
+				nextStep: 'Open the target child pool to inspect the updated migration balance.',
+				title: 'Pool REP Migrated',
+			}
+		case 'createChildUniverse':
+			return {
+				detail: 'The selected child universe pool was created.',
+				dismissKey,
+				nextStep: 'Continue with vault or pool REP migration for that outcome.',
+				title: 'Child Universe Created',
+			}
+		case 'startTruthAuction':
+			return {
+				detail: 'The truth auction was started for this child pool.',
+				dismissKey,
+				nextStep: 'Review the order book and submit bids as needed.',
+				title: 'Truth Auction Started',
+			}
+		case 'submitBid':
+			return {
+				detail: 'Your truth auction bid was submitted.',
+				dismissKey,
+				nextStep: 'Watch the order book and settlement state before your next bid.',
+				title: 'Bid Submitted',
+			}
+		case 'finalizeTruthAuction':
+			return {
+				detail: 'The truth auction was finalized.',
+				dismissKey,
+				nextStep: 'Review refundable bids and settle finalized positions.',
+				title: 'Truth Auction Finalized',
+			}
+		case 'refundLosingBids':
+			return {
+				detail: 'The selected losing bid refund was submitted.',
+				dismissKey,
+				nextStep: 'Review your remaining auction bids and settlement actions.',
+				title: 'Losing Bid Refunded',
+			}
+		case 'claimAuctionProceeds':
+			return {
+				detail: 'Finalized truth auction proceeds were settled for the selected bid.',
+				dismissKey,
+				nextStep: 'Review the updated vault and bid state before further settlement actions.',
+				title: 'Finalized Bid Settled',
+			}
+		default:
+			return {
+				detail: `${getForkAuctionActionLabel(result.action)} was submitted.`,
+				dismissKey,
+				title: `${getForkAuctionActionLabel(result.action)} Submitted`,
+			}
+	}
+}
+
 function getStageAheadMessage(stage: ForkAuctionStageView, currentStage: ForkAuctionStageView) {
 	if (getForkAuctionStageOrder(stage) <= getForkAuctionStageOrder(currentStage)) return undefined
-	const currentStageText = currentStage === 'initiate' ? 'operational' : `in ${getForkAuctionStageLabel(currentStage)}`
+	if (currentStage === 'initiate') return undefined
+	const currentStageText = `in ${getForkAuctionStageLabel(currentStage)}`
 	switch (stage) {
 		case 'migration':
 			return `This pool is currently ${currentStageText}. Migration controls become meaningful once the pool has forked.`
@@ -158,17 +237,6 @@ function getStageAheadMessage(stage: ForkAuctionStageView, currentStage: ForkAuc
 		default:
 			return undefined
 	}
-}
-function renderSummaryMetricGrid(metrics: DisplayMetric[]) {
-	return (
-		<div className='fork-summary-grid'>
-			{metrics.map(metric => (
-				<MetricField key={metric.label} className='entity-metric' label={metric.label}>
-					{metric.value}
-				</MetricField>
-			))}
-		</div>
-	)
 }
 function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 	return (
@@ -525,27 +593,29 @@ export function ForkAuctionSection({
 	accountState,
 	currentTimestamp,
 	disabled = false,
-	disabledMessage,
 	embedInCard = false,
 	forkAuctionDetails,
 	forkAuctionActiveAction,
 	forkAuctionError,
 	forkAuctionForm,
 	forkAuctionResult,
+	forkMigrationReadClient,
 	lifecycleStateOverride,
-	loadingForkAuctionDetails,
+	loadingReportingDetails = false,
 	onClaimAuctionProceeds,
-	onCreateChildUniverse,
 	onFinalizeTruthAuction,
 	onForkAuctionFormChange,
-	onLoadForkAuction,
-	onMigrateEscalationDeposits,
 	onMigrateRepToZoltar,
+	onMigrateEscalationDeposits,
 	onMigrateVault,
 	onRefundLosingBids,
+	onReportingFormChange,
 	onStartTruthAuction,
 	onSubmitBid,
 	previewPool,
+	reportingDetails,
+	reportingForm,
+	securityPools = [],
 	stageView,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
@@ -574,19 +644,16 @@ export function ForkAuctionSection({
 	})
 	const resolvedForkTypeLabel = forkAuctionDetails === undefined ? previewForkTypeLabel : getForkTypeLabel(forkAuctionDetails.forkOwnSecurityPool)
 	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
-	const forkStageDescription = (() => {
-		if (forkAuctionDetails === undefined) {
-			if (lifecycleStateOverride === 'poolForked' && systemState === 'operational') return undefined
-			if (systemState === undefined) return undefined
-
-			return getForkStageDescriptionForState(systemState)
-		}
-
-		return getForkStageDescription(forkAuctionDetails)
-	})()
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
+	const selectedOutcomeLabel = getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)
 	const connectedWalletVaultSummary = accountState.address === undefined || previewPool === undefined ? undefined : previewPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
+	const selectedOutcomeMigrationChildPool = securityPoolAddress === undefined ? undefined : securityPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
+	const selectedEscalationMigrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === forkAuctionForm.selectedOutcome)
+	const selectedEscalationMigrationDeposits = selectedEscalationMigrationSide?.userDeposits ?? []
+	const selectedEscalationMigrationDepositIndexes = reportingForm?.selectedWithdrawDepositIndexesByOutcome[forkAuctionForm.selectedOutcome] ?? []
+	const showSelectedEscalationMigrationDeposits = !loadingReportingDetails && reportingDetails?.status === 'active'
+	const hasSelectedEscalationMigrationDeposits = selectedEscalationMigrationDeposits.length > 0
 	const migrationBalancesContent = (() => {
 		if (accountState.address === undefined) return <p className='detail'>Connect wallet to inspect your parent-pool balances.</p>
 		if (connectedWalletVaultSummary === undefined) return <p className='detail'>Parent-pool vault balances are unavailable for the connected wallet. You can still use the migration actions below if this wallet has parent-pool state to move.</p>
@@ -604,6 +671,8 @@ export function ForkAuctionSection({
 	})()
 	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.repDepositShare > 0n || connectedWalletVaultSummary.securityBondAllowance > 0n)
 	const hasWalletEscalationMigrationBalance = connectedWalletVaultSummary !== undefined && connectedWalletVaultSummary.lockedRepInEscalationGame > 0n
+	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? 'No REP collateral or security bond allowance remains to migrate for the connected wallet.' : undefined
+	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? 'No locked REP remains to migrate for the connected wallet.' : undefined
 	const currentStage =
 		systemState === undefined
 			? 'initiate'
@@ -616,7 +685,9 @@ export function ForkAuctionSection({
 					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
 				})
 	const selectedStage = stageView === 'initiate' ? 'migration' : stageView
-	const [childUniverseModalOpen, setChildUniverseModalOpen] = useState(false)
+	const [selectedOutcomeMigrationSeedStatus, setSelectedOutcomeMigrationSeedStatus] = useState<ForkOutcomeMigrationSeedStatus | undefined>(undefined)
+	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
+	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
 	const [truthAuctionBookData, setTruthAuctionBookData] = useState<TruthAuctionBookData>({
 		tickSummaries: [],
 		tickCount: 0n,
@@ -786,21 +857,49 @@ export function ForkAuctionSection({
 			settlementAddress: bid.bidder,
 		})
 	}
-	const createChildUniverseEnabled = forkPoolState.actions.createChildUniverse.enabled
-	const childUniverseRequirements = [
-		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
-		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
-		{ key: 'wallet', label: 'Wallet connected', resolved: accountState.address !== undefined, ...(accountState.address !== undefined ? {} : { detail: 'Connect a wallet before creating a child universe.' }) },
-		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before creating a child universe.' }) },
-	]
-	const createChildUniverseLauncherAction: ReadinessAction = {
-		actionLabel: 'Create child universe',
-		description: 'Review the selected outcome and confirm the child-universe creation in a bounded execution modal.',
-		key: 'create-child-universe',
-		...(hasLoadedPoolContext && createChildUniverseEnabled ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
-		readiness: hasLoadedPoolContext && createChildUniverseEnabled ? 'ready' : 'blocked',
-		title: `Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`,
-		...(hasLoadedPoolContext ? {} : { blocker: 'Load fork details for this pool first.' }),
+	const setSelectedEscalationMigrationDepositIndexes = (nextSelectedDepositIndexes: bigint[]) => {
+		if (onReportingFormChange === undefined || reportingForm === undefined) return
+		onReportingFormChange({
+			selectedWithdrawDepositIndexesByOutcome: {
+				...reportingForm.selectedWithdrawDepositIndexesByOutcome,
+				[forkAuctionForm.selectedOutcome]: nextSelectedDepositIndexes,
+			},
+		})
+	}
+	const migrateSelectedEscalationDepositsGuardMessage = (() => {
+		if (migrateEscalationBalanceGuardMessage !== undefined) return migrateEscalationBalanceGuardMessage
+		if (loadingReportingDetails) return 'Loading eligible escalation deposits.'
+		if (reportingDetails?.status !== 'active') return 'Escalation deposit details are unavailable for this pool right now.'
+		if (selectedEscalationMigrationDeposits.length === 0) return `No ${selectedOutcomeLabel} escalation deposits are currently available to migrate for this wallet.`
+		if (selectedEscalationMigrationDepositIndexes.length > 0) return undefined
+		return 'Select at least one deposit to migrate or use the all-deposits action below.'
+	})()
+	const migrateAllEscalationDepositsGuardMessage = (() => {
+		if (migrateEscalationBalanceGuardMessage !== undefined) return migrateEscalationBalanceGuardMessage
+		if (loadingReportingDetails) return 'Loading eligible escalation deposits.'
+		if (reportingDetails?.status !== 'active') return 'Escalation deposit details are unavailable for this pool right now.'
+		if (selectedEscalationMigrationDeposits.length > 0) return undefined
+		return `No ${selectedOutcomeLabel} escalation deposits are currently available to migrate for this wallet.`
+	})()
+	const selectedOutcomeMigrationSeedGuardMessage = (() => {
+		if (migrateVaultBalanceGuardMessage !== undefined) return undefined
+		if (loadingSelectedOutcomeMigrationSeedStatus) return `Checking whether pool REP has already been migrated for the ${selectedOutcomeLabel} child pool.`
+		if (selectedOutcomeMigrationSeedStatusError !== undefined) return selectedOutcomeMigrationSeedStatusError
+		if (selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.seeded) return undefined
+		return `Migrate pool REP to the ${selectedOutcomeLabel} child pool before moving vault balances.`
+	})()
+	const migrateVaultGuardMessage = migrateVaultBalanceGuardMessage ?? selectedOutcomeMigrationSeedGuardMessage
+	const onMigrateSelectedOutcomeRepToZoltar = () => {
+		onMigrateRepToZoltar([forkAuctionForm.selectedOutcome])
+	}
+	const onMigrateSelectedEscalationDeposits = () => {
+		onMigrateEscalationDeposits(forkAuctionForm.selectedOutcome, selectedEscalationMigrationDepositIndexes)
+	}
+	const onMigrateAllEscalationDeposits = () => {
+		onMigrateEscalationDeposits(
+			forkAuctionForm.selectedOutcome,
+			selectedEscalationMigrationDeposits.map(deposit => deposit.depositIndex),
+		)
 	}
 	const renderStageActionButton = ({
 		action,
@@ -838,9 +937,39 @@ export function ForkAuctionSection({
 		)
 	}
 	useEffect(() => {
-		if (forkAuctionResult?.action !== 'createChildUniverse') return
-		setChildUniverseModalOpen(false)
-	}, [forkAuctionResult])
+		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined) {
+			setSelectedOutcomeMigrationSeedStatus(undefined)
+			setSelectedOutcomeMigrationSeedStatusError(undefined)
+			setLoadingSelectedOutcomeMigrationSeedStatus(false)
+			return
+		}
+		const client = forkMigrationReadClient ?? createConnectedReadClient()
+		let cancelled = false
+		setLoadingSelectedOutcomeMigrationSeedStatus(true)
+		setSelectedOutcomeMigrationSeedStatusError(undefined)
+		void loadForkOutcomeMigrationSeedStatus(client, {
+			childSecurityPoolAddress: selectedOutcomeMigrationChildPool?.securityPoolAddress,
+			outcome: forkAuctionForm.selectedOutcome,
+			securityPoolAddress,
+			universeId,
+		})
+			.then(status => {
+				if (cancelled) return
+				setSelectedOutcomeMigrationSeedStatus(status)
+			})
+			.catch(error => {
+				if (cancelled) return
+				setSelectedOutcomeMigrationSeedStatus(undefined)
+				setSelectedOutcomeMigrationSeedStatusError(getErrorMessage(error, `Unable to verify whether pool REP is ready for the ${selectedOutcomeLabel} child pool.`))
+			})
+			.finally(() => {
+				if (cancelled) return
+				setLoadingSelectedOutcomeMigrationSeedStatus(false)
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, forkMigrationReadClient, securityPoolAddress, selectedOutcomeLabel, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedStage, universeId])
 	useEffect(() => {
 		setLoadedTickPageCount(1)
 		setLoadedViewerBidPageCount(1)
@@ -959,6 +1088,7 @@ export function ForkAuctionSection({
 						{ label: 'Transaction', value: <TransactionHashLink hash={forkAuctionResult.hash} /> },
 					],
 				}
+	const forkAuctionOutcome = getForkAuctionOutcomePresentation(forkAuctionResult)
 	const migrationStatusMetrics: DisplayMetric[] = [
 		{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
 		{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
@@ -999,41 +1129,6 @@ export function ForkAuctionSection({
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? forkOnlyFallbackText : <CurrencyValue value={truthAuctionStatus.totalRepPurchased} suffix='REP' /> },
 	]
-	const liveSnapshotMetrics: DisplayMetric[] = (() => {
-		if (selectedStage === 'migration')
-			return [
-				{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-				{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
-				{
-					label: 'Migration Ends',
-					value: (() => {
-						if (forkAuctionDetails === undefined) return migrationSummaryText
-						if (forkAuctionDetails.migrationEndsAt === undefined) return 'Started/finished'
-
-						return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />
-					})(),
-				},
-			]
-
-		return (() => {
-			if (selectedStage === 'auction')
-				return [
-					{ label: 'Started', value: startedDisplay },
-					{ label: 'Ends', value: endsDisplay },
-					{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
-					{ label: 'Clearing Price', value: clearingPriceDisplay },
-				]
-			if (selectedStage === 'settlement')
-				return [
-					{ label: 'Finalized', value: finalizedDisplay },
-					{ label: 'Underfunded', value: underfundedDisplay },
-					{ label: 'Auctioned Allowance', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionedSecurityBondAllowance} suffix='ETH' /> },
-					{ label: 'Settlement Available', value: settlementAvailableDisplay },
-				]
-
-			return migrationStatusMetrics
-		})()
-	})()
 	const truthAuctionHero = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
@@ -1442,53 +1537,95 @@ export function ForkAuctionSection({
 						{accountState.address === undefined ? undefined : (
 							<>
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Vault' description={"Move the connected wallet's REP collateral and security bond allowance into the selected child pool."} variant='embedded'>
-									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>No REP collateral or security bond allowance remains to migrate for the connected wallet.</p> : undefined}
 									<div className='form-grid'>
 										<label className='field'>
 											<span>Outcome</span>
 											<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 										</label>
-										<div className='actions'>{renderStageActionButton({ action: 'migrateVault', idleLabel: 'Migrate Vault', onClick: onMigrateVault, pendingLabel: 'Migrating vault...', tone: 'primary' })}</div>
 									</div>
+									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>No REP collateral or security bond allowance remains to migrate for the connected wallet.</p> : undefined}
+									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child pool.</p> : undefined}
+									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
+									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
+										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? 'Pool REP is already available in the selected child pool.' : 'Pool REP for this outcome is already staged and will sweep into the child pool during vault migration.'}</p>
+									)}
+									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
+										<>
+											<p className='detail'>This child outcome is not seeded with parent-pool REP yet. Migrate the pool REP first, then move your vault balances.</p>
+											<div className='actions'>
+												{renderStageActionButton({
+													action: 'migrateRepToZoltar',
+													idleLabel: `Migrate Pool REP To ${selectedOutcomeLabel}`,
+													onClick: onMigrateSelectedOutcomeRepToZoltar,
+													pendingLabel: 'Migrating pool REP...',
+												})}
+											</div>
+										</>
+									)}
+									<div className='actions'>{renderStageActionButton({ action: 'migrateVault', availability: createActionAvailability(migrateVaultGuardMessage), idleLabel: 'Migrate Vault', onClick: onMigrateVault, pendingLabel: 'Migrating vault...', tone: 'primary' })}</div>
 								</SectionBlock>
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Escalation Deposits' description='Move winning non-decision escalation deposits for the connected wallet into the selected child pool.' variant='embedded'>
-									{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No locked REP is currently visible for winning non-decision escalation deposits on the connected wallet.</p> : undefined}
 									<div className='form-grid'>
 										<label className='field'>
 											<span>Outcome</span>
 											<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 										</label>
-										<label className='field'>
-											<span>Escalation Deposit Indexes</span>
-											<FormInput value={forkAuctionForm.depositIndexes} onInput={event => onForkAuctionFormChange({ depositIndexes: event.currentTarget.value })} placeholder='0,1,2' />
-										</label>
-										<div className='actions'>{renderStageActionButton({ action: 'migrateEscalationDeposits', idleLabel: 'Migrate Escalation Deposits', onClick: onMigrateEscalationDeposits, pendingLabel: 'Migrating escalation deposits...' })}</div>
+									</div>
+									{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No locked REP is currently visible for winning non-decision escalation deposits on the connected wallet.</p> : undefined}
+									{loadingReportingDetails ? <p className='detail'>Loading escalation deposits for the selected wallet…</p> : undefined}
+									{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>Escalation deposit details are unavailable for this pool right now.</p>}
+									{showSelectedEscalationMigrationDeposits && !hasSelectedEscalationMigrationDeposits ? <p className='detail'>No {selectedOutcomeLabel} escalation deposits are currently available to migrate for this wallet.</p> : undefined}
+									{showSelectedEscalationMigrationDeposits && hasSelectedEscalationMigrationDeposits ? (
+										<div className='field'>
+											<span>Choose deposits to migrate</span>
+											<EscalationDepositSelectionList
+												disabled={forkAuctionActiveAction === 'migrateEscalationDeposits'}
+												items={selectedEscalationMigrationDeposits.map(deposit => {
+													const claimAmount = getEscalationDepositClaimAmount(reportingDetails, forkAuctionForm.selectedOutcome, deposit)
+													return {
+														deposit,
+														details: [
+															<>
+																Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+															</>,
+															claimAmount === undefined ? (
+																'Worth now: Pending migration/finalization'
+															) : (
+																<>
+																	Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
+																</>
+															),
+															'Current path: Eligible for child-pool migration',
+															<>
+																Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+															</>,
+														],
+													}
+												})}
+												onSelectionChange={setSelectedEscalationMigrationDepositIndexes}
+												selectedDepositIndexes={selectedEscalationMigrationDepositIndexes}
+											/>
+										</div>
+									) : undefined}
+									<div className='actions'>
+										{renderStageActionButton({
+											action: 'migrateEscalationDeposits',
+											availability: createActionAvailability(migrateSelectedEscalationDepositsGuardMessage),
+											idleLabel: `Migrate Selected ${selectedOutcomeLabel} Deposits`,
+											onClick: onMigrateSelectedEscalationDeposits,
+											pendingLabel: 'Migrating escalation deposits...',
+										})}
+										{renderStageActionButton({
+											action: 'migrateEscalationDeposits',
+											availability: createActionAvailability(migrateAllEscalationDepositsGuardMessage),
+											idleLabel: `Migrate All ${selectedOutcomeLabel} Deposits`,
+											onClick: onMigrateAllEscalationDeposits,
+											pendingLabel: 'Migrating escalation deposits...',
+										})}
 									</div>
 								</SectionBlock>
 							</>
 						)}
-					</SectionBlock>
-
-					<SectionBlock title='Create Child Universe'>
-						<div className='form-grid'>
-							<label className='field'>
-								<span>Outcome</span>
-								<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
-							</label>
-							<ActionLauncherCard action={createChildUniverseLauncherAction}>
-								<p className='detail'>Selected outcome: {getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)}</p>
-							</ActionLauncherCard>
-						</div>
-					</SectionBlock>
-
-					<SectionBlock title='Migrate Pool REP' description={"Move the parent pool's REP inventory into the selected child outcomes. This seeds child-pool REP before wallet-level migration."}>
-						<div className='form-grid'>
-							<label className='field'>
-								<span>Target Child Outcomes</span>
-								<FormInput value={forkAuctionForm.repMigrationOutcomes} onInput={event => onForkAuctionFormChange({ repMigrationOutcomes: event.currentTarget.value })} placeholder='yes,no,invalid' />
-							</label>
-							<div className='actions'>{renderStageActionButton({ action: 'migrateRepToZoltar', idleLabel: 'Migrate Pool REP', onClick: onMigrateRepToZoltar, pendingLabel: 'Migrating pool REP...' })}</div>
-						</div>
 					</SectionBlock>
 				</fieldset>
 			)
@@ -1646,59 +1783,14 @@ export function ForkAuctionSection({
 	})()
 	const content = (
 		<>
-			<div className='form-grid'>
-				{showSecurityPoolAddressInput ? (
-					<LookupFieldRow
-						label='Security Pool Address'
-						value={forkAuctionForm.securityPoolAddress}
-						onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })}
-						placeholder='0x...'
-						action={
-							<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
-								{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
-							</button>
-						}
-					/>
-				) : (
-					<div className='actions'>
-						<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
-							{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
-						</button>
-					</div>
-				)}
-				{hasLoadedPoolContext ? undefined : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
-				{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
-				{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
-			</div>
-			<WorkflowTransactionStatus latestAction={latestForkAuctionAction} outcome={undefined} />
+			{!showSecurityPoolAddressInput && hasLoadedPoolContext ? undefined : (
+				<div className='form-grid'>
+					{!showSecurityPoolAddressInput ? undefined : <LookupFieldRow label='Security Pool Address' value={forkAuctionForm.securityPoolAddress} onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })} placeholder='0x...' />}
+					{hasLoadedPoolContext ? undefined : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
+				</div>
+			)}
+			<WorkflowTransactionStatus latestAction={latestForkAuctionAction} outcome={forkAuctionOutcome} />
 			{hasLoadedPoolContext ? stagePanel : undefined}
-			{hasLoadedPoolContext ? <SectionBlock title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</SectionBlock> : undefined}
-
-			<ChildUniverseDeploymentModal
-				actionAvailability={{
-					disabled: !createChildUniverseEnabled || interactionDisabledReason !== undefined,
-					reason: createChildUniverseEnabled ? interactionDisabledReason : undefined,
-				}}
-				description='Confirm the selected fork outcome and create its child universe in one bounded transaction flow.'
-				idleLabel={`Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`}
-				isOpen={childUniverseModalOpen}
-				onClose={() => setChildUniverseModalOpen(false)}
-				onConfirm={onCreateChildUniverse}
-				pending={forkAuctionActiveAction === 'createChildUniverse'}
-				pendingLabel='Creating child universe...'
-				requirements={childUniverseRequirements}
-				title='Create Child Universe'
-				tone='primary'
-			>
-				<SectionBlock headingLevel={4} title='Child Universe Context' variant='embedded'>
-					<div className='workflow-metric-grid'>
-						<MetricField label='Selected Outcome'>{getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)}</MetricField>
-						<MetricField label='Pool'>{securityPoolAddress === undefined ? UNKNOWN_VALUE : <AddressValue address={securityPoolAddress} />}</MetricField>
-						<MetricField label='Universe'>{universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} />}</MetricField>
-						<MetricField label='Stage'>{getForkAuctionStageLabel(currentStage)}</MetricField>
-					</div>
-				</SectionBlock>
-			</ChildUniverseDeploymentModal>
 
 			<ErrorNotice message={forkAuctionError} />
 		</>

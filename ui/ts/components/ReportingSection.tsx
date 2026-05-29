@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
@@ -655,47 +656,40 @@ export function ReportingSection({
 							<SectionBlock key={side.key} density='compact' headingLevel={4} title={side.label} variant='embedded'>
 								<div className='field'>
 									<span>Choose deposits to withdraw</span>
-									<div className='withdraw-deposit-list'>
-										{side.userDeposits.map(deposit => {
-											const isChecked = selectedWithdrawDepositIndexes.includes(deposit.depositIndex)
+									<EscalationDepositSelectionList
+										disabled={withdrawControlsLocked || withdrawActionPending}
+										items={side.userDeposits.map(deposit => {
 											const claimAmount = getEscalationDepositClaimAmount(effectiveReportingDetails, side.key, deposit)
-											return (
-												<label key={`${side.key}-${deposit.depositIndex.toString()}`} className='withdraw-deposit-option'>
-													<input
-														type='checkbox'
-														checked={isChecked}
-														disabled={withdrawControlsLocked || withdrawActionPending}
-														onChange={event => {
-															const nextSelectedWithdrawDepositIndexes = event.currentTarget.checked ? [...selectedWithdrawDepositIndexes, deposit.depositIndex] : selectedWithdrawDepositIndexes.filter(index => index !== deposit.depositIndex)
-															onReportingFormChange({
-																selectedWithdrawDepositIndexesByOutcome: {
-																	...selectedWithdrawDepositIndexesByOutcome,
-																	[side.key]: nextSelectedWithdrawDepositIndexes,
-																},
-															})
-														}}
-													/>
-													<span className='withdraw-deposit-copy'>
-														<strong>Deposit #{deposit.depositIndex.toString()}</strong>
-														<span>
-															Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
-														</span>
-														{claimAmount === undefined ? (
-															<span>Worth after finalization: Pending finalization</span>
-														) : (
-															<span>
-																Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
-															</span>
-														)}
-														<span>Current claim type: {claimLabel ?? 'Pending finalization'}</span>
-														<span>
-															Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
-														</span>
-													</span>
-												</label>
-											)
+											return {
+												deposit,
+												details: [
+													<>
+														Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+													</>,
+													claimAmount === undefined ? (
+														'Worth after finalization: Pending finalization'
+													) : (
+														<>
+															Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
+														</>
+													),
+													`Current claim type: ${claimLabel ?? 'Pending finalization'}`,
+													<>
+														Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+													</>,
+												],
+											}
 										})}
-									</div>
+										onSelectionChange={nextSelectedWithdrawDepositIndexes =>
+											onReportingFormChange({
+												selectedWithdrawDepositIndexesByOutcome: {
+													...selectedWithdrawDepositIndexesByOutcome,
+													[side.key]: nextSelectedWithdrawDepositIndexes,
+												},
+											})
+										}
+										selectedDepositIndexes={selectedWithdrawDepositIndexes}
+									/>
 								</div>
 
 								<div className='actions'>

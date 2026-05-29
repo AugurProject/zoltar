@@ -73,7 +73,7 @@ import {
 	toUint8Array,
 } from './contracts/helpers.js'
 import { type ContractRevertReasonParams, type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
-import { getInfraContractAddresses, getOpenOracleAddress } from './contracts/deploymentHelpers.js'
+import { getInfraContractAddresses, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
 export { createSecurityPool, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
@@ -1020,6 +1020,74 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 		hash,
 	} satisfies OpenOracleActionResult
 }
+export async function loadForkOutcomeMigrationSeedStatus(
+	client: Pick<ReadClient, 'readContract'>,
+	{
+		childSecurityPoolAddress,
+		outcome,
+		securityPoolAddress,
+		universeId,
+	}: {
+		childSecurityPoolAddress?: Address | undefined
+		outcome: ReportingOutcomeKey
+		securityPoolAddress: Address
+		universeId: bigint
+	},
+) {
+	const childUniverseId = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getChildUniverseId',
+		address: getZoltarAddress(),
+		args: [universeId, BigInt(getReportingOutcomeValue(outcome))],
+	})
+	const migrationProxyAddress = await client.readContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'getMigrationProxyAddress',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	})
+	const childRepToken = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getRepToken',
+		address: getZoltarAddress(),
+		args: [childUniverseId],
+	})
+	if (childRepToken === zeroAddress) {
+		return {
+			childPoolRepBalance: 0n,
+			childRepToken: undefined,
+			childUniverseId,
+			migrationProxyAddress,
+			pendingProxyRepBalance: 0n,
+			seeded: false,
+		}
+	}
+	const pendingProxyRepBalance = await client.readContract({
+		abi: ABIS.mainnet.erc20,
+		functionName: 'balanceOf',
+		address: childRepToken,
+		args: [migrationProxyAddress],
+	})
+	const childPoolRepBalance =
+		childSecurityPoolAddress === undefined
+			? 0n
+			: await client.readContract({
+					abi: ABIS.mainnet.erc20,
+					functionName: 'balanceOf',
+					address: childRepToken,
+					args: [childSecurityPoolAddress],
+				})
+
+	return {
+		childPoolRepBalance,
+		childRepToken,
+		childUniverseId,
+		migrationProxyAddress,
+		pendingProxyRepBalance,
+		seeded: pendingProxyRepBalance > 0n || childPoolRepBalance > 0n,
+	}
+}
+
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
 	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], block] = await Promise.all([
 		readRequiredMulticall(client, [

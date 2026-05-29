@@ -530,8 +530,12 @@ export function App() {
 				onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
 				onInitiateFork: () => void initiateFork(),
 				onLoadForkAuction: () => void loadForkAuction(),
-				onMigrateEscalationDeposits: () => void migrateEscalation(),
-				onMigrateRepToZoltar: () => void migrateRepToZoltar(),
+				onMigrateEscalationDeposits: (outcome, depositIndexes) =>
+					void migrateEscalation({
+						outcome,
+						...(depositIndexes === undefined ? {} : { depositIndexes }),
+					}),
+				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
 				onMigrateVault: () => void migrateVault(),
 				onRefundLosingBids: () => void refundLosingBids(),
 				onStartTruthAuction: () => void startTruthAuction(),

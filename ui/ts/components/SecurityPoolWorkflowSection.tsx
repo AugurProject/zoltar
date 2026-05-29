@@ -376,7 +376,7 @@ export function SecurityPoolWorkflowSection({
 		void securityVault.onLoadSecurityVault()
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
-		const shouldAutoloadReportingForFork = isSelectedPoolForkStageView(view) && !selectedPoolHasActualForkActivity && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'
+		const shouldAutoloadReportingForFork = view === 'fork-migration'
 		const shouldAutoloadReportingForCurrentView = view === 'reporting' || view === 'withdraw-escalation-deposits' || shouldAutoloadReportingForFork
 		if (!shouldAutoloadReportingForCurrentView || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
@@ -812,7 +812,12 @@ export function SecurityPoolWorkflowSection({
 										embedInCard
 										forkAuctionDetails={currentForkAuctionDetails}
 										lifecycleStateOverride={selectedPoolLifecycleState}
+										loadingReportingDetails={reporting.loadingReportingDetails}
+										onReportingFormChange={reporting.onReportingFormChange}
 										previewPool={selectedPool}
+										reportingDetails={currentReportingDetails}
+										reportingForm={reporting.reportingForm}
+										securityPools={securityPools}
 										stageView={getForkStageViewForSelectedPoolView(view)}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}

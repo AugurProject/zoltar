@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import type { ForkAuctionDetails, ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
+import type { ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { parseBigIntInput } from './marketForm.js'
@@ -55,10 +55,6 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 		default:
 			return assertNever(state)
 	}
-}
-
-export function getForkStageDescription(details: ForkAuctionDetails) {
-	return getForkStageDescriptionForState(details.systemState)
 }
 
 export function getForkAuctionStageLabel(stage: ForkAuctionStageView) {
