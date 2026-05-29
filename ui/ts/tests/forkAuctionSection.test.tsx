@@ -294,9 +294,33 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This pool is operational. If it is a child universe, the fork and auction path has completed.')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Fork Workflow' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
 		expect(documentQueries.queryByRole('tablist', { name: 'Fork lifecycle stages' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Live Snapshot' })).not.toBeNull()
+	})
+
+	test('shows migration preview content before any fork activity exists', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ForkAuctionSection, {
+				...createProps({
+					previewPool: createPreviewPool(),
+					showHeader: true,
+					showSecurityPoolAddressInput: true,
+					stageView: 'migration',
+				}),
+				forkAuctionDetails: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const migrationSection = documentQueries.getByRole('heading', { name: 'Migration Status' }).closest('section')
+		if (!(migrationSection instanceof HTMLElement)) throw new Error('Expected migration status section to render')
+
+		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Fork Trigger' })).toBeNull()
+		expect(document.body.textContent?.includes('This pool is currently operational. Migration controls become meaningful once the pool has forked.')).toBe(true)
+		expect(getMetricValue(migrationSection, 'Fork Type')).toBe('Unavailable until fork')
 	})
 
 	test('launches create child universe in a focused modal', async () => {
@@ -325,15 +349,17 @@ describe('ForkAuctionSection', () => {
 		expect(createChildUniverseCallCount).toBe(1)
 	})
 
-	test('gates fork stage write buttons through the shared action matrix', async () => {
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ stageView: 'initiate' })))
+	test('keeps migration actions available while gating later-stage writes through the shared action matrix', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ stageView: 'migration' })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Initiate Pool Fork')
-		expectTransactionButtonDisabled(document.body, 'Fork Universe Directly')
+		expectTransactionButtonEnabled(document.body, 'Create child universe')
+		expectTransactionButtonEnabled(document.body, 'Migrate Pool REP')
+		expectTransactionButtonEnabled(document.body, 'Migrate Vault')
+		expectTransactionButtonEnabled(document.body, 'Migrate Escalation Deposits')
 
 		await act(() => {
 			render(h(ForkAuctionSection, createProps({ stageView: 'auction' })), renderedComponent.container)
@@ -493,32 +519,28 @@ describe('ForkAuctionSection', () => {
 
 	test('does not imply a concrete fork type before a fork path is chosen after non-decision', async () => {
 		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
+			h(ForkAuctionSection, {
+				...createProps({
 					forkAuctionDetails: undefined,
 					lifecycleStateOverride: 'poolForked',
 					previewPool: createPreviewPool({ questionOutcome: 'yes' }),
 					showHeader: true,
 					showSecurityPoolAddressInput: true,
+					stageView: 'migration',
 				}),
-			),
+				forkAuctionDetails: undefined,
+			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const workflowSection = documentQueries.getByRole('heading', { name: 'Fork Workflow' }).closest('section')
-		if (!(workflowSection instanceof HTMLElement)) throw new Error('Expected fork workflow section to render')
-		const summaryGrids = workflowSection.querySelectorAll('.fork-summary-grid')
-		const workflowMetrics = summaryGrids[0]
-		const poolMetrics = summaryGrids[1]
-		if (!(workflowMetrics instanceof HTMLElement)) throw new Error('Expected fork workflow metrics to render')
-		if (!(poolMetrics instanceof HTMLElement)) throw new Error('Expected pool summary metrics to render')
+		const migrationSection = documentQueries.getByRole('heading', { name: 'Migration Status' }).closest('section')
+		if (!(migrationSection instanceof HTMLElement)) throw new Error('Expected migration status section to render')
 
-		expect(getMetricValue(workflowMetrics, 'Fork Type')).toBe('Not chosen yet')
-		expect(within(workflowMetrics).queryByText('Viewing')).toBeNull()
-		expect(within(workflowMetrics).queryByText('Fork Outcome')).toBeNull()
-		expect(within(poolMetrics).queryByText('Fork Outcome')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
+		expect(getMetricValue(migrationSection, 'Fork Type')).toBe('Not chosen yet')
+		expect(within(migrationSection).queryByText('Viewing')).toBeNull()
+		expect(within(migrationSection).queryByText('Fork Outcome')).toBeNull()
 		expect(documentQueries.queryByText('Parent/Zoltar fork')).toBeNull()
 	})
 

@@ -71,7 +71,7 @@ void describe('url params', () => {
 		expect(readSelectedPoolViewQueryParam('?selectedPoolView=')).toBe(undefined)
 		expect(writeSelectedPoolViewQueryParam('', 'fork-auction')).toBe('?selectedPoolView=fork-auction&securityPoolsView=operate')
 		expect(writeSelectedPoolViewQueryParam('?foo=bar', 'fork-settlement')).toBe('?foo=bar&selectedPoolView=fork-settlement&securityPoolsView=operate')
-		expect(writeSelectedPoolViewQueryParam('?foo=bar&selectedPoolView=fork-trigger', undefined)).toBe('?foo=bar')
+		expect(writeSelectedPoolViewQueryParam('?foo=bar&selectedPoolView=fork-migration', undefined)).toBe('?foo=bar')
 	})
 
 	void test('reads and writes an open oracle view query param', () => {

@@ -8,7 +8,6 @@ import { getReportingOutcomeLabel } from './reporting.js'
 
 const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
 
-export const MIGRATION_TIME_SECONDS = 8n * SECONDS_PER_WEEK
 export const AUCTION_TIME_SECONDS = SECONDS_PER_WEEK
 const PRICE_PRECISION = 10n ** 18n
 

@@ -376,7 +376,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(within(secondaryGroup).getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
 		expect(within(secondaryGroup).getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Trading', 'Reporting', 'Withdraw Escalation Deposits', 'Trigger', 'Migration', 'Auction', 'Settlement', 'Staged Operations', 'Open Oracle']) {
+		for (const label of ['Vaults', 'Trading', 'Reporting', 'Withdraw Escalation Deposits', 'Migration', 'Auction', 'Settlement', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool to open this workflow.')
@@ -422,7 +422,6 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Current: Auction')).toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Trigger' }).textContent).toBe('Trigger')
 		expect(documentQueries.getByRole('tab', { name: 'Migration' }).textContent).toBe('Migration')
 		expect(documentQueries.getByRole('tab', { name: 'Auction' }).textContent).toBe('Auction')
 		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).textContent).toBe('Settlement')
@@ -2319,16 +2318,12 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 	})
 
-	test('opens the fork workflow directly from the non-decision withdraw panel', async () => {
-		const selectedViews: string[] = []
+	test('does not offer Open Fork Workflow before the pool has entered its fork workflow', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: selectedPoolAddress,
-					onSelectedPoolViewChange: view => {
-						selectedViews.push(view ?? '')
-					},
 					reporting: createReportingProps({
 						reportingDetails: {
 							activationTime: 120n,
@@ -2385,11 +2380,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Fork Workflow' }))
-		})
-
-		expect(selectedViews).toEqual(['fork-trigger'])
+		expect(documentQueries.queryByRole('button', { name: 'Open Fork Workflow' })).toBeNull()
 	})
 
 	test('opens the concrete migration stage when the pool is already inside its fork workflow', async () => {
@@ -2459,7 +2450,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					checkedSecurityPoolAddress: zeroAddress,
 					securityPoolAddress: zeroAddress,
 					securityPools: [createSelectedPool()],
-					selectedPoolView: 'fork-trigger',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2468,7 +2459,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
-		expect(documentQueries.getByRole('heading', { name: 'Fork Workflow' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
 		expect(documentQueries.queryByRole('tablist', { name: 'Fork lifecycle stages' })).toBeNull()
 	})
 
@@ -2513,7 +2504,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
-					selectedPoolView: 'fork-trigger',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2528,7 +2519,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Mode')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Outcome')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Fork Trigger' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
 	})
 
@@ -2678,7 +2669,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [createSelectedPool({ completeSetCollateralAmount: 0n, marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational', truthAuctionAddress: zeroAddress })],
-					selectedPoolView: 'fork-trigger',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2841,7 +2832,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			}),
 			securityPoolAddress: selectedPoolAddress,
 			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
-			selectedPoolView: 'fork-trigger',
+			selectedPoolView: 'fork-migration',
 		})
 
 		const renderedComponent = await renderIntoDocument(
@@ -2932,7 +2923,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			}),
 			securityPoolAddress: zeroAddress,
 			securityPools: [createSelectedPool()],
-			selectedPoolView: 'fork-trigger',
+			selectedPoolView: 'fork-migration',
 		})
 
 		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
@@ -2995,7 +2986,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							selectedVaultAddress: zeroAddress,
 						},
 					}),
-					selectedPoolView: 'fork-trigger',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,

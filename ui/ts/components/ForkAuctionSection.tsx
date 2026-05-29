@@ -26,24 +26,10 @@ import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import {
-	AUCTION_TIME_SECONDS,
-	estimateRepPurchased,
-	getForkAuctionStageLabel,
-	getForkAuctionStageOrder,
-	getForkAuctionStageView,
-	getForkStageDescription,
-	getForkStageDescriptionForState,
-	getOutcomeActionLabel,
-	getTimeRemaining,
-	getTruthAuctionBidGuardMessage,
-	MIGRATION_TIME_SECONDS,
-	type ForkAuctionStageView,
-} from '../lib/forkAuction.js'
+import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getTimeRemaining, getTruthAuctionBidGuardMessage, type ForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ForkAuctionActionResult, ListedSecurityPool, ReadClient, TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
@@ -159,13 +145,14 @@ function getForkAuctionActionLabel(actionName: ForkAuctionActionResult['action']
 
 function getStageAheadMessage(stage: ForkAuctionStageView, currentStage: ForkAuctionStageView) {
 	if (getForkAuctionStageOrder(stage) <= getForkAuctionStageOrder(currentStage)) return undefined
+	const currentStageText = currentStage === 'initiate' ? 'operational' : `in ${getForkAuctionStageLabel(currentStage)}`
 	switch (stage) {
 		case 'migration':
-			return `This pool is currently in ${getForkAuctionStageLabel(currentStage)}. Migration controls become meaningful once the pool has forked.`
+			return `This pool is currently ${currentStageText}. Migration controls become meaningful once the pool has forked.`
 		case 'auction':
-			return `This pool is currently in ${getForkAuctionStageLabel(currentStage)}. Auction controls become meaningful after migration completes and the truth auction starts.`
+			return `This pool is currently ${currentStageText}. Auction controls become meaningful after migration completes and the truth auction starts.`
 		case 'settlement':
-			return `This pool is currently in ${getForkAuctionStageLabel(currentStage)}. Settlement controls become meaningful after bidding progresses or the truth auction finalizes.`
+			return `This pool is currently ${currentStageText}. Settlement controls become meaningful after bidding progresses or the truth auction finalizes.`
 		case 'initiate':
 			return undefined
 		default:
@@ -551,8 +538,6 @@ export function ForkAuctionSection({
 	onCreateChildUniverse,
 	onFinalizeTruthAuction,
 	onForkAuctionFormChange,
-	onForkUniverse,
-	onInitiateFork,
 	onLoadForkAuction,
 	onMigrateEscalationDeposits,
 	onMigrateRepToZoltar,
@@ -575,7 +560,6 @@ export function ForkAuctionSection({
 	const truthAuctionEndsAt = forkAuctionDetails?.truthAuction?.auctionEndsAt ?? auctionWindow?.endsAt
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
-	const parentSecurityPoolAddress = forkAuctionDetails?.parentSecurityPoolAddress ?? previewPool?.parent
 	const systemState = forkAuctionDetails?.systemState ?? previewPool?.systemState
 	const forkOutcome = forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome
 	const questionOutcome = forkAuctionDetails?.questionOutcome ?? previewPool?.questionOutcome
@@ -631,7 +615,7 @@ export function ForkAuctionSection({
 					truthAuction: forkAuctionDetails?.truthAuction,
 					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
 				})
-	const selectedStage = stageView
+	const selectedStage = stageView === 'initiate' ? 'migration' : stageView
 	const [childUniverseModalOpen, setChildUniverseModalOpen] = useState(false)
 	const [truthAuctionBookData, setTruthAuctionBookData] = useState<TruthAuctionBookData>({
 		tickSummaries: [],
@@ -975,36 +959,6 @@ export function ForkAuctionSection({
 						{ label: 'Transaction', value: <TransactionHashLink hash={forkAuctionResult.hash} /> },
 					],
 				}
-	const poolSummaryMetrics: DisplayMetric[] = [
-		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
-		{ label: 'Universe', value: universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} /> },
-		{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-		{ label: 'System State', value: getSecurityPoolLifecycleLabel(forkPoolState.lifecycleState) },
-		{
-			label: 'Fork Type',
-			value: resolvedForkTypeLabel,
-		},
-		{ label: 'Question Outcome', value: questionOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(questionOutcome) },
-		{ label: 'Collateral', value: renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, 'ETH', UNKNOWN_VALUE) },
-	]
-	const workflowSummaryMetrics: DisplayMetric[] = [
-		{ label: 'Current Stage', value: getForkAuctionStageLabel(currentStage) },
-		{ label: 'System State', value: getSecurityPoolLifecycleLabel(forkPoolState.lifecycleState) },
-		{
-			label: 'Fork Type',
-			value: resolvedForkTypeLabel,
-		},
-		{ label: 'Collateral', value: renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, 'ETH', UNKNOWN_VALUE) },
-	]
-	const initiateStatusMetrics: DisplayMetric[] = [
-		{ label: 'Current Stage', value: getForkAuctionStageLabel(currentStage) },
-		{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-		{
-			label: 'Fork Type',
-			value: resolvedForkTypeLabel,
-		},
-		{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
-	]
 	const migrationStatusMetrics: DisplayMetric[] = [
 		{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
 		{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
@@ -1046,16 +1000,6 @@ export function ForkAuctionSection({
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? forkOnlyFallbackText : <CurrencyValue value={truthAuctionStatus.totalRepPurchased} suffix='REP' /> },
 	]
 	const liveSnapshotMetrics: DisplayMetric[] = (() => {
-		if (selectedStage === 'initiate')
-			return [
-				{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-				{
-					label: 'Fork Type',
-					value: resolvedForkTypeLabel,
-				},
-				{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-				{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
-			]
 		if (selectedStage === 'migration')
 			return [
 				{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
@@ -1087,7 +1031,7 @@ export function ForkAuctionSection({
 					{ label: 'Settlement Available', value: settlementAvailableDisplay },
 				]
 
-			return initiateStatusMetrics
+			return migrationStatusMetrics
 		})()
 	})()
 	const truthAuctionHero = (() => {
@@ -1487,33 +1431,6 @@ export function ForkAuctionSection({
 		)
 	})()
 	const stagePanel = (() => {
-		if (selectedStage === 'initiate')
-			return (
-				<fieldset className='fork-stage-panel' disabled={disabled}>
-					{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
-					<SectionBlock title='Fork Trigger'>{renderWorkflowMetricGrid(initiateStatusMetrics)}</SectionBlock>
-
-					<SectionBlock title='Initiate Pool Fork'>
-						<div className='actions'>{renderStageActionButton({ action: 'initiateFork', idleLabel: 'Initiate Pool Fork', onClick: onInitiateFork, pendingLabel: 'Initiating pool fork...' })}</div>
-					</SectionBlock>
-
-					<SectionBlock title='Direct Universe Fork'>
-						<div className='form-grid'>
-							<div className='field-row'>
-								<label className='field'>
-									<span>Direct Fork Universe ID</span>
-									<FormInput value={forkAuctionForm.directForkUniverseId} onInput={event => onForkAuctionFormChange({ directForkUniverseId: event.currentTarget.value })} />
-								</label>
-								<label className='field'>
-									<span>Direct Fork Question ID</span>
-									<FormInput value={forkAuctionForm.directForkQuestionId} onInput={event => onForkAuctionFormChange({ directForkQuestionId: event.currentTarget.value })} placeholder='0x...' />
-								</label>
-							</div>
-							<div className='actions'>{renderStageActionButton({ action: 'forkUniverse', idleLabel: 'Fork Universe Directly', onClick: onForkUniverse, pendingLabel: 'Forking universe directly...' })}</div>
-						</div>
-					</SectionBlock>
-				</fieldset>
-			)
 		if (selectedStage === 'migration')
 			return (
 				<fieldset className='fork-stage-panel' disabled={disabled}>
@@ -1729,37 +1646,30 @@ export function ForkAuctionSection({
 	})()
 	const content = (
 		<>
-			<SectionBlock
-				title='Fork Workflow'
-				description='Trigger the pool fork, migrate assets, run the truth auction, and settle claims.'
-				actions={
-					showSecurityPoolAddressInput ? undefined : (
+			<div className='form-grid'>
+				{showSecurityPoolAddressInput ? (
+					<LookupFieldRow
+						label='Security Pool Address'
+						value={forkAuctionForm.securityPoolAddress}
+						onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })}
+						placeholder='0x...'
+						action={
+							<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
+								{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
+							</button>
+						}
+					/>
+				) : (
+					<div className='actions'>
 						<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
 							{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
 						</button>
-					)
-				}
-			>
-				<div className='form-grid'>
-					{showSecurityPoolAddressInput ? (
-						<LookupFieldRow
-							label='Security Pool Address'
-							value={forkAuctionForm.securityPoolAddress}
-							onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })}
-							placeholder='0x...'
-							action={
-								<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
-									{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
-								</button>
-							}
-						/>
-					) : undefined}
-					{hasLoadedPoolContext ? renderSummaryMetricGrid(workflowSummaryMetrics) : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
-					{hasLoadedPoolContext ? renderSummaryMetricGrid(poolSummaryMetrics) : undefined}
-					{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
-					{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
-				</div>
-			</SectionBlock>
+					</div>
+				)}
+				{hasLoadedPoolContext ? undefined : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
+				{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
+				{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
+			</div>
 			<WorkflowTransactionStatus latestAction={latestForkAuctionAction} outcome={undefined} />
 			{hasLoadedPoolContext ? stagePanel : undefined}
 			{hasLoadedPoolContext ? <SectionBlock title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</SectionBlock> : undefined}

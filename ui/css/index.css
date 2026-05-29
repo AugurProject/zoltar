@@ -4252,18 +4252,7 @@ button:focus-visible {
 }
 
 .selected-pool-workflow-group-fork > .view-tab {
-	position: relative;
 	padding-inline-start: 1.4rem;
-}
-
-.selected-pool-workflow-group-fork > .view-tab::before {
-	content: "";
-	position: absolute;
-	left: 0.68rem;
-	top: 0.6rem;
-	bottom: 0.6rem;
-	width: 1px;
-	background: var(--divider-subtle);
 }
 
 .selected-pool-workflow-group-secondary {

@@ -40,12 +40,11 @@ void describe('selected pool workflow lookup state', () => {
 
 	void test('maps concrete fork stage views in both directions', () => {
 		expect(isSelectedPoolForkStageView('vaults')).toBe(false)
-		expect(isSelectedPoolForkStageView('fork-trigger')).toBe(true)
-		expect(getForkStageViewForSelectedPoolView('fork-trigger')).toBe('initiate')
+		expect(isSelectedPoolForkStageView('fork-migration')).toBe(true)
 		expect(getForkStageViewForSelectedPoolView('fork-migration')).toBe('migration')
 		expect(getForkStageViewForSelectedPoolView('fork-auction')).toBe('auction')
 		expect(getForkStageViewForSelectedPoolView('fork-settlement')).toBe('settlement')
-		expect(getSelectedPoolViewForForkStage('initiate')).toBe('fork-trigger')
+		expect(getSelectedPoolViewForForkStage('initiate')).toBe('fork-migration')
 		expect(getSelectedPoolViewForForkStage('migration')).toBe('fork-migration')
 		expect(getSelectedPoolViewForForkStage('auction')).toBe('fork-auction')
 		expect(getSelectedPoolViewForForkStage('settlement')).toBe('fork-settlement')
@@ -57,7 +56,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: undefined,
 				selectedPool: undefined,
 			}),
-		).toBe('fork-trigger')
+		).toBe('fork-migration')
 
 		expect(
 			getSelectedPoolForkWorkflowView({

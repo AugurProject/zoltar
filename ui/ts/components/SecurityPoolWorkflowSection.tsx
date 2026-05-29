@@ -221,6 +221,7 @@ export function SecurityPoolWorkflowSection({
 		forkAuctionDetails: currentForkAuctionDetails,
 		selectedPool,
 	})
+	const openSelectedPoolForkWorkflow = selectedPoolHasActualForkActivity ? () => onSelectedPoolViewChange(currentForkWorkflowView) : undefined
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails &&
 		(sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || ((view === 'reporting' || view === 'withdraw-escalation-deposits') && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
@@ -772,7 +773,7 @@ export function SecurityPoolWorkflowSection({
 										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
 										lockedReason={reportingLockedReason}
 										mode='full-reporting'
-										onOpenForkWorkflow={() => onSelectedPoolViewChange(currentForkWorkflowView)}
+										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
 										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
@@ -791,7 +792,7 @@ export function SecurityPoolWorkflowSection({
 										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
 										lockedReason={reportingLockedReason}
 										mode='withdraw-only'
-										onOpenForkWorkflow={() => onSelectedPoolViewChange(currentForkWorkflowView)}
+										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
 										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
