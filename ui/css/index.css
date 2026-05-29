@@ -4283,31 +4283,6 @@ button:focus-visible {
 	color: var(--text-secondary);
 }
 
-.selected-pool-workflow-group-current {
-	font-size: 0.75rem;
-	font-weight: 500;
-	letter-spacing: 0;
-	text-transform: none;
-	color: var(--muted);
-}
-
-.selected-pool-workflow-tab-copy {
-	display: grid;
-	gap: 0.16rem;
-}
-
-.selected-pool-workflow-tab-label {
-	display: block;
-}
-
-.selected-pool-workflow-tab-status {
-	display: block;
-	font-size: 0.76rem;
-	font-weight: 500;
-	letter-spacing: 0;
-	color: var(--muted);
-}
-
 .selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] .view-tab {
 	width: 100%;
 	text-align: left;
@@ -4657,10 +4632,6 @@ button:focus-visible {
 		border-left-color: transparent;
 		text-align: center;
 		white-space: nowrap;
-	}
-
-	.selected-pool-workflow-tab-copy {
-		min-width: max-content;
 	}
 
 	.selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] .view-tab.active {

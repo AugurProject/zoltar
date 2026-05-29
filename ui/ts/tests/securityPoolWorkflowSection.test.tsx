@@ -421,11 +421,11 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Current: Auction')).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Trigger' }).textContent?.includes('Completed')).toBe(true)
-		expect(documentQueries.getByRole('tab', { name: 'Migration' }).textContent?.includes('Completed')).toBe(true)
-		expect(documentQueries.getByRole('tab', { name: 'Auction' }).textContent?.includes('Current')).toBe(true)
-		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).textContent?.includes('Available later')).toBe(true)
+		expect(documentQueries.queryByText('Current: Auction')).toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Trigger' }).textContent).toBe('Trigger')
+		expect(documentQueries.getByRole('tab', { name: 'Migration' }).textContent).toBe('Migration')
+		expect(documentQueries.getByRole('tab', { name: 'Auction' }).textContent).toBe('Auction')
+		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).textContent).toBe('Settlement')
 		expect(documentQueries.getByRole('heading', { name: 'Auction Status' })).not.toBeNull()
 
 		await act(() => {

@@ -31,8 +31,6 @@ import {
 	getForkStageViewForSelectedPoolView,
 	getCurrentPoolOracleManagerDetails,
 	getSelectedPoolCardTitle,
-	getSelectedPoolForkStageCurrentLabel,
-	getSelectedPoolForkStageRailStatus,
 	getSelectedPoolForkWorkflowView,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewLabel,
@@ -223,7 +221,6 @@ export function SecurityPoolWorkflowSection({
 		forkAuctionDetails: currentForkAuctionDetails,
 		selectedPool,
 	})
-	const currentForkWorkflowLabel = getSelectedPoolForkStageCurrentLabel(currentForkWorkflowView)
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails &&
 		(sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || ((view === 'reporting' || view === 'withdraw-escalation-deposits') && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
@@ -533,7 +530,6 @@ export function SecurityPoolWorkflowSection({
 		if (nextTab instanceof HTMLElement) nextTab.focus()
 	}
 	const renderSelectedPoolViewTab = (selectedPoolUiView: SelectedPoolView) => {
-		const forkStageStatus = isSelectedPoolForkStageView(selectedPoolUiView) ? getSelectedPoolForkStageRailStatus({ currentView: currentForkWorkflowView, view: selectedPoolUiView }) : undefined
 		return (
 			<button
 				aria-label={getSelectedPoolViewLabel(selectedPoolUiView)}
@@ -549,10 +545,7 @@ export function SecurityPoolWorkflowSection({
 				title={selectedPoolWorkflowGuardMessage}
 				type='button'
 			>
-				<span className='selected-pool-workflow-tab-copy'>
-					<span className='selected-pool-workflow-tab-label'>{getSelectedPoolViewLabel(selectedPoolUiView)}</span>
-					{forkStageStatus === undefined ? undefined : <span className='selected-pool-workflow-tab-status'>{forkStageStatus}</span>}
-				</span>
+				{getSelectedPoolViewLabel(selectedPoolUiView)}
 			</button>
 		)
 	}
@@ -635,10 +628,7 @@ export function SecurityPoolWorkflowSection({
 								{SELECTED_POOL_PRIMARY_VIEWS.map(renderSelectedPoolViewTab)}
 							</div>
 							<div className='selected-pool-workflow-group selected-pool-workflow-group-fork' role='group' aria-label='Fork workflow stages'>
-								<p className='selected-pool-workflow-group-label'>
-									Fork Workflow
-									{showSelectedPoolWorkflowDetails && currentForkWorkflowLabel !== undefined ? <span className='selected-pool-workflow-group-current'>{`Current: ${currentForkWorkflowLabel}`}</span> : undefined}
-								</p>
+								<p className='selected-pool-workflow-group-label'>Fork Workflow</p>
 								{SELECTED_POOL_FORK_STAGE_VIEWS.map(renderSelectedPoolViewTab)}
 							</div>
 							<div className='selected-pool-workflow-group selected-pool-workflow-group-secondary' role='group' aria-label='Additional pool workflows'>

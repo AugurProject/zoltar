@@ -8,7 +8,6 @@ import {
 	getOracleLastPriceDisplay,
 	getOraclePriceValidityPresentation,
 	getSelectedPoolCardTitle,
-	getSelectedPoolForkStageRailStatus,
 	getSelectedPoolForkWorkflowView,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewForForkStage,
@@ -101,12 +100,6 @@ void describe('selected pool workflow lookup state', () => {
 				selectedPool: undefined,
 			}),
 		).toBe('fork-settlement')
-	})
-
-	void test('reports fork stage rail status relative to the current workflow stage', () => {
-		expect(getSelectedPoolForkStageRailStatus({ currentView: 'fork-auction', view: 'fork-trigger' })).toBe('Completed')
-		expect(getSelectedPoolForkStageRailStatus({ currentView: 'fork-auction', view: 'fork-auction' })).toBe('Current')
-		expect(getSelectedPoolForkStageRailStatus({ currentView: 'fork-auction', view: 'fork-settlement' })).toBe('Available later')
 	})
 })
 

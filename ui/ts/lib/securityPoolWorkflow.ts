@@ -1,7 +1,7 @@
 import { sameAddress } from './address.js'
 import { assertNever } from './assert.js'
 import { formatDuration, formatRoundedCurrencyBalance } from './formatters.js'
-import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, type ForkAuctionStageView } from './forkAuction.js'
+import { getForkAuctionStageView, type ForkAuctionStageView } from './forkAuction.js'
 import type { LoadableValueState } from './loadState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
 import { getTimeRemaining } from './time.js'
@@ -133,21 +133,6 @@ export function getSelectedPoolForkWorkflowView({
 	)
 }
 
-export function getSelectedPoolForkStageRailStatus({ currentView, view }: { currentView: SelectedPoolForkStageView | undefined; view: SelectedPoolForkStageView }) {
-	if (currentView === undefined) return undefined
-	const stage = getForkStageViewForSelectedPoolView(view)
-	const currentStage = getForkStageViewForSelectedPoolView(currentView)
-	const stageOrder = getForkAuctionStageOrder(stage)
-	const currentStageOrder = getForkAuctionStageOrder(currentStage)
-	if (stageOrder === currentStageOrder) return 'Current'
-	if (stageOrder < currentStageOrder) return 'Completed'
-	return 'Available later'
-}
-
-export function getSelectedPoolForkStageCurrentLabel(view: SelectedPoolForkStageView | undefined) {
-	if (view === undefined) return undefined
-	return getForkAuctionStageLabel(getForkStageViewForSelectedPoolView(view))
-}
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
 }
