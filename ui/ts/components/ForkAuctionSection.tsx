@@ -1536,34 +1536,6 @@ export function ForkAuctionSection({
 						{migrationBalancesContent}
 						{accountState.address === undefined ? undefined : (
 							<>
-								<SectionBlock density='compact' headingLevel={4} title='Migrate Vault' description={"Move the connected wallet's REP collateral and security bond allowance into the selected child pool."} variant='embedded'>
-									<div className='form-grid'>
-										<label className='field'>
-											<span>Outcome</span>
-											<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
-										</label>
-									</div>
-									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>No REP collateral or security bond allowance remains to migrate for the connected wallet.</p> : undefined}
-									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child pool.</p> : undefined}
-									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
-									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
-										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? 'Pool REP is already available in the selected child pool.' : 'Pool REP for this outcome is already staged and will sweep into the child pool during vault migration.'}</p>
-									)}
-									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
-										<>
-											<p className='detail'>This child outcome is not seeded with parent-pool REP yet. Migrate the pool REP first, then move your vault balances.</p>
-											<div className='actions'>
-												{renderStageActionButton({
-													action: 'migrateRepToZoltar',
-													idleLabel: `Migrate Pool REP To ${selectedOutcomeLabel}`,
-													onClick: onMigrateSelectedOutcomeRepToZoltar,
-													pendingLabel: 'Migrating pool REP...',
-												})}
-											</div>
-										</>
-									)}
-									<div className='actions'>{renderStageActionButton({ action: 'migrateVault', availability: createActionAvailability(migrateVaultGuardMessage), idleLabel: 'Migrate Vault', onClick: onMigrateVault, pendingLabel: 'Migrating vault...', tone: 'primary' })}</div>
-								</SectionBlock>
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Escalation Deposits' description='Move winning non-decision escalation deposits for the connected wallet into the selected child pool.' variant='embedded'>
 									<div className='form-grid'>
 										<label className='field'>
@@ -1623,6 +1595,34 @@ export function ForkAuctionSection({
 											pendingLabel: 'Migrating escalation deposits...',
 										})}
 									</div>
+								</SectionBlock>
+								<SectionBlock density='compact' headingLevel={4} title='Migrate Vault' description={"Move the connected wallet's REP collateral and security bond allowance into the selected child pool."} variant='embedded'>
+									<div className='form-grid'>
+										<label className='field'>
+											<span>Outcome</span>
+											<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
+										</label>
+									</div>
+									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>No REP collateral or security bond allowance remains to migrate for the connected wallet.</p> : undefined}
+									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child pool.</p> : undefined}
+									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
+									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
+										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? 'Pool REP is already available in the selected child pool.' : 'Pool REP for this outcome is already staged and will sweep into the child pool during vault migration.'}</p>
+									)}
+									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
+										<>
+											<p className='detail'>This child outcome is not seeded with parent-pool REP yet. Migrate the pool REP first, then move your vault balances.</p>
+											<div className='actions'>
+												{renderStageActionButton({
+													action: 'migrateRepToZoltar',
+													idleLabel: `Migrate Pool REP To ${selectedOutcomeLabel}`,
+													onClick: onMigrateSelectedOutcomeRepToZoltar,
+													pendingLabel: 'Migrating pool REP...',
+												})}
+											</div>
+										</>
+									)}
+									<div className='actions'>{renderStageActionButton({ action: 'migrateVault', availability: createActionAvailability(migrateVaultGuardMessage), idleLabel: 'Migrate Vault', onClick: onMigrateVault, pendingLabel: 'Migrating vault...', tone: 'primary' })}</div>
 								</SectionBlock>
 							</>
 						)}
