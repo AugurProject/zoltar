@@ -52,7 +52,7 @@ import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
@@ -289,7 +289,6 @@ export function SecurityPoolWorkflowSection({
 		selectedPool: loadedSelectedPool,
 	})
 	const selectedPoolForkOwnSecurityPool = selectedPoolSummaryPool?.forkOwnSecurityPool
-	const selectedPoolForkOutcome = selectedPoolSummaryPool?.forkOutcome
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
@@ -599,7 +598,6 @@ export function SecurityPoolWorkflowSection({
 								{!showSelectedPoolForkSummaryMetrics ? undefined : (
 									<>
 										<MetricField label='Fork Mode'>{selectedPoolForkOwnSecurityPool === true ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
-										<MetricField label='Fork Outcome'>{selectedPoolForkOutcome === undefined ? '—' : getReportingOutcomeLabel(selectedPoolForkOutcome)}</MetricField>
 									</>
 								)}
 								{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
@@ -633,15 +631,19 @@ export function SecurityPoolWorkflowSection({
 				<div className='selected-pool-workspace-grid'>
 					<div className='selected-pool-workflow-rail'>
 						<div aria-label='Selected pool views' className='selected-pool-workflow-nav view-tabs' data-orientation='vertical' data-size='compact' role='tablist'>
-							<div className='selected-pool-workflow-group'>{SELECTED_POOL_PRIMARY_VIEWS.map(renderSelectedPoolViewTab)}</div>
-							<div className='selected-pool-workflow-group selected-pool-workflow-group-fork'>
+							<div className='selected-pool-workflow-group' role='group' aria-label='Primary pool workflows'>
+								{SELECTED_POOL_PRIMARY_VIEWS.map(renderSelectedPoolViewTab)}
+							</div>
+							<div className='selected-pool-workflow-group selected-pool-workflow-group-fork' role='group' aria-label='Fork workflow stages'>
 								<p className='selected-pool-workflow-group-label'>
 									Fork Workflow
 									{showSelectedPoolWorkflowDetails && currentForkWorkflowLabel !== undefined ? <span className='selected-pool-workflow-group-current'>{`Current: ${currentForkWorkflowLabel}`}</span> : undefined}
 								</p>
 								{SELECTED_POOL_FORK_STAGE_VIEWS.map(renderSelectedPoolViewTab)}
 							</div>
-							<div className='selected-pool-workflow-group'>{SELECTED_POOL_SECONDARY_VIEWS.map(renderSelectedPoolViewTab)}</div>
+							<div className='selected-pool-workflow-group selected-pool-workflow-group-secondary' role='group' aria-label='Additional pool workflows'>
+								{SELECTED_POOL_SECONDARY_VIEWS.map(renderSelectedPoolViewTab)}
+							</div>
 						</div>
 					</div>
 

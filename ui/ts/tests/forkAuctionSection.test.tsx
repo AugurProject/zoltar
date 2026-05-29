@@ -296,9 +296,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('This pool is operational. If it is a child universe, the fork and auction path has completed.')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Fork Workflow' })).not.toBeNull()
 		expect(documentQueries.queryByRole('tablist', { name: 'Fork lifecycle stages' })).toBeNull()
-
-		const summaries = Array.from(document.body.querySelectorAll('summary')).map(node => node.textContent?.trim() ?? '')
-		expect(summaries).toContain('Live Snapshot')
+		expect(documentQueries.getByRole('heading', { name: 'Live Snapshot' })).not.toBeNull()
 	})
 
 	test('launches create child universe in a focused modal', async () => {
@@ -368,7 +366,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 
 		expectTransactionButtonDisabled(document.body, 'Create child universe')
-		expectTransactionButtonDisabled(document.body, 'Migrate REP To Zoltar')
+		expectTransactionButtonDisabled(document.body, 'Migrate Pool REP')
 		expectTransactionButtonDisabled(document.body, 'Migrate Vault')
 		expectTransactionButtonDisabled(document.body, 'Migrate Escalation Deposits')
 
@@ -405,6 +403,54 @@ describe('ForkAuctionSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
 		expect(documentQueries.queryByRole('button', { name: 'Settle Finalized Bid' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Withdraw Bids' })).toBeNull()
+	})
+
+	test('shows wallet migration balances and separates pool REP migration from vault migration', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaultCount: 1n,
+						vaults: [
+							{
+								lockedRepInEscalationGame: 3n * ETH,
+								repDepositShare: 12n * ETH,
+								securityBondAllowance: 2n * ETH,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Time Left')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'What You Need To Do Now' })).toBeNull()
+		const migrationBalancesSection = documentQueries.getByRole('heading', { name: 'Your Migration Balances' }).closest('section')
+		if (!(migrationBalancesSection instanceof HTMLElement)) throw new Error('Expected migration balances section to render')
+		expect(within(migrationBalancesSection).getByText('REP Collateral')).not.toBeNull()
+		expect(within(migrationBalancesSection).getByText('Security Bond Allowance')).not.toBeNull()
+		expect(within(migrationBalancesSection).getByText('Locked REP')).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('heading', { name: 'Migrate Vault' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('heading', { name: 'Migrate Escalation Deposits' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Vault' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Escalation Deposits' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByText('Escalation Deposit Indexes')).not.toBeNull()
+		expect(within(migrationBalancesSection).queryByText('Vault Address')).toBeNull()
+		expect(documentQueries.getAllByRole('heading', { name: 'Migrate Pool REP' }).length).toBe(1)
+		expect(documentQueries.getByRole('heading', { name: 'Migrate Pool REP' })).not.toBeNull()
+		expect(documentQueries.getByText('Target Child Outcomes')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Migrate Pool REP' })).not.toBeNull()
 	})
 
 	test('prefers the live chain timestamp over the loaded snapshot for migration time left', async () => {
@@ -463,11 +509,16 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		const workflowSection = documentQueries.getByRole('heading', { name: 'Fork Workflow' }).closest('section')
 		if (!(workflowSection instanceof HTMLElement)) throw new Error('Expected fork workflow section to render')
-		const workflowMetrics = workflowSection.querySelector('.fork-summary-grid')
+		const summaryGrids = workflowSection.querySelectorAll('.fork-summary-grid')
+		const workflowMetrics = summaryGrids[0]
+		const poolMetrics = summaryGrids[1]
 		if (!(workflowMetrics instanceof HTMLElement)) throw new Error('Expected fork workflow metrics to render')
+		if (!(poolMetrics instanceof HTMLElement)) throw new Error('Expected pool summary metrics to render')
 
 		expect(getMetricValue(workflowMetrics, 'Fork Type')).toBe('Not chosen yet')
-		expect(getMetricValue(workflowMetrics, 'Fork Outcome')).toBe('Not chosen yet')
+		expect(within(workflowMetrics).queryByText('Viewing')).toBeNull()
+		expect(within(workflowMetrics).queryByText('Fork Outcome')).toBeNull()
+		expect(within(poolMetrics).queryByText('Fork Outcome')).toBeNull()
 		expect(documentQueries.queryByText('Parent/Zoltar fork')).toBeNull()
 	})
 
