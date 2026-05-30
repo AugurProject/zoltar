@@ -2997,6 +2997,36 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(vaultLoadCalls).toBe(1)
 	})
 
+	test('refreshes the selected pool after starting truth auction', async () => {
+		const selectedPoolAddress = zeroAddress
+		let refreshedPoolAddress: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionResult: {
+							action: 'startTruthAuction',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000cc',
+							securityPoolAddress: selectedPoolAddress,
+							universeId: 1n,
+						},
+					}),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshedPoolAddress = securityPoolAddressInput
+					},
+					securityPoolAddress: selectedPoolAddress,
+					selectedPoolView: 'fork-migration',
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
+	})
+
 	test('reloads reporting after migrating escalation deposits in the fork workflow', async () => {
 		const selectedPoolAddress = zeroAddress
 		let reportingLoadCalls = 0

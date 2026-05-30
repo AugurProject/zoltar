@@ -913,6 +913,171 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
+	test('shows a timer indicating when truth auction can be started', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 150n,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						migrationEndsAt: 210n,
+						systemState: 'forkMigration',
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('Truth auction can be started in 1m once migration ends.')).toBe(true)
+	})
+
+	test('locks the start-auction button after submit until the pool refreshes', async () => {
+		let startTruthAuctionCalls = 0
+		const baseProps = createProps({
+			currentTimestamp: 201n,
+			forkAuctionDetails: {
+				...createForkAuctionDetails(),
+				migrationEndsAt: 200n,
+				systemState: 'forkMigration',
+			},
+			onStartTruthAuction: () => {
+				startTruthAuctionCalls += 1
+			},
+			stageView: 'auction',
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		expectTransactionButtonEnabled(document.body, 'Start Truth Auction')
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Start Truth Auction' }))
+		})
+		expect(startTruthAuctionCalls).toBe(1)
+		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Starting truth auction...')
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Start Truth Auction' }))
+		})
+		expect(startTruthAuctionCalls).toBe(1)
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						...baseProps,
+						forkAuctionResult: {
+							action: 'startTruthAuction',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000f0',
+							securityPoolAddress: zeroAddress,
+							universeId: 1n,
+						},
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Starting truth auction...')
+	})
+
+	test('locks the vault migration button after submit until the wallet is marked migrated for that outcome', async () => {
+		let migrateVaultCalls = 0
+		const selectedOutcomeVaults = [
+			{
+				lockedRepInEscalationGame: 0n,
+				repDepositShare: rep(10n),
+				securityBondAllowance: 3n * ETH,
+				unpaidEthFees: 0n,
+				vaultAddress: zeroAddress,
+			},
+		]
+		const selectedOutcomeChildPool = createPreviewPool({
+			questionOutcome: 'yes',
+			parent: zeroAddress,
+			securityPoolAddress: '0x00000000000000000000000000000000000000cd',
+			vaults: [
+				{
+					lockedRepInEscalationGame: 0n,
+					repDepositShare: 0n,
+					securityBondAllowance: 0n,
+					unpaidEthFees: 0n,
+					vaultAddress: zeroAddress,
+				},
+			],
+			vaultCount: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					onMigrateVault: () => {
+						migrateVaultCalls += 1
+					},
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaults: selectedOutcomeVaults,
+					}),
+					securityPools: [selectedOutcomeChildPool],
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault')
+		})
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault' }))
+		})
+		expect(migrateVaultCalls).toBe(1)
+		expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Migrating vault...')
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault' }))
+		})
+		expect(migrateVaultCalls).toBe(1)
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkMigration',
+						},
+						onMigrateVault: () => {
+							migrateVaultCalls += 1
+						},
+						previewPool: createPreviewPool({
+							systemState: 'forkMigration',
+							vaults: selectedOutcomeVaults,
+						}),
+						securityPools: [selectedOutcomeChildPool],
+						forkAuctionResult: {
+							action: 'migrateVault',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000f1',
+							securityPoolAddress: zeroAddress,
+							universeId: 1n,
+						},
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		await waitFor(() => {
+			expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Vault migration for this outcome is already complete for this wallet.')
+		})
+	})
+
 	test('disables submit bid after auction end to prevent reverted bids', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

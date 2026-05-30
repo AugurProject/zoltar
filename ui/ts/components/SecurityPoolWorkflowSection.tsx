@@ -431,10 +431,12 @@ export function SecurityPoolWorkflowSection({
 		if (lastForkAuctionOutcomeRefreshHash.current === forkAuctionRefreshHash) return
 		lastForkAuctionOutcomeRefreshHash.current = forkAuctionRefreshHash
 		void onRefreshSelectedPoolData(nextForkAuctionResult.securityPoolAddress)
-		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault')) {
+		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault' || nextForkAuctionResult.action === 'startTruthAuction')) {
 			void securityVault.onLoadSecurityVault()
 		}
-		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation')) void reporting.onLoadReporting()
+		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'startTruthAuction')) {
+			void reporting.onLoadReporting()
+		}
 	}, [forkAuction.forkAuctionResult, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
 	useEffect(() => {
 		const vaultStatusRefreshHash = securityVault.securityVaultResult?.action === 'depositRep' || securityVault.securityVaultResult?.action === 'redeemRep' ? securityVault.securityVaultResult.hash : undefined
