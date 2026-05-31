@@ -202,8 +202,8 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onForkWithOwnEscalation: () => undefined,
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
-		onMigrateEscalationDeposits: () => undefined,
-		onMigrateRepToZoltar: () => undefined,
+		onMigrateEscalationDeposits: (_outcome, _depositIndexes) => undefined,
+		onMigrateRepToZoltar: _outcomes => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,
 		onStartTruthAuction: () => undefined,
@@ -368,8 +368,15 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
+		const forkGroup = documentQueries.getByRole('group', { name: 'Fork workflow stages' })
+		const secondaryGroup = documentQueries.getByRole('group', { name: 'Additional pool workflows' })
+		expect(within(forkGroup).getByText('Fork Workflow')).not.toBeNull()
+		expect(within(forkGroup).queryByRole('tab', { name: 'Staged Operations' })).toBeNull()
+		expect(within(forkGroup).queryByRole('tab', { name: 'Open Oracle' })).toBeNull()
+		expect(within(secondaryGroup).getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
+		expect(within(secondaryGroup).getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Trading', 'Reporting', 'Withdraw Escalation Deposits', 'Fork', 'Staged Operations', 'Open Oracle']) {
+		for (const label of ['Vaults', 'Trading', 'Reporting', 'Withdraw Escalation Deposits', 'Migration', 'Auction', 'Settlement', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool to open this workflow.')
@@ -379,6 +386,58 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
 		expect(documentQueries.queryByText('Paste a security pool address or browse pools.')).toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
+	})
+
+	test('shows fork stage status microcopy in the rail and switches stage panels through the shared setter', async () => {
+		const selectedViews: string[] = []
+		const selectedPoolAddress = zeroAddress
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: selectedPoolAddress,
+			forkAuction: createForkAuctionProps({
+				forkAuctionDetails: createForkAuctionDetails({
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					securityPoolAddress: selectedPoolAddress,
+					systemState: 'forkTruthAuction',
+					truthAuctionStartedAt: 1n,
+				}),
+			}),
+			onSelectedPoolViewChange: view => {
+				selectedViews.push(view ?? '')
+			},
+			securityPoolAddress: selectedPoolAddress,
+			securityPools: [
+				createSelectedPool({
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					securityPoolAddress: selectedPoolAddress,
+					systemState: 'forkTruthAuction',
+					truthAuctionStartedAt: 1n,
+				}),
+			],
+			selectedPoolView: 'fork-auction',
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Current: Auction')).toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Migration' }).textContent).toBe('Migration')
+		expect(documentQueries.getByRole('tab', { name: 'Auction' }).textContent).toBe('Auction')
+		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).textContent).toBe('Settlement')
+		expect(documentQueries.getByRole('heading', { name: 'Auction Status' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Settlement' }))
+		})
+
+		expect(selectedViews).toEqual(['fork-settlement'])
+
+		await act(() => {
+			render(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='fork-settlement' showHeader={false} />, renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
 	})
 
 	test('shows a pool not found warning while an entered address is still unresolved', async () => {
@@ -2259,16 +2318,12 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 	})
 
-	test('opens the fork workflow directly from the non-decision withdraw panel', async () => {
-		const selectedViews: string[] = []
+	test('does not offer Open Fork Workflow before the pool has entered its fork workflow', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: selectedPoolAddress,
-					onSelectedPoolViewChange: view => {
-						selectedViews.push(view ?? '')
-					},
 					reporting: createReportingProps({
 						reportingDetails: {
 							activationTime: 120n,
@@ -2325,11 +2380,67 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Open Fork Workflow' })).toBeNull()
+	})
+
+	test('opens the concrete migration stage when the pool is already inside its fork workflow', async () => {
+		const selectedViews: string[] = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					onSelectedPoolViewChange: view => {
+						selectedViews.push(view ?? '')
+					},
+					reporting: createReportingProps({
+						reportingDetails: {
+							activationTime: 120n,
+							bindingCapital: 10n,
+							completeSetCollateralAmount: 1n,
+							currentRequiredBond: 2n,
+							currentTime: 150n,
+							escalationEndTime: 300n,
+							escalationGameAddress: zeroAddress,
+							forkThreshold: 40n,
+							hasReachedNonDecision: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							nonDecisionThreshold: 20n,
+							questionOutcome: 'none',
+							resolution: 'none',
+							securityPoolAddress: selectedPoolAddress,
+							sides: [
+								{ balance: 7n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+								{ balance: 20n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+							startBond: 1n,
+							status: 'active',
+							totalCost: 40n,
+							universeId: 1n,
+							viewerVaultAvailableEscalationRep: 12_000n,
+							viewerVaultExists: true,
+							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultRepDepositShare: 12_000n,
+							withdrawalEnabled: false,
+							withdrawalState: 'not-finalized',
+						},
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ forkOutcome: 'yes', marketDetails: createMarketDetails({ endTime: 2n }), migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+					selectedPoolView: 'reporting',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Fork Workflow' }))
 		})
 
-		expect(selectedViews).toEqual(['fork'])
+		expect(selectedViews).toEqual(['fork-migration'])
 	})
 
 	test('shows only the shared question card when the fork tab is active', async () => {
@@ -2339,7 +2450,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					checkedSecurityPoolAddress: zeroAddress,
 					securityPoolAddress: zeroAddress,
 					securityPools: [createSelectedPool()],
-					selectedPoolView: 'fork',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2348,7 +2459,8 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
-		expect(documentQueries.getByRole('heading', { name: 'Lifecycle' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
+		expect(documentQueries.queryByRole('tablist', { name: 'Fork lifecycle stages' })).toBeNull()
 	})
 
 	test('unlocks the fork workflow and relabels the pool when escalation reaches non-decision', async () => {
@@ -2392,7 +2504,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
-					selectedPoolView: 'fork',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2403,11 +2515,11 @@ describe('SecurityPoolWorkflowSection', () => {
 		const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
 		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
 		const selectedPoolSummaryQueries = within(selectedPoolSummary)
-		expect(documentQueries.getByText('Pool Forked')).not.toBeNull()
+		expect(documentQueries.getAllByText('Pool Forked').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Mode')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Outcome')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Fork Trigger' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
 	})
 
@@ -2557,7 +2669,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [createSelectedPool({ completeSetCollateralAmount: 0n, marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational', truthAuctionAddress: zeroAddress })],
-					selectedPoolView: 'fork',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2571,9 +2683,8 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(reportingLoadCalls).toBe(0)
 		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
 		expect(selectedPoolSummaryQueries.getByText('Fork Mode')).not.toBeNull()
-		expect(selectedPoolSummaryQueries.getByText('Fork Outcome')).not.toBeNull()
 		expect(getMetricValue(selectedPoolSummary, 'Fork Mode')).toBe('Own escalation fork')
-		expect(getMetricValue(selectedPoolSummary, 'Fork Outcome')).toBe('Yes')
+		expect(selectedPoolSummaryQueries.queryByText('Fork Outcome')).toBeNull()
 		expect(selectedPoolSummaryQueries.getByRole('button', { name: `Copy address ${freshTruthAuctionAddress}` })).not.toBeNull()
 	})
 
@@ -2721,7 +2832,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			}),
 			securityPoolAddress: selectedPoolAddress,
 			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational' })],
-			selectedPoolView: 'fork',
+			selectedPoolView: 'fork-migration',
 		})
 
 		const renderedComponent = await renderIntoDocument(
@@ -2812,7 +2923,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			}),
 			securityPoolAddress: zeroAddress,
 			securityPools: [createSelectedPool()],
-			selectedPoolView: 'fork',
+			selectedPoolView: 'fork-migration',
 		})
 
 		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
@@ -2875,7 +2986,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							selectedVaultAddress: zeroAddress,
 						},
 					}),
-					selectedPoolView: 'fork',
+					selectedPoolView: 'fork-migration',
 				})}
 				showHeader={false}
 			/>,
@@ -2884,6 +2995,36 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
 		expect(vaultLoadCalls).toBe(1)
+	})
+
+	test('refreshes the selected pool after starting truth auction', async () => {
+		const selectedPoolAddress = zeroAddress
+		let refreshedPoolAddress: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionResult: {
+							action: 'startTruthAuction',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000cc',
+							securityPoolAddress: selectedPoolAddress,
+							universeId: 1n,
+						},
+					}),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshedPoolAddress = securityPoolAddressInput
+					},
+					securityPoolAddress: selectedPoolAddress,
+					selectedPoolView: 'fork-migration',
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
 	})
 
 	test('reloads reporting after migrating escalation deposits in the fork workflow', async () => {

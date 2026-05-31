@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import type { ForkAuctionDetails, ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
+import type { ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { parseBigIntInput } from './marketForm.js'
@@ -8,11 +8,24 @@ import { getReportingOutcomeLabel } from './reporting.js'
 
 const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
 
-export const MIGRATION_TIME_SECONDS = 8n * SECONDS_PER_WEEK
 export const AUCTION_TIME_SECONDS = SECONDS_PER_WEEK
 const PRICE_PRECISION = 10n ** 18n
 
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'
+
+const FORK_AUCTION_STAGE_LABELS: Record<ForkAuctionStageView, string> = {
+	initiate: 'Trigger',
+	migration: 'Migration',
+	auction: 'Auction',
+	settlement: 'Settlement',
+}
+
+const FORK_AUCTION_STAGE_ORDER: Record<ForkAuctionStageView, number> = {
+	initiate: 0,
+	migration: 1,
+	auction: 2,
+	settlement: 3,
+}
 
 type ForkAuctionStageSource = {
 	claimingAvailable?: boolean
@@ -44,8 +57,12 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 	}
 }
 
-export function getForkStageDescription(details: ForkAuctionDetails) {
-	return getForkStageDescriptionForState(details.systemState)
+export function getForkAuctionStageLabel(stage: ForkAuctionStageView) {
+	return FORK_AUCTION_STAGE_LABELS[stage]
+}
+
+export function getForkAuctionStageOrder(stage: ForkAuctionStageView) {
+	return FORK_AUCTION_STAGE_ORDER[stage]
 }
 
 export function deriveHasForkActivity(source: ForkActivitySource) {

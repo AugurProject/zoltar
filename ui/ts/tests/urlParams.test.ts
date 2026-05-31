@@ -67,11 +67,11 @@ void describe('url params', () => {
 	})
 
 	void test('reads and writes a selected pool view query param', () => {
-		expect(readSelectedPoolViewQueryParam('?selectedPoolView=withdraw-escalation-deposits')).toBe('withdraw-escalation-deposits')
+		expect(readSelectedPoolViewQueryParam('?selectedPoolView=fork-auction')).toBe('fork-auction')
 		expect(readSelectedPoolViewQueryParam('?selectedPoolView=')).toBe(undefined)
-		expect(writeSelectedPoolViewQueryParam('', 'withdraw-escalation-deposits')).toBe('?selectedPoolView=withdraw-escalation-deposits&securityPoolsView=operate')
-		expect(writeSelectedPoolViewQueryParam('?foo=bar', 'withdraw-escalation-deposits')).toBe('?foo=bar&selectedPoolView=withdraw-escalation-deposits&securityPoolsView=operate')
-		expect(writeSelectedPoolViewQueryParam('?foo=bar&selectedPoolView=withdraw-escalation-deposits', undefined)).toBe('?foo=bar')
+		expect(writeSelectedPoolViewQueryParam('', 'fork-auction')).toBe('?selectedPoolView=fork-auction&securityPoolsView=operate')
+		expect(writeSelectedPoolViewQueryParam('?foo=bar', 'fork-settlement')).toBe('?foo=bar&selectedPoolView=fork-settlement&securityPoolsView=operate')
+		expect(writeSelectedPoolViewQueryParam('?foo=bar&selectedPoolView=fork-migration', undefined)).toBe('?foo=bar')
 	})
 
 	void test('reads and writes an open oracle view query param', () => {

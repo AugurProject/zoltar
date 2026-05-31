@@ -28,14 +28,20 @@ import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
+	getForkStageViewForSelectedPoolView,
 	getCurrentPoolOracleManagerDetails,
 	getSelectedPoolCardTitle,
+	getSelectedPoolForkWorkflowView,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewLabel,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
+	isSelectedPoolForkStageView,
 	isForkWorkflowDisabled,
 	resolveSelectedPoolView,
+	SELECTED_POOL_FORK_STAGE_VIEWS,
+	SELECTED_POOL_PRIMARY_VIEWS,
+	SELECTED_POOL_SECONDARY_VIEWS,
 	SELECTED_POOL_VIEWS,
 	shouldShowSelectedPoolWorkflowDetails,
 	type SelectedPoolView,
@@ -44,7 +50,7 @@ import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
@@ -184,7 +190,7 @@ export function SecurityPoolWorkflowSection({
 			return 'Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.'
 		}
 		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolState !== 'operational') {
-			return 'This pool has already entered its fork workflow. Continue in the Fork tab.'
+			return 'This pool has already entered its fork workflow. Continue in the Fork workflow.'
 		}
 		return 'Triggering a Zoltar fork is not available in the current pool state.'
 	})()
@@ -211,6 +217,11 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolExists: selectedPool !== undefined,
 		selectedPoolUniverseMismatch,
 	})
+	const currentForkWorkflowView = getSelectedPoolForkWorkflowView({
+		forkAuctionDetails: currentForkAuctionDetails,
+		selectedPool,
+	})
+	const openSelectedPoolForkWorkflow = selectedPoolHasActualForkActivity ? () => onSelectedPoolViewChange(currentForkWorkflowView) : undefined
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails &&
 		(sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || ((view === 'reporting' || view === 'withdraw-escalation-deposits') && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
@@ -226,11 +237,6 @@ export function SecurityPoolWorkflowSection({
 				selectedPoolLookupState,
 				selectedPoolUniverseMismatch,
 			})
-	const selectedPoolViewOptions: ViewTabOption<SelectedPoolView>[] = SELECTED_POOL_VIEWS.map(selectedPoolUiView => ({
-		...(selectedPoolWorkflowGuardMessage === undefined ? {} : { disabled: true, reason: selectedPoolWorkflowGuardMessage }),
-		label: getSelectedPoolViewLabel(selectedPoolUiView),
-		value: selectedPoolUiView,
-	}))
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: 'Directory', value: 'browse-vaults' },
 		{ label: 'Selected', value: 'selected-vault' },
@@ -281,7 +287,6 @@ export function SecurityPoolWorkflowSection({
 		selectedPool: loadedSelectedPool,
 	})
 	const selectedPoolForkOwnSecurityPool = selectedPoolSummaryPool?.forkOwnSecurityPool
-	const selectedPoolForkOutcome = selectedPoolSummaryPool?.forkOutcome
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
@@ -371,7 +376,7 @@ export function SecurityPoolWorkflowSection({
 		void securityVault.onLoadSecurityVault()
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
-		const shouldAutoloadReportingForFork = view === 'fork' && !selectedPoolHasActualForkActivity && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'
+		const shouldAutoloadReportingForFork = view === 'fork-migration'
 		const shouldAutoloadReportingForCurrentView = view === 'reporting' || view === 'withdraw-escalation-deposits' || shouldAutoloadReportingForFork
 		if (!shouldAutoloadReportingForCurrentView || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
@@ -399,7 +404,7 @@ export function SecurityPoolWorkflowSection({
 	])
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
-		if (view !== 'fork' || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
+		if (!isSelectedPoolForkStageView(view) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
 		if (sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
 		if (forkAuction.loadingForkAuctionDetails) return
 		void forkAuction.onLoadForkAuction()
@@ -426,10 +431,12 @@ export function SecurityPoolWorkflowSection({
 		if (lastForkAuctionOutcomeRefreshHash.current === forkAuctionRefreshHash) return
 		lastForkAuctionOutcomeRefreshHash.current = forkAuctionRefreshHash
 		void onRefreshSelectedPoolData(nextForkAuctionResult.securityPoolAddress)
-		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault')) {
+		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault' || nextForkAuctionResult.action === 'startTruthAuction')) {
 			void securityVault.onLoadSecurityVault()
 		}
-		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation')) void reporting.onLoadReporting()
+		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'startTruthAuction')) {
+			void reporting.onLoadReporting()
+		}
 	}, [forkAuction.forkAuctionResult, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
 	useEffect(() => {
 		const vaultStatusRefreshHash = securityVault.securityVaultResult?.action === 'depositRep' || securityVault.securityVaultResult?.action === 'redeemRep' ? securityVault.securityVaultResult.hash : undefined
@@ -495,6 +502,56 @@ export function SecurityPoolWorkflowSection({
 		if (poolPriceOracleResult.stagedExecution?.operation === 'withdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, reporting.onLoadReporting, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails, view])
+	const selectSelectedPoolView = (nextView: SelectedPoolView) => {
+		onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)
+	}
+	const moveSelectedPoolView = (currentView: SelectedPoolView, direction: 'next' | 'previous' | 'first' | 'last') => {
+		if (selectedPoolWorkflowGuardMessage !== undefined) return undefined
+		const enabledViews = SELECTED_POOL_VIEWS
+		if (enabledViews.length === 0) return undefined
+		if (direction === 'first') return enabledViews[0]
+		if (direction === 'last') return enabledViews[enabledViews.length - 1]
+		const currentIndex = enabledViews.indexOf(currentView)
+		if (currentIndex === -1) return enabledViews[0]
+		const nextIndex = direction === 'next' ? (currentIndex + 1) % enabledViews.length : (currentIndex - 1 + enabledViews.length) % enabledViews.length
+		return enabledViews[nextIndex]
+	}
+	const handleSelectedPoolViewKeyDown = (currentView: SelectedPoolView, event: KeyboardEvent) => {
+		const navigationKey = (() => {
+			if (event.key === 'ArrowDown' || event.key === 'ArrowRight') return 'next'
+			if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') return 'previous'
+			if (event.key === 'Home') return 'first'
+			if (event.key === 'End') return 'last'
+			return undefined
+		})()
+		if (navigationKey === undefined) return
+		const nextView = moveSelectedPoolView(currentView, navigationKey)
+		if (nextView === undefined) return
+		event.preventDefault()
+		selectSelectedPoolView(nextView)
+		const nextTab = document.getElementById(`selected-pool-view-${nextView}`)
+		if (nextTab instanceof HTMLElement) nextTab.focus()
+	}
+	const renderSelectedPoolViewTab = (selectedPoolUiView: SelectedPoolView) => {
+		return (
+			<button
+				aria-label={getSelectedPoolViewLabel(selectedPoolUiView)}
+				key={selectedPoolUiView}
+				aria-selected={view === selectedPoolUiView}
+				className={`view-tab ${view === selectedPoolUiView ? 'active' : ''}`.trim()}
+				disabled={selectedPoolWorkflowGuardMessage !== undefined}
+				id={`selected-pool-view-${selectedPoolUiView}`}
+				onClick={() => selectSelectedPoolView(selectedPoolUiView)}
+				onKeyDown={event => handleSelectedPoolViewKeyDown(selectedPoolUiView, event)}
+				role='tab'
+				tabIndex={view === selectedPoolUiView ? 0 : -1}
+				title={selectedPoolWorkflowGuardMessage}
+				type='button'
+			>
+				{getSelectedPoolViewLabel(selectedPoolUiView)}
+			</button>
+		)
+	}
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
 			<StickyObjectContext
@@ -537,7 +594,6 @@ export function SecurityPoolWorkflowSection({
 								{!showSelectedPoolForkSummaryMetrics ? undefined : (
 									<>
 										<MetricField label='Fork Mode'>{selectedPoolForkOwnSecurityPool === true ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
-										<MetricField label='Fork Outcome'>{selectedPoolForkOutcome === undefined ? '—' : getReportingOutcomeLabel(selectedPoolForkOutcome)}</MetricField>
 									</>
 								)}
 								{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
@@ -570,7 +626,18 @@ export function SecurityPoolWorkflowSection({
 			<section className='selected-pool-workspace'>
 				<div className='selected-pool-workspace-grid'>
 					<div className='selected-pool-workflow-rail'>
-						<ViewTabs ariaLabel='Selected pool views' className='selected-pool-workflow-nav' orientation='vertical' size='compact' value={view} onChange={nextView => onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)} options={selectedPoolViewOptions} />
+						<div aria-label='Selected pool views' className='selected-pool-workflow-nav view-tabs' data-orientation='vertical' data-size='compact' role='tablist'>
+							<div className='selected-pool-workflow-group' role='group' aria-label='Primary pool workflows'>
+								{SELECTED_POOL_PRIMARY_VIEWS.map(renderSelectedPoolViewTab)}
+							</div>
+							<div className='selected-pool-workflow-group selected-pool-workflow-group-fork' role='group' aria-label='Fork workflow stages'>
+								<p className='selected-pool-workflow-group-label'>Fork Workflow</p>
+								{SELECTED_POOL_FORK_STAGE_VIEWS.map(renderSelectedPoolViewTab)}
+							</div>
+							<div className='selected-pool-workflow-group selected-pool-workflow-group-secondary' role='group' aria-label='Additional pool workflows'>
+								{SELECTED_POOL_SECONDARY_VIEWS.map(renderSelectedPoolViewTab)}
+							</div>
+						</div>
 					</div>
 
 					<div className='selected-pool-workflow-content'>
@@ -708,7 +775,7 @@ export function SecurityPoolWorkflowSection({
 										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
 										lockedReason={reportingLockedReason}
 										mode='full-reporting'
-										onOpenForkWorkflow={() => onSelectedPoolViewChange('fork')}
+										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
 										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
@@ -727,7 +794,7 @@ export function SecurityPoolWorkflowSection({
 										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
 										lockedReason={reportingLockedReason}
 										mode='withdraw-only'
-										onOpenForkWorkflow={() => onSelectedPoolViewChange('fork')}
+										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
 										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
@@ -738,7 +805,7 @@ export function SecurityPoolWorkflowSection({
 									/>
 								) : undefined}
 
-								{view === 'fork' ? (
+								{isSelectedPoolForkStageView(view) ? (
 									<ForkAuctionSection
 										{...forkAuction}
 										currentTimestamp={currentTimestamp}
@@ -747,7 +814,13 @@ export function SecurityPoolWorkflowSection({
 										embedInCard
 										forkAuctionDetails={currentForkAuctionDetails}
 										lifecycleStateOverride={selectedPoolLifecycleState}
+										loadingReportingDetails={reporting.loadingReportingDetails}
+										onReportingFormChange={reporting.onReportingFormChange}
 										previewPool={selectedPool}
+										reportingDetails={currentReportingDetails}
+										reportingForm={reporting.reportingForm}
+										securityPools={securityPools}
+										stageView={getForkStageViewForSelectedPoolView(view)}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}
 									/>

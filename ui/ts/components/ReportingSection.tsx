@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
@@ -56,8 +57,8 @@ const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because t
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = 'Select an outcome side above to enable reporting.'
 const NO_SELECTED_SIDE_CAPACITY_REASON = 'No remaining contribution capacity is available on the selected side.'
 const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = 'Remaining selected-side capacity is below the minimum report bond.'
-const FORK_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or open the Fork workflow if Zoltar is already forked.'
-const FORK_TRIGGERED_WITHDRAW_REASON = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or continue in the Fork workflow once Zoltar is already forked.'
+const FORK_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
+const FORK_TRIGGERED_WITHDRAW_REASON = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
 const FORK_ALREADY_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.'
 const FORK_ALREADY_TRIGGERED_WITHDRAW_REASON = 'Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in the Fork workflow.'
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
@@ -427,7 +428,7 @@ export function ReportingSection({
 	}
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && reportingStatus !== 'missing' && withdrawableSides.length === 0
-	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && onOpenForkWorkflow !== undefined
+	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && forkAlreadyTriggered && onOpenForkWorkflow !== undefined
 	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
 	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }
 	const forkTriggeredActions =
@@ -655,47 +656,40 @@ export function ReportingSection({
 							<SectionBlock key={side.key} density='compact' headingLevel={4} title={side.label} variant='embedded'>
 								<div className='field'>
 									<span>Choose deposits to withdraw</span>
-									<div className='withdraw-deposit-list'>
-										{side.userDeposits.map(deposit => {
-											const isChecked = selectedWithdrawDepositIndexes.includes(deposit.depositIndex)
+									<EscalationDepositSelectionList
+										disabled={withdrawControlsLocked || withdrawActionPending}
+										items={side.userDeposits.map(deposit => {
 											const claimAmount = getEscalationDepositClaimAmount(effectiveReportingDetails, side.key, deposit)
-											return (
-												<label key={`${side.key}-${deposit.depositIndex.toString()}`} className='withdraw-deposit-option'>
-													<input
-														type='checkbox'
-														checked={isChecked}
-														disabled={withdrawControlsLocked || withdrawActionPending}
-														onChange={event => {
-															const nextSelectedWithdrawDepositIndexes = event.currentTarget.checked ? [...selectedWithdrawDepositIndexes, deposit.depositIndex] : selectedWithdrawDepositIndexes.filter(index => index !== deposit.depositIndex)
-															onReportingFormChange({
-																selectedWithdrawDepositIndexesByOutcome: {
-																	...selectedWithdrawDepositIndexesByOutcome,
-																	[side.key]: nextSelectedWithdrawDepositIndexes,
-																},
-															})
-														}}
-													/>
-													<span className='withdraw-deposit-copy'>
-														<strong>Deposit #{deposit.depositIndex.toString()}</strong>
-														<span>
-															Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
-														</span>
-														{claimAmount === undefined ? (
-															<span>Worth after finalization: Pending finalization</span>
-														) : (
-															<span>
-																Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
-															</span>
-														)}
-														<span>Current claim type: {claimLabel ?? 'Pending finalization'}</span>
-														<span>
-															Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
-														</span>
-													</span>
-												</label>
-											)
+											return {
+												deposit,
+												details: [
+													<>
+														Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+													</>,
+													claimAmount === undefined ? (
+														'Worth after finalization: Pending finalization'
+													) : (
+														<>
+															Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
+														</>
+													),
+													`Current claim type: ${claimLabel ?? 'Pending finalization'}`,
+													<>
+														Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+													</>,
+												],
+											}
 										})}
-									</div>
+										onSelectionChange={nextSelectedWithdrawDepositIndexes =>
+											onReportingFormChange({
+												selectedWithdrawDepositIndexesByOutcome: {
+													...selectedWithdrawDepositIndexesByOutcome,
+													[side.key]: nextSelectedWithdrawDepositIndexes,
+												},
+											})
+										}
+										selectedDepositIndexes={selectedWithdrawDepositIndexes}
+									/>
 								</div>
 
 								<div className='actions'>

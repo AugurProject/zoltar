@@ -104,28 +104,28 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const createChildUniverse = async (outcome: ReportingOutcomeKey | bigint) =>
 		await runForkAuctionAction('createChildUniverse', async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, getReportingOutcomeKey(outcome)), 'Failed to create child universe')
 
-	const migrateRepToZoltar = async () =>
+	const migrateRepToZoltar = async (outcomesOverride?: ReportingOutcomeKey[]) =>
 		await runForkAuctionAction(
 			'migrateRepToZoltar',
-			async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')),
+			async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, outcomesOverride ?? parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')),
 			'Failed to migrate REP to Zoltar',
 		)
 
 	const migrateVault = async () =>
 		await runForkAuctionAction('migrateVault', async (walletAddress, details) => await migrateSecurityVault(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to migrate vault')
 
-	const migrateEscalation = async () =>
+	const migrateEscalation = async ({ depositIndexes, outcome, vaultAddress }: { depositIndexes?: bigint[]; outcome?: ReportingOutcomeKey; vaultAddress?: Address } = {}) =>
 		await runForkAuctionAction(
 			'migrateEscalationDeposits',
 			async (walletAddress, details) => {
-				const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.vaultAddress, walletAddress, 'Vault address')
+				const resolvedVaultAddress = vaultAddress ?? resolveOptionalAddressInput(forkAuctionForm.value.vaultAddress, walletAddress, 'Vault address')
 				return await migrateEscalationDeposits(
 					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 					details.securityPoolAddress,
 					details.universeId,
-					vaultAddress,
-					parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome),
-					parseBigIntListInput(forkAuctionForm.value.depositIndexes, 'Deposit indexes'),
+					resolvedVaultAddress,
+					outcome ?? parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome),
+					depositIndexes ?? parseBigIntListInput(forkAuctionForm.value.depositIndexes, 'Deposit indexes'),
 				)
 			},
 			'Failed to migrate escalation deposits',

@@ -3,13 +3,17 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import {
+	getForkStageViewForSelectedPoolView,
 	getCurrentPoolOracleManagerDetails,
 	getOracleLastPriceDisplay,
 	getOraclePriceValidityPresentation,
 	getSelectedPoolCardTitle,
+	getSelectedPoolForkWorkflowView,
 	getSelectedPoolOracleMetricValues,
+	getSelectedPoolViewForForkStage,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
+	isSelectedPoolForkStageView,
 	isForkWorkflowDisabled,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
@@ -29,9 +33,72 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveSelectedPoolView(undefined)).toBe('vaults')
 		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
 		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
-		expect(resolveSelectedPoolView('fork')).toBe('fork')
+		expect(resolveSelectedPoolView('fork')).toBe('vaults')
 		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
 		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
+	})
+
+	void test('maps concrete fork stage views in both directions', () => {
+		expect(isSelectedPoolForkStageView('vaults')).toBe(false)
+		expect(isSelectedPoolForkStageView('fork-migration')).toBe(true)
+		expect(getForkStageViewForSelectedPoolView('fork-migration')).toBe('migration')
+		expect(getForkStageViewForSelectedPoolView('fork-auction')).toBe('auction')
+		expect(getForkStageViewForSelectedPoolView('fork-settlement')).toBe('settlement')
+		expect(getSelectedPoolViewForForkStage('initiate')).toBe('fork-migration')
+		expect(getSelectedPoolViewForForkStage('migration')).toBe('fork-migration')
+		expect(getSelectedPoolViewForForkStage('auction')).toBe('fork-auction')
+		expect(getSelectedPoolViewForForkStage('settlement')).toBe('fork-settlement')
+	})
+
+	void test('derives the best fork workflow stage from pool and fork-auction state', () => {
+		expect(
+			getSelectedPoolForkWorkflowView({
+				forkAuctionDetails: undefined,
+				selectedPool: undefined,
+			}),
+		).toBe('fork-migration')
+
+		expect(
+			getSelectedPoolForkWorkflowView({
+				forkAuctionDetails: undefined,
+				selectedPool: {
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					systemState: 'forkMigration',
+					truthAuctionStartedAt: 0n,
+				},
+			}),
+		).toBe('fork-migration')
+
+		expect(
+			getSelectedPoolForkWorkflowView({
+				forkAuctionDetails: {
+					claimingAvailable: false,
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					systemState: 'forkTruthAuction',
+					truthAuction: undefined,
+					truthAuctionStartedAt: 10n,
+				},
+				selectedPool: undefined,
+			}),
+		).toBe('fork-auction')
+
+		expect(
+			getSelectedPoolForkWorkflowView({
+				forkAuctionDetails: {
+					claimingAvailable: true,
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					systemState: 'operational',
+					truthAuction: {
+						finalized: true,
+					},
+					truthAuctionStartedAt: 10n,
+				},
+				selectedPool: undefined,
+			}),
+		).toBe('fork-settlement')
 	})
 })
 

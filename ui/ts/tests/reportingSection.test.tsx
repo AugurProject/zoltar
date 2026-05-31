@@ -750,8 +750,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or open the Fork workflow if Zoltar is already forked.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or open the Fork workflow if Zoltar is already forked.')
+		expect(document.body.textContent?.includes('Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
 	})
 
 	test('auto-refreshes reporting once when the live timestamp reaches an unresolved timeout boundary', async () => {
@@ -1251,19 +1251,19 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or continue in the Fork workflow once Zoltar is already forked.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits', 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe, or continue in the Fork workflow once Zoltar is already forked.')
+		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits', 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
 	})
 
-	test('shows an Open Fork Workflow action when non-decision blocks escalation deposits', async () => {
-		let openedForkWorkflow = 0
+	test('shows a Trigger Zoltar Fork action when non-decision blocks escalation deposits', async () => {
+		let triggerZoltarForkCalls = 0
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					mode: 'withdraw-only',
-					onOpenForkWorkflow: () => {
-						openedForkWorkflow += 1
+					onTriggerZoltarFork: () => {
+						triggerZoltarForkCalls += 1
 					},
 					reportingDetails: createReportingDetails({
 						hasReachedNonDecision: true,
@@ -1275,10 +1275,10 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Fork Workflow' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
 		})
 
-		expect(openedForkWorkflow).toBe(1)
+		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
 	test('keeps only Open Fork Workflow visible after a fork-triggered pool has already entered its fork workflow', async () => {
