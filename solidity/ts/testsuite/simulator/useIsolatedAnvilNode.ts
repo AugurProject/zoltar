@@ -5,6 +5,7 @@ import { AddressInfo, createServer } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { ensureDefined } from './utils/testUtils'
+const isSolidityBytecodeCoverageEnabled = (): boolean => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
 
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
 const RPC_READY_TIMEOUT_MS = 30_000
@@ -169,7 +170,24 @@ export const useIsolatedAnvilNode = () => {
 		const port = await getFreePort()
 		const rpcUrl = `http://${DEFAULT_ANVIL_HOST}:${port}`
 
-		const childProcess = spawn(DEFAULT_ANVIL_BIN, ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'], {
+		const anvilArgs = [
+			'--host',
+			DEFAULT_ANVIL_HOST,
+			'--port',
+			`${port}`,
+			'--chain-id',
+			'1',
+			'--timestamp',
+			'1',
+			'--block-base-fee-per-gas',
+			'0',
+			'--gas-price',
+			'0',
+			'--no-priority-fee',
+		]
+		if (isSolidityBytecodeCoverageEnabled()) anvilArgs.push('--print-traces')
+
+		const childProcess = spawn(DEFAULT_ANVIL_BIN, anvilArgs, {
 			windowsHide: true,
 			stdio: ['ignore', 'ignore', 'pipe'],
 		})
