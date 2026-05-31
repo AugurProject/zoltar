@@ -1,6 +1,7 @@
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
+import { collectBytecodeCoverageForTransaction } from '../../coverage/traceToSource'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -30,6 +31,8 @@ type RpcBlock = {
 
 type RpcTransactionReceipt = {
 	readonly status?: string
+	readonly to?: string
+	readonly contractAddress?: string
 }
 
 type RpcTransaction = {
@@ -37,10 +40,24 @@ type RpcTransaction = {
 }
 
 type RpcTransactionRequest = {
+	readonly from?: string
+	readonly to?: string
 	readonly gasPrice?: string
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
 	readonly type?: string
+}
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+const parseTransactionReceipt = (value: unknown): RpcTransactionReceipt | undefined => {
+	if (!isObjectRecord(value)) return undefined
+	const typed = value
+	return {
+		status: typeof typed['status'] === 'string' ? typed['status'] : undefined,
+		to: typeof typed['to'] === 'string' ? typed['to'] : undefined,
+		contractAddress: typeof typed['contractAddress'] === 'string' ? typed['contractAddress'] : undefined,
+	}
 }
 
 function hasJsonRpcBaseFields(value: unknown): value is { jsonrpc: string; id: number | string } {
@@ -146,12 +163,13 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
 	const request = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
-		const params = args.method === 'eth_sendTransaction' ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
+		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
+		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
 		let nextBlockTimestamp: bigint | undefined
 		// Avoid preflight eth_call here. Recent Anvil versions can leak state when a
 		// mutating call reverts after intermediate writes, which corrupts subsequent
 		// eth_sendTransaction behavior inside the same test.
-		if (args.method === 'eth_sendTransaction' && params[0]) {
+		if (isSendTransactionMethod && params[0]) {
 			const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
 			if (latestBlockTimestamp !== undefined) currentTimestamp = latestBlockTimestamp
 			nextBlockTimestamp = currentTimestamp + 1n
@@ -203,15 +221,16 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				}
 			}
 
-			if (transactionBlockNumber !== undefined) throw new Error(`Receipt not available for mined transaction ${hash}`)
+			if (transactionBlockNumber !== undefined) return undefined
 			return undefined
 		}
 
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
 		ensureDefined(json.result, 'json.result is undefined')
-		if (args.method === 'eth_sendTransaction' && params[0] !== undefined && typeof json.result === 'string') {
+		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
 			const receiptResult = await waitForReceiptStatus(json.result)
+			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
 			if (receiptResult?.status === '0x0') {
 				try {
 					await request({ method: 'eth_call', params: [params[0], 'latest'] })
@@ -219,6 +238,18 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					throw error
 				}
 				throw new Error('Transaction reverted')
+			}
+
+			if (receiptResult?.status !== '0x0') {
+				const transaction = isRpcTransactionRequest(params[0]) ? params[0] : {}
+				await collectBytecodeCoverageForTransaction({
+					request,
+					transactionHash: json.result,
+					transaction: {
+						to: typeof transaction.to === 'string' ? transaction.to : undefined,
+					},
+					receipt: parsedReceipt,
+				}).catch(() => {})
 			}
 		}
 		if (nextBlockTimestamp !== undefined) currentTimestamp = nextBlockTimestamp

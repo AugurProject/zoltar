@@ -57,6 +57,32 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 
 **Last step**: After the task PR is ready, merge the latest `main` into the branch and resolve any conflicts if they exist.
 
+## Coverage Requirements
+
+After completing each task, agents should also run coverage analysis before finalizing:
+
+1. UI TypeScript coverage:
+   ```bash
+   bun run coverage:ui
+   ```
+
+2. Solidity TypeScript coverage:
+   ```bash
+   bun run coverage:contracts:ts
+   ```
+
+3. Solidity bytecode coverage:
+   ```bash
+   bun run coverage:contracts:bytecode
+   ```
+
+4. Optional unified run (runs all three domains):
+   ```bash
+   bun run coverage
+   ```
+
+Coverage should be kept at 100% for covered domains. Any reductions should be resolved before finalizing the task.
+
 # Package Guidelines
 
 - **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.

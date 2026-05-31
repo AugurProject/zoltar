@@ -107,7 +107,15 @@ const compilerSettings = {
 	},
 	outputSelection: {
 		'*': {
-			'*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'abi'],
+			'*': [
+				'abi',
+				'evm.bytecode.object',
+				'evm.bytecode.opcodes',
+				'evm.bytecode.sourceMap',
+				'evm.deployedBytecode.object',
+				'evm.deployedBytecode.opcodes',
+				'evm.deployedBytecode.sourceMap',
+			],
 		},
 	},
 }
