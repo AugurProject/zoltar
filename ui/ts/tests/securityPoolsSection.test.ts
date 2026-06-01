@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
@@ -421,15 +421,41 @@ void describe('security pools selected tab refresh', () => {
 		).toBe(false)
 
 		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress,
-				selectedPoolExists: false,
-			}),
-		).toBe(true)
+				shouldRefreshSelectedPoolDataOnViewOpen({
+					currentSecurityPoolAddress,
+					nextView: 'operate',
+					nextSecurityPoolAddress,
+					selectedPoolExists: false,
+				}),
+			).toBe(true)
+
+		expect(
+				shouldRefreshSelectedPoolDataOnViewOpen({
+					currentSecurityPoolAddress: '   ',
+					nextView: 'operate',
+					nextSecurityPoolAddress: currentSecurityPoolAddress,
+					selectedPoolExists: true,
+				}),
+			).toBe(false)
+
+		expect(
+				shouldRefreshSelectedPoolDataOnViewOpen({
+					currentSecurityPoolAddress: '   ',
+					nextView: 'operate',
+					selectedPoolExists: false,
+				}),
+			).toBe(false)
+
+		expect(
+				shouldRefreshSelectedPoolDataOnViewOpen({
+					currentSecurityPoolAddress,
+					nextView: 'operate',
+					nextSecurityPoolAddress: '   ',
+					selectedPoolExists: false,
+				}),
+			).toBe(false)
+		})
 	})
-})
 
 void describe('SecurityPoolsSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -542,6 +568,76 @@ void describe('SecurityPoolsSection', () => {
 		})
 
 		expect(calls).toEqual(['load', 'retry'])
+	})
+
+	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {
+		const createdPoolAddress = '0x00000000000000000000000000000000000000a4'
+		const activeViewChanges: string[] = []
+		const refreshCalls: string[] = []
+
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					activeView: 'create',
+					onActiveViewChange: activeView => {
+						activeViewChanges.push(activeView)
+					},
+					createPool: createCreatePoolProps({
+						securityPoolResult: {
+							deployPoolHash: zeroHash,
+							questionId: '0x01',
+							securityPoolAddress: createdPoolAddress,
+							securityMultiplier: 2n,
+							universeId: 1n,
+						},
+					}),
+					workflow: createWorkflowProps({
+						onRefreshSelectedPoolData: address => {
+							refreshCalls.push(address)
+						},
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Pool' }))
+		expect(activeViewChanges).toEqual(['operate'])
+		expect(refreshCalls).toEqual([createdPoolAddress])
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to Browse' }))
+		expect(activeViewChanges).toEqual(['operate', 'browse'])
+		expect(refreshCalls).toEqual([createdPoolAddress])
+	})
+
+	void test('Create Another Pool button is wired in create mode', async () => {
+		let resetCount = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					activeView: 'create',
+					createPool: createCreatePoolProps({
+						securityPoolResult: {
+							deployPoolHash: zeroHash,
+							questionId: '0x01',
+							securityPoolAddress: '0x00000000000000000000000000000000000000a5',
+							securityMultiplier: 2n,
+							universeId: 1n,
+						},
+						onResetSecurityPoolCreation: () => {
+							resetCount += 1
+						},
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Create Another Pool' }))
+		expect(resetCount).toBe(1)
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {

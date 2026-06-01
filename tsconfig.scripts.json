@@ -17,7 +17,7 @@
 		"noUncheckedIndexedAccess": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-		"lib": ["ESNext"],
+		"lib": ["ESNext", "DOM"],
 		"types": ["bun-types", "node"]
 	},
 	"include": ["bun-test-setup.ts", "scripts/**/*.mts", "ui/build/**/*.mts", "ui/dev-server.ts"]

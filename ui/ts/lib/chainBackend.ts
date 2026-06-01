@@ -76,7 +76,11 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 
 export function normalizeAccount(value: unknown): Address | undefined {
 	if (typeof value !== 'string') return undefined
-	return getAddress(value)
+	try {
+		return getAddress(value)
+	} catch {
+		return undefined
+	}
 }
 
 export function createInjectedBackend(): ChainBackend {
@@ -110,7 +114,12 @@ export function createInjectedBackend(): ChainBackend {
 		getChainId: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return MAINNET_NETWORK_PROFILE.chainIdHex
-			const result = await ethereum.request({ method: 'eth_chainId' })
+			let result: unknown
+			try {
+				result = await ethereum.request({ method: 'eth_chainId' })
+			} catch {
+				return MAINNET_NETWORK_PROFILE.chainIdHex
+			}
 			return typeof result === 'string' ? result : MAINNET_NETWORK_PROFILE.chainIdHex
 		},
 		getProvider,
@@ -120,7 +129,7 @@ export function createInjectedBackend(): ChainBackend {
 		requestAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
-			const result = await ethereum.request({ method: 'eth_requestAccounts' })
+			const result = await ethereum.request({ method: 'eth_requestAccounts' }).catch(() => [])
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 		},

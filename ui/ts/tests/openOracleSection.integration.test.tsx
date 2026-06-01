@@ -12,6 +12,7 @@ import { getOpenOracleAddress, loadErc20Allowance, loadErc20Balance, loadOpenOra
 import { useOpenOracleOperations } from '../hooks/useOpenOracleOperations.js'
 import type { AccountState } from '../types/app.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
+import { createInjectedBackend } from '../lib/chainBackend.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import type { OpenOracleView } from '../types/components.js'
@@ -23,6 +24,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/test
 import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
 import { ensureInfraDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -171,6 +173,7 @@ describe.serial('OpenOracleSection integration', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
+	let resetActiveEnvironment: (() => void) | undefined
 	let restoreDomEnvironment: (() => void) | undefined
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -186,17 +189,23 @@ describe.serial('OpenOracleSection integration', () => {
 	})
 
 	beforeEach(() => {
+		resetActiveEnvironment?.()
+		resetActiveEnvironmentForTesting()
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
 		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
+		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend())
 		uiReadClient = createConnectedReadClient()
 	})
 
 	afterEach(async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
+		resetActiveEnvironment?.()
+		resetActiveEnvironment = undefined
+		resetActiveEnvironmentForTesting()
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
 	})

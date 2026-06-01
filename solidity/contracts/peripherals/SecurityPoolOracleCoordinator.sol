@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.33;
+pragma solidity 0.8.35;
 
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';

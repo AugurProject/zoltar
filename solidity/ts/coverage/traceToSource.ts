@@ -23,8 +23,8 @@ interface CoverageProfile {
 type CoverageProfileMap = Map<string, CoverageProfile[]>
 
 type ContractArtifactEvmBytecode = {
-	readonly object?: string
-	readonly sourceMap?: string
+	readonly object: string
+	readonly sourceMap: string
 }
 
 type ContractArtifact = {
@@ -60,9 +60,13 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 			const getSection = (field: 'bytecode' | 'deployedBytecode'): ContractArtifactEvmBytecode | undefined => {
 				const sectionValue = evmValue[field]
 				if (!isRecord(sectionValue)) return undefined
+				const object = typeof sectionValue['object'] === 'string' ? sectionValue['object'] : undefined
+				const sourceMap = typeof sectionValue['sourceMap'] === 'string' ? sectionValue['sourceMap'] : undefined
+				if (object === undefined && sourceMap === undefined) return undefined
+
 				return {
-					object: typeof sectionValue['object'] === 'string' ? sectionValue['object'] : undefined,
-					sourceMap: typeof sectionValue['sourceMap'] === 'string' ? sectionValue['sourceMap'] : undefined,
+					object: object === undefined ? '' : object,
+					sourceMap: sourceMap === undefined ? '' : sourceMap,
 				}
 			}
 
@@ -71,7 +75,10 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 			if (bytecodeSection === undefined && deployedBytecodeSection === undefined) continue
 
 			const sourceFileContracts = contracts[sourceFileName] ?? {}
-			sourceFileContracts[contractName] = { evm: { bytecode: bytecodeSection, deployedBytecode: deployedBytecodeSection } }
+			const evm: { bytecode?: ContractArtifactEvmBytecode; deployedBytecode?: ContractArtifactEvmBytecode } = {}
+			if (bytecodeSection !== undefined) evm.bytecode = bytecodeSection
+			if (deployedBytecodeSection !== undefined) evm.deployedBytecode = deployedBytecodeSection
+			sourceFileContracts[contractName] = { evm }
 			contracts[sourceFileName] = sourceFileContracts
 		}
 	}
@@ -80,9 +87,11 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 }
 
 const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts: ContractArtifacts; sourceFiles: readonly string[] }> => {
-	const raw: ContractsJson = JSON.parse(await fs.readFile(artifactsPath, 'utf8'))
+	const rawJson = JSON.parse(await fs.readFile(artifactsPath, 'utf8'))
+	if (!isRecord(rawJson)) return { contracts: {}, sourceFiles: [] }
+	const raw: ContractsJson = rawJson
 	const contracts = parseContractsJson(raw)
-	const sourceFiles = isRecord(raw['sources']) ? Object.keys(raw['sources']) : []
+	const sourceFiles = isRecord(raw.sources) ? Object.keys(raw.sources) : []
 	return { contracts, sourceFiles }
 }
 
@@ -155,11 +164,7 @@ const lineForOffset = (source: string, offset: number): number => {
 	return line
 }
 
-const lineRangeFromSourceOffset = (
-	source: string,
-	sourceOffset: number,
-	sourceLength: number,
-): { readonly startLine: number; readonly endLine: number } => {
+const lineRangeFromSourceOffset = (source: string, sourceOffset: number, sourceLength: number): { readonly startLine: number; readonly endLine: number } => {
 	const length = Math.max(0, sourceLength)
 	const startLine = lineForOffset(source, sourceOffset)
 	const endOffset = length === 0 ? sourceOffset : sourceOffset + length - 1
@@ -186,12 +191,7 @@ const parseTraceSteps = (traceResponse: unknown): unknown[] => {
 	return Array.isArray(structLogs) ? structLogs : []
 }
 
-const collectProfilesForAddresses = async (
-	addresses: readonly string[],
-	request: RpcRequest,
-	profileByBytecode: CoverageProfileMap,
-	addressProfileCache: Map<string, CoverageProfile[] | undefined>,
-): Promise<Map<string, CoverageProfile[]>> => {
+const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CoverageProfile[] | undefined>): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
 	for (const address of addresses) {
 		const existingProfiles = addressProfileCache.get(address)
@@ -213,13 +213,7 @@ const collectProfilesForAddresses = async (
 	return result
 }
 
-const recordLineHitsForProfileSegment = async (
-	profile: CoverageProfile,
-	segment: ParsedSourceMapSegment,
-	rootPath: string,
-	fileContents: Map<string, string>,
-	lineCoverage: Map<string, Map<number, number>>,
-): Promise<void> => {
+const recordLineHitsForProfileSegment = async (profile: CoverageProfile, segment: ParsedSourceMapSegment, rootPath: string, fileContents: Map<string, string>, lineCoverage: Map<string, Map<number, number>>): Promise<void> => {
 	const sourcePath = profile.sourceFileNames[segment.sourceIndex]
 	if (sourcePath === undefined) return
 
@@ -280,12 +274,7 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 	}
 }
 
-export const collectBytecodeCoverageForTransaction = async (options: {
-	readonly request: RpcRequest
-	readonly transactionHash: string
-	readonly transaction: RpcTransactionRequest
-	readonly receipt?: RpcTransactionReceiptData
-}): Promise<void> => {
+export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
 	if (!isSolidityBytecodeCoverageEnabled()) return
 
 	const config = getSolidityBytecodeCoverageConfig()

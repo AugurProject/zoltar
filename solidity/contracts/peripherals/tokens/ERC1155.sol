@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.33;
+pragma solidity 0.8.35;
 
 import { IERC165 } from '../interfaces/IERC165.sol';
 import { IERC1155 } from '../interfaces/IERC1155.sol';

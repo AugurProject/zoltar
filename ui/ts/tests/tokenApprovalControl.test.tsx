@@ -53,4 +53,91 @@ describe('TokenApprovalControl', () => {
 		expect(approveButton.disabled).toBe(true)
 		expect(documentQueries.queryByText(/must be greater than the current approved/i)).toBeNull()
 	})
+
+	test('shows a guard message and keeps approval disabled when approval is guarded', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='submitting the initial report'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage='Connect a wallet before approving.'
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving WETH...'
+				requiredAmount={10n * 10n ** 18n}
+				resetKey='weth-approval-guard'
+				tokenSymbol='WETH'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const approveButton = documentQueries.getByRole('button', { name: 'Approve WETH' }) as HTMLButtonElement
+
+		expect(approveButton.disabled).toBe(true)
+		expect(approveButton.title).toBe('Connect a wallet before approving.')
+	})
+
+	test('shows loading state while approval is pending', async () => {
+		let approveCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='submitting the initial report'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={() => {
+					approveCalls += 1
+				}}
+				pending={true}
+				pendingLabel='Approving WETH...'
+				requiredAmount={10n * 10n ** 18n}
+				resetKey='weth-approval-pending'
+				tokenSymbol='WETH'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const approveButton = documentQueries.getByRole('button', { name: 'Approving WETH...' }) as HTMLButtonElement
+
+		expect(approveButton.disabled).toBe(true)
+		fireEvent.click(approveButton)
+		expect(approveCalls).toBe(0)
+	})
+
+	test('reports and blocks an invalid custom approval input', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='submitting the initial report'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving WETH...'
+				requiredAmount={10n * 10n ** 18n}
+				resetKey='weth-approval-invalid'
+				tokenSymbol='WETH'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.input(documentQueries.getByPlaceholderText('Leave blank for required total'), {
+				target: { value: 'not-a-number' },
+			})
+		})
+
+		const approveButton = documentQueries.getByRole('button', { name: 'Approve WETH' }) as HTMLButtonElement
+		expect(approveButton.disabled).toBe(true)
+		expect(approveButton.title).toBe('Approval amount must be a decimal number')
+	})
 })

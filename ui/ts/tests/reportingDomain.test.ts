@@ -8,9 +8,12 @@ import {
 	computeEscalationTimeSinceStartFromAttritionCost,
 	getEscalationBalanceTuple,
 	getEscalationBindingCapital,
+	getEscalationTimeRemaining,
 	getEscalationPhase,
+	getEscalationDepositClaimAmount,
 	getMaxProfitContribution,
 	getMinimumOutcomeChangeContribution,
+	getRemainingSelectedOutcomeContributionCapacity,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	getReportingTimerPreview,
@@ -19,7 +22,7 @@ import {
 	previewReportingContribution,
 	projectEscalationEndTime,
 } from '../lib/reportingDomain.js'
-import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '../types/contracts.js'
+import type { ActiveReportingDetails, MarketDetails, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 const REP = 10n ** 18n
 
@@ -329,6 +332,40 @@ describe('reportingDomain', () => {
 		})
 	})
 
+	test('getMaxProfitContribution reports unavailable when the selected side is not present', () => {
+		expect(
+			getMaxProfitContribution(
+				createReportingDetails({
+					sides: [
+						{ balance: rep(10n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+					],
+				}),
+				'invalid',
+			),
+		).toEqual({
+			amount: undefined,
+			reason: 'Selected side is unavailable.',
+		})
+	})
+
+	test('projecting an invalid-side report preserves branch coverage in balance recalculation helpers', () => {
+		const details = createReportingDetails({
+			nonDecisionThreshold: rep(5000n),
+			sides: [
+				{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(4n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			startBond: rep(1n),
+		})
+
+		expect(previewReportingContribution(details, 'invalid', rep(1n))).toEqual({
+			actualDepositAmount: rep(1n),
+			reason: undefined,
+		})
+	})
+
 	test('getSelectedOutcomeRewardWindowFillTimestamp returns the future reward-window fill time when room remains', () => {
 		const details = createDynamicReportingDetails()
 
@@ -500,5 +537,175 @@ describe('reportingDomain', () => {
 			payout: rep(26n),
 			profit: rep(12n),
 		})
+	})
+
+	test('throws a clear error when escalation timing inputs are malformed', () => {
+		expect(() =>
+			getEscalationTimeRemaining({
+				...createReportingDetails(),
+				escalationEndTime: undefined as unknown as bigint,
+			}),
+		).toThrow('Escalation end time is required')
+	})
+
+	test('returns undefined when selected outcome metadata is not available for reward-window timing', () => {
+		expect(
+			getSelectedOutcomeRewardWindowFillTimestamp(
+				createReportingDetails({
+					sides: [{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] }],
+				}),
+				'yes',
+				rep(1n),
+			),
+		).toBeUndefined()
+	})
+
+	test('returns undefined for active reporting timer previews when non-decision has been reached', () => {
+		expect(
+			getReportingTimerPreview(
+				createReportingDetails({
+					hasReachedNonDecision: true,
+				}),
+				'yes',
+				rep(1n),
+			),
+		).toBeUndefined()
+	})
+
+	test('returns reward-window metadata in no-op forms and missing-side paths', () => {
+		const details = createReportingDetails({
+			sides: [
+				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(3n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			],
+		})
+		expect(getRemainingSelectedOutcomeContributionCapacity(details, 'no')).toBe(0n)
+		expect(getRemainingSelectedOutcomeContributionCapacity({ ...details, nonDecisionThreshold: rep(20n) }, 'invalid')).toBe(rep(18n))
+	})
+
+	test('returns undefined amount/profit for zero-deposit and unknown-side contribution calculations', () => {
+		const unknownOutcome = 'ghost' as unknown as ReportingOutcomeKey
+		expect(calculateEstimatedEscalationReturn(createReportingDetails(), 'yes', 0n)).toEqual({
+			payout: 0n,
+			profit: 0n,
+		})
+		expect(calculateEstimatedEscalationReturn(createReportingDetails(), unknownOutcome, rep(5n))).toEqual({
+			payout: 0n,
+			profit: 0n,
+		})
+	})
+
+	test('preview helpers return zero-state messages for resolved and full-side states', () => {
+		expect(
+			previewReportingContribution(
+				{
+					...createReportingDetails(),
+					resolution: 'yes',
+				},
+				'yes',
+				rep(1n),
+			),
+		).toEqual({
+			actualDepositAmount: undefined,
+			reason: 'Escalation is already resolved.',
+		})
+		expect(
+			previewReportingContribution(
+				{
+					...createReportingDetails(),
+					nonDecisionThreshold: rep(10n),
+					sides: [
+						{ balance: rep(10n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					],
+				},
+				'yes',
+				rep(1n),
+			),
+		).toEqual({
+			actualDepositAmount: undefined,
+			reason: 'Selected side is already full at 10 REP.',
+		})
+	})
+
+	test('uses the reward floor when the selected resolved side has no reward-eligible principal', () => {
+		const details = createReportingDetails({
+			questionOutcome: 'yes',
+			withdrawalEnabled: true,
+			sides: [
+				{ balance: 0n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			],
+		})
+
+		expect(
+			getEscalationDepositClaimAmount(details, 'yes', {
+				amount: rep(1n),
+				cumulativeAmount: rep(1n),
+				depositIndex: 0n,
+				depositor: zeroAddress,
+			}),
+		).toBe(rep(1n))
+	})
+
+	test('returns no reward for capped projections when selected side has no room', () => {
+		expect(
+			calculateEstimatedEscalationReturn(
+				{
+					...createReportingDetails(),
+					sides: [
+						{ balance: rep(100n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					],
+				},
+				'yes',
+				rep(5n),
+			),
+		).toEqual({
+			payout: 0n,
+			profit: 0n,
+		})
+	})
+
+	test('returns pure deposit payout when reward eligibility is effectively empty', () => {
+		const details = createReportingDetails({
+			sides: [
+				{ balance: rep(0n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(0n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(0n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			],
+		})
+
+		expect(calculateEstimatedEscalationReturn(details, 'yes', rep(1n))).toEqual({
+			payout: rep(1n),
+			profit: 0n,
+		})
+	})
+
+	test('returns selected-side lookup errors for missing active reporting sides', () => {
+		expect(
+			previewReportingContribution(
+				{
+					...createReportingDetails(),
+					sides: [
+						{ balance: rep(1n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					],
+				},
+				'yes',
+				rep(1n),
+			),
+		).toEqual({
+			actualDepositAmount: undefined,
+			reason: 'Select a valid reporting outcome.',
+		})
+	})
+
+	test('throws when projection logic receives an unknown reporting outcome', () => {
+		const unknownOutcome = 'ghost' as unknown as ReportingOutcomeKey
+		expect(() => getReportingTimerPreview(createDynamicReportingDetails(), unknownOutcome, rep(1n))).toThrow('Unhandled discriminated union member: "ghost"')
 	})
 })

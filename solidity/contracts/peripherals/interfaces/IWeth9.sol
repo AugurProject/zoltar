@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.33;
+pragma solidity 0.8.35;
 
 interface IWeth9 {
 	// ERC-20 metadata

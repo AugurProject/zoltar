@@ -167,6 +167,45 @@ function createScalarForkUniverse(): ZoltarUniverseSummary {
 	}
 }
 
+function createBinaryForkUniverse(): ZoltarUniverseSummary {
+	return {
+		childUniverses: [
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 0n,
+				outcomeLabel: 'Yes',
+				parentUniverseId: 1n,
+				reputationToken: zeroAddress,
+				universeId: 2n,
+			},
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 1n,
+				outcomeLabel: 'No',
+				parentUniverseId: 1n,
+				reputationToken: zeroAddress,
+				universeId: 3n,
+			},
+		],
+		forkThreshold: 0n,
+		forkQuestionDetails: {
+			...createMarketDetails(),
+			marketType: 'binary',
+			numTicks: 2n,
+			outcomeLabels: ['Yes', 'No'],
+		},
+		forkTime: 1n,
+		forkingOutcomeIndex: 0n,
+		hasForked: true,
+		parentUniverseId: 1n,
+		reputationToken: zeroAddress,
+		totalTheoreticalSupply: 0n,
+		universeId: 10n,
+	}
+}
+
 function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: ZoltarUniverseSummary }) {
 	const [tradingForm, setTradingForm] = useState<TradingFormState>(createTradingForm())
 
@@ -174,6 +213,29 @@ function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: Z
 		<TradingSection
 			{...createTradingSectionProps({
 				selectedPool: createSelectedPool({ universeHasForked: true }),
+				tradingForkUniverse,
+				tradingForm,
+			})}
+			onTradingFormChange={update => setTradingForm(current => ({ ...current, ...update }))}
+		/>
+	)
+}
+
+function TradingSectionWithMutableForm({
+	initialTradingForm = {},
+	tradingForkUniverse,
+	selectedPool = createSelectedPool({ universeHasForked: true }),
+}: {
+	initialTradingForm?: Partial<TradingFormState>
+	tradingForkUniverse: ZoltarUniverseSummary
+	selectedPool?: ListedSecurityPool
+}) {
+	const [tradingForm, setTradingForm] = useState<TradingFormState>({ ...createTradingForm(), ...initialTradingForm })
+
+	return (
+		<TradingSection
+			{...createTradingSectionProps({
+				selectedPool,
 				tradingForkUniverse,
 				tradingForm,
 			})}
@@ -468,5 +530,133 @@ void describe('TradingSection', () => {
 
 		expect(modalQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
 		expect(modalQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
+	})
+
+	void test('renders latest trading outcomes for completed action variants', async () => {
+		for (const scenario of [
+			{ action: 'redeemCompleteSet' as const, title: 'Complete Sets Redeemed' },
+			{ action: 'migrateShares' as const, title: 'Shares Migrated' },
+			{ action: 'redeemShares' as const, title: 'Resolved Shares Redeemed' },
+		] as const) {
+			const tradingResult = {
+				action: scenario.action,
+				hash: zeroHash,
+				securityPoolAddress: zeroAddress,
+				universeId: 1n,
+				...(scenario.action === 'migrateShares' ? { shareOutcome: 'yes', targetOutcomeIndexes: [0n, 1n] } : {}),
+			} as const
+
+			const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingResult })} />)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			const documentQueries = within(document.body)
+			expect(documentQueries.getByText('Latest Trading Action')).not.toBeNull()
+			expect(documentQueries.getByText(scenario.title)).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: `Copy address ${zeroAddress}` })).not.toBeNull()
+
+			if (scenario.action === 'migrateShares') {
+				expect(documentQueries.getByText('Share Outcome')).not.toBeNull()
+				expect(documentQueries.getByText('yes')).not.toBeNull()
+				expect(documentQueries.getByText('Target Outcome Indexes')).not.toBeNull()
+				expect(documentQueries.getByText('0, 1')).not.toBeNull()
+			}
+
+			await renderedComponent.cleanup()
+			cleanupRenderedComponent = undefined
+		}
+	})
+
+	void test('renders security pool address input when enabled and updates it through onTradingFormChange', async () => {
+		let nextSecurityPoolAddress: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					onTradingFormChange: ({ securityPoolAddress }) => {
+						if (securityPoolAddress !== undefined) {
+							nextSecurityPoolAddress = securityPoolAddress
+						}
+					},
+					showSecurityPoolAddressInput: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const input = documentQueries.getByPlaceholderText('0x...')
+		expect(input).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(input, { target: { value: '0xabc' } })
+		})
+		expect(nextSecurityPoolAddress).toBe('0xabc')
+	})
+
+	void test('fills the redeem amount from the max helper in the redeem modal', async () => {
+		let redeemedAmount: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					onTradingFormChange: ({ redeemAmount }) => {
+						if (redeemAmount !== undefined) {
+							redeemedAmount = redeemAmount
+						}
+					},
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSets: 1n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem complete sets' }))
+		})
+
+		const modalElement = documentQueries.getByRole('dialog')
+		const modalQueries = within(modalElement)
+		const maxButton = modalElement.querySelector('.field-inline-action') as HTMLButtonElement
+		expect(maxButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(maxButton)
+		})
+
+		expect(redeemedAmount).toBe('1')
+	})
+
+	void test('lets malformed migration targets be reset and toggled through shared target helpers', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSectionWithMutableForm
+				tradingForkUniverse={createBinaryForkUniverse()}
+				initialTradingForm={{
+					targetOutcomeIndexes: 'bad index',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const selectAllButton = modalQueries.getByRole('button', { name: 'Select all' }) as HTMLButtonElement
+		const clearButton = modalQueries.getByRole('button', { name: 'Clear' }) as HTMLButtonElement
+		expect(clearButton.disabled).toBe(true)
+		await act(() => {
+			fireEvent.click(selectAllButton)
+		})
+		expect(clearButton.disabled).toBe(false)
+
+		const yesTarget = modalQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
+		expect(yesTarget.getAttribute('aria-pressed')).toBe('true')
+		await act(() => {
+			fireEvent.click(yesTarget)
+		})
+		expect(yesTarget.getAttribute('aria-pressed')).toBe('false')
 	})
 })

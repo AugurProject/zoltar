@@ -54,9 +54,9 @@ const parseTransactionReceipt = (value: unknown): RpcTransactionReceipt | undefi
 	if (!isObjectRecord(value)) return undefined
 	const typed = value
 	return {
-		status: typeof typed['status'] === 'string' ? typed['status'] : undefined,
-		to: typeof typed['to'] === 'string' ? typed['to'] : undefined,
-		contractAddress: typeof typed['contractAddress'] === 'string' ? typed['contractAddress'] : undefined,
+		...(typeof typed['status'] === 'string' ? { status: typed['status'] } : {}),
+		...(typeof typed['to'] === 'string' ? { to: typed['to'] } : {}),
+		...(typeof typed['contractAddress'] === 'string' ? { contractAddress: typed['contractAddress'] } : {}),
 	}
 }
 
@@ -241,14 +241,24 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			}
 
 			if (receiptResult?.status !== '0x0') {
-				const transaction = isRpcTransactionRequest(params[0]) ? params[0] : {}
-				await collectBytecodeCoverageForTransaction({
+				const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
+				const receipt =
+					parsedReceipt === undefined
+						? undefined
+						: {
+								...(typeof parsedReceipt.to === 'string' ? { to: parsedReceipt.to } : {}),
+								...(typeof parsedReceipt.contractAddress === 'string' ? { contractAddress: parsedReceipt.contractAddress } : {}),
+							}
+				const requestOptions = {
 					request,
 					transactionHash: json.result,
 					transaction: {
-						to: typeof transaction.to === 'string' ? transaction.to : undefined,
+						...(transaction !== undefined && typeof transaction.to === 'string' ? { to: transaction.to } : {}),
 					},
-					receipt: parsedReceipt,
+					...(receipt !== undefined ? { receipt } : {}),
+				}
+				await collectBytecodeCoverageForTransaction({
+					...requestOptions,
 				}).catch(() => {})
 			}
 		}

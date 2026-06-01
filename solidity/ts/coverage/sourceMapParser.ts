@@ -26,7 +26,7 @@ const getPushArgumentLength = (opcode: number): number => {
 	return 0
 }
 
-export const parseBytecodeInstructionOffsets = (bytecode: string): readonly number[] => {
+const parseBytecodeInstructionOffsets = (bytecode: string): readonly number[] => {
 	const normalized = normalizeHexBytes(bytecode)
 	if (normalized === '') return []
 
@@ -42,7 +42,7 @@ export const parseBytecodeInstructionOffsets = (bytecode: string): readonly numb
 	return instructionOffsets
 }
 
-export const parseSourceMap = (sourceMap: string): readonly (ParsedSourceMapSegment | undefined)[] => {
+const parseSourceMap = (sourceMap: string): readonly (ParsedSourceMapSegment | undefined)[] => {
 	const segments: (ParsedSourceMapSegment | undefined)[] = []
 
 	let currentSourceOffset: number | undefined
@@ -95,7 +95,7 @@ export const buildPcToSourceMap = (bytecode: string, sourceMap: string): Readonl
 	}
 
 	// Keep source-map state in sync with all instructions when an explicit source-map entry is shorter than instruction count.
-	let lastSegment = segments[segments.length - 1]
+	const lastSegment = segments[segments.length - 1]
 	for (let instructionIndex = segments.length; instructionIndex < instructionOffsets.length; instructionIndex++) {
 		const pc = instructionOffsets[instructionIndex]
 		if (pc === undefined) continue

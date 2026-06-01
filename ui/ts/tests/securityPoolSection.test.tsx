@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolSection } from '../components/SecurityPoolSection.js'
@@ -74,7 +74,7 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 	}
 }
 
-describe('SecurityPoolSection', () => {
+	describe('SecurityPoolSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -158,5 +158,144 @@ describe('SecurityPoolSection', () => {
 		if (!(statusStack instanceof HTMLElement)) throw new Error('Expected pool creation status stack to render')
 		expect(documentQueries.getByRole('heading', { name: 'Pool Created' })).not.toBeNull()
 		expect(within(statusStack).getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
+	})
+
+	test('renders loading create labels and reasons while pool duplicate checks run', async () => {
+		const duplicateCheckRender = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					checkingDuplicateOriginPool: true,
+				}),
+			),
+		)
+		cleanupRenderedComponent = duplicateCheckRender.cleanup
+		expectTransactionButtonDisabled(
+			document.body,
+			'Checking Duplicate...',
+			'Checking whether a pool already exists for this question and security multiplier.',
+		)
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+
+		const creatingRender = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					securityPoolCreating: true,
+				}),
+			),
+		)
+		cleanupRenderedComponent = creatingRender.cleanup
+		expectTransactionButtonDisabled(
+			document.body,
+			'Creating Pool...',
+			'Security pool creation is already in progress.',
+		)
+	})
+
+	test('renders duplicate and forked branch messaging and button labels', async () => {
+		const duplicateRender = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					duplicateOriginPoolExists: true,
+				}),
+			),
+		)
+		cleanupRenderedComponent = duplicateRender.cleanup
+		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question and security multiplier already exists.')
+		expect(within(document.body).getByText('A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.')).not.toBeNull()
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+
+		const forkedRender = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					zoltarUniverseHasForked: true,
+				}),
+			),
+		)
+		cleanupRenderedComponent = forkedRender.cleanup
+		expectTransactionButtonDisabled(document.body, 'Pool Creation Locked', 'Security pools cannot be created after Zoltar has forked.')
+		expect(within(document.body).getByText('Security pools cannot be created after Zoltar has forked.')).not.toBeNull()
+	})
+
+	test('wires created pool action buttons to callbacks', async () => {
+		const poolAddress = getAddress('0x00000000000000000000000000000000000000a2')
+		let openedAddress: string | undefined
+		let returnedToBrowse = false
+		let resetCount = 0
+
+		const resultPool = {
+			deployPoolHash: zeroHash,
+			questionId: '0x01',
+			securityPoolAddress: poolAddress,
+			securityMultiplier: 2n,
+			universeId: 1n,
+		}
+
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					securityPoolResult: resultPool,
+					onOpenCreatedPool: securityPoolAddress => {
+						openedAddress = securityPoolAddress
+					},
+					onReturnToBrowse: () => {
+						returnedToBrowse = true
+					},
+					onResetSecurityPoolCreation: () => {
+						resetCount += 1
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Pool' }))
+		expect(openedAddress).toBe(poolAddress)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to Browse' }))
+		expect(returnedToBrowse).toBe(true)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Create Another Pool' }))
+		expect(resetCount).toBe(1)
+	})
+
+	test('uses carried market details when created market does not match loaded market details', async () => {
+		const resultPool = {
+			deployPoolHash: zeroHash,
+			questionId: '0x99',
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000a3'),
+			securityMultiplier: 2n,
+			universeId: 1n,
+		}
+
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketDetails: createMarketDetails({
+						questionId: '0x01',
+						title: 'Loaded question',
+						description: 'Loaded description',
+					}),
+					poolCreationMarketDetails: createMarketDetails({
+						questionId: '0x99',
+						title: 'Fallback question',
+						description: 'Fallback description',
+					}),
+					securityPoolResult: resultPool,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Pool Created')).not.toBeNull()
+		expect(documentQueries.getByText('Fallback question')).not.toBeNull()
+		expect(documentQueries.getByText('Fallback description')).not.toBeNull()
+		expect(documentQueries.queryByText('Loaded question')).toBeNull()
 	})
 })

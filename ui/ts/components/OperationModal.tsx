@@ -19,18 +19,26 @@ export function OperationModal({ children, description, isOpen, onClose, title }
 			if (event.key !== 'Tab') return
 			const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")
 			if (focusableElements === undefined || focusableElements.length === 0) return
-			const firstElement = focusableElements[0]
-			const lastElement = focusableElements[focusableElements.length - 1]
-			if (!(document.activeElement instanceof HTMLElement)) return
-			if (event.shiftKey && document.activeElement === firstElement) {
-				event.preventDefault()
-				lastElement?.focus()
+			const elements = Array.from(focusableElements)
+			if (!(document.activeElement instanceof HTMLElement)) {
+				elements[0]?.focus()
 				return
 			}
-			if (!event.shiftKey && document.activeElement === lastElement) {
-				event.preventDefault()
-				firstElement?.focus()
+
+			const currentIndex = elements.indexOf(document.activeElement)
+			if (currentIndex === -1) {
+				elements[0]?.focus()
+				return
 			}
+
+			if (event.shiftKey) {
+				event.preventDefault()
+				elements[(currentIndex - 1 + elements.length) % elements.length]?.focus()
+				return
+			}
+
+			event.preventDefault()
+			elements[(currentIndex + 1) % elements.length]?.focus()
 		}
 		document.addEventListener('keydown', handleKeyDown)
 		return () => {

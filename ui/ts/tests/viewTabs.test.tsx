@@ -51,7 +51,7 @@ describe('ViewTabs', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const tabs = within(document.body).getAllByRole('tab') as HTMLButtonElement[]
-		const overviewTab = requireButton(tabs[0], 'overview')
+		const overviewTab = requireButton(tabs[0] as HTMLButtonElement, 'overview')
 		const detailsTab = requireButton(tabs[1], 'details')
 
 		expect(overviewTab.getAttribute('aria-controls')).toBe('overview-panel')
@@ -70,6 +70,46 @@ describe('ViewTabs', () => {
 
 		expect(selectedValue).toBe('overview')
 		expect(document.activeElement).toBe(overviewTab)
+	})
+
+	test('supports wrap-around and disabled-option skipping for keyboard navigation', async () => {
+		let selectedValue = 'overview'
+		const renderedComponent = await renderIntoDocument(
+			<ViewTabs
+				ariaLabel='Wrap Tabs'
+				value={selectedValue}
+				onChange={value => {
+					selectedValue = value
+				}}
+				options={[
+					{ label: 'Overview', value: 'overview' },
+					{ disabled: true, label: 'Paused', value: 'paused' },
+					{ label: 'Reports', value: 'reports' },
+				]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const tabs = within(document.body).getAllByRole('tab') as HTMLButtonElement[]
+		const overviewTab = requireButton(tabs[0], 'overview')
+		expect(overviewTab).toBeDefined()
+
+		await act(() => {
+			fireEvent.keyDown(overviewTab, { key: 'ArrowLeft' })
+		})
+		expect(selectedValue).toBe('reports')
+
+		await act(() => {
+			const reportsTab = document.getElementById('wrap-tabs-reports-tab')
+			if (reportsTab === null) throw new Error('Expected reports tab to exist')
+			fireEvent.keyDown(reportsTab as HTMLElement, { key: 'ArrowRight' })
+		})
+		expect(selectedValue).toBe('overview')
+
+		await act(() => {
+			fireEvent.keyDown(overviewTab as HTMLButtonElement, { key: 'End' })
+		})
+		expect(selectedValue).toBe('reports')
 	})
 
 	test('renders real links when href metadata is provided', async () => {
