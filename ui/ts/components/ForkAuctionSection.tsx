@@ -230,7 +230,7 @@ function getStageAheadMessage(stage: ForkAuctionStageView, currentStage: ForkAuc
 		case 'migration':
 			return `This pool is currently ${currentStageText}. Migration controls become meaningful once the pool has forked.`
 		case 'auction':
-			return `This pool is currently ${currentStageText}. Auction controls become meaningful after migration completes and the truth auction starts.`
+			return undefined
 		case 'settlement':
 			return `This pool is currently ${currentStageText}. Settlement controls become meaningful after bidding progresses or the truth auction finalizes.`
 		case 'initiate':
@@ -620,15 +620,19 @@ export function ForkAuctionSection({
 	const selectedAuctionPrice = forkAuctionDetails?.truthAuction?.clearingPrice
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, selectedAuctionPrice)
 	const effectiveCurrentTimestamp = currentTimestamp ?? forkAuctionDetails?.currentTime
-	const previewAuctionWindow = getTruthAuctionWindow(previewPool?.truthAuctionStartedAt)
-	const auctionWindow = forkAuctionDetails === undefined ? previewAuctionWindow : getTruthAuctionWindow(forkAuctionDetails.truthAuctionStartedAt)
-	const truthAuctionEndsAt = forkAuctionDetails?.truthAuction?.auctionEndsAt ?? auctionWindow?.endsAt
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
 	const systemState = forkAuctionDetails?.systemState ?? previewPool?.systemState
 	const forkOutcome = forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome
 	const questionOutcome = forkAuctionDetails?.questionOutcome ?? previewPool?.questionOutcome
 	const truthAuctionAddress = forkAuctionDetails?.truthAuctionAddress ?? previewPool?.truthAuctionAddress
+	const optimisticTruthAuctionStartedAt =
+		forkAuctionResult?.action === 'startTruthAuction' && securityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? forkAuctionDetails?.currentTime ?? 1n) : undefined
+	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
+	if (previewPool?.truthAuctionStartedAt !== undefined && previewPool.truthAuctionStartedAt > 0n) effectiveTruthAuctionStartedAt = previewPool.truthAuctionStartedAt
+	if (forkAuctionDetails?.truthAuctionStartedAt !== undefined && forkAuctionDetails.truthAuctionStartedAt > 0n) effectiveTruthAuctionStartedAt = forkAuctionDetails.truthAuctionStartedAt
+	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
+	const truthAuctionEndsAt = forkAuctionDetails?.truthAuction?.auctionEndsAt ?? auctionWindow?.endsAt
 	const previewPoolHasActualForkActivity = previewPool?.hasForkActivity === true
 	const isSyntheticForkTriggerPreview = lifecycleStateOverride === 'poolForked' && !previewPoolHasActualForkActivity
 	const hasPreviewForkActivity = previewPoolHasActualForkActivity || lifecycleStateOverride === 'poolForked'
@@ -729,19 +733,15 @@ export function ForkAuctionSection({
 	const shouldShowTruthAuctionVisualization = truthAuctionStatus !== undefined && truthAuctionAddress !== undefined && truthAuctionAddress !== zeroAddress
 	const enteredBidTick = parseOptionalBigInt(forkAuctionForm.submitBidTick)
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuctionStatus)
+	const startTruthAuctionCountdown = forkAuctionDetails?.migrationEndsAt === undefined || effectiveCurrentTimestamp === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, effectiveCurrentTimestamp)
 	const startedDisplay = (() => {
-		if (forkAuctionDetails === undefined) {
-			if (previewPool?.truthAuctionStartedAt === undefined || previewPool.truthAuctionStartedAt === 0n) return 'Not started'
-
-			return renderTimestamp({
-				displayTimestamp: previewPool.truthAuctionStartedAt,
-				fallbackText: 'Not started',
-			})
+		if (effectiveTruthAuctionStartedAt === undefined || effectiveTruthAuctionStartedAt === 0n) {
+			if (startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n) return `Starts in ${formatDuration(startTruthAuctionCountdown)}`
+			return 'Not started'
 		}
-		if (forkAuctionDetails.truthAuctionStartedAt === 0n) return 'Not started'
 
 		return renderTimestamp({
-			displayTimestamp: forkAuctionDetails.truthAuctionStartedAt,
+			displayTimestamp: effectiveTruthAuctionStartedAt,
 			fallbackText: 'Not started',
 		})
 	})()
@@ -857,11 +857,10 @@ export function ForkAuctionSection({
 		truthAuction: truthAuctionStatus,
 		truthAuctionEndsAt,
 	})
-	const hasStartedTruthAuction = forkAuctionDetails?.truthAuctionStartedAt !== undefined && forkAuctionDetails.truthAuctionStartedAt > 0n
-	const startTruthAuctionCountdown = forkAuctionDetails?.migrationEndsAt === undefined || effectiveCurrentTimestamp === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, effectiveCurrentTimestamp)
+	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
 	const startTruthAuctionReadyInText = (() => {
 		if (startTruthAuctionCountdown === undefined) return undefined
-		if (startTruthAuctionCountdown === 0n) return 'Migration has ended. Start truth auction when this pool refreshes.'
+		if (startTruthAuctionCountdown === 0n) return undefined
 		return `Truth auction can be started in ${formatDuration(startTruthAuctionCountdown)} once migration ends.`
 	})()
 	const isVaultMigrationCompleteForSelectedOutcome = (() => {
@@ -876,6 +875,11 @@ export function ForkAuctionSection({
 		if (forkAuctionActiveAction === 'startTruthAuction') return true
 
 		return false
+	})()
+	const startTruthAuctionAvailabilityMessage = (() => {
+		if (hasStartedTruthAuction) return 'Truth auction already started.'
+		if (isStartTruthAuctionInProgress) return 'Starting truth auction...'
+		return startTruthAuctionGuardMessage
 	})()
 	const refundTruthAuctionBidGuardMessage = getRefundTruthAuctionBidGuardMessage({
 		refundBidIndexInput: forkAuctionForm.refundBidIndex,
@@ -1193,7 +1197,6 @@ export function ForkAuctionSection({
 		{ label: 'Auction Address', value: renderAddress(truthAuctionAddress) },
 		{ label: 'Started', value: startedDisplay },
 		{ label: 'Ends', value: endsDisplay },
-		{ label: 'Time Left', value: timeLeftDisplay },
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? forkOnlyFallbackText : <CurrencyValue value={truthAuctionStatus.totalRepPurchased} suffix='REP' /> },
 		{ label: 'Clearing Tick', value: truthAuctionStatus?.clearingTick?.toString() ?? truthAuctionFallback },
@@ -1618,7 +1621,7 @@ export function ForkAuctionSection({
 						{migrationBalancesContent}
 						{accountState.address === undefined ? undefined : (
 							<>
-								<SectionBlock density='compact' headingLevel={4} title='Migrate Escalation Deposits' description='Move winning non-decision escalation deposits for the connected wallet into the selected child universe.' variant='embedded'>
+								<SectionBlock density='compact' headingLevel={4} title='Migrate Escalation Deposits' variant='embedded'>
 									{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No locked REP is currently visible for winning non-decision escalation deposits on the connected wallet.</p> : undefined}
 									{loadingReportingDetails ? <p className='detail'>Loading escalation deposits for the selected wallet…</p> : undefined}
 									{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>Escalation deposit details are unavailable for this pool right now.</p>}
@@ -1685,7 +1688,7 @@ export function ForkAuctionSection({
 											<div className='actions'>
 												{renderStageActionButton({
 													action: 'migrateRepToZoltar',
-													idleLabel: `Migrate Pool REP To ${selectedOutcomeLabel}`,
+													idleLabel: `Migrate Collateral To ${selectedOutcomeLabel} Universe`,
 													onClick: onMigrateSelectedOutcomeRepToZoltar,
 													pendingLabel: 'Migrating pool REP...',
 												})}
@@ -1702,6 +1705,7 @@ export function ForkAuctionSection({
 											tone: 'primary',
 										})}
 									</div>
+									{isVaultMigrationCompleteForSelectedOutcome ? <p className='detail'>Already migrated</p> : undefined}
 								</SectionBlock>
 							</>
 						)}
@@ -1761,7 +1765,7 @@ export function ForkAuctionSection({
 							<div className='actions'>
 								{renderStageActionButton({
 									action: 'startTruthAuction',
-									availability: createActionAvailability(isStartTruthAuctionInProgress ? 'Starting truth auction...' : startTruthAuctionGuardMessage),
+									availability: createActionAvailability(startTruthAuctionAvailabilityMessage),
 									idleLabel: 'Start Truth Auction',
 									onClick: onStartTruthAuctionSubmit,
 									pendingLabel: 'Starting truth auction...',
