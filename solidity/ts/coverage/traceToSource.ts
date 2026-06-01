@@ -178,7 +178,8 @@ const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string):
 		try {
 			const sourceCode = await fs.readFile(candidate, 'utf8')
 			return { absoluteSourcePath: candidate, sourceCode }
-		} catch (_error) {
+		} catch (error) {
+			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 			// Try next candidate.
 		}
 	}
@@ -269,7 +270,8 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 			params: [transactionHash, { disableStack: true, disableMemory: true, disableStorage: true }],
 		})
 		return parseTraceSteps(trace)
-	} catch (_error) {
+	} catch (error) {
+		if (!(error instanceof Error) && !(typeof error === 'object' && error !== null && ('code' in error || 'message' in error))) throw error
 		return []
 	}
 }

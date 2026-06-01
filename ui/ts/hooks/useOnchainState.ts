@@ -4,7 +4,7 @@ import type { Address } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../contracts.js'
 import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
 import type { ChainBackend } from '../lib/chainBackend.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorMessage, hasErrorCode, hasErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getWethAddress } from '../lib/uniswapQuoter.js'
@@ -43,7 +43,8 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 			const chainId = await chainIdPromise
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId })
-		} catch (_error) {
+		} catch (error) {
+			if (!hasErrorCode(error) && !hasErrorMessage(error)) throw error
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId: resolvedFallbackChainId })
 		}
@@ -87,7 +88,8 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 			currentBlockNumber: typeof block.number === 'bigint' ? block.number : undefined,
 			currentTimestamp: typeof block.timestamp === 'bigint' ? block.timestamp : undefined,
 		}
-	} catch (_error) {
+	} catch (error) {
+		if (!isRecoverableContractReadError(error)) throw error
 		return {
 			currentBlockNumber: undefined,
 			currentTimestamp: undefined,

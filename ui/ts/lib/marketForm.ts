@@ -1,5 +1,7 @@
 import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
-import { parseDecimalInput } from './decimal.js'
+import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
+
+const WHOLE_NUMBER_PATTERN = /^-?\d+$/
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
@@ -128,28 +130,35 @@ export function parseRepAmountInput(value: string, label: string) {
 	return parseDecimalInput(value, label, 18)
 }
 
+export function tryParseRepAmountInput(value: string) {
+	return tryParseDecimalInput(value, 18)
+}
+
 export function parseOptionalRepAmountInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') return undefined
+	return tryParseRepAmountInput(trimmed)
+}
 
-	try {
-		return parseRepAmountInput(trimmed, 'REP amount')
-	} catch (_error) {
-		return undefined
-	}
+export function tryParseBigIntInput(value: string) {
+	const trimmed = value.trim()
+	if (trimmed === '' || !WHOLE_NUMBER_PATTERN.test(trimmed)) return undefined
+	return BigInt(trimmed)
 }
 
 export function parseBigIntInput(value: string, label: string) {
 	const trimmed = validateAndTrim(value, label)
-	try {
-		return BigInt(trimmed)
-	} catch (_error) {
-		throw new Error(`${label} must be a whole number`)
-	}
+	const parsed = tryParseBigIntInput(trimmed)
+	if (parsed === undefined) throw new Error(`${label} must be a whole number`)
+	return parsed
 }
 
 export function parseTradingAmountInput(value: string, label: string) {
 	return parseDecimalInput(value, label, 18)
+}
+
+export function tryParseTradingAmountInput(value: string) {
+	return tryParseDecimalInput(value, 18)
 }
 
 export function parseTimestampInput(value: string, label: string) {

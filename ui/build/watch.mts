@@ -85,19 +85,23 @@ const attachProcessErrorHandler = (childProcess: ManagedProcess, label: string) 
 	})
 }
 
+const isIgnorableKillError = (error: unknown): error is NodeJS.ErrnoException => error instanceof Error && 'code' in error && (error.code === 'ESRCH' || error.code === 'EPERM')
+
 const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	if (childProcess === undefined) return
 	if (childProcess.exitCode !== null || childProcess.signalCode !== null) return
 	try {
 		childProcess.kill('SIGTERM')
-	} catch (_error) {
+	} catch (error) {
+		if (!isIgnorableKillError(error)) throw error
 		return
 	}
 	const forceKillTimeout = setTimeout(() => {
 		if (childProcess.exitCode === null && childProcess.signalCode === null) {
 			try {
 				childProcess.kill('SIGKILL')
-			} catch (_error) {
+			} catch (error) {
+				if (!isIgnorableKillError(error)) throw error
 				return
 			}
 		}

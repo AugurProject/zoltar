@@ -1,8 +1,8 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { SimulationController } from '../simulation/controller.js'
+import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
-import { parseDecimalInput } from '../lib/decimal.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { TimestampValue } from './TimestampValue.js'
 const SIMULATION_TIME_PRESETS = [
@@ -33,6 +33,12 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
+	const resetRepPerEthPriceInput = () => {
+		repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+	}
+	const resetRepPerUsdcPriceInput = () => {
+		repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
+	}
 	useEffect(
 		() =>
 			controller.subscribe(() => {
@@ -207,13 +213,14 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 										repPerEthPrice.value = event.currentTarget.value
 									}}
 									onChange={event => {
-										try {
-											void runControl(async () => {
-												controller.setRepPerEthPrice(parseDecimalInput(event.currentTarget.value, 'REP / ETH mock price'))
-											})
-										} catch (_error) {
-											repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+										const parsedPrice = tryParseDecimalInput(event.currentTarget.value)
+										if (parsedPrice === undefined) {
+											resetRepPerEthPriceInput()
+											return
 										}
+										void runControl(async () => {
+											controller.setRepPerEthPrice(parsedPrice)
+										})
 									}}
 								/>
 							</label>
@@ -229,13 +236,14 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 										repPerUsdcPrice.value = event.currentTarget.value
 									}}
 									onChange={event => {
-										try {
-											void runControl(async () => {
-												controller.setRepPerUsdcPrice(parseDecimalInput(event.currentTarget.value, 'REP / USDC mock price', 6))
-											})
-										} catch (_error) {
-											repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
+										const parsedPrice = tryParseDecimalInput(event.currentTarget.value, 6)
+										if (parsedPrice === undefined) {
+											resetRepPerUsdcPriceInput()
+											return
 										}
+										void runControl(async () => {
+											controller.setRepPerUsdcPrice(parsedPrice)
+										})
 									}}
 								/>
 							</label>

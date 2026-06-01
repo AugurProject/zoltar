@@ -118,7 +118,8 @@ describe('Escalation Game Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch (_error) {
+				} catch (error) {
+					if (!(error instanceof Error)) throw error
 					return undefined
 				}
 			})

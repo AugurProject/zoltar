@@ -141,7 +141,8 @@ const terminateProcess = (child: AnvilProcess, signal: NodeJS.Signals = 'SIGTERM
 	if (child.exitCode !== null || child.signalCode !== null) return
 	try {
 		child.kill(signal)
-	} catch (_error) {
+	} catch (error) {
+		if (!(error instanceof Error) || !('code' in error) || (error.code !== 'ESRCH' && error.code !== 'EPERM')) throw error
 		// Ignore termination errors while cleaning up a failed spawn/startup path.
 	}
 }

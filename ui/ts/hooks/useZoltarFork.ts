@@ -244,7 +244,9 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 
 	useEffect(() => {
 		if (!shouldAutoLoadForkAccess) return
-		void loadZoltarForkAccess().catch(() => undefined)
+		void loadZoltarForkAccess().catch(error => {
+			if (!(error instanceof Error)) throw error
+		})
 	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => child.universeId.toString()).join(',')])
 
 	return {

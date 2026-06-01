@@ -5,11 +5,11 @@ import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from 
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
-import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
+import { getDefaultSecurityPoolFormState, parseBigIntInput, tryParseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
@@ -29,12 +29,7 @@ type UseSecurityPoolCreationParameters = {
 export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	const marketId = marketIdInput.trim()
 	if (marketId === '') return undefined
-	try {
-		BigInt(marketId)
-		return marketId
-	} catch (_error) {
-		return undefined
-	}
+	return tryParseBigIntInput(marketId) === undefined ? undefined : marketId
 }
 
 function parseQuestionIdInput(marketId: string) {
@@ -66,12 +61,9 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			return
 		}
 
-		let questionId: bigint
-		let securityMultiplier: bigint
-		try {
-			questionId = BigInt(marketId)
-			securityMultiplier = parseBigIntInput(securityMultiplierInput, 'Security multiplier')
-		} catch (_error) {
+		const questionId = tryParseBigIntInput(marketId)
+		const securityMultiplier = tryParseBigIntInput(securityMultiplierInput)
+		if (questionId === undefined || securityMultiplier === undefined) {
 			duplicateOriginPoolExists.value = false
 			return
 		}
@@ -81,7 +73,8 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
-			} catch (_error) {
+			} catch (error) {
+				if (!isRecoverableContractReadError(error)) throw error
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = false
 			}

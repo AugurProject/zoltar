@@ -1,6 +1,7 @@
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from 'viem'
 import type { ReadClient } from './clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from './activeEnvironment.js'
+import { isRecoverableContractReadError, isRecoverableQuoteError } from './errors.js'
 import { MAINNET_WETH_ADDRESS } from './networkProfile.js'
 
 export const UNISWAP_V4_QUOTER_ADDRESS: Address = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203'
@@ -153,7 +154,8 @@ async function isRepToken(client: ReadClient, token: Address) {
 			functionName: 'symbol',
 		})
 		return symbol === 'REP'
-	} catch (_error) {
+	} catch (error) {
+		if (!isRecoverableContractReadError(error)) throw error
 		return false
 	}
 }
@@ -285,6 +287,7 @@ export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn:
 				bestPoolConfig = poolConfig
 			}
 		} catch (error) {
+			if (!isRecoverableQuoteError(error)) throw error
 			lastError = error
 		}
 	}
@@ -388,7 +391,8 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 		})
 		if (poolAddress === zeroAddress) return undefined
 		return getAddress(poolAddress)
-	} catch (_error) {
+	} catch (error) {
+		if (!isRecoverableContractReadError(error)) throw error
 		return undefined
 	}
 }
@@ -412,6 +416,7 @@ export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenI
 				bestFee = fee
 			}
 		} catch (error) {
+			if (!isRecoverableQuoteError(error)) throw error
 			lastError = error
 		}
 	}

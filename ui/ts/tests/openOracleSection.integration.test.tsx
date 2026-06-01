@@ -164,7 +164,8 @@ async function waitForLatestAction(actionName: string) {
 			},
 			{ timeout: 1000 },
 		)
-	} catch (_error) {
+	} catch (error) {
+		if (!(error instanceof Error)) throw error
 		return
 	}
 }

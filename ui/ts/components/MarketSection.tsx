@@ -84,7 +84,8 @@ export function MarketSection({
 		if (hasLoadedZoltarQuestions) return
 		if (lastAutoLoadedQuestionsUniverseId.current === activeUniverseId) return
 		lastAutoLoadedQuestionsUniverseId.current = activeUniverseId
-		void Promise.resolve(onLoadZoltarQuestions()).catch(() => {
+		void Promise.resolve(onLoadZoltarQuestions()).catch(error => {
+			if (!(error instanceof Error)) throw error
 			lastAutoLoadedQuestionsUniverseId.current = undefined
 		})
 	}, [activeUniverseId, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount])

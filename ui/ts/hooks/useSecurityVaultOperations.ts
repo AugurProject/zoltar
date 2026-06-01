@@ -9,7 +9,7 @@ import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
@@ -419,8 +419,12 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			return
 		}
 
-		void reloadSecurityVaultRepBalance(currentSecurityVaultDetails.repToken, accountAddress).catch(() => undefined)
-		void reloadSecurityVaultRepAllowance(currentSecurityVaultDetails.repToken, accountAddress, currentSecurityVaultDetails.securityPoolAddress).catch(() => undefined)
+		void reloadSecurityVaultRepBalance(currentSecurityVaultDetails.repToken, accountAddress).catch(error => {
+			if (!isRecoverableContractReadError(error)) throw error
+		})
+		void reloadSecurityVaultRepAllowance(currentSecurityVaultDetails.repToken, accountAddress, currentSecurityVaultDetails.securityPoolAddress).catch(error => {
+			if (!isRecoverableContractReadError(error)) throw error
+		})
 	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultAddress])
 
 	return {

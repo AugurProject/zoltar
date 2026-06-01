@@ -230,7 +230,9 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch {
+			} catch Panic(uint256) {
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
+			} catch (bytes memory) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
@@ -241,7 +243,9 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch {
+			} catch Panic(uint256) {
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
+			} catch (bytes memory) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else {
@@ -252,7 +256,9 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch {
+			} catch Panic(uint256) {
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
+			} catch (bytes memory) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}

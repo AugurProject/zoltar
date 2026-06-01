@@ -259,7 +259,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				}
 				await collectBytecodeCoverageForTransaction({
 					...requestOptions,
-				}).catch(() => {})
+				}).catch(error => {
+					if (!(error instanceof Error)) throw error
+				})
 			}
 		}
 		if (nextBlockTimestamp !== undefined) currentTimestamp = nextBlockTimestamp

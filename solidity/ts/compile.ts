@@ -82,7 +82,8 @@ async function exists(path: string) {
 	try {
 		await fs.stat(path)
 		return true
-	} catch (_error) {
+	} catch (error) {
+		if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 		return false
 	}
 }
@@ -142,7 +143,8 @@ async function loadHashCache(): Promise<{ hash: string | undefined }> {
 			const parsed = HashCache.parse(JSON.parse(data))
 			return { hash: parsed.hash }
 		}
-	} catch (_error) {
+	} catch (error) {
+		if (error instanceof SyntaxError || (error instanceof Error && (('code' in error && error.code === 'ENOENT') || error.name === 'ZodError'))) return { hash: undefined }
 		// ignore
 	}
 	return { hash: undefined }
@@ -240,7 +242,8 @@ const compileContracts = async () => {
 		try {
 			const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8')
 			CompileResult.parse(JSON.parse(artifactContent))
-		} catch (_error) {
+		} catch (error) {
+			if (!(error instanceof SyntaxError) && !(error instanceof Error && (('code' in error && error.code === 'ENOENT') || error.name === 'ZodError'))) throw error
 			console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...')
 			needsRecompilation = true
 		}

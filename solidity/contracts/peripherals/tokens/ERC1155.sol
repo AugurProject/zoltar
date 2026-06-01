@@ -375,7 +375,11 @@ contract ERC1155 is IERC1155 {
 		if (to.code.length == 0) return;
 		try IERC1155Receiver(to).onERC1155Received(operator, from, id, value, data) returns (bytes4 response) {
 			require(response == ERC1155_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens');
-		} catch {
+		} catch Error(string memory) {
+			revert('ERC1155: receiver rejected tokens');
+		} catch Panic(uint256) {
+			revert('ERC1155: receiver panicked');
+		} catch (bytes memory) {
 			revert('ERC1155: transfer to non ERC1155Receiver implementer');
 		}
 	}
@@ -384,7 +388,11 @@ contract ERC1155 is IERC1155 {
 		if (to.code.length == 0) return;
 		try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, values, data) returns (bytes4 response) {
 			require(response == ERC1155_BATCH_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens');
-		} catch {
+		} catch Error(string memory) {
+			revert('ERC1155: receiver rejected tokens');
+		} catch Panic(uint256) {
+			revert('ERC1155: receiver panicked');
+		} catch (bytes memory) {
 			revert('ERC1155: transfer to non ERC1155Receiver implementer');
 		}
 	}

@@ -50,7 +50,8 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreat
 			answerUnit: marketForm.answerUnit.trim(),
 			...parseScalarFormInputs(marketForm),
 		}
-	} catch (_error) {
+	} catch (error) {
+		if (!(error instanceof Error)) throw error
 		return undefined
 	}
 }

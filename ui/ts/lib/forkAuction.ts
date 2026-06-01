@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import type { ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
-import { parseBigIntInput } from './marketForm.js'
+import { tryParseBigIntInput } from './marketForm.js'
 import { getTimeRemaining as getSharedTimeRemaining } from './time.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 
@@ -119,13 +119,8 @@ export function getTruthAuctionBidGuardMessage({
 
 	const trimmedAmount = submitBidAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
-
-	let bidAmount: bigint
-	try {
-		bidAmount = parseBigIntInput(trimmedAmount, 'Bid amount')
-	} catch (_error) {
-		return 'Enter a valid bid amount.'
-	}
+	const bidAmount = tryParseBigIntInput(trimmedAmount)
+	if (bidAmount === undefined) return 'Enter a valid bid amount.'
 
 	if (bidAmount <= 0n) return 'Enter a bid amount greater than zero.'
 	if (bidAmount < truthAuction.minBidSize) return `Bid must be at least ${formatCurrencyBalance(truthAuction.minBidSize)} ETH.`

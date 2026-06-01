@@ -6,7 +6,7 @@ import { useLoadController } from './useLoadController.js'
 import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput } from '../lib/inputs.js'
+import { parseBigIntListInput, parseReportingOutcomeInput, tryParseAddressInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getDefaultShareMigrationTargetOutcomeIndexes, isTradingSystemDeployed } from '../lib/trading.js'
@@ -79,12 +79,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 	const resolveTradingPoolAddressInput = (value: string) => {
 		const trimmed = value.trim()
 		if (!trimmed.startsWith('0x') || trimmed.length !== 42) return undefined
-
-		try {
-			return parseAddressInput(trimmed, 'Security pool address')
-		} catch (_error) {
-			return undefined
-		}
+		return tryParseAddressInput(trimmed)
 	}
 
 	const refreshTradingDetails = async (securityPoolAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {

@@ -1,10 +1,10 @@
 import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { assertNever } from './assert.js'
-import { parseDecimalInput } from './decimal.js'
+import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
-import { parseBigIntInput } from './marketForm.js'
+import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
@@ -135,18 +135,10 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
 	if (!walletConnected) return 'Connect a wallet before creating an Open Oracle game.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before creating an Open Oracle game.'
-	let ethValue: bigint
-	try {
-		ethValue = parseBigIntInput(ethValueInput, 'ETH value')
-	} catch (_error) {
-		return 'Enter a valid ETH value to send.'
-	}
-	let settlerReward: bigint
-	try {
-		settlerReward = parseBigIntInput(settlerRewardInput, 'Settler reward')
-	} catch (_error) {
-		return 'Enter a valid settler reward.'
-	}
+	const ethValue = tryParseBigIntInput(ethValueInput)
+	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
+	const settlerReward = tryParseBigIntInput(settlerRewardInput)
+	if (settlerReward === undefined) return 'Enter a valid settler reward.'
 	if (ethValue <= 100n) return 'ETH value to send must be greater than 100 wei.'
 	if (ethValue <= settlerReward) return 'ETH value to send must exceed the settler reward.'
 	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
@@ -293,6 +285,10 @@ function calculateOpenOracleToken2Amount(token1Amount: bigint, price: bigint) {
 }
 function parseOpenOraclePriceInput(value: string) {
 	return parseDecimalInput(value, 'Price')
+}
+
+function tryParseOpenOraclePriceInput(value: string) {
+	return tryParseDecimalInput(value)
 }
 export function formatOpenOraclePriceInput(price: bigint | undefined) {
 	return price === undefined ? '' : formatCurrencyInputBalance(price)
@@ -505,12 +501,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 }): OpenOracleInitialReportSubmissionDetails {
 	const trimmedPriceInput = priceInput.trim()
 	const resolvedPriceInput = trimmedPriceInput === '' ? (defaultPrice ?? '') : trimmedPriceInput
-	let price: bigint | undefined
-	try {
-		price = resolvedPriceInput === '' ? undefined : parseOpenOraclePriceInput(resolvedPriceInput)
-	} catch (_error) {
-		price = undefined
-	}
+	const price = resolvedPriceInput === '' ? undefined : tryParseOpenOraclePriceInput(resolvedPriceInput)
 	const amount1 = reportDetails?.exactToken1Report
 	const amount2 = amount1 === undefined || price === undefined ? undefined : calculateOpenOracleToken2Amount(amount1, price)
 	const priceSource = (() => {
@@ -739,16 +730,8 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	let newAmount1: bigint | undefined
 	let newAmount2: bigint | undefined
 	if (reportDetails !== undefined) expectedNewAmount1 = reportDetails.escalationHalt > reportDetails.currentAmount1 ? (reportDetails.currentAmount1 * reportDetails.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION : reportDetails.currentAmount1 + 1n
-	try {
-		newAmount1 = parseBigIntInput(disputeNewAmount1Input, 'New token1 amount')
-	} catch (_error) {
-		newAmount1 = undefined
-	}
-	try {
-		newAmount2 = parseBigIntInput(disputeNewAmount2Input, 'New token2 amount')
-	} catch (_error) {
-		newAmount2 = undefined
-	}
+	newAmount1 = tryParseBigIntInput(disputeNewAmount1Input)
+	newAmount2 = tryParseBigIntInput(disputeNewAmount2Input)
 	const token1ContributionAmount =
 		reportDetails === undefined || newAmount2 === undefined || expectedNewAmount1 === undefined
 			? undefined

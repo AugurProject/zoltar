@@ -21,7 +21,8 @@ export function useCopyToClipboard() {
 				copied.value = false
 				copyResetTimeout.current = undefined
 			}, 1200)
-		} catch (_error) {
+		} catch (error) {
+			if (!(error instanceof DOMException) && !(error instanceof Error)) throw error
 			copied.value = false
 			if (copyResetTimeout.current !== undefined) {
 				window.clearTimeout(copyResetTimeout.current)

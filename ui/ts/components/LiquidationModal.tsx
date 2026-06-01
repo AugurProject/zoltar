@@ -18,7 +18,7 @@ import { pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
-import { parseRepAmountInput } from '../lib/marketForm.js'
+import { tryParseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
@@ -197,13 +197,7 @@ export function LiquidationModal({
 	}, [showLiquidationModal])
 	if (!showLiquidationModal) return undefined
 	const currentTimestamp = chainCurrentTimestamp
-	const liquidationAmountValue = (() => {
-		try {
-			return parseRepAmountInput(liquidationAmount, 'Liquidation amount')
-		} catch (_error) {
-			return undefined
-		}
-	})()
+	const liquidationAmountValue = tryParseRepAmountInput(liquidationAmount)
 	const poolOraclePrice = currentPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice
 	const poolOracleSettlementTimestamp = currentPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp ?? 0n
 	const poolOracleCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, poolOraclePrice)

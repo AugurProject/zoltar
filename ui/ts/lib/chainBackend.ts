@@ -1,5 +1,7 @@
-import { createPublicClient, createWalletClient, custom, getAddress, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from 'viem'
+import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from 'viem'
 import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
+import { hasErrorCode, hasErrorMessage } from './errors.js'
+import { tryParseAddressInput } from './inputs.js'
 import { MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
 
 const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
@@ -75,12 +77,11 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 }
 
 export function normalizeAccount(value: unknown): Address | undefined {
-	if (typeof value !== 'string') return undefined
-	try {
-		return getAddress(value)
-	} catch (_error) {
-		return undefined
-	}
+	return typeof value === 'string' ? tryParseAddressInput(value) : undefined
+}
+
+function isProviderRequestError(error: unknown) {
+	return hasErrorCode(error) || hasErrorMessage(error)
 }
 
 export function createInjectedBackend(): ChainBackend {
@@ -107,7 +108,13 @@ export function createInjectedBackend(): ChainBackend {
 		getAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
-			const result = await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
+			let result: unknown
+			try {
+				result = await ethereum.request({ method: 'eth_accounts' })
+			} catch (error) {
+				if (!isProviderRequestError(error)) throw error
+				return []
+			}
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 		},
@@ -117,7 +124,8 @@ export function createInjectedBackend(): ChainBackend {
 			let result: unknown
 			try {
 				result = await ethereum.request({ method: 'eth_chainId' })
-			} catch (_error) {
+			} catch (error) {
+				if (!isProviderRequestError(error)) throw error
 				return MAINNET_NETWORK_PROFILE.chainIdHex
 			}
 			return typeof result === 'string' ? result : MAINNET_NETWORK_PROFILE.chainIdHex
@@ -129,7 +137,13 @@ export function createInjectedBackend(): ChainBackend {
 		requestAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
-			const result = await ethereum.request({ method: 'eth_requestAccounts' }).catch(() => [])
+			let result: unknown
+			try {
+				result = await ethereum.request({ method: 'eth_requestAccounts' })
+			} catch (error) {
+				if (!isProviderRequestError(error)) throw error
+				return []
+			}
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 		},

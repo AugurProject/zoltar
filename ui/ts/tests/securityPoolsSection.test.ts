@@ -546,7 +546,9 @@ void describe('SecurityPoolsSection', () => {
 		expect(calls).toEqual(['load'])
 		await act(async () => {
 			initialLoad.reject(new Error('temporary failure'))
-			await initialLoad.promise.catch(() => undefined)
+			await initialLoad.promise.catch(error => {
+				if (!(error instanceof Error)) throw error
+			})
 		})
 
 		await act(() => {

@@ -23,7 +23,7 @@ import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
-import { parseRepAmountInput } from '../lib/marketForm.js'
+import { tryParseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
@@ -253,27 +253,9 @@ export function SecurityVaultSection({
 		: undefined
 	const hasWithdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '' && normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '0'
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
-	const depositAmount = (() => {
-		try {
-			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP collateral amount')
-		} catch (_error) {
-			return undefined
-		}
-	})()
-	const securityBondAllowanceAmount = (() => {
-		try {
-			return parseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount, 'Security bond allowance')
-		} catch (_error) {
-			return undefined
-		}
-	})()
-	const withdrawAmount = (() => {
-		try {
-			return parseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount, 'REP withdraw amount')
-		} catch (_error) {
-			return undefined
-		}
-	})()
+	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
+	const securityBondAllowanceAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount)
+	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
 	const securityBondAllowance = currentSelectedVaultDetails?.securityBondAllowance ?? 0n
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
