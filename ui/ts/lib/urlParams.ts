@@ -1,3 +1,5 @@
+import { tryParseBigIntInput } from './marketForm.js'
+
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUERY_PARAM = 'securityPool'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
@@ -27,12 +29,7 @@ function writeStringQueryParam(search: string, key: string, value: string | unde
 export function readUniverseQueryParam(search: string) {
 	const value = readStringQueryParam(search, UNIVERSE_QUERY_PARAM)
 	if (value === undefined) return undefined
-
-	try {
-		return BigInt(value)
-	} catch {
-		return undefined
-	}
+	return tryParseBigIntInput(value)
 }
 
 export function writeUniverseQueryParam(search: string, universeId: bigint | undefined) {

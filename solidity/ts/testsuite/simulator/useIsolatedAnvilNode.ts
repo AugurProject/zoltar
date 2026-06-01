@@ -141,7 +141,8 @@ const terminateProcess = (child: AnvilProcess, signal: NodeJS.Signals = 'SIGTERM
 	if (child.exitCode !== null || child.signalCode !== null) return
 	try {
 		child.kill(signal)
-	} catch {
+	} catch (error) {
+		if (!(error instanceof Error) || !('code' in error) || (error.code !== 'ESRCH' && error.code !== 'EPERM')) throw error
 		// Ignore termination errors while cleaning up a failed spawn/startup path.
 	}
 }
@@ -170,21 +171,7 @@ export const useIsolatedAnvilNode = () => {
 		const port = await getFreePort()
 		const rpcUrl = `http://${DEFAULT_ANVIL_HOST}:${port}`
 
-		const anvilArgs = [
-			'--host',
-			DEFAULT_ANVIL_HOST,
-			'--port',
-			`${port}`,
-			'--chain-id',
-			'1',
-			'--timestamp',
-			'1',
-			'--block-base-fee-per-gas',
-			'0',
-			'--gas-price',
-			'0',
-			'--no-priority-fee',
-		]
+		const anvilArgs = ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee']
 		if (isSolidityBytecodeCoverageEnabled()) anvilArgs.push('--print-traces')
 
 		const childProcess = spawn(DEFAULT_ANVIL_BIN, anvilArgs, {

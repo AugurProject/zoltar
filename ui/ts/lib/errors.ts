@@ -5,6 +5,37 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
+export function hasErrorCode(value: unknown): value is { code: number | string } {
+	return isObjectRecord(value) && (typeof value['code'] === 'number' || typeof value['code'] === 'string')
+}
+
+export function hasErrorMessage(value: unknown): value is { message: string } {
+	return isObjectRecord(value) && typeof value['message'] === 'string'
+}
+
+const ignorableLogDecodeErrorNames = ['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch']
+
+export function isIgnorableLogDecodeError(error: unknown) {
+	return error instanceof Error && ignorableLogDecodeErrorNames.includes(error.name)
+}
+
+const recoverableContractReadErrorNames = ['CallExecutionError', 'ContractFunctionExecutionError', 'ContractFunctionRevertedError', 'HttpRequestError', 'InvalidAddressError', 'RpcRequestError', 'TimeoutError', 'UnknownNodeError']
+const recoverableContractReadPatterns = ['abi', 'call reverted', 'contract function', 'execution reverted', 'internal json-rpc', 'json-rpc', 'network', 'no data', 'returned no data', 'rpc', 'should not be used', 'symbol']
+
+export function isRecoverableContractReadError(error: unknown) {
+	if (!(error instanceof Error)) return false
+	if (recoverableContractReadErrorNames.includes(error.name)) return true
+	const normalizedMessage = error.message.toLowerCase()
+	return recoverableContractReadPatterns.some(pattern => normalizedMessage.includes(pattern))
+}
+
+const recoverableQuoteErrorPatterns = ['mock pricing', 'no uniswap', 'pool', 'quote', 'quoter', 'simulation mode', 'uniswap']
+
+export function isRecoverableQuoteError(error: unknown) {
+	if (isRecoverableContractReadError(error)) return true
+	return error instanceof Error && recoverableQuoteErrorPatterns.some(pattern => error.message.toLowerCase().includes(pattern))
+}
+
 function normalizeWhitespace(value: string) {
 	return value.trim().replace(/\s+/g, ' ')
 }
@@ -51,7 +82,8 @@ function collectErrorDetails(error: unknown, seen = new Set<object>()): string[]
 	try {
 		const serialized = JSON.stringify(error)
 		return serialized === undefined ? [] : [serialized]
-	} catch {
+	} catch (error) {
+		if (!(error instanceof TypeError)) throw error
 		return []
 	}
 }

@@ -11,6 +11,7 @@ import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances,
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
+import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 const ESCALATION_TIME_LENGTH = 4233600n
 
@@ -118,7 +119,8 @@ describe('Escalation Game Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})

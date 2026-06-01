@@ -15,8 +15,8 @@ import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
-import { parseBigIntListInput } from '../lib/inputs.js'
-import { parseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
+import { tryParseBigIntListInput } from '../lib/inputs.js'
+import { tryParseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
 import { getUniversePresentation } from '../lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
@@ -50,11 +50,11 @@ type ZoltarMigrationSectionProps = {
 }
 
 function getMigrationAmount(value: string) {
-	return parseMigrationAmountInput(value, 'Migration amount')
+	return parseMigrationAmountInput(value)
 }
 
 function getMigrationOutcomeIndexes(value: string) {
-	return parseBigIntListInput(value, 'Outcome indexes')
+	return tryParseBigIntListInput(value) ?? []
 }
 
 function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBalance: bigint | undefined) {
@@ -91,21 +91,9 @@ export function ZoltarMigrationSection({
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
-	const selectedOutcomeIndexes = useMemo(() => {
-		try {
-			return getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes)
-		} catch {
-			return []
-		}
-	}, [zoltarMigrationForm.outcomeIndexes])
+	const selectedOutcomeIndexes = useMemo(() => getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes), [zoltarMigrationForm.outcomeIndexes])
 	const selectedOutcomeIndexSet = useMemo(() => new Set(selectedOutcomeIndexes.map(index => index.toString())), [selectedOutcomeIndexes])
-	const migrationAmount = (() => {
-		try {
-			return getMigrationAmount(zoltarMigrationForm.amount)
-		} catch {
-			return undefined
-		}
-	})()
+	const migrationAmount = getMigrationAmount(zoltarMigrationForm.amount)
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
 	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
 	const missingPreparationAmount = hasValidAmount && migrationAmount !== undefined ? getMissingPreparationAmount(migrationAmount, zoltarMigrationPreparedRepBalance) : 0n

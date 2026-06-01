@@ -23,6 +23,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WarningSurface } from './WarningSurface.js'
+import { tryParseBigIntInput } from '../lib/marketForm.js'
 import { assertNever } from '../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
@@ -304,16 +305,7 @@ export function SecurityPoolWorkflowSection({
 
 		return ''
 	})()
-	const resolvedPendingOperationId =
-		pendingOperationInput === ''
-			? undefined
-			: (() => {
-					try {
-						return BigInt(pendingOperationInput)
-					} catch {
-						return undefined
-					}
-				})()
+	const resolvedPendingOperationId = pendingOperationInput === '' ? undefined : tryParseBigIntInput(pendingOperationInput)
 	const executePendingOperationGuardMessage = getVaultExecutePendingOperationGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined,

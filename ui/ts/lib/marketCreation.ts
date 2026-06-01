@@ -2,7 +2,7 @@ import { encodeAbiParameters, keccak256 } from 'viem'
 import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, QuestionData } from '../types/contracts.js'
 import { assertNever } from './assert.js'
-import { parseBigIntInput, parseTimestampInput } from './marketForm.js'
+import { parseBigIntInput, parseTimestampInput, tryParseBigIntInput } from './marketForm.js'
 import { parseOpenInterestFeePerYearPercentInput } from './retentionRate.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
@@ -195,11 +195,9 @@ export function createMarketParameters(form: MarketFormState) {
 function parseQuestionIdInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error('Question ID is required')
-	try {
-		return BigInt(trimmed)
-	} catch {
-		throw new Error('Question ID must be a valid decimal or hex bigint')
-	}
+	const parsed = tryParseBigIntInput(trimmed)
+	if (parsed === undefined) throw new Error('Question ID must be a valid decimal or hex bigint')
+	return parsed
 }
 export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	return {

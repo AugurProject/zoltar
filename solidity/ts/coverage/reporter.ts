@@ -2,14 +2,14 @@ import * as path from 'node:path'
 import { promises as fs } from 'node:fs'
 import type { SolidityBytecodeCoverageConfig } from './coverageConfig'
 
-export interface SolidityCoverageFileSummary {
+interface SolidityCoverageFileSummary {
 	readonly file: string
 	readonly totalLines: number
 	readonly coveredLines: number
 	readonly lineHits: Record<string, number>
 }
 
-export interface SolidityCoverageSummary {
+interface SolidityCoverageSummary {
 	readonly totalLines: number
 	readonly totalCoveredLines: number
 	readonly files: Record<string, SolidityCoverageFileSummary>

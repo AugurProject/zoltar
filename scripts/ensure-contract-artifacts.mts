@@ -29,11 +29,16 @@ const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidity
 const sharedFreshnessInputs = [path.join(sharedRoot, 'tsconfig.json')]
 const uiSharedFreshnessInputs = [path.join(repositoryRoot, 'ui', 'build', 'shared.mts')]
 
+function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
+	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
 async function exists(filePath: string): Promise<boolean> {
 	try {
 		await fs.stat(filePath)
 		return true
-	} catch {
+	} catch (error) {
+		if (!isMissingPathError(error)) throw error
 		return false
 	}
 }
@@ -74,8 +79,9 @@ async function contractsJsonIsReadable(contractsJsonPath: string): Promise<boole
 	try {
 		JSON.parse(await fs.readFile(contractsJsonPath, 'utf8'))
 		return true
-	} catch {
-		return false
+	} catch (error) {
+		if (error instanceof SyntaxError || isMissingPathError(error)) return false
+		throw error
 	}
 }
 

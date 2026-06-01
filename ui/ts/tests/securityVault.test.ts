@@ -8,6 +8,7 @@ import {
 	doesLoadedSecurityVaultMatchSelection,
 	getOracleManagerPriceValidUntilTimestamp,
 	getSecurityVaultMaxBondAllowanceAmount,
+	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultAddress,
 	hasValidSecurityVaultOraclePrice,
 	isSecurityVaultDepositBelowMinimum,
@@ -177,5 +178,96 @@ void describe('security vault helpers', () => {
 
 		await expect(loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))).resolves.toBeUndefined()
 		expect(readContractCalled).toBe(false)
+	})
+
+	void test('returns zero or no withdrawal when balance inputs are missing or blocked', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				lockedRepInEscalationGame: 0n,
+				repDepositShare: undefined,
+				repPerEthPrice: 0n,
+				securityBondAllowance: 0n,
+				totalRepDeposit: undefined,
+				totalSecurityBondAllowance: undefined,
+			}),
+		).toBe(undefined)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				lockedRepInEscalationGame: 10n * 10n ** 18n,
+				repDepositShare: 10n * 10n ** 18n,
+				repPerEthPrice: 0n,
+				securityBondAllowance: 0n,
+				totalRepDeposit: undefined,
+				totalSecurityBondAllowance: undefined,
+			}),
+		).toBe(0n)
+	})
+
+	void test('caps max bond allowance by local backing and empty global context', () => {
+		expect(
+			getSecurityVaultMaxBondAllowanceAmount({
+				repDepositShare: 20n * 10n ** 18n,
+				repPerEthPrice: 2n * 10n ** 18n,
+				currentSecurityBondAllowance: 10n * 10n ** 18n,
+			}),
+		).toBe(9_999_999_999_999_999_999n)
+	})
+
+	void test('uses global allowance ceilings only when pool totals are available', () => {
+		expect(
+			getSecurityVaultMaxBondAllowanceAmount({
+				currentSecurityBondAllowance: 15n * 10n ** 18n,
+				repDepositShare: 20n * 10n ** 18n,
+				repPerEthPrice: 10n ** 18n,
+				totalRepDeposit: 50n * 10n ** 18n,
+				totalSecurityBondAllowance: 30n * 10n ** 18n,
+			}),
+		).toBe(19_999_999_999_999_999_999n)
+		expect(
+			getSecurityVaultMaxBondAllowanceAmount({
+				currentSecurityBondAllowance: 40n * 10n ** 18n,
+				repDepositShare: 50n * 10n ** 18n,
+				repPerEthPrice: 10n ** 18n,
+				totalRepDeposit: 10n * 10n ** 18n,
+				totalSecurityBondAllowance: 40n * 10n ** 18n,
+			}),
+		).toBe(9_999_999_999_999_999_999n)
+	})
+
+	void test('withdrawable amount is bounded by unlocked vault rep and pool caps', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				lockedRepInEscalationGame: 5n * 10n ** 18n,
+				repDepositShare: 20n * 10n ** 18n,
+				repPerEthPrice: 2n * 10n ** 18n,
+				securityBondAllowance: 3n * 10n ** 18n,
+				totalRepDeposit: 10n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			}),
+		).toBe(6_000_000_000_000_000_000n)
+	})
+
+	void test('respects allowance-backed floors and zero-balance constraints', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				lockedRepInEscalationGame: 1n * 10n ** 18n,
+				repDepositShare: 10n * 10n ** 18n,
+				repPerEthPrice: 2n * 10n ** 18n,
+				securityBondAllowance: 1n * 10n ** 18n,
+				totalRepDeposit: 50n * 10n ** 18n,
+				totalSecurityBondAllowance: 1n * 10n ** 18n,
+			}),
+		).toBe(8_000_000_000_000_000_000n)
+
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				lockedRepInEscalationGame: 10n * 10n ** 18n,
+				repDepositShare: 10n * 10n ** 18n,
+				repPerEthPrice: 5n * 10n ** 18n,
+				securityBondAllowance: 10n * 10n ** 18n,
+				totalRepDeposit: 100n * 10n ** 18n,
+				totalSecurityBondAllowance: 20n * 10n ** 18n,
+			}),
+		).toBe(0n)
 	})
 })

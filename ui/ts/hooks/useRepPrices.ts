@@ -2,6 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
+import { isRecoverableQuoteError } from '../lib/errors.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, getRepAddress, isRepPricingEnabled } from '../lib/uniswapQuoter.js'
 
 const ONE_ETH = 10n ** 18n
@@ -25,7 +26,8 @@ async function fetchRepPerEthPrice(client: ReturnType<typeof createConnectedRead
 	try {
 		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
-	} catch {
+	} catch (error) {
+		if (!isRecoverableQuoteError(error)) throw error
 		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
 		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
@@ -64,7 +66,8 @@ export function useRepPrices(): RepPrices {
 					repUsdcSourceUrl.value = undefined
 				}
 			})
-			.catch(() => {
+			.catch(error => {
+				if (!isRecoverableQuoteError(error)) throw error
 				// prices unavailable — leave the last successful values in place
 			})
 	}

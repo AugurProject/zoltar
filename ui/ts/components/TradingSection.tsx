@@ -16,6 +16,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { assertNever } from '../lib/assert.js'
+import { tryParseBigIntListInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
@@ -110,16 +111,7 @@ export function TradingSection({
 	const redeemSharesEnabled = resolvedPoolState.actions.redeemShares.enabled
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
-	let selectedTargetOutcomeIndexes: bigint[] = []
-	try {
-		selectedTargetOutcomeIndexes = tradingForm.targetOutcomeIndexes
-			.split(',')
-			.map(value => value.trim())
-			.filter(value => value !== '')
-			.map(value => BigInt(value))
-	} catch {
-		selectedTargetOutcomeIndexes = []
-	}
+	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.33;
+pragma solidity 0.8.35;
 
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
@@ -230,7 +230,9 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch {
+			} catch Panic(uint256) {
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
+			} catch (bytes memory) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
@@ -241,7 +243,9 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch {
+			} catch Panic(uint256) {
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
+			} catch (bytes memory) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else {
@@ -252,7 +256,9 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch {
+			} catch Panic(uint256) {
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
+			} catch (bytes memory) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}

@@ -58,4 +58,73 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
 		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Switch the connected wallet network to Ethereum mainnet to continue.')).not.toBeNull()
 	})
+
+	test('shows a simulation bootstrap failure notice', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: 'Anvil boot failed',
+				wrongNetworkMessage: undefined,
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Simulation bootstrap failed')).not.toBeNull()
+		expect(documentQueries.getByText('Anvil boot failed')).not.toBeNull()
+	})
+
+	test('shows deployment setup and custom wrong-network guidance together', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: 'Top-level error',
+				showAugurPlaceHolderDeploymentWarning: true,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: undefined,
+				wrongNetworkMessage: 'Chain ID mismatch.',
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Setup incomplete')).not.toBeNull()
+		expect(documentQueries.getByText('Finish setup in Deploy before using the app.')).not.toBeNull()
+		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
+		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Chain ID mismatch.')).not.toBeNull()
+		expect(documentQueries.getByText('Error')).not.toBeNull()
+		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
+	})
+
+	test('shows a fork warning when the current universe has forked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: true,
+				simulationBootstrapError: undefined,
+				wrongNetworkMessage: undefined,
+				zoltarUniverse: {
+					childUniverses: [],
+					forkThreshold: 1000n,
+					forkQuestionDetails: undefined,
+					forkTime: 1_700_000n,
+					forkingOutcomeIndex: 0n,
+					hasForked: true,
+					parentUniverseId: 0n,
+					reputationToken: '0x0000000000000000000000000000000000000000',
+					totalTheoreticalSupply: 0n,
+					universeId: 3n,
+				},
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Universe forked')).not.toBeNull()
+		expect(documentQueries.getByText(/Universe 3 has forked on/)).not.toBeNull()
+	})
 })

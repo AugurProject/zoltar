@@ -1,12 +1,28 @@
 /// <reference types="bun-types" />
-import { afterEach, describe, expect, test } from 'bun:test'
-import { zeroAddress } from 'viem'
-import { createInjectedBackend } from '../lib/chainBackend.js'
+
+import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { getAddress, zeroAddress } from 'viem'
+import { createInjectedBackend, normalizeAccount } from '../lib/chainBackend.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
-type RequestParameters = {
-	method: string
-	params?: unknown
+
+type FetchArguments = Parameters<typeof fetch>
+type FetchHandler = (input: FetchArguments[0], init: FetchArguments[1] | undefined) => Promise<Response>
+
+type RpcBody = Record<string, unknown>
+
+const isRpcBody = (value: unknown): value is RpcBody => typeof value === 'object' && value !== null
+
+const extractRpcId = (value: unknown): number | string => {
+	if (isRpcBody(value) && (typeof value['id'] === 'number' || typeof value['id'] === 'string')) return value['id']
+	return 0
 }
+
+const createMockFetch = (originalFetch: typeof fetch, handler: FetchHandler): typeof fetch => {
+	const mocked = (async (input: FetchArguments[0], init?: FetchArguments[1]) => handler(input, init)) as typeof fetch
+	mocked.preconnect = originalFetch.preconnect
+	return mocked
+}
+
 function ensureWindowObject() {
 	const globalWindow = globalThis as typeof globalThis & {
 		window?: Window
@@ -14,22 +30,48 @@ function ensureWindowObject() {
 	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
 	return globalWindow.window
 }
-function createMockInjectedEthereum(requestHandler: (parameters: RequestParameters) => Promise<unknown>): InjectedEthereum {
+
+type MockRequestParameters = {
+	method: string
+	params?: unknown
+}
+
+function createMockInjectedEthereum(requestHandler: (parameters: MockRequestParameters) => Promise<unknown>): InjectedEthereum {
 	return {
 		on: () => undefined,
 		removeListener: () => undefined,
 		request: requestHandler as InjectedEthereum['request'],
 	}
 }
-function createMockFetch(handler: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => Promise<Response>): typeof fetch {
-	const mockFetch: typeof fetch = async (input, init) => await handler(input, init)
-	mockFetch.preconnect = globalThis.fetch.preconnect
-	return mockFetch
+
+function createMockInjectedEthereumWithListeners() {
+	const callbacks: { accounts: unknown[]; chain: unknown[] } = { accounts: [], chain: [] }
+	const calls: { action: 'add' | 'remove'; event: string; handler: unknown }[] = []
+
+	const ethereum = {
+		on: (event: string, handler: unknown) => {
+			calls.push({ action: 'add', event, handler })
+			if (event === 'accountsChanged') callbacks.accounts = [handler]
+			if (event === 'chainChanged') callbacks.chain = [handler]
+		},
+		removeListener: (event: string, handler: unknown) => {
+			calls.push({ action: 'remove', event, handler })
+			if (event === 'accountsChanged') callbacks.accounts = callbacks.accounts?.filter(value => value !== handler)
+			if (event === 'chainChanged') callbacks.chain = callbacks.chain?.filter(value => value !== handler)
+		},
+		request: async () => {
+			throw new Error('No request handler')
+		},
+	}
+
+	return { calls, ethereum: ethereum as InjectedEthereum }
 }
-function getRpcId(value: unknown) {
-	if (typeof value !== 'object' || value === null || !('id' in value)) return undefined
-	return value.id
-}
+
+afterEach(() => {
+	const windowObject = ensureWindowObject()
+	delete windowObject.ethereum
+})
+
 describe('injected backend read transport', () => {
 	const originalFetch = globalThis.fetch
 	const originalEthereum = ensureWindowObject().ethereum
@@ -42,6 +84,7 @@ describe('injected backend read transport', () => {
 		}
 		windowObject.ethereum = originalEthereum
 	})
+
 	test('uses the injected provider for reads by default', async () => {
 		const requestCalls: string[] = []
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async parameters => {
@@ -49,7 +92,7 @@ describe('injected backend read transport', () => {
 			return '0x'
 		})
 		let fetchCalled = false
-		globalThis.fetch = createMockFetch(async () => {
+		globalThis.fetch = createMockFetch(originalFetch, async () => {
 			fetchCalled = true
 			throw new Error('fetch should not be called while provider reads are enabled')
 		})
@@ -59,6 +102,7 @@ describe('injected backend read transport', () => {
 		expect(requestCalls).toEqual(['eth_getCode'])
 		expect(fetchCalled).toBe(false)
 	})
+
 	test('switches injected reads to the shared RPC backend when requested', async () => {
 		const requestCalls: string[] = []
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async parameters => {
@@ -66,7 +110,7 @@ describe('injected backend read transport', () => {
 			return '0x'
 		})
 		const fetchCalls: string[] = []
-		globalThis.fetch = createMockFetch(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+		globalThis.fetch = createMockFetch(originalFetch, async (input, init) => {
 			const url = input instanceof Request ? input.url : String(input)
 			fetchCalls.push(url)
 
@@ -75,12 +119,10 @@ describe('injected backend read transport', () => {
 				rawBody = await input.clone().text()
 			} else if (typeof init?.body === 'string') {
 				rawBody = init.body
-			} else {
-				rawBody = undefined
 			}
 
 			const body = rawBody === undefined || rawBody === '' ? undefined : JSON.parse(rawBody)
-			const responseBody = Array.isArray(body) ? body.map(item => ({ id: getRpcId(item), jsonrpc: '2.0', result: '0x' })) : { id: getRpcId(body), jsonrpc: '2.0', result: '0x' }
+			const responseBody = Array.isArray(body) ? body.map(item => ({ id: extractRpcId(item), jsonrpc: '2.0', result: '0x' })) : { id: extractRpcId(body), jsonrpc: '2.0', result: '0x' }
 			return new Response(JSON.stringify(responseBody), {
 				headers: {
 					'content-type': 'application/json',
@@ -93,5 +135,166 @@ describe('injected backend read transport', () => {
 		expect(code).toBeUndefined()
 		expect(fetchCalls).toEqual(['https://ethereum.dark.florist'])
 		expect(requestCalls).toEqual([])
+	})
+
+	test('handles malformed wallet and chain responses without throwing', async () => {
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return 'not-an-array'
+			if (method === 'eth_chainId') return 42
+			if (method === 'eth_requestAccounts') return null
+			return []
+		})
+
+		const backend = createInjectedBackend()
+		expect(await backend.getAccounts()).toEqual([])
+		expect(await backend.requestAccounts()).toEqual([])
+		expect(await backend.getChainId()).toBe('0x1')
+	})
+
+	test('falls back to mainnet defaults when the chainId response is malformed', async () => {
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return []
+			if (method === 'eth_chainId') return 123
+			if (method === 'eth_requestAccounts') return []
+			return []
+		})
+
+		const backend = createInjectedBackend()
+		expect(await backend.getChainId()).toBe('0x1')
+	})
+
+	test('reports wallet presence and uses read paths when a provider is available', async () => {
+		expect(createInjectedBackend().hasWallet()).toBe(false)
+
+		const injectedWallet = createMockInjectedEthereum(async () => [])
+		ensureWindowObject().ethereum = injectedWallet
+		const backend = createInjectedBackend()
+
+		expect(backend.hasWallet()).toBe(true)
+		expect(await backend.getAccounts()).toEqual([])
+		expect(await backend.requestAccounts()).toEqual([])
+	})
+
+	test('throws when creating a write client before wallet injection', () => {
+		const backend = createInjectedBackend()
+		expect(() => backend.createWriteClient(zeroAddress)).toThrow('No injected wallet found')
+	})
+
+	test('normalizes wallet account lists and filters invalid addresses', async () => {
+		const validAddress = '0x0000000000000000000000000000000000000001'
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return ['  ', `0x${validAddress.slice(2).toUpperCase()}`, 'not-an-address']
+			if (method === 'eth_requestAccounts') return [validAddress, 'bad-address']
+			return []
+		})
+		const backend = createInjectedBackend()
+
+		expect(await backend.getAccounts()).toEqual([getAddress(validAddress)])
+		expect(await backend.requestAccounts()).toEqual([getAddress(validAddress)])
+	})
+
+	test('invokes injected transaction callbacks for write methods', async () => {
+		const callbacks: string[] = []
+		let sendRawTransactionCalls = 0
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_getTransactionCount') return '0x1'
+			if (method === 'eth_estimateGas') return '0x5208'
+			if (method === 'eth_gasPrice') return '0x1'
+			if (method === 'eth_maxPriorityFeePerGas') return '0x1'
+			if (method === 'eth_sendTransaction') {
+				callbacks.push('sent')
+				return `0x${String(callbacks.length).padStart(64, '0')}`
+			}
+			if (method === 'eth_sendRawTransaction') {
+				sendRawTransactionCalls += 1
+				return `0x${String(sendRawTransactionCalls + callbacks.length).padStart(64, '0')}`
+			}
+			return '0x'
+		})
+
+		const backend = createInjectedBackend()
+		const onTransactionSubmitted = mock(() => undefined)
+		const writeClient = backend.createWriteClient(zeroAddress, { onTransactionSubmitted })
+
+		await writeClient.sendTransaction({ to: zeroAddress })
+		await writeClient.sendRawTransaction({ serializedTransaction: '0x' })
+		await writeClient.writeContract({
+			address: zeroAddress,
+			abi: [
+				{
+					type: 'function',
+					name: 'foo',
+					inputs: [],
+					outputs: [],
+					stateMutability: 'nonpayable',
+				},
+			] as const,
+			functionName: 'foo',
+		})
+
+		expect(onTransactionSubmitted).toHaveBeenCalledTimes(3)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith('0x0000000000000000000000000000000000000000000000000000000000000001')
+		expect(onTransactionSubmitted).toHaveBeenCalledWith('0x0000000000000000000000000000000000000000000000000000000000000002')
+		expect(onTransactionSubmitted).toHaveBeenCalledWith('0x0000000000000000000000000000000000000000000000000000000000000002')
+		expect(callbacks.length).toBe(2)
+	})
+
+	test('handles provider call failures in read paths without throwing', async () => {
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async () => {
+			throw new Error('provider unavailable')
+		})
+
+		const backend = createInjectedBackend()
+
+		expect(await backend.getAccounts()).toEqual([])
+		expect(await backend.requestAccounts()).toEqual([])
+		await expect(backend.createReadClient().getCode({ address: zeroAddress })).rejects.toThrow('provider unavailable')
+	})
+
+	test('falls back to default chain id when chain RPC calls fail', async () => {
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_chainId') throw new Error('RPC offline')
+			return []
+		})
+
+		const backend = createInjectedBackend()
+		expect(await backend.getChainId()).toBe('0x1')
+	})
+
+	test('subscribes and unsubscribes event listeners cleanly', async () => {
+		const { calls, ethereum } = createMockInjectedEthereumWithListeners()
+		ensureWindowObject().ethereum = ethereum
+		const backend = createInjectedBackend()
+		const unsubscribeAccounts = backend.subscribeAccountsChanged(() => undefined)
+		const unsubscribeChain = backend.subscribeChainChanged(() => undefined)
+
+		expect(calls).toEqual([
+			{ action: 'add', event: 'accountsChanged', handler: calls[0]?.handler },
+			{ action: 'add', event: 'chainChanged', handler: calls[1]?.handler },
+		])
+
+		unsubscribeAccounts()
+		unsubscribeChain()
+
+		expect(calls).toEqual([
+			{ action: 'add', event: 'accountsChanged', handler: calls[0]?.handler },
+			{ action: 'add', event: 'chainChanged', handler: calls[1]?.handler },
+			{ action: 'remove', event: 'accountsChanged', handler: calls[0]?.handler },
+			{ action: 'remove', event: 'chainChanged', handler: calls[1]?.handler },
+		])
+	})
+
+	test('normalizes mixed-case and rejects malformed wallet values for normalizeAccount', () => {
+		expect(normalizeAccount('0x00000000000000000000000000000000000000a1')).toBe(getAddress('0x00000000000000000000000000000000000000A1'))
+		expect(normalizeAccount('0X00000000000000000000000000000000000000A1')).toBe(undefined)
+		expect(normalizeAccount('bad-address')).toBe(undefined)
+		expect(normalizeAccount(123)).toBe(undefined)
+	})
+
+	test('returns the chain id fallback without an injected provider', async () => {
+		delete ensureWindowObject().ethereum
+		const backend = createInjectedBackend()
+		expect(await backend.getChainId()).toBe('0x1')
 	})
 })

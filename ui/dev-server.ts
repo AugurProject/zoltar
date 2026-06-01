@@ -29,7 +29,8 @@ const sendLiveReloadEvent = (reason: string) => {
 	for (const client of liveReloadClients) {
 		try {
 			client.write(`event: reload\ndata: ${JSON.stringify({ reason })}\n\n`)
-		} catch {
+		} catch (error) {
+			if (!(error instanceof Error && 'code' in error && (error.code === 'ECONNRESET' || error.code === 'EPIPE' || error.code === 'ERR_STREAM_DESTROYED' || error.code === 'ERR_INVALID_STATE'))) throw error
 			liveReloadClients.delete(client)
 		}
 	}

@@ -23,8 +23,8 @@ interface CoverageProfile {
 type CoverageProfileMap = Map<string, CoverageProfile[]>
 
 type ContractArtifactEvmBytecode = {
-	readonly object?: string
-	readonly sourceMap?: string
+	readonly object: string
+	readonly sourceMap: string
 }
 
 type ContractArtifact = {
@@ -60,9 +60,13 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 			const getSection = (field: 'bytecode' | 'deployedBytecode'): ContractArtifactEvmBytecode | undefined => {
 				const sectionValue = evmValue[field]
 				if (!isRecord(sectionValue)) return undefined
+				const object = typeof sectionValue['object'] === 'string' ? sectionValue['object'] : undefined
+				const sourceMap = typeof sectionValue['sourceMap'] === 'string' ? sectionValue['sourceMap'] : undefined
+				if (object === undefined && sourceMap === undefined) return undefined
+
 				return {
-					object: typeof sectionValue['object'] === 'string' ? sectionValue['object'] : undefined,
-					sourceMap: typeof sectionValue['sourceMap'] === 'string' ? sectionValue['sourceMap'] : undefined,
+					object: object === undefined ? '' : object,
+					sourceMap: sourceMap === undefined ? '' : sourceMap,
 				}
 			}
 
@@ -71,7 +75,10 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 			if (bytecodeSection === undefined && deployedBytecodeSection === undefined) continue
 
 			const sourceFileContracts = contracts[sourceFileName] ?? {}
-			sourceFileContracts[contractName] = { evm: { bytecode: bytecodeSection, deployedBytecode: deployedBytecodeSection } }
+			const evm: { bytecode?: ContractArtifactEvmBytecode; deployedBytecode?: ContractArtifactEvmBytecode } = {}
+			if (bytecodeSection !== undefined) evm.bytecode = bytecodeSection
+			if (deployedBytecodeSection !== undefined) evm.deployedBytecode = deployedBytecodeSection
+			sourceFileContracts[contractName] = { evm }
 			contracts[sourceFileName] = sourceFileContracts
 		}
 	}
@@ -80,9 +87,11 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 }
 
 const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts: ContractArtifacts; sourceFiles: readonly string[] }> => {
-	const raw: ContractsJson = JSON.parse(await fs.readFile(artifactsPath, 'utf8'))
+	const rawJson = JSON.parse(await fs.readFile(artifactsPath, 'utf8'))
+	if (!isRecord(rawJson)) return { contracts: {}, sourceFiles: [] }
+	const raw: ContractsJson = rawJson
 	const contracts = parseContractsJson(raw)
-	const sourceFiles = isRecord(raw['sources']) ? Object.keys(raw['sources']) : []
+	const sourceFiles = isRecord(raw.sources) ? Object.keys(raw.sources) : []
 	return { contracts, sourceFiles }
 }
 
@@ -155,11 +164,7 @@ const lineForOffset = (source: string, offset: number): number => {
 	return line
 }
 
-const lineRangeFromSourceOffset = (
-	source: string,
-	sourceOffset: number,
-	sourceLength: number,
-): { readonly startLine: number; readonly endLine: number } => {
+const lineRangeFromSourceOffset = (source: string, sourceOffset: number, sourceLength: number): { readonly startLine: number; readonly endLine: number } => {
 	const length = Math.max(0, sourceLength)
 	const startLine = lineForOffset(source, sourceOffset)
 	const endOffset = length === 0 ? sourceOffset : sourceOffset + length - 1
@@ -173,7 +178,8 @@ const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string):
 		try {
 			const sourceCode = await fs.readFile(candidate, 'utf8')
 			return { absoluteSourcePath: candidate, sourceCode }
-		} catch {
+		} catch (error) {
+			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 			// Try next candidate.
 		}
 	}
@@ -186,12 +192,7 @@ const parseTraceSteps = (traceResponse: unknown): unknown[] => {
 	return Array.isArray(structLogs) ? structLogs : []
 }
 
-const collectProfilesForAddresses = async (
-	addresses: readonly string[],
-	request: RpcRequest,
-	profileByBytecode: CoverageProfileMap,
-	addressProfileCache: Map<string, CoverageProfile[] | undefined>,
-): Promise<Map<string, CoverageProfile[]>> => {
+const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CoverageProfile[] | undefined>): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
 	for (const address of addresses) {
 		const existingProfiles = addressProfileCache.get(address)
@@ -213,13 +214,7 @@ const collectProfilesForAddresses = async (
 	return result
 }
 
-const recordLineHitsForProfileSegment = async (
-	profile: CoverageProfile,
-	segment: ParsedSourceMapSegment,
-	rootPath: string,
-	fileContents: Map<string, string>,
-	lineCoverage: Map<string, Map<number, number>>,
-): Promise<void> => {
+const recordLineHitsForProfileSegment = async (profile: CoverageProfile, segment: ParsedSourceMapSegment, rootPath: string, fileContents: Map<string, string>, lineCoverage: Map<string, Map<number, number>>): Promise<void> => {
 	const sourcePath = profile.sourceFileNames[segment.sourceIndex]
 	if (sourcePath === undefined) return
 
@@ -268,6 +263,17 @@ const writeCoverage = async (): Promise<void> => {
 	}
 }
 
+function isIgnorableTraceRequestError(error: unknown) {
+	if (typeof error !== 'object' || error === null) return false
+
+	const errorCode = 'code' in error ? error.code : undefined
+	if (errorCode === -32601 || errorCode === -32000) return true
+
+	const errorMessage = 'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : undefined
+	if (errorMessage === undefined) return false
+	return errorMessage.includes('debug_tracetransaction') || errorMessage.includes('method not found') || errorMessage.includes('resource not found') || errorMessage.includes('transaction not found')
+}
+
 const requestTrace = async (request: RpcRequest, transactionHash: string): Promise<unknown[]> => {
 	try {
 		const trace = await request({
@@ -275,17 +281,13 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 			params: [transactionHash, { disableStack: true, disableMemory: true, disableStorage: true }],
 		})
 		return parseTraceSteps(trace)
-	} catch {
+	} catch (error) {
+		if (!isIgnorableTraceRequestError(error)) throw error
 		return []
 	}
 }
 
-export const collectBytecodeCoverageForTransaction = async (options: {
-	readonly request: RpcRequest
-	readonly transactionHash: string
-	readonly transaction: RpcTransactionRequest
-	readonly receipt?: RpcTransactionReceiptData
-}): Promise<void> => {
+export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
 	if (!isSolidityBytecodeCoverageEnabled()) return
 
 	const config = getSolidityBytecodeCoverageConfig()

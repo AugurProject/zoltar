@@ -1,5 +1,6 @@
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type TransactionReceipt } from 'viem'
 import { peripherals_SecurityPool_SecurityPool, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { isIgnorableLogDecodeError } from '../lib/errors.js'
 import type { SecurityPoolCreationResult, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { writeContractAndWaitForReceipt } from './core.js'
 import { getQuestionIdHex } from './helpers.js'
@@ -24,7 +25,8 @@ function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
 			const securityPoolAddress = decodedLog.args.securityPool
 			if (securityPoolAddress === undefined) throw new Error('Deployment event missing security pool address')
 			return securityPoolAddress
-		} catch {
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
 			continue
 		}
 	}

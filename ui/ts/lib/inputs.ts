@@ -1,12 +1,20 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
-import { getAddress, isHex, type Address, type Hex } from 'viem'
-import { parseBigIntInput } from './marketForm.js'
+import { getAddress, isAddress, isHex, type Address, type Hex } from 'viem'
+import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement } from './tokenApproval.js'
+
+export function tryParseAddressInput(value: string): Address | undefined {
+	const trimmed = value.trim()
+	if (trimmed === '' || !isAddress(trimmed)) return undefined
+	return getAddress(trimmed)
+}
 
 export function parseAddressInput(value: string, label: string): Address {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required`)
-	return getAddress(trimmed)
+	const parsed = tryParseAddressInput(value)
+	if (parsed === undefined) throw new Error(`${label} must be a valid address: ${trimmed}`)
+	return parsed
 }
 
 export function resolveOptionalAddressInput(value: string | undefined, fallbackAddress: Address, label: string) {
@@ -29,12 +37,7 @@ export function parseReportIdInput(value: string) {
 export function parseOptionalBigIntInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') return undefined
-
-	try {
-		return BigInt(trimmed)
-	} catch {
-		return undefined
-	}
+	return tryParseBigIntInput(trimmed)
 }
 
 function parseListInput<T>(value: string, label: string, parseItem: (entry: string, index: number) => T): T[] {
@@ -46,8 +49,31 @@ function parseListInput<T>(value: string, label: string, parseItem: (entry: stri
 	return values.map(parseItem)
 }
 
+function getListEntries(value: string) {
+	return value
+		.split(',')
+		.map(entry => entry.trim())
+		.filter(entry => entry !== '')
+}
+
 export function parseBigIntListInput(value: string, label: string) {
-	return parseListInput(value, label, (entry, index) => parseBigIntInput(entry, `${label} #${index + 1}`))
+	return parseListInput(value, label, (entry, index) => {
+		const parsed = tryParseBigIntInput(entry)
+		if (parsed === undefined) throw new Error(`${label} #${index + 1} must be a whole number`)
+		return parsed
+	})
+}
+
+export function tryParseBigIntListInput(value: string) {
+	const entries = getListEntries(value)
+	if (entries.length === 0) return undefined
+	const parsedEntries: bigint[] = []
+	for (const entry of entries) {
+		const parsed = tryParseBigIntInput(entry)
+		if (parsed === undefined) return undefined
+		parsedEntries.push(parsed)
+	}
+	return parsedEntries
 }
 
 export function resolveOptionalBigIntListInput(value: string, fallback: bigint[], label: string) {

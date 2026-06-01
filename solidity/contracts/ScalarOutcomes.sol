@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSE
-pragma solidity 0.8.33;
+pragma solidity 0.8.35;
 
 library ScalarOutcomes {
 	uint256 internal constant DECIMALS = 18;

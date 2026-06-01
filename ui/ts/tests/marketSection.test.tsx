@@ -335,7 +335,7 @@ describe('MarketSection', () => {
 		})
 		await act(async () => {
 			initialLoad.reject(new Error('temporary failure'))
-			await initialLoad.promise.catch(() => undefined)
+			await expect(initialLoad.promise).rejects.toThrow('temporary failure')
 		})
 
 		await act(() => {

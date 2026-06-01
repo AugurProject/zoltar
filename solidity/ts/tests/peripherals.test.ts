@@ -23,6 +23,7 @@ import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMig
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond, getUnsettledDepositIndexesByOutcomeAndDepositor } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
+import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import {
 	createCompleteSet,
 	depositRep,
@@ -431,7 +432,8 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})
@@ -567,7 +569,8 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})
@@ -580,7 +583,8 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})
@@ -629,7 +633,8 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})
@@ -642,7 +647,8 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})
@@ -2327,7 +2333,8 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})

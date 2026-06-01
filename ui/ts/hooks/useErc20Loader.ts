@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { loadErc20Allowance, loadErc20Balance } from '../contracts.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { ReadClient } from '../types/contracts.js'
@@ -18,7 +18,8 @@ function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ..
 			const value = await loadFn(createConnectedReadClient(), ...args)
 			if (!isCurrent()) return
 			signal.value = value
-		} catch {
+		} catch (error) {
+			if (!isRecoverableContractReadError(error)) throw error
 			if (!isCurrent()) return
 			signal.value = undefined
 		}

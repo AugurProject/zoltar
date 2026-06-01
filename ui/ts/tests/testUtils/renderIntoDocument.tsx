@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 
 type RenderIntoDocumentResult = {
 	cleanup: () => Promise<void>
+	unmount: () => Promise<void>
 	container: HTMLDivElement
 }
 
@@ -13,13 +14,16 @@ export async function renderIntoDocument(node: ComponentChild): Promise<RenderIn
 		render(node, container)
 	})
 
+	const unmount = async () => {
+		await act(() => {
+			render(null, container)
+		})
+		container.remove()
+	}
+
 	return {
-		cleanup: async () => {
-			await act(() => {
-				render(null, container)
-			})
-			container.remove()
-		},
+		cleanup: unmount,
+		unmount,
 		container,
 	}
 }

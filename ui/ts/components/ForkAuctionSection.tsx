@@ -26,6 +26,7 @@ import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getTimeRemaining, getTruthAuctionBidGuardMessage, type ForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
+import { tryParseBigIntInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { getEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
@@ -251,20 +252,14 @@ function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 }
 function estimateBidRep(bidAmount: string, selectedAuctionPrice: bigint | undefined) {
 	if (selectedAuctionPrice === undefined) return undefined
-	try {
-		return estimateRepPurchased(BigInt(bidAmount === '' ? '0' : bidAmount), selectedAuctionPrice)
-	} catch {
-		return undefined
-	}
+	const parsedBidAmount = bidAmount.trim() === '' ? 0n : tryParseBigIntInput(bidAmount)
+	if (parsedBidAmount === undefined) return undefined
+	return estimateRepPurchased(parsedBidAmount, selectedAuctionPrice)
 }
 function parseOptionalBigInt(value: string) {
 	const trimmedValue = value.trim()
 	if (trimmedValue === '') return undefined
-	try {
-		return BigInt(trimmedValue)
-	} catch {
-		return undefined
-	}
+	return tryParseBigIntInput(trimmedValue)
 }
 
 function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {

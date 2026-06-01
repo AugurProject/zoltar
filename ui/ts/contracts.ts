@@ -2,6 +2,7 @@ import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractF
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
+import { isIgnorableLogDecodeError } from './lib/errors.js'
 import { deriveHasForkActivity } from './lib/forkAuction.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
@@ -149,7 +150,8 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 				operationId: decodedLog.args.operationId,
 				success: decodedLog.args.success,
 			} satisfies StagedOracleExecutionResult
-		} catch {
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
 			continue
 		}
 	}

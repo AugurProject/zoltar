@@ -5,7 +5,7 @@ import { getAddress } from 'viem'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, loadZoltarUniverseSummary, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
-import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
+import { getActiveBackend, getActiveSimulationController, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import type { SimulationScenario } from '../simulation/scenarios.js'
@@ -87,6 +87,28 @@ void describe('active environment', () => {
 		expect(getActiveBackend().id).toBe('injected')
 		resetEnvironment()
 	})
+
+	void test('initializes the simulation backend from hash query params and exposes its controller', async () => {
+		const backend = await initializeActiveEnvironment({
+			hash: '#/zoltar?simulate=1&simScenario=securitypoolx2',
+			hostname: 'localhost',
+			search: '',
+		})
+
+		if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
+		const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
+
+		try {
+			expect(simulationBackend.currentScenario).toBe('securitypoolx2')
+			expect(getActiveBackend()).toBe(simulationBackend)
+			expect(getActiveSimulationController()).toBe(simulationBackend)
+			await simulationBackend.waitUntilReady()
+			expect(simulationBackend.isBootstrapped).toBe(true)
+		} finally {
+			await simulationBackend.dispose()
+			resetActiveEnvironmentForTesting()
+		}
+	}, 30_000)
 })
 
 void describe('simulation backend', () => {

@@ -1,8 +1,8 @@
 import type { Address } from 'viem'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
-import { parseBigIntListInput } from './inputs.js'
-import { parseTradingAmountInput } from './marketForm.js'
+import { tryParseBigIntListInput } from './inputs.js'
+import { tryParseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
 import type { DeploymentStatus } from '../types/contracts.js'
@@ -140,13 +140,8 @@ export function getTradingMintGuardMessage({
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a mint amount greater than zero.'
-
-	let mintAmount: bigint
-	try {
-		mintAmount = parseTradingAmountInput(trimmedAmount, 'Mint amount')
-	} catch {
-		return 'Enter a valid mint amount.'
-	}
+	const mintAmount = tryParseTradingAmountInput(trimmedAmount)
+	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return 'Enter a mint amount greater than zero.'
 	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalance(remainingCapacity)} ETH.`
@@ -181,13 +176,8 @@ export function getTradingRedeemCompleteSetGuardMessage({
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a redeem amount greater than zero.'
-
-	let redeemAmount: bigint
-	try {
-		redeemAmount = parseTradingAmountInput(trimmedAmount, 'Redeem amount')
-	} catch {
-		return 'Enter a valid redeem amount.'
-	}
+	const redeemAmount = tryParseTradingAmountInput(trimmedAmount)
+	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return 'Enter a redeem amount greater than zero.'
 	if (redeemAmount > maxRedeemableCompleteSets) return `Max redeemable amount is ${formatCurrencyBalance(maxRedeemableCompleteSets)} complete sets.`
@@ -221,12 +211,8 @@ export function getTradingMigrateSharesGuardMessage({
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
 
-	let targetOutcomeIndexes: bigint[]
-	try {
-		targetOutcomeIndexes = parseBigIntListInput(targetOutcomeIndexesInput, 'Target child universes')
-	} catch {
-		return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
-	}
+	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
+	if (targetOutcomeIndexes === undefined) return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
 
 	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
 	if (loadingTradingDetails) return 'Loading wallet share balances.'

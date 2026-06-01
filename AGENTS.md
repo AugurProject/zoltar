@@ -81,7 +81,13 @@ After completing each task, agents should also run coverage analysis before fina
    bun run coverage
    ```
 
-Coverage should be kept at 100% for covered domains. Any reductions should be resolved before finalizing the task.
+Coverage does not need to reach 100%. The requirement is that coverage must not regress relative to the pre-change baseline for the relevant coverage commands.
+
+- If a task only affects UI code, `bun run coverage:ui` must not decrease.
+- If a task affects Solidity code or Solidity-side test/runtime code, `bun run coverage:contracts:ts` and `bun run coverage:contracts:bytecode` must not decrease.
+- If a task affects both areas, all relevant coverage commands must be non-regressing.
+
+Any intentional coverage regression must be explicitly called out in the final response and approved by the user before the task is considered complete.
 
 # Package Guidelines
 

@@ -5,10 +5,21 @@ import * as path from 'node:path'
 const cwd = process.cwd()
 const localNodeModulesPath = path.join(cwd, 'node_modules')
 
+function isGitPathLookupFailure(error) {
+	if (!(error instanceof Error)) return false
+	const execError = error
+	return execError.code === 'ENOENT' || execError.status !== undefined || execError.signal !== undefined
+}
+
+function isMissingPathError(error) {
+	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
 function tryGetGitPath(args) {
 	try {
 		return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
-	} catch {
+	} catch (error) {
+		if (!isGitPathLookupFailure(error)) throw error
 		return undefined
 	}
 }
@@ -26,7 +37,13 @@ const sharedNodeModulesPath =
 			})()
 
 const ensureDirectory = async directoryPath => {
-	const stat = await fs.lstat(directoryPath).catch(() => undefined)
+	let stat
+	try {
+		stat = await fs.lstat(directoryPath)
+	} catch (error) {
+		if (!isMissingPathError(error)) throw error
+		stat = undefined
+	}
 	if (stat?.isDirectory()) return
 	if (stat !== undefined) {
 		await fs.rm(directoryPath, { force: true, recursive: true })
@@ -39,7 +56,13 @@ async function ensureSharedNodeModules() {
 		await ensureDirectory(sharedNodeModulesPath)
 		return
 	}
-	const localStat = await fs.lstat(localNodeModulesPath).catch(() => undefined)
+	let localStat
+	try {
+		localStat = await fs.lstat(localNodeModulesPath)
+	} catch (error) {
+		if (!isMissingPathError(error)) throw error
+		localStat = undefined
+	}
 	if (localStat?.isSymbolicLink()) {
 		const linkedTarget = await fs.readlink(localNodeModulesPath)
 		const resolvedTarget = path.resolve(path.dirname(localNodeModulesPath), linkedTarget)

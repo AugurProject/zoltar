@@ -18,6 +18,16 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 	const rootRef = useRef<HTMLDivElement | null>(null)
 	const selectedOption = value === undefined ? undefined : options.find(option => option.value === value)
 
+	const focusMenuOptionAt = (currentTarget: HTMLButtonElement | null, direction: -1 | 1) => {
+		if (rootRef.current === null || currentTarget === null) return
+		const menuOptions = Array.from(rootRef.current.querySelectorAll<HTMLButtonElement>('.enum-dropdown-option'))
+		if (menuOptions.length === 0) return
+		const currentIndex = menuOptions.indexOf(currentTarget)
+		if (currentIndex === -1) return
+		const nextIndex = (currentIndex + direction + menuOptions.length) % menuOptions.length
+		menuOptions[nextIndex]?.focus()
+	}
+
 	useEffect(() => {
 		const handleDocumentMouseDown = (event: MouseEvent) => {
 			if (rootRef.current === null) return
@@ -45,6 +55,18 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 				disabled={disabled}
 				aria-haspopup='listbox'
 				aria-expanded={open}
+				onKeyDown={event => {
+					if (event.key === 'Escape') {
+						setOpen(false)
+						return
+					}
+					if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === ' ' || event.key === 'Enter') {
+						event.preventDefault()
+						if (!disabled) {
+							setOpen(true)
+						}
+					}
+				}}
 				onClick={() => {
 					if (disabled) return
 					setOpen(current => !current)
@@ -62,6 +84,20 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 							type='button'
 							role='option'
 							aria-selected={option.value === value}
+							onKeyDown={event => {
+								if (event.key === 'Escape') {
+									setOpen(false)
+									return
+								}
+								if (event.key === 'ArrowDown') {
+									event.preventDefault()
+									focusMenuOptionAt(event.currentTarget as HTMLButtonElement, 1)
+								}
+								if (event.key === 'ArrowUp') {
+									event.preventDefault()
+									focusMenuOptionAt(event.currentTarget as HTMLButtonElement, -1)
+								}
+							}}
 							onClick={() => {
 								onChange(option.value)
 								setOpen(false)

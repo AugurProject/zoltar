@@ -21,8 +21,9 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveViewChang
 		if (overview.hasLoadedSecurityPools) return
 		if (autoLoadedBrowsePools.current) return
 		autoLoadedBrowsePools.current = true
-		void Promise.resolve(overview.onLoadSecurityPools()).catch(() => {
+		void Promise.resolve(overview.onLoadSecurityPools()).catch(error => {
 			autoLoadedBrowsePools.current = false
+			console.error('[security-pools] failed to auto-load security pools', error)
 		})
 	}, [overview.hasLoadedSecurityPools, overview.loadingSecurityPools, overview.onLoadSecurityPools, view])
 

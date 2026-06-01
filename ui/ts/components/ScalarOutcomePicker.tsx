@@ -1,14 +1,11 @@
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
+import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 
 function getSafeSelectedTickValue(selectedTick: string) {
-	try {
-		return BigInt(selectedTick === '' ? '0' : selectedTick)
-	} catch {
-		return 0n
-	}
+	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
 }
 
 export function ScalarOutcomePicker({ action, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {

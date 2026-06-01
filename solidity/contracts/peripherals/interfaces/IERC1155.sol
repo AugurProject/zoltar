@@ -17,7 +17,7 @@ limitations under the License.
 
 */
 
-pragma solidity 0.8.33;
+pragma solidity 0.8.35;
 
 import './IERC165.sol';
 
