@@ -11,6 +11,7 @@ import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances,
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
+import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 const ESCALATION_TIME_LENGTH = 4233600n
 
@@ -119,7 +120,7 @@ describe('Escalation Game Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
+					if (!isIgnorableLogDecodeError(error)) throw error
 					return undefined
 				}
 			})
