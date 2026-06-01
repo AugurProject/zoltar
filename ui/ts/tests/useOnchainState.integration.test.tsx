@@ -302,6 +302,135 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('shows a wallet-install message when connectWallet is requested without a wallet provider', async () => {
+		const { backend } = createBackend({
+			hasWallet: false,
+		})
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurPlaceHolderDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 0n),
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const connectButton = within(document.body).getByRole('button', { name: 'Connect wallet' })
+		await act(async () => {
+			fireEvent.click(connectButton)
+		})
+
+		expect(requireHookState(hookState).errorMessage).toBe('No wallet detected. Install or enable a wallet to continue.')
+		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
+		resetEnvironment()
+	})
+
+	test('treats recoverable chain-clock reads as missing block and timestamp data', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a4')
+		const readClient = {
+			getBalance: async () => 123n,
+			getBlock: async () => {
+				const error = new Error('block RPC failed')
+				error.name = 'ContractFunctionExecutionError'
+				throw error
+			},
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({
+			accountAddress: account,
+			readClient,
+		})
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurPlaceHolderDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 222n),
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+
+		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
+		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
+		expect(requireHookState(hookState).errorMessage).toBeUndefined()
+		resetEnvironment()
+	})
+
+	test('updates bootstrap state and chain clock from backend subscription events', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a5')
+		let currentBlockNumber = 10n
+		let currentTimestamp = 20n
+		const readClient = {
+			getBalance: async () => 123n,
+			getBlock: async () => ({ number: currentBlockNumber, timestamp: currentTimestamp }),
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend, subscriptionState } = createBackend({
+			accountAddress: account,
+			readClient,
+		})
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurPlaceHolderDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 333n),
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).currentBlockNumber).toBe(10n))
+
+		backend.bootstrapError = 'bootstrap failed'
+		backend.bootstrapLabel = 'retrying'
+		backend.bootstrapProgress = 45
+		backend.isBootstrapped = true
+		currentBlockNumber = 99n
+		currentTimestamp = 1234n
+
+		await act(async () => {
+			subscriptionState.stateHandler?.()
+			await Promise.resolve()
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).currentBlockNumber).toBe(99n))
+		expect(requireHookState(hookState).currentTimestamp).toBe(1234n)
+		expect(requireHookState(hookState).environmentBootstrapError).toBe('bootstrap failed')
+		expect(requireHookState(hookState).environmentBootstrapLabel).toBe('retrying')
+		expect(requireHookState(hookState).environmentBootstrapProgress).toBe(45)
+		expect(requireHookState(hookState).environmentReady).toBe(true)
+		resetEnvironment()
+	})
+
 	test('prevents concurrent connectWallet calls and reports connection failures', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a3')
 		const connectDeferred = createDeferred<readonly Address[]>()

@@ -81,7 +81,7 @@ After completing each task, agents should also run coverage analysis before fina
    bun run coverage
    ```
 
-Coverage should be kept at 100% for covered domains. Any reductions should be resolved before finalizing the task.
+Coverage does not need to reach 100%. The requirement is that coverage must not decrease as a result of the task. Any coverage regression in the touched domain should be resolved before finalizing the task, or explicitly called out and approved if there is a strong reason it cannot be avoided.
 
 # Package Guidelines
 
