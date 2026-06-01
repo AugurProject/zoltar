@@ -22,9 +22,7 @@ describe('ApprovedAmountValue', () => {
 	})
 
 	test('renders the max label when approval exceeds max-display threshold', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<ApprovedAmountValue value={APPROVAL_MAX_DISPLAY_THRESHOLD + 1n} requiredAmount={0n} suffix='REP' units={18} />,
-		)
+		const renderedComponent = await renderIntoDocument(<ApprovedAmountValue value={APPROVAL_MAX_DISPLAY_THRESHOLD + 1n} requiredAmount={0n} suffix='REP' units={18} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -36,9 +34,7 @@ describe('ApprovedAmountValue', () => {
 	})
 
 	test('renders currency output with tone class for sufficient amounts', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<ApprovedAmountValue value={2n * 10n ** 18n} requiredAmount={1n} suffix='REP' units={18} />,
-		)
+		const renderedComponent = await renderIntoDocument(<ApprovedAmountValue value={2n * 10n ** 18n} requiredAmount={1n} suffix='REP' units={18} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)

@@ -178,7 +178,7 @@ const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string):
 		try {
 			const sourceCode = await fs.readFile(candidate, 'utf8')
 			return { absoluteSourcePath: candidate, sourceCode }
-		} catch {
+		} catch (_error) {
 			// Try next candidate.
 		}
 	}
@@ -269,7 +269,7 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 			params: [transactionHash, { disableStack: true, disableMemory: true, disableStorage: true }],
 		})
 		return parseTraceSteps(trace)
-	} catch {
+	} catch (_error) {
 		return []
 	}
 }

@@ -48,20 +48,11 @@ describe('EscalationDepositSelectionList', () => {
 
 		function SelectionHarness() {
 			const [selectedIndexes, setSelectedIndexes] = useState<bigint[]>([])
-			return (
-				<EscalationDepositSelectionList
-					disabled={false}
-					items={deposits}
-					onSelectionChange={setSelectedIndexes}
-					selectedDepositIndexes={selectedIndexes}
-				/>
-			)
+			return <EscalationDepositSelectionList disabled={false} items={deposits} onSelectionChange={setSelectedIndexes} selectedDepositIndexes={selectedIndexes} />
 		}
 
-		const rendered = await renderIntoDocument(
-			<SelectionHarness />,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<SelectionHarness />)
+		cleanupRendered = rendered.cleanup
 
 		const checkboxes = document.querySelectorAll('input[type="checkbox"]')
 		const firstCheckbox = checkboxes.item(0) as HTMLInputElement
@@ -104,20 +95,11 @@ describe('EscalationDepositSelectionList', () => {
 
 		function SelectionHarness() {
 			const [selectedIndexes, setSelectedIndexes] = useState<bigint[]>([8n])
-			return (
-				<EscalationDepositSelectionList
-					disabled={true}
-					items={deposits}
-					onSelectionChange={setSelectedIndexes}
-					selectedDepositIndexes={selectedIndexes}
-				/>
-			)
+			return <EscalationDepositSelectionList disabled={true} items={deposits} onSelectionChange={setSelectedIndexes} selectedDepositIndexes={selectedIndexes} />
 		}
 
-		const rendered = await renderIntoDocument(
-			<SelectionHarness />,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<SelectionHarness />)
+		cleanupRendered = rendered.cleanup
 
 		const checkbox = document.querySelector('input[type="checkbox"]') as HTMLInputElement
 		expect(checkbox.checked).toBe(true)

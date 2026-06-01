@@ -153,7 +153,7 @@ async function isRepToken(client: ReadClient, token: Address) {
 			functionName: 'symbol',
 		})
 		return symbol === 'REP'
-	} catch {
+	} catch (_error) {
 		return false
 	}
 }
@@ -388,7 +388,7 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 		})
 		if (poolAddress === zeroAddress) return undefined
 		return getAddress(poolAddress)
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }

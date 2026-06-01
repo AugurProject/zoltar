@@ -15,7 +15,7 @@ export function parseDecimalInput(value: string, label: string, units: number = 
 	const normalized = normalizeDecimalInput(trimmed)
 	try {
 		return parseUnits(normalized, units)
-	} catch {
+	} catch (_error) {
 		throw new Error(`${label} must be a decimal number`)
 	}
 }

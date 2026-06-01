@@ -94,7 +94,7 @@ export function ZoltarMigrationSection({
 	const selectedOutcomeIndexes = useMemo(() => {
 		try {
 			return getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes)
-		} catch {
+		} catch (_error) {
 			return []
 		}
 	}, [zoltarMigrationForm.outcomeIndexes])
@@ -102,7 +102,7 @@ export function ZoltarMigrationSection({
 	const migrationAmount = (() => {
 		try {
 			return getMigrationAmount(zoltarMigrationForm.amount)
-		} catch {
+		} catch (_error) {
 			return undefined
 		}
 	})()

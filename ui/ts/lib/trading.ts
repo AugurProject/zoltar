@@ -144,7 +144,7 @@ export function getTradingMintGuardMessage({
 	let mintAmount: bigint
 	try {
 		mintAmount = parseTradingAmountInput(trimmedAmount, 'Mint amount')
-	} catch {
+	} catch (_error) {
 		return 'Enter a valid mint amount.'
 	}
 
@@ -185,7 +185,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	let redeemAmount: bigint
 	try {
 		redeemAmount = parseTradingAmountInput(trimmedAmount, 'Redeem amount')
-	} catch {
+	} catch (_error) {
 		return 'Enter a valid redeem amount.'
 	}
 
@@ -224,7 +224,7 @@ export function getTradingMigrateSharesGuardMessage({
 	let targetOutcomeIndexes: bigint[]
 	try {
 		targetOutcomeIndexes = parseBigIntListInput(targetOutcomeIndexesInput, 'Target child universes')
-	} catch {
+	} catch (_error) {
 		return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
 	}
 

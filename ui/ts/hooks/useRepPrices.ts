@@ -25,7 +25,7 @@ async function fetchRepPerEthPrice(client: ReturnType<typeof createConnectedRead
 	try {
 		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
-	} catch {
+	} catch (_error) {
 		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
 		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }

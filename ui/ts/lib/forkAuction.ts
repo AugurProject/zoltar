@@ -123,7 +123,7 @@ export function getTruthAuctionBidGuardMessage({
 	let bidAmount: bigint
 	try {
 		bidAmount = parseBigIntInput(trimmedAmount, 'Bid amount')
-	} catch {
+	} catch (_error) {
 		return 'Enter a valid bid amount.'
 	}
 

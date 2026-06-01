@@ -40,7 +40,11 @@ void describe('universe helpers', () => {
 	})
 
 	test('updates route hash query and dispatches popstate when universe changes', () => {
-		;(globalThis as { PopStateEvent?: (typeof window.Event) | (typeof Event) }).PopStateEvent = window.PopStateEvent ?? window.Event
+		Object.defineProperty(globalThis, 'PopStateEvent', {
+			configurable: true,
+			value: window.PopStateEvent ?? window.Event,
+			writable: true,
+		})
 		let popstateFired = false
 		window.addEventListener('popstate', () => {
 			popstateFired = true

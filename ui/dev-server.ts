@@ -29,7 +29,7 @@ const sendLiveReloadEvent = (reason: string) => {
 	for (const client of liveReloadClients) {
 		try {
 			client.write(`event: reload\ndata: ${JSON.stringify({ reason })}\n\n`)
-		} catch {
+		} catch (_error) {
 			liveReloadClients.delete(client)
 		}
 	}

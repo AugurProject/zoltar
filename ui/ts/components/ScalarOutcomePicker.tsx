@@ -6,7 +6,7 @@ import { clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOut
 function getSafeSelectedTickValue(selectedTick: string) {
 	try {
 		return BigInt(selectedTick === '' ? '0' : selectedTick)
-	} catch {
+	} catch (_error) {
 		return 0n
 	}
 }

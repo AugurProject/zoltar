@@ -310,7 +310,7 @@ export function SecurityPoolWorkflowSection({
 			: (() => {
 					try {
 						return BigInt(pendingOperationInput)
-					} catch {
+					} catch (_error) {
 						return undefined
 					}
 				})()

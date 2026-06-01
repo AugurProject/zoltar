@@ -138,13 +138,13 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, sett
 	let ethValue: bigint
 	try {
 		ethValue = parseBigIntInput(ethValueInput, 'ETH value')
-	} catch {
+	} catch (_error) {
 		return 'Enter a valid ETH value to send.'
 	}
 	let settlerReward: bigint
 	try {
 		settlerReward = parseBigIntInput(settlerRewardInput, 'Settler reward')
-	} catch {
+	} catch (_error) {
 		return 'Enter a valid settler reward.'
 	}
 	if (ethValue <= 100n) return 'ETH value to send must be greater than 100 wei.'
@@ -508,7 +508,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	let price: bigint | undefined
 	try {
 		price = resolvedPriceInput === '' ? undefined : parseOpenOraclePriceInput(resolvedPriceInput)
-	} catch {
+	} catch (_error) {
 		price = undefined
 	}
 	const amount1 = reportDetails?.exactToken1Report
@@ -741,12 +741,12 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	if (reportDetails !== undefined) expectedNewAmount1 = reportDetails.escalationHalt > reportDetails.currentAmount1 ? (reportDetails.currentAmount1 * reportDetails.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION : reportDetails.currentAmount1 + 1n
 	try {
 		newAmount1 = parseBigIntInput(disputeNewAmount1Input, 'New token1 amount')
-	} catch {
+	} catch (_error) {
 		newAmount1 = undefined
 	}
 	try {
 		newAmount2 = parseBigIntInput(disputeNewAmount2Input, 'New token2 amount')
-	} catch {
+	} catch (_error) {
 		newAmount2 = undefined
 	}
 	const token1ContributionAmount =

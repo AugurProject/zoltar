@@ -82,7 +82,7 @@ async function exists(path: string) {
 	try {
 		await fs.stat(path)
 		return true
-	} catch {
+	} catch (_error) {
 		return false
 	}
 }
@@ -142,7 +142,7 @@ async function loadHashCache(): Promise<{ hash: string | undefined }> {
 			const parsed = HashCache.parse(JSON.parse(data))
 			return { hash: parsed.hash }
 		}
-	} catch {
+	} catch (_error) {
 		// ignore
 	}
 	return { hash: undefined }
@@ -240,7 +240,7 @@ const compileContracts = async () => {
 		try {
 			const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8')
 			CompileResult.parse(JSON.parse(artifactContent))
-		} catch {
+		} catch (_error) {
 			console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...')
 			needsRecompilation = true
 		}

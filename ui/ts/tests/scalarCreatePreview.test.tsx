@@ -19,13 +19,7 @@ function createScalarCreatePreviewDetails() {
 	}
 }
 
-function StatefulScalarCreatePreview({
-	initialTick,
-	onSelectedTickChange,
-}: {
-	initialTick: string
-	onSelectedTickChange?: (tick: string) => void
-}) {
+function StatefulScalarCreatePreview({ initialTick, onSelectedTickChange }: { initialTick: string; onSelectedTickChange?: (tick: string) => void }) {
 	const [selectedTick, setSelectedTick] = useState(initialTick)
 	return (
 		<ScalarCreatePreview

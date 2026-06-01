@@ -24,7 +24,7 @@ function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
 			const securityPoolAddress = decodedLog.args.securityPool
 			if (securityPoolAddress === undefined) throw new Error('Deployment event missing security pool address')
 			return securityPoolAddress
-		} catch {
+		} catch (_error) {
 			continue
 		}
 	}

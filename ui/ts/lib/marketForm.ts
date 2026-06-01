@@ -134,7 +134,7 @@ export function parseOptionalRepAmountInput(value: string) {
 
 	try {
 		return parseRepAmountInput(trimmed, 'REP amount')
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }
@@ -143,7 +143,7 @@ export function parseBigIntInput(value: string, label: string) {
 	const trimmed = validateAndTrim(value, label)
 	try {
 		return BigInt(trimmed)
-	} catch {
+	} catch (_error) {
 		throw new Error(`${label} must be a whole number`)
 	}
 }

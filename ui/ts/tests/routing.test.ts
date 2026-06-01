@@ -1,18 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import {
-	DEPLOY_ROUTE,
-	OPEN_ORACLE_ROUTE,
-	buildRouteHref,
-	ensureRouteHash,
-	getCurrentRoute,
-	getCurrentRouteHash,
-	getRouteHash,
-	getRouteHashSearch,
-	SECURITY_POOLS_ROUTE,
-	ZOLTAR_ROUTE,
-} from '../lib/routing.js'
+import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from '../lib/routing.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
 describe('routing', () => {

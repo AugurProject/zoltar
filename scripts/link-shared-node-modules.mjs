@@ -8,7 +8,7 @@ const localNodeModulesPath = path.join(cwd, 'node_modules')
 function tryGetGitPath(args) {
 	try {
 		return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }

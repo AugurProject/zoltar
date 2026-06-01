@@ -256,21 +256,21 @@ export function SecurityVaultSection({
 	const depositAmount = (() => {
 		try {
 			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP collateral amount')
-		} catch {
+		} catch (_error) {
 			return undefined
 		}
 	})()
 	const securityBondAllowanceAmount = (() => {
 		try {
 			return parseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount, 'Security bond allowance')
-		} catch {
+		} catch (_error) {
 			return undefined
 		}
 	})()
 	const withdrawAmount = (() => {
 		try {
 			return parseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount, 'REP withdraw amount')
-		} catch {
+		} catch (_error) {
 			return undefined
 		}
 	})()

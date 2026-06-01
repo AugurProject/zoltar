@@ -1,14 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import {
-	getMetricPlaceholderPresentation,
-	getPageNotFoundPresentation,
-	getPoolRegistryPresentation,
-	getReportPresentation,
-	getUniversePresentation,
-	getWalletPresentation,
-} from '../lib/userCopy.js'
+import { getMetricPlaceholderPresentation, getPageNotFoundPresentation, getPoolRegistryPresentation, getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 
 void describe('user copy helpers', () => {
 	void test('maps pool selection states semantically', () => {

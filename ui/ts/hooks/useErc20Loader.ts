@@ -18,7 +18,7 @@ function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ..
 			const value = await loadFn(createConnectedReadClient(), ...args)
 			if (!isCurrent()) return
 			signal.value = value
-		} catch {
+		} catch (_error) {
 			if (!isCurrent()) return
 			signal.value = undefined
 		}

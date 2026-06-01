@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Address, type Hash } from 'viem'
+import { getAddress, type Hash, type TransactionReceipt } from 'viem'
 import { getMulticall3Address } from '../contracts/deploymentHelpers.js'
 import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '../contracts/core.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
@@ -11,46 +11,64 @@ type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransac
 	call?: WriteClient['call']
 }
 
+function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
+	return {
+		blockHash: '0x0',
+		blockNumber: 0n,
+		contractAddress: null,
+		cumulativeGasUsed: 0n,
+		from: getAddress('0x0000000000000000000000000000000000000000'),
+		gasUsed: 0n,
+		logs: [],
+		logsBloom: '0x',
+		status,
+		to: getAddress('0x0000000000000000000000000000000000000000'),
+		transactionHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+		transactionIndex: 0n,
+		type: 'eip1559',
+	} as unknown as TransactionReceipt
+}
+
 describe('contract core helpers', () => {
 	test('readRequiredMulticall forwards allowFailure false to the multicall address', async () => {
 		let capturedRequest: MulticallRequest | undefined
 		const readClient = {
-			multicall: async request => {
+			multicall: async (request: MulticallRequest) => {
 				capturedRequest = request
-				return [{ result: 1n }]
+				return [{ result: 1n, status: 'success' } as never]
 			},
-		} as ReadClient
+		} as unknown as ReadClient
 
 		const values = await readRequiredMulticall(readClient, [{ abi: [], address: getAddress('0x1111111111111111111111111111111111111111'), functionName: 'foo' } as const])
 		const request = capturedRequest
 
 		expect(request?.allowFailure).toBe(false)
 		expect(request?.multicallAddress).toBe(getMulticall3Address())
-		expect(values).toEqual([{ result: 1n }])
+		expect(values as unknown).toEqual([{ result: 1n, status: 'success' }])
 	})
 
 	test('readOptionalMulticall forwards allowFailure true to the multicall address', async () => {
 		let capturedRequest: MulticallRequest | undefined
 		const readClient = {
-			multicall: async request => {
+			multicall: async (request: MulticallRequest) => {
 				capturedRequest = request
-				return [{ result: 1n }]
+				return [{ result: 1n, status: 'success' } as never]
 			},
-		} as ReadClient
+		} as unknown as ReadClient
 
 		const values = await readOptionalMulticall(readClient, [{ abi: [], address: getAddress('0x1111111111111111111111111111111111111111'), functionName: 'foo' } as const])
 		const request = capturedRequest
 
 		expect(request?.allowFailure).toBe(true)
 		expect(request?.multicallAddress).toBe(getMulticall3Address())
-		expect(values).toEqual([{ result: 1n }])
+		expect(values as unknown).toEqual([{ result: 1n, status: 'success' }])
 	})
 
 	test('writeContractAndWait and writeContractAndWaitForReceipt return hashes for successful writes', async () => {
 		const hash = `0x${'a'.repeat(64)}` as Hash
 		const contractCall: WriteContractClient = {
 			sendTransaction: async () => hash,
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
+			waitForTransactionReceipt: async () => hashReceipt('success'),
 		}
 
 		const returnedHashOnly = await writeContractAndWait(contractCall, () => ({
@@ -79,7 +97,7 @@ describe('contract core helpers', () => {
 				throw callError
 			},
 			sendTransaction: async () => hash,
-			waitForTransactionReceipt: async () => ({ status: 'reverted' }),
+			waitForTransactionReceipt: async () => hashReceipt('reverted'),
 		}
 		await expect(
 			writeContractAndWaitForReceipt(
@@ -99,7 +117,7 @@ describe('contract core helpers', () => {
 			sendTransaction: async () => {
 				throw new Error('provider failed')
 			},
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
+			waitForTransactionReceipt: async () => hashReceipt('success'),
 		}
 		await expect(
 			writeContractAndWaitForReceipt(
@@ -117,7 +135,7 @@ describe('contract core helpers', () => {
 	test('writeContractAndWaitForReceipt throws a generic revert message when no reason can be resolved', async () => {
 		const genericClient: WriteContractClient = {
 			sendTransaction: async () => `0x${'c'.repeat(64)}` as Hash,
-			waitForTransactionReceipt: async () => ({ status: 'reverted' }),
+			waitForTransactionReceipt: async () => hashReceipt('reverted'),
 		}
 		await expect(
 			writeContractAndWaitForReceipt(

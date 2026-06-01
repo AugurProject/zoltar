@@ -1,40 +1,37 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { type Address, type Hash, getAddress } from 'viem'
-import {
-	getDeploymentSteps,
-	loadDeploymentStatusOracleSnapshot,
-	loadErc20Allowance,
-	loadErc20Balance,
-} from '../contracts.js'
+import { type Address, type Hash, type TransactionReceipt, getAddress } from 'viem'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../contracts.js'
+import type { ReadClient, WriteClient } from '../types/contracts.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 
-type MockWriteClient = {
-	getCode: (request: { address: Address }) => Promise<`0x${string}` | undefined>
-	sendTransaction: (request: { to?: Address | null | undefined; data?: `0x${string}` | undefined; value?: bigint | undefined }) => Promise<Hash>
-	waitForTransactionReceipt: (request: { hash: Hash }) => Promise<{ status: 'success' | 'reverted' }>
-	sendRawTransaction?: (request: { serializedTransaction: `0x${string}` }) => Promise<Hash>
-	installSimulationProxyDeployer?: (request: { address: Address; runtimeCode: `0x${string}` }) => Promise<void>
-	patchSimulationGenesisRepToken?: (request: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
+type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
+type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'patchSimulationGenesisRepToken'>>
+
+function asWriteClient(client: MockWriteClient): WriteClient {
+	return client as unknown as WriteClient
 }
 
-const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
+function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
+	return { ...({} as TransactionReceipt), status }
+}
+
+const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' as const
 
 function createDeploymentSteps() {
 	return getDeploymentSteps()
 }
 
-function createMockReadClient(responses: {
-	getCode: (request: { address: Address }) => Promise<`0x${string}` | undefined>
-	readContract?: (request: { functionName: string }) => Promise<unknown>
-}) {
+function createMockReadClient({ getCode, readContract }: { getCode: MockReadClient['getCode']; readContract?: MockReadClient['readContract'] }) {
 	return {
-		getCode: responses.getCode,
-		readContract: responses.readContract ?? (async () => {
-			throw new Error('readContract should be mocked')
-		}),
-	}
+		getCode,
+		readContract:
+			readContract ??
+			(async () => {
+				throw new Error('readContract should be mocked')
+			}),
+	} as MockReadClient
 }
 
 describe('contract deployment internals', () => {
@@ -54,12 +51,12 @@ describe('contract deployment internals', () => {
 			},
 			readContract: async ({ functionName }) => {
 				readContractCalls.push(functionName)
-				if (functionName === 'getDeploymentMask') return 5n
+				if (functionName === 'getDeploymentMask') return 5n as never
 				throw new Error(`Unexpected readContract call: ${functionName}`)
 			},
 		})
 
-		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient)
+		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient as ReadClient)
 
 		expect(readContractCalls).toEqual(['getDeploymentMask'])
 		expect(snapshot.augurPlaceHolderDeployed).toBe(false)
@@ -79,7 +76,7 @@ describe('contract deployment internals', () => {
 		let capturedProxyDeployData: `0x${string}` | undefined
 		let capturedFactoryData: `0x${string}` | undefined
 		const txHash = `0x${'7'.repeat(64)}` as Hash
-		const client = {
+		const client = asWriteClient({
 			getCode: async () => '0x1234',
 			sendTransaction: async request => {
 				if (capturedProxyDeployData === undefined) {
@@ -89,8 +86,8 @@ describe('contract deployment internals', () => {
 				}
 				return txHash
 			},
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
-		} as MockWriteClient
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
 
 		const oracleHash = await oracleStep.deploy(client)
 		const factoryHash = await factoryStep.deploy(client)
@@ -108,18 +105,18 @@ describe('contract deployment internals', () => {
 		let sendTransactionCallCount = 0
 		let sendRawTransactionCallCount = 0
 
-		const client = {
+		const client = asWriteClient({
 			getCode: async () => '0x1234',
 			sendTransaction: async () => {
 				sendTransactionCallCount += 1
 				return `0x${'9'.repeat(64)}` as Hash
 			},
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
+			waitForTransactionReceipt: async () => hashReceipt('success'),
 			sendRawTransaction: async () => {
 				sendRawTransactionCallCount += 1
 				return `0x${'a'.repeat(64)}` as Hash
 			},
-		} as MockWriteClient
+		})
 
 		const hash = await proxyStep.deploy(client)
 
@@ -135,7 +132,7 @@ describe('contract deployment internals', () => {
 		let installCalled = false
 		let funded = false
 
-		const client = {
+		const client = asWriteClient({
 			getCode: async () => undefined,
 			installSimulationProxyDeployer: async () => {
 				installCalled = true
@@ -144,11 +141,11 @@ describe('contract deployment internals', () => {
 				funded = true
 				return `0x${'b'.repeat(64)}` as Hash
 			},
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
+			waitForTransactionReceipt: async () => hashReceipt('success'),
 			sendRawTransaction: async () => {
 				throw new Error('sendRawTransaction should not be called')
 			},
-		} as MockWriteClient
+		})
 
 		const hash = await proxyStep.deploy(client)
 
@@ -165,26 +162,24 @@ describe('contract deployment internals', () => {
 		const fundHash = `0x${'c'.repeat(64)}` as Hash
 		const deployHash = `0x${'d'.repeat(64)}` as Hash
 
-		const client = {
+		const client = asWriteClient({
 			getCode: async () => undefined,
 			sendTransaction: async request => {
 				seen.push(request.to ?? 'none')
 				return request.value === undefined ? deployHash : fundHash
 			},
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
+			waitForTransactionReceipt: async () => hashReceipt('success'),
 			sendRawTransaction: async request => {
 				seen.push(request.serializedTransaction)
 				return deployHash
 			},
-		} as MockWriteClient
+		})
 
 		const hash = await proxyStep.deploy(client)
 
 		expect(hash).toBe(deployHash)
 		expect(seen[0]).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
-		expect(seen[1]).toBe(
-			'0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222',
-		)
+		expect(seen[1]).toBe('0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222')
 	})
 
 	test('zoltar deployment step patches the Genesis REP token in simulation mode', async () => {
@@ -194,17 +189,17 @@ describe('contract deployment internals', () => {
 		let patchedParameters: { repAddress: Address; zoltarAddress: Address } | undefined
 
 		const txHash = `0x${'e'.repeat(64)}` as Hash
-		const client = {
+		const client = asWriteClient({
 			getCode: async () => '0x1234',
 			sendTransaction: async () => txHash,
-			waitForTransactionReceipt: async () => ({ status: 'success' }),
+			waitForTransactionReceipt: async () => hashReceipt('success'),
 			patchSimulationGenesisRepToken: async ({ repAddress, zoltarAddress }) => {
 				patchedParameters = {
 					repAddress,
 					zoltarAddress,
 				}
 			},
-		} as MockWriteClient
+		})
 
 		const hash = await zoltarStep.deploy(client)
 
@@ -226,15 +221,15 @@ describe('contract deployment internals', () => {
 
 			let seenData: `0x${string}` | undefined
 			let seenAddress: Address | undefined
-			const client = {
+			const client = asWriteClient({
 				getCode: async () => '0x1234',
 				sendTransaction: async request => {
 					seenData = request.data
-					seenAddress = request.to
+					seenAddress = request.to === null ? undefined : request.to
 					return txHash
 				},
-				waitForTransactionReceipt: async () => ({ status: 'success' }),
-			} as MockWriteClient
+				waitForTransactionReceipt: async () => hashReceipt('success'),
+			})
 
 			const hash = await step.deploy(client)
 
@@ -250,22 +245,25 @@ describe('contract deployment internals', () => {
 		const ownerAddress = getAddress('0x2222222222222222222222222222222222222222')
 		const spenderAddress = getAddress('0x3333333333333333333333333333333333333333')
 		const seen: Array<{ functionName: string; address: Address; args: readonly unknown[] }> = []
-		const readClient = {
+		const readClient: MockReadClient = {
 			getCode: async () => '0x',
 			readContract: async request => {
+				if (request.address === undefined) {
+					throw new Error('Expected token address')
+				}
 				seen.push({
 					address: request.address,
-					args: request.args ?? [],
+					args: Array.isArray(request.args) ? request.args : [],
 					functionName: request.functionName,
 				})
-				if (request.functionName === 'balanceOf') return 2_000n
-				if (request.functionName === 'allowance') return 500n
+				if (request.functionName === 'balanceOf') return 2_000n as never
+				if (request.functionName === 'allowance') return 500n as never
 				throw new Error(`Unexpected function name: ${request.functionName}`)
 			},
-		} as ReadClient
+		}
 
-		expect(await loadErc20Balance(readClient, tokenAddress, ownerAddress)).toBe(2_000n)
-		expect(await loadErc20Allowance(readClient, tokenAddress, ownerAddress, spenderAddress)).toBe(500n)
+		expect(await loadErc20Balance(readClient as ReadClient, tokenAddress, ownerAddress)).toBe(2_000n)
+		expect(await loadErc20Allowance(readClient as ReadClient, tokenAddress, ownerAddress, spenderAddress)).toBe(500n)
 		expect(seen).toEqual([
 			{
 				functionName: 'balanceOf',

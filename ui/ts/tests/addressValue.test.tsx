@@ -85,7 +85,7 @@ describe('AddressValue', () => {
 			fireEvent.click(copyButton)
 		})
 		await waitFor(() => {
-		expect(copyButton.childNodes[0]?.textContent).toBe('Copied')
+			expect(copyButton.childNodes[0]?.textContent).toBe('Copied')
 		})
 	})
 

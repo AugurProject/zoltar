@@ -5,7 +5,7 @@ import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress, zeroHash } from 'viem'
+import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
@@ -421,41 +421,41 @@ void describe('security pools selected tab refresh', () => {
 		).toBe(false)
 
 		expect(
-				shouldRefreshSelectedPoolDataOnViewOpen({
-					currentSecurityPoolAddress,
-					nextView: 'operate',
-					nextSecurityPoolAddress,
-					selectedPoolExists: false,
-				}),
-			).toBe(true)
+			shouldRefreshSelectedPoolDataOnViewOpen({
+				currentSecurityPoolAddress,
+				nextView: 'operate',
+				nextSecurityPoolAddress,
+				selectedPoolExists: false,
+			}),
+		).toBe(true)
 
 		expect(
-				shouldRefreshSelectedPoolDataOnViewOpen({
-					currentSecurityPoolAddress: '   ',
-					nextView: 'operate',
-					nextSecurityPoolAddress: currentSecurityPoolAddress,
-					selectedPoolExists: true,
-				}),
-			).toBe(false)
+			shouldRefreshSelectedPoolDataOnViewOpen({
+				currentSecurityPoolAddress: '   ',
+				nextView: 'operate',
+				nextSecurityPoolAddress: currentSecurityPoolAddress,
+				selectedPoolExists: true,
+			}),
+		).toBe(false)
 
 		expect(
-				shouldRefreshSelectedPoolDataOnViewOpen({
-					currentSecurityPoolAddress: '   ',
-					nextView: 'operate',
-					selectedPoolExists: false,
-				}),
-			).toBe(false)
+			shouldRefreshSelectedPoolDataOnViewOpen({
+				currentSecurityPoolAddress: '   ',
+				nextView: 'operate',
+				selectedPoolExists: false,
+			}),
+		).toBe(false)
 
 		expect(
-				shouldRefreshSelectedPoolDataOnViewOpen({
-					currentSecurityPoolAddress,
-					nextView: 'operate',
-					nextSecurityPoolAddress: '   ',
-					selectedPoolExists: false,
-				}),
-			).toBe(false)
-		})
+			shouldRefreshSelectedPoolDataOnViewOpen({
+				currentSecurityPoolAddress,
+				nextView: 'operate',
+				nextSecurityPoolAddress: '   ',
+				selectedPoolExists: false,
+			}),
+		).toBe(false)
 	})
+})
 
 void describe('SecurityPoolsSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -571,7 +571,7 @@ void describe('SecurityPoolsSection', () => {
 	})
 
 	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {
-		const createdPoolAddress = '0x00000000000000000000000000000000000000a4'
+		const createdPoolAddress = getAddress('0x00000000000000000000000000000000000000a4')
 		const activeViewChanges: string[] = []
 		const refreshCalls: string[] = []
 
@@ -594,7 +594,9 @@ void describe('SecurityPoolsSection', () => {
 					}),
 					workflow: createWorkflowProps({
 						onRefreshSelectedPoolData: address => {
-							refreshCalls.push(address)
+							if (address !== undefined) {
+								refreshCalls.push(address)
+							}
 						},
 					}),
 				}),

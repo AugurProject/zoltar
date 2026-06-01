@@ -1,7 +1,6 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -31,9 +30,7 @@ describe('useUrlState', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
-		cleanupDom = installDomEnvironment(
-			'http://localhost/#/open-oracle?universe=1&openOracleView=selected-report&openOracleReportId=101&securityPool=0x1111111111111111111111111111111111111111&securityPoolsView=operate&selectedPoolView=positions&zoltarView=trading',
-		).cleanup
+		cleanupDom = installDomEnvironment('http://localhost/#/open-oracle?universe=1&openOracleView=selected-report&openOracleReportId=101&securityPool=0x1111111111111111111111111111111111111111&securityPoolsView=operate&selectedPoolView=positions&zoltarView=trading').cleanup
 	})
 
 	afterEach(async () => {

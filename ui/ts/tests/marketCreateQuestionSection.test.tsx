@@ -100,7 +100,7 @@ describe('MarketCreateQuestionSection', () => {
 		})
 		await act(() => {
 			const options = documentQueries.getAllByRole('option') as HTMLButtonElement[]
-			const categoricalOption = options.find(option => option.textContent?.includes('Categorical'))
+			const categoricalOption = options.find(option => option.textContent?.includes('Categorical') === true)
 			if (categoricalOption === undefined) throw new Error('Expected categorical option')
 			fireEvent.click(categoricalOption)
 		})
@@ -177,7 +177,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(openForkTabCount).toBe(1)
 	})
 
-		test('calls categorical mutators', async () => {
+	test('calls categorical mutators', async () => {
 		const updates: Array<Partial<MarketFormState>> = []
 		const renderedComponent = await renderIntoDocument(
 			<MarketCreateQuestionSection

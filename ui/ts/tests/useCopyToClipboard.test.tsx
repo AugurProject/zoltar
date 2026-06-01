@@ -71,16 +71,17 @@ describe('useCopyToClipboard', () => {
 		const renderedComponent = await renderIntoDocument(<Probe />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(timeoutCallbacks).toHaveLength(0)
-		if (hook === undefined) {
+		const activeHook = hook
+		if (activeHook === undefined) {
 			throw new Error('hook did not mount')
 		}
 
 		await act(async () => {
-			await hook.copyText('copiable')
+			await activeHook.copyText('copiable')
 		})
-		expect(hook?.copied.value).toBe(true)
+		expect(activeHook?.copied.value).toBe(true)
 		expect(timeoutCallbacks).toHaveLength(1)
-		expect(hook?.copied.value).toBe(true)
+		expect(activeHook?.copied.value).toBe(true)
 		await renderedComponent.cleanup()
 		expect(clearTimeoutIds.length).toBeGreaterThanOrEqual(1)
 		hook = undefined
@@ -108,19 +109,20 @@ describe('useCopyToClipboard', () => {
 		const renderedComponent = await renderIntoDocument(<Probe />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(timeoutCallbacks).toHaveLength(0)
-		if (hook === undefined) {
+		const activeHook = hook
+		if (activeHook === undefined) {
 			throw new Error('hook did not mount')
 		}
 
 		await act(async () => {
-			await hook.copyText('copiable')
+			await activeHook.copyText('copiable')
 		})
-		expect(hook?.copied.value).toBe(true)
+		expect(activeHook?.copied.value).toBe(true)
 		expect(timeoutCallbacks).toHaveLength(1)
 		await act(() => {
 			timeoutCallbacks[0]?.()
 		})
-		expect(hook?.copied.value).toBe(false)
+		expect(activeHook?.copied.value).toBe(false)
 		await renderedComponent.cleanup()
 		hook = undefined
 		cleanupRenderedComponent = undefined
@@ -130,7 +132,7 @@ describe('useCopyToClipboard', () => {
 		const clearTimeoutIds: number[] = []
 		let nextTimerId = 1
 		setClipboardWriteText(async () => undefined)
-		window.setTimeout = ((callback: TimerHandler) => {
+		window.setTimeout = ((_callback: TimerHandler) => {
 			nextTimerId += 1
 			return nextTimerId as unknown as number
 		}) as typeof window.setTimeout
@@ -147,23 +149,24 @@ describe('useCopyToClipboard', () => {
 		const renderedComponent = await renderIntoDocument(<Probe />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		if (hook === undefined) {
+		const activeHook = hook
+		if (activeHook === undefined) {
 			throw new Error('hook did not mount')
 		}
 
 		await act(async () => {
-			await hook.copyText('good')
+			await activeHook.copyText('good')
 		})
-		expect(hook?.copied.value).toBe(true)
+		expect(activeHook?.copied.value).toBe(true)
 
 		setClipboardWriteText(async () => {
 			throw new Error('copy blocked')
 		})
 
 		await act(async () => {
-			await hook.copyText('blocked')
+			await activeHook.copyText('blocked')
 		})
-		expect(hook?.copied.value).toBe(false)
+		expect(activeHook?.copied.value).toBe(false)
 		expect(clearTimeoutIds.length).toBeGreaterThanOrEqual(1)
 		await renderedComponent.cleanup()
 	})

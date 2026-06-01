@@ -39,15 +39,7 @@ function createDeferred<T>() {
 	return { promise, reject, resolve }
 }
 
-function createReadClient({
-	ethBalance = 0n,
-	blockNumber = 10n,
-	blockTimestamp = 20n,
-}: {
-	ethBalance?: bigint
-	blockNumber?: bigint
-	blockTimestamp?: bigint
-} = {}) {
+function createReadClient({ ethBalance = 0n, blockNumber = 10n, blockTimestamp = 20n }: { ethBalance?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
 	return {
 		getBalance: async () => ethBalance,
 		getBlock: async () => ({ number: blockNumber, timestamp: blockTimestamp }),
@@ -125,7 +117,10 @@ function createBackend({
 				subscriptionState.unsub.chain += 1
 			}
 		},
-		waitUntilReady,
+	}
+
+	if (waitUntilReady !== undefined) {
+		backend.waitUntilReady = waitUntilReady
 	}
 
 	return { backend, subscriptionState }
@@ -273,11 +268,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() =>
-			expect(requireHookState(hookState).errorMessage).toBe(
-				'Failed to refresh deployment status. Reason: deployment status RPC failed',
-			)
-		)
+		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh deployment status. Reason: deployment status RPC failed'))
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		resetEnvironment()
 	})
@@ -306,9 +297,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() =>
-			expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: wallet connect failed')
-		)
+		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: wallet connect failed'))
 		expect(requireHookState(hookState).walletBootstrapComplete).toBe(true)
 		resetEnvironment()
 	})
@@ -434,11 +423,7 @@ describe('useOnchainState (integration)', () => {
 		}
 
 		failureSignal.reject(new Error('bootstrap unavailable'))
-		await waitFor(() =>
-			expect(requireHookState(failureState).environmentBootstrapError).toBe(
-				'Failed to bootstrap simulation environment. Reason: bootstrap unavailable',
-			)
-		)
+		await waitFor(() => expect(requireHookState(failureState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: bootstrap unavailable'))
 		await failureRender.cleanup()
 		cleanupRenderedComponent = undefined
 		resetFailureEnvironment()

@@ -431,7 +431,7 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (_error) {
 					return undefined
 				}
 			})
@@ -567,7 +567,7 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (_error) {
 					return undefined
 				}
 			})
@@ -580,7 +580,7 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (_error) {
 					return undefined
 				}
 			})
@@ -629,7 +629,7 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (_error) {
 					return undefined
 				}
 			})
@@ -642,7 +642,7 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (_error) {
 					return undefined
 				}
 			})
@@ -2327,7 +2327,7 @@ describe('Peripherals Contract Test Suite', () => {
 						data: log.data,
 						topics: log.topics,
 					})
-				} catch {
+				} catch (_error) {
 					return undefined
 				}
 			})

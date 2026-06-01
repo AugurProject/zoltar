@@ -82,7 +82,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 
 		try {
 			return parseAddressInput(trimmed, 'Security pool address')
-		} catch {
+		} catch (_error) {
 			return undefined
 		}
 	}

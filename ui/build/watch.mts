@@ -90,14 +90,14 @@ const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	if (childProcess.exitCode !== null || childProcess.signalCode !== null) return
 	try {
 		childProcess.kill('SIGTERM')
-	} catch {
+	} catch (_error) {
 		return
 	}
 	const forceKillTimeout = setTimeout(() => {
 		if (childProcess.exitCode === null && childProcess.signalCode === null) {
 			try {
 				childProcess.kill('SIGKILL')
-			} catch {
+			} catch (_error) {
 				return
 			}
 		}

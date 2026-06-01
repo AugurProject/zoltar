@@ -30,7 +30,7 @@ export function readUniverseQueryParam(search: string) {
 
 	try {
 		return BigInt(value)
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }

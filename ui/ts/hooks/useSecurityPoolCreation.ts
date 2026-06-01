@@ -32,7 +32,7 @@ export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	try {
 		BigInt(marketId)
 		return marketId
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }
@@ -71,7 +71,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 		try {
 			questionId = BigInt(marketId)
 			securityMultiplier = parseBigIntInput(securityMultiplierInput, 'Security multiplier')
-		} catch {
+		} catch (_error) {
 			duplicateOriginPoolExists.value = false
 			return
 		}
@@ -81,7 +81,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
-			} catch {
+			} catch (_error) {
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = false
 			}

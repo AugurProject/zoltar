@@ -200,7 +200,7 @@ export function LiquidationModal({
 	const liquidationAmountValue = (() => {
 		try {
 			return parseRepAmountInput(liquidationAmount, 'Liquidation amount')
-		} catch {
+		} catch (_error) {
 			return undefined
 		}
 	})()

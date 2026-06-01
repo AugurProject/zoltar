@@ -9,7 +9,7 @@ import { TradingSection } from '../components/TradingSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 import type { TradingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -221,15 +221,7 @@ function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: Z
 	)
 }
 
-function TradingSectionWithMutableForm({
-	initialTradingForm = {},
-	tradingForkUniverse,
-	selectedPool = createSelectedPool({ universeHasForked: true }),
-}: {
-	initialTradingForm?: Partial<TradingFormState>
-	tradingForkUniverse: ZoltarUniverseSummary
-	selectedPool?: ListedSecurityPool
-}) {
+function TradingSectionWithMutableForm({ initialTradingForm = {}, tradingForkUniverse, selectedPool = createSelectedPool({ universeHasForked: true }) }: { initialTradingForm?: Partial<TradingFormState>; tradingForkUniverse: ZoltarUniverseSummary; selectedPool?: ListedSecurityPool }) {
 	const [tradingForm, setTradingForm] = useState<TradingFormState>({ ...createTradingForm(), ...initialTradingForm })
 
 	return (
@@ -538,7 +530,7 @@ void describe('TradingSection', () => {
 			{ action: 'migrateShares' as const, title: 'Shares Migrated' },
 			{ action: 'redeemShares' as const, title: 'Resolved Shares Redeemed' },
 		] as const) {
-			const tradingResult = {
+			const tradingResult: TradingActionResult = {
 				action: scenario.action,
 				hash: zeroHash,
 				securityPoolAddress: zeroAddress,
@@ -616,7 +608,6 @@ void describe('TradingSection', () => {
 		})
 
 		const modalElement = documentQueries.getByRole('dialog')
-		const modalQueries = within(modalElement)
 		const maxButton = modalElement.querySelector('.field-inline-action') as HTMLButtonElement
 		expect(maxButton.disabled).toBe(false)
 

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address } from 'viem'
+import { getAddress, zeroAddress } from 'viem'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import {
 	bigintToAddress,
@@ -66,55 +66,42 @@ describe('contracts helpers', () => {
 	})
 
 	test('tuple validators require exact tuple structure and throw with unexpected responses', () => {
-		const validEscalationTuple = [1n, 2n, 3n, 4n, 5n, [6n, 7n, 8n], 9, 10n, 11, 12n, true] as const
+		const validEscalationTuple: [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, bigint, bigint, bigint, boolean] = [1n, 2n, 3n, 4n, 5n, [6n, 7n, 8n], 9n, 10n, 11n, 12n, true]
 		expect(requireEscalationGameTuple(validEscalationTuple, 'escalation response')).toEqual(validEscalationTuple)
 		expect(() => requireEscalationGameTuple([1n, 2n], 'escalation response')).toThrow('Unexpected escalation response')
 
-		const validUniverseSummary = [
-			[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000a1'), 4n],
-		] as const
+		const validUniverseSummary: Array<[bigint, bigint, bigint, `0x${string}`, bigint]> = [[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000a1'), 4n]]
 		expect(requireUniverseTupleArray(validUniverseSummary, 'universe summary')).toEqual(validUniverseSummary)
-		expect(() =>
-			requireUniverseTupleArray([[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000b2'), 4n, 5n] as never], 'universe summary'),
-		).toThrow('Unexpected universe summary response')
+		expect(() => requireUniverseTupleArray([[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000b2'), 4n, 5n] as never], 'universe summary')).toThrow('Unexpected universe summary response')
 
-		const validVaultTuple = [[1n, 2n, 3n, 4n, 5n]] as const
+		const validVaultTuple: Array<[bigint, bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n, 5n]]
 		expect(requireSecurityVaultTupleArray(validVaultTuple, 'vault response')).toEqual(validVaultTuple)
 		expect(() => requireSecurityVaultTupleArray([[1n, 2n, 3n, 4n] as never], 'vault response')).toThrow('Unexpected vault response')
 
-		const validMetaTuple = [
-			1n,
-			2n,
-			3n,
-			4n,
-			'0x00000000000000000000000000000000000000b2',
-			1,
-			'0x00000000000000000000000000000000000000c3',
-			true,
-			4,
-			5,
-			6,
-			7,
-		] as const
+		const validMetaTuple: [bigint, bigint, bigint, bigint, `0x${string}`, bigint, `0x${string}`, boolean, bigint, bigint, bigint, bigint] = [1n, 2n, 3n, 4n, getAddress('0x00000000000000000000000000000000000000b2'), 1n, getAddress('0x00000000000000000000000000000000000000c3'), true, 4n, 5n, 6n, 7n]
 		const oneValidMetaTuple = [validMetaTuple]
 		expect(requireOpenOracleReportMetaTuple(validMetaTuple, 'oracle meta')).toEqual(validMetaTuple)
 		expect(requireOpenOracleReportMetaTupleArray(oneValidMetaTuple, 'oracle meta')).toEqual(oneValidMetaTuple)
-		expect(() =>
-			requireOpenOracleReportMetaTupleArray([[1n, 2n] as never], 'oracle meta'),
-		).toThrow('Unexpected oracle meta response')
+		expect(() => requireOpenOracleReportMetaTupleArray([[1n, 2n] as never], 'oracle meta')).toThrow('Unexpected oracle meta response')
 
-		const validStatusTuple = [1n, 2n, 3n, '0x00000000000000000000000000000000000000d4', 1, 2, '0x00000000000000000000000000000000000000e5', 3, true, false] as const
+		const validStatusTuple: [bigint, bigint, bigint, `0x${string}`, bigint, bigint, `0x${string}`, bigint, boolean, boolean] = [1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000d4'), 1n, 2n, getAddress('0x00000000000000000000000000000000000000e5'), 3n, true, false]
 		expect(requireOpenOracleReportStatusTuple(validStatusTuple, 'oracle status')).toEqual(validStatusTuple)
 		expect(requireOpenOracleReportStatusTupleArray([validStatusTuple], 'oracle status')).toEqual([validStatusTuple])
-		expect(() =>
-			requireOpenOracleReportStatusTupleArray([[1n, 2n] as never], 'oracle status'),
-		).toThrow('Unexpected oracle status response')
+		expect(() => requireOpenOracleReportStatusTupleArray([[1n, 2n] as never], 'oracle status')).toThrow('Unexpected oracle status response')
 
-		const validExtraData = ['0x00', '0x00000000000000000000000000000000000000f6', 1, 2, '0x', zeroAddress, true, false, true] as const
+		const validExtraData: [`0x${string}`, `0x${string}`, bigint, bigint, `0x${string}`, `0x${string}`, boolean, boolean, boolean] = [
+			'0x00000000000000000000000000000000000000f6',
+			getAddress('0x00000000000000000000000000000000000000f7'),
+			1n,
+			2n,
+			getAddress('0x00000000000000000000000000000000000000f6'),
+			zeroAddress,
+			true,
+			false,
+			true,
+		]
 		expect(requireOpenOracleExtraDataTuple(validExtraData, 'oracle extra data')).toEqual(validExtraData)
-		expect(() =>
-			requireOpenOracleExtraDataTuple(['0x00', zeroAddress, 1] as never, 'oracle extra data'),
-		).toThrow('Unexpected oracle extra data response')
+		expect(() => requireOpenOracleExtraDataTuple(['0x00', zeroAddress, 1] as never, 'oracle extra data')).toThrow('Unexpected oracle extra data response')
 	})
 
 	test('question id helpers are deterministic and convert values consistently', () => {

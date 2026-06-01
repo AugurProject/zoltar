@@ -253,7 +253,7 @@ function estimateBidRep(bidAmount: string, selectedAuctionPrice: bigint | undefi
 	if (selectedAuctionPrice === undefined) return undefined
 	try {
 		return estimateRepPurchased(BigInt(bidAmount === '' ? '0' : bidAmount), selectedAuctionPrice)
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }
@@ -262,7 +262,7 @@ function parseOptionalBigInt(value: string) {
 	if (trimmedValue === '') return undefined
 	try {
 		return BigInt(trimmedValue)
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }

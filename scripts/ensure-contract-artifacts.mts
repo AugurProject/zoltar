@@ -33,7 +33,7 @@ async function exists(filePath: string): Promise<boolean> {
 	try {
 		await fs.stat(filePath)
 		return true
-	} catch {
+	} catch (_error) {
 		return false
 	}
 }
@@ -74,7 +74,7 @@ async function contractsJsonIsReadable(contractsJsonPath: string): Promise<boole
 	try {
 		JSON.parse(await fs.readFile(contractsJsonPath, 'utf8'))
 		return true
-	} catch {
+	} catch (_error) {
 		return false
 	}
 }

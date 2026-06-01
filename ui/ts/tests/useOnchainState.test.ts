@@ -355,7 +355,7 @@ void describe('loadWalletState', () => {
 
 		await loadPromise
 
-		expect(errorMessage).toBe('Failed to refresh wallet balances. Reason: eth rpc failed')
+		expect(errorMessage ?? '').toBe('Failed to refresh wallet balances. Reason: eth rpc failed')
 		expect(accountState.chainId).toBe('0x123')
 		expect(accountState.ethBalance).toBeUndefined()
 		expect(accountState.wethBalance).toBe(777n)
@@ -402,7 +402,7 @@ void describe('loadWalletState', () => {
 
 		await loadPromise
 
-		expect(errorMessage).toBe('Failed to refresh wallet balances. Reason: weth rpc failed')
+		expect(errorMessage ?? '').toBe('Failed to refresh wallet balances. Reason: weth rpc failed')
 		expect(accountState.chainId).toBe('0x123')
 		expect(accountState.ethBalance).toBe(888n)
 		expect(accountState.wethBalance).toBeUndefined()

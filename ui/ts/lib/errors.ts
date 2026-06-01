@@ -51,7 +51,7 @@ function collectErrorDetails(error: unknown, seen = new Set<object>()): string[]
 	try {
 		const serialized = JSON.stringify(error)
 		return serialized === undefined ? [] : [serialized]
-	} catch {
+	} catch (_error) {
 		return []
 	}
 }

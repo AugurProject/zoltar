@@ -197,7 +197,7 @@ function parseQuestionIdInput(value: string) {
 	if (trimmed === '') throw new Error('Question ID is required')
 	try {
 		return BigInt(trimmed)
-	} catch {
+	} catch (_error) {
 		throw new Error('Question ID must be a valid decimal or hex bigint')
 	}
 }

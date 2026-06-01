@@ -1,7 +1,6 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { waitFor } from '@testing-library/dom'
 import { zeroAddress, type Address, type Hash } from 'viem'
@@ -63,11 +62,18 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
 	mock.module('../contracts.js', () => ({
 		loadMarketDetails: loadMarketDetails ?? mock(async () => createMarketDetails()),
-		createSecurityPool: createSecurityPool ?? mock(async () => ({
-			deployPoolHash: '0x0' as Hash,
-			questionId: '0x0b',
-			securityPoolAddress: zeroAddress,
-		} as SecurityPoolCreationResult)),
+		createSecurityPool:
+			createSecurityPool ??
+			mock(
+				async () =>
+					({
+						deployPoolHash: '0x0' as Hash,
+						questionId: '0x0b',
+						securityPoolAddress: zeroAddress,
+						securityMultiplier: 2n,
+						universeId: 0n,
+					}) as SecurityPoolCreationResult,
+			),
 		originSecurityPoolExists: originSecurityPoolExists ?? mock(async () => false),
 	}))
 
@@ -87,11 +93,7 @@ function requireState(state: UseSecurityPoolCreationState | undefined): UseSecur
 	return state
 }
 
-function createHarness(
-	useSecurityPoolCreation: UseSecurityPoolCreation,
-	props: Parameters<UseSecurityPoolCreation>[0],
-	onRender: (state: UseSecurityPoolCreationState) => void,
-) {
+function createHarness(useSecurityPoolCreation: UseSecurityPoolCreation, props: Parameters<UseSecurityPoolCreation>[0], onRender: (state: UseSecurityPoolCreationState) => void) {
 	return function SecurityPoolCreationHarness() {
 		const state = useSecurityPoolCreation(props)
 		onRender(state)
@@ -314,6 +316,8 @@ describe('useSecurityPoolCreation', () => {
 				deployPoolHash: '0xabc' as Hash,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
+				securityMultiplier: 2n,
+				universeId: 0n,
 			} as SecurityPoolCreationResult
 		})
 		setupContractMocks({
@@ -418,10 +422,13 @@ describe('useSecurityPoolCreation', () => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
 		})
 
-		let firstCreate: Promise<void>
+		let firstCreate: Promise<void> | undefined
 		await act(() => {
 			firstCreate = requireState(state).createPool()
 		})
+		if (firstCreate === undefined) {
+			throw new Error('Expected createPool promise')
+		}
 		expect(requireState(state).securityPoolCreating).toBe(true)
 
 		await act(async () => {
@@ -436,6 +443,8 @@ describe('useSecurityPoolCreation', () => {
 			deployPoolHash: '0xabc',
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
+			securityMultiplier: 2n,
+			universeId: 0n,
 		})
 		await firstCreate
 		expect(createdCount).toBe(1)

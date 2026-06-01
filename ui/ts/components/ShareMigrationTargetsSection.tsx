@@ -53,7 +53,7 @@ function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string
 		if (label === undefined)
 			try {
 				label = formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex)
-			} catch {
+			} catch (_error) {
 				label = `Malformed (${outcomeIndex.toString()})`
 			}
 		return {

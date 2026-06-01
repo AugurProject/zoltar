@@ -13,4 +13,3 @@ void describe('security pool lifecycle label', () => {
 		expect(getSecurityPoolLifecycleLabel('forkTruthAuction')).toBe('Truth Auction')
 	})
 })
-

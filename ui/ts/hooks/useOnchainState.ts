@@ -43,7 +43,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 			const chainId = await chainIdPromise
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId })
-		} catch {
+		} catch (_error) {
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId: resolvedFallbackChainId })
 		}
@@ -87,7 +87,7 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 			currentBlockNumber: typeof block.number === 'bigint' ? block.number : undefined,
 			currentTimestamp: typeof block.timestamp === 'bigint' ? block.timestamp : undefined,
 		}
-	} catch {
+	} catch (_error) {
 		return {
 			currentBlockNumber: undefined,
 			currentTimestamp: undefined,

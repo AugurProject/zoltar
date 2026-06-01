@@ -21,7 +21,7 @@ export function useCopyToClipboard() {
 				copied.value = false
 				copyResetTimeout.current = undefined
 			}, 1200)
-		} catch {
+		} catch (_error) {
 			copied.value = false
 			if (copyResetTimeout.current !== undefined) {
 				window.clearTimeout(copyResetTimeout.current)

@@ -117,7 +117,7 @@ export function TradingSection({
 			.map(value => value.trim())
 			.filter(value => value !== '')
 			.map(value => BigInt(value))
-	} catch {
+	} catch (_error) {
 		selectedTargetOutcomeIndexes = []
 	}
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))

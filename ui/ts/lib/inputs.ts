@@ -32,7 +32,7 @@ export function parseOptionalBigIntInput(value: string) {
 
 	try {
 		return BigInt(trimmed)
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }

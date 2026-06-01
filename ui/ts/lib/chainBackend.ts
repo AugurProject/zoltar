@@ -78,7 +78,7 @@ export function normalizeAccount(value: unknown): Address | undefined {
 	if (typeof value !== 'string') return undefined
 	try {
 		return getAddress(value)
-	} catch {
+	} catch (_error) {
 		return undefined
 	}
 }
@@ -117,7 +117,7 @@ export function createInjectedBackend(): ChainBackend {
 			let result: unknown
 			try {
 				result = await ethereum.request({ method: 'eth_chainId' })
-			} catch {
+			} catch (_error) {
 				return MAINNET_NETWORK_PROFILE.chainIdHex
 			}
 			return typeof result === 'string' ? result : MAINNET_NETWORK_PROFILE.chainIdHex

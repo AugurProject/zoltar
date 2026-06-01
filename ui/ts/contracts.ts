@@ -149,7 +149,7 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 				operationId: decodedLog.args.operationId,
 				success: decodedLog.args.success,
 			} satisfies StagedOracleExecutionResult
-		} catch {
+		} catch (_error) {
 			continue
 		}
 	}

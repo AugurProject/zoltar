@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses } from '../simulation/bootstrap.js'
 import { type Address, getAddress, getCreateAddress, toHex } from 'viem'
@@ -10,9 +10,16 @@ const MOCK_PRIMARY_ACCOUNT = getAddress('0x0000000000000000000000000000000000000
 const MOCK_SECONDARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a2')
 
 type MemoryStorageCall = {
-    address: string
-    index: string
-    value: string
+	address: string
+	index: string
+	value: string
+}
+
+function createBaselineProfile(overrides: Partial<NetworkProfile> = {}): NetworkProfile {
+	return {
+		...MAINNET_NETWORK_PROFILE,
+		...overrides,
+	}
 }
 
 function createMockedBootstrapDependencies({ accounts, scenario, profile }: { accounts: readonly string[]; scenario: 'security-pool' | 'securitypoolx2'; profile: NetworkProfile }) {
@@ -39,29 +46,24 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			deployed: false,
 		},
 	]
-	const deployedCodes = new Map<string, string>([
-		[deployments[0].address, '0x01'],
-	])
+	const poolAddresses: Address[] = [getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000b2')]
+	const firstDeploymentAddress = deployments[0]?.address ?? getAddress('0x00000000000000000000000000000000000000a1')
+	const primaryPoolAddress = poolAddresses[0] ?? getAddress('0x00000000000000000000000000000000000000b1')
+	const secondaryPoolAddress = poolAddresses[1] ?? getAddress('0x00000000000000000000000000000000000000b2')
+	const deployedCodes = new Map<string, string>([[firstDeploymentAddress, '0x01']])
 	const managerByPool = new Map<Address, Address>()
 	const openOracleByManager = new Map<Address, Address>()
-	const managerToPool = new Map<Address, string>()
-	const poolAddresses: Address[] = [
-		getAddress('0x00000000000000000000000000000000000000b1'),
-		getAddress('0x00000000000000000000000000000000000000b2'),
-	]
-	const vaultAddressByPool: Record<string, Address[]> = scenario === 'security-pool'
-		? {
-				[poolAddresses[0]]: [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT)],
-			}
-		: {
-				[poolAddresses[0]]: [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT), getAddress(accounts[1] ?? MOCK_SECONDARY_ACCOUNT)],
-				[poolAddresses[1]]: [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT), getAddress(accounts[1] ?? MOCK_SECONDARY_ACCOUNT)],
-			}
-	const poolPlan = scenario === 'security-pool'
-		? [{ question: 'Will this resolve?' }]
-		: [{ question: 'Will this resolve? (securitypoolx2 #1)' }, { question: 'Will this resolve? (securitypoolx2 #2)' }]
-	const repDeposits: Record<string, Record<string, bigint>> = {}
-	const securityBondAllowances: Record<string, Record<string, bigint>> = {}
+	const managerToPool = new Map<Address, Address>()
+	const vaultAddressByPool: Record<Address, Address[]> = {}
+	if (scenario === 'security-pool') {
+		vaultAddressByPool[primaryPoolAddress] = [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT)]
+	} else {
+		vaultAddressByPool[primaryPoolAddress] = [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT), getAddress(accounts[1] ?? MOCK_SECONDARY_ACCOUNT)]
+		vaultAddressByPool[secondaryPoolAddress] = [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT), getAddress(accounts[1] ?? MOCK_SECONDARY_ACCOUNT)]
+	}
+	const poolPlan = scenario === 'security-pool' ? [{ question: 'Will this resolve?' }] : [{ question: 'Will this resolve? (securitypoolx2 #1)' }, { question: 'Will this resolve? (securitypoolx2 #2)' }]
+	const repDeposits: Record<Address, Record<Address, bigint>> = {}
+	const securityBondAllowances: Record<Address, Record<Address, bigint>> = {}
 	const pendingOperations: Record<Address, { targetVault: Address; amount: bigint; operationId: bigint }> = {}
 	let marketCount = 0
 	let securityPoolCount = 0
@@ -102,8 +104,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		deploymentCodeRequests: [] as string[],
 	}
 
-	const getPoolAddressForMarket = (index: number) => poolAddresses[index] ?? poolAddresses[0]
-	const getManagerForPool = (poolAddress: string) => {
+	const getPoolAddressForMarket = (index: number): Address => poolAddresses[index] ?? primaryPoolAddress
+	const getManagerForPool = (poolAddress: Address) => {
 		const existingManager = managerByPool.get(poolAddress)
 		if (existingManager !== undefined) return existingManager
 		const nextManager = getAddress(`0x00000000000000000000000000000000000001${poolAddress.slice(-2)}`)
@@ -155,9 +157,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				managerAddress,
 			} as never
 		}),
-		depositRepToSecurityPool: mock(async (client: { account?: Address }, poolAddress: string, amount: bigint) => {
+		depositRepToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint) => {
 			state.callLog.depositRepToSecurityPool += 1
-			const vaultAddress = vaultAddressByPool[poolAddress]?.find(vaultAddressCandidate => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
+			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
 			if (vaultAddress !== undefined) {
 				repDeposits[poolAddress] ??= {}
 				repDeposits[poolAddress][vaultAddress] = amount
@@ -167,26 +169,28 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				hash: '0x01',
 			} as never
 		}),
-		getDeploymentSteps: mock(() => deployments.map(step => ({
-			id: step.id,
-			label: step.label,
-			address: step.address,
-			deploy: async () => {
-				state.callLog.setSecurityPoolDeployCalls += 1
-				deployedCodes.set(step.address, '0x01')
-				return {
-					address: step.address,
-					action: 'none',
-					hash: `0x${Math.random().toString(16).slice(2)}`,
-				} as never
-			},
-		}))),
+		getDeploymentSteps: mock(() =>
+			deployments.map(step => ({
+				id: step.id,
+				label: step.label,
+				address: step.address,
+				deploy: async () => {
+					state.callLog.setSecurityPoolDeployCalls += 1
+					deployedCodes.set(step.address, '0x01')
+					return {
+						address: step.address,
+						action: 'none',
+						hash: `0x${Math.random().toString(16).slice(2)}`,
+					} as never
+				},
+			})),
+		),
 		loadAllSecurityPools: mock(async () => {
 			state.callLog.loadAllSecurityPools += 1
 			return poolPlan.map((_pool, index) => {
 				const securityPoolAddress = getPoolAddressForMarket(index)
 				const vaultAddresses = vaultAddressByPool[securityPoolAddress] ?? []
-				const vaultRows = vaultAddresses.map(vaultAddress => ({
+				const vaultRows: Array<{ vaultAddress: Address; repDepositShare: bigint; securityBondAllowance: bigint }> = vaultAddresses.map(vaultAddress => ({
 					vaultAddress,
 					repDepositShare: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
 					securityBondAllowance: securityBondAllowances[securityPoolAddress]?.[vaultAddress] ?? 0n,
@@ -194,8 +198,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				return {
 					securityPoolAddress,
 					vaultCount: BigInt(vaultRows.length),
-					totalRepDeposit: vaultRows.reduce((sum, row) => sum + row.repDepositShare, 0n),
-					totalSecurityBondAllowance: vaultRows.reduce((sum, row) => sum + row.securityBondAllowance, 0n),
+					totalRepDeposit: vaultRows.reduce<bigint>((sum, row) => sum + row.repDepositShare, 0n),
+					totalSecurityBondAllowance: vaultRows.reduce<bigint>((sum, row) => sum + row.securityBondAllowance, 0n),
 					vaults: vaultRows,
 				} as never
 			})
@@ -238,7 +242,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				isDistributed: true,
 			} as never
 		}),
-		loadSecurityVaultDetails: mock(async (_client: never, securityPoolAddress: string, vaultAddress: string) => {
+		loadSecurityVaultDetails: mock(async (_client: never, securityPoolAddress: Address, vaultAddress: Address) => {
 			state.callLog.loadSecurityVaultDetails += 1
 			return {
 				currentRetentionRate: 0n,
@@ -249,7 +253,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				repToken: profile.genesisRepTokenAddress,
 				securityBondAllowance: securityBondAllowances[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				securityPoolAddress,
-				totalSecurityBondAllowance: Object.values(securityBondAllowances[securityPoolAddress] ?? {}).reduce((sum, amount) => sum + amount, 0n),
+				totalSecurityBondAllowance: Object.values(securityBondAllowances[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
 				unpaidEthFees: 0n,
 				universeId: 0n,
 				vaultAddress,
@@ -283,90 +287,90 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		}),
 	}))
 
-    mock.module('../simulation/clock.js', () => ({
-        advanceSimulationTime: async () => undefined,
-        getSimulationChainTimestamp: async () => 1_000n,
-        initializeSimulationClock: async () => 1_000n,
-    }))
+	mock.module('../simulation/clock.js', () => ({
+		advanceSimulationTime: async () => undefined,
+		getSimulationChainTimestamp: async () => 1_000n,
+		initializeSimulationClock: async () => 1_000n,
+	}))
 
-    const memoryClient = {
-        getBlock: async () => ({ timestamp: 1_000n }),
-        getStorageAt: async () => toHex(0n, { size: 32 }),
-        setStorageAt: async () => undefined,
-        getCode: async ({ address }: { address: string }) => {
-            state.deploymentCodeRequests.push(address)
-            return deployedCodes.get(address) ?? '0x'
-        },
-        setCode: async ({ address, bytecode }: { address: string; bytecode: string }) => {
-            state.callLog.setSimulationCodeCalls += 1
-            deployedCodes.set(address, bytecode === '' ? '0x' : '0x01')
-        },
-        impersonateAccount: async () => undefined,
-        setBalance: async () => undefined,
-        tevmReady: async () => undefined,
-    } as never
+	const memoryClient = {
+		getBlock: async () => ({ timestamp: 1_000n }),
+		getStorageAt: async () => toHex(0n, { size: 32 }),
+		setStorageAt: async () => undefined,
+		getCode: async ({ address }: { address: Address }) => {
+			state.deploymentCodeRequests.push(address)
+			return deployedCodes.get(address) ?? '0x'
+		},
+		setCode: async ({ address, bytecode }: { address: Address; bytecode: string }) => {
+			state.callLog.setSimulationCodeCalls += 1
+			deployedCodes.set(address, bytecode === '' ? '0x' : '0x01')
+		},
+		impersonateAccount: async () => undefined,
+		setBalance: async () => undefined,
+		tevmReady: async () => undefined,
+	} as never
 
-	const writeCalls: Array<{ account: string; to: string | undefined; value: bigint | undefined }> = []
-	const createWriteClient = (accountAddress: string) => ({
-		account: accountAddress,
-		sendTransaction: async (request: { to?: string; value?: bigint }) => {
-			writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-			return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-        },
-        waitForTransactionReceipt: async () => ({ status: 'success' }),
-        getCode: async () => '0x01',
-        writeContract: async ({ address }: { address: string }) => {
-            state.callLog.writeContract += 1
-            const pending = pendingOperations[address]
-            if (pending !== undefined) {
-                settleSecurityBondAllowance(address, pending.targetVault)
-            }
-            return '0x01'
-        },
-    }) as never
+	const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+	const createWriteClient = (accountAddress: Address) =>
+		({
+			account: accountAddress,
+			sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+				writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+				return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+			},
+			waitForTransactionReceipt: async () =>
+				({
+					status: 'success',
+					blockHash: '0x0',
+					blockNumber: 0n,
+					contractAddress: null,
+					cumulativeGasUsed: 0n,
+					from: accountAddress,
+					gasUsed: 0n,
+					logs: [],
+					logsBloom: '0x',
+					to: accountAddress,
+					transactionHash: `0x${'0'.repeat(64)}`,
+					transactionIndex: 0n,
+					type: 'eip1559',
+				}) as never,
+			getCode: async () => '0x01',
+			writeContract: async ({ address }: { address: Address }) => {
+				state.callLog.writeContract += 1
+				const pending = pendingOperations[address]
+				if (pending !== undefined) {
+					settleSecurityBondAllowance(address, pending.targetVault)
+				}
+				return '0x01'
+			},
+		}) as never
 
-    return { createWriteClient, memoryClient, state, writeCalls }
-}
-
-function createBaselineProfile() {
-    return {
-        chainId: '1',
-        genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f2'),
-        id: 'mainnet',
-        label: 'Mainnet',
-        repPrices: {
-            ethUsd: 1800n,
-            repEth: 0n,
-            repUsdc: 0n,
-        },
-        rpcUrls: [],
-        wethAddress: getAddress('0x00000000000000000000000000000000000000f3'),
-    } as const
+	return { createWriteClient, memoryClient, state, writeCalls }
 }
 
 function createBootstrapMemoryClient(
-    overrides: Partial<{
-    getBlock: () => Promise<{ timestamp: bigint }>
-    getStorageAt: (args: { address: string; index: string }) => Promise<string>
-    setStorageAt: (payload: { address: string; index: string; value: string }) => Promise<void>
-    getCode: (args: { address: string }) => Promise<`0x${string}`>
-    tevmReady: () => Promise<void>
-    impersonateAccount: (args: { address: string }) => Promise<void>
-    setBalance: (args: { address: string; value: bigint }) => Promise<void>
-    setCode: (args: { address: string; bytecode: string }) => Promise<void>
-    }>,
+	overrides: Partial<{
+		getBlock: () => Promise<{ timestamp: bigint }>
+		getStorageAt: (args: { address: string; index: string }) => Promise<string>
+		setStorageAt: (payload: { address: string; index: string; value: string }) => Promise<void>
+		getCode: (args: { address: string }) => Promise<`0x${string}`>
+		tevmReady: () => Promise<void>
+		impersonateAccount: (args: { address: string }) => Promise<void>
+		setBalance: (args: { address: string; value: bigint }) => Promise<void>
+		setCode: (args: { address: string; bytecode: string }) => Promise<void>
+	}> = {},
 ) {
-    return {
-        getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
-        getStorageAt: async () => toHex(0n, { size: 32 }),
-        setStorageAt: async () => undefined,
-        getCode: async () => '0x01',
-        tevmReady: async () => undefined,
-        impersonateAccount: async () => undefined,
-        setBalance: async () => undefined,
-        setCode: async () => undefined,
-        ...overrides,
-    } as never
+	return {
+		getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
+		getStorageAt: async () => toHex(0n, { size: 32 }),
+		setStorageAt: async () => undefined,
+		getCode: async () => '0x01',
+		tevmReady: async () => undefined,
+		impersonateAccount: async () => undefined,
+		setBalance: async () => undefined,
+		setCode: async () => undefined,
+		...overrides,
+	} as never
 }
 
 describe('simulation bootstrap', () => {
@@ -374,333 +378,298 @@ describe('simulation bootstrap', () => {
 		mock.restore()
 	})
 
-    test('predicts simulation token addresses from account nonces', () => {
-        const profile = predictSimulationTokenAddresses(MOCK_PRIMARY_ACCOUNT)
+	test('predicts simulation token addresses from account nonces', () => {
+		const profile = predictSimulationTokenAddresses(MOCK_PRIMARY_ACCOUNT)
 
-        expect(profile.genesisRepTokenAddress).toBe(getCreateAddress({ from: MOCK_PRIMARY_ACCOUNT, nonce: 0n }))
-        expect(profile.wethAddress).toBe(MAINNET_WETH_ADDRESS)
-    })
+		expect(profile.genesisRepTokenAddress).toBe(getCreateAddress({ from: MOCK_PRIMARY_ACCOUNT, nonce: 0n }))
+		expect(profile.wethAddress).toBe(MAINNET_WETH_ADDRESS)
+	})
 
-    test('mints simulation REP with a positive-amount guard', async () => {
-        const memoryClient = { getBlock: async () => ({ timestamp: 0n }) } as never
-    	await expect(
-    		mintSimulationGenesisRep({
-    		    accountAddress: MOCK_PRIMARY_ACCOUNT,
-    		    amount: 0n,
-    		    memoryClient,
-    		    repAddress: getAddress('0x00000000000000000000000000000000000000b1'),
-    		    zoltarAddress: getAddress('0x00000000000000000000000000000000000000b2'),
-            }),
-        ).rejects.toThrow('Simulation REP mint amount must be greater than zero')
-    })
+	test('mints simulation REP with a positive-amount guard', async () => {
+		const memoryClient = { getBlock: async () => ({ timestamp: 0n }) } as never
+		await expect(
+			mintSimulationGenesisRep({
+				accountAddress: MOCK_PRIMARY_ACCOUNT,
+				amount: 0n,
+				memoryClient,
+				repAddress: getAddress('0x00000000000000000000000000000000000000b1'),
+				zoltarAddress: getAddress('0x00000000000000000000000000000000000000b2'),
+			}),
+		).rejects.toThrow('Simulation REP mint amount must be greater than zero')
+	})
 
-    test('updates mocked REP balances and skips Zoltar bootstrap when token code is missing', async () => {
-        const repAddress = getAddress('0x00000000000000000000000000000000000000d1')
-        const zoltarAddress = getAddress('0x00000000000000000000000000000000000000d2')
-        const storageWrites: MemoryStorageCall[] = []
-        const getStorageAt = mock(async () => '0x')
-        const setStorageAt = mock(async (payload: { address: string; index: string; value: string }) => {
-            storageWrites.push(payload)
-        })
-        const memoryClient = {
-            getStorageAt,
-            setStorageAt,
-            getCode: async () => '0x',
-        } as never
+	test('updates mocked REP balances and skips Zoltar bootstrap when token code is missing', async () => {
+		const repAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const storageWrites: MemoryStorageCall[] = []
+		const getStorageAt = mock(async () => '0x')
+		const setStorageAt = mock(async (payload: { address: string; index: string; value: string }) => {
+			storageWrites.push(payload)
+		})
+		const memoryClient = {
+			getStorageAt,
+			setStorageAt,
+			getCode: async () => '0x',
+		} as never
 
-        await mintSimulationGenesisRep({
-            accountAddress: MOCK_PRIMARY_ACCOUNT,
-            amount: 11n,
-            memoryClient,
-            repAddress,
-            zoltarAddress,
-        })
+		await mintSimulationGenesisRep({
+			accountAddress: MOCK_PRIMARY_ACCOUNT,
+			amount: 11n,
+			memoryClient,
+			repAddress,
+			zoltarAddress,
+		})
 
-        const repWrites = storageWrites.filter(write => write.address === repAddress)
-        const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
-        const repValues = repWrites.map(write => BigInt(write.value))
+		const repWrites = storageWrites.filter(write => write.address === repAddress)
+		const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
+		const repValues = repWrites.map(write => BigInt(write.value))
 
-        expect(repWrites).toHaveLength(3)
-        expect(new Set(repValues)).toEqual(new Set([11n]))
-        expect(zoltarWrites).toHaveLength(0)
-    })
+		expect(repWrites).toHaveLength(3)
+		expect(new Set(repValues)).toEqual(new Set([11n]))
+		expect(zoltarWrites).toHaveLength(0)
+	})
 
-    test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
-        const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
-        const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
-        const storageWrites: MemoryStorageCall[] = []
-        const memoryClient = {
-            getStorageAt: async () => toHex(0n, { size: 32 }),
-            setStorageAt: async (payload: { address: string; index: string; value: string }) => {
-                storageWrites.push(payload)
-            },
-            getCode: async ({ address }: { address: string }) => (address.toLowerCase() === repAddress.toLowerCase() ? '0x01' : '0x01'),
-        } as never
+	test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
+		const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
+		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
+		const storageWrites: MemoryStorageCall[] = []
+		const memoryClient = {
+			getStorageAt: async () => toHex(0n, { size: 32 }),
+			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
+				storageWrites.push(payload)
+			},
+			getCode: async ({ address }: { address: string }) => (address.toLowerCase() === repAddress.toLowerCase() ? '0x01' : '0x01'),
+		} as never
 
-        await mintSimulationGenesisRep({
-            accountAddress: MOCK_PRIMARY_ACCOUNT,
-            amount: 11n,
-            memoryClient,
-            repAddress,
-            zoltarAddress,
-        })
+		await mintSimulationGenesisRep({
+			accountAddress: MOCK_PRIMARY_ACCOUNT,
+			amount: 11n,
+			memoryClient,
+			repAddress,
+			zoltarAddress,
+		})
 
-        const repWrites = storageWrites.filter(write => write.address === repAddress)
-        const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
+		const repWrites = storageWrites.filter(write => write.address === repAddress)
+		const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
 
-        expect(repWrites).toHaveLength(3)
-        expect(zoltarWrites).toHaveLength(2)
-    })
+		expect(repWrites).toHaveLength(3)
+		expect(zoltarWrites).toHaveLength(2)
+	})
 
-    test('bootstraps baseline simulation chain using seeded progress and mocked clients', async () => {
-        const profile: NetworkProfile = {
-            id: 'mainnet',
-            label: 'Mainnet',
-            chainId: '1',
-            rpcUrls: ['https://ethereum.dark.florist'],
-            repPrices: {
-                ethUsd: 1800n,
-                repUsdc: 0n,
-                repEth: 0n,
-            },
-            genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f2'),
-            wethAddress: getAddress('0x00000000000000000000000000000000000000f3'),
-        }
-        const progressCalls: string[] = []
-        const progress = async (payload: { label: string }) => {
-            progressCalls.push(payload.label)
-        }
-        const writeCalls: Array<{ account: string; to: string | undefined; value: bigint | undefined }> = []
-        const memoryClient = {
-            tevmReady: async () => undefined,
-            getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
-            getStorageAt: async () => toHex(0n, { size: 32 }),
-            setStorageAt: async () => undefined,
-            setCode: async () => undefined,
-            impersonateAccount: async () => undefined,
-            setBalance: async () => undefined,
-            getCode: async () => '0x01',
-        } as never
-        const createWriteClient = (accountAddress: string) => ({
-            sendTransaction: async (request: { to?: string; value?: bigint }) => {
-                writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-                return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-            },
-            waitForTransactionReceipt: async () => ({ status: 'success' }),
-            getCode: async () => '0x01',
-        }) as never
+	test('bootstraps baseline simulation chain using seeded progress and mocked clients', async () => {
+		const profile = createBaselineProfile()
+		const progressCalls: string[] = []
+		const progress = async ({ label }: { label: string; value: number }) => {
+			progressCalls.push(label)
+		}
+		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+		const memoryClient = {
+			tevmReady: async () => undefined,
+			getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
+			getStorageAt: async () => toHex(0n, { size: 32 }),
+			setStorageAt: async () => undefined,
+			setCode: async () => undefined,
+			impersonateAccount: async () => undefined,
+			setBalance: async () => undefined,
+			getCode: async () => '0x01',
+		} as never
+		const createWriteClient = (accountAddress: Address) =>
+			({
+				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+				},
+				waitForTransactionReceipt: async () =>
+					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				getCode: async () => '0x01',
+			}) as never
 
-        await bootstrapSimulationChain({
-            accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
-            createReadClient: () => ({} as never),
-            createWriteClient,
-            memoryClient,
-            onProgress: async payload => {
-                await progress(payload)
-            },
-            primaryAccount: MOCK_PRIMARY_ACCOUNT,
-            profile,
-            scenario: 'baseline',
-        })
+		await bootstrapSimulationChain({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			createReadClient: () => ({}) as never,
+			createWriteClient,
+			memoryClient,
+			onProgress: progress,
+			primaryAccount: MOCK_PRIMARY_ACCOUNT,
+			profile,
+			scenario: 'baseline',
+		})
 
-        expect(progressCalls).toContain('Initializing simulation engine')
-        expect(progressCalls).toContain('Preparing simulation chain')
-        expect(progressCalls).toContain('Using baseline simulation scenario')
-        expect(progressCalls).toContain('Simulation scenario ready')
-        expect(writeCalls.length).toBeGreaterThan(1)
-        expect(writeCalls.some(call => call.value !== undefined)).toBe(true)
-    })
+		expect(progressCalls).toContain('Initializing simulation engine')
+		expect(progressCalls).toContain('Preparing simulation chain')
+		expect(progressCalls).toContain('Using baseline simulation scenario')
+		expect(progressCalls).toContain('Simulation scenario ready')
+		expect(writeCalls.length).toBeGreaterThan(1)
+		expect(writeCalls.some(call => call.value !== undefined)).toBe(true)
+	})
 
-    test('rejects security-pool bootstrap when the primary QA account is missing', async () => {
-        const memoryClient = createBootstrapMemoryClient()
-        const writeCalls: Array<{ account: string; to: string | undefined; value: bigint | undefined }> = []
-        const createWriteClient = (accountAddress: string) => ({
-            sendTransaction: async (request: { to?: string; value?: bigint }) => {
-                writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-                return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-            },
-            waitForTransactionReceipt: async () => ({ status: 'success' }),
-            getCode: async () => '0x01',
-        }) as never
+	test('rejects security-pool bootstrap when the primary QA account is missing', async () => {
+		const memoryClient = createBootstrapMemoryClient()
+		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+		const createWriteClient = (accountAddress: Address) =>
+			({
+				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+				},
+				waitForTransactionReceipt: async () =>
+					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				getCode: async () => '0x01',
+			}) as never
 
-        await expect(
-            bootstrapSimulationChain({
-                accounts: [],
-                createReadClient: () => ({ kind: 'read-client' } as never),
-                createWriteClient,
-                memoryClient,
-                primaryAccount: MOCK_PRIMARY_ACCOUNT,
-                onProgress: () => undefined,
-                profile: {
-                    chainId: '1',
-                    genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f2'),
-                    id: 'mainnet',
-                    label: 'Mainnet',
-                    repPrices: {
-                        ethUsd: 1800n,
-                        repEth: 0n,
-                        repUsdc: 0n,
-                    },
-                    rpcUrls: [],
-                    wethAddress: getAddress('0x00000000000000000000000000000000000000f3'),
-                },
-                scenario: 'security-pool',
-            }),
-        ).rejects.toThrow('Expected seeded simulation QA account A1')
-    })
+		await expect(
+			bootstrapSimulationChain({
+				accounts: [],
+				createReadClient: () => ({ kind: 'read-client' }) as never,
+				createWriteClient,
+				memoryClient,
+				primaryAccount: MOCK_PRIMARY_ACCOUNT,
+				onProgress: () => undefined,
+				profile: createBaselineProfile(),
+				scenario: 'security-pool',
+			}),
+		).rejects.toThrow('Expected seeded simulation QA account A1')
+	})
 
-    test('rejects securitypoolx2 bootstrap when the secondary QA account is missing', async () => {
-        const memoryClient = createBootstrapMemoryClient()
-        const writeCalls: Array<{ account: string; to: string | undefined; value: bigint | undefined }> = []
-        const createWriteClient = (accountAddress: string) => ({
-            sendTransaction: async (request: { to?: string; value?: bigint }) => {
-                writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-                return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-            },
-            waitForTransactionReceipt: async () => ({ status: 'success' }),
-            getCode: async () => '0x01',
-        }) as never
+	test('rejects securitypoolx2 bootstrap when the secondary QA account is missing', async () => {
+		const memoryClient = createBootstrapMemoryClient()
+		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+		const createWriteClient = (accountAddress: Address) =>
+			({
+				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+				},
+				waitForTransactionReceipt: async () =>
+					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				getCode: async () => '0x01',
+			}) as never
 
-        await expect(
-            bootstrapSimulationChain({
-                accounts: [MOCK_PRIMARY_ACCOUNT],
-                createReadClient: () => ({ kind: 'read-client' } as never),
-                createWriteClient,
-                memoryClient,
-                primaryAccount: MOCK_PRIMARY_ACCOUNT,
-                onProgress: () => undefined,
-                profile: {
-                    chainId: '1',
-                    genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f2'),
-                    id: 'mainnet',
-                    label: 'Mainnet',
-                    repPrices: {
-                        ethUsd: 1800n,
-                        repEth: 0n,
-                        repUsdc: 0n,
-                    },
-                    rpcUrls: [],
-                    wethAddress: getAddress('0x00000000000000000000000000000000000000f3'),
-                },
-                scenario: 'securitypoolx2',
-            }),
-        ).rejects.toThrow('Expected simulation QA account B2 for securitypoolx2')
-    })
+		await expect(
+			bootstrapSimulationChain({
+				accounts: [MOCK_PRIMARY_ACCOUNT],
+				createReadClient: () => ({ kind: 'read-client' }) as never,
+				createWriteClient,
+				memoryClient,
+				primaryAccount: MOCK_PRIMARY_ACCOUNT,
+				onProgress: () => undefined,
+				profile: createBaselineProfile(),
+				scenario: 'securitypoolx2',
+			}),
+		).rejects.toThrow('Expected simulation QA account B2 for securitypoolx2')
+	})
 
-    test('boots deployed simulation scenario when all contracts are already present', async () => {
-        const memoryClient = createBootstrapMemoryClient({
-            getCode: async () => '0x01',
-        })
-        const progressCalls: string[] = []
-        const writeCalls: Array<{ account: string; to: string | undefined; value: bigint | undefined }> = []
-        const createWriteClient = (accountAddress: string) => ({
-            sendTransaction: async (request: { to?: string; value?: bigint }) => {
-                writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-                return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-            },
-            waitForTransactionReceipt: async () => ({ status: 'success' }),
-            getCode: async () => '0x01',
-        }) as never
+	test('boots deployed simulation scenario when all contracts are already present', async () => {
+		const memoryClient = createBootstrapMemoryClient({
+			getCode: async () => '0x01',
+		})
+		const progressCalls: string[] = []
+		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+		const createWriteClient = (accountAddress: Address) =>
+			({
+				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+				},
+				waitForTransactionReceipt: async () =>
+					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				getCode: async () => '0x01',
+			}) as never
 
-        await bootstrapSimulationChain({
-            accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
-            createReadClient: () => ({ kind: 'read-client' } as never),
-            createWriteClient,
-            memoryClient,
-            primaryAccount: MOCK_PRIMARY_ACCOUNT,
-            onProgress: payload => progressCalls.push(payload.label),
-            profile: {
-                chainId: '1',
-                genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f2'),
-                id: 'mainnet',
-                label: 'Mainnet',
-                repPrices: {
-                    ethUsd: 1800n,
-                    repEth: 0n,
-                    repUsdc: 0n,
-                },
-                rpcUrls: [],
-                wethAddress: getAddress('0x00000000000000000000000000000000000000f3'),
-            },
-            scenario: 'deployed',
-        })
+		await bootstrapSimulationChain({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			createReadClient: () => ({ kind: 'read-client' }) as never,
+			createWriteClient,
+			memoryClient,
+			primaryAccount: MOCK_PRIMARY_ACCOUNT,
+			onProgress: payload => {
+				progressCalls.push(payload.label)
+			},
+			profile: createBaselineProfile(),
+			scenario: 'deployed',
+		})
 
-        expect(progressCalls).toContain('Initializing simulation engine')
-        expect(progressCalls).toContain('Simulation scenario ready')
-        expect(writeCalls.length).toBeGreaterThan(1)
-    })
+		expect(progressCalls).toContain('Initializing simulation engine')
+		expect(progressCalls).toContain('Simulation scenario ready')
+		expect(writeCalls.length).toBeGreaterThan(1)
+	})
 
-    test('throws when simulation initialization times out', async () => {
-        const originalSetTimeout = globalThis.setTimeout
-        const memoryClient = createBootstrapMemoryClient({
-            tevmReady: async () => new Promise(() => undefined),
-            getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
-        })
-        const createWriteClient = () =>
-            ({
-                sendTransaction: async () => '0x01',
-                waitForTransactionReceipt: async () => ({ status: 'success' }),
-                getCode: async () => '0x01',
-            }) as never
+	test('throws when simulation initialization times out', async () => {
+		const originalSetTimeout = globalThis.setTimeout
+		const memoryClient = createBootstrapMemoryClient({
+			tevmReady: async () => new Promise(() => undefined),
+			getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
+		})
+		const createWriteClient = () =>
+			({
+				sendTransaction: async () => '0x01',
+				waitForTransactionReceipt: async () =>
+					({
+						status: 'success',
+						blockHash: '0x0',
+						blockNumber: 0n,
+						contractAddress: null,
+						cumulativeGasUsed: 0n,
+						from: MOCK_PRIMARY_ACCOUNT,
+						gasUsed: 0n,
+						logs: [],
+						logsBloom: '0x',
+						to: MOCK_PRIMARY_ACCOUNT,
+						transactionHash: `0x${'0'.repeat(64)}`,
+						transactionIndex: 0n,
+						type: 'eip1559',
+					}) as never,
+				getCode: async () => '0x01',
+			}) as never
 
-        globalThis.setTimeout = ((handler: TimerHandler) => {
-            if (typeof handler === 'function') {
-                handler()
-            }
-            return 1 as ReturnType<typeof setTimeout>
-        }) as typeof globalThis.setTimeout
+		globalThis.setTimeout = ((handler: TimerHandler) => {
+			if (typeof handler === 'function') {
+				handler()
+			}
+			return 1 as unknown as ReturnType<typeof setTimeout>
+		}) as unknown as typeof globalThis.setTimeout
 
-        try {
-            await expect(
-                bootstrapSimulationChain({
-                    accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
-                    createReadClient: () => ({} as never),
-                    createWriteClient: createWriteClient,
-                    memoryClient,
-                    onProgress: () => undefined,
-                    primaryAccount: MOCK_PRIMARY_ACCOUNT,
-                    profile: {
-                        chainId: '1',
-                        genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f2'),
-                        id: 'mainnet',
-                        label: 'Mainnet',
-                        repPrices: {
-                            ethUsd: 1800n,
-                            repEth: 0n,
-                            repUsdc: 0n,
-                        },
-                        rpcUrls: [],
-                        wethAddress: getAddress('0x00000000000000000000000000000000000000f3'),
-                    },
-                    scenario: 'baseline',
-                }),
-            ).rejects.toThrow('Simulation engine initialization timed out')
-        } finally {
-            globalThis.setTimeout = originalSetTimeout
-        }
-    })
+		try {
+			await expect(
+				bootstrapSimulationChain({
+					accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+					createReadClient: () => ({}) as never,
+					createWriteClient: createWriteClient,
+					memoryClient,
+					onProgress: () => undefined,
+					primaryAccount: MOCK_PRIMARY_ACCOUNT,
+					profile: createBaselineProfile(),
+					scenario: 'baseline',
+				}),
+			).rejects.toThrow('Simulation engine initialization timed out')
+		} finally {
+			globalThis.setTimeout = originalSetTimeout
+		}
+	})
 
-    test('boots the security-pool simulation path with seeded pool construction and oracle report settling', async () => {
-        const profile = createBaselineProfile()
-        const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
-            accounts: [MOCK_PRIMARY_ACCOUNT],
-            scenario: 'security-pool',
-            profile,
-        })
+	test('boots the security-pool simulation path with seeded pool construction and oracle report settling', async () => {
+		const profile = createBaselineProfile()
+		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+			accounts: [MOCK_PRIMARY_ACCOUNT],
+			scenario: 'security-pool',
+			profile,
+		})
 
-        const { bootstrapSimulationChain } = await import(`../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
+		const { bootstrapSimulationChain } = await import(`../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
-        const progressCalls: string[] = []
-        await bootstrapSimulationChain({
-            accounts: [MOCK_PRIMARY_ACCOUNT],
-            createReadClient: () => ({} as never),
-            createWriteClient,
-            memoryClient,
-            onProgress: async payload => progressCalls.push(payload.label),
-            primaryAccount: MOCK_PRIMARY_ACCOUNT,
-            profile,
-            scenario: 'security-pool',
-        })
+		const progressCalls: string[] = []
+		await bootstrapSimulationChain({
+			accounts: [MOCK_PRIMARY_ACCOUNT],
+			createReadClient: () => ({}) as never,
+			createWriteClient,
+			memoryClient,
+			onProgress: async (payload: { label: string; value: number }) => {
+				progressCalls.push(payload.label)
+			},
+			primaryAccount: MOCK_PRIMARY_ACCOUNT,
+			profile,
+			scenario: 'security-pool',
+		})
 
 		expect(state.callLog.createMarket).toBe(1)
 		expect(state.callLog.createSecurityPool).toBe(1)
@@ -710,27 +679,27 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.settleOracleReport).toBe(1)
 		expect(state.callLog.submitInitialOracleReport).toBe(1)
 		expect(writeCalls.length).toBeGreaterThan(0)
-    })
+	})
 
-    test('boots the securitypoolx2 simulation path with secondary vault security-bond allowance execution', async () => {
-        const profile = createBaselineProfile()
-        const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
-            accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
-            scenario: 'securitypoolx2',
-            profile,
-        })
-        const { bootstrapSimulationChain } = await import(`../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
+	test('boots the securitypoolx2 simulation path with secondary vault security-bond allowance execution', async () => {
+		const profile = createBaselineProfile()
+		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			scenario: 'securitypoolx2',
+			profile,
+		})
+		const { bootstrapSimulationChain } = await import(`../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
-        await bootstrapSimulationChain({
-            accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
-            createReadClient: () => ({} as never),
-            createWriteClient,
-            memoryClient,
-            onProgress: async () => undefined,
-            primaryAccount: MOCK_PRIMARY_ACCOUNT,
-            profile,
-            scenario: 'securitypoolx2',
-        })
+		await bootstrapSimulationChain({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			createReadClient: () => ({}) as never,
+			createWriteClient,
+			memoryClient,
+			onProgress: async () => undefined,
+			primaryAccount: MOCK_PRIMARY_ACCOUNT,
+			profile,
+			scenario: 'securitypoolx2',
+		})
 
 		expect(state.callLog.createMarket).toBe(2)
 		expect(state.callLog.createSecurityPool).toBe(2)

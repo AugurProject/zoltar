@@ -2,18 +2,21 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { h } from 'preact'
 import { DeploymentSection } from '../components/DeploymentSection.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
+const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
+
 function createDeploymentStep(props: { id: DeploymentStatus['id']; deployed: boolean; dependencies?: DeploymentStatus['id'][]; label?: string }) {
+	const hash = props.id === 'proxyDeployer' ? ZERO_HASH : ('0x1234' as `0x${string}`)
+
 	return {
 		address: zeroAddress,
 		dependencies: props.dependencies ?? [],
-		deploy: async () => '0x0',
+		deploy: async () => hash,
 		deployed: props.deployed,
 		id: props.id,
 		label: props.label ?? props.id,
@@ -51,7 +54,7 @@ describe('DeploymentSection', () => {
 				}}
 			/>,
 		)
-		cleanupRendered = rendered.unmount
+		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.querySelector('span.badge')?.textContent).toBe('Deployed')
 		expect(rendered.container.textContent).toContain('Code found at expected address.')
@@ -61,18 +64,8 @@ describe('DeploymentSection', () => {
 
 	test('shows deployment progress for busy steps', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(
-			<DeploymentSection
-				title='Deployment'
-				steps={[deploymentStep]}
-				allSteps={[deploymentStep]}
-				accountAddress={zeroAddress}
-				busyStepId='multicall3'
-				isMainnet={true}
-				onDeploy={async () => undefined}
-			/>,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId='multicall3' isMainnet={true} onDeploy={async () => undefined} />)
+		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Deployment in progress.')
 		expectTransactionButtonDisabled(document.body, 'Deploying...')
@@ -80,18 +73,8 @@ describe('DeploymentSection', () => {
 
 	test('shows the connect-wallet branch when account is missing', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(
-			<DeploymentSection
-				title='Deployment'
-				steps={[deploymentStep]}
-				allSteps={[deploymentStep]}
-				accountAddress={undefined}
-				busyStepId={undefined}
-				isMainnet={true}
-				onDeploy={async () => undefined}
-			/>,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={undefined} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
+		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Connect wallet to continue.')
 		expectTransactionButtonDisabled(document.body, 'Deploy', 'Connect wallet to deploy this contract.')
@@ -99,18 +82,8 @@ describe('DeploymentSection', () => {
 
 	test('shows the network-guard branch when account is present but not on mainnet', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
-		const rendered = await renderIntoDocument(
-			<DeploymentSection
-				title='Deployment'
-				steps={[deploymentStep]}
-				allSteps={[deploymentStep]}
-				accountAddress={zeroAddress}
-				busyStepId={undefined}
-				isMainnet={false}
-				onDeploy={async () => undefined}
-			/>,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={false} onDeploy={async () => undefined} />)
+		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Switch to Ethereum mainnet.')
 		expectTransactionButtonDisabled(document.body, 'Deploy', 'Switch to Ethereum mainnet to deploy this contract.')
@@ -119,18 +92,8 @@ describe('DeploymentSection', () => {
 	test('shows blocked state while prerequisite step is missing', async () => {
 		const prerequisite = createDeploymentStep({ id: 'proxyDeployer', deployed: false, label: 'Proxy Deployer' })
 		const dependent = createDeploymentStep({ id: 'deploymentStatusOracle', deployed: false, dependencies: ['proxyDeployer'], label: 'Deployment Status Oracle' })
-		const rendered = await renderIntoDocument(
-			<DeploymentSection
-				title='Deployment'
-				steps={[dependent]}
-				allSteps={[prerequisite, dependent]}
-				accountAddress={zeroAddress}
-				busyStepId={undefined}
-				isMainnet={true}
-				onDeploy={async () => undefined}
-			/>,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
+		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Waiting for Proxy Deployer.')
 		expectTransactionButtonDisabled(document.body, 'Deploy', 'Waiting for Proxy Deployer.')
@@ -140,18 +103,8 @@ describe('DeploymentSection', () => {
 
 	test('enables deploy when wallet and chain are ready and prerequisites are satisfied', async () => {
 		const step = createDeploymentStep({ id: 'multicall3', deployed: false })
-		const rendered = await renderIntoDocument(
-			<DeploymentSection
-				title='Deployment'
-				steps={[step]}
-				allSteps={[step]}
-				accountAddress={zeroAddress}
-				busyStepId={undefined}
-				isMainnet={true}
-				onDeploy={async () => undefined}
-			/>,
-		)
-		cleanupRendered = rendered.unmount
+		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[step]} allSteps={[step]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
+		cleanupRendered = rendered.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Deploy')
 		expect(rendered.container.textContent).toContain('Can deploy now.')
