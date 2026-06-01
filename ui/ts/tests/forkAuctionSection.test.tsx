@@ -711,7 +711,7 @@ describe('ForkAuctionSection', () => {
 		await waitFor(() => {
 			expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Migrate pool REP to the Yes child pool before moving vault balances.')
 		})
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Pool REP To Yes' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Collateral To Yes Universe' }))
 		expect(migrateRepCalls).toEqual([['yes']])
 	})
 
@@ -930,10 +930,15 @@ describe('ForkAuctionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const auctionStatusSection = within(document.body).getByRole('heading', { name: 'Auction Status' }).closest('section')
+		if (!(auctionStatusSection instanceof HTMLElement)) throw new Error('Expected auction status section to render')
+
 		expect(document.body.textContent?.includes('Truth auction can be started in 1m once migration ends.')).toBe(true)
+		expect(getMetricValue(auctionStatusSection, 'Started')).toBe('Starts in 1m')
+		expect(document.body.textContent?.includes('This pool is currently in Migration. Auction controls become meaningful after migration completes and the truth auction starts.')).toBe(false)
 	})
 
-	test('locks the start-auction button after submit until the pool refreshes', async () => {
+	test('refreshes auction status immediately after truth auction start succeeds', async () => {
 		let startTruthAuctionCalls = 0
 		const baseProps = createProps({
 			currentTimestamp: 201n,
@@ -979,7 +984,12 @@ describe('ForkAuctionSection', () => {
 				renderedComponent.container,
 			)
 		})
-		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Starting truth auction...')
+		const auctionStatusSection = documentQueries.getByRole('heading', { name: 'Auction Status' }).closest('section')
+		if (!(auctionStatusSection instanceof HTMLElement)) throw new Error('Expected auction status section to render')
+
+		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Truth auction already started.')
+		expect(getMetricValue(auctionStatusSection, 'Started')).not.toBe('Not started')
+		expect(getMetricValue(auctionStatusSection, 'Ends')).not.toBe('Not started')
 	})
 
 	test('locks the vault migration button after submit until the wallet is marked migrated for that outcome', async () => {
@@ -1076,6 +1086,7 @@ describe('ForkAuctionSection', () => {
 		await waitFor(() => {
 			expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Vault migration for this outcome is already complete for this wallet.')
 		})
+		expect(document.body.textContent?.includes('Already migrated')).toBe(true)
 	})
 
 	test('disables submit bid after auction end to prevent reverted bids', async () => {
