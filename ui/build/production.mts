@@ -42,6 +42,7 @@ async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 async function writeProductionIndexHtml() {
 	const templatePath = path.join(UI_ROOT_PATH, 'build', 'index.production.html')
 	const html = await fs.readFile(templatePath, 'utf8')
+	await fs.mkdir(DIST_ROOT_PATH, { recursive: true })
 	await fs.writeFile(path.join(DIST_ROOT_PATH, 'index.html'), html)
 }
 

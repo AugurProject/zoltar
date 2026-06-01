@@ -157,16 +157,11 @@ async function clickElement(element: HTMLElement) {
 }
 
 async function waitForLatestAction(actionName: string) {
-	try {
-		await waitFor(
-			() => {
-				expect(within(document.body).queryAllByText(actionName).length).toBeGreaterThan(0)
-			},
-			{ timeout: 1000 },
-		)
-	} catch (error) {
-		if (!(error instanceof Error)) throw error
-		return
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		if (within(document.body).queryAllByText(actionName).length > 0) return
+		await new Promise(resolve => {
+			setTimeout(resolve, 50)
+		})
 	}
 }
 

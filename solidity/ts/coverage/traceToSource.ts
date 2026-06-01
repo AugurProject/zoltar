@@ -263,6 +263,17 @@ const writeCoverage = async (): Promise<void> => {
 	}
 }
 
+function isIgnorableTraceRequestError(error: unknown) {
+	if (typeof error !== 'object' || error === null) return false
+
+	const errorCode = 'code' in error ? error.code : undefined
+	if (errorCode === -32601 || errorCode === -32000) return true
+
+	const errorMessage = 'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : undefined
+	if (errorMessage === undefined) return false
+	return errorMessage.includes('debug_tracetransaction') || errorMessage.includes('method not found') || errorMessage.includes('resource not found') || errorMessage.includes('transaction not found')
+}
+
 const requestTrace = async (request: RpcRequest, transactionHash: string): Promise<unknown[]> => {
 	try {
 		const trace = await request({
@@ -271,7 +282,7 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 		})
 		return parseTraceSteps(trace)
 	} catch (error) {
-		if (!(error instanceof Error) && !(typeof error === 'object' && error !== null && ('code' in error || 'message' in error))) throw error
+		if (!isIgnorableTraceRequestError(error)) throw error
 		return []
 	}
 }

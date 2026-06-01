@@ -85,8 +85,8 @@ export function MarketSection({
 		if (lastAutoLoadedQuestionsUniverseId.current === activeUniverseId) return
 		lastAutoLoadedQuestionsUniverseId.current = activeUniverseId
 		void Promise.resolve(onLoadZoltarQuestions()).catch(error => {
-			if (!(error instanceof Error)) throw error
 			lastAutoLoadedQuestionsUniverseId.current = undefined
+			console.error('[market] failed to auto-load zoltar questions', error)
 		})
 	}, [activeUniverseId, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount])
 

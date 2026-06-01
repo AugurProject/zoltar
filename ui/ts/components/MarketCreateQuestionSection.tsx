@@ -15,6 +15,7 @@ import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import type { TransactionActionStatus } from '../types/components.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
+
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: 'Binary' },
 	{ value: 'categorical', label: 'Categorical' },
@@ -43,18 +44,16 @@ type MarketCreateQuestionSectionProps = {
 	onUseQuestionForPool: (questionId: string) => void
 	zoltarQuestions: MarketDetails[]
 }
-function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreatePreviewDetails | undefined {
+
+function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputsValid: boolean): ScalarCreatePreviewDetails | undefined {
 	if (marketForm.marketType !== 'scalar') return undefined
-	try {
-		return {
-			answerUnit: marketForm.answerUnit.trim(),
-			...parseScalarFormInputs(marketForm),
-		}
-	} catch (error) {
-		if (!(error instanceof Error)) throw error
-		return undefined
+	if (!scalarInputsValid) return undefined
+	return {
+		answerUnit: marketForm.answerUnit.trim(),
+		...parseScalarFormInputs(marketForm),
 	}
 }
+
 export function MarketCreateQuestionSection({
 	accountAddress,
 	hasForked,
@@ -75,8 +74,9 @@ export function MarketCreateQuestionSection({
 }: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
-	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
 	const marketFormValidation = validateMarketForm(marketForm)
+	const scalarInputsValid = marketFormValidation.fieldErrors.scalarIncrement === undefined && marketFormValidation.fieldErrors.scalarMax === undefined && marketFormValidation.fieldErrors.scalarMin === undefined
+	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm, scalarInputsValid)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : getQuestionTitle(selectedQuestionDetails)
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return

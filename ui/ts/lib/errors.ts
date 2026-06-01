@@ -20,7 +20,7 @@ export function isIgnorableLogDecodeError(error: unknown) {
 }
 
 const recoverableContractReadErrorNames = ['CallExecutionError', 'ContractFunctionExecutionError', 'ContractFunctionRevertedError', 'HttpRequestError', 'InvalidAddressError', 'RpcRequestError', 'TimeoutError', 'UnknownNodeError']
-const recoverableContractReadPatterns = ['abi', 'call reverted', 'contract function', 'execution reverted', 'internal json-rpc', 'json-rpc', 'network', 'no data', 'returned no data', 'rpc', 'symbol']
+const recoverableContractReadPatterns = ['abi', 'call reverted', 'contract function', 'execution reverted', 'internal json-rpc', 'json-rpc', 'network', 'no data', 'returned no data', 'rpc', 'should not be used', 'symbol']
 
 export function isRecoverableContractReadError(error: unknown) {
 	if (!(error instanceof Error)) return false

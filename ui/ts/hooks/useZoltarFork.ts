@@ -245,7 +245,8 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	useEffect(() => {
 		if (!shouldAutoLoadForkAccess) return
 		void loadZoltarForkAccess().catch(error => {
-			if (!(error instanceof Error)) throw error
+			zoltarForkError.value = getErrorMessage(error, 'Failed to load Zoltar fork access')
+			console.error('[zoltar-fork] failed to auto-load fork access', error)
 		})
 	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => child.universeId.toString()).join(',')])
 

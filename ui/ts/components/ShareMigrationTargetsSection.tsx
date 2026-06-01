@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
-import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
+import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ShareMigrationTargetsSectionProps = {
@@ -49,14 +49,8 @@ function renderTargetOutcomeRow(target: TargetOutcomePresentation, selected: boo
 function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string, ZoltarChildUniverseSummary>, scalarQuestion: MarketDetails, selectedOutcomeIndexes: bigint[]) {
 	return selectedOutcomeIndexes.map(outcomeIndex => {
 		const childUniverse = childUniverseByOutcomeIndex.get(outcomeIndex.toString())
-		let label = childUniverse?.outcomeLabel
-		if (label === undefined)
-			try {
-				label = formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex)
-			} catch (error) {
-				if (!(error instanceof Error)) throw error
-				label = `Malformed (${outcomeIndex.toString()})`
-			}
+		const descriptor = getScalarOutcomeIndexDescriptor(scalarQuestion, outcomeIndex)
+		const label = childUniverse?.outcomeLabel ?? (descriptor.kind === 'malformed' ? `Malformed (${outcomeIndex.toString()})` : formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex))
 		return {
 			exists: childUniverse?.exists === true,
 			label,

@@ -305,10 +305,7 @@ export function SecurityPoolWorkflowSection({
 
 		return ''
 	})()
-	const resolvedPendingOperationId =
-		pendingOperationInput === ''
-			? undefined
-			: tryParseBigIntInput(pendingOperationInput)
+	const resolvedPendingOperationId = pendingOperationInput === '' ? undefined : tryParseBigIntInput(pendingOperationInput)
 	const executePendingOperationGuardMessage = getVaultExecutePendingOperationGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined,

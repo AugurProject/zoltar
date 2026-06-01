@@ -10,9 +10,10 @@ export function tryParseAddressInput(value: string): Address | undefined {
 }
 
 export function parseAddressInput(value: string, label: string): Address {
-	if (value.trim() === '') throw new Error(`${label} is required`)
+	const trimmed = value.trim()
+	if (trimmed === '') throw new Error(`${label} is required`)
 	const parsed = tryParseAddressInput(value)
-	if (parsed === undefined) throw new Error(`${label} must be a valid address`)
+	if (parsed === undefined) throw new Error(`${label} must be a valid address: ${trimmed}`)
 	return parsed
 }
 

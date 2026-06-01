@@ -9,7 +9,7 @@ import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.j
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
-import { getDefaultSecurityPoolFormState, parseBigIntInput, tryParseBigIntInput } from '../lib/marketForm.js'
+import { getDefaultSecurityPoolFormState, tryParseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'

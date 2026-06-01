@@ -81,7 +81,7 @@ async function contractsJsonIsReadable(contractsJsonPath: string): Promise<boole
 		return true
 	} catch (error) {
 		if (error instanceof SyntaxError || isMissingPathError(error)) return false
-		return false
+		throw error
 	}
 }
 

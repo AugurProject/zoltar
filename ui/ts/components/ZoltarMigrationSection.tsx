@@ -50,7 +50,7 @@ type ZoltarMigrationSectionProps = {
 }
 
 function getMigrationAmount(value: string) {
-	return parseMigrationAmountInput(value, 'Migration amount')
+	return parseMigrationAmountInput(value)
 }
 
 function getMigrationOutcomeIndexes(value: string) {

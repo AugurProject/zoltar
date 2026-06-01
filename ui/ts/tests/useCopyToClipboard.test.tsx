@@ -160,7 +160,7 @@ describe('useCopyToClipboard', () => {
 		expect(activeHook?.copied.value).toBe(true)
 
 		setClipboardWriteText(async () => {
-			throw new Error('copy blocked')
+			throw new DOMException('copy blocked', 'NotAllowedError')
 		})
 
 		await act(async () => {

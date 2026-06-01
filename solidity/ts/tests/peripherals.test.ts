@@ -432,7 +432,7 @@ describe('Peripherals Contract Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error)) throw error
+					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
 					return undefined
 				}
 			})
@@ -569,7 +569,7 @@ describe('Peripherals Contract Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error)) throw error
+					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
 					return undefined
 				}
 			})
@@ -583,7 +583,7 @@ describe('Peripherals Contract Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error)) throw error
+					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
 					return undefined
 				}
 			})
@@ -633,7 +633,7 @@ describe('Peripherals Contract Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error)) throw error
+					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
 					return undefined
 				}
 			})
@@ -647,7 +647,7 @@ describe('Peripherals Contract Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error)) throw error
+					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
 					return undefined
 				}
 			})
@@ -2333,7 +2333,7 @@ describe('Peripherals Contract Test Suite', () => {
 						topics: log.topics,
 					})
 				} catch (error) {
-					if (!(error instanceof Error)) throw error
+					if (!(error instanceof Error) || !['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'].includes(error.name)) throw error
 					return undefined
 				}
 			})

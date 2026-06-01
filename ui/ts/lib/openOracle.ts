@@ -1,10 +1,10 @@
 import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { assertNever } from './assert.js'
-import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
+import { tryParseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
-import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
+import { tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
@@ -283,10 +283,6 @@ function calculateOpenOracleToken2Amount(token1Amount: bigint, price: bigint) {
 	if (token1Amount <= 0n || price <= 0n) return undefined
 	return (token1Amount * OPEN_ORACLE_PRICE_PRECISION) / price
 }
-function parseOpenOraclePriceInput(value: string) {
-	return parseDecimalInput(value, 'Price')
-}
-
 function tryParseOpenOraclePriceInput(value: string) {
 	return tryParseDecimalInput(value)
 }

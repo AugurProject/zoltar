@@ -14,15 +14,17 @@ export function useCopyToClipboard() {
 
 	const copyText = async (text: string) => {
 		try {
+			const clipboard = navigator.clipboard
+			if (clipboard === undefined || typeof clipboard.writeText !== 'function') throw new Error('Clipboard API is unavailable')
 			if (copyResetTimeout.current !== undefined) window.clearTimeout(copyResetTimeout.current)
-			await navigator.clipboard.writeText(text)
+			await clipboard.writeText(text)
 			copied.value = true
 			copyResetTimeout.current = window.setTimeout(() => {
 				copied.value = false
 				copyResetTimeout.current = undefined
 			}, 1200)
 		} catch (error) {
-			if (!(error instanceof DOMException) && !(error instanceof Error)) throw error
+			if (!(error instanceof DOMException)) throw error
 			copied.value = false
 			if (copyResetTimeout.current !== undefined) {
 				window.clearTimeout(copyResetTimeout.current)

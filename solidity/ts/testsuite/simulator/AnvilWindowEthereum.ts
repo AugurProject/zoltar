@@ -259,8 +259,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				}
 				await collectBytecodeCoverageForTransaction({
 					...requestOptions,
-				}).catch(error => {
-					if (!(error instanceof Error)) throw error
 				})
 			}
 		}
