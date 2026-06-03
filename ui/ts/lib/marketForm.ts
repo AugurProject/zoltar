@@ -109,7 +109,7 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 		selectedOutcome: 'yes',
 		settlementAddress: '',
 		submitBidAmount: '0',
-		submitBidTick: '0',
+		submitBidPrice: '0',
 		vaultAddress: '',
 	}
 }
@@ -159,6 +159,14 @@ export function parseTradingAmountInput(value: string, label: string) {
 }
 
 export function tryParseTradingAmountInput(value: string) {
+	return tryParseDecimalInput(value, 18)
+}
+
+export function parseTruthAuctionPriceInput(value: string, label: string) {
+	return parseDecimalInput(value, label, 18)
+}
+
+export function tryParseTruthAuctionPriceInput(value: string) {
 	return tryParseDecimalInput(value, 18)
 }
 

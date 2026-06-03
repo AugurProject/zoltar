@@ -24,9 +24,10 @@ import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/c
 
 type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
+	selectedSecurityPoolAddress?: string
 }
 
-export function useSecurityVaultOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityVaultOperationsParameters) {
+export function useSecurityVaultOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseSecurityVaultOperationsParameters) {
 	const securityVaultLoad = useLoadController()
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultMissing = useSignal(false)
@@ -40,7 +41,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const nextSecurityVaultLoad = useRequestGuard()
 	const lastEffectiveVaultSelectionKey = useRef<string | undefined>(undefined)
 	const effectiveSelectedVaultAddress = getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress)
-	const effectiveVaultSelectionKey = `${normalizeAddress(securityVaultForm.value.securityPoolAddress) ?? ''}:${normalizeAddress(effectiveSelectedVaultAddress) ?? ''}`
+	const effectiveSecurityPoolAddressInput = selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? securityVaultForm.value.securityPoolAddress : selectedSecurityPoolAddress
+	const effectiveVaultSelectionKey = `${normalizeAddress(effectiveSecurityPoolAddressInput) ?? ''}:${normalizeAddress(effectiveSelectedVaultAddress) ?? ''}`
 	const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
 		switch (actionName) {
 			case 'approveRep':
@@ -123,6 +125,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
+	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
 
 	useEffect(() => {
 		if (!enabled) {
@@ -180,7 +183,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				securityVaultMissing.value = false
 			},
 			load: async () => {
-				const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
+				const securityPoolAddress = resolveSecurityVaultPoolAddress()
 				const vaultAddress = vaultAddressInput?.trim() === '' || vaultAddressInput === undefined ? resolveSelectedVaultAddress() : parseAddressInput(vaultAddressInput, 'Selected vault address')
 				if (vaultAddressInput !== undefined)
 					securityVaultForm.value = {
@@ -235,8 +238,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					},
 				},
 				async walletAddress => {
-					const currentForm = securityVaultForm.value
-					securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+					securityPoolAddress = resolveSecurityVaultPoolAddress()
 					if (securityVaultMissing.value) throw new Error('Security pool does not exist')
 					const selectedVaultAddress = resolveSelectedVaultAddress()
 					if (!sameAddress(selectedVaultAddress, walletAddress)) throw new Error('Selected vault is read-only')

@@ -17,6 +17,9 @@ import type { ActionFeedback } from '../types/components.js'
 import type { ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type UseReportingOperationsParameters = WriteOperationsParameters
+type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & {
+	selectedSecurityPoolAddress?: string
+}
 
 function getAvailableWithdrawDepositIndexes(details: ReportingDetails, outcome: ReportingOutcomeKey) {
 	if (details.status !== 'active') return []
@@ -46,7 +49,7 @@ function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: Reporti
 	}
 }
 
-export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseReportingOperationsParameters) {
+export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: ResolvedReportingOperationsParameters) {
 	const reportingLoad = useLoadController()
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
@@ -65,6 +68,8 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		throw new Error('Select an outcome side before reporting on a market.')
 	}
 
+	const resolveReportingSecurityPoolAddress = () => parseAddressInput(selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? reportingForm.value.securityPoolAddress : selectedSecurityPoolAddress, 'Security pool address')
+
 	const loadReporting = async () => {
 		const isCurrent = nextReportingLoad()
 		await reportingLoad.run({
@@ -73,7 +78,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				reportingError.value = undefined
 			},
 			load: async () => {
-				const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
+				const securityPoolAddress = resolveReportingSecurityPoolAddress()
 				return await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 			},
 			onSuccess: details => {
@@ -104,15 +109,14 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				},
 				async walletAddress => {
 					reportingResult.value = undefined
-					const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+					const securityPoolAddress = resolveReportingSecurityPoolAddress()
 					return await action(walletAddress, securityPoolAddress, currentForm)
 				},
 				errorFallback,
 				async result => {
 					reportingResult.value = result
 					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
-					const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
-					const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
+					const details = await loadReportingDetails(createConnectedReadClient(), result.securityPoolAddress, accountAddress)
 					reportingDetails.value = details
 					setReportingForm(current => {
 						const selectedWithdrawDepositIndexesByOutcome = pruneSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, details)
