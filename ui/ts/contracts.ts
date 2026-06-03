@@ -1571,6 +1571,7 @@ type TruthAuctionSettlementBidIdentifier = {
 	tick: bigint
 	bidIndex: bigint
 }
+type TruthAuctionSettlementBidBatch = readonly TruthAuctionSettlementBidIdentifier[]
 
 export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly TruthAuctionSettlementBidIdentifier[]) {
 	return await executeForkAuctionAction(
@@ -1584,6 +1585,29 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'refundLosingBids',
 				args: selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids,
+			})),
+	)
+}
+
+export async function settleTruthAuctionBids(
+	client: WriteClient,
+	securityPoolAddress: Address,
+	universeId: bigint,
+	vaultAddress: Address,
+	claimTickIndices: TruthAuctionSettlementBidBatch,
+	refundTickIndices: TruthAuctionSettlementBidBatch,
+) {
+	return await executeForkAuctionAction(
+		client,
+		'claimAuctionProceeds',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
+				address: getInfraContractAddresses().securityPoolForker,
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'settleAuctionBids',
+				args: [securityPoolAddress, vaultAddress, claimTickIndices, refundTickIndices],
 			})),
 	)
 }

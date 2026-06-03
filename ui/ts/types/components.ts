@@ -652,7 +652,7 @@ export type ForkAuctionRouteContentProps = {
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
+	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) => void
 	onCreateChildUniverse: () => void
 	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address) => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void

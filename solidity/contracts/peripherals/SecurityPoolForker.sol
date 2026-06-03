@@ -339,6 +339,35 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	// settle here as ETH-only refunds, in which case no vault accounting changes.
 	// Anyone can call this so that settlement is not blocked on the bidder.
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) public {
+		_claimAuctionProceeds(securityPool, vault, tickIndices);
+	}
+
+	// settleAuctionBids lets callers submit both claim and refund batches in a single
+	// transaction. Before finalization, only refundable bids can be settled.
+	// After finalization, both sets are withdrawn as settlement payouts from the auction.
+	function settleAuctionBids(
+		ISecurityPool securityPool,
+		address vault,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices
+	) public {
+		require(claimTickIndices.length > 0 || refundTickIndices.length > 0, 'Pick one or more bids to settle first.');
+		if (forkDataByPool[securityPool].truthAuction.finalized()) {
+			IUniformPriceDualCapBatchAuction.TickIndex[] memory allTickIndices = new IUniformPriceDualCapBatchAuction.TickIndex[](claimTickIndices.length + refundTickIndices.length);
+			for (uint256 i = 0; i < claimTickIndices.length; i += 1) {
+				allTickIndices[i] = claimTickIndices[i];
+			}
+			for (uint256 i = 0; i < refundTickIndices.length; i += 1) {
+				allTickIndices[claimTickIndices.length + i] = refundTickIndices[i];
+			}
+			_claimAuctionProceeds(securityPool, vault, allTickIndices);
+			return;
+		}
+		require(claimTickIndices.length == 0, 'Winning bids can only be claimed after the auction is finalized.');
+		claimableRefundsForSettlement(securityPool, refundTickIndices);
+	}
+
+	function _claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) private {
 		require(forkDataByPool[securityPool].truthAuction.finalized(), 'Auction needs to be finalized');
 		(uint256 amount, ) = forkDataByPool[securityPool].truthAuction.withdrawBids(vault, tickIndices);
 		if (amount == 0) return;
@@ -357,6 +386,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		uint256 nextFeeIndex = currentSecurityBondAllowance > 0 ? currentFeeIndex : securityPool.feeIndex();
 		securityPool.configureVault(vault, poolOwnership + poolOwnershipAmount, currentSecurityBondAllowance + newSecurityBondAllowance, nextFeeIndex);
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
+	}
+
+	function claimableRefundsForSettlement(ISecurityPool securityPool, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) private {
+		forkDataByPool[securityPool].truthAuction.refundLosingBids(tickIndices);
 	}
 
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome){

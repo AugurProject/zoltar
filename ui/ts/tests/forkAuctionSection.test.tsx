@@ -2974,8 +2974,8 @@ describe('ForkAuctionSection', () => {
 							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 						}),
 					],
-					onRefundLosingBids: (_address, bids) => {
-						const selected = bids?.at(0)
+					onClaimAuctionProceeds: (_address, _bids, refundBids) => {
+						const selected = refundBids?.at(0)
 						selectedBids.push(selected === undefined ? undefined : { tick: selected.tick, bidIndex: selected.bidIndex })
 					},
 					truthAuctionReadClient,
@@ -3050,13 +3050,11 @@ describe('ForkAuctionSection', () => {
 							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 						}),
 					],
-					onClaimAuctionProceeds: (_address, bids) => {
-						const selected = bids?.at(0)
-						selectedBids.push(selected === undefined ? undefined : { tick: selected.tick, bidIndex: selected.bidIndex })
-					},
-					onRefundLosingBids: (_address, bids) => {
-						const selected = bids?.at(0)
-						selectedRefundBids.push(selected === undefined ? undefined : { tick: selected.tick, bidIndex: selected.bidIndex })
+					onClaimAuctionProceeds: (_address, claims, refunds) => {
+						const selectedClaim = claims?.at(0)
+						selectedBids.push(selectedClaim === undefined ? undefined : { tick: selectedClaim.tick, bidIndex: selectedClaim.bidIndex })
+						const selectedRefund = refunds?.at(0)
+						selectedRefundBids.push(selectedRefund === undefined ? undefined : { tick: selectedRefund.tick, bidIndex: selectedRefund.bidIndex })
 					},
 					truthAuctionReadClient,
 				}),

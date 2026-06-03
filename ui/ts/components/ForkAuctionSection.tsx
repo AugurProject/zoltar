@@ -1118,8 +1118,9 @@ export function ForkAuctionSection({
 		if (forkAuctionResult === undefined || selectedAuctionPoolAddress === undefined || !sameAddress(forkAuctionResult.securityPoolAddress, selectedAuctionPoolAddress)) return
 		const currentActionQueue = settlementActionQueue
 		if (forkAuctionResult.action === 'claimAuctionProceeds') {
-			if (currentActionQueue[0] !== 'claimAuctionProceeds') return
-			markSettlementBidResult(isSettlementBidSelectedForClaiming, 'claimed')
+			if (currentActionQueue.length > 0 && currentActionQueue[0] !== 'claimAuctionProceeds') return
+			if (isSettlementBidSelectedForClaiming.length > 0) markSettlementBidResult(isSettlementBidSelectedForClaiming, 'claimed')
+			if (isSettlementBidSelectedForRefunding.length > 0) markSettlementBidResult(isSettlementBidSelectedForRefunding, 'refunded')
 			const nextActionQueue = currentActionQueue.slice(1)
 			setSettlementActionQueue(nextActionQueue)
 			if (nextActionQueue[0] === 'refundLosingBids' && isSettlementBidSelectedForRefunding.length > 0) {
@@ -1158,14 +1159,13 @@ export function ForkAuctionSection({
 		if (selectedSettlementBidRows.length === 0) return
 		if (isSettleSelectedBidsInProgress) return
 		if (selectedAuctionPoolAddress === undefined) return
-		const nextSettlementActionQueue: SettlementAction[] = []
-		if (selectedClaimSettlementBidRows.length > 0) nextSettlementActionQueue.push('claimAuctionProceeds')
-		if (selectedRefundSettlementBidRows.length > 0) nextSettlementActionQueue.push('refundLosingBids')
-		if (nextSettlementActionQueue.length === 0) return
+		const selectedClaimSettlementBids = getSettlementBidsFromKeys(selectedClaimSettlementBidKeys)
+		const selectedRefundSettlementBids = getSettlementBidsFromKeys(selectedRefundSettlementBidKeys)
+		if (selectedClaimSettlementBids.length === 0 && selectedRefundSettlementBids.length === 0) return
 		setIsSettlementBidSelectedForClaiming(selectedClaimSettlementBidKeys)
 		setIsSettlementBidSelectedForRefunding(selectedRefundSettlementBidKeys)
-		setSettlementActionQueue(nextSettlementActionQueue)
-		submitClaimBidsByKeys(selectedClaimSettlementBidKeys.length > 0 ? selectedClaimSettlementBidKeys : selectedRefundSettlementBidKeys)
+		setSettlementActionQueue([])
+		onClaimAuctionProceeds(selectedAuctionPoolAddress, selectedClaimSettlementBids, selectedRefundSettlementBids)
 	}
 	const onClaimAuctionProceedsForSelectedAuction = () => {
 		if (selectedClaimSettlementBidRows.length === 0) return

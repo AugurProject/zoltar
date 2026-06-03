@@ -3,7 +3,6 @@ import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import {
-	claimSecurityPoolAuctionProceeds,
 	createChildUniverseFromSecurityPool,
 	finalizeSecurityPoolTruthAuction,
 	forkUniverseDirectly,
@@ -14,6 +13,7 @@ import {
 	migrateRepToZoltarFromSecurityPool,
 	migrateSecurityVault,
 	refundTruthAuctionBid,
+	settleTruthAuctionBids,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 } from '../contracts.js'
@@ -185,17 +185,25 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction('finalizeTruthAuction', async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction', securityPoolAddressOverride)
 
-	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) =>
+	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) =>
 		await runForkAuctionAction(
 			'claimAuctionProceeds',
 			async (walletAddress, details) => {
 				const bidderAddress = resolveOptionalAddressInput(forkAuctionForm.value.settlementAddress, walletAddress, 'Bidder address')
-				const normalizedBids =
-					selectedBids === undefined ? [{ tick: parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Settlement bid index') }] : Array.from(selectedBids).filter(({ tick, bidIndex }) => tick >= 0n && bidIndex >= 0n)
-				if (normalizedBids.length === 0) throw new Error('Pick one or more bids to settle first.')
-				const selectedBid = normalizedBids[0]
+				const normalizedClaimBids =
+					selectedClaimBids === undefined ? [{ tick: parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Settlement bid index') }] : Array.from(selectedClaimBids).filter(({ tick, bidIndex }) => tick >= 0n && bidIndex >= 0n)
+				const normalizedRefundBids = selectedRefundBids === undefined ? [] : Array.from(selectedRefundBids).filter(({ tick, bidIndex }) => tick >= 0n && bidIndex >= 0n)
+				if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Pick one or more bids to settle first.')
+				const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
 				if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
-				return await claimSecurityPoolAuctionProceeds(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, bidderAddress, selectedBid.tick, selectedBid.bidIndex, normalizedBids)
+				return await settleTruthAuctionBids(
+					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+					details.securityPoolAddress,
+					details.universeId,
+					bidderAddress,
+					normalizedClaimBids,
+					normalizedRefundBids,
+				)
 			},
 			'Failed to settle finalized bid',
 			securityPoolAddressOverride,

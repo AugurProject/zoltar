@@ -523,7 +523,8 @@ export function App() {
 				forkAuctionForm,
 				forkAuctionResult,
 				loadingForkAuctionDetails,
-				onClaimAuctionProceeds: securityPoolAddressOverride => void claimAuctionProceeds(securityPoolAddressOverride),
+				onClaimAuctionProceeds: (securityPoolAddressOverride, selectedClaimBids, selectedRefundBids) =>
+					void claimAuctionProceeds(securityPoolAddressOverride, selectedClaimBids, selectedRefundBids),
 				onCreateChildUniverse: () => void createChildUniverse(forkAuctionForm.selectedOutcome),
 				onFinalizeTruthAuction: securityPoolAddressOverride => void finalizeTruthAuction(securityPoolAddressOverride),
 				onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
@@ -538,7 +539,7 @@ export function App() {
 					}),
 				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
 				onMigrateVault: () => void migrateVault(),
-				onRefundLosingBids: securityPoolAddressOverride => void refundLosingBids(securityPoolAddressOverride),
+				onRefundLosingBids: (securityPoolAddressOverride, selectedBids) => void refundLosingBids(securityPoolAddressOverride, selectedBids),
 				onStartTruthAuction: securityPoolAddressOverride => void startTruthAuction(securityPoolAddressOverride),
 				onSubmitBid: securityPoolAddressOverride => void submitBid(securityPoolAddressOverride),
 			},
