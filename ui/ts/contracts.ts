@@ -1566,7 +1566,13 @@ export async function submitTruthAuctionBid(client: WriteClient, securityPoolAdd
 		return await writeContractAndWait(client, () => callParams)
 	})
 }
-export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint) {
+
+type TruthAuctionSettlementBidIdentifier = {
+	tick: bigint
+	bidIndex: bigint
+}
+
+export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly TruthAuctionSettlementBidIdentifier[]) {
 	return await executeForkAuctionAction(
 		client,
 		'refundLosingBids',
@@ -1577,7 +1583,23 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 				address: truthAuctionAddress,
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'refundLosingBids',
-				args: [[{ tick, bidIndex }]],
+				args: selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids,
+			})),
+	)
+}
+
+export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly TruthAuctionSettlementBidIdentifier[]) {
+	return await executeForkAuctionAction(
+		client,
+		'claimAuctionProceeds',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
+				address: getInfraContractAddresses().securityPoolForker,
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'claimAuctionProceeds',
+				args: [securityPoolAddress, vaultAddress, selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids],
 			})),
 	)
 }
@@ -1593,21 +1615,6 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'finalizeTruthAuction',
 				args: [securityPoolAddress],
-			})),
-	)
-}
-export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
-	return await executeForkAuctionAction(
-		client,
-		'claimAuctionProceeds',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'claimAuctionProceeds',
-				args: [securityPoolAddress, vaultAddress, [{ tick, bidIndex }]],
 			})),
 	)
 }

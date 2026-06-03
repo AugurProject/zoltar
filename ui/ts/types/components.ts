@@ -638,6 +638,11 @@ export type TradingSectionProps = TradingRouteContentProps & {
 	showHeader?: boolean
 }
 
+export type SettlementSelectedBid = {
+	tick: bigint
+	bidIndex: bigint
+}
+
 export type ForkAuctionRouteContentProps = {
 	accountState: AccountState
 	forkAuctionDetails: ForkAuctionDetails | undefined
@@ -647,7 +652,7 @@ export type ForkAuctionRouteContentProps = {
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address) => void
+	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
 	onCreateChildUniverse: () => void
 	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address) => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
@@ -658,7 +663,7 @@ export type ForkAuctionRouteContentProps = {
 	onMigrateEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
-	onRefundLosingBids: (securityPoolAddressOverride?: Address) => void
+	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
 	onStartTruthAuction: (securityPoolAddressOverride?: Address) => void
 	onSubmitBid: (securityPoolAddressOverride?: Address) => void
 }
