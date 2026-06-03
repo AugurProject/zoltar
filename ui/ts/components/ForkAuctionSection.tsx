@@ -31,9 +31,10 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '..
 import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
 import { getEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
-import { writeSecurityPoolQueryParam } from '../lib/urlParams.js'
+import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 import type { ForkAuctionActionResult, ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
+import { formatUniverseLabel } from '../lib/universe.js'
 const UNKNOWN_VALUE = '—'
 const UNAVAILABLE_UNTIL_FORK = '-'
 const TRUTH_AUCTION_TICK_PAGE_SIZE = 25
@@ -105,15 +106,28 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
-function OutcomeChildPoolLink({ outcomeLabel, securityPoolAddress }: { outcomeLabel: string; securityPoolAddress: string | undefined }) {
+function OutcomeChildPoolLink({
+	outcomeLabel,
+	securityPoolAddress,
+	universeId,
+}: {
+	outcomeLabel: string
+	securityPoolAddress: string | undefined
+	universeId: bigint | undefined
+}) {
 	if (securityPoolAddress === undefined) return <p className='detail'>Child universe not created for the {outcomeLabel} outcome yet.</p>
 
-	const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolQueryParam('', securityPoolAddress))
+	const securityPoolSearch = writeSecurityPoolQueryParam('', securityPoolAddress)
+	const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(securityPoolSearch, universeId))
+	const universeLabel = universeId === undefined ? undefined : formatUniverseLabel(universeId)
 
 	return (
 		<p className='detail'>
-			Selected {outcomeLabel} child pool:{' '}
-			<a href={securityPoolHref}>{securityPoolAddress}</a>
+			Selected {outcomeLabel} Child pool:{' '}
+			<a href={securityPoolHref}>
+				{securityPoolAddress}
+				{universeLabel === undefined ? undefined : `, ${universeLabel}`}
+			</a>
 		</p>
 	)
 }
@@ -726,7 +740,9 @@ export function ForkAuctionSection({
 	const [settlementActionQueue, setSettlementActionQueue] = useState<SettlementAction[]>([])
 	const [settlementBidResultRefreshToken, setSettlementBidResultRefreshToken] = useState(0)
 	const [settlementBidResultByKey, setSettlementBidResultByKey] = useState<Record<string, LocalSettlementBidStatus>>({})
-	const selectedOutcomeChildPoolNotice = <OutcomeChildPoolLink outcomeLabel={selectedOutcomeLabel} securityPoolAddress={selectedAuctionChildPool?.securityPoolAddress} />
+	const selectedOutcomeChildPoolNotice = (
+		<OutcomeChildPoolLink outcomeLabel={selectedOutcomeLabel} securityPoolAddress={selectedAuctionChildPool?.securityPoolAddress} universeId={selectedAuctionChildPool?.universeId} />
+	)
 	const effectiveLockedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
 		if (connectedWalletVaultSummary.lockedRepInEscalationGame > optimisticMigratedEscalationRep) {
@@ -928,7 +944,7 @@ export function ForkAuctionSection({
 		if (settlementSelectionMode === 'refund') return 'Select refundable bids and claim them together.'
 		return 'Select winning and refundable bids and settle them together.'
 	})()
-	const settlementActionPendingLabel = settlementSelectionHasClaims ? 'Submitting settlement transactions...' : 'Submitting refund transactions...'
+	const settlementActionPendingLabel = 'Submitting settlement transaction...'
 	const refreshSettlementBidResults = () => {
 		setSettlementBidResultRefreshToken(currentToken => currentToken + 1)
 	}

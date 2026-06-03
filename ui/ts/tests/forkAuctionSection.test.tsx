@@ -2852,7 +2852,7 @@ describe('ForkAuctionSection', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
 
 		await waitFor(() => {
-			expect(documentQueries.queryByRole('button', { name: 'Submitting settlement transactions...' })).not.toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Submitting settlement transaction...' })).not.toBeNull()
 		})
 		expect(selectedClaims).toContainEqual({ tick: 12n, bidIndex: 0n })
 		const callCountBeforeResult = callCount
