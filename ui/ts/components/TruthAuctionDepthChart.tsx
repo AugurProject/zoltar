@@ -1,5 +1,6 @@
 import { useRef } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
+import { formatCurrencyInputBalance } from '../lib/formatters.js'
 
 type TruthAuctionDisposition = {
 	label: string
@@ -133,7 +134,7 @@ export function TruthAuctionDepthChart({ clearingTick, loadedTickCount, onSelect
 				<div className='truth-auction-depth-hit-targets'>
 					{points.map((point, index) => (
 						<button
-							aria-label={`Select tick ${point.tick.toString()} from depth chart`}
+							aria-label={`Select price ${formatCurrencyInputBalance(point.price)} ETH / REP from depth chart`}
 							aria-pressed={point.isSelected}
 							className='truth-auction-depth-hit-target'
 							key={point.tick.toString()}

@@ -2367,14 +2367,16 @@ strong.metric-value-danger {
 }
 
 .truth-auction-wallet-summary,
-.truth-auction-bid-coverage-summary {
+.truth-auction-bid-coverage-summary,
+.truth-auction-selected-bid-summary {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
 	gap: 0.9rem 1rem;
 }
 
 .truth-auction-wallet-summary > div,
-.truth-auction-bid-coverage-summary > div {
+.truth-auction-bid-coverage-summary > div,
+.truth-auction-selected-bid-summary > div {
 	padding-top: 0.65rem;
 	border-top: 1px solid var(--divider-subtle);
 }
@@ -2670,7 +2672,7 @@ strong.metric-value-danger {
 }
 
 .truth-auction-bid-row.is-wide {
-	grid-template-columns: minmax(0, 0.72fr) minmax(0, 0.9fr) minmax(0, 0.7fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto minmax(0, 1.35fr);
+	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto minmax(0, 1.35fr);
 }
 
 .truth-auction-bid-row.is-header {
@@ -2693,8 +2695,15 @@ strong.metric-value-danger {
 .truth-auction-bid-row-label {
 	display: grid;
 	gap: 0.15rem;
+	min-width: 0;
 	color: var(--text);
 	font-weight: 600;
+}
+
+.truth-auction-bid-row > *,
+.truth-auction-bid-row.is-wallet > *,
+.truth-auction-bid-row.is-wide > * {
+	min-width: 0;
 }
 
 .truth-auction-bid-row-address {
@@ -2707,11 +2716,18 @@ strong.metric-value-danger {
 }
 
 .truth-auction-bid-row-actions {
-	grid-auto-flow: column;
-	grid-auto-columns: max-content;
+	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: flex-start;
 	gap: 0.45rem;
+	min-width: 0;
+}
+
+.truth-auction-bid-row-actions > button {
+	flex: 0 1 auto;
+	max-width: 100%;
+	min-width: 0;
 }
 
 .truth-auction-row-empty {
@@ -3802,8 +3818,11 @@ button:focus-visible {
 	}
 
 	.truth-auction-bid-row-actions {
-		grid-auto-flow: row;
-		grid-auto-columns: unset;
+		align-items: stretch;
+	}
+
+	.truth-auction-bid-row-actions > button {
+		width: 100%;
 	}
 
 	.lookup-field-controls.has-action {
