@@ -204,7 +204,6 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPoolReportingStage === 'forkTriggered') return true
 		return selectedPoolHasActualForkActivity
 	})()
-	const showSelectedPoolForkSummaryMetrics = selectedPoolHasActualForkActivity || (selectedPoolStateModel.lifecycleState !== 'operational' && selectedPoolReportingStage !== 'forkTriggered')
 	const reportingLockedReason = (() => {
 		if (reportingReady) return undefined
 		if (marketDetails === undefined) return 'Reporting opens after market end.'
@@ -288,7 +287,6 @@ export function SecurityPoolWorkflowSection({
 		forkAuctionDetails: currentForkAuctionDetails,
 		selectedPool: loadedSelectedPool,
 	})
-	const selectedPoolForkOwnSecurityPool = selectedPoolSummaryPool?.forkOwnSecurityPool
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
@@ -554,8 +552,12 @@ export function SecurityPoolWorkflowSection({
 				{...(loadedSelectedPool === undefined || selectedPoolSummaryPool === undefined
 					? {}
 					: {
-							badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}`}>{getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolSummaryPool.hasForkActivity, lifecycleState: selectedPoolStateModel.lifecycleState })}</span>,
-						})}
+								badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}`}>{getSecurityPoolStatusBadgeLabel({
+									hasForkActivity: selectedPoolSummaryPool.hasForkActivity,
+									questionOutcome: selectedPoolSummaryPool.questionOutcome,
+									lifecycleState: selectedPoolStateModel.lifecycleState,
+								})}</span>,
+							})}
 				sticky={false}
 				title={getSelectedPoolCardTitle()}
 				items={[]}
@@ -587,11 +589,6 @@ export function SecurityPoolWorkflowSection({
 										priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
 									/>
 								</MetricField>
-								{!showSelectedPoolForkSummaryMetrics ? undefined : (
-									<>
-										<MetricField label='Fork Mode'>{selectedPoolForkOwnSecurityPool === true ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
-									</>
-								)}
 								{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
 									<MetricField label='Pending Request'>
 										<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>

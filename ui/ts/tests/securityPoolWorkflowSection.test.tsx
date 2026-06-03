@@ -339,13 +339,6 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 	}
 }
 
-function getMetricValue(container: HTMLElement, label: string) {
-	const labelElement = within(container).getByText(label)
-	const metricValue = labelElement.parentElement?.querySelector('.metric-field-value')
-	if (!(metricValue instanceof HTMLElement)) throw new Error(`Missing metric value for ${label}`)
-	return metricValue.textContent
-}
-
 describe('SecurityPoolWorkflowSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -769,7 +762,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Ended')).not.toBeNull()
+		expect(documentQueries.getByText('Finalized as Yes')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
@@ -2732,8 +2725,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const selectedPoolSummaryQueries = within(selectedPoolSummary)
 		expect(reportingLoadCalls).toBe(0)
 		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
-		expect(selectedPoolSummaryQueries.getByText('Fork Mode')).not.toBeNull()
-		expect(getMetricValue(selectedPoolSummary, 'Fork Mode')).toBe('Own escalation fork')
+		expect(selectedPoolSummaryQueries.queryByText('Fork Mode')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Outcome')).toBeNull()
 		expect(selectedPoolSummaryQueries.getByRole('button', { name: `Copy address ${freshTruthAuctionAddress}` })).not.toBeNull()
 	})

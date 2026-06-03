@@ -20,6 +20,7 @@ void describe('security pool lifecycle label', () => {
 		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: true, lifecycleState: 'poolForked' })).toBe('Fork Migration')
 		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: true, lifecycleState: 'forkMigration' })).toBe('Fork Migration')
 		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: true, lifecycleState: 'forkTruthAuction' })).toBe('Truth Auction')
-		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: false, lifecycleState: 'ended' })).toBe('Ended')
+		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: false, lifecycleState: 'ended', questionOutcome: 'yes' })).toBe('Finalized as Yes')
+		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: false, lifecycleState: 'ended' })).toBe('Finalized')
 	})
 })

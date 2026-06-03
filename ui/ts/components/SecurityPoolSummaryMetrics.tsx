@@ -1,5 +1,4 @@
 import type { ComponentChildren } from 'preact'
-import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
@@ -52,11 +51,6 @@ export function SecurityPoolSummaryMetrics({ children, className = 'workflow-met
 				totalRepDeposit={pool.totalRepDeposit}
 				totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
 			/>
-			{pool.truthAuctionAddress === zeroAddress ? undefined : (
-				<MetricField label='Truth Auction'>
-					<AddressValue address={pool.truthAuctionAddress} />
-				</MetricField>
-			)}
 			{children}
 		</div>
 	)
