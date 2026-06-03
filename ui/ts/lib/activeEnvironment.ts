@@ -1,7 +1,9 @@
 import type { ChainBackend } from './chainBackend.js'
 import { createInjectedBackend } from './chainBackend.js'
+import { getErrorMessage } from '../lib/errors.js'
 import type { NetworkProfile } from './networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
+import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { normalizeSimulationScenario, type SimulationScenario } from '../simulation/scenarios.js'
 
@@ -39,6 +41,12 @@ function getSimulationScenario(location: LocationLike): SimulationScenario {
 	return normalizeSimulationScenario(params.get('simScenario') ?? undefined)
 }
 
+function getSimulationStateId(location: LocationLike) {
+	const params = readLocationParams(location)
+	const stateId = params.get('simState')
+	return stateId === null || stateId.trim() === '' ? undefined : stateId
+}
+
 export async function initializeActiveEnvironment(location: LocationLike = window.location) {
 	if (activeSimulationController !== undefined) {
 		await activeSimulationController.dispose()
@@ -50,9 +58,29 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		return injectedBackend
 	}
 
-	const simulationBackend = await createSimulationBackend({
-		scenario: getSimulationScenario(location),
-	})
+	const savedStateId = getSimulationStateId(location)
+	let initialBootstrapError: string | undefined = undefined
+	let savedState = undefined
+	if (savedStateId !== undefined) {
+		try {
+			savedState = getSavedSimulationStateEnvelope(savedStateId)
+		} catch (error) {
+			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')}. Falling back to the baseline scenario.`
+		}
+		if (savedState === undefined && initialBootstrapError === undefined) {
+			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`
+		}
+	}
+	const simulationBackend =
+		savedStateId !== undefined && savedState !== undefined
+			? await createSimulationBackend({
+					savedState,
+					savedStateId,
+				})
+			: await createSimulationBackend({
+					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
+					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
+				})
 	activeBackend = simulationBackend
 	activeSimulationController = simulationBackend
 	void simulationBackend.bootstrap().catch(error => {

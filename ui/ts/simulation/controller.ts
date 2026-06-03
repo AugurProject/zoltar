@@ -1,5 +1,6 @@
 import type { Address } from 'viem'
 import type { SimulationScenario } from './scenarios.js'
+import type { SimulationSource } from './savedStates.js'
 
 export type SimulationController = {
 	accounts: readonly Address[]
@@ -11,6 +12,7 @@ export type SimulationController = {
 	currentTimestamp: bigint
 	currentScenario: SimulationScenario
 	dispose(): Promise<void>
+	exportState(name: string): Promise<string>
 	isActive: true
 	isBootstrapped: boolean
 	isBootstrapping: boolean
@@ -22,6 +24,7 @@ export type SimulationController = {
 	reset(): Promise<void>
 	selectAccount(address: Address): Promise<void>
 	selectedAccount: Address
+	simulationSource: SimulationSource
 	setRepPerEthPrice(value: bigint): void
 	setRepPerUsdcPrice(value: bigint): void
 	setQueryDelayMilliseconds(value: number): void

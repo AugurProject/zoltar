@@ -1,5 +1,6 @@
 import type { Address, Hash, Hex, TransactionReceipt } from 'viem'
 import type { SimulationScenario } from './scenarios.js'
+import type { SimulationInitialization, SimulationSource } from './savedStates.js'
 
 export type SimulationWorkerState = {
 	bootstrapError: string | undefined
@@ -8,6 +9,7 @@ export type SimulationWorkerState = {
 	blockCountSinceReset: bigint
 	currentScenario: SimulationScenario
 	currentTimestamp: bigint
+	currentSource: SimulationSource
 	isBootstrapped: boolean
 	isBootstrapping: boolean
 	queryDelayMilliseconds: number
@@ -21,6 +23,7 @@ export type SimulationWorkerState = {
 export type SimulationWorkerCallMap = {
 	advanceTime: { params: { seconds: bigint }; result: undefined }
 	bootstrap: { params: undefined; result: undefined }
+	exportState: { params: { name: string }; result: string }
 	getAccounts: { params: undefined; result: readonly Address[] }
 	getState: { params: undefined; result: SimulationWorkerState }
 	installSimulationProxyDeployer: { params: { address: Address; runtimeCode: Hex }; result: undefined }
@@ -40,7 +43,7 @@ export type SimulationWorkerCallMap = {
 export type SimulationWorkerCallMethod = keyof SimulationWorkerCallMap
 
 export type SimulationWorkerInitMessage = {
-	scenario: SimulationScenario
+	initialization: SimulationInitialization
 	type: 'init'
 }
 

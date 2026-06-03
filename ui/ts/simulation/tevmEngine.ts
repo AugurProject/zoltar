@@ -9,9 +9,11 @@ import { createSimulationProfile } from '../lib/networkProfile.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
 import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
+import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization, type SimulationSource } from './savedStates.js'
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
 type MemoryClientLike = ReturnType<typeof createMemoryClient>
+type DumpedTevmState = Awaited<ReturnType<MemoryClientLike['tevmDumpState']>>['state']
 type RequestArguments = {
 	method: string
 	params?: unknown
@@ -185,6 +187,7 @@ type SimulationEngine = {
 	accounts: readonly Address[]
 	advanceTime(seconds: bigint): Promise<void>
 	bootstrap(): Promise<void>
+	exportState(name: string): Promise<string>
 	getAccounts(): Promise<readonly Address[]>
 	getChainId(): Promise<string>
 	getProfile(): ChainBackend['profile']
@@ -204,11 +207,38 @@ type SimulationEngine = {
 	waitForTransactionReceipt(hash: Hash): Promise<Awaited<ReturnType<ReadClient['getTransactionReceipt']>>>
 	waitUntilReady(): Promise<void>
 }
-export async function createSimulationEngine({ scenario }: { scenario: SimulationScenario }): Promise<SimulationEngine> {
+
+function getInitializationScenario(initialization: SimulationInitialization): SimulationScenario {
+	return initialization.kind === 'scenario' ? initialization.scenario : initialization.envelope.baseScenario
+}
+
+function getSimulationSource(initialization: SimulationInitialization): SimulationSource {
+	return initialization.kind === 'scenario'
+		? {
+				kind: 'scenario',
+				scenario: initialization.scenario,
+			}
+		: {
+				baseScenario: initialization.envelope.baseScenario,
+				kind: 'saved-state',
+				name: initialization.envelope.name,
+				savedAt: initialization.envelope.savedAt,
+				stateId: initialization.stateId,
+			}
+}
+
+async function requireSuccessfulLoadState(memoryClient: MemoryClientLike, state: DumpedTevmState) {
+	const result = await memoryClient.tevmLoadState({ state })
+	if (result.errors === undefined || result.errors.length === 0) return
+	throw new Error(result.errors.map(error => error.message).join(', '))
+}
+
+export async function createSimulationEngine({ initialization }: { initialization: SimulationInitialization }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount)
 	const profile = createSimulationProfile(predictedTokenAddresses)
+	const baseScenario = getInitializationScenario(initialization)
 	let memoryClient = createSimulationMemoryClient(profile)
 	const stateListeners = new Set<() => void>()
 	const impersonatedAccounts = new Set<string>()
@@ -225,6 +255,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
 	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	let selectedAccount = primaryAccount
+	const simulationSource = getSimulationSource(initialization)
 	let transactionCountSinceReset = 0n
 	let transactionDelayMilliseconds = 1000
 	const emitState = () => {
@@ -251,6 +282,30 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		const chainState = await getSimulationChainState(memoryClient)
 		currentTimestamp = chainState.currentTimestamp
 		blockCountSinceReset = chainState.blockNumber
+	}
+	const restoreSavedStateEnvelope = async (envelope: SavedSimulationStateEnvelopeV1, progressLabel: string) => {
+		bootstrapError = undefined
+		bootstrapLabel = progressLabel
+		bootstrapProgress = 0
+		memoryClient = createSimulationMemoryClient(profile)
+		impersonatedAccounts.clear()
+		await initializeSimulationAccounts()
+		await requireSuccessfulLoadState(memoryClient, envelope.state.snapshot as DumpedTevmState)
+		await initializeSimulationAccounts()
+		queryDelayMilliseconds = clampDelayMilliseconds(envelope.state.queryDelayMilliseconds)
+		repPerEthPrice = envelope.state.repPerEthPrice
+		repPerUsdcPrice = envelope.state.repPerUsdcPrice
+		transactionDelayMilliseconds = clampDelayMilliseconds(envelope.state.transactionDelayMilliseconds)
+		transactionCountSinceReset = envelope.state.transactionCountSinceReset
+		const nextSelectedAccount = QA_ACCOUNTS.find(account => account.toLowerCase() === envelope.state.selectedAccount.toLowerCase())
+		if (nextSelectedAccount === undefined) throw new Error(`Unknown saved simulation account: ${envelope.state.selectedAccount}`)
+		selectedAccount = nextSelectedAccount
+		await ensureImpersonated(selectedAccount)
+		await refreshSimulationState()
+		baselineTransactionCount = envelope.state.transactionCountSinceReset
+		bootstrapLabel = 'Simulation scenario ready'
+		bootstrapProgress = 1
+		bootstrapped = true
 	}
 	const sendRawTransactionInternal = async (serializedTransaction: SerializedTransaction) => {
 		const parsedTransaction = parseTransaction(serializedTransaction)
@@ -439,34 +494,41 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			getTransactionDelay: () => 0,
 			onReceiptResolved: async () => undefined,
 		})
+	const bootstrapBuiltInScenario = async (scenario: SimulationScenario) => {
+		await bootstrapSimulationChain({
+			accounts: QA_ACCOUNTS,
+			createReadClient: createBootstrapReadClient,
+			createWriteClient: createBootstrapWriteClient,
+			memoryClient,
+			onProgress: progress => {
+				bootstrapLabel = progress.label
+				bootstrapProgress = progress.value
+				emitState()
+			},
+			primaryAccount,
+			profile,
+			scenario,
+		})
+		await refreshSimulationState()
+		baselineTransactionCount = transactionCountSinceReset
+		bootstrapLabel = 'Simulation scenario ready'
+		bootstrapProgress = 1
+		bootstrapped = true
+	}
 	const bootstrap = async () => {
 		if (bootstrapPromise !== undefined) return await bootstrapPromise
 		bootstrapping = true
 		bootstrapError = undefined
-		bootstrapLabel = 'Starting simulation bootstrap'
+		bootstrapLabel = initialization.kind === 'scenario' ? 'Starting simulation bootstrap' : 'Loading saved simulation state'
 		bootstrapProgress = 0
 		emitState()
 		bootstrapPromise = (async () => {
 			try {
-				await bootstrapSimulationChain({
-					accounts: QA_ACCOUNTS,
-					createReadClient: createBootstrapReadClient,
-					createWriteClient: createBootstrapWriteClient,
-					memoryClient,
-					onProgress: progress => {
-						bootstrapLabel = progress.label
-						bootstrapProgress = progress.value
-						emitState()
-					},
-					primaryAccount,
-					profile,
-					scenario,
-				})
-				await refreshSimulationState()
-				baselineTransactionCount = transactionCountSinceReset
-				bootstrapLabel = 'Simulation scenario ready'
-				bootstrapProgress = 1
-				bootstrapped = true
+				if (initialization.kind === 'scenario') {
+					await bootstrapBuiltInScenario(initialization.scenario)
+				} else {
+					await restoreSavedStateEnvelope(initialization.envelope, 'Loading saved simulation state')
+				}
 			} catch (error) {
 				bootstrapError = error instanceof Error ? error.message : 'Failed to bootstrap simulation scenario'
 				throw error
@@ -486,8 +548,9 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		bootstrapLabel,
 		bootstrapProgress,
 		blockCountSinceReset,
-		currentScenario: scenario,
+		currentScenario: baseScenario,
 		currentTimestamp,
+		currentSource: simulationSource,
 		isBootstrapped: bootstrapped,
 		isBootstrapping: bootstrapping,
 		queryDelayMilliseconds,
@@ -505,6 +568,32 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			emitState()
 		},
 		bootstrap,
+		exportState: async name => {
+			if (!bootstrapped) throw new Error('Simulation scenario must be bootstrapped before exporting state')
+			const snapshot = await memoryClient.tevmDumpState()
+			if (snapshot.errors !== undefined && snapshot.errors.length > 0) {
+				throw new Error(snapshot.errors.map(error => error.message).join(', '))
+			}
+			const normalizedName = name.trim()
+			if (normalizedName === '') throw new Error('Saved simulation state name is required')
+			return serializeSavedSimulationStateEnvelope({
+				baseScenario,
+				name: normalizedName,
+				savedAt: new Date().toISOString(),
+				state: {
+					blockCountSinceReset,
+					currentTimestamp,
+					queryDelayMilliseconds,
+					repPerEthPrice,
+					repPerUsdcPrice,
+					selectedAccount,
+					snapshot: snapshot.state,
+					transactionCountSinceReset,
+					transactionDelayMilliseconds,
+				},
+				version: 1,
+			})
+		},
 		getAccounts: async () => [selectedAccount],
 		getChainId: async () => profile.chainIdHex,
 		getProfile: () => profile,
@@ -550,31 +639,30 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			bootstrapError = undefined
 			bootstrapLabel = 'Resetting simulation scenario'
 			bootstrapProgress = 0
-			memoryClient = createSimulationMemoryClient(profile)
-			impersonatedAccounts.clear()
-			await initializeSimulationAccounts()
-			await bootstrapSimulationChain({
-				accounts: QA_ACCOUNTS,
-				createReadClient: createBootstrapReadClient,
-				createWriteClient: createBootstrapWriteClient,
-				memoryClient,
-				onProgress: progress => {
-					bootstrapLabel = progress.label
-					bootstrapProgress = progress.value
-					emitState()
-				},
-				primaryAccount,
-				profile,
-				scenario,
-			})
-			selectedAccount = primaryAccount
-			transactionCountSinceReset = baselineTransactionCount
-			repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
-			repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
-			await refreshSimulationState()
-			bootstrapLabel = undefined
-			bootstrapProgress = undefined
+			bootstrapping = true
 			emitState()
+			try {
+				if (initialization.kind === 'scenario') {
+					memoryClient = createSimulationMemoryClient(profile)
+					impersonatedAccounts.clear()
+					await initializeSimulationAccounts()
+					await bootstrapBuiltInScenario(initialization.scenario)
+					selectedAccount = primaryAccount
+					transactionCountSinceReset = baselineTransactionCount
+					repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
+					repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
+					queryDelayMilliseconds = 0
+					transactionDelayMilliseconds = 1000
+					await refreshSimulationState()
+				} else {
+					await restoreSavedStateEnvelope(initialization.envelope, 'Resetting saved simulation state')
+				}
+				bootstrapLabel = undefined
+				bootstrapProgress = undefined
+			} finally {
+				bootstrapping = false
+				emitState()
+			}
 		},
 		selectAccount: async address => {
 			if (!QA_ACCOUNTS.includes(address)) throw new Error(`Unknown simulation account: ${address}`)
