@@ -2518,7 +2518,7 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent?.includes('Winning')).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' }))
 		expect(documentQueries.queryByText('Selected Price')).toBeNull()
-		expect(document.body.querySelector('.truth-auction-bid-row.is-header')).toBeNull()
+		expect(document.body.textContent?.includes('Price (ETH / REP)')).toBe(true)
 		expect(document.body.querySelector('.truth-auction-level-detail .truth-auction-bid-row')).toBeNull()
 		expect(document.body.textContent?.includes('2 submissions')).toBe(true)
 		expect(document.body.textContent?.includes('3.0000 ETH / REP')).toBe(true)
@@ -2568,12 +2568,7 @@ describe('ForkAuctionSection', () => {
 			expect(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' })).not.toBeNull()
 		})
 
-		fireEvent.click(
-			documentQueries.getAllByRole('button', { name: 'View Price' })[1] ??
-				(() => {
-					throw new Error('Expected a historical View Price button')
-				})(),
-		)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' }))
 
 		expect(documentQueries.queryByText('Selected Price')).toBeNull()
 		expect(document.body.textContent?.includes('Loading selected price…')).toBe(false)
@@ -3251,17 +3246,19 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		let auctionBidsSection: HTMLElement | null = null
 		await waitFor(() => {
-			expect(documentQueries.getByRole('heading', { name: 'Auction Bids' })).not.toBeNull()
+			auctionBidsSection = document.body.querySelector('.truth-auction-bid-table')?.closest('.section-block') ?? null
+			expect(auctionBidsSection).not.toBeNull()
 			expect(document.body.textContent?.includes('Showing 3 of 3 bids across loaded levels')).toBe(true)
 		})
+		if (!(auctionBidsSection instanceof HTMLElement)) throw new Error('Expected auction bids section to render')
 
 		const marketViewHeading = documentQueries.getByRole('heading', { name: 'Market View' })
-		const auctionBidsHeading = documentQueries.getByRole('heading', { name: 'Auction Bids' })
 		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
 
-		expectElementBefore(marketViewHeading, auctionBidsHeading)
-		expectElementBefore(auctionBidsHeading, submitBidHeading)
+		expectElementBefore(marketViewHeading, auctionBidsSection)
+		expectElementBefore(auctionBidsSection, submitBidHeading)
 		expect(document.body.textContent?.includes('Bid #1')).toBe(false)
 		expect(document.body.textContent?.includes('Tick 10')).toBe(false)
 	})
@@ -3320,11 +3317,11 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByRole('heading', { name: 'Auction Bids' })).not.toBeNull()
+			expect(document.body.querySelector('.truth-auction-bid-table .truth-auction-bid-row.is-wide')).not.toBeNull()
 			expect(documentQueries.getAllByRole('button', { name: 'Settle' }).length).toBeGreaterThan(0)
 		})
 
-		const aggregateTable = documentQueries.getByRole('heading', { name: 'Auction Bids' }).closest('.section-block')
+		const aggregateTable = document.body.querySelector('.truth-auction-bid-table .truth-auction-bid-row.is-wide')?.closest('.section-block')
 		if (!(aggregateTable instanceof HTMLElement)) throw new Error('Expected aggregated auction bids section to render')
 		await waitFor(() => {
 			expect(aggregateTable.querySelectorAll('.truth-auction-bid-row.is-wide').length).toBeGreaterThanOrEqual(3)
