@@ -675,7 +675,6 @@ export function ForkAuctionSection({
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
 	const selectedOutcomeLabel = getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)
-	const selectedOutcomeChildPoolNotice = <OutcomeChildPoolLink outcomeLabel={selectedOutcomeLabel} securityPoolAddress={selectedAuctionChildPool?.securityPoolAddress} />
 	const connectedWalletVaultSummary = accountState.address === undefined || previewPool === undefined ? undefined : previewPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const selectedOutcomeMigrationChildPool = securityPoolAddress === undefined ? undefined : securityPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
 	const selectedOutcomeMigrationChildVault = selectedOutcomeMigrationChildPool === undefined || accountState.address === undefined ? undefined : selectedOutcomeMigrationChildPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
@@ -727,6 +726,7 @@ export function ForkAuctionSection({
 	const [settlementActionQueue, setSettlementActionQueue] = useState<SettlementAction[]>([])
 	const [settlementBidResultRefreshToken, setSettlementBidResultRefreshToken] = useState(0)
 	const [settlementBidResultByKey, setSettlementBidResultByKey] = useState<Record<string, LocalSettlementBidStatus>>({})
+	const selectedOutcomeChildPoolNotice = <OutcomeChildPoolLink outcomeLabel={selectedOutcomeLabel} securityPoolAddress={selectedAuctionChildPool?.securityPoolAddress} />
 	const effectiveLockedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
 		if (connectedWalletVaultSummary.lockedRepInEscalationGame > optimisticMigratedEscalationRep) {
