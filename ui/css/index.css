@@ -2289,6 +2289,7 @@ strong.metric-value-danger {
 	display: grid;
 	gap: 0.75rem;
 	align-content: start;
+	min-width: 0;
 }
 
 .truth-auction-market-section {
@@ -2297,6 +2298,7 @@ strong.metric-value-danger {
 }
 
 .truth-auction-market-stack > .truth-auction-market-section:first-child,
+.truth-auction-market-detail-grid > .truth-auction-market-section:first-child,
 .truth-auction-market-board > .truth-auction-market-section:first-child {
 	padding-top: 0;
 	border-top: 0;
@@ -2349,16 +2351,23 @@ strong.metric-value-danger {
 }
 
 .truth-auction-market-board {
-	grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
+	grid-template-columns: minmax(0, 1fr);
 	gap: 1rem 1.25rem;
 }
 
+.truth-auction-market-detail-grid,
 .truth-auction-market-stack,
 .truth-auction-ladder,
 .truth-auction-manual-tools,
 .truth-auction-stage-actions,
 .truth-auction-settlement-grid {
 	gap: 0.75rem;
+}
+
+.truth-auction-market-detail-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.85fr);
+	align-items: start;
 }
 
 .truth-auction-stage-actions,
@@ -2385,7 +2394,6 @@ strong.metric-value-danger {
 .truth-auction-level-header,
 .truth-auction-depth-legend-range,
 .truth-auction-price-row-main,
-.truth-auction-price-row-meta,
 .truth-auction-bid-row,
 .truth-auction-depth-header {
 	display: flex;
@@ -2548,6 +2556,13 @@ strong.metric-value-danger {
 	padding: 0.95rem 1rem;
 }
 
+.truth-auction-price-value {
+	display: inline-block;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	font-variant-numeric: tabular-nums;
+}
+
 .truth-auction-price-row-main strong {
 	font-size: var(--font-base);
 }
@@ -2563,6 +2578,17 @@ strong.metric-value-danger {
 .truth-auction-bid-row {
 	color: var(--muted);
 	font-size: var(--font-small);
+}
+
+.truth-auction-price-row-meta {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.45rem 0.75rem;
+}
+
+.truth-auction-level-detail {
+	position: sticky;
+	top: 1rem;
 }
 
 .truth-auction-status-pill {
@@ -3782,9 +3808,15 @@ button:focus-visible {
 
 	.truth-auction-hero,
 	.truth-auction-market-board,
+	.truth-auction-market-detail-grid,
 	.truth-auction-stage-actions,
 	.truth-auction-settlement-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-level-detail {
+		position: static;
+		top: auto;
 	}
 
 	.truth-auction-depth-chart {

@@ -1589,7 +1589,175 @@ describe('ForkAuctionSection', () => {
 		const auctionOverviewSection = within(document.body).getByRole('heading', { name: 'Auction Overview' }).closest('section')
 		if (!(auctionOverviewSection instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
 		expect(getMetricValue(auctionOverviewSection, 'Time Left')).toBe('0m')
+		expect(within(auctionOverviewSection).getByText('Unfilled')).not.toBeNull()
+		expect(within(auctionOverviewSection).queryByText('Finalized')).toBeNull()
+		expect(within(auctionOverviewSection).queryByText('Underfunded')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Truth auction is already finalized.')
+	})
+
+	test('shows auction overview badge states instead of finalized and underfunded metrics', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const getAuctionOverviewSection = () => {
+			const section = within(document.body).getByRole('heading', { name: 'Auction Overview' }).closest('section')
+			if (!(section instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
+			return section
+		}
+
+		await waitFor(() => {
+			expect(within(getAuctionOverviewSection()).getByText('Open')).not.toBeNull()
+		})
+		expect(within(getAuctionOverviewSection()).queryByText('Finalized')).toBeNull()
+		expect(within(getAuctionOverviewSection()).queryByText('Underfunded')).toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkTruthAuction',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								clearingPrice: 2n * ETH,
+								clearingTick: 10n,
+								ethAtClearingTick: 5n * ETH,
+								hitCap: true,
+							},
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expect(within(getAuctionOverviewSection()).getByText('Clearing')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'operational',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								clearingPrice: 2n * ETH,
+								clearingTick: 10n,
+								ethAtClearingTick: 5n * ETH,
+								finalized: true,
+								hitCap: true,
+								timeRemaining: 0n,
+							},
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expect(within(getAuctionOverviewSection()).getByText('Settled')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'operational',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								finalized: true,
+								underfunded: true,
+								timeRemaining: 0n,
+							},
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expect(within(getAuctionOverviewSection()).getByText('Shortfall')).not.toBeNull()
+	})
+
+	test('shows inactive and pending auction status badges before the truth auction is live', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					securityPools: [],
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const getAuctionStatusSection = () => {
+			const section = within(document.body).getByRole('heading', { name: 'Auction Status' }).closest('section')
+			if (!(section instanceof HTMLElement)) throw new Error('Expected auction status section to render')
+			return section
+		}
+
+		expect(within(getAuctionStatusSection()).getByText('Inactive')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkMigration',
+						},
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+								truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+							}),
+						],
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(within(getAuctionStatusSection()).getByText('Pending')).not.toBeNull()
 	})
 
 	test('shows a price-specific bid validation error for malformed live-auction prices', async () => {
@@ -2880,9 +3048,15 @@ describe('ForkAuctionSection', () => {
 
 	test('keeps the auction stage ordered as market view, submit bid, my bids, then finalize and shows the form-linked preview state', async () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
-			if (request.functionName === 'activeTickCount') return 1n
-			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
-			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
+			if (request.functionName === 'activeTickCount') return 3n
+			if (request.functionName === 'getActiveTickPage') {
+				return [
+					createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }),
+					createTruthAuctionTickSummary({ tick: 2n, price: getTruthAuctionPriceAtTick(2n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }),
+					createTruthAuctionTickSummary({ tick: 1n, price: getTruthAuctionPriceAtTick(1n), currentTotalEth: 3n * ETH, submissionCount: 1n, active: true }),
+				]
+			}
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
 			if (request.functionName === 'getBidCountAtTick') return 1n
 			if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
 			if (request.functionName === 'getBidderBidCount') return 1n
@@ -2936,9 +3110,12 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent?.includes('Current form price')).toBe(true)
 		expect(documentQueries.getByRole('button', { name: 'Use This Price' })).not.toBeNull()
 		expect(documentQueries.getByText('Bid Price (ETH / REP)')).not.toBeNull()
+		expect(documentQueries.getByText(`${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(1n))} ETH / REP`)).not.toBeNull()
+		expect(documentQueries.getByText(`${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(2n))} ETH / REP`)).not.toBeNull()
 		expect(documentQueries.queryByText('Bid Tick')).toBeNull()
 		expect(document.body.querySelector('.truth-auction-depth-marker.is-preview')).not.toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-section')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-market-detail-grid')).not.toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-board .truth-auction-panel')).toBeNull()
 	})
 
