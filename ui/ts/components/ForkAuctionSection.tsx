@@ -10,7 +10,6 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { MetricField } from './MetricField.js'
-import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -950,21 +949,6 @@ export function ForkAuctionSection({
 
 		return formatDuration(truthAuctionTimeRemaining)
 	})()
-	const truthAuctionEndedNotice = (() => {
-		if (truthAuctionStatus === undefined) return undefined
-		const hasEndedByTime = truthAuctionEndsAt !== undefined && effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp >= truthAuctionEndsAt
-		if (!truthAuctionStatus.finalized && !hasEndedByTime) return undefined
-		return (
-			<p className='notice success'>
-				<strong>Truth auction has ended.</strong> {truthAuctionStatus.finalized ? 'Bidding is closed and finalized settlement paths are now in effect.' : 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'}{' '}
-				{truthAuctionEndsAt === undefined ? undefined : (
-					<Fragment>
-						Ended at: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={truthAuctionEndsAt} />
-					</Fragment>
-				)}
-			</p>
-		)
-	})()
 	const ethRaisedCapDisplay =
 		truthAuctionStatus === undefined ? (
 			truthAuctionFallback
@@ -1041,6 +1025,35 @@ export function ForkAuctionSection({
 		truthAuction: truthAuctionStatus,
 		truthAuctionEndsAt,
 	})
+	const truthAuctionEndedNotice = (() => {
+		if (truthAuctionStatus === undefined) return undefined
+		const hasEndedByTime = truthAuctionEndsAt !== undefined && effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp >= truthAuctionEndsAt
+		if (!truthAuctionStatus.finalized && !hasEndedByTime) return undefined
+		return (
+			<div className='notice success'>
+				<p>
+					<strong>Truth auction has ended.</strong> {truthAuctionStatus.finalized ? 'Bidding is closed and finalized settlement paths are now in effect.' : 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'}{' '}
+					{truthAuctionEndsAt === undefined ? undefined : (
+						<Fragment>
+							Ended at: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={truthAuctionEndsAt} />
+						</Fragment>
+					)}
+				</p>
+				{truthAuctionStatus.finalized ? undefined : (
+					<div className='actions'>
+						{renderStageActionButton({
+							action: 'finalizeTruthAuction',
+							availability: createActionAvailability(finalizeTruthAuctionGuardMessage),
+							forceEnabled: hasSelectedAuctionChildPool,
+							idleLabel: 'Finalize Truth Auction',
+							onClick: onFinalizeTruthAuctionForSelectedAuction,
+							pendingLabel: 'Finalizing truth auction...',
+						})}
+					</div>
+				)}
+			</div>
+		)
+	})()
 	const startTruthAuctionReadyInText = (() => {
 		if (startTruthAuctionCountdown === undefined) return undefined
 		if (startTruthAuctionCountdown === 0n) return undefined
@@ -1134,7 +1147,7 @@ export function ForkAuctionSection({
 	const onSubmitBidForSelectedAuction = () => {
 		onSubmitBid(selectedAuctionPoolAddress)
 	}
-	const onFinalizeTruthAuctionForSelectedAuction = () => {
+	function onFinalizeTruthAuctionForSelectedAuction() {
 		onFinalizeTruthAuction(selectedAuctionPoolAddress)
 	}
 	const onRefundLosingBidsForSelectedAuction = () => {
@@ -1165,7 +1178,7 @@ export function ForkAuctionSection({
 		})
 		onMigrateEscalationDeposits(forkAuctionForm.selectedOutcome, depositIndexes)
 	}
-	const renderStageActionButton = ({
+	function renderStageActionButton({
 		action,
 		availability,
 		forceEnabled,
@@ -1184,7 +1197,7 @@ export function ForkAuctionSection({
 		onClick: () => void
 		pendingLabel: string
 		tone?: 'primary' | 'secondary'
-	}) => {
+	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
 		const disabledReason = interactionDisabledReason ?? resolvedAvailability.reason
@@ -1215,19 +1228,7 @@ export function ForkAuctionSection({
 			</div>
 		)
 	}
-	const renderBidActionButtons = ({
-		bid,
-		disposition,
-		hasActions = true,
-		showViewPriceAction = true,
-		showEmptyState = false,
-	}: {
-		bid: TruthAuctionBidView
-		disposition: TruthAuctionBidDisposition
-		hasActions?: boolean
-		showViewPriceAction?: boolean
-		showEmptyState?: boolean
-	}) => {
+	const renderBidActionButtons = ({ bid, disposition, hasActions = true, showViewPriceAction = true, showEmptyState = false }: { bid: TruthAuctionBidView; disposition: TruthAuctionBidDisposition; hasActions?: boolean; showViewPriceAction?: boolean; showEmptyState?: boolean }) => {
 		if (!hasActions) return undefined
 		const isViewerBid = sameAddress(bid.bidder, accountState.address)
 		const canPrefillRefund = isViewerBid && disposition.canPrefillRefund
@@ -1273,12 +1274,12 @@ export function ForkAuctionSection({
 			{showActions ? <span>Actions</span> : undefined}
 		</div>
 	)
-	const renderMyBidsHeader = () => (
-		<div className='truth-auction-bid-row is-wallet is-header'>
+	const renderMyBidsHeader = ({ showActions = true }: { showActions?: boolean }) => (
+		<div className={`truth-auction-bid-row is-wallet ${showActions ? '' : 'is-no-actions'} is-header`}>
 			<span className='truth-auction-bid-row-label'>Price (ETH / REP)</span>
 			<span>Bid Amount (ETH)</span>
+			{showActions ? <span>Actions</span> : undefined}
 			<span className='truth-auction-bid-row-status'>Status</span>
-			<span>Actions</span>
 		</div>
 	)
 	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = 'Submit Bid', variant = 'default' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
@@ -1872,6 +1873,8 @@ export function ForkAuctionSection({
 	})()
 	const viewerTruthAuctionBidsSection = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+		const viewerBidsWithDisposition = truthAuctionBookData.viewerBids.map(bid => ({ bid, disposition: getBidDisposition(bid, truthAuctionStatus) }))
+		const hasViewerBidActions = viewerBidsWithDisposition.some(({ bid, disposition }) => sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle))
 
 		return (
 			<SectionBlock title='My Bids' description='Your bids and their current status.'>
@@ -1889,19 +1892,18 @@ export function ForkAuctionSection({
 				{accountState.address !== undefined && !loadingTruthAuctionBook && truthAuctionBookData.viewerBids.length === 0 ? <p className='detail'>No bids from this wallet are indexed for the current auction.</p> : undefined}
 				{truthAuctionBookData.viewerBids.length === 0 ? undefined : (
 					<div className='truth-auction-bid-table'>
-						{renderMyBidsHeader()}
-						{truthAuctionBookData.viewerBids.map(bid => {
-							const disposition = getBidDisposition(bid, truthAuctionStatus)
+						{renderMyBidsHeader({ showActions: hasViewerBidActions })}
+						{viewerBidsWithDisposition.map(({ bid, disposition }) => {
 							return (
-								<div className='truth-auction-bid-row is-wallet' key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
+								<div className={`truth-auction-bid-row is-wallet ${hasViewerBidActions ? '' : 'is-no-actions'}`} key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
 									<span className='truth-auction-bid-row-label'>{renderTruthAuctionPriceValue(getTruthAuctionPriceAtTick(bid.tick))}</span>
 									<span>
 										<CurrencyValue value={bid.ethAmount} suffix='ETH' />
 									</span>
+									{hasViewerBidActions ? renderBidActionButtons({ bid, disposition, hasActions: hasViewerBidActions, showViewPriceAction: false }) : undefined}
 									<span className='truth-auction-bid-row-status'>
 										<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
 									</span>
-									{renderBidActionButtons({ bid, disposition, showViewPriceAction: false })}
 								</div>
 							)
 						})}
@@ -1933,30 +1935,6 @@ export function ForkAuctionSection({
 			title: 'Settle Finalized Bid',
 			tone: 'primary',
 		})
-	})()
-	const truthAuctionOperatorToolsSection = (() => {
-		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
-		return (
-			<ReadOnlyDetailAccordion defaultOpen={false} title='Operator Tools'>
-				<div className='truth-auction-manual-tools'>
-					{truthAuctionStatus.finalized
-						? renderFinalizedSettlementSection({
-								density: 'compact',
-								headingLevel: 4,
-								idleLabel: 'Run Raw Finalized Settlement',
-								title: 'Raw Finalized Settlement',
-								variant: 'embedded',
-							})
-						: renderRefundBidSection({
-								density: 'compact',
-								headingLevel: 4,
-								idleLabel: 'Run Raw Refund',
-								title: 'Raw Refund Fallback',
-								variant: 'embedded',
-							})}
-				</div>
-			</ReadOnlyDetailAccordion>
-		)
 	})()
 	const stagePanel = (() => {
 		if (selectedStage === 'migration')
@@ -2079,20 +2057,6 @@ export function ForkAuctionSection({
 								description: 'Enter a price and ETH amount.',
 							})}
 							{viewerTruthAuctionBidsSection}
-							{truthAuctionStatus.finalized ? undefined : (
-								<SectionBlock title='Finalize Truth Auction' description='Finalize once bidding has closed.'>
-									<div className='actions'>
-										{renderStageActionButton({
-											action: 'finalizeTruthAuction',
-											availability: createActionAvailability(finalizeTruthAuctionGuardMessage),
-											forceEnabled: hasSelectedAuctionChildPool,
-											idleLabel: 'Finalize Truth Auction',
-											onClick: onFinalizeTruthAuctionForSelectedAuction,
-											pendingLabel: 'Finalizing truth auction...',
-										})}
-									</div>
-								</SectionBlock>
-							)}
 						</fieldset>
 					)
 				return (
@@ -2123,21 +2087,6 @@ export function ForkAuctionSection({
 						</SectionBlock>
 
 						{renderSubmitBidSection({ description: 'Enter a price and ETH amount.' })}
-
-						{truthAuctionStatus?.finalized ? undefined : (
-							<SectionBlock title='Finalize Truth Auction' description='Finalize once bidding has closed.'>
-								<div className='actions'>
-									{renderStageActionButton({
-										action: 'finalizeTruthAuction',
-										availability: createActionAvailability(finalizeTruthAuctionGuardMessage),
-										forceEnabled: hasSelectedAuctionChildPool,
-										idleLabel: 'Finalize Truth Auction',
-										onClick: onFinalizeTruthAuctionForSelectedAuction,
-										pendingLabel: 'Finalizing truth auction...',
-									})}
-								</div>
-							</SectionBlock>
-						)}
 					</fieldset>
 				)
 			}
@@ -2150,12 +2099,9 @@ export function ForkAuctionSection({
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
-							{auctionWideBidsSection}
 							{viewerTruthAuctionBidsSection}
 							{truthAuctionRefundSection}
 							{truthAuctionFinalizedSettlementSection}
-							{truthAuctionMarketViewSection}
-							{truthAuctionOperatorToolsSection}
 						</fieldset>
 					)
 				return (
