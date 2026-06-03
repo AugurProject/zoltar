@@ -297,7 +297,7 @@ describe('SimulationBanner', () => {
 	})
 
 	test('lets the user remove corrupted saved states from browser storage', async () => {
-		const domEnvironment = installDomEnvironment()
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simState=broken-state')
 		window.localStorage.setItem(
 			'zoltar.simulation.savedStates',
 			JSON.stringify([
@@ -346,6 +346,8 @@ describe('SimulationBanner', () => {
 			await waitFor(() => {
 				expect(documentQueries.queryByText('Ignored 1 corrupted saved simulation state in browser storage.')).toBeNull()
 				expect(window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('{bad json')
+				expect(window.location.hash).toContain('simScenario=baseline')
+				expect(window.location.hash).not.toContain('simState=')
 			})
 		} finally {
 			await renderedComponent.cleanup()

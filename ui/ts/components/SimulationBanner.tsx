@@ -7,7 +7,7 @@ import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
-import { deleteSavedSimulationState, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord } from '../simulation/savedStates.js'
+import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
 
@@ -55,6 +55,12 @@ function navigateToSavedSimulationState(stateId: string) {
 	navigateToSimulationSearch(nextSearch)
 }
 
+function hasSavedSimulationStateRoute() {
+	const params = new URLSearchParams(getRouteHashSearch())
+	const stateId = params.get('simState')
+	return stateId !== null && stateId.trim() !== ''
+}
+
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }) {
 	if (parameters.bootstrapError !== undefined) {
 		return {
@@ -88,8 +94,9 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const repPerEthPrice = useSignal(formatCurrencyInputBalance(controller.repPerEthPrice))
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const savedStateError = useSignal<string | undefined>(undefined)
-	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(listSavedSimulationStateRecords())
-	const savedStateStorageWarning = useSignal<string | undefined>(getSavedSimulationStateStorageWarning())
+	const initialSavedStateSummary: SavedSimulationStateStorageSummary = getSavedSimulationStateStorageSummary()
+	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(initialSavedStateSummary.records)
+	const savedStateStorageWarning = useSignal<string | undefined>(initialSavedStateSummary.warning)
 	const saveName = useSignal('')
 	const exportName = useSignal('')
 	const exportStateText = useSignal('')
@@ -102,8 +109,9 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
 
 	const reloadSavedStateRecords = () => {
-		savedStateRecords.value = listSavedSimulationStateRecords()
-		savedStateStorageWarning.value = getSavedSimulationStateStorageWarning()
+		const summary = getSavedSimulationStateStorageSummary()
+		savedStateRecords.value = summary.records
+		savedStateStorageWarning.value = summary.warning
 	}
 
 	const getDefaultSavedStateName = () => (currentSource.value.kind === 'saved-state' ? currentSource.value.name : `${getSimulationScenarioLabel(currentScenario.value)} ${new Date().toISOString().slice(0, 16)}`)
@@ -559,6 +567,10 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								const removedCount = removeCorruptedSavedSimulationStates()
 								if (removedCount === 0) throw new Error('No corrupted saved simulation states were found')
 								reloadSavedStateRecords()
+								if (hasSavedSimulationStateRoute()) {
+									navigateToBuiltInScenario(currentScenario.value)
+									return
+								}
 								closeModal()
 							})
 						}

@@ -2,6 +2,8 @@ import { getErrorMessage } from '../lib/errors.js'
 import { isSimulationScenario, type SimulationScenario } from './scenarios.js'
 
 const SAVED_SIMULATION_STATES_STORAGE_KEY = 'zoltar.simulation.savedStates'
+const SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY = 'zoltar.simulation.savedStates.corruptedBackup'
+const MAX_CORRUPTED_SAVED_STATE_BACKUPS = 5
 
 export const SAVED_SIMULATION_STATE_VERSION = 1 as const
 
@@ -32,6 +34,16 @@ export type SavedSimulationStateRecord = {
 	persistedAt: string
 	savedAt: string
 	serialized: string
+}
+
+export type SavedSimulationStateStorageSummary = {
+	records: SavedSimulationStateRecord[]
+	warning: string | undefined
+}
+
+type SavedSimulationStateCorruptedBackup = {
+	backedUpAt: string
+	rawValue: string
 }
 
 export type SimulationSource =
@@ -68,7 +80,9 @@ type SavedSimulationStateStorageRecord = {
 }
 
 type SavedSimulationStateStorageSnapshot = {
+	hasMalformedStorageValue: boolean
 	droppedRecordCount: number
+	rawValue: string | null
 	records: SavedSimulationStateStorageRecord[]
 }
 
@@ -172,15 +186,15 @@ function normalizeSavedStateStorageRecord(record: SavedSimulationStateStorageRec
 }
 
 function parseSavedStateStorageRecords(serialized: string | null): SavedSimulationStateStorageSnapshot {
-	if (serialized === null || serialized.trim() === '') return { droppedRecordCount: 0, records: [] }
+	if (serialized === null || serialized.trim() === '') return { droppedRecordCount: 0, hasMalformedStorageValue: false, rawValue: serialized, records: [] }
 	let parsed: unknown
 	try {
 		parsed = JSON.parse(serialized)
 	} catch (error) {
 		if (!(error instanceof SyntaxError)) throw error
-		return { droppedRecordCount: 1, records: [] }
+		return { droppedRecordCount: 0, hasMalformedStorageValue: true, rawValue: serialized, records: [] }
 	}
-	if (!Array.isArray(parsed)) return { droppedRecordCount: 1, records: [] }
+	if (!Array.isArray(parsed)) return { droppedRecordCount: 0, hasMalformedStorageValue: true, rawValue: serialized, records: [] }
 	const validRecords: SavedSimulationStateStorageRecord[] = []
 	let droppedRecordCount = 0
 	for (const item of parsed) {
@@ -196,6 +210,8 @@ function parseSavedStateStorageRecords(serialized: string | null): SavedSimulati
 	}
 	return {
 		droppedRecordCount,
+		hasMalformedStorageValue: false,
+		rawValue: serialized,
 		records: validRecords,
 	}
 }
@@ -225,6 +241,49 @@ function toSavedSimulationStateRecord(storageRecord: SavedSimulationStateStorage
 	}
 }
 
+function getSavedSimulationStateStorageSnapshot(storage?: Storage) {
+	return parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
+}
+
+function getSavedSimulationStateStorageWarningFromSnapshot(snapshot: SavedSimulationStateStorageSnapshot) {
+	if (snapshot.hasMalformedStorageValue) return 'Saved simulation state storage is corrupted in browser storage.'
+	const droppedRecordCount = snapshot.droppedRecordCount
+	if (droppedRecordCount === 0) return undefined
+	return droppedRecordCount === 1 ? 'Ignored 1 corrupted saved simulation state in browser storage.' : `Ignored ${droppedRecordCount} corrupted saved simulation states in browser storage.`
+}
+
+function toSavedSimulationStateStorageSummary(snapshot: SavedSimulationStateStorageSnapshot): SavedSimulationStateStorageSummary {
+	return {
+		records: snapshot.records.map(toSavedSimulationStateRecord).sort((left, right) => right.persistedAt.localeCompare(left.persistedAt)),
+		warning: getSavedSimulationStateStorageWarningFromSnapshot(snapshot),
+	}
+}
+
+function writeCorruptedSavedStateStorageBackup(rawValue: string, storage?: Storage) {
+	const storageReference = getStorage(storage)
+	const serializedExistingBackups = storageReference.getItem(SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY)
+	let existingBackups: SavedSimulationStateCorruptedBackup[] = []
+	if (serializedExistingBackups !== null && serializedExistingBackups.trim() !== '') {
+		try {
+			const parsed = JSON.parse(serializedExistingBackups)
+			if (Array.isArray(parsed)) {
+				existingBackups = parsed.filter((item): item is SavedSimulationStateCorruptedBackup => isObjectRecord(item) && typeof item['backedUpAt'] === 'string' && typeof item['rawValue'] === 'string')
+			}
+		} catch (error) {
+			if (!(error instanceof SyntaxError)) throw error
+			existingBackups = []
+		}
+	}
+	const nextBackups = [
+		{
+			backedUpAt: new Date().toISOString(),
+			rawValue,
+		},
+		...existingBackups,
+	].slice(0, MAX_CORRUPTED_SAVED_STATE_BACKUPS)
+	storageReference.setItem(SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY, JSON.stringify(nextBackups))
+}
+
 export function serializeSavedSimulationStateEnvelope(envelope: SavedSimulationStateEnvelopeV1) {
 	assertSavedStateEnvelope(envelope)
 	return stringifySimulationValue(envelope)
@@ -241,28 +300,27 @@ export function parseSavedSimulationStateEnvelope(serialized: string) {
 	return parsed
 }
 
-export function listSavedSimulationStateRecords(storage?: Storage) {
-	return parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
-		.records.map(toSavedSimulationStateRecord)
-		.sort((left, right) => right.persistedAt.localeCompare(left.persistedAt))
-}
-
-export function getSavedSimulationStateStorageWarning(storage?: Storage) {
-	const droppedRecordCount = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY)).droppedRecordCount
-	if (droppedRecordCount === 0) return undefined
-	return droppedRecordCount === 1 ? 'Ignored 1 corrupted saved simulation state in browser storage.' : `Ignored ${droppedRecordCount} corrupted saved simulation states in browser storage.`
+export function getSavedSimulationStateStorageSummary(storage?: Storage) {
+	return toSavedSimulationStateStorageSummary(getSavedSimulationStateStorageSnapshot(storage))
 }
 
 export function removeCorruptedSavedSimulationStates(storage?: Storage) {
 	const storageReference = getStorage(storage)
-	const snapshot = parseSavedStateStorageRecords(storageReference.getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
+	const snapshot = getSavedSimulationStateStorageSnapshot(storageReference)
+	if (snapshot.hasMalformedStorageValue) {
+		if (snapshot.rawValue !== null && snapshot.rawValue.trim() !== '') {
+			writeCorruptedSavedStateStorageBackup(snapshot.rawValue, storageReference)
+		}
+		writeSavedStateStorageRecords([], storageReference)
+		return 1
+	}
 	if (snapshot.droppedRecordCount === 0) return 0
 	writeSavedStateStorageRecords(snapshot.records, storageReference)
 	return snapshot.droppedRecordCount
 }
 
 function getSavedSimulationStateRecord(stateId: string, storage?: Storage) {
-	return listSavedSimulationStateRecords(storage).find(record => record.id === stateId)
+	return getSavedSimulationStateStorageSummary(storage).records.find(record => record.id === stateId)
 }
 
 export function getSavedSimulationStateEnvelope(stateId: string, storage?: Storage) {
@@ -278,7 +336,7 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 		name: normalizeSavedStateName(parsedEnvelope.name),
 	}
 	const normalizedSerialized = serializeSavedSimulationStateEnvelope(envelope)
-	const currentRecords = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY)).records
+	const currentRecords = getSavedSimulationStateStorageSnapshot(storage).records
 	const persistedAt = new Date().toISOString()
 	const id = createSavedStateRecordId({
 		existingIds: new Set(currentRecords.map(record => record.id)),
@@ -298,7 +356,7 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 }
 
 export function deleteSavedSimulationState(stateId: string, storage?: Storage) {
-	const currentRecords = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY)).records
+	const currentRecords = getSavedSimulationStateStorageSnapshot(storage).records
 	const nextRecords = currentRecords.filter(record => record.id !== stateId)
 	if (nextRecords.length === currentRecords.length) return false
 	writeSavedStateStorageRecords(nextRecords, storage)
