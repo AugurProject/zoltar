@@ -38,7 +38,7 @@ import {
 	type ForkAuctionStageView,
 } from '../lib/forkAuction.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
-import { tryParseBigIntInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
+import { tryParseBigIntInput, tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { getEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
@@ -263,7 +263,7 @@ function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 }
 function estimateBidRep(bidAmount: string, bidPrice: bigint | undefined) {
 	if (bidPrice === undefined) return undefined
-	const parsedBidAmount = bidAmount.trim() === '' ? 0n : tryParseBigIntInput(bidAmount)
+	const parsedBidAmount = bidAmount.trim() === '' ? 0n : tryParseTruthAuctionAmountInput(bidAmount)
 	if (parsedBidAmount === undefined) return undefined
 	return estimateRepPurchased(parsedBidAmount, bidPrice)
 }
@@ -1215,7 +1215,18 @@ export function ForkAuctionSection({
 			</div>
 		)
 	}
-	const renderBidActionButtons = ({ bid, disposition, showEmptyState = false }: { bid: TruthAuctionBidView; disposition: TruthAuctionBidDisposition; showEmptyState?: boolean }) => {
+	const renderBidActionButtons = ({
+		bid,
+		disposition,
+		hasActions = true,
+		showEmptyState = false,
+	}: {
+		bid: TruthAuctionBidView
+		disposition: TruthAuctionBidDisposition
+		hasActions?: boolean
+		showEmptyState?: boolean
+	}) => {
+		if (!hasActions) return undefined
 		const isViewerBid = sameAddress(bid.bidder, accountState.address)
 		const canPrefillRefund = isViewerBid && disposition.canPrefillRefund
 		const canPrefillSettle = isViewerBid && disposition.canPrefillSettle
@@ -1821,7 +1832,7 @@ export function ForkAuctionSection({
 									<span className='truth-auction-bid-row-status'>
 										<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
 									</span>
-									{renderBidActionButtons({ bid, disposition })}
+									{renderBidActionButtons({ bid, disposition, hasActions: false })}
 								</div>
 							)
 						})}

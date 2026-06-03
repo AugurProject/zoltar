@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import type { ForkOutcomeKey, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
-import { tryParseBigIntInput } from './marketForm.js'
+import { tryParseTruthAuctionAmountInput } from './marketForm.js'
 import { getTimeRemaining as getSharedTimeRemaining } from './time.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 
@@ -199,7 +199,7 @@ export function getTruthAuctionBidGuardMessage({
 
 	const trimmedAmount = submitBidAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
-	const bidAmount = tryParseBigIntInput(trimmedAmount)
+	const bidAmount = tryParseTruthAuctionAmountInput(trimmedAmount)
 	if (bidAmount === undefined) return 'Enter a valid bid amount.'
 
 	if (bidAmount <= 0n) return 'Enter a bid amount greater than zero.'

@@ -25,7 +25,7 @@ import { sameAddress } from '../lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
+import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
@@ -160,7 +160,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				const bidPrice = parseTruthAuctionPriceInput(forkAuctionForm.value.submitBidPrice, 'Bid price')
 				const bidTick = getTruthAuctionTickAtPrice(bidPrice)
 				if (bidTick === undefined) throw new Error('Enter a valid bid price.')
-				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
+				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseTruthAuctionAmountInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 			},
 			'Failed to submit truth auction bid',
 			securityPoolAddressOverride,

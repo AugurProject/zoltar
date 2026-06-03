@@ -1495,7 +1495,7 @@ describe('ForkAuctionSection', () => {
 					},
 					forkAuctionForm: {
 						...createForkAuctionForm(),
-						submitBidAmount: (1n * ETH).toString(),
+						submitBidAmount: '1',
 						submitBidPrice: '1',
 					},
 				}),
@@ -1520,7 +1520,7 @@ describe('ForkAuctionSection', () => {
 					},
 					forkAuctionForm: {
 						...createForkAuctionForm(),
-						submitBidAmount: (3n * ETH).toString(),
+						submitBidAmount: '3',
 						submitBidPrice: '1',
 					},
 				}),
@@ -1553,7 +1553,7 @@ describe('ForkAuctionSection', () => {
 					},
 					forkAuctionForm: {
 						...createForkAuctionForm(),
-						submitBidAmount: (3n * ETH).toString(),
+						submitBidAmount: '3',
 						submitBidPrice: 'abc',
 					},
 					stageView: 'auction',
@@ -1755,7 +1755,7 @@ describe('ForkAuctionSection', () => {
 					},
 					forkAuctionForm: {
 						...createForkAuctionForm(),
-						submitBidAmount: (3n * ETH).toString(),
+						submitBidAmount: '3',
 						submitBidPrice: 'abc',
 					},
 					stageView: 'auction',
@@ -2129,7 +2129,7 @@ describe('ForkAuctionSection', () => {
 					},
 					forkAuctionForm: {
 						...createForkAuctionForm(),
-						submitBidAmount: (3n * ETH).toString(),
+						submitBidAmount: '3',
 						submitBidPrice: '1',
 					},
 				}),
@@ -3026,7 +3026,7 @@ describe('ForkAuctionSection', () => {
 					},
 					forkAuctionForm: {
 						...createForkAuctionForm(),
-						submitBidAmount: (4n * ETH).toString(),
+						submitBidAmount: '4',
 						submitBidPrice: formatCurrencyInputBalance(getTruthAuctionPriceAtTick(12n)),
 					},
 					truthAuctionReadClient,
