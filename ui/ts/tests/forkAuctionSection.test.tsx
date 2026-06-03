@@ -2519,14 +2519,18 @@ describe('ForkAuctionSection', () => {
 			expect(documentQueries.getByRole('heading', { name: 'My Bids' })).not.toBeNull()
 		})
 		expect(documentQueries.getByRole('heading', { name: 'Market View' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Showing 2 of 2 active price levels')).toBe(true)
-		expect(document.body.textContent?.includes('Loaded depth')).toBe(true)
+		expect(document.body.textContent?.includes('Visible depth from loaded price levels')).toBe(false)
+		expect(document.body.textContent?.includes('Showing 2 of 2 active price levels')).toBe(false)
+		expect(document.body.textContent?.includes('Highest loaded price')).toBe(false)
+		expect(documentQueries.getByText('Loaded Depth (ETH)')).not.toBeNull()
+		expect(documentQueries.getByText('Price (ETH / REP)')).not.toBeNull()
 		expect(document.body.textContent?.includes('Winning')).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' }))
 		await waitFor(() => {
 			expect(document.body.textContent?.includes('Selected Price')).toBe(true)
 		})
 		expect(documentQueries.getByText('Selected Price')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-bid-row.is-header')).toBeNull()
 		expect(document.body.textContent?.includes('2 submissions')).toBe(true)
 	})
 
@@ -2922,7 +2926,7 @@ describe('ForkAuctionSection', () => {
 		const selectedLevel = document.body.querySelector('.truth-auction-level-detail')
 		if (!(selectedLevel instanceof HTMLElement)) throw new Error('Expected selected price-level detail to render')
 
-		const bidRows = Array.from(selectedLevel.querySelectorAll('.truth-auction-bid-row')).slice(1)
+		const bidRows = Array.from(selectedLevel.querySelectorAll('.truth-auction-bid-row'))
 		const viewerRow = bidRows.find(row => row.textContent?.includes(zeroAddress) === true)
 		const otherWalletRow = bidRows.find(row => row.textContent?.includes('0x0000000000000000000000000000000000000001') === true)
 		if (!(viewerRow instanceof HTMLElement)) throw new Error('Expected selected price-level viewer row to render')
@@ -3110,12 +3114,13 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent?.includes('Current form price')).toBe(true)
 		expect(documentQueries.getByRole('button', { name: 'Use This Price' })).not.toBeNull()
 		expect(documentQueries.getByText('Bid Price (ETH / REP)')).not.toBeNull()
-		expect(documentQueries.getByText(`${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(1n))} ETH / REP`)).not.toBeNull()
-		expect(documentQueries.getByText(`${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(2n))} ETH / REP`)).not.toBeNull()
+		expect(documentQueries.getAllByText(`${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(1n))} ETH / REP`).length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText(`${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(2n))} ETH / REP`).length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Bid Tick')).toBeNull()
 		expect(document.body.querySelector('.truth-auction-depth-marker.is-preview')).not.toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-section')).not.toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-detail-grid')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-stage-actions')).toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-board .truth-auction-panel')).toBeNull()
 	})
 
@@ -3260,11 +3265,11 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(document.body.textContent?.includes('Showing 25 of 26 active price levels')).toBe(true)
+			expect(document.body.querySelectorAll('.truth-auction-ladder-row').length).toBe(25)
 		})
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Load More Price Levels' }))
 		await waitFor(() => {
-			expect(document.body.textContent?.includes('Showing 26 of 26 active price levels')).toBe(true)
+			expect(document.body.querySelectorAll('.truth-auction-ladder-row').length).toBe(26)
 		})
 	})
 

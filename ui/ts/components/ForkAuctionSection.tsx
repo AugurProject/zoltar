@@ -1743,15 +1743,7 @@ export function ForkAuctionSection({
 						</div>
 						{loadingTruthAuctionBook ? <p className='detail'>Loading order book…</p> : undefined}
 						{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>No live price levels are currently active for this auction.</p> : undefined}
-						{truthAuctionDepthPoints.length === 0 ? undefined : (
-							<TruthAuctionDepthChart
-								loadedTickCount={truthAuctionDepthPoints.length}
-								onSelectTick={selectTruthAuctionTick}
-								points={truthAuctionDepthPoints}
-								totalActiveTickCount={truthAuctionBookData.tickCount}
-								{...(truthAuctionStatus.hitCap && truthAuctionStatus.clearingTick !== undefined ? { clearingTick: truthAuctionStatus.clearingTick } : {})}
-							/>
-						)}
+						{truthAuctionDepthPoints.length === 0 ? undefined : <TruthAuctionDepthChart onSelectTick={selectTruthAuctionTick} points={truthAuctionDepthPoints} {...(truthAuctionStatus.hitCap && truthAuctionStatus.clearingTick !== undefined ? { clearingTick: truthAuctionStatus.clearingTick } : {})} />}
 					</div>
 					<div className='truth-auction-market-detail-grid'>
 						<div className='truth-auction-market-section'>
@@ -1832,14 +1824,6 @@ export function ForkAuctionSection({
 									{!loadingSelectedTickBids && resolvedSelectedTickBids.length === 0 ? <p className='detail'>No bids are currently indexed for this price.</p> : undefined}
 									{resolvedSelectedTickBids.length === 0 ? undefined : (
 										<div className='truth-auction-bid-table'>
-											<div className='truth-auction-bid-row is-header'>
-												<span>Price</span>
-												<span>Bidder</span>
-												<span>Amount</span>
-												<span>Cumulative</span>
-												<span>Status</span>
-												<span>Actions</span>
-											</div>
 											{resolvedSelectedTickBids.map(bid => {
 												const disposition = getBidDisposition(bid, truthAuctionStatus)
 												return (
@@ -1893,14 +1877,6 @@ export function ForkAuctionSection({
 				{!loadingAggregatedAuctionBids && truthAuctionBookData.tickSummaries.length > 0 && aggregatedAuctionBids.length === 0 ? <p className='detail'>No bids are currently indexed for the loaded prices.</p> : undefined}
 				{aggregatedAuctionBids.length === 0 ? undefined : (
 					<div className='truth-auction-bid-table'>
-						<div className='truth-auction-bid-row is-header is-wide'>
-							<span>Price</span>
-							<span>Bidder</span>
-							<span>Amount</span>
-							<span>Cumulative</span>
-							<span>Status</span>
-							<span>Actions</span>
-						</div>
 						{aggregatedAuctionBids.map(bid => {
 							const disposition = getBidDisposition(bid, truthAuctionStatus)
 							return (
@@ -1953,12 +1929,6 @@ export function ForkAuctionSection({
 				{accountState.address !== undefined && !loadingTruthAuctionBook && truthAuctionBookData.viewerBids.length === 0 ? <p className='detail'>No bids from this wallet are indexed for the current auction.</p> : undefined}
 				{truthAuctionBookData.viewerBids.length === 0 ? undefined : (
 					<div className='truth-auction-bid-table'>
-						<div className='truth-auction-bid-row is-header is-wallet'>
-							<span>Price</span>
-							<span>Amount</span>
-							<span>Status</span>
-							<span>Actions</span>
-						</div>
 						{truthAuctionBookData.viewerBids.map(bid => {
 							const disposition = getBidDisposition(bid, truthAuctionStatus)
 							return (
@@ -2144,12 +2114,10 @@ export function ForkAuctionSection({
 							{truthAuctionHero}
 							{truthAuctionMarketViewSection}
 							{auctionWideBidsSection}
-							<div className='truth-auction-stage-actions'>
-								{renderSubmitBidSection({
-									description: 'Enter a price and ETH amount.',
-								})}
-								{viewerTruthAuctionBidsSection}
-							</div>
+							{renderSubmitBidSection({
+								description: 'Enter a price and ETH amount.',
+							})}
+							{viewerTruthAuctionBidsSection}
 							{truthAuctionStatus.finalized ? undefined : (
 								<SectionBlock title='Finalize Truth Auction' description='Finalize once bidding has closed.'>
 									<div className='actions'>
