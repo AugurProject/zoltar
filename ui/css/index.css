@@ -2772,15 +2772,15 @@ strong.metric-value-danger {
 }
 
 .truth-auction-bid-row.is-wide {
-	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto minmax(0, 1.35fr);
+	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.75fr) minmax(0, 1.35fr);
+}
+
+.truth-auction-bid-row.is-wide.is-no-actions {
+	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.75fr);
 }
 
 .truth-auction-bid-row.is-wallet.is-no-actions {
-	grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 1.4fr);
-}
-
-.truth-auction-bid-row.is-no-actions {
-	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.4fr);
 }
 
 .truth-auction-bid-row.is-header {

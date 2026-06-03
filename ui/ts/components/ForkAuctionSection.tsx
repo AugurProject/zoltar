@@ -28,8 +28,10 @@ import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalanc
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
 import { getEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
+import { writeSecurityPoolQueryParam } from '../lib/urlParams.js'
 import type { ForkAuctionActionResult, ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 const UNKNOWN_VALUE = '—'
@@ -56,19 +58,14 @@ type TruthAuctionBidDisposition = TruthAuctionDisposition & {
 	summaryKind: TruthAuctionBidSummaryKind
 }
 
+type LocalSettlementBidStatus = 'claimed' | 'refunded'
+type SettlementAction = 'claimAuctionProceeds' | 'refundLosingBids'
+
 type TruthAuctionBookData = {
 	tickSummaries: TruthAuctionTickSummary[]
 	tickCount: bigint
 	viewerBids: TruthAuctionBidView[]
 	viewerBidCount: bigint
-}
-
-type TruthAuctionViewerBidSummary = {
-	refundableCount: number
-	partialCount: number
-	refundedCount: number
-	repClaimableCount: number
-	winningCount: number
 }
 
 type TruthAuctionStateBadge = {
@@ -107,6 +104,18 @@ function renderAddress(address: string | undefined) {
 function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp: bigint | undefined; fallbackText: string }) {
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
+}
+function OutcomeChildPoolLink({ outcomeLabel, securityPoolAddress }: { outcomeLabel: string; securityPoolAddress: string | undefined }) {
+	if (securityPoolAddress === undefined) return <p className='detail'>Child universe not created for the {outcomeLabel} outcome yet.</p>
+
+	const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolQueryParam('', securityPoolAddress))
+
+	return (
+		<p className='detail'>
+			Selected {outcomeLabel} child pool:{' '}
+			<a href={securityPoolHref}>{securityPoolAddress}</a>
+		</p>
+	)
 }
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
 	return hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK
@@ -511,36 +520,6 @@ function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetrics | und
 	}
 }
 
-function summarizeViewerTruthAuctionBids(viewerBids: TruthAuctionBidView[], truthAuction: TruthAuctionMetrics | undefined): TruthAuctionViewerBidSummary {
-	return viewerBids.reduce<TruthAuctionViewerBidSummary>(
-		(summary, bid) => {
-			const disposition = getBidDisposition(bid, truthAuction)
-
-			if (disposition.summaryKind === 'refunded') {
-				summary.refundedCount += 1
-				return summary
-			}
-			if (disposition.summaryKind === 'winning') {
-				summary.winningCount += 1
-			} else if (disposition.summaryKind === 'partial') {
-				summary.partialCount += 1
-			} else if (disposition.summaryKind === 'losing' || disposition.summaryKind === 'refundable') {
-				summary.refundableCount += 1
-			}
-			if (disposition.canPrefillSettle && disposition.settlementKind === 'repClaim') summary.repClaimableCount += 1
-
-			return summary
-		},
-		{
-			partialCount: 0,
-			refundableCount: 0,
-			refundedCount: 0,
-			repClaimableCount: 0,
-			winningCount: 0,
-		},
-	)
-}
-
 async function loadTruthAuctionActiveTickPages(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageCount: number) {
 	const tickSummaries: TruthAuctionTickSummary[] = []
 	let tickCount = 0n
@@ -742,6 +721,11 @@ export function ForkAuctionSection({
 	const [loadingAggregatedAuctionBids, setLoadingAggregatedAuctionBids] = useState(false)
 	const [truthAuctionBookError, setTruthAuctionBookError] = useState<string | undefined>(undefined)
 	const [selectedSettlementBidKeys, setSelectedSettlementBidKeys] = useState<string[]>([])
+	const [isSettlementBidSelectedForClaiming, setIsSettlementBidSelectedForClaiming] = useState<string[]>([])
+	const [isSettlementBidSelectedForRefunding, setIsSettlementBidSelectedForRefunding] = useState<string[]>([])
+	const [settlementActionQueue, setSettlementActionQueue] = useState<SettlementAction[]>([])
+	const [settlementBidResultRefreshToken, setSettlementBidResultRefreshToken] = useState(0)
+	const [settlementBidResultByKey, setSettlementBidResultByKey] = useState<Record<string, LocalSettlementBidStatus>>({})
 	const effectiveLockedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
 		if (connectedWalletVaultSummary.lockedRepInEscalationGame > optimisticMigratedEscalationRep) {
@@ -779,6 +763,7 @@ export function ForkAuctionSection({
 						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 					</label>
 				</div>
+				{selectedOutcomeChildPoolNotice}
 				{selectedOutcomeMigrationVaultBalanceContent}
 			</>
 		)
@@ -801,7 +786,7 @@ export function ForkAuctionSection({
 	const selectedStage = stageView === 'initiate' ? 'migration' : stageView
 	const selectedStageAheadMessage = getStageAheadMessage(selectedStage, currentStage)
 	const selectedAuctionLabel = getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)
-	const showAuctionChildPoolMessage = (selectedStage === 'auction' || selectedStage === 'settlement') && !hasSelectedAuctionChildPool
+	const selectedOutcomeChildPoolNotice = <OutcomeChildPoolLink outcomeLabel={selectedAuctionLabel} securityPoolAddress={selectedAuctionChildPool?.securityPoolAddress} />
 	const enteredBidPrice = tryParseTruthAuctionPriceInput(forkAuctionForm.submitBidPrice)
 	const enteredBidTick = enteredBidPrice === undefined ? undefined : getTruthAuctionTickAtPrice(enteredBidPrice)
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, enteredBidPrice)
@@ -870,7 +855,6 @@ export function ForkAuctionSection({
 		tickSummaries: activeTickSummaries,
 		truthAuction: truthAuctionStatus,
 	})
-	const viewerBidSummary = summarizeViewerTruthAuctionBids(truthAuctionBookData.viewerBids, truthAuctionStatus)
 	const selectedLoadedTickSummary = selectedBookTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === selectedBookTick)
 	const previewTickSummary = enteredBidTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === enteredBidTick)
 	const submitBidPreviewTickSummary = previewTickSummary ?? (enteredBidTick !== undefined && selectedLoadedTickSummary?.tick === enteredBidTick ? selectedLoadedTickSummary : undefined)
@@ -903,7 +887,6 @@ export function ForkAuctionSection({
 
 		return 'No'
 	})()
-	const viewerRefundMetricLabel = truthAuctionStatus?.finalized ? 'Refundable' : 'Below Clearing'
 	const settlementBidActionRows =
 		truthAuctionStatus === undefined
 			? []
@@ -917,6 +900,12 @@ export function ForkAuctionSection({
 	const selectedSettlementBidRows = settlementBidRows.filter(({ bid }) => selectedSettlementBidKeys.includes(settlementBidKey(bid)))
 	const selectedRefundSettlementBidRows = selectedSettlementBidRows.filter(({ disposition }) => disposition.canPrefillRefund)
 	const selectedClaimSettlementBidRows = selectedSettlementBidRows.filter(({ disposition }) => disposition.canPrefillSettle)
+	const selectedClaimSettlementBidKeys = selectedClaimSettlementBidRows.map(({ bid }) => settlementBidKey(bid))
+	const selectedRefundSettlementBidKeys = selectedRefundSettlementBidRows.map(({ bid }) => settlementBidKey(bid))
+	const getSettlementBidsFromKeys = (selectedBidKeys: string[]) => {
+		const selectedBidKeySet = new Set(selectedBidKeys)
+		return settlementBidRows.filter(({ bid }) => selectedBidKeySet.has(settlementBidKey(bid))).map(({ bid }) => ({ bidIndex: bid.bidIndex, tick: bid.tick }))
+	}
 	const settlementRowsHaveClaims = settlementBidRows.some(({ disposition }) => disposition.canPrefillSettle)
 	const settlementRowsHaveRefunds = settlementBidRows.some(({ disposition }) => disposition.canPrefillRefund)
 	const settlementRowsSelectionMode = (() => {
@@ -940,6 +929,10 @@ export function ForkAuctionSection({
 		return 'Select winning and refundable bids and settle them together.'
 	})()
 	const settlementActionPendingLabel = settlementSelectionHasClaims ? 'Submitting settlement transactions...' : 'Submitting refund transactions...'
+	const refreshSettlementBidResults = () => {
+		setSettlementBidResultRefreshToken(currentToken => currentToken + 1)
+	}
+	const isSettleSelectedBidsInProgress = settlementActionQueue.length > 0 || isSettlementBidSelectedForClaiming.length + isSettlementBidSelectedForRefunding.length > 0
 	const interactionDisabledReason = (() => {
 		if (accountState.address === undefined) return 'Connect a wallet before using fork and auction actions.'
 		if (!isMainnet) return 'Switch to Ethereum mainnet before using fork and auction actions.'
@@ -1080,6 +1073,69 @@ export function ForkAuctionSection({
 	function onFinalizeTruthAuctionForSelectedAuction() {
 		onFinalizeTruthAuction(selectedAuctionPoolAddress)
 	}
+	const submitClaimBidsByKeys = (claimBidKeys: string[]) => {
+		if (selectedAuctionPoolAddress === undefined) return
+		const claimBids = getSettlementBidsFromKeys(claimBidKeys)
+		if (claimBids.length === 0) return
+		setIsSettlementBidSelectedForClaiming(claimBidKeys)
+		onClaimAuctionProceeds(selectedAuctionPoolAddress, claimBids)
+	}
+	const submitRefundBidsByKeys = (refundBidKeys: string[]) => {
+		if (selectedAuctionPoolAddress === undefined) return
+		const refundBids = getSettlementBidsFromKeys(refundBidKeys)
+		if (refundBids.length === 0) return
+		setIsSettlementBidSelectedForRefunding(refundBidKeys)
+		onRefundLosingBids(selectedAuctionPoolAddress, refundBids)
+	}
+	const markSettlementBidResult = (settlementBidKeys: string[], status: LocalSettlementBidStatus) => {
+		const targetBidKeys = Array.from(new Set(settlementBidKeys))
+		if (targetBidKeys.length === 0) return
+
+		setSettlementBidResultByKey(currentStatuses => {
+			const nextStatuses = { ...currentStatuses }
+			for (const settlementBidKeyToSettle of targetBidKeys) {
+				nextStatuses[settlementBidKeyToSettle] = status
+			}
+			return nextStatuses
+		})
+		setSelectedSettlementBidKeys(currentSelection => currentSelection.filter(selectedBidKey => !targetBidKeys.includes(selectedBidKey)))
+
+		if (status === 'claimed') {
+			setIsSettlementBidSelectedForClaiming(currentSelection => currentSelection.filter(claimedBidKey => !targetBidKeys.includes(claimedBidKey)))
+			return
+		}
+
+		setIsSettlementBidSelectedForRefunding(currentSelection => currentSelection.filter(refundedBidKey => !targetBidKeys.includes(refundedBidKey)))
+	}
+	useEffect(() => {
+		if (!isSettleSelectedBidsInProgress) return
+		if (forkAuctionError !== undefined) {
+			setIsSettlementBidSelectedForClaiming([])
+			setIsSettlementBidSelectedForRefunding([])
+			setSettlementActionQueue([])
+			return
+		}
+		if (forkAuctionResult === undefined || selectedAuctionPoolAddress === undefined || !sameAddress(forkAuctionResult.securityPoolAddress, selectedAuctionPoolAddress)) return
+		const currentActionQueue = settlementActionQueue
+		if (forkAuctionResult.action === 'claimAuctionProceeds') {
+			if (currentActionQueue[0] !== 'claimAuctionProceeds') return
+			markSettlementBidResult(isSettlementBidSelectedForClaiming, 'claimed')
+			const nextActionQueue = currentActionQueue.slice(1)
+			setSettlementActionQueue(nextActionQueue)
+			if (nextActionQueue[0] === 'refundLosingBids' && isSettlementBidSelectedForRefunding.length > 0) {
+				submitRefundBidsByKeys(isSettlementBidSelectedForRefunding)
+			} else {
+				refreshSettlementBidResults()
+			}
+			return
+		}
+		if (forkAuctionResult.action === 'refundLosingBids') {
+			if (currentActionQueue[0] !== 'refundLosingBids') return
+			markSettlementBidResult(isSettlementBidSelectedForRefunding, 'refunded')
+			setSettlementActionQueue(currentActionQueue.slice(1))
+			refreshSettlementBidResults()
+		}
+	}, [forkAuctionError, forkAuctionResult, isSettleSelectedBidsInProgress, isSettlementBidSelectedForClaiming, isSettlementBidSelectedForRefunding, settlementActionQueue, selectedAuctionPoolAddress])
 	const settlementBidActionAvailability = (() => {
 		if (selectedSettlementBidRows.length === 0) return 'Pick one or more of your bids before settlement.'
 		if (truthAuctionStatus === undefined) return 'Load the truth auction before settling bids.'
@@ -1096,35 +1152,24 @@ export function ForkAuctionSection({
 	})()
 	const onRefundLosingBidsForSelectedAuction = () => {
 		if (selectedRefundSettlementBidRows.length === 0) return
-		onRefundLosingBids(
-			selectedAuctionPoolAddress,
-			selectedRefundSettlementBidRows.map(({ bid }) => ({
-				bidIndex: bid.bidIndex,
-				tick: bid.tick,
-			})),
-		)
+		submitRefundBidsByKeys(selectedRefundSettlementBidKeys)
 	}
 	const onSettleSelectedBidsForSelectedAuction = () => {
-		if (settlementSelectionMode === 'claim') {
-			onClaimAuctionProceedsForSelectedAuction()
-			return
-		}
-		if (settlementSelectionMode === 'refund') {
-			onRefundLosingBidsForSelectedAuction()
-			return
-		}
-		onClaimAuctionProceedsForSelectedAuction()
-		onRefundLosingBidsForSelectedAuction()
+		if (selectedSettlementBidRows.length === 0) return
+		if (isSettleSelectedBidsInProgress) return
+		if (selectedAuctionPoolAddress === undefined) return
+		const nextSettlementActionQueue: SettlementAction[] = []
+		if (selectedClaimSettlementBidRows.length > 0) nextSettlementActionQueue.push('claimAuctionProceeds')
+		if (selectedRefundSettlementBidRows.length > 0) nextSettlementActionQueue.push('refundLosingBids')
+		if (nextSettlementActionQueue.length === 0) return
+		setIsSettlementBidSelectedForClaiming(selectedClaimSettlementBidKeys)
+		setIsSettlementBidSelectedForRefunding(selectedRefundSettlementBidKeys)
+		setSettlementActionQueue(nextSettlementActionQueue)
+		submitClaimBidsByKeys(selectedClaimSettlementBidKeys.length > 0 ? selectedClaimSettlementBidKeys : selectedRefundSettlementBidKeys)
 	}
 	const onClaimAuctionProceedsForSelectedAuction = () => {
 		if (selectedClaimSettlementBidRows.length === 0) return
-		onClaimAuctionProceeds(
-			selectedAuctionPoolAddress,
-			selectedClaimSettlementBidRows.map(({ bid }) => ({
-				bidIndex: bid.bidIndex,
-				tick: bid.tick,
-			})),
-		)
+		submitClaimBidsByKeys(selectedClaimSettlementBidKeys)
 	}
 	const onMigrateVaultSubmit = () => {
 		setIsVaultMigrationPending(true)
@@ -1155,6 +1200,7 @@ export function ForkAuctionSection({
 		idleLabel,
 		onClick,
 		pendingLabel,
+		pending,
 		tone = 'secondary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -1166,17 +1212,19 @@ export function ForkAuctionSection({
 		idleLabel: string
 		onClick: () => void
 		pendingLabel: string
+		pending?: boolean
 		tone?: 'primary' | 'secondary'
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
 		const disabledReason = interactionDisabledReason ?? resolvedAvailability.reason
+		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
 				idleLabel={idleLabel}
 				pendingLabel={pendingLabel}
 				onClick={onClick}
-				pending={forkAuctionActiveAction === action}
+				pending={isPending}
 				tone={tone}
 				availability={{
 					disabled: !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
@@ -1209,9 +1257,9 @@ export function ForkAuctionSection({
 	)
 	const renderMyBidsHeader = ({ showActions = true }: { showActions?: boolean }) => (
 		<div className={`truth-auction-bid-row is-wallet ${showActions ? '' : 'is-no-actions'} is-header`}>
+			{showActions ? <span>Selected</span> : undefined}
 			<span className='truth-auction-bid-row-label'>Price (ETH / REP)</span>
 			<span>Bid Amount (ETH)</span>
-			{showActions ? <span>Actions</span> : undefined}
 			<span className='truth-auction-bid-row-status'>Status</span>
 		</div>
 	)
@@ -1248,6 +1296,7 @@ export function ForkAuctionSection({
 		description,
 		idleLabel,
 		pendingLabel,
+		pending = false,
 		title,
 		availabilityMessage,
 		onClick,
@@ -1257,6 +1306,7 @@ export function ForkAuctionSection({
 		description?: ComponentChildren
 		idleLabel: string
 		pendingLabel: string
+		pending?: boolean
 		title?: ComponentChildren
 		availabilityMessage: string | undefined
 		onClick?: () => void
@@ -1272,6 +1322,7 @@ export function ForkAuctionSection({
 					idleLabel,
 					onClick: onClick ?? (action === 'refundLosingBids' ? onRefundLosingBidsForSelectedAuction : onClaimAuctionProceedsForSelectedAuction),
 					pendingLabel,
+					pending,
 					tone,
 				})}
 			</div>
@@ -1420,11 +1471,32 @@ export function ForkAuctionSection({
 	useEffect(() => {
 		if (selectedStage !== 'settlement') {
 			setSelectedSettlementBidKeys([])
+			setIsSettlementBidSelectedForClaiming([])
+			setIsSettlementBidSelectedForRefunding([])
+			setSettlementBidResultByKey({})
+			setSettlementActionQueue([])
 			return
 		}
 		const selectableBidKeySet = new Set(settlementBidRowKeys)
 		setSelectedSettlementBidKeys(currentKeys => currentKeys.filter(key => selectableBidKeySet.has(key)))
-	}, [accountState.address, selectedStage, settlementBidRowKeySignature, selectedAuctionPoolAddress])
+		setSettlementBidResultByKey(currentStatuses => {
+			let hasUnchangedKeys = false
+			const nextStatuses: Record<string, LocalSettlementBidStatus> = {}
+			Object.keys(currentStatuses).forEach(currentSettlementBidKey => {
+				if (settlementBidRows.some(({ bid }) => settlementBidKey(bid) === currentSettlementBidKey)) {
+					const existingStatus = currentStatuses[currentSettlementBidKey]
+					if (existingStatus !== undefined) {
+						nextStatuses[currentSettlementBidKey] = existingStatus
+						hasUnchangedKeys = true
+					}
+				}
+			})
+			setIsSettlementBidSelectedForClaiming(currentKeys => currentKeys.filter(key => settlementBidRowKeys.includes(key)))
+			setIsSettlementBidSelectedForRefunding(currentKeys => currentKeys.filter(key => settlementBidRowKeys.includes(key)))
+			if (hasUnchangedKeys) return nextStatuses
+			return {}
+		})
+	}, [accountState.address, selectedStage, settlementBidRowKeySignature, selectedAuctionPoolAddress, settlementBidRows, settlementBidRowKeys])
 	useEffect(() => {
 		setLoadedTickPageCount(1)
 		setLoadedViewerBidPageCount(1)
@@ -1486,7 +1558,7 @@ export function ForkAuctionSection({
 		return () => {
 			cancelled = true
 		}
-	}, [accountState.address, auctionTruthAuctionAddress, enteredBidTick, forkAuctionResult?.hash, loadedTickPageCount, loadedViewerBidPageCount, selectedStage, shouldShowTruthAuctionVisualization, truthAuctionReadClient, truthAuctionStatus?.clearingTick])
+	}, [accountState.address, auctionTruthAuctionAddress, enteredBidTick, forkAuctionResult?.hash, loadedTickPageCount, loadedViewerBidPageCount, selectedStage, settlementBidResultRefreshToken, shouldShowTruthAuctionVisualization, truthAuctionReadClient, truthAuctionStatus?.clearingTick])
 	useEffect(() => {
 		if (!shouldShowTruthAuctionVisualization || auctionTruthAuctionAddress === undefined || auctionTruthAuctionAddress === zeroAddress || (selectedStage !== 'auction' && selectedStage !== 'settlement')) {
 			setAggregatedAuctionBids([])
@@ -1516,7 +1588,7 @@ export function ForkAuctionSection({
 		return () => {
 			cancelled = true
 		}
-	}, [auctionTruthAuctionAddress, forkAuctionResult?.hash, loadedAuctionBidPageCount, selectedStage, shouldShowTruthAuctionVisualization, truthAuctionBookData.tickSummaries, truthAuctionReadClient])
+	}, [auctionTruthAuctionAddress, forkAuctionResult?.hash, loadedAuctionBidPageCount, selectedStage, settlementBidResultRefreshToken, shouldShowTruthAuctionVisualization, truthAuctionBookData.tickSummaries, truthAuctionReadClient])
 	const latestForkAuctionAction =
 		forkAuctionResult === undefined
 			? undefined
@@ -1575,7 +1647,6 @@ export function ForkAuctionSection({
 			</label>
 		</div>
 	)
-	const selectedAuctionChildPoolNotice = showAuctionChildPoolMessage ? <p className='detail'>Child universe not created for the {selectedAuctionLabel} outcome yet.</p> : undefined
 	const selectedAuctionDetailsNotice = (() => {
 		if (!hasSelectedAuctionChildPool || selectedStage === 'migration') return undefined
 		if (loadingSelectedAuctionDetails) return <p className='detail'>Loading {selectedAuctionLabel} child auction details.</p>
@@ -1743,64 +1814,68 @@ export function ForkAuctionSection({
 			</SectionBlock>
 		)
 	})()
-		const viewerTruthAuctionBidsSection = (() => {
-			if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
-			const viewerBidsWithDisposition = truthAuctionBookData.viewerBids.map(bid => ({ bid, disposition: getBidDisposition(bid, truthAuctionStatus) }))
-			const hasViewerBidActions = viewerBidsWithDisposition.some(({ bid, disposition }) => sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle))
-			const isSettlementStage = selectedStage === 'settlement'
-			const showSettlementActionColumn = isSettlementStage && hasViewerBidActions
+	const viewerTruthAuctionBidsSection = (() => {
+		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+		const viewerBidsWithDisposition = truthAuctionBookData.viewerBids.map(bid => ({ bid, disposition: getBidDisposition(bid, truthAuctionStatus) }))
+		const hasViewerBidActions = viewerBidsWithDisposition.some(({ bid, disposition }) => sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle))
+		const isSettlementStage = selectedStage === 'settlement'
+		const showSettlementActionColumn = isSettlementStage && hasViewerBidActions
 
-			return (
-			<SectionBlock title='My Bids' description='Your bids and their current status.'>
+		return (
+			<SectionBlock title='My Bids'>
 				{accountState.address === undefined ? <p className='detail'>Connect a wallet to inspect your submitted truth auction bids.</p> : undefined}
-				{accountState.address !== undefined ? (
-					<div className='truth-auction-wallet-summary'>
-						<MetricField label='Winning'>{viewerBidSummary.winningCount.toString()}</MetricField>
-						<MetricField label='Partial'>{viewerBidSummary.partialCount.toString()}</MetricField>
-						<MetricField label={viewerRefundMetricLabel}>{viewerBidSummary.refundableCount.toString()}</MetricField>
-						<MetricField label='REP Claimable'>{viewerBidSummary.repClaimableCount.toString()}</MetricField>
-						<MetricField label='Refunded'>{viewerBidSummary.refundedCount.toString()}</MetricField>
-					</div>
-				) : undefined}
 				{accountState.address !== undefined && loadingTruthAuctionBook ? <p className='detail'>Loading your bids…</p> : undefined}
 				{accountState.address !== undefined && !loadingTruthAuctionBook && truthAuctionBookData.viewerBids.length === 0 ? <p className='detail'>No bids from this wallet are indexed for the current auction.</p> : undefined}
 				{truthAuctionBookData.viewerBids.length === 0 ? undefined : (
 					<div className='truth-auction-bid-table'>
 						{renderMyBidsHeader({ showActions: showSettlementActionColumn })}
-							{viewerBidsWithDisposition.map(({ bid, disposition }) => {
-								const isSettlementBid = sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle)
-								const isSettlementBidActions = isSettlementStage && isSettlementBid
-								const isSettlementBidChecked = selectedSettlementBidKeys.includes(settlementBidKey(bid))
-								return (
-									<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
-										<span className='truth-auction-bid-row-label'>{renderTruthAuctionPriceValue(getTruthAuctionPriceAtTick(bid.tick))}</span>
-										<span>
-											<CurrencyValue value={bid.ethAmount} suffix='ETH' />
-										</span>
-										{showSettlementActionColumn ? (
-											<div className='truth-auction-bid-row-actions'>
-												<input
-													disabled={!isSettlementBidActions}
-													type='checkbox'
-													checked={isSettlementBidActions ? isSettlementBidChecked : false}
-													title={isSettlementBidActions ? 'Select bid for settlement' : 'This bid is not yet settlement-eligible'}
-													aria-label={isSettlementBidActions ? 'Select bid for settlement' : 'Bid is not settlement-eligible'}
-													onChange={event =>
-														setSelectedSettlementBidKeys(currentKeys => {
-															const key = settlementBidKey(bid)
-															if (event.currentTarget.checked) {
-																if (currentKeys.includes(key)) return currentKeys
-																return [...currentKeys, key]
-															}
-															return currentKeys.filter(currentKey => currentKey !== key)
-														})
-													}
-												/>
-												</div>
-											) : undefined}
-										<span className='truth-auction-bid-row-status'>
-											<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
-										</span>
+						{viewerBidsWithDisposition.map(({ bid, disposition }) => {
+							const isSettlementBid = sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle)
+							const settlementBidRow = settlementBidKey(bid)
+							const inSessionSettlementResult = settlementBidResultByKey[settlementBidRow]
+							const isSettlementBidActions = isSettlementStage && isSettlementBid && inSessionSettlementResult === undefined && !isSettleSelectedBidsInProgress
+							const isSettlementBidChecked = selectedSettlementBidKeys.includes(settlementBidRow)
+							const isSettlementBidSelectable = inSessionSettlementResult === undefined && !isSettleSelectedBidsInProgress
+							const statusLabel = (() => {
+								if (inSessionSettlementResult === 'claimed') return 'Claimed'
+								if (inSessionSettlementResult === 'refunded') return 'Refunded'
+								return disposition.label
+							})()
+							const statusTone = (() => {
+								if (inSessionSettlementResult === 'claimed') return 'is-success'
+								if (inSessionSettlementResult === 'refunded') return 'is-default'
+								return getTruthAuctionDispositionClassName(disposition.tone)
+							})()
+							return (
+								<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
+									{showSettlementActionColumn ? (
+										<div className='truth-auction-bid-row-actions'>
+											<input
+												disabled={!isSettlementBidActions || !isSettlementBidSelectable}
+												type='checkbox'
+												checked={isSettlementBidActions ? isSettlementBidChecked : false}
+												title={isSettlementBidActions ? 'Select bid for settlement' : 'This bid is not yet settlement-eligible'}
+												aria-label={isSettlementBidActions ? 'Select bid for settlement' : 'Bid is not settlement-eligible'}
+												onChange={event =>
+													setSelectedSettlementBidKeys(currentKeys => {
+														const key = settlementBidRow
+														if (event.currentTarget.checked) {
+															if (currentKeys.includes(key)) return currentKeys
+															return [...currentKeys, key]
+														}
+														return currentKeys.filter(currentKey => currentKey !== key)
+													})
+												}
+											/>
+										</div>
+									) : undefined}
+									<span className='truth-auction-bid-row-label'>{renderTruthAuctionPriceValue(getTruthAuctionPriceAtTick(bid.tick))}</span>
+									<span>
+										<CurrencyValue value={bid.ethAmount} suffix='ETH' />
+									</span>
+									<span className='truth-auction-bid-row-status'>
+										<span className={`truth-auction-status-pill ${statusTone}`}>{statusLabel}</span>
+									</span>
 								</div>
 							)
 						})}
@@ -1820,6 +1895,7 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return renderSettlementActionSection({
 			action: settlementAction,
+			pending: isSettleSelectedBidsInProgress,
 			availabilityMessage: settlementActionAvailabilityMessage,
 			description: settlementActionDescription,
 			idleLabel: settlementActionLabel,
@@ -1941,6 +2017,7 @@ export function ForkAuctionSection({
 						<fieldset className='fork-stage-panel' disabled={disabled}>
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 							{auctionOutcomeSelector}
+							{selectedOutcomeChildPoolNotice}
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
@@ -1956,7 +2033,7 @@ export function ForkAuctionSection({
 					<fieldset className='fork-stage-panel' disabled={disabled}>
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{auctionOutcomeSelector}
-						{selectedAuctionChildPoolNotice}
+						{selectedOutcomeChildPoolNotice}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title='Auction Status'>
@@ -1989,6 +2066,7 @@ export function ForkAuctionSection({
 						<fieldset className='fork-stage-panel' disabled={disabled}>
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 							{auctionOutcomeSelector}
+							{selectedOutcomeChildPoolNotice}
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
@@ -2000,7 +2078,7 @@ export function ForkAuctionSection({
 					<fieldset className='fork-stage-panel' disabled={disabled}>
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{auctionOutcomeSelector}
-						{selectedAuctionChildPoolNotice}
+						{selectedOutcomeChildPoolNotice}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title='Settlement Status'>

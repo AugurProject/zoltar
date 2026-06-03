@@ -2261,9 +2261,7 @@ describe('ForkAuctionSection', () => {
 			expect(endedNotice).toBeNull()
 		})
 		const prefinalizationSettlementCheckbox = await waitFor(() => {
-			const checkboxes = Array.from(document.body.querySelectorAll('.truth-auction-bid-row input[type="checkbox"]')).filter(
-				(checkbox): checkbox is HTMLInputElement => checkbox instanceof HTMLInputElement && !checkbox.disabled,
-			)
+			const checkboxes = Array.from(document.body.querySelectorAll('.truth-auction-bid-row input[type="checkbox"]')).filter((checkbox): checkbox is HTMLInputElement => checkbox instanceof HTMLInputElement && !checkbox.disabled)
 			if (checkboxes.length === 0) throw new Error('Expected enabled settlement checkbox')
 			const enabledCheckbox = checkboxes[0]
 			if (enabledCheckbox === undefined) throw new Error('Expected enabled settlement checkbox')
@@ -2293,9 +2291,7 @@ describe('ForkAuctionSection', () => {
 			expect(within(endedNotice as HTMLElement).queryByRole('button', { name: 'Finalize Truth Auction' })).not.toBeNull()
 		})
 		const postFinalizationSettlementCheckbox = await waitFor(() => {
-			const checkboxes = Array.from(document.body.querySelectorAll('.truth-auction-bid-row input[type="checkbox"]')).filter(
-				(checkbox): checkbox is HTMLInputElement => checkbox instanceof HTMLInputElement && !checkbox.disabled,
-			)
+			const checkboxes = Array.from(document.body.querySelectorAll('.truth-auction-bid-row input[type="checkbox"]')).filter((checkbox): checkbox is HTMLInputElement => checkbox instanceof HTMLInputElement && !checkbox.disabled)
 			if (checkboxes.length === 0) throw new Error('Expected enabled settlement checkbox')
 			const enabledCheckbox = checkboxes[0]
 			if (enabledCheckbox === undefined) throw new Error('Expected enabled settlement checkbox')
@@ -2779,6 +2775,148 @@ describe('ForkAuctionSection', () => {
 		expect(selectedBids).toContainEqual({ tick: 12n, bidIndex: 0n })
 	})
 
+	test('shows settlement progress while submitting and marks selected bids as claimed', async () => {
+		const selectedClaims: Array<{ tick: bigint; bidIndex: bigint } | undefined> = []
+		let callCount = 0
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			callCount += 1
+			if (request.functionName === 'activeTickCount') return 1n
+			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return 1n
+			if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
+			if (request.functionName === 'getBidderBidCount') return 1n
+			if (request.functionName === 'getBidderBidPage') return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const settleResult = {
+			action: 'claimAuctionProceeds' as const,
+			hash: zeroAddress,
+			securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+			universeId: 1n,
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						claimingAvailable: true,
+						systemState: 'operational',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							clearingPrice: 2n * ETH,
+							clearingTick: 10n,
+							ethAtClearingTick: 5n * ETH,
+							finalized: true,
+							hitCap: true,
+						},
+						truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+						truthAuctionStartedAt: 1n,
+						securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+					},
+					securityPools: [
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'yes',
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+						}),
+					],
+					onClaimAuctionProceeds: (_address, bids) => {
+						const selected = bids?.at(0)
+						selectedClaims.push(selected === undefined ? undefined : { tick: selected.tick, bidIndex: selected.bidIndex })
+					},
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const myBidsSection = await waitFor(() => {
+			const heading = documentQueries.getByRole('heading', { name: 'My Bids' })
+			const section = heading.closest('section')
+			if (!(section instanceof HTMLElement)) throw new Error('Expected My Bids section')
+			return section
+		})
+		const firstRowCheckbox = await waitFor(() => {
+			const input = myBidsSection.querySelector('input[type="checkbox"]')
+			if (!(input instanceof HTMLInputElement)) throw new Error('Expected settlement checkbox')
+			return input
+		})
+		fireEvent.click(firstRowCheckbox)
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Settle Selected Bids')
+		})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
+
+		await waitFor(() => {
+			expect(documentQueries.queryByRole('button', { name: 'Submitting settlement transactions...' })).not.toBeNull()
+		})
+		expect(selectedClaims).toContainEqual({ tick: 12n, bidIndex: 0n })
+		const callCountBeforeResult = callCount
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							claimingAvailable: true,
+							systemState: 'operational',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								clearingPrice: 2n * ETH,
+								clearingTick: 10n,
+								ethAtClearingTick: 5n * ETH,
+								finalized: true,
+								hitCap: true,
+							},
+							truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+							truthAuctionStartedAt: 1n,
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+						},
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+							}),
+						],
+						forkAuctionResult: settleResult,
+						onClaimAuctionProceeds: (_address, bids) => {
+							const selected = bids?.at(0)
+							selectedClaims.push(selected === undefined ? undefined : { tick: selected.tick, bidIndex: selected.bidIndex })
+						},
+						truthAuctionReadClient,
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Settle Selected Bids')
+		})
+		const row = await waitFor(() => {
+			const latestMyBidsSection = documentQueries.getByRole('heading', { name: 'My Bids' }).closest('section')
+			if (!(latestMyBidsSection instanceof HTMLElement)) throw new Error('Expected My Bids section')
+			const nextRow = latestMyBidsSection.querySelector('.truth-auction-bid-row:not(.is-header)')
+			if (!(nextRow instanceof HTMLElement)) throw new Error('Expected wallet row')
+			return nextRow
+		})
+		const rowStatus = row.querySelector('.truth-auction-status-pill')
+		if (!(rowStatus instanceof HTMLElement)) throw new Error('Expected settlement status pill')
+		expect(rowStatus.textContent).toBe('Claimed')
+		const rowCheckbox = row.querySelector('input[type="checkbox"]')
+		if (!(rowCheckbox instanceof HTMLInputElement)) throw new Error('Expected settlement checkbox')
+		expect(rowCheckbox.disabled).toBe(true)
+		expect(callCount).toBeGreaterThan(callCountBeforeResult)
+	})
+
 	test('selects refundable bids in the settlement flow without row prefill actions', async () => {
 		const selectedBids: Array<{ tick: bigint; bidIndex: bigint } | undefined> = []
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
@@ -3048,21 +3186,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => {
-			expect(document.body.querySelector('.truth-auction-wallet-summary')).not.toBeNull()
-		})
-
-		await waitFor(() => {
-			expect(document.body.querySelector('.truth-auction-wallet-summary')).not.toBeNull()
-		})
-		const walletSummary = document.body.querySelector('.truth-auction-wallet-summary')
-		if (!(walletSummary instanceof HTMLElement)) throw new Error('Expected wallet summary to render')
-
-		await waitFor(() => {
-			expect(getMetricValue(walletSummary, 'Winning')).toBe('1')
-			expect(getMetricValue(walletSummary, 'Partial')).toBe('1')
-			expect(getMetricValue(walletSummary, 'Refundable')).toBe('1')
-			expect(getMetricValue(walletSummary, 'REP Claimable')).toBe('2')
-			expect(getMetricValue(walletSummary, 'Refunded')).toBe('1')
+			expect(document.body.querySelector('.truth-auction-wallet-summary')).toBeNull()
 		})
 	})
 
@@ -3102,12 +3226,8 @@ describe('ForkAuctionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const walletSummary = document.body.querySelector('.truth-auction-wallet-summary')
-		if (!(walletSummary instanceof HTMLElement)) throw new Error('Expected wallet summary to render')
-
 		await waitFor(() => {
-			expect(getMetricValue(walletSummary, 'Below Clearing')).toBe('1')
-			expect(getMetricValue(walletSummary, 'REP Claimable')).toBe('0')
+			expect(document.body.querySelector('.truth-auction-wallet-summary')).toBeNull()
 		})
 	})
 
@@ -3238,9 +3358,9 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Settle Finalized Bid' })).toBeNull()
 	})
 
-		test('aligns my bids columns with status always last when actions are unavailable', async () => {
-			const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
-				if (request.functionName === 'activeTickCount') return 1n
+	test('aligns my bids columns with status always last when actions are unavailable', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 1n
 			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
 			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
 			if (request.functionName === 'getBidCountAtTick') return 1n
@@ -3298,95 +3418,92 @@ describe('ForkAuctionSection', () => {
 		const rowCells = Array.from(firstWalletRow.children).map(cell => cell.textContent?.trim() ?? '')
 		expect(rowCells).toHaveLength(3)
 		expect(rowCells[rowCells.length - 1]).toBe('Claimed')
-			expect(firstWalletRow.querySelector('.truth-auction-bid-row-actions')).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: 'Refund' })).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: 'Settle' })).toBeNull()
-		})
+		expect(firstWalletRow.querySelector('.truth-auction-bid-row-actions')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Refund' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Settle' })).toBeNull()
+	})
 
-		test('shows disabled settlement checkboxes for non-claimable bids while keeping action column when any bid is claimable', async () => {
-			const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
-				if (request.functionName === 'activeTickCount') return 1n
-				if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 10n, price: getTruthAuctionPriceAtTick(10n), currentTotalEth: 3n * ETH, submissionCount: 1n, active: true })]
-				if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 10n, price: getTruthAuctionPriceAtTick(10n), currentTotalEth: 3n * ETH, submissionCount: 1n, active: true })
-				if (request.functionName === 'getBidCountAtTick') return 1n
-				if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 3n * ETH, cumulativeEth: 3n * ETH })]
-				if (request.functionName === 'getBidderBidCount') return 2n
-				if (request.functionName === 'getBidderBidPage') {
-					return [
-						createTruthAuctionBidView({ tick: 9n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }),
-						createTruthAuctionBidView({ tick: 11n, bidIndex: 1n, ethAmount: 1n * ETH, cumulativeEth: 3n * ETH }),
-					]
-				}
-				throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
-			})
-			const renderedComponent = await renderIntoDocument(
-				h(
-					ForkAuctionSection,
-					createProps({
-						accountState: createAccountState({ address: zeroAddress, ethBalance: 10n * ETH }),
-						forkAuctionDetails: {
-							...createForkAuctionDetails(),
-							claimingAvailable: false,
-							systemState: 'operational',
-							truthAuction: {
-								...createTruthAuctionMetrics(),
-								clearingPrice: getTruthAuctionPriceAtTick(10n),
-								clearingTick: 10n,
-								ethAtClearingTick: 3n * ETH,
-								hitCap: true,
-								finalized: false,
-								timeRemaining: 0n,
-							},
-							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
-							truthAuctionStartedAt: 1n,
+	test('shows disabled settlement checkboxes for non-claimable bids while keeping action column when any bid is claimable', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 1n
+			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 10n, price: getTruthAuctionPriceAtTick(10n), currentTotalEth: 3n * ETH, submissionCount: 1n, active: true })]
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 10n, price: getTruthAuctionPriceAtTick(10n), currentTotalEth: 3n * ETH, submissionCount: 1n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return 1n
+			if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 3n * ETH, cumulativeEth: 3n * ETH })]
+			if (request.functionName === 'getBidderBidCount') return 2n
+			if (request.functionName === 'getBidderBidPage') {
+				return [createTruthAuctionBidView({ tick: 9n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }), createTruthAuctionBidView({ tick: 11n, bidIndex: 1n, ethAmount: 1n * ETH, cumulativeEth: 3n * ETH })]
+			}
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: zeroAddress, ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						claimingAvailable: false,
+						systemState: 'operational',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							clearingPrice: getTruthAuctionPriceAtTick(10n),
+							clearingTick: 10n,
+							ethAtClearingTick: 3n * ETH,
+							hitCap: true,
+							finalized: false,
+							timeRemaining: 0n,
 						},
-						stageView: 'settlement',
-						truthAuctionReadClient,
-					}),
-				),
-			)
-			cleanupRenderedComponent = renderedComponent.cleanup
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					stageView: 'settlement',
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-			const documentQueries = within(document.body)
-			const myBidsSection = await waitFor(() => {
-				const heading = documentQueries.getByRole('heading', { name: 'My Bids' })
-				const section = heading.closest('section')
-				if (!(section instanceof HTMLElement)) throw new Error('Expected my bids section to render')
-				return section
-			})
-			const headerRow = await waitFor(() => {
-				const row = myBidsSection.querySelector('.truth-auction-bid-row')
-				if (!(row instanceof HTMLElement)) throw new Error('Expected my bids header row')
-				return row
-			})
-			const headerCells = Array.from(headerRow.children).map(cell => cell.textContent?.trim() ?? '')
-			expect(headerCells).toEqual(['Price (ETH / REP)', 'Bid Amount (ETH)', 'Actions', 'Status'])
+		const documentQueries = within(document.body)
+		const myBidsSection = await waitFor(() => {
+			const heading = documentQueries.getByRole('heading', { name: 'My Bids' })
+			const section = heading.closest('section')
+			if (!(section instanceof HTMLElement)) throw new Error('Expected my bids section to render')
+			return section
+		})
+		const headerRow = await waitFor(() => {
+			const row = myBidsSection.querySelector('.truth-auction-bid-row')
+			if (!(row instanceof HTMLElement)) throw new Error('Expected my bids header row')
+			return row
+		})
+		const headerCells = Array.from(headerRow.children).map(cell => cell.textContent?.trim() ?? '')
+		expect(headerCells).toEqual(['Selected', 'Price (ETH / REP)', 'Bid Amount (ETH)', 'Status'])
 
-			const walletRows = myBidsSection.querySelectorAll('.truth-auction-bid-row:not(.is-header)')
-			expect(walletRows.length).toBe(2)
-			const rowsByCheckboxState = Array.from(walletRows).map(row => {
-				const checkboxElement = row.querySelector('.truth-auction-bid-row-actions input[type="checkbox"]')
-				const checkbox = checkboxElement instanceof HTMLInputElement ? checkboxElement : null
-				if (checkbox === null) throw new Error('Expected settlement action checkbox for row')
-				return { checkbox }
-			})
-
-			const enabledRows = rowsByCheckboxState.filter(item => !item.checkbox.disabled)
-			const disabledRows = rowsByCheckboxState.filter(item => item.checkbox.disabled)
-			expect(enabledRows).toHaveLength(1)
-			expect(disabledRows).toHaveLength(1)
-			const enabledRow = enabledRows[0]
-			const disabledRow = disabledRows[0]
-			if (enabledRow === undefined || disabledRow === undefined) throw new Error('Expected both enabled and disabled settlement rows')
-			expect(enabledRow.checkbox.disabled).toBe(false)
-			expect(disabledRow.checkbox.disabled).toBe(true)
-			expect(myBidsSection.querySelector('.truth-auction-bid-row-empty')).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: 'Refund' })).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: 'Settle' })).toBeNull()
+		const walletRows = myBidsSection.querySelectorAll('.truth-auction-bid-row:not(.is-header)')
+		expect(walletRows.length).toBe(2)
+		const rowsByCheckboxState = Array.from(walletRows).map(row => {
+			const checkboxElement = row.querySelector('.truth-auction-bid-row-actions input[type="checkbox"]')
+			const checkbox = checkboxElement instanceof HTMLInputElement ? checkboxElement : null
+			if (checkbox === null) throw new Error('Expected settlement action checkbox for row')
+			return { checkbox }
 		})
 
-		test('keeps finalized settlement focused on wallet actions before the market view', async () => {
-			const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+		const enabledRows = rowsByCheckboxState.filter(item => !item.checkbox.disabled)
+		const disabledRows = rowsByCheckboxState.filter(item => item.checkbox.disabled)
+		expect(enabledRows).toHaveLength(1)
+		expect(disabledRows).toHaveLength(1)
+		const enabledRow = enabledRows[0]
+		const disabledRow = disabledRows[0]
+		if (enabledRow === undefined || disabledRow === undefined) throw new Error('Expected both enabled and disabled settlement rows')
+		expect(enabledRow.checkbox.disabled).toBe(false)
+		expect(disabledRow.checkbox.disabled).toBe(true)
+		expect(myBidsSection.querySelector('.truth-auction-bid-row-empty')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Refund' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Settle' })).toBeNull()
+	})
+
+	test('keeps finalized settlement focused on wallet actions before the market view', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
 			if (request.functionName === 'activeTickCount') return 1n
 			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
 			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
