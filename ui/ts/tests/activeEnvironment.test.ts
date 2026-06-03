@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, loadZoltarUniverseSummary, queueOracleManagerOperation } from '../contracts.js'
+import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadForkAuctionDetails, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, loadTruthAuctionActiveTickPage, loadZoltarUniverseSummary, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
 import { getActiveBackend, getActiveSimulationController, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
@@ -519,6 +519,34 @@ void describe('simulation backend', () => {
 			await backend.dispose()
 		}
 	}, 90_000)
+
+	void test('bootstraps the securitypoolx2-auction scenario with an active child truth auction and ten bids', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2-auction')
+		backend.setTransactionDelayMilliseconds(0)
+
+		try {
+			const readClient = backend.createReadClient()
+			const pools = await loadAllSecurityPools(readClient)
+			const parentPools = pools.filter(pool => pool.parent === getAddress('0x0000000000000000000000000000000000000000'))
+			const childPools = pools.filter(pool => pool.parent !== getAddress('0x0000000000000000000000000000000000000000'))
+			const yesAuctionChildPool = childPools.find(pool => pool.questionOutcome === 'yes' && pool.systemState === 'forkTruthAuction')
+			if (yesAuctionChildPool === undefined) throw new Error('Expected a seeded Yes child pool with an active truth auction')
+
+			const forkAuctionDetails = await loadForkAuctionDetails(readClient, yesAuctionChildPool.securityPoolAddress)
+			const activeTickPage = await loadTruthAuctionActiveTickPage(readClient, forkAuctionDetails.truthAuctionAddress, 0, 25)
+			const totalSeededBidCount = activeTickPage.ticks.reduce((sum, tickSummary) => sum + tickSummary.submissionCount, 0n)
+
+			expect(backend.currentScenario).toBe('securitypoolx2-auction')
+			expect(parentPools.length).toBeGreaterThanOrEqual(2)
+			expect(childPools.length).toBeGreaterThanOrEqual(1)
+			expect(forkAuctionDetails.truthAuctionAddress === getAddress('0x0000000000000000000000000000000000000000')).toBe(false)
+			expect(forkAuctionDetails.truthAuction?.finalized).toBe(false)
+			expect(activeTickPage.ticks.length).toBeGreaterThanOrEqual(3)
+			expect(totalSeededBidCount).toBe(10n)
+		} finally {
+			await backend.dispose()
+		}
+	}, 120_000)
 
 	void test('loads reporting without errors before the first escalation report in securitypoolx2', async () => {
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2')

@@ -16,7 +16,7 @@ import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -161,7 +161,7 @@ export function SecurityPoolsOverviewSection({
 										key={pool.securityPoolAddress}
 										title={getQuestionTitle(pool.marketDetails)}
 										variant='record'
-										badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolLifecycleLabel(displayState)}</span>}
+										badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, lifecycleState: displayState })}</span>}
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (
 												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>

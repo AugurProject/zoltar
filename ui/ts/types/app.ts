@@ -105,7 +105,7 @@ export type ForkAuctionFormState = {
 	selectedOutcome: ReportingOutcomeKey
 	settlementAddress: string
 	submitBidAmount: string
-	submitBidTick: string
+	submitBidPrice: string
 	vaultAddress: string
 }
 

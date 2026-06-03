@@ -53,7 +53,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	return {
 		badgeClass: 'blocked',
 		detail: `Waiting for ${prerequisiteLabel}.`,
-		label: 'Blocked',
+		label: 'Waiting',
 		buttonLabel: 'Deploy',
 	}
 }

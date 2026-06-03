@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, getTruthAuctionBidGuardMessage, hasForkActivity } from '../lib/forkAuction.js'
+import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, getTruthAuctionBidGuardMessage, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, hasForkActivity, TRUTH_AUCTION_PRICE_PRECISION } from '../lib/forkAuction.js'
 import type { TruthAuctionMetrics } from '../types/contracts.js'
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
@@ -125,6 +125,21 @@ void describe('fork auction helpers', () => {
 		expect(getForkAuctionStageOrder('migration')).toBe(1)
 		expect(getForkAuctionStageOrder('auction')).toBe(2)
 		expect(getForkAuctionStageOrder('settlement')).toBe(3)
+	})
+
+	void test('maps exact truth auction prices back to their ticks', () => {
+		expect(getTruthAuctionTickAtPrice(TRUTH_AUCTION_PRICE_PRECISION)).toBe(0n)
+		expect(getTruthAuctionTickAtPrice(getTruthAuctionPriceAtTick(12n))).toBe(12n)
+		expect(getTruthAuctionTickAtPrice(getTruthAuctionPriceAtTick(-3n))).toBe(-3n)
+	})
+
+	void test('rounds entered truth auction prices down to the nearest valid tick', () => {
+		const tick12Price = getTruthAuctionPriceAtTick(12n)
+		const tick13Price = getTruthAuctionPriceAtTick(13n)
+		const betweenPositiveTicksPrice = (tick12Price + tick13Price) / 2n
+
+		expect(getTruthAuctionTickAtPrice(betweenPositiveTicksPrice)).toBe(12n)
+		expect(getTruthAuctionTickAtPrice(0n)).toBeUndefined()
 	})
 
 	void test('uses settlement after finalized auction and after active fork flags in settled-like states', () => {

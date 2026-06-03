@@ -174,7 +174,7 @@ export function App() {
 		setSecurityBondAllowance,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations({ ...baseHookConfig, enabled: route === 'security-pools' })
+	} = useSecurityVaultOperations({ ...baseHookConfig, enabled: route === 'security-pools', selectedSecurityPoolAddress: securityPoolAddress })
 	const {
 		approveToken1,
 		approveToken2,
@@ -200,7 +200,7 @@ export function App() {
 		submitInitialReport,
 		wrapWethForInitialReport,
 	} = useOpenOracleOperations({ ...baseHookConfig, enabled: route === 'open-oracle' })
-	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingFeedback, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingFeedback, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({ ...baseHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		setReportingForm(current => applyReportingFormUpdate(current, update))
 	}
@@ -230,6 +230,7 @@ export function App() {
 		...baseHookConfig,
 		deploymentStatuses,
 		enabled: route === 'security-pools',
+		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const {
 		claimAuctionProceeds,
@@ -253,7 +254,7 @@ export function App() {
 		setForkAuctionForm,
 		startTruthAuction,
 		submitBid,
-	} = useForkAuctionOperations(baseHookConfig)
+	} = useForkAuctionOperations({ ...baseHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
@@ -522,14 +523,14 @@ export function App() {
 				forkAuctionForm,
 				forkAuctionResult,
 				loadingForkAuctionDetails,
-				onClaimAuctionProceeds: () => void claimAuctionProceeds(),
+				onClaimAuctionProceeds: securityPoolAddressOverride => void claimAuctionProceeds(securityPoolAddressOverride),
 				onCreateChildUniverse: () => void createChildUniverse(forkAuctionForm.selectedOutcome),
-				onFinalizeTruthAuction: () => void finalizeTruthAuction(),
+				onFinalizeTruthAuction: securityPoolAddressOverride => void finalizeTruthAuction(securityPoolAddressOverride),
 				onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
 				onForkUniverse: () => void forkUniverse(),
 				onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
 				onInitiateFork: () => void initiateFork(),
-				onLoadForkAuction: () => void loadForkAuction(),
+				onLoadForkAuction: securityPoolAddressOverride => void loadForkAuction(securityPoolAddressOverride),
 				onMigrateEscalationDeposits: (outcome, depositIndexes) =>
 					void migrateEscalation({
 						outcome,
@@ -537,9 +538,9 @@ export function App() {
 					}),
 				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
 				onMigrateVault: () => void migrateVault(),
-				onRefundLosingBids: () => void refundLosingBids(),
-				onStartTruthAuction: () => void startTruthAuction(),
-				onSubmitBid: () => void submitBid(),
+				onRefundLosingBids: securityPoolAddressOverride => void refundLosingBids(securityPoolAddressOverride),
+				onStartTruthAuction: securityPoolAddressOverride => void startTruthAuction(securityPoolAddressOverride),
+				onSubmitBid: securityPoolAddressOverride => void submitBid(securityPoolAddressOverride),
 			},
 			liquidationAmount,
 			liquidationMaxAmount,

@@ -3,23 +3,34 @@ import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toH
 import {
 	approveErc20,
 	createMarket,
+	createChildUniverseFromSecurityPool,
+	createCompleteSetInSecurityPool,
 	createSecurityPool,
 	depositRepToSecurityPool,
+	forkZoltarWithOwnEscalation,
 	getDeploymentSteps,
 	loadAllSecurityPools,
 	loadErc20Balance,
+	loadForkAuctionDetails,
 	loadOracleManagerDetails,
 	loadOpenOracleReportDetails,
+	loadReportingDetails,
 	loadSecurityVaultDetails,
+	loadZoltarUniverseSummary,
+	migrateRepToZoltarFromSecurityPool,
 	queueOracleManagerOperation,
+	reportOutcomeInSecurityPool,
 	settleOracleReport,
+	startTruthAuctionForSecurityPool,
 	submitInitialOracleReport,
+	submitTruthAuctionBid,
 } from '../contracts.js'
 import { ReputationToken_ReputationToken, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
+import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/forkAuction.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
-import type { QuestionData } from '../types/contracts.js'
+import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'
 import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 
@@ -41,6 +52,9 @@ const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
 const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
+const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 20_000_000n * 10n ** 18n
+const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
+const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
@@ -760,6 +774,107 @@ async function seedSecurityPoolX2Scenario({
 	await reportStep('Seeded securitypoolx2 scenario is ready')
 }
 
+async function loadRequiredChildSecurityPool(readClient: ReadClient, parentSecurityPoolAddress: Address, questionOutcome: ListedSecurityPool['questionOutcome']) {
+	const childPool = (await loadAllSecurityPools(readClient)).find(pool => pool.parent === parentSecurityPoolAddress && pool.questionOutcome === questionOutcome)
+	if (childPool === undefined) throw new Error(`Expected a ${questionOutcome} child pool for ${parentSecurityPoolAddress}`)
+	return childPool
+}
+
+async function seedSecurityPoolX2AuctionScenario({
+	accounts,
+	createReadClient,
+	createWriteClient,
+	memoryClient,
+	onProgress,
+	profile,
+}: {
+	accounts: readonly Address[]
+	createReadClient: () => ReadClient
+	createWriteClient: (accountAddress: Address) => WriteClient
+	memoryClient: TevmLikeClient
+	onProgress: BootstrapProgressHandler | undefined
+	profile: NetworkProfile
+}) {
+	await seedSecurityPoolX2Scenario({
+		accounts,
+		createReadClient,
+		createWriteClient,
+		memoryClient,
+		onProgress,
+		profile,
+	})
+
+	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for securitypoolx2-auction')
+	const secondaryAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for securitypoolx2-auction')
+	const readClient = createReadClient()
+	const writeClient = createWriteClient(primaryAccount)
+	const x2Pools = await loadAllSecurityPools(readClient)
+	const parentPool = x2Pools.find(pool => pool.marketDetails.title === 'Will this resolve? (securitypoolx2 #1)')
+	if (parentPool === undefined) throw new Error('Expected the first securitypoolx2 parent pool for auction scenario seeding')
+
+	await reportBootstrapProgress(onProgress, 'Preparing fork-auction seed pool', 0.985)
+	await approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, 'approveRep')
+	await depositRepToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT)
+	await createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
+
+	const universeSummary = await loadZoltarUniverseSummary(readClient, parentPool.universeId)
+	if (universeSummary === undefined) throw new Error(`Expected a Zoltar universe summary for parent pool ${parentPool.securityPoolAddress}`)
+	const reportingDetailsBeforeFork = await loadReportingDetails(readClient, parentPool.securityPoolAddress, primaryAccount)
+	if (reportingDetailsBeforeFork.marketDetails.endTime >= reportingDetailsBeforeFork.currentTime) {
+		await advanceSimulationTime(memoryClient, reportingDetailsBeforeFork.marketDetails.endTime - reportingDetailsBeforeFork.currentTime + DAY_IN_SECONDS)
+	}
+
+	const ownForkDepositAmount = universeSummary.forkThreshold / SECURITY_MULTIPLIER
+	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)
+	await reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'yes', ownForkDepositAmount)
+	await reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'no', ownForkDepositAmount)
+	await forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
+
+	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
+	await createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
+	await migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
+	await advanceSimulationTime(memoryClient, 8n * DAY_IN_SECONDS + DAY_IN_SECONDS)
+
+	const yesChildPool = await loadRequiredChildSecurityPool(readClient, parentPool.securityPoolAddress, 'yes')
+	const yesForkDetailsBeforeAuction = await loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
+	await reportBootstrapProgress(onProgress, 'Starting seeded truth auction', 0.992)
+	await startTruthAuctionForSecurityPool(writeClient, yesChildPool.securityPoolAddress, yesForkDetailsBeforeAuction.universeId)
+
+	const yesForkDetails = await loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
+	if (yesForkDetails.truthAuctionAddress === undefined || yesForkDetails.truthAuctionAddress === '0x0000000000000000000000000000000000000000') {
+		throw new Error('Expected a seeded truth auction address for the Yes child pool')
+	}
+	if (yesForkDetails.truthAuction?.finalized) {
+		throw new Error('Expected the seeded truth auction to remain active after startTruthAuction')
+	}
+
+	const biddingAccounts = [primaryAccount, secondaryAccount, ...accounts.slice(2)]
+	const bidPriceByIndex = [
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[1],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[1],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[1],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[2],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[2],
+		SECURITY_POOL_X2_AUCTION_BID_PRICES[2],
+	] as const
+
+	for (const [index, bidAmount] of SECURITY_POOL_X2_AUCTION_BID_AMOUNTS.entries()) {
+		const bidderAccount = biddingAccounts[index % biddingAccounts.length]
+		if (bidderAccount === undefined) throw new Error('Expected at least one QA account for seeded truth auction bids')
+		const bidPrice = bidPriceByIndex[index]
+		if (bidPrice === undefined) throw new Error(`Missing seeded truth auction bid price for bid ${index + 1}`)
+		const bidTick = getTruthAuctionTickAtPrice(bidPrice)
+		if (bidTick === undefined) throw new Error(`Unable to map seeded truth auction bid price to a tick for bid ${index + 1}`)
+		await submitTruthAuctionBid(createWriteClient(bidderAccount), yesChildPool.securityPoolAddress, yesForkDetails.universeId, yesForkDetails.truthAuctionAddress, bidTick, bidAmount)
+	}
+
+	await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
+}
+
 async function applyScenario({
 	accounts,
 	createReadClient,
@@ -800,6 +915,17 @@ async function applyScenario({
 		case 'securitypoolx2':
 			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2Scenario({
+				accounts,
+				createReadClient,
+				createWriteClient,
+				memoryClient,
+				onProgress,
+				profile,
+			})
+			return
+		case 'securitypoolx2-auction':
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await seedSecurityPoolX2AuctionScenario({
 				accounts,
 				createReadClient,
 				createWriteClient,

@@ -162,6 +162,49 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(badgeTexts).toContain('Ended')
 	})
 
+	test('shows Fork Migration for pools already in fork migration flow', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							forkOutcome: 'yes',
+							migratedRep: 1n,
+							systemState: 'poolForked',
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		expect(badgeTexts).toContain('Fork Migration')
+	})
+
+	test('shows Fork Finalized for operational pools with completed fork history', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							forkOutcome: 'yes',
+							hasForkActivity: true,
+							migratedRep: 1n,
+							systemState: 'operational',
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 10n,
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		expect(badgeTexts).toContain('Fork Finalized')
+	})
+
 	test('filters the registry by the derived Ended state', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection

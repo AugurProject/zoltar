@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { getAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -52,7 +53,7 @@ import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
-import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
@@ -399,7 +400,7 @@ export function SecurityPoolWorkflowSection({
 		if (!isSelectedPoolForkStageView(view) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
 		if (sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
 		if (forkAuction.loadingForkAuctionDetails) return
-		void forkAuction.onLoadForkAuction()
+		void forkAuction.onLoadForkAuction(getAddress(normalizedSelectedPoolAddress))
 	}, [forkAuction.forkAuctionDetails?.securityPoolAddress, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		const reportingRefreshHash = reporting.reportingResult?.hash
@@ -423,13 +424,16 @@ export function SecurityPoolWorkflowSection({
 		if (lastForkAuctionOutcomeRefreshHash.current === forkAuctionRefreshHash) return
 		lastForkAuctionOutcomeRefreshHash.current = forkAuctionRefreshHash
 		void onRefreshSelectedPoolData(nextForkAuctionResult.securityPoolAddress)
+		if (showSelectedPoolWorkflowDetails && nextForkAuctionResult.action === 'startTruthAuction') {
+			void forkAuction.onLoadForkAuction(nextForkAuctionResult.securityPoolAddress)
+		}
 		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault' || nextForkAuctionResult.action === 'startTruthAuction')) {
 			void securityVault.onLoadSecurityVault()
 		}
 		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'startTruthAuction')) {
 			void reporting.onLoadReporting()
 		}
-	}, [forkAuction.forkAuctionResult, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
+	}, [forkAuction.forkAuctionResult, forkAuction.onLoadForkAuction, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
 	useEffect(() => {
 		const vaultStatusRefreshHash = securityVault.securityVaultResult?.action === 'depositRep' || securityVault.securityVaultResult?.action === 'redeemRep' ? securityVault.securityVaultResult.hash : undefined
 		if (vaultStatusRefreshHash === undefined) {
@@ -547,10 +551,10 @@ export function SecurityPoolWorkflowSection({
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
 			<StickyObjectContext
-				{...(loadedSelectedPool === undefined
+				{...(loadedSelectedPool === undefined || selectedPoolSummaryPool === undefined
 					? {}
 					: {
-							badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}`}>{getSecurityPoolLifecycleLabel(selectedPoolStateModel.lifecycleState)}</span>,
+							badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}`}>{getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolSummaryPool.hasForkActivity, lifecycleState: selectedPoolStateModel.lifecycleState })}</span>,
 						})}
 				sticky={false}
 				title={getSelectedPoolCardTitle()}

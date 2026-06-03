@@ -148,7 +148,7 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 			selectedOutcome: 'yes',
 			settlementAddress: '',
 			submitBidAmount: '',
-			submitBidTick: '',
+			submitBidPrice: '',
 			vaultAddress: '',
 		},
 		forkAuctionResult: undefined,

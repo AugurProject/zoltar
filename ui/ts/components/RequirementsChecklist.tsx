@@ -12,7 +12,7 @@ export function RequirementsChecklist({ items }: RequirementsChecklistProps) {
 		<ul className='requirements-checklist'>
 			{blockedItems.map(item => (
 				<li key={item.key} className='blocked'>
-					<strong>Blocked:</strong> {item.label}
+					{item.label}
 					{item.detail === undefined ? undefined : <span> {item.detail}</span>}
 				</li>
 			))}

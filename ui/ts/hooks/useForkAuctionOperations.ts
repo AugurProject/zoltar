@@ -19,19 +19,22 @@ import {
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { getTruthAuctionBidGuardMessage } from '../lib/forkAuction.js'
+import { getTruthAuctionBidGuardMessage, getTruthAuctionTickAtPrice } from '../lib/forkAuction.js'
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
+import { sameAddress } from '../lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
+import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
-type UseForkAuctionOperationsParameters = WriteOperationsParameters
+type UseForkAuctionOperationsParameters = WriteOperationsParameters & {
+	selectedSecurityPoolAddress?: string
+}
 
-export function useForkAuctionOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseForkAuctionOperationsParameters) {
+export function useForkAuctionOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseForkAuctionOperationsParameters) {
 	const forkAuctionDetails = useSignal<ForkAuctionDetails | undefined>(undefined)
 	const forkAuctionActiveAction = useSignal<ForkAuctionActionResult['action'] | undefined>(undefined)
 	const forkAuctionFeedback = useSignal<ActionFeedback<ForkAuctionActionResult['action']> | undefined>(undefined)
@@ -45,14 +48,15 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	}
 	const getSuccessTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} submitted`
 	const getFailureTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} failed`
+	const resolveForkAuctionSecurityPoolAddress = () => parseAddressInput(selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? forkAuctionForm.value.securityPoolAddress : selectedSecurityPoolAddress, 'Security pool address')
 
-	const loadForkAuction = async () => {
+	const loadForkAuction = async (securityPoolAddressOverride?: Address) => {
 		await forkAuctionLoad.run({
 			onStart: () => {
 				forkAuctionError.value = undefined
 			},
 			load: async () => {
-				const securityPoolAddress = parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')
+				const securityPoolAddress = securityPoolAddressOverride ?? resolveForkAuctionSecurityPoolAddress()
 				return await loadForkAuctionDetails(createConnectedReadClient(), securityPoolAddress)
 			},
 			onSuccess: details => {
@@ -65,7 +69,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		})
 	}
 
-	const runForkAuctionAction = async (actionName: ForkAuctionActionResult['action'], action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string) => {
+	const runForkAuctionAction = async (actionName: ForkAuctionActionResult['action'], action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string, securityPoolAddressOverride?: Address) => {
 		try {
 			forkAuctionActiveAction.value = actionName
 			forkAuctionFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
@@ -81,14 +85,18 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				},
 				async walletAddress => {
 					forkAuctionResult.value = undefined
-					const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createConnectedReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
+					const resolvedSecurityPoolAddress = securityPoolAddressOverride ?? resolveForkAuctionSecurityPoolAddress()
+					const canReuseLoadedDetails = securityPoolAddressOverride === undefined && forkAuctionDetails.value !== undefined && sameAddress(forkAuctionDetails.value.securityPoolAddress, resolvedSecurityPoolAddress)
+					const details = canReuseLoadedDetails ? requireDefined(forkAuctionDetails.value, 'Fork auction details unavailable') : await loadForkAuctionDetails(createConnectedReadClient(), resolvedSecurityPoolAddress)
 					return await action(walletAddress, details)
 				},
 				errorFallback,
 				async result => {
 					forkAuctionResult.value = result
 					forkAuctionFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
-					forkAuctionDetails.value = await loadForkAuctionDetails(createConnectedReadClient(), result.securityPoolAddress)
+					if (securityPoolAddressOverride === undefined || sameAddress(result.securityPoolAddress, resolveForkAuctionSecurityPoolAddress())) {
+						forkAuctionDetails.value = await loadForkAuctionDetails(createConnectedReadClient(), result.securityPoolAddress)
+					}
 				},
 			)
 		} finally {
@@ -131,9 +139,10 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 			'Failed to migrate escalation deposits',
 		)
 
-	const startTruthAuction = async () => await runForkAuctionAction('startTruthAuction', async (walletAddress, details) => await startTruthAuctionForSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to start truth auction')
+	const startTruthAuction = async (securityPoolAddressOverride?: Address) =>
+		await runForkAuctionAction('startTruthAuction', async (walletAddress, details) => await startTruthAuctionForSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to start truth auction', securityPoolAddressOverride)
 
-	const submitBid = async () =>
+	const submitBid = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction(
 			'submitBid',
 			async (walletAddress, details) => {
@@ -148,12 +157,16 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				})
 				if (bidGuardMessage !== undefined) throw new Error(bidGuardMessage)
 				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
-				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.submitBidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
+				const bidPrice = parseTruthAuctionPriceInput(forkAuctionForm.value.submitBidPrice, 'Bid price')
+				const bidTick = getTruthAuctionTickAtPrice(bidPrice)
+				if (bidTick === undefined) throw new Error('Enter a valid bid price.')
+				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 			},
 			'Failed to submit truth auction bid',
+			securityPoolAddressOverride,
 		)
 
-	const refundLosingBids = async () =>
+	const refundLosingBids = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction(
 			'refundLosingBids',
 			async (walletAddress, details) => {
@@ -168,11 +181,13 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				)
 			},
 			'Failed to refund losing bids',
+			securityPoolAddressOverride,
 		)
 
-	const finalizeTruthAuction = async () => await runForkAuctionAction('finalizeTruthAuction', async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction')
+	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address) =>
+		await runForkAuctionAction('finalizeTruthAuction', async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction', securityPoolAddressOverride)
 
-	const claimAuctionProceeds = async () =>
+	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction(
 			'claimAuctionProceeds',
 			async (walletAddress, details) => {
@@ -187,6 +202,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				)
 			},
 			'Failed to settle finalized bid',
+			securityPoolAddressOverride,
 		)
 
 	const forkUniverse = async () =>

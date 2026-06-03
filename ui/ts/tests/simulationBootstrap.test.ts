@@ -22,7 +22,7 @@ function createBaselineProfile(overrides: Partial<NetworkProfile> = {}): Network
 	}
 }
 
-function createMockedBootstrapDependencies({ accounts, scenario, profile }: { accounts: readonly string[]; scenario: 'security-pool' | 'securitypoolx2'; profile: NetworkProfile }) {
+function createMockedBootstrapDependencies({ accounts, scenario, profile }: { accounts: readonly string[]; scenario: 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction'; profile: NetworkProfile }) {
 	const eth = 10n ** 18n
 	const primaryVaultRepDeposit = 10_000n * eth
 	const primaryVaultSecurityBondAllowance = 2_500n * eth
@@ -50,6 +50,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const firstDeploymentAddress = deployments[0]?.address ?? getAddress('0x00000000000000000000000000000000000000a1')
 	const primaryPoolAddress = poolAddresses[0] ?? getAddress('0x00000000000000000000000000000000000000b1')
 	const secondaryPoolAddress = poolAddresses[1] ?? getAddress('0x00000000000000000000000000000000000000b2')
+	const yesChildPoolAddress = getAddress('0x00000000000000000000000000000000000000c1')
 	const deployedCodes = new Map<string, string>([[firstDeploymentAddress, '0x01']])
 	const managerByPool = new Map<Address, Address>()
 	const openOracleByManager = new Map<Address, Address>()
@@ -88,15 +89,23 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			approveErc20: 0,
 			createMarket: 0,
 			createSecurityPool: 0,
+			createCompleteSetInSecurityPool: 0,
 			depositRepToSecurityPool: 0,
 			loadAllSecurityPools: 0,
 			loadErc20Balance: 0,
+			loadForkAuctionDetails: 0,
 			loadOracleManagerDetails: 0,
 			loadOpenOracleReportDetails: 0,
+			loadReportingDetails: 0,
 			loadSecurityVaultDetails: 0,
+			loadZoltarUniverseSummary: 0,
+			migrateRepToZoltarFromSecurityPool: 0,
 			queueOracleManagerOperation: 0,
+			reportOutcomeInSecurityPool: 0,
 			settleOracleReport: 0,
+			startTruthAuctionForSecurityPool: 0,
 			submitInitialOracleReport: 0,
+			submitTruthAuctionBid: 0,
 			writeContract: 0,
 			setSecurityPoolDeployCalls: 0,
 			setSimulationCodeCalls: 0,
@@ -157,6 +166,24 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				managerAddress,
 			} as never
 		}),
+		createCompleteSetInSecurityPool: mock(async () => {
+			state.callLog.createCompleteSetInSecurityPool += 1
+			return {
+				action: 'createCompleteSet',
+				hash: '0x01',
+				securityPoolAddress: primaryPoolAddress,
+				universeId: 0n,
+			} as never
+		}),
+		createChildUniverseFromSecurityPool: mock(
+			async () =>
+				({
+					action: 'createChildUniverse',
+					hash: '0x01',
+					securityPoolAddress: primaryPoolAddress,
+					universeId: 1n,
+				}) as never,
+		),
 		depositRepToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint) => {
 			state.callLog.depositRepToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
@@ -169,6 +196,15 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				hash: '0x01',
 			} as never
 		}),
+		forkZoltarWithOwnEscalation: mock(
+			async () =>
+				({
+					action: 'forkWithOwnEscalation',
+					hash: '0x01',
+					securityPoolAddress: primaryPoolAddress,
+					universeId: 0n,
+				}) as never,
+		),
 		getDeploymentSteps: mock(() =>
 			deployments.map(step => ({
 				id: step.id,
@@ -187,7 +223,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		),
 		loadAllSecurityPools: mock(async () => {
 			state.callLog.loadAllSecurityPools += 1
-			return poolPlan.map((_pool, index) => {
+			const parentPools = poolPlan.map((_pool, index) => {
 				const securityPoolAddress = getPoolAddressForMarket(index)
 				const vaultAddresses = vaultAddressByPool[securityPoolAddress] ?? []
 				const vaultRows: Array<{ vaultAddress: Address; repDepositShare: bigint; securityBondAllowance: bigint }> = vaultAddresses.map(vaultAddress => ({
@@ -196,6 +232,11 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					securityBondAllowance: securityBondAllowances[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				}))
 				return {
+					marketDetails: {
+						title: poolPlan[index]?.question ?? `Pool ${index + 1}`,
+					},
+					parent: getAddress('0x0000000000000000000000000000000000000000'),
+					questionOutcome: 'none',
 					securityPoolAddress,
 					vaultCount: BigInt(vaultRows.length),
 					totalRepDeposit: vaultRows.reduce<bigint>((sum, row) => sum + row.repDepositShare, 0n),
@@ -203,10 +244,39 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					vaults: vaultRows,
 				} as never
 			})
+			if (scenario !== 'securitypoolx2-auction') return parentPools
+			return [
+				...parentPools,
+				{
+					parent: primaryPoolAddress,
+					questionOutcome: 'yes',
+					securityPoolAddress: yesChildPoolAddress,
+					systemState: 'forkTruthAuction',
+					totalRepDeposit: 0n,
+					totalSecurityBondAllowance: 0n,
+					vaultCount: 0n,
+					vaults: [],
+				} as never,
+			]
 		}),
 		loadErc20Balance: mock(async () => {
 			state.callLog.loadErc20Balance += 1
 			return 0n
+		}),
+		loadForkAuctionDetails: mock(async () => {
+			state.callLog.loadForkAuctionDetails += 1
+			return {
+				currentTime: SIMULATION_INITIAL_TIMESTAMP,
+				migratedRep: 1n,
+				securityPoolAddress: primaryPoolAddress,
+				systemState: 'forkTruthAuction',
+				truthAuction: {
+					finalized: false,
+				},
+				truthAuctionAddress: getAddress('0x0000000000000000000000000000000000000aa1'),
+				truthAuctionStartedAt: 1n,
+				universeId: 1n,
+			} as never
 		}),
 		loadOracleManagerDetails: mock(async (_client: never, managerAddress: Address) => {
 			state.callLog.loadOracleManagerDetails += 1
@@ -242,6 +312,15 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				isDistributed: true,
 			} as never
 		}),
+		loadReportingDetails: mock(async () => {
+			state.callLog.loadReportingDetails += 1
+			return {
+				currentTime: SIMULATION_INITIAL_TIMESTAMP,
+				marketDetails: {
+					endTime: SIMULATION_INITIAL_TIMESTAMP - 1n,
+				},
+			} as never
+		}),
 		loadSecurityVaultDetails: mock(async (_client: never, securityPoolAddress: Address, vaultAddress: Address) => {
 			state.callLog.loadSecurityVaultDetails += 1
 			return {
@@ -257,6 +336,21 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				unpaidEthFees: 0n,
 				universeId: 0n,
 				vaultAddress,
+			} as never
+		}),
+		loadZoltarUniverseSummary: mock(async () => {
+			state.callLog.loadZoltarUniverseSummary += 1
+			return {
+				forkThreshold: 100n,
+			} as never
+		}),
+		migrateRepToZoltarFromSecurityPool: mock(async () => {
+			state.callLog.migrateRepToZoltarFromSecurityPool += 1
+			return {
+				action: 'migrateRepToZoltar',
+				hash: '0x01',
+				securityPoolAddress: primaryPoolAddress,
+				universeId: 0n,
 			} as never
 		}),
 		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint) => {
@@ -277,13 +371,39 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				hash: '0x01',
 			} as never
 		}),
+		reportOutcomeInSecurityPool: mock(async () => {
+			state.callLog.reportOutcomeInSecurityPool += 1
+			return {
+				action: 'reportOutcome',
+				hash: '0x01',
+				securityPoolAddress: primaryPoolAddress,
+			} as never
+		}),
 		settleOracleReport: mock(async () => {
 			state.callLog.settleOracleReport += 1
 			return { hash: '0x01' } as never
 		}),
+		startTruthAuctionForSecurityPool: mock(async () => {
+			state.callLog.startTruthAuctionForSecurityPool += 1
+			return {
+				action: 'startTruthAuction',
+				hash: '0x01',
+				securityPoolAddress: primaryPoolAddress,
+				universeId: 1n,
+			} as never
+		}),
 		submitInitialOracleReport: mock(async () => {
 			state.callLog.submitInitialOracleReport += 1
 			return { action: 'submitInitialReport', hash: '0x01' } as never
+		}),
+		submitTruthAuctionBid: mock(async () => {
+			state.callLog.submitTruthAuctionBid += 1
+			return {
+				action: 'submitBid',
+				hash: '0x01',
+				securityPoolAddress: primaryPoolAddress,
+				universeId: 1n,
+			} as never
 		}),
 	}))
 
@@ -709,6 +829,36 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.writeContract).toBe(2)
 		expect(state.callLog.queueOracleManagerOperation).toBe(4)
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
+		expect(writeCalls.length).toBeGreaterThan(0)
+	})
+
+	test('boots the securitypoolx2-auction simulation path with forked child-auction seeding and ten bids', async () => {
+		const profile = createBaselineProfile()
+		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			scenario: 'securitypoolx2-auction',
+			profile,
+		})
+		const { bootstrapSimulationChain } = await import(`../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
+
+		await bootstrapSimulationChain({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			createReadClient: () => ({}) as never,
+			createWriteClient,
+			memoryClient,
+			onProgress: async () => undefined,
+			primaryAccount: MOCK_PRIMARY_ACCOUNT,
+			profile,
+			scenario: 'securitypoolx2-auction',
+		})
+
+		expect(state.callLog.createMarket).toBe(2)
+		expect(state.callLog.createSecurityPool).toBe(2)
+		expect(state.callLog.reportOutcomeInSecurityPool).toBe(2)
+		expect(state.callLog.migrateRepToZoltarFromSecurityPool).toBe(1)
+		expect(state.callLog.startTruthAuctionForSecurityPool).toBe(1)
+		expect(state.callLog.submitTruthAuctionBid).toBe(10)
+		expect(state.callLog.loadForkAuctionDetails).toBeGreaterThanOrEqual(2)
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 })
