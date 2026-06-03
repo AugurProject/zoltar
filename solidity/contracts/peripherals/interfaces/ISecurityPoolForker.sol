@@ -15,5 +15,6 @@ interface ISecurityPoolForker {
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external;
+	function settleAuctionBids(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices, IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices) external;
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome);
 }

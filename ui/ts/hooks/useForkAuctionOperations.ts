@@ -3,7 +3,6 @@ import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import {
-	claimSecurityPoolAuctionProceeds,
 	createChildUniverseFromSecurityPool,
 	finalizeSecurityPoolTruthAuction,
 	forkUniverseDirectly,
@@ -14,6 +13,7 @@ import {
 	migrateRepToZoltarFromSecurityPool,
 	migrateSecurityVault,
 	refundTruthAuctionBid,
+	settleTruthAuctionBids,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 } from '../contracts.js'
@@ -25,10 +25,11 @@ import { sameAddress } from '../lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
+import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import type { SettlementSelectedBid } from '../types/components.js'
 
 type UseForkAuctionOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
@@ -160,25 +161,22 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				const bidPrice = parseTruthAuctionPriceInput(forkAuctionForm.value.submitBidPrice, 'Bid price')
 				const bidTick = getTruthAuctionTickAtPrice(bidPrice)
 				if (bidTick === undefined) throw new Error('Enter a valid bid price.')
-				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
+				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseTruthAuctionAmountInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 			},
 			'Failed to submit truth auction bid',
 			securityPoolAddressOverride,
 		)
 
-	const refundLosingBids = async (securityPoolAddressOverride?: Address) =>
+	const refundLosingBids = async (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) =>
 		await runForkAuctionAction(
 			'refundLosingBids',
 			async (walletAddress, details) => {
 				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
-				return await refundTruthAuctionBid(
-					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
-					details.securityPoolAddress,
-					details.universeId,
-					truthAuctionAddress,
-					parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'),
-					parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index'),
-				)
+				const normalizedBids = selectedBids === undefined ? [{ tick: parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'), bidIndex: parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index') }] : Array.from(selectedBids).filter(({ tick, bidIndex }) => tick >= 0n && bidIndex >= 0n)
+				if (normalizedBids.length === 0) throw new Error('Pick one or more bids to refund first.')
+				const selectedBid = normalizedBids[0]
+				if (selectedBid === undefined) throw new Error('Pick one or more bids to refund first.')
+				return await refundTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, selectedBid.tick, selectedBid.bidIndex, normalizedBids)
 			},
 			'Failed to refund losing bids',
 			securityPoolAddressOverride,
@@ -187,18 +185,24 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction('finalizeTruthAuction', async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction', securityPoolAddressOverride)
 
-	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address) =>
+	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) =>
 		await runForkAuctionAction(
 			'claimAuctionProceeds',
 			async (walletAddress, details) => {
 				const bidderAddress = resolveOptionalAddressInput(forkAuctionForm.value.settlementAddress, walletAddress, 'Bidder address')
-				return await claimSecurityPoolAuctionProceeds(
+				const normalizedClaimBids =
+					selectedClaimBids === undefined ? [{ tick: parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Settlement bid index') }] : Array.from(selectedClaimBids).filter(({ tick, bidIndex }) => tick >= 0n && bidIndex >= 0n)
+				const normalizedRefundBids = selectedRefundBids === undefined ? [] : Array.from(selectedRefundBids).filter(({ tick, bidIndex }) => tick >= 0n && bidIndex >= 0n)
+				if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Pick one or more bids to settle first.')
+				const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
+				if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
+				return await settleTruthAuctionBids(
 					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 					details.securityPoolAddress,
 					details.universeId,
 					bidderAddress,
-					parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Settlement bid tick'),
-					parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Settlement bid index'),
+					normalizedClaimBids,
+					normalizedRefundBids,
 				)
 			},
 			'Failed to settle finalized bid',

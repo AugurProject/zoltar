@@ -144,7 +144,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' }).closest('.actions')).toBeNull()
 	})
 
-	test('shows Ended for resolved operational pools', async () => {
+	test('shows Finalized as Yes for resolved operational pools', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -159,7 +159,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
-		expect(badgeTexts).toContain('Ended')
+		expect(badgeTexts).toContain('Finalized as Yes')
 	})
 
 	test('shows Fork Migration for pools already in fork migration flow', async () => {

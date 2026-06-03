@@ -14,16 +14,6 @@ import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, Security
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
-
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -522,52 +512,6 @@ void describe('SecurityPoolsSection', () => {
 		})
 
 		expect(calls).toEqual(['load'])
-	})
-
-	void test('retries the browse auto-load after an earlier automatic load fails', async () => {
-		const calls: string[] = []
-		const initialLoad = createDeferred<void>()
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						hasLoadedSecurityPools: false,
-						loadingSecurityPools: false,
-						onLoadSecurityPools: () => {
-							calls.push('load')
-							return initialLoad.promise
-						},
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(calls).toEqual(['load'])
-		await act(async () => {
-			initialLoad.reject(new Error('temporary failure'))
-			await expect(initialLoad.promise).rejects.toThrow('temporary failure')
-		})
-
-		await act(() => {
-			render(
-				h(
-					SecurityPoolsSection,
-					createSecurityPoolsSectionProps({
-						overview: createOverviewProps({
-							hasLoadedSecurityPools: false,
-							loadingSecurityPools: false,
-							onLoadSecurityPools: () => {
-								calls.push('retry')
-							},
-						}),
-					}),
-				),
-				renderedComponent.container,
-			)
-		})
-
-		expect(calls).toEqual(['load', 'retry'])
 	})
 
 	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {

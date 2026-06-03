@@ -170,6 +170,14 @@ export function tryParseTruthAuctionPriceInput(value: string) {
 	return tryParseDecimalInput(value, 18)
 }
 
+export function parseTruthAuctionAmountInput(value: string, label: string) {
+	return parseDecimalInput(value, label, 18)
+}
+
+export function tryParseTruthAuctionAmountInput(value: string) {
+	return tryParseDecimalInput(value, 18)
+}
+
 export function parseTimestampInput(value: string, label: string) {
 	const timestampMs = new Date(value).getTime()
 	if (Number.isNaN(timestampMs)) throw new Error(`${label} is invalid`)
