@@ -2829,12 +2829,6 @@ strong.metric-value-danger {
 	min-width: 0;
 }
 
-.truth-auction-bid-row-empty {
-	color: var(--muted);
-	font-size: var(--font-small);
-	opacity: 0.6;
-}
-
 .truth-auction-row-empty {
 	color: var(--muted);
 }

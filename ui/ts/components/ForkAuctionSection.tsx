@@ -1743,14 +1743,14 @@ export function ForkAuctionSection({
 			</SectionBlock>
 		)
 	})()
-	const viewerTruthAuctionBidsSection = (() => {
-		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
-		const viewerBidsWithDisposition = truthAuctionBookData.viewerBids.map(bid => ({ bid, disposition: getBidDisposition(bid, truthAuctionStatus) }))
-		const hasViewerBidActions = viewerBidsWithDisposition.some(({ bid, disposition }) => sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle))
-		const isSettlementStage = selectedStage === 'settlement'
-		const showSettlementActionColumn = isSettlementStage && hasViewerBidActions
+		const viewerTruthAuctionBidsSection = (() => {
+			if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+			const viewerBidsWithDisposition = truthAuctionBookData.viewerBids.map(bid => ({ bid, disposition: getBidDisposition(bid, truthAuctionStatus) }))
+			const hasViewerBidActions = viewerBidsWithDisposition.some(({ bid, disposition }) => sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle))
+			const isSettlementStage = selectedStage === 'settlement'
+			const showSettlementActionColumn = isSettlementStage && hasViewerBidActions
 
-		return (
+			return (
 			<SectionBlock title='My Bids' description='Your bids and their current status.'>
 				{accountState.address === undefined ? <p className='detail'>Connect a wallet to inspect your submitted truth auction bids.</p> : undefined}
 				{accountState.address !== undefined ? (
@@ -1767,23 +1767,24 @@ export function ForkAuctionSection({
 				{truthAuctionBookData.viewerBids.length === 0 ? undefined : (
 					<div className='truth-auction-bid-table'>
 						{renderMyBidsHeader({ showActions: showSettlementActionColumn })}
-						{viewerBidsWithDisposition.map(({ bid, disposition }) => {
-							const isSettlementBid = sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle)
-							const isSettlementBidActions = isSettlementStage && isSettlementBid
-							const isSettlementBidChecked = selectedSettlementBidKeys.includes(settlementBidKey(bid))
-							const showActionCell = showSettlementActionColumn
-							return (
-								<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
-									<span className='truth-auction-bid-row-label'>{renderTruthAuctionPriceValue(getTruthAuctionPriceAtTick(bid.tick))}</span>
-									<span>
-										<CurrencyValue value={bid.ethAmount} suffix='ETH' />
-									</span>
-									{showActionCell ? (
-										<div className='truth-auction-bid-row-actions'>
-											{isSettlementBidActions ? (
+							{viewerBidsWithDisposition.map(({ bid, disposition }) => {
+								const isSettlementBid = sameAddress(bid.bidder, accountState.address) && (disposition.canPrefillRefund || disposition.canPrefillSettle)
+								const isSettlementBidActions = isSettlementStage && isSettlementBid
+								const isSettlementBidChecked = selectedSettlementBidKeys.includes(settlementBidKey(bid))
+								return (
+									<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
+										<span className='truth-auction-bid-row-label'>{renderTruthAuctionPriceValue(getTruthAuctionPriceAtTick(bid.tick))}</span>
+										<span>
+											<CurrencyValue value={bid.ethAmount} suffix='ETH' />
+										</span>
+										{showSettlementActionColumn ? (
+											<div className='truth-auction-bid-row-actions'>
 												<input
+													disabled={!isSettlementBidActions}
 													type='checkbox'
-													checked={isSettlementBidChecked}
+													checked={isSettlementBidActions ? isSettlementBidChecked : false}
+													title={isSettlementBidActions ? 'Select bid for settlement' : 'This bid is not yet settlement-eligible'}
+													aria-label={isSettlementBidActions ? 'Select bid for settlement' : 'Bid is not settlement-eligible'}
 													onChange={event =>
 														setSelectedSettlementBidKeys(currentKeys => {
 															const key = settlementBidKey(bid)
@@ -1795,14 +1796,11 @@ export function ForkAuctionSection({
 														})
 													}
 												/>
-												) : (
-													<span className='truth-auction-bid-row-empty'>—</span>
-												)}
-											</div>
-										) : undefined}
-									<span className='truth-auction-bid-row-status'>
-										<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
-									</span>
+												</div>
+											) : undefined}
+										<span className='truth-auction-bid-row-status'>
+											<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
+										</span>
 								</div>
 							)
 						})}
