@@ -7,7 +7,7 @@ import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
-import { deleteSavedSimulationState, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, persistSavedSimulationState, type SavedSimulationStateRecord } from '../simulation/savedStates.js'
+import { deleteSavedSimulationState, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
 
@@ -24,7 +24,7 @@ type SimulationBannerProps = {
 	onRefresh: () => Promise<void>
 }
 
-type SimulationModal = 'delete' | 'export' | 'import' | 'save' | undefined
+type SimulationModal = 'cleanup' | 'delete' | 'export' | 'import' | 'save' | undefined
 
 function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	const params = new URLSearchParams(getRouteHashSearch())
@@ -421,6 +421,18 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								>
 									Import state
 								</button>
+								{savedStateStorageWarning.value === undefined ? undefined : (
+									<button
+										className='destructive'
+										onClick={() => {
+											savedStateError.value = undefined
+											modal.value = 'cleanup'
+										}}
+										disabled={busy.value}
+									>
+										Remove corrupted saves
+									</button>
+								)}
 								{currentSource.value.kind !== 'saved-state' ? undefined : (
 									<button
 										className='destructive'
@@ -531,6 +543,27 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						}
 					>
 						Delete save
+					</button>
+				</div>
+			</OperationModal>
+			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title='Remove Corrupted Saved States'>
+				<p className='detail'>Remove saved simulation state entries that are no longer readable from browser storage. Valid saved states will be kept.</p>
+				{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
+				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<div className='actions'>
+					<button
+						type='button'
+						className='destructive'
+						onClick={() =>
+							void runNavigationControl(async () => {
+								const removedCount = removeCorruptedSavedSimulationStates()
+								if (removedCount === 0) throw new Error('No corrupted saved simulation states were found')
+								reloadSavedStateRecords()
+								closeModal()
+							})
+						}
+					>
+						Remove corrupted saves
 					</button>
 				</div>
 			</OperationModal>

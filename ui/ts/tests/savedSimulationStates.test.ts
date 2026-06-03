@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
+import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, parseSavedSimulationStateEnvelope, persistSavedSimulationState, removeCorruptedSavedSimulationStates, serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
 function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: string }) {
@@ -191,6 +191,42 @@ describe('saved simulation states', () => {
 
 			expect(listSavedSimulationStateRecords().map(record => record.id)).toEqual(['saved-baseline-20260602123456'])
 			expect(getSavedSimulationStateStorageWarning()).toBe('Ignored 1 corrupted saved simulation state in browser storage.')
+		} finally {
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('removes corrupted saved-state storage records while preserving valid saves', () => {
+		const domEnvironment = installDomEnvironment()
+
+		try {
+			window.localStorage.setItem(
+				'zoltar.simulation.savedStates',
+				JSON.stringify([
+					{
+						baseScenario: 'baseline',
+						id: 'saved-baseline-20260602123456',
+						name: 'Saved baseline',
+						savedAt: '2026-06-02T12:34:56.000Z',
+						serialized: createSerializedSavedState({
+							name: 'Saved baseline',
+							savedAt: '2026-06-02T12:34:56.000Z',
+						}),
+					},
+					{
+						baseScenario: 'baseline',
+						id: 'broken-state',
+						name: 'Broken state',
+						savedAt: '2026-06-02T12:35:56.000Z',
+						serialized: '{bad json',
+					},
+				]),
+			)
+
+			expect(removeCorruptedSavedSimulationStates()).toBe(1)
+			expect(getSavedSimulationStateStorageWarning()).toBeUndefined()
+			expect(listSavedSimulationStateRecords().map(record => record.id)).toEqual(['saved-baseline-20260602123456'])
+			expect(removeCorruptedSavedSimulationStates()).toBe(0)
 		} finally {
 			domEnvironment.cleanup()
 		}

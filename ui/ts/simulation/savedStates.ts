@@ -253,6 +253,14 @@ export function getSavedSimulationStateStorageWarning(storage?: Storage) {
 	return droppedRecordCount === 1 ? 'Ignored 1 corrupted saved simulation state in browser storage.' : `Ignored ${droppedRecordCount} corrupted saved simulation states in browser storage.`
 }
 
+export function removeCorruptedSavedSimulationStates(storage?: Storage) {
+	const storageReference = getStorage(storage)
+	const snapshot = parseSavedStateStorageRecords(storageReference.getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
+	if (snapshot.droppedRecordCount === 0) return 0
+	writeSavedStateStorageRecords(snapshot.records, storageReference)
+	return snapshot.droppedRecordCount
+}
+
 function getSavedSimulationStateRecord(stateId: string, storage?: Storage) {
 	return listSavedSimulationStateRecords(storage).find(record => record.id === stateId)
 }

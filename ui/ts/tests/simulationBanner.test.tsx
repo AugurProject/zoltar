@@ -296,6 +296,63 @@ describe('SimulationBanner', () => {
 		}
 	})
 
+	test('lets the user remove corrupted saved states from browser storage', async () => {
+		const domEnvironment = installDomEnvironment()
+		window.localStorage.setItem(
+			'zoltar.simulation.savedStates',
+			JSON.stringify([
+				{
+					baseScenario: 'baseline',
+					id: 'saved-baseline-20260602123456',
+					name: 'Saved baseline',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					serialized: serializeSavedSimulationStateEnvelope({
+						baseScenario: 'baseline',
+						name: 'Saved baseline',
+						savedAt: '2026-06-02T12:34:56.000Z',
+						state: {
+							blockCountSinceReset: 0n,
+							currentTimestamp: 1n,
+							queryDelayMilliseconds: 0,
+							repPerEthPrice: 10n ** 18n,
+							repPerUsdcPrice: 10n ** 6n,
+							selectedAccount: '0x00000000000000000000000000000000000000a1',
+							snapshot: {},
+							transactionCountSinceReset: 0n,
+							transactionDelayMilliseconds: 0,
+						},
+						version: 1,
+					}),
+				},
+				{
+					baseScenario: 'baseline',
+					id: 'broken-state',
+					name: 'Broken state',
+					savedAt: '2026-06-02T12:35:56.000Z',
+					serialized: '{bad json',
+				},
+			]),
+		)
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController()
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Remove corrupted saves' }))
+			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
+
+			await waitFor(() => {
+				expect(documentQueries.queryByText('Ignored 1 corrupted saved simulation state in browser storage.')).toBeNull()
+				expect(window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('{bad json')
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('imports a saved state and navigates to its saved-state URL', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
