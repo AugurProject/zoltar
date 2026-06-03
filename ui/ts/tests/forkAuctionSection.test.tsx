@@ -29,27 +29,6 @@ function createReadContractStub(handler: TruthAuctionReadContractHandler): ReadC
 	return async request => (await handler(request as TruthAuctionReadContractRequest)) as never
 }
 
-function createDeferred<T>() {
-	let resolve: ((value: T | PromiseLike<T>) => void) | undefined
-	let reject: ((reason?: unknown) => void) | undefined
-	const promise = new Promise<T>((innerResolve, innerReject) => {
-		resolve = innerResolve
-		reject = innerReject
-	})
-
-	return {
-		promise,
-		reject: (reason?: unknown) => {
-			if (reject === undefined) throw new Error('Deferred promise reject handler was not initialized')
-			reject(reason)
-		},
-		resolve: (value: T | PromiseLike<T>) => {
-			if (resolve === undefined) throw new Error('Deferred promise resolve handler was not initialized')
-			resolve(value)
-		},
-	}
-}
-
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -1589,7 +1568,176 @@ describe('ForkAuctionSection', () => {
 		const auctionOverviewSection = within(document.body).getByRole('heading', { name: 'Auction Overview' }).closest('section')
 		if (!(auctionOverviewSection instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
 		expect(getMetricValue(auctionOverviewSection, 'Time Left')).toBe('0m')
+		expect(within(auctionOverviewSection).getByText('Unfilled')).not.toBeNull()
+		expect(within(auctionOverviewSection).queryByText('The order book below reflects live demand and provisional clearing. Final allocation locks once the auction is finalized.')).toBeNull()
+		expect(within(auctionOverviewSection).queryByText('Finalized')).toBeNull()
+		expect(within(auctionOverviewSection).queryByText('Underfunded')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Truth auction is already finalized.')
+	})
+
+	test('shows auction overview badge states instead of finalized and underfunded metrics', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const getAuctionOverviewSection = () => {
+			const section = within(document.body).getByRole('heading', { name: 'Auction Overview' }).closest('section')
+			if (!(section instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
+			return section
+		}
+
+		await waitFor(() => {
+			expect(within(getAuctionOverviewSection()).getByText('Open')).not.toBeNull()
+		})
+		expect(within(getAuctionOverviewSection()).queryByText('Finalized')).toBeNull()
+		expect(within(getAuctionOverviewSection()).queryByText('Underfunded')).toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkTruthAuction',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								clearingPrice: 2n * ETH,
+								clearingTick: 10n,
+								ethAtClearingTick: 5n * ETH,
+								hitCap: true,
+							},
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expect(within(getAuctionOverviewSection()).getByText('Clearing')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'operational',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								clearingPrice: 2n * ETH,
+								clearingTick: 10n,
+								ethAtClearingTick: 5n * ETH,
+								finalized: true,
+								hitCap: true,
+								timeRemaining: 0n,
+							},
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expect(within(getAuctionOverviewSection()).getByText('Settled')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'operational',
+							truthAuction: {
+								...createTruthAuctionMetrics(),
+								finalized: true,
+								underfunded: true,
+								timeRemaining: 0n,
+							},
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		expect(within(getAuctionOverviewSection()).getByText('Shortfall')).not.toBeNull()
+	})
+
+	test('shows inactive and pending auction status badges before the truth auction is live', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					securityPools: [],
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const getAuctionStatusSection = () => {
+			const section = within(document.body).getByRole('heading', { name: 'Auction Status' }).closest('section')
+			if (!(section instanceof HTMLElement)) throw new Error('Expected auction status section to render')
+			return section
+		}
+
+		expect(within(getAuctionStatusSection()).getByText('Inactive')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkMigration',
+						},
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+								truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+							}),
+						],
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(within(getAuctionStatusSection()).getByText('Pending')).not.toBeNull()
 	})
 
 	test('shows a price-specific bid validation error for malformed live-auction prices', async () => {
@@ -2054,6 +2202,16 @@ describe('ForkAuctionSection', () => {
 	})
 
 	test('gates settlement actions against lifecycle conditions that would otherwise revert onchain', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 1n
+			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })]
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return 2n
+			if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }), createTruthAuctionBidView({ tick: 9n, bidIndex: 1n, ethAmount: 1n * ETH, cumulativeEth: 1n * ETH })]
+			if (request.functionName === 'getBidderBidCount') return 2n
+			if (request.functionName === 'getBidderBidPage') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }), createTruthAuctionBidView({ tick: 9n, bidIndex: 1n, ethAmount: 1n * ETH, cumulativeEth: 1n * ETH })]
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
 		const baseDetails = {
 			...createForkAuctionDetails(),
 			systemState: 'forkTruthAuction',
@@ -2087,13 +2245,16 @@ describe('ForkAuctionSection', () => {
 				}),
 			],
 			stageView: 'settlement',
+			truthAuctionReadClient,
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Finalize Truth Auction' })).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Refund Losing Bid')
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Refund Losing Bid')
+		})
 		expect(documentQueries.queryByRole('button', { name: 'Settle Finalized Bid' })).toBeNull()
 
 		await act(() => {
@@ -2141,6 +2302,16 @@ describe('ForkAuctionSection', () => {
 	})
 
 	test('disables finalized settlement until the settlement inputs are complete', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 1n
+			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 1n, active: true })]
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 1n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return 1n
+			if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
+			if (request.functionName === 'getBidderBidCount') return 1n
+			if (request.functionName === 'getBidderBidPage') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
 		const baseDetails = {
 			...createForkAuctionDetails(),
 			claimingAvailable: true,
@@ -2167,65 +2338,19 @@ describe('ForkAuctionSection', () => {
 							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 						}),
 					],
+					truthAuctionReadClient,
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		const settlementSection = documentQueries.getByRole('heading', { name: 'Settle Finalized Bid' }).closest('.section-block')
+		if (!(settlementSection instanceof HTMLElement)) throw new Error('Expected finalized settlement section to render')
 		expect(documentQueries.getByRole('heading', { name: 'Settlement Overview' })).not.toBeNull()
-		expect(documentQueries.getAllByText('Bidder Address').length).toBeGreaterThan(0)
-		expectTransactionButtonDisabled(document.body, 'Settle Finalized Bid', 'Enter a valid settlement bid tick.')
-
-		await act(() => {
-			render(
-				h(ForkAuctionSection, {
-					...createProps({
-						accountState: createAccountState({ ethBalance: 10n * ETH }),
-						forkAuctionDetails: baseDetails,
-						forkAuctionForm: {
-							...createForkAuctionForm(),
-							claimBidTick: '10',
-						},
-						securityPools: [
-							createPreviewPool({
-								parent: zeroAddress,
-								questionOutcome: 'yes',
-								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
-							}),
-						],
-					}),
-				}),
-				renderedComponent.container,
-			)
-		})
-		expectTransactionButtonDisabled(document.body, 'Settle Finalized Bid', 'Enter a valid settlement bid index.')
-
-		await act(() => {
-			render(
-				h(ForkAuctionSection, {
-					...createProps({
-						accountState: createAccountState({ ethBalance: 10n * ETH }),
-						forkAuctionDetails: baseDetails,
-						forkAuctionForm: {
-							...createForkAuctionForm(),
-							claimBidIndex: '0',
-							claimBidTick: '10',
-							settlementAddress: 'not-an-address',
-						},
-						securityPools: [
-							createPreviewPool({
-								parent: zeroAddress,
-								questionOutcome: 'yes',
-								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
-							}),
-						],
-					}),
-				}),
-				renderedComponent.container,
-			)
-		})
-		expectTransactionButtonDisabled(document.body, 'Settle Finalized Bid', 'Enter a valid bidder address.')
+		expect(within(settlementSection).queryByText('Bidder Address')).toBeNull()
+		expect(within(settlementSection).queryByText('Settlement Bid Tick')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Settle Finalized Bid', 'Pick one of your bids to load a settlement target.')
 
 		await act(() => {
 			render(
@@ -2245,6 +2370,7 @@ describe('ForkAuctionSection', () => {
 								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 							}),
 						],
+						truthAuctionReadClient,
 					}),
 				}),
 				renderedComponent.container,
@@ -2373,20 +2499,33 @@ describe('ForkAuctionSection', () => {
 			expect(documentQueries.getByRole('heading', { name: 'My Bids' })).not.toBeNull()
 		})
 		expect(documentQueries.getByRole('heading', { name: 'Market View' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Showing 2 of 2 active price levels')).toBe(true)
-		expect(document.body.textContent?.includes('Loaded depth')).toBe(true)
+		expect(document.body.textContent?.includes('Visible depth from loaded price levels')).toBe(false)
+		expect(document.body.textContent?.includes('Showing 2 of 2 active price levels')).toBe(false)
+		expect(document.body.textContent?.includes('Highest loaded price')).toBe(false)
+		expect(documentQueries.getByText('Loaded Depth (ETH)')).not.toBeNull()
+		expect(documentQueries.getByText('Price (ETH / REP)')).not.toBeNull()
+		const auctionOverviewSection = documentQueries.getByRole('heading', { name: 'Auction Overview' }).closest('section')
+		if (!(auctionOverviewSection instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
+		expect(within(auctionOverviewSection).queryByText('The order book below reflects live demand and provisional clearing. Final allocation locks once the auction is finalized.')).toBeNull()
+		const overviewHeader = auctionOverviewSection.querySelector('.section-block-header')
+		const overviewBadge = auctionOverviewSection.querySelector('.section-block-badge .badge')
+		if (!(overviewHeader instanceof HTMLElement) || !(overviewBadge instanceof HTMLElement)) throw new Error('Expected auction overview header and badge to render')
+		expect(overviewHeader.lastElementChild === overviewBadge.parentElement).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('ETH Raised')).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('≈ 9.00 ETH / ≈ 100.00 ETH')).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('REP Sold')).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('≈ 0.00 REP / ≈ 100.00 REP')).toBe(false)
 		expect(document.body.textContent?.includes('Winning')).toBe(true)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Select tick 12 from depth chart' }))
-		await waitFor(() => {
-			expect(document.body.textContent?.includes('Tick 12 at')).toBe(true)
-		})
-		expect(documentQueries.getByText('Selected Price Level')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' }))
+		expect(documentQueries.queryByText('Selected Price')).toBeNull()
+		expect(document.body.querySelector('.truth-auction-bid-row.is-header')).toBeNull()
+		expect(document.body.querySelector('.truth-auction-level-detail .truth-auction-bid-row')).toBeNull()
 		expect(document.body.textContent?.includes('2 submissions')).toBe(true)
+		expect(document.body.textContent?.includes('3.0000 ETH / REP')).toBe(true)
+		expect(document.body.textContent?.includes('2.0000 ETH / REP')).toBe(true)
 	})
 
-	test('clears stale selected price-level details while a historical wallet tick is loading', async () => {
-		const historicalTickSummaryLoad = createDeferred<TruthAuctionTickSummary>()
-		const historicalTickBidLoad = createDeferred<TruthAuctionBidView[]>()
+	test('keeps the market view on the ladder and chart without rendering a selected price panel', async () => {
 		const activeTickSummary = createTruthAuctionTickSummary({
 			tick: 12n,
 			price: 3n * ETH,
@@ -2397,15 +2536,6 @@ describe('ForkAuctionSection', () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
 			if (request.functionName === 'activeTickCount') return 1n
 			if (request.functionName === 'getActiveTickPage') return [activeTickSummary]
-			if (request.functionName === 'getTickSummary') {
-				if ((request.args?.[0] ?? 0n) === 9n) return await historicalTickSummaryLoad.promise
-				return activeTickSummary
-			}
-			if (request.functionName === 'getBidCountAtTick') return 1n
-			if (request.functionName === 'getBidPageAtTick') {
-				if ((request.args?.[0] ?? 0n) === 9n) return await historicalTickBidLoad.promise
-				return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
-			}
 			if (request.functionName === 'getBidderBidCount') return 2n
 			if (request.functionName === 'getBidderBidPage') {
 				return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH }), createTruthAuctionBidView({ tick: 9n, bidIndex: 1n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
@@ -2435,35 +2565,18 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(document.body.textContent?.includes('Tick 12 at')).toBe(true)
+			expect(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' })).not.toBeNull()
 		})
 
 		fireEvent.click(
-			documentQueries.getAllByRole('button', { name: 'Show Price Level' })[1] ??
+			documentQueries.getAllByRole('button', { name: 'View Price' })[1] ??
 				(() => {
-					throw new Error('Expected a historical Show Price Level button')
+					throw new Error('Expected a historical View Price button')
 				})(),
 		)
 
-		await waitFor(() => {
-			expect(document.body.textContent?.includes('Tick 12 at')).toBe(false)
-			expect(document.body.textContent?.includes('Loading selected price level…')).toBe(true)
-		})
-
-		historicalTickSummaryLoad.resolve(
-			createTruthAuctionTickSummary({
-				tick: 9n,
-				price: 2n * ETH,
-				currentTotalEth: 0n,
-				submissionCount: 1n,
-				active: false,
-			}),
-		)
-		historicalTickBidLoad.resolve([createTruthAuctionBidView({ tick: 9n, bidIndex: 1n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })])
-
-		await waitFor(() => {
-			expect(document.body.textContent?.includes('Tick 9 at')).toBe(true)
-		})
+		expect(documentQueries.queryByText('Selected Price')).toBeNull()
+		expect(document.body.textContent?.includes('Loading selected price…')).toBe(false)
 	})
 
 	test('reloads the paged bidbook after a successful fork-auction action result changes', async () => {
@@ -2622,12 +2735,12 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getAllByRole('button', { name: 'Prefill Settle' }).length).toBeGreaterThan(0)
+			expect(documentQueries.getAllByRole('button', { name: 'Settle' }).length).toBeGreaterThan(0)
 		})
 		fireEvent.click(
-			documentQueries.getAllByRole('button', { name: 'Prefill Settle' })[0] ??
+			documentQueries.getAllByRole('button', { name: 'Settle' })[0] ??
 				(() => {
-					throw new Error('Expected at least one Prefill Settle button')
+					throw new Error('Expected at least one Settle button')
 				})(),
 		)
 
@@ -2699,16 +2812,16 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getAllByRole('button', { name: 'Prefill Settle' }).length).toBeGreaterThan(0)
+			expect(documentQueries.getAllByRole('button', { name: 'Settle' }).length).toBeGreaterThan(0)
 		})
 
 		expect(document.body.textContent?.includes('Owner Withdrawal')).toBe(false)
 		expect(documentQueries.getAllByText('Refundable').length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Refunded').length).toBeGreaterThan(0)
 
-		const settleButtons = documentQueries.getAllByRole('button', { name: 'Prefill Settle' })
+		const settleButtons = documentQueries.getAllByRole('button', { name: 'Settle' })
 		const refundableRowButton = settleButtons.find(button => button.closest('.truth-auction-bid-row')?.textContent?.includes('Refundable') === true)
-		if (refundableRowButton === undefined) throw new Error('Expected a refundable Prefill Settle button')
+		if (refundableRowButton === undefined) throw new Error('Expected a refundable Settle button')
 
 		fireEvent.click(refundableRowButton)
 
@@ -2719,15 +2832,10 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('hides selected price-level settlement shortcuts for bids owned by other wallets', async () => {
+	test('does not render a selected price detail panel after choosing a ladder price', async () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
 			if (request.functionName === 'activeTickCount') return 1n
 			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })]
-			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })
-			if (request.functionName === 'getBidCountAtTick') return 2n
-			if (request.functionName === 'getBidPageAtTick') {
-				return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }), createTruthAuctionBidView({ tick: 10n, bidIndex: 1n, bidder: '0x0000000000000000000000000000000000000001', ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 2n * ETH })]
-			}
 			if (request.functionName === 'getBidderBidCount') return 1n
 			if (request.functionName === 'getBidderBidPage') return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
 			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
@@ -2760,31 +2868,14 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByRole('button', { name: 'Select tick 10 from depth chart' })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Select price 2 ETH / REP from depth chart' })).not.toBeNull()
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Select tick 10 from depth chart' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Select price 2 ETH / REP from depth chart' }))
 		})
 
-		await waitFor(() => {
-			expect(document.body.textContent?.includes('Tick 10 at')).toBe(true)
-		})
-
-		await waitFor(() => {
-			expect(document.body.textContent?.includes('Bid #1')).toBe(true)
-		})
-
-		const selectedLevel = document.body.querySelector('.truth-auction-level-detail')
-		if (!(selectedLevel instanceof HTMLElement)) throw new Error('Expected selected price-level detail to render')
-
-		const bidRows = Array.from(selectedLevel.querySelectorAll('.truth-auction-bid-row')).slice(1)
-		const viewerRow = bidRows.find(row => row.textContent?.includes('Bid #0') === true)
-		const otherWalletRow = bidRows.find(row => row.textContent?.includes('Bid #1') === true)
-		if (!(viewerRow instanceof HTMLElement)) throw new Error('Expected selected price-level viewer row to render')
-		if (!(otherWalletRow instanceof HTMLElement)) throw new Error('Expected selected price-level non-viewer row to render')
-
-		expect(within(viewerRow).getAllByRole('button', { name: 'Prefill Settle' }).length).toBe(1)
-		expect(within(otherWalletRow).queryByRole('button', { name: 'Prefill Settle' })).toBeNull()
+		expect(documentQueries.queryByText('Selected Price')).toBeNull()
+		expect(document.body.querySelector('.truth-auction-level-detail')).toBeNull()
 	})
 
 	test('summarizes wallet bids from semantic bid outcomes instead of presentation labels', async () => {
@@ -2901,11 +2992,17 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('keeps the auction stage ordered as market view, submit bid, finalize, then my bids and shows the form-linked preview state', async () => {
+	test('keeps the auction stage ordered as market view, submit bid, my bids, then finalize and shows the form-linked preview state', async () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
-			if (request.functionName === 'activeTickCount') return 1n
-			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
-			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
+			if (request.functionName === 'activeTickCount') return 3n
+			if (request.functionName === 'getActiveTickPage') {
+				return [
+					createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }),
+					createTruthAuctionTickSummary({ tick: 2n, price: getTruthAuctionPriceAtTick(2n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }),
+					createTruthAuctionTickSummary({ tick: 1n, price: getTruthAuctionPriceAtTick(1n), currentTotalEth: 3n * ETH, submissionCount: 1n, active: true }),
+				]
+			}
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })
 			if (request.functionName === 'getBidCountAtTick') return 1n
 			if (request.functionName === 'getBidPageAtTick') return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
 			if (request.functionName === 'getBidderBidCount') return 1n
@@ -2953,15 +3050,18 @@ describe('ForkAuctionSection', () => {
 		const myBidsHeading = documentQueries.getByRole('heading', { name: 'My Bids' })
 
 		expectElementBefore(marketViewHeading, submitBidHeading)
-		expectElementBefore(submitBidHeading, finalizeHeading)
-		expectElementBefore(finalizeHeading, myBidsHeading)
+		expectElementBefore(submitBidHeading, myBidsHeading)
+		expectElementBefore(myBidsHeading, finalizeHeading)
 		expect(documentQueries.getByText(/Selected ladder price:/)).not.toBeNull()
-		expect(document.body.textContent?.includes('Current form tick')).toBe(true)
-		expect(documentQueries.getByRole('button', { name: 'Use This Price' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Current form price')).toBe(true)
 		expect(documentQueries.getByText('Bid Price (ETH / REP)')).not.toBeNull()
+		expect(documentQueries.getAllByText('1.0001 ETH / REP').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('1.0002 ETH / REP').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Bid Tick')).toBeNull()
 		expect(document.body.querySelector('.truth-auction-depth-marker.is-preview')).not.toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-section')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-market-detail-grid')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-stage-actions')).toBeNull()
 		expect(document.body.querySelector('.truth-auction-market-board .truth-auction-panel')).toBeNull()
 	})
 
@@ -3106,11 +3206,11 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(document.body.textContent?.includes('Showing 25 of 26 active price levels')).toBe(true)
+			expect(document.body.querySelectorAll('.truth-auction-ladder-row').length).toBe(25)
 		})
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Load More Price Levels' }))
 		await waitFor(() => {
-			expect(document.body.textContent?.includes('Showing 26 of 26 active price levels')).toBe(true)
+			expect(document.body.querySelectorAll('.truth-auction-ladder-row').length).toBe(26)
 		})
 	})
 
@@ -3162,8 +3262,8 @@ describe('ForkAuctionSection', () => {
 
 		expectElementBefore(marketViewHeading, auctionBidsHeading)
 		expectElementBefore(auctionBidsHeading, submitBidHeading)
-		expect(document.body.textContent?.includes('Bid #1')).toBe(true)
-		expect(document.body.textContent?.includes('Tick 10')).toBe(true)
+		expect(document.body.textContent?.includes('Bid #1')).toBe(false)
+		expect(document.body.textContent?.includes('Tick 10')).toBe(false)
 	})
 
 	test('sorts aggregated auction bids by tick descending then bid index ascending and can prefill actions from that table', async () => {
@@ -3221,29 +3321,26 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		await waitFor(() => {
 			expect(documentQueries.getByRole('heading', { name: 'Auction Bids' })).not.toBeNull()
-			expect(documentQueries.getAllByRole('button', { name: 'Prefill Settle' }).length).toBeGreaterThan(0)
+			expect(documentQueries.getAllByRole('button', { name: 'Settle' }).length).toBeGreaterThan(0)
 		})
 
 		const aggregateTable = documentQueries.getByRole('heading', { name: 'Auction Bids' }).closest('.section-block')
 		if (!(aggregateTable instanceof HTMLElement)) throw new Error('Expected aggregated auction bids section to render')
 		await waitFor(() => {
-			expect(aggregateTable.textContent?.includes('Bid #0')).toBe(true)
+			expect(aggregateTable.querySelectorAll('.truth-auction-bid-row.is-wide').length).toBeGreaterThanOrEqual(3)
 		})
 		const aggregateRows = Array.from(aggregateTable.querySelectorAll('.truth-auction-bid-row.is-wide')).filter(row => !row.classList.contains('is-header'))
-		expect(aggregateRows.length).toBeGreaterThanOrEqual(3)
-		expect(aggregateRows[0]?.textContent).toContain('Tick 12')
-		expect(aggregateRows[0]?.textContent).toContain('Bid #0')
-		expect(aggregateRows[1]?.textContent).toContain('Tick 12')
-		expect(aggregateRows[1]?.textContent).toContain('Bid #1')
-		expect(aggregateRows[2]?.textContent).toContain('Tick 10')
+		expect(aggregateRows[0]?.textContent).toContain('≈ 2.00 ETH')
+		expect(aggregateRows[1]?.textContent).toContain('≈ 3.00 ETH')
+		expect(aggregateRows[2]?.textContent).toContain('≈ 4.00 ETH')
 
-		fireEvent.click(within(aggregateTable).getAllByRole('button', { name: 'Prefill Settle' })[0] as HTMLElement)
+		fireEvent.click(within(aggregateTable).getAllByRole('button', { name: 'Settle' })[0] as HTMLElement)
 		expect(formUpdates).toContainEqual({
 			claimBidIndex: '0',
 			claimBidTick: '12',
 			settlementAddress: zeroAddress,
 		})
-		expect(aggregateRows[1]?.textContent?.includes('Prefill Settle')).toBe(false)
+		expect(aggregateRows[1]?.textContent?.includes('Settle')).toBe(false)
 	})
 
 	test('expands aggregated auction bid coverage after loading more price levels and more bid pages', async () => {

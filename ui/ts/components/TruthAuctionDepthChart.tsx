@@ -1,5 +1,6 @@
 import { useRef } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
+import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 
 type TruthAuctionDisposition = {
 	label: string
@@ -18,10 +19,8 @@ export type TruthAuctionDepthPoint = {
 
 type TruthAuctionDepthChartProps = {
 	clearingTick?: bigint
-	loadedTickCount: number
 	onSelectTick: (tick: bigint) => void
 	points: TruthAuctionDepthPoint[]
-	totalActiveTickCount: bigint
 }
 
 const CHART_WIDTH = 560
@@ -34,6 +33,10 @@ const CHART_PADDING = {
 	top: 10,
 }
 let nextDepthGradientId = 0
+
+function formatTruthAuctionPriceLabel(price: bigint) {
+	return `${formatRoundedCurrencyBalance(price, 18, 4)} ETH / REP`
+}
 
 function getDepthRatio(value: bigint, maxDepth: bigint) {
 	if (value <= 0n || maxDepth <= 0n) return 0
@@ -104,69 +107,88 @@ function buildDepthLinePath(points: TruthAuctionDepthPoint[]) {
 	return path
 }
 
-export function TruthAuctionDepthChart({ clearingTick, loadedTickCount, onSelectTick, points, totalActiveTickCount }: TruthAuctionDepthChartProps) {
+export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: TruthAuctionDepthChartProps) {
 	if (points.length === 0) return null
 
 	const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right
-	const visibleCoverageText = `Showing ${loadedTickCount.toString()} of ${totalActiveTickCount.toString()} active price levels`
+	const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
+	const baselineY = CHART_HEIGHT - CHART_PADDING.bottom
 	const gradientIdRef = useRef<string | undefined>(undefined)
 	if (gradientIdRef.current === undefined) {
 		gradientIdRef.current = `truth-auction-depth-fill-${nextDepthGradientId.toString()}`
 		nextDepthGradientId += 1
 	}
 	const gradientId = gradientIdRef.current
+	const highestLoadedPrice = points[0]?.price
+	const lowestLoadedPrice = points[points.length - 1]?.price
+	const midpointIndex = points.length >= 3 ? Math.floor(points.length / 2) : undefined
+	const midpointPrice = midpointIndex === undefined ? undefined : points[midpointIndex]?.price
+	const maxLoadedDepth = points.reduce((currentMax, point) => (point.cumulativeEth > currentMax ? point.cumulativeEth : currentMax), 0n)
+	const midpointDepth = maxLoadedDepth >= 2n ? maxLoadedDepth / 2n : undefined
+	const getDepthYPosition = (value: bigint) => {
+		if (value <= 0n || maxLoadedDepth <= 0n) return baselineY
+		return baselineY - getDepthRatio(value, maxLoadedDepth) * plotHeight
+	}
 
 	return (
 		<>
-			<div className='truth-auction-depth-chart' role='group' aria-label='Truth auction visible depth chart'>
-				<svg aria-hidden='true' viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio='none'>
-					<defs>
-						<linearGradient id={gradientId} x1='0%' x2='100%' y1='0%' y2='0%'>
-							<stop offset='0%' stop-color='#e8a644' stop-opacity='0.28' />
-							<stop offset='100%' stop-color='#3e9f78' stop-opacity='0.28' />
-						</linearGradient>
-					</defs>
-					<rect className='truth-auction-depth-base' height={CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom} rx='14' ry='14' width={plotWidth} x={CHART_PADDING.left} y={CHART_PADDING.top} />
-					<path className='truth-auction-depth-area' d={buildDepthAreaPath(points)} fill={`url(#${gradientId})`} />
-					<path className='truth-auction-depth-line' d={buildDepthLinePath(points)} />
-				</svg>
-				<div className='truth-auction-depth-hit-targets'>
-					{points.map((point, index) => (
-						<button
-							aria-label={`Select tick ${point.tick.toString()} from depth chart`}
-							aria-pressed={point.isSelected}
-							className='truth-auction-depth-hit-target'
-							key={point.tick.toString()}
-							onClick={() => onSelectTick(point.tick)}
-							style={{
-								left: `${(index / points.length) * 100}%`,
-								width: `${100 / points.length}%`,
-							}}
-							type='button'
-						>
-							<span className={getMarkerClassName(point, clearingTick)}>
-								<span className='truth-auction-depth-marker-dot' />
-							</span>
-						</button>
-					))}
-				</div>
-			</div>
-			<div className='truth-auction-depth-legend'>
-				<div className='truth-auction-depth-legend-copy'>
-					<strong>Visible depth from loaded price levels</strong>
-					<span>{visibleCoverageText}</span>
-				</div>
-				{points[0] === undefined ? undefined : (
-					<div className='truth-auction-depth-legend-range'>
-						<span>
-							Highest loaded price <CurrencyValue value={points[0].price} suffix='ETH / REP' />
+			<div className='truth-auction-depth-frame'>
+				<div className='truth-auction-depth-y-axis'>
+					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>Loaded Depth (ETH)</span>
+					<div className='truth-auction-depth-y-ticks' aria-hidden='true'>
+						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-max' style={{ top: `${(getDepthYPosition(maxLoadedDepth) / CHART_HEIGHT) * 100}%` }}>
+							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix='ETH' />
 						</span>
-						<span>
-							Loaded depth <CurrencyValue value={points[points.length - 1]?.cumulativeEth} suffix='ETH' />
+						{midpointDepth === undefined ? undefined : (
+							<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-mid' style={{ top: `${(getDepthYPosition(midpointDepth) / CHART_HEIGHT) * 100}%` }}>
+								<CurrencyValue copyable={false} value={midpointDepth} suffix='ETH' />
+							</span>
+						)}
+						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-min' style={{ top: `${(getDepthYPosition(0n) / CHART_HEIGHT) * 100}%` }}>
+							0 ETH
 						</span>
 					</div>
-				)}
+				</div>
+				<div className='truth-auction-depth-chart' role='group' aria-label='Truth auction visible depth chart'>
+					<svg aria-hidden='true' viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio='none'>
+						<defs>
+							<linearGradient id={gradientId} x1='0%' x2='100%' y1='0%' y2='0%'>
+								<stop offset='0%' stop-color='#e8a644' stop-opacity='0.28' />
+								<stop offset='100%' stop-color='#3e9f78' stop-opacity='0.28' />
+							</linearGradient>
+						</defs>
+						<rect className='truth-auction-depth-base' height={CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom} rx='14' ry='14' width={plotWidth} x={CHART_PADDING.left} y={CHART_PADDING.top} />
+						<path className='truth-auction-depth-area' d={buildDepthAreaPath(points)} fill={`url(#${gradientId})`} />
+						<path className='truth-auction-depth-line' d={buildDepthLinePath(points)} />
+					</svg>
+					<div className='truth-auction-depth-hit-targets'>
+						{points.map((point, index) => (
+							<button
+								aria-label={`Select price ${formatCurrencyInputBalance(point.price)} ETH / REP from depth chart`}
+								aria-pressed={point.isSelected}
+								className='truth-auction-depth-hit-target'
+								key={point.tick.toString()}
+								onClick={() => onSelectTick(point.tick)}
+								style={{
+									left: `${(index / points.length) * 100}%`,
+									width: `${100 / points.length}%`,
+								}}
+								type='button'
+							>
+								<span className={getMarkerClassName(point, clearingTick)}>
+									<span className='truth-auction-depth-marker-dot' />
+								</span>
+							</button>
+						))}
+					</div>
+				</div>
 			</div>
+			<div className={`truth-auction-depth-x-axis${midpointPrice === undefined ? ' no-midpoint' : ''}`}>
+				{highestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-max'>{formatTruthAuctionPriceLabel(highestLoadedPrice)}</span>}
+				{midpointPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-mid'>{formatTruthAuctionPriceLabel(midpointPrice)}</span>}
+				{lowestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-min'>{formatTruthAuctionPriceLabel(lowestLoadedPrice)}</span>}
+			</div>
+			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>Price (ETH / REP)</div>
 		</>
 	)
 }
