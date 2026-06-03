@@ -1590,6 +1590,7 @@ describe('ForkAuctionSection', () => {
 		if (!(auctionOverviewSection instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
 		expect(getMetricValue(auctionOverviewSection, 'Time Left')).toBe('0m')
 		expect(within(auctionOverviewSection).getByText('Unfilled')).not.toBeNull()
+		expect(within(auctionOverviewSection).queryByText('The order book below reflects live demand and provisional clearing. Final allocation locks once the auction is finalized.')).toBeNull()
 		expect(within(auctionOverviewSection).queryByText('Finalized')).toBeNull()
 		expect(within(auctionOverviewSection).queryByText('Underfunded')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Truth auction is already finalized.')
@@ -2524,6 +2525,13 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent?.includes('Highest loaded price')).toBe(false)
 		expect(documentQueries.getByText('Loaded Depth (ETH)')).not.toBeNull()
 		expect(documentQueries.getByText('Price (ETH / REP)')).not.toBeNull()
+		const auctionOverviewSection = documentQueries.getByRole('heading', { name: 'Auction Overview' }).closest('section')
+		if (!(auctionOverviewSection instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
+		expect(within(auctionOverviewSection).queryByText('The order book below reflects live demand and provisional clearing. Final allocation locks once the auction is finalized.')).toBeNull()
+		expect(auctionOverviewSection.textContent?.includes('ETH Raised')).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('≈ 9.00 ETH / ≈ 100.00 ETH')).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('REP Sold')).toBe(true)
+		expect(auctionOverviewSection.textContent?.includes('≈ 0.00 REP / ≈ 100.00 REP')).toBe(false)
 		expect(document.body.textContent?.includes('Winning')).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Select price 3 ETH / REP from depth chart' }))
 		await waitFor(() => {
@@ -2531,6 +2539,7 @@ describe('ForkAuctionSection', () => {
 		})
 		expect(documentQueries.getByText('Selected Price')).not.toBeNull()
 		expect(document.body.querySelector('.truth-auction-bid-row.is-header')).toBeNull()
+		expect(document.body.querySelector('.truth-auction-level-detail .truth-auction-bid-row')).toBeNull()
 		expect(document.body.textContent?.includes('2 submissions')).toBe(true)
 	})
 
@@ -2868,7 +2877,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('hides selected price-level settlement shortcuts for bids owned by other wallets', async () => {
+	test('keeps selected price-level detail summary-only without settlement shortcut rows', async () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
 			if (request.functionName === 'activeTickCount') return 1n
 			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })]
@@ -2919,21 +2928,10 @@ describe('ForkAuctionSection', () => {
 			expect(document.body.textContent?.includes('Selected Price')).toBe(true)
 		})
 
-		await waitFor(() => {
-			expect(document.body.textContent?.includes('0x0000000000000000000000000000000000000001')).toBe(true)
-		})
-
 		const selectedLevel = document.body.querySelector('.truth-auction-level-detail')
 		if (!(selectedLevel instanceof HTMLElement)) throw new Error('Expected selected price-level detail to render')
-
-		const bidRows = Array.from(selectedLevel.querySelectorAll('.truth-auction-bid-row'))
-		const viewerRow = bidRows.find(row => row.textContent?.includes(zeroAddress) === true)
-		const otherWalletRow = bidRows.find(row => row.textContent?.includes('0x0000000000000000000000000000000000000001') === true)
-		if (!(viewerRow instanceof HTMLElement)) throw new Error('Expected selected price-level viewer row to render')
-		if (!(otherWalletRow instanceof HTMLElement)) throw new Error('Expected selected price-level non-viewer row to render')
-
-		expect(within(viewerRow).getAllByRole('button', { name: 'Settle' }).length).toBe(1)
-		expect(within(otherWalletRow).queryByRole('button', { name: 'Settle' })).toBeNull()
+		expect(selectedLevel.querySelector('.truth-auction-bid-row')).toBeNull()
+		expect(within(selectedLevel).queryByRole('button', { name: 'Settle' })).toBeNull()
 	})
 
 	test('summarizes wallet bids from semantic bid outcomes instead of presentation labels', async () => {
