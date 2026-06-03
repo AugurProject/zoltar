@@ -189,7 +189,7 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 			selectedOutcome: 'yes',
 			settlementAddress: '',
 			submitBidAmount: '',
-			submitBidTick: '',
+			submitBidPrice: '',
 			vaultAddress: '',
 		},
 		forkAuctionResult: undefined,
@@ -775,6 +775,56 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 		expectTransactionButtonDisabled(document.body, 'Liquidate Vault')
+	})
+
+	test('shows Fork Migration in the selected-pool badge once fork migration has started', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+					selectedPoolView: 'reporting',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Fork Migration')).not.toBeNull()
+	})
+
+	test('shows Fork Finalized in the selected-pool badge after child-pool fork flow completes', async () => {
+		const selectedPoolAddress = zeroAddress
+		const freshTruthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionDetails: createForkAuctionDetails({
+							completeSetCollateralAmount: 2n,
+							forkOutcome: 'yes',
+							forkOwnSecurityPool: true,
+							marketDetails: createMarketDetails({ endTime: 2n }),
+							migratedRep: 5n,
+							securityPoolAddress: selectedPoolAddress,
+							systemState: 'operational',
+							truthAuctionAddress: freshTruthAuctionAddress,
+							truthAuctionStartedAt: 10n,
+						}),
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ completeSetCollateralAmount: 0n, marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress, systemState: 'operational', truthAuctionAddress: zeroAddress })],
+					selectedPoolView: 'fork-migration',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Fork Finalized')).not.toBeNull()
 	})
 
 	test('disables minting in trading when the workflow state shows the selected pool has ended', async () => {
@@ -2515,7 +2565,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
 		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary to render')
 		const selectedPoolSummaryQueries = within(selectedPoolSummary)
-		expect(documentQueries.getAllByText('Pool Forked').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Fork Migration').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('This pool is currently operational, so fork and truth auction actions are read only.')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Mode')).toBeNull()
 		expect(selectedPoolSummaryQueries.queryByText('Fork Outcome')).toBeNull()
@@ -3000,11 +3050,15 @@ describe('SecurityPoolWorkflowSection', () => {
 	test('refreshes the selected pool after starting truth auction', async () => {
 		const selectedPoolAddress = zeroAddress
 		let refreshedPoolAddress: string | undefined
+		const loadedForkAuctionAddresses: string[] = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: selectedPoolAddress,
 					forkAuction: createForkAuctionProps({
+						onLoadForkAuction: securityPoolAddressOverride => {
+							if (securityPoolAddressOverride !== undefined) loadedForkAuctionAddresses.push(securityPoolAddressOverride)
+						},
 						forkAuctionResult: {
 							action: 'startTruthAuction',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000cc',
@@ -3025,6 +3079,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
+		expect(loadedForkAuctionAddresses).toContain(selectedPoolAddress)
 	})
 
 	test('reloads reporting after migrating escalation deposits in the fork workflow', async () => {

@@ -89,7 +89,7 @@ describe('DeploymentSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Deploy', 'Switch to Ethereum mainnet to deploy this contract.')
 	})
 
-	test('shows blocked state while prerequisite step is missing', async () => {
+	test('shows waiting state while prerequisite step is missing', async () => {
 		const prerequisite = createDeploymentStep({ id: 'proxyDeployer', deployed: false, label: 'Proxy Deployer' })
 		const dependent = createDeploymentStep({ id: 'deploymentStatusOracle', deployed: false, dependencies: ['proxyDeployer'], label: 'Deployment Status Oracle' })
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
@@ -97,7 +97,8 @@ describe('DeploymentSection', () => {
 
 		expect(rendered.container.textContent).toContain('Waiting for Proxy Deployer.')
 		expectTransactionButtonDisabled(document.body, 'Deploy', 'Waiting for Proxy Deployer.')
-		expect(rendered.container.textContent).toContain('Blocked')
+		expect(rendered.container.textContent).toContain('Waiting')
+		expect(rendered.container.textContent).not.toContain('Blocked')
 		expect(rendered.container.textContent).toContain('Deployment Status Oracle')
 	})
 

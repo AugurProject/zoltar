@@ -647,28 +647,29 @@ export type ForkAuctionRouteContentProps = {
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: () => void
+	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address) => void
 	onCreateChildUniverse: () => void
-	onFinalizeTruthAuction: () => void
+	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address) => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
 	onForkUniverse: () => void
 	onForkWithOwnEscalation: () => void
 	onInitiateFork: () => void
-	onLoadForkAuction: () => void
+	onLoadForkAuction: (securityPoolAddressOverride?: Address) => void
 	onMigrateEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
-	onRefundLosingBids: () => void
-	onStartTruthAuction: () => void
-	onSubmitBid: () => void
+	onRefundLosingBids: (securityPoolAddressOverride?: Address) => void
+	onStartTruthAuction: (securityPoolAddressOverride?: Address) => void
+	onSubmitBid: (securityPoolAddressOverride?: Address) => void
 }
 
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
+	auctionDetailsOverride?: ForkAuctionDetails | undefined
 	currentTimestamp?: bigint | undefined
 	disabled?: boolean
 	disabledMessage?: string | undefined
 	embedInCard?: boolean
-	forkMigrationReadClient?: Pick<ReadClient, 'readContract'> | undefined
+	forkMigrationReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
 	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
 	loadingReportingDetails?: boolean
 	onReportingFormChange?: ((update: Partial<ReportingFormState>) => void) | undefined
@@ -679,5 +680,5 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	stageView: ForkAuctionStageView
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
-	truthAuctionReadClient?: Pick<ReadClient, 'readContract'> | undefined
+	truthAuctionReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
 }

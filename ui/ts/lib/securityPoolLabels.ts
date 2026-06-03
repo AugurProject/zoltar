@@ -19,3 +19,11 @@ export function getSecurityPoolLifecycleLabel(state: SecurityPoolLifecycleState 
 			return assertNever(state)
 	}
 }
+
+export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, lifecycleState }: { hasForkActivity: boolean; lifecycleState: SecurityPoolLifecycleState | undefined }) {
+	if (lifecycleState === undefined) return 'Unknown'
+	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return 'Fork Migration'
+	if (lifecycleState === 'forkTruthAuction') return 'Truth Auction'
+	if (lifecycleState === 'operational' && hasForkActivity) return 'Fork Finalized'
+	return getSecurityPoolLifecycleLabel(lifecycleState)
+}

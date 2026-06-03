@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@testing-library/dom'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { type Address, zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
-import { AUCTION_TIME_SECONDS, deriveHasForkActivity, getForkAuctionStageView } from '../lib/forkAuction.js'
-import { formatDuration } from '../lib/formatters.js'
+import { AUCTION_TIME_SECONDS, deriveHasForkActivity, getForkAuctionStageView, getTruthAuctionPriceAtTick } from '../lib/forkAuction.js'
+import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import type { AccountState, ForkAuctionFormState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
@@ -17,6 +17,11 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from 
 
 const ETH = 10n ** 18n
 const REP = 10n ** 18n
+const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
+const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
+const NO_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f2'
+const YES_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa1'
+const NO_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa2'
 type TruthAuctionReadContractRequest = Parameters<ReadClient['readContract']>[0]
 type TruthAuctionReadContractHandler = (request: TruthAuctionReadContractRequest) => Promise<unknown>
 
@@ -218,7 +223,7 @@ function createTruthAuctionMetrics() {
 	}
 }
 
-function createForkAuctionForm(): ForkAuctionFormState {
+function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): ForkAuctionFormState {
 	return {
 		claimBidIndex: '',
 		claimBidTick: '',
@@ -232,8 +237,9 @@ function createForkAuctionForm(): ForkAuctionFormState {
 		selectedOutcome: 'yes',
 		settlementAddress: '',
 		submitBidAmount: '',
-		submitBidTick: '',
+		submitBidPrice: '',
 		vaultAddress: '',
+		...overrides,
 	}
 }
 
@@ -301,8 +307,19 @@ function createForkMigrationReadClient(
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
 	const forkAuctionDetails = overrides.forkAuctionDetails ?? createForkAuctionDetails()
 	const previewPool = overrides.previewPool
+	const stageView =
+		overrides.stageView ??
+		getForkAuctionStageView({
+			claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
+			forkOutcome: forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome ?? 'none',
+			migratedRep: forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep ?? 0n,
+			systemState: forkAuctionDetails?.systemState ?? previewPool?.systemState ?? 'operational',
+			truthAuction: forkAuctionDetails?.truthAuction,
+			truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
+		})
 	return {
 		accountState: createAccountState(),
+		auctionDetailsOverride: overrides.auctionDetailsOverride ?? (stageView === 'auction' || stageView === 'settlement' ? forkAuctionDetails : undefined),
 		embedInCard: false,
 		forkAuctionActiveAction: undefined,
 		forkAuctionDetails,
@@ -331,16 +348,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		reportingDetails: undefined,
 		reportingForm: createReportingForm(),
 		securityPools: [],
-		stageView:
-			overrides.stageView ??
-			getForkAuctionStageView({
-				claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
-				forkOutcome: forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome ?? 'none',
-				migratedRep: forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep ?? 0n,
-				systemState: forkAuctionDetails?.systemState ?? previewPool?.systemState ?? 'operational',
-				truthAuction: forkAuctionDetails?.truthAuction,
-				truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
-			}),
+		stageView,
 		showHeader: false,
 		showSecurityPoolAddressInput: false,
 		truthAuctionReadClient: createTruthAuctionReadClient(),
@@ -408,7 +416,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Trigger' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Refresh fork' })).toBeNull()
 		expect(document.body.textContent?.includes('This pool is currently operational. Migration controls become meaningful once the pool has forked.')).toBe(false)
-		expect(getMetricValue(migrationSection, 'Fork Type')).toBe('Unavailable until fork')
+		expect(getMetricValue(migrationSection, 'Fork Type')).toBe('-')
 	})
 
 	test('keeps migration actions available while gating later-stage writes through the shared action matrix', async () => {
@@ -439,7 +447,7 @@ describe('ForkAuctionSection', () => {
 
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
 		await waitFor(() => {
-			expectTransactionButtonEnabled(document.body, 'Migrate Vault')
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To Yes')
 			expectTransactionButtonDisabled(document.body, 'Migrate Selected Yes Deposits', 'Select at least one deposit to migrate or use the all-deposits action below.')
 			expectTransactionButtonEnabled(document.body, 'Migrate All Yes Deposits')
 		})
@@ -453,7 +461,7 @@ describe('ForkAuctionSection', () => {
 		await act(() => {
 			render(h(ForkAuctionSection, createProps({ stageView: 'settlement' })), renderedComponent.container)
 		})
-		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction')
+		expect(documentQueries.queryByRole('button', { name: 'Finalize Truth Auction' })).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
 		expect(documentQueries.queryByRole('button', { name: 'Settle Finalized Bid' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Withdraw Bids' })).toBeNull()
@@ -474,7 +482,7 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 
-		expectTransactionButtonDisabled(document.body, 'Migrate Vault')
+		expectTransactionButtonDisabled(document.body, 'Migrate Vault To Yes')
 		expectTransactionButtonDisabled(document.body, 'Migrate Selected Yes Deposits')
 		expectTransactionButtonDisabled(document.body, 'Migrate All Yes Deposits')
 
@@ -507,7 +515,7 @@ describe('ForkAuctionSection', () => {
 				renderedComponent.container,
 			)
 		})
-		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction')
+		expect(documentQueries.queryByRole('button', { name: 'Finalize Truth Auction' })).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
 		expect(documentQueries.queryByRole('button', { name: 'Settle Finalized Bid' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Withdraw Bids' })).toBeNull()
@@ -570,7 +578,7 @@ describe('ForkAuctionSection', () => {
 		expect(within(migrationBalancesSection).getByText('Locked REP')).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('heading', { name: 'Migrate Vault' })).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('heading', { name: 'Migrate Escalation Deposits' })).not.toBeNull()
-		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Vault' })).not.toBeNull()
+		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Vault To Yes' })).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate Selected Yes Deposits' })).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('button', { name: 'Migrate All Yes Deposits' })).not.toBeNull()
 		expect(within(migrationBalancesSection).getByRole('checkbox', { name: /Deposit #1/i })).not.toBeNull()
@@ -686,7 +694,129 @@ describe('ForkAuctionSection', () => {
 		])
 	})
 
-	test('requires pool REP migration before vault migration when the selected child has not been seeded', async () => {
+	test('updates locked rep in the parent migration balances after escalation migration succeeds', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaultCount: 1n,
+						vaults: [
+							{
+								lockedRepInEscalationGame: rep(3n),
+								repDepositShare: 0n,
+								securityBondAllowance: 0n,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					reportingDetails: createReportingDetails({
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{
+								balance: rep(5n),
+								deposits: [],
+								key: 'yes',
+								label: 'Yes',
+								userDeposits: [
+									createDeposit({
+										amount: rep(2n),
+										cumulativeAmount: rep(3n),
+										depositIndex: 1n,
+									}),
+								],
+							},
+							{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: {
+							invalid: [],
+							yes: [1n],
+							no: [],
+						},
+					}),
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const migrationBalancesSection = within(document.body).getByRole('heading', { name: 'Your Migration Balances' }).closest('section')
+		if (!(migrationBalancesSection instanceof HTMLElement)) throw new Error('Expected migration balances section to render')
+		const lockedRepMetric = within(migrationBalancesSection).getByText('Locked REP').closest('div')
+		if (!(lockedRepMetric instanceof HTMLElement)) throw new Error('Expected locked REP metric to render')
+		expect(within(lockedRepMetric).getByRole('button', { name: 'Copy exact value 3' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Selected Yes Deposits' }))
+		})
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionResult: {
+							action: 'migrateEscalationDeposits',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000e1',
+							securityPoolAddress: zeroAddress,
+							universeId: 1n,
+						},
+						previewPool: createPreviewPool({
+							systemState: 'forkMigration',
+							vaultCount: 1n,
+							vaults: [
+								{
+									lockedRepInEscalationGame: rep(3n),
+									repDepositShare: 0n,
+									securityBondAllowance: 0n,
+									unpaidEthFees: 0n,
+									vaultAddress: zeroAddress,
+								},
+							],
+						}),
+						reportingDetails: createReportingDetails({
+							sides: [
+								{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+								{
+									balance: rep(5n),
+									deposits: [],
+									key: 'yes',
+									label: 'Yes',
+									userDeposits: [
+										createDeposit({
+											amount: rep(2n),
+											cumulativeAmount: rep(3n),
+											depositIndex: 1n,
+										}),
+									],
+								},
+								{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							],
+						}),
+						reportingForm: createReportingForm({
+							selectedWithdrawDepositIndexesByOutcome: {
+								invalid: [],
+								yes: [1n],
+								no: [],
+							},
+						}),
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(within(lockedRepMetric).getByRole('button', { name: 'Copy exact value 1' })).not.toBeNull()
+		})
+	})
+
+	test('requires pool migration before vault migration when the selected child pool has not been funded yet', async () => {
 		const migrateRepCalls: Array<string[] | undefined> = []
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -709,10 +839,549 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => {
-			expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Migrate pool REP to the Yes child pool before moving vault balances.')
+			expectTransactionButtonDisabled(document.body, 'Migrate Vault To Yes', 'Migrate pool to the Yes universe before moving vault balances.')
 		})
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Collateral To Yes Universe' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Pool To Yes Universe' }))
 		expect(migrateRepCalls).toEqual([['yes']])
+	})
+
+	test('shows pool migration as already complete and disables the pool migration button once funded', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkMigrationReadClient: createForkMigrationReadClient(async request => {
+						if (request.functionName === 'getChildUniverseId') return 11n
+						if (request.functionName === 'getMigrationProxyAddress') return '0x00000000000000000000000000000000000000aa'
+						if (request.functionName === 'getRepToken') return '0x00000000000000000000000000000000000000bb'
+						if (request.functionName === 'balanceOf') return request.address === '0x00000000000000000000000000000000000000aa' ? 0n : 1n
+						throw new Error(`Unexpected fork migration read: ${String(request.functionName)}`)
+					}),
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(within(document.body).getByText('Pool REP for this outcome is already staged and will sweep into the child universe during vault migration.')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Migrate Pool To Yes Universe', 'Pool REP has already been migrated to the Yes universe.')
+		})
+	})
+
+	test('shows the selected child pool auction status and switches with the selected outcome', async () => {
+		const parentDetails = {
+			...createForkAuctionDetails(),
+			currentTime: 300n,
+			migrationEndsAt: 200n,
+			securityPoolAddress: PARENT_POOL_ADDRESS,
+			systemState: 'forkMigration' as const,
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					auctionDetailsOverride: undefined,
+					forkAuctionDetails: parentDetails,
+					forkAuctionForm: createForkAuctionForm({
+						selectedOutcome: 'yes',
+					}),
+					securityPools: [
+						createPreviewPool({
+							parent: PARENT_POOL_ADDRESS,
+							questionOutcome: 'yes',
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+							truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+							truthAuctionStartedAt: 310n,
+						}),
+						createPreviewPool({
+							parent: PARENT_POOL_ADDRESS,
+							questionOutcome: 'no',
+							securityPoolAddress: NO_CHILD_POOL_ADDRESS,
+							truthAuctionAddress: NO_TRUTH_AUCTION_ADDRESS,
+							truthAuctionStartedAt: 410n,
+						}),
+					],
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const auctionStatusSection = within(document.body).getByRole('heading', { name: 'Auction Status' }).closest('section')
+		if (!(auctionStatusSection instanceof HTMLElement)) throw new Error('Expected auction status section to render')
+		expect(getMetricValue(auctionStatusSection, 'Auction Address')).toContain('0x0000')
+		expect(getMetricValue(auctionStatusSection, 'Auction Address')).toContain('0aa1')
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						auctionDetailsOverride: undefined,
+						forkAuctionDetails: parentDetails,
+						forkAuctionForm: createForkAuctionForm({
+							selectedOutcome: 'no',
+						}),
+						securityPools: [
+							createPreviewPool({
+								parent: PARENT_POOL_ADDRESS,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+								truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+								truthAuctionStartedAt: 310n,
+							}),
+							createPreviewPool({
+								parent: PARENT_POOL_ADDRESS,
+								questionOutcome: 'no',
+								securityPoolAddress: NO_CHILD_POOL_ADDRESS,
+								truthAuctionAddress: NO_TRUTH_AUCTION_ADDRESS,
+								truthAuctionStartedAt: 410n,
+							}),
+						],
+						stageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(getMetricValue(auctionStatusSection, 'Auction Address')).toContain('0aa2')
+	})
+
+	test('shows a passive missing-child message on the auction tab without child-creation actions', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					auctionDetailsOverride: undefined,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						currentTime: 300n,
+						migrationEndsAt: 200n,
+						securityPoolAddress: PARENT_POOL_ADDRESS,
+						systemState: 'forkMigration',
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Child universe not created for the Yes outcome yet.')).not.toBeNull()
+		expect(within(document.body).queryByRole('button', { name: 'Create Child Universe' })).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Child universe not created for the Yes outcome yet.')
+	})
+
+	test('starts the truth auction for the selected child pool instead of the parent pool', async () => {
+		const startTruthAuctionCalls: Array<string | undefined> = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					auctionDetailsOverride: undefined,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						currentTime: 300n,
+						migrationEndsAt: 200n,
+						securityPoolAddress: PARENT_POOL_ADDRESS,
+						systemState: 'forkMigration',
+					},
+					onStartTruthAuction: securityPoolAddressOverride => {
+						startTruthAuctionCalls.push(securityPoolAddressOverride)
+					},
+					securityPools: [
+						createPreviewPool({
+							parent: PARENT_POOL_ADDRESS,
+							questionOutcome: 'yes',
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+						}),
+					],
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Start Truth Auction' }))
+		})
+
+		expect(startTruthAuctionCalls).toEqual([YES_CHILD_POOL_ADDRESS])
+	})
+
+	test('does not mark vault migration complete just because the selected child vault already has balances', async () => {
+		const selectedOutcomeChildPool = createPreviewPool({
+			parent: zeroAddress,
+			questionOutcome: 'yes',
+			securityPoolAddress: '0x0000000000000000000000000000000000000100',
+			systemState: 'forkMigration',
+			vaults: [
+				{
+					lockedRepInEscalationGame: 0n,
+					repDepositShare: rep(1n),
+					securityBondAllowance: 0n,
+					unpaidEthFees: 0n,
+					vaultAddress: zeroAddress,
+				},
+			],
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaults: [
+							{
+								lockedRepInEscalationGame: 0n,
+								repDepositShare: rep(2n),
+								securityBondAllowance: 1n,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					securityPools: [selectedOutcomeChildPool],
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To Yes')
+		})
+		expect(document.body.textContent?.includes('Already migrated')).toBe(false)
+	})
+
+	test('marks vault migration complete globally after a successful migration result', async () => {
+		let migrateVaultCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					forkAuctionForm: {
+						...createForkAuctionForm(),
+						selectedOutcome: 'yes',
+					},
+					forkAuctionResult: undefined,
+					onMigrateVault: () => {
+						migrateVaultCalls += 1
+					},
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaults: [
+							{
+								lockedRepInEscalationGame: 0n,
+								repDepositShare: rep(2n),
+								securityBondAllowance: 1n,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					securityPools: [
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'yes',
+							securityPoolAddress: '0x0000000000000000000000000000000000000101',
+							systemState: 'forkMigration',
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: rep(2n),
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: zeroAddress,
+								},
+							],
+						}),
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'invalid',
+							securityPoolAddress: '0x0000000000000000000000000000000000000102',
+							systemState: 'forkMigration',
+							vaults: [],
+						}),
+					],
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To Yes')
+		})
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault To Yes' }))
+		})
+		expect(migrateVaultCalls).toBe(1)
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkMigration',
+						},
+						forkAuctionForm: {
+							...createForkAuctionForm(),
+							selectedOutcome: 'yes',
+						},
+						onMigrateVault: () => {
+							migrateVaultCalls += 1
+						},
+						forkAuctionResult: {
+							action: 'migrateVault',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000f3',
+							securityPoolAddress: zeroAddress,
+							universeId: 1n,
+						},
+						previewPool: createPreviewPool({
+							systemState: 'forkMigration',
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: rep(2n),
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: zeroAddress,
+								},
+							],
+						}),
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: '0x0000000000000000000000000000000000000101',
+								systemState: 'forkMigration',
+								vaults: [
+									{
+										lockedRepInEscalationGame: 0n,
+										repDepositShare: rep(2n),
+										securityBondAllowance: 1n,
+										unpaidEthFees: 0n,
+										vaultAddress: zeroAddress,
+									},
+								],
+							}),
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'invalid',
+								securityPoolAddress: '0x0000000000000000000000000000000000000102',
+								systemState: 'forkMigration',
+								vaults: [],
+							}),
+						],
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkMigration',
+						},
+						forkAuctionForm: {
+							...createForkAuctionForm(),
+							selectedOutcome: 'invalid',
+						},
+						onMigrateVault: () => {
+							migrateVaultCalls += 1
+						},
+						forkAuctionResult: {
+							action: 'migrateVault',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000f3',
+							securityPoolAddress: zeroAddress,
+							universeId: 1n,
+						},
+						previewPool: createPreviewPool({
+							systemState: 'forkMigration',
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: rep(2n),
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: zeroAddress,
+								},
+							],
+						}),
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: '0x0000000000000000000000000000000000000101',
+								systemState: 'forkMigration',
+								vaults: [
+									{
+										lockedRepInEscalationGame: 0n,
+										repDepositShare: rep(2n),
+										securityBondAllowance: 1n,
+										unpaidEthFees: 0n,
+										vaultAddress: zeroAddress,
+									},
+								],
+							}),
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'invalid',
+								securityPoolAddress: '0x0000000000000000000000000000000000000102',
+								systemState: 'forkMigration',
+								vaults: [],
+							}),
+						],
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expectTransactionButtonDisabled(document.body, 'Migrate Vault To Invalid', 'Vault migration is already complete for this wallet.')
+		})
+		expect(document.body.textContent?.includes('Already migrated')).toBe(true)
+	})
+
+	test('keeps vault migration available while no successful migration result or refreshed empty balances exist', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkMigration',
+					},
+					forkAuctionForm: {
+						...createForkAuctionForm(),
+						selectedOutcome: 'no',
+					},
+					previewPool: createPreviewPool({
+						systemState: 'forkMigration',
+						vaults: [
+							{
+								lockedRepInEscalationGame: 0n,
+								repDepositShare: rep(2n),
+								securityBondAllowance: 1n,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					securityPools: [
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'no',
+							securityPoolAddress: '0x0000000000000000000000000000000000000201',
+							systemState: 'forkMigration',
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: rep(2n),
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: zeroAddress,
+								},
+							],
+						}),
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'yes',
+							securityPoolAddress: '0x0000000000000000000000000000000000000202',
+							systemState: 'forkMigration',
+							vaults: [],
+						}),
+					],
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To No')
+		})
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkMigration',
+						},
+						forkAuctionForm: {
+							...createForkAuctionForm(),
+							selectedOutcome: 'yes',
+						},
+						previewPool: createPreviewPool({
+							systemState: 'forkMigration',
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: rep(2n),
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: zeroAddress,
+								},
+							],
+						}),
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'no',
+								securityPoolAddress: '0x0000000000000000000000000000000000000201',
+								systemState: 'forkMigration',
+								vaults: [
+									{
+										lockedRepInEscalationGame: 0n,
+										repDepositShare: rep(2n),
+										securityBondAllowance: 1n,
+										unpaidEthFees: 0n,
+										vaultAddress: zeroAddress,
+									},
+								],
+							}),
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: '0x0000000000000000000000000000000000000202',
+								systemState: 'forkMigration',
+								vaults: [],
+							}),
+						],
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To Yes')
+		})
+		expect(document.body.textContent?.includes('Already migrated')).toBe(false)
 	})
 
 	test('renders latest fork action status outside action rows', async () => {
@@ -762,7 +1431,7 @@ describe('ForkAuctionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'No REP collateral or security bond allowance remains to migrate for the connected wallet.')
+		expectTransactionButtonDisabled(document.body, 'Migrate Vault To Yes', 'No REP collateral or security bond allowance remains to migrate for the connected wallet.')
 		expectTransactionButtonDisabled(document.body, 'Migrate Selected Yes Deposits', 'No locked REP remains to migrate for the connected wallet.')
 		expectTransactionButtonDisabled(document.body, 'Migrate All Yes Deposits', 'No locked REP remains to migrate for the connected wallet.')
 	})
@@ -848,7 +1517,7 @@ describe('ForkAuctionSection', () => {
 					forkAuctionForm: {
 						...createForkAuctionForm(),
 						submitBidAmount: (1n * ETH).toString(),
-						submitBidTick: '1',
+						submitBidPrice: '1',
 					},
 				}),
 			),
@@ -873,7 +1542,7 @@ describe('ForkAuctionSection', () => {
 					forkAuctionForm: {
 						...createForkAuctionForm(),
 						submitBidAmount: (3n * ETH).toString(),
-						submitBidTick: '1',
+						submitBidPrice: '1',
 					},
 				}),
 			),
@@ -883,14 +1552,89 @@ describe('ForkAuctionSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Need 1 more ETH in this wallet to bid the selected amount.')
 	})
 
+	test('uses finalized-aware time left and finalized bid guard on the auction tab', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					currentTimestamp: 150n,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						currentTime: 150n,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							auctionEndsAt: 1_000n,
+							finalized: true,
+							timeRemaining: 500n,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					forkAuctionForm: {
+						...createForkAuctionForm(),
+						submitBidAmount: (3n * ETH).toString(),
+						submitBidPrice: 'abc',
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Bid Price (ETH / REP)')).not.toBeNull()
+		expect(within(document.body).queryByText('Bid Tick')).toBeNull()
+
+		const auctionOverviewSection = within(document.body).getByRole('heading', { name: 'Auction Overview' }).closest('section')
+		if (!(auctionOverviewSection instanceof HTMLElement)) throw new Error('Expected auction overview section to render')
+		expect(getMetricValue(auctionOverviewSection, 'Time Left')).toBe('0m')
+		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Truth auction is already finalized.')
+	})
+
+	test('shows a price-specific bid validation error for malformed live-auction prices', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					forkAuctionForm: {
+						...createForkAuctionForm(),
+						submitBidAmount: (3n * ETH).toString(),
+						submitBidPrice: 'abc',
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Enter a valid bid price.')
+	})
+
 	test('disables start truth auction until migration ends and enables it afterwards', async () => {
 		const baseProps = createProps({
 			currentTimestamp: 150n,
+			auctionDetailsOverride: undefined,
 			forkAuctionDetails: {
 				...createForkAuctionDetails(),
 				migrationEndsAt: 200n,
 				systemState: 'forkMigration',
 			},
+			securityPools: [
+				createPreviewPool({
+					parent: zeroAddress,
+					questionOutcome: 'yes',
+					securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+				}),
+			],
 			stageView: 'auction',
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
@@ -938,10 +1682,41 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent?.includes('This pool is currently in Migration. Auction controls become meaningful after migration completes and the truth auction starts.')).toBe(false)
 	})
 
+	test('shows bypass auction copy when no parent collateral remains to auction', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 201n,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						completeSetCollateralAmount: 0n,
+						migrationEndsAt: 200n,
+						systemState: 'forkMigration',
+					},
+					securityPools: [
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'yes',
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+						}),
+					],
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Bypass Auction')
+		expect(document.body.textContent?.includes('No parent collateral remains to auction, so this step immediately bypasses bidding and finalizes the child pool.')).toBe(true)
+		expect(within(document.body).queryByRole('button', { name: 'Start Truth Auction' })).toBeNull()
+	})
+
 	test('refreshes auction status immediately after truth auction start succeeds', async () => {
 		let startTruthAuctionCalls = 0
 		const baseProps = createProps({
 			currentTimestamp: 201n,
+			auctionDetailsOverride: undefined,
 			forkAuctionDetails: {
 				...createForkAuctionDetails(),
 				migrationEndsAt: 200n,
@@ -950,6 +1725,13 @@ describe('ForkAuctionSection', () => {
 			onStartTruthAuction: () => {
 				startTruthAuctionCalls += 1
 			},
+			securityPools: [
+				createPreviewPool({
+					parent: zeroAddress,
+					questionOutcome: 'yes',
+					securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+				}),
+			],
 			stageView: 'auction',
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
@@ -962,6 +1744,10 @@ describe('ForkAuctionSection', () => {
 		})
 		expect(startTruthAuctionCalls).toBe(1)
 		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'Starting truth auction...')
+		const pendingAuctionStatusSection = documentQueries.getByRole('heading', { name: 'Auction Status' }).closest('section')
+		if (!(pendingAuctionStatusSection instanceof HTMLElement)) throw new Error('Expected auction status section to render')
+		expect(getMetricValue(pendingAuctionStatusSection, 'Started')).toBe('Starting...')
+		expect(getMetricValue(pendingAuctionStatusSection, 'Ends')).toBe('Pending confirmation')
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Start Truth Auction' }))
 		})
@@ -976,7 +1762,7 @@ describe('ForkAuctionSection', () => {
 						forkAuctionResult: {
 							action: 'startTruthAuction',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000f0',
-							securityPoolAddress: zeroAddress,
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 							universeId: 1n,
 						},
 					}),
@@ -992,7 +1778,7 @@ describe('ForkAuctionSection', () => {
 		expect(getMetricValue(auctionStatusSection, 'Ends')).not.toBe('Not started')
 	})
 
-	test('locks the vault migration button after submit until the wallet is marked migrated for that outcome', async () => {
+	test('locks the vault migration button after submit until the wallet is marked fully migrated', async () => {
 		let migrateVaultCalls = 0
 		const selectedOutcomeVaults = [
 			{
@@ -1041,16 +1827,16 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => {
-			expectTransactionButtonEnabled(document.body, 'Migrate Vault')
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To Yes')
 		})
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault To Yes' }))
 		})
 		expect(migrateVaultCalls).toBe(1)
-		expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Migrating vault...')
+		expectTransactionButtonDisabled(document.body, 'Migrate Vault To Yes', 'Migrating vault...')
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate Vault To Yes' }))
 		})
 		expect(migrateVaultCalls).toBe(1)
 
@@ -1084,9 +1870,94 @@ describe('ForkAuctionSection', () => {
 			)
 		})
 		await waitFor(() => {
-			expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'Vault migration for this outcome is already complete for this wallet.')
+			expectTransactionButtonDisabled(document.body, 'Migrate Vault To Yes', 'Vault migration is already complete for this wallet.')
 		})
 		expect(document.body.textContent?.includes('Already migrated')).toBe(true)
+		const migrationStatusSection = within(document.body).getByRole('heading', { name: 'Migration Status' }).closest('section')
+		if (!(migrationStatusSection instanceof HTMLElement)) throw new Error('Expected migration status section to render')
+		expect(within(migrationStatusSection).getByText('Migrated')).not.toBeNull()
+	})
+
+	test('clears vault migration completion when the connected wallet or parent pool changes', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: zeroAddress }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						securityPoolAddress: zeroAddress,
+						systemState: 'forkMigration',
+					},
+					forkAuctionResult: {
+						action: 'migrateVault',
+						hash: '0x00000000000000000000000000000000000000000000000000000000000000f2',
+						securityPoolAddress: zeroAddress,
+						universeId: 1n,
+					},
+					previewPool: createPreviewPool({
+						securityPoolAddress: zeroAddress,
+						systemState: 'forkMigration',
+						vaults: [
+							{
+								lockedRepInEscalationGame: 0n,
+								repDepositShare: rep(2n),
+								securityBondAllowance: 1n,
+								unpaidEthFees: 0n,
+								vaultAddress: zeroAddress,
+							},
+						],
+					}),
+					securityPools: [createPreviewPool({ parent: zeroAddress, questionOutcome: 'yes', securityPoolAddress: YES_CHILD_POOL_ADDRESS })],
+					stageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expectTransactionButtonDisabled(document.body, 'Migrate Vault To Yes', 'Vault migration is already complete for this wallet.')
+		})
+
+		const otherAccount = '0x0000000000000000000000000000000000000001'
+		const otherPool = '0x00000000000000000000000000000000000000aa'
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ address: otherAccount }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							securityPoolAddress: otherPool,
+							systemState: 'forkMigration',
+						},
+						forkAuctionResult: undefined,
+						previewPool: createPreviewPool({
+							securityPoolAddress: otherPool,
+							systemState: 'forkMigration',
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: rep(2n),
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: otherAccount,
+								},
+							],
+						}),
+						securityPools: [createPreviewPool({ parent: otherPool, questionOutcome: 'yes', securityPoolAddress: '0x00000000000000000000000000000000000000ab' })],
+						stageView: 'migration',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expectTransactionButtonEnabled(document.body, 'Migrate Vault To Yes')
+		})
+		expect(document.body.textContent?.includes('Already migrated')).toBe(false)
 	})
 
 	test('disables submit bid after auction end to prevent reverted bids', async () => {
@@ -1111,7 +1982,7 @@ describe('ForkAuctionSection', () => {
 					forkAuctionForm: {
 						...createForkAuctionForm(),
 						submitBidAmount: (3n * ETH).toString(),
-						submitBidTick: '10',
+						submitBidPrice: '1',
 					},
 				}),
 			),
@@ -1119,6 +1990,67 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Truth auction has ended.')
+	})
+
+	test('shows an auction-ended notice with the end timestamp once bidding has closed', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 201n,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							auctionEndsAt: 200n,
+							finalized: false,
+							timeRemaining: 0n,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 200n - AUCTION_TIME_SECONDS,
+					},
+					stageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const endedNotice = document.body.querySelector('.notice.success')
+		expect(endedNotice?.textContent).toContain('Truth auction has ended.')
+		expect(endedNotice?.textContent).toContain('Ended at:')
+		expect(endedNotice?.textContent).toContain('Finalize the truth auction')
+	})
+
+	test('shows the ended notice for finalized auctions too', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 201n,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						claimingAvailable: true,
+						systemState: 'operational',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							auctionEndsAt: 200n,
+							finalized: true,
+							timeRemaining: 0n,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 200n - AUCTION_TIME_SECONDS,
+					},
+					stageView: 'settlement',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const endedNotice = document.body.querySelector('.notice.success')
+		expect(endedNotice?.textContent).toContain('Truth auction has ended.')
+		expect(endedNotice?.textContent).toContain('finalized settlement paths are now in effect')
+		expect(endedNotice?.textContent).toContain('Ended at:')
 	})
 
 	test('gates settlement actions against lifecycle conditions that would otherwise revert onchain', async () => {
@@ -1147,13 +2079,20 @@ describe('ForkAuctionSection', () => {
 				refundBidIndex: '1',
 				refundTick: '9',
 			},
+			securityPools: [
+				createPreviewPool({
+					parent: zeroAddress,
+					questionOutcome: 'yes',
+					securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+				}),
+			],
 			stageView: 'settlement',
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction', 'Truth auction is still ongoing.')
+		expect(documentQueries.queryByRole('button', { name: 'Finalize Truth Auction' })).toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Refund Losing Bid')
 		expect(documentQueries.queryByRole('button', { name: 'Settle Finalized Bid' })).toBeNull()
 
@@ -1168,25 +2107,27 @@ describe('ForkAuctionSection', () => {
 		})
 
 		await waitFor(() => {
-			expectTransactionButtonEnabled(document.body, 'Finalize Truth Auction')
+			expect(documentQueries.queryByRole('button', { name: 'Finalize Truth Auction' })).toBeNull()
 		})
 		expectTransactionButtonEnabled(document.body, 'Refund Losing Bid')
 
 		await act(() => {
+			const finalizedDetails = {
+				...baseDetails,
+				claimingAvailable: true,
+				systemState: 'operational',
+				truthAuction: {
+					...baseDetails.truthAuction,
+					finalized: true,
+					timeRemaining: 0n,
+				},
+			} satisfies ForkAuctionDetails
 			render(
 				h(ForkAuctionSection, {
 					...baseProps,
+					auctionDetailsOverride: finalizedDetails,
 					currentTimestamp: 201n,
-					forkAuctionDetails: {
-						...baseDetails,
-						claimingAvailable: true,
-						systemState: 'operational',
-						truthAuction: {
-							...baseDetails.truthAuction,
-							finalized: true,
-							timeRemaining: 0n,
-						},
-					},
+					forkAuctionDetails: finalizedDetails,
 				}),
 				renderedComponent.container,
 			)
@@ -1219,6 +2160,13 @@ describe('ForkAuctionSection', () => {
 					accountState: createAccountState({ ethBalance: 10n * ETH }),
 					forkAuctionDetails: baseDetails,
 					forkAuctionForm: createForkAuctionForm(),
+					securityPools: [
+						createPreviewPool({
+							parent: zeroAddress,
+							questionOutcome: 'yes',
+							securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+						}),
+					],
 				}),
 			),
 		)
@@ -1239,6 +2187,13 @@ describe('ForkAuctionSection', () => {
 							...createForkAuctionForm(),
 							claimBidTick: '10',
 						},
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+							}),
+						],
 					}),
 				}),
 				renderedComponent.container,
@@ -1258,6 +2213,13 @@ describe('ForkAuctionSection', () => {
 							claimBidTick: '10',
 							settlementAddress: 'not-an-address',
 						},
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+							}),
+						],
 					}),
 				}),
 				renderedComponent.container,
@@ -1276,6 +2238,13 @@ describe('ForkAuctionSection', () => {
 							claimBidIndex: '0',
 							claimBidTick: '10',
 						},
+						securityPools: [
+							createPreviewPool({
+								parent: zeroAddress,
+								questionOutcome: 'yes',
+								securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+							}),
+						],
 					}),
 				}),
 				renderedComponent.container,
@@ -1932,7 +2901,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('keeps the auction stage ordered as market view, submit bid, then my bids and shows the form-linked preview state', async () => {
+	test('keeps the auction stage ordered as market view, submit bid, finalize, then my bids and shows the form-linked preview state', async () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
 			if (request.functionName === 'activeTickCount') return 1n
 			if (request.functionName === 'getActiveTickPage') return [createTruthAuctionTickSummary({ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
@@ -1961,7 +2930,7 @@ describe('ForkAuctionSection', () => {
 					forkAuctionForm: {
 						...createForkAuctionForm(),
 						submitBidAmount: (4n * ETH).toString(),
-						submitBidTick: '12',
+						submitBidPrice: formatCurrencyInputBalance(getTruthAuctionPriceAtTick(12n)),
 					},
 					truthAuctionReadClient,
 				}),
@@ -1980,13 +2949,20 @@ describe('ForkAuctionSection', () => {
 
 		const marketViewHeading = documentQueries.getByRole('heading', { name: 'Market View' })
 		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
+		const finalizeHeading = documentQueries.getByRole('heading', { name: 'Finalize Truth Auction' })
 		const myBidsHeading = documentQueries.getByRole('heading', { name: 'My Bids' })
 
 		expectElementBefore(marketViewHeading, submitBidHeading)
-		expectElementBefore(submitBidHeading, myBidsHeading)
+		expectElementBefore(submitBidHeading, finalizeHeading)
+		expectElementBefore(finalizeHeading, myBidsHeading)
 		expect(documentQueries.getByText(/Selected ladder price:/)).not.toBeNull()
 		expect(document.body.textContent?.includes('Current form tick')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Use This Price' })).not.toBeNull()
+		expect(documentQueries.getByText('Bid Price (ETH / REP)')).not.toBeNull()
+		expect(documentQueries.queryByText('Bid Tick')).toBeNull()
 		expect(document.body.querySelector('.truth-auction-depth-marker.is-preview')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-market-section')).not.toBeNull()
+		expect(document.body.querySelector('.truth-auction-market-board .truth-auction-panel')).toBeNull()
 	})
 
 	test('keeps pre-finalization settlement focused on wallet actions before the market view and leaves operator tools collapsed by default', async () => {
@@ -2135,6 +3111,250 @@ describe('ForkAuctionSection', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Load More Price Levels' }))
 		await waitFor(() => {
 			expect(document.body.textContent?.includes('Showing 26 of 26 active price levels')).toBe(true)
+		})
+	})
+
+	test('shows aggregated auction bids without requiring a selected tick and keeps the section ordered after market view', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 2n
+			if (request.functionName === 'getActiveTickPage') {
+				return [createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 5n * ETH, submissionCount: 2n, active: true }), createTruthAuctionTickSummary({ tick: 10n, price: getTruthAuctionPriceAtTick(10n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
+			}
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return (request.args?.[0] ?? 0n) === 12n ? 2n : 1n
+			if (request.functionName === 'getBidPageAtTick') {
+				if ((request.args?.[0] ?? 0n) === 12n) {
+					return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }), createTruthAuctionBidView({ tick: 12n, bidIndex: 1n, bidder: '0x0000000000000000000000000000000000000001', ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 2n * ETH })]
+				}
+				return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
+			}
+			if (request.functionName === 'getBidderBidCount') return 1n
+			if (request.functionName === 'getBidderBidPage') return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByRole('heading', { name: 'Auction Bids' })).not.toBeNull()
+			expect(document.body.textContent?.includes('Showing 3 of 3 bids across loaded levels')).toBe(true)
+		})
+
+		const marketViewHeading = documentQueries.getByRole('heading', { name: 'Market View' })
+		const auctionBidsHeading = documentQueries.getByRole('heading', { name: 'Auction Bids' })
+		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
+
+		expectElementBefore(marketViewHeading, auctionBidsHeading)
+		expectElementBefore(auctionBidsHeading, submitBidHeading)
+		expect(document.body.textContent?.includes('Bid #1')).toBe(true)
+		expect(document.body.textContent?.includes('Tick 10')).toBe(true)
+	})
+
+	test('sorts aggregated auction bids by tick descending then bid index ascending and can prefill actions from that table', async () => {
+		const formUpdates: Partial<ForkAuctionFormState>[] = []
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 2n
+			if (request.functionName === 'getActiveTickPage') {
+				return [createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 5n * ETH, submissionCount: 2n, active: true }), createTruthAuctionTickSummary({ tick: 10n, price: getTruthAuctionPriceAtTick(10n), currentTotalEth: 4n * ETH, submissionCount: 1n, active: true })]
+			}
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return (request.args?.[0] ?? 0n) === 12n ? 2n : 1n
+			if (request.functionName === 'getBidPageAtTick') {
+				if ((request.args?.[0] ?? 0n) === 12n) {
+					return [createTruthAuctionBidView({ tick: 12n, bidIndex: 1n, bidder: '0x0000000000000000000000000000000000000001', ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 2n * ETH }), createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
+				}
+				return [createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, claimed: true })]
+			}
+			if (request.functionName === 'getBidderBidCount') return 2n
+			if (request.functionName === 'getBidderBidPage') {
+				return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH }), createTruthAuctionBidView({ tick: 10n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, claimed: true })]
+			}
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						claimingAvailable: true,
+						systemState: 'operational',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							clearingPrice: getTruthAuctionPriceAtTick(10n),
+							clearingTick: 10n,
+							ethAtClearingTick: 4n * ETH,
+							finalized: true,
+							hitCap: true,
+							timeRemaining: 0n,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					onForkAuctionFormChange: update => {
+						formUpdates.push(update)
+					},
+					stageView: 'settlement',
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByRole('heading', { name: 'Auction Bids' })).not.toBeNull()
+			expect(documentQueries.getAllByRole('button', { name: 'Prefill Settle' }).length).toBeGreaterThan(0)
+		})
+
+		const aggregateTable = documentQueries.getByRole('heading', { name: 'Auction Bids' }).closest('.section-block')
+		if (!(aggregateTable instanceof HTMLElement)) throw new Error('Expected aggregated auction bids section to render')
+		await waitFor(() => {
+			expect(aggregateTable.textContent?.includes('Bid #0')).toBe(true)
+		})
+		const aggregateRows = Array.from(aggregateTable.querySelectorAll('.truth-auction-bid-row.is-wide')).filter(row => !row.classList.contains('is-header'))
+		expect(aggregateRows.length).toBeGreaterThanOrEqual(3)
+		expect(aggregateRows[0]?.textContent).toContain('Tick 12')
+		expect(aggregateRows[0]?.textContent).toContain('Bid #0')
+		expect(aggregateRows[1]?.textContent).toContain('Tick 12')
+		expect(aggregateRows[1]?.textContent).toContain('Bid #1')
+		expect(aggregateRows[2]?.textContent).toContain('Tick 10')
+
+		fireEvent.click(within(aggregateTable).getAllByRole('button', { name: 'Prefill Settle' })[0] as HTMLElement)
+		expect(formUpdates).toContainEqual({
+			claimBidIndex: '0',
+			claimBidTick: '12',
+			settlementAddress: zeroAddress,
+		})
+		expect(aggregateRows[1]?.textContent?.includes('Prefill Settle')).toBe(false)
+	})
+
+	test('expands aggregated auction bid coverage after loading more price levels and more bid pages', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 2n
+			if (request.functionName === 'getActiveTickPage') {
+				const offset = request.args?.[0] ?? 0n
+				if (offset === 25n) {
+					return [createTruthAuctionTickSummary({ tick: 9n, price: getTruthAuctionPriceAtTick(9n), currentTotalEth: 5n * ETH, submissionCount: 1n, active: true })]
+				}
+				return [createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })]
+			}
+			if (request.functionName === 'getTickSummary') return createTruthAuctionTickSummary({ tick: 12n, price: getTruthAuctionPriceAtTick(12n), currentTotalEth: 5n * ETH, submissionCount: 2n, active: true })
+			if (request.functionName === 'getBidCountAtTick') return (request.args?.[0] ?? 0n) === 12n ? 2n : 1n
+			if (request.functionName === 'getBidPageAtTick') {
+				const tick = request.args?.[0] ?? 0n
+				const offset = request.args?.[1] ?? 0n
+				if (tick === 12n && offset === 0n) return [createTruthAuctionBidView({ tick: 12n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
+				if (tick === 12n && offset === 25n) return [createTruthAuctionBidView({ tick: 12n, bidIndex: 1n, ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 2n * ETH })]
+				return [createTruthAuctionBidView({ tick: 9n, bidIndex: 0n, ethAmount: 5n * ETH, cumulativeEth: 5n * ETH })]
+			}
+			if (request.functionName === 'getBidderBidCount') return 0n
+			if (request.functionName === 'getBidderBidPage') return []
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const firstPageTicks = Array.from({ length: 25 }, (_, index) =>
+			createTruthAuctionTickSummary({
+				tick: BigInt(100 - index),
+				price: getTruthAuctionPriceAtTick(BigInt(100 - index)),
+				currentTotalEth: 1n * ETH,
+				submissionCount: index === 0 ? 2n : 0n,
+				active: true,
+			}),
+		)
+		const expandedTruthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 26n
+			if (request.functionName === 'getActiveTickPage') {
+				const offset = request.args?.[0] ?? 0n
+				if (offset === 25n) return [createTruthAuctionTickSummary({ tick: 75n, price: getTruthAuctionPriceAtTick(75n), currentTotalEth: 1n * ETH, submissionCount: 1n, active: true })]
+				return firstPageTicks
+			}
+			if (request.functionName === 'getTickSummary') return firstPageTicks[0] ?? createTruthAuctionTickSummary()
+			if (request.functionName === 'getBidCountAtTick') {
+				const tick = request.args?.[0] ?? 0n
+				if (tick === 100n) return 2n
+				if (tick === 75n) return 1n
+				return 0n
+			}
+			if (request.functionName === 'getBidPageAtTick') {
+				const tick = request.args?.[0] ?? 0n
+				const offset = request.args?.[1] ?? 0n
+				if (tick === 100n && offset === 0n) return [createTruthAuctionBidView({ tick: 100n, bidIndex: 0n, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH })]
+				if (tick === 100n && offset === 25n) return [createTruthAuctionBidView({ tick: 100n, bidIndex: 1n, ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 2n * ETH })]
+				if (tick === 75n) return [createTruthAuctionBidView({ tick: 75n, bidIndex: 0n, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH })]
+				return []
+			}
+			if (request.functionName === 'getBidderBidCount') return 0n
+			if (request.functionName === 'getBidderBidPage') return []
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(document.body.textContent?.includes('Showing 1 of 2 bids across loaded levels')).toBe(true)
+		})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Load More Auction Bids' }))
+		await waitFor(() => {
+			expect(document.body.textContent?.includes('Showing 2 of 2 bids across loaded levels')).toBe(true)
+		})
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ ethBalance: 10n * ETH }),
+						forkAuctionDetails: {
+							...createForkAuctionDetails(),
+							systemState: 'forkTruthAuction',
+							truthAuction: createTruthAuctionMetrics(),
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 1n,
+						},
+						truthAuctionReadClient: expandedTruthAuctionReadClient,
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Load More Price Levels' }))
+		await waitFor(() => {
+			expect(document.body.textContent?.includes('Showing 3 of 3 bids across loaded levels')).toBe(true)
 		})
 	})
 })

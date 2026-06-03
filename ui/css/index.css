@@ -2261,8 +2261,7 @@ strong.metric-value-danger {
 }
 
 .truth-auction-hero-primary,
-.truth-auction-panel,
-.truth-auction-level-detail {
+.truth-auction-panel {
 	padding: 1rem;
 	border: 1px solid var(--border-default);
 	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
@@ -2273,7 +2272,6 @@ strong.metric-value-danger {
 
 .truth-auction-hero-primary,
 .truth-auction-panel,
-.truth-auction-level-detail,
 .truth-auction-progress-group,
 .truth-auction-depth-header,
 .truth-auction-panel-header,
@@ -2284,6 +2282,24 @@ strong.metric-value-danger {
 .truth-auction-bid-row-actions {
 	display: grid;
 	gap: 0.75rem;
+}
+
+.truth-auction-market-section,
+.truth-auction-level-detail {
+	display: grid;
+	gap: 0.75rem;
+	align-content: start;
+}
+
+.truth-auction-market-section {
+	padding-top: 0.85rem;
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.truth-auction-market-stack > .truth-auction-market-section:first-child,
+.truth-auction-market-board > .truth-auction-market-section:first-child {
+	padding-top: 0;
+	border-top: 0;
 }
 
 .truth-auction-hero-grid {
@@ -2350,13 +2366,15 @@ strong.metric-value-danger {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.truth-auction-wallet-summary {
+.truth-auction-wallet-summary,
+.truth-auction-bid-coverage-summary {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
 	gap: 0.9rem 1rem;
 }
 
-.truth-auction-wallet-summary > div {
+.truth-auction-wallet-summary > div,
+.truth-auction-bid-coverage-summary > div {
 	padding-top: 0.65rem;
 	border-top: 1px solid var(--divider-subtle);
 }
@@ -2649,6 +2667,10 @@ strong.metric-value-danger {
 
 .truth-auction-bid-row.is-wallet {
 	grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 0.85fr) auto minmax(0, 1.4fr);
+}
+
+.truth-auction-bid-row.is-wide {
+	grid-template-columns: minmax(0, 0.72fr) minmax(0, 0.9fr) minmax(0, 0.7fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto minmax(0, 1.35fr);
 }
 
 .truth-auction-bid-row.is-header {
@@ -3770,6 +3792,7 @@ button:focus-visible {
 	}
 
 	.truth-auction-bid-row,
+	.truth-auction-bid-row.is-wide,
 	.truth-auction-bid-row.is-wallet {
 		grid-template-columns: 1fr;
 	}

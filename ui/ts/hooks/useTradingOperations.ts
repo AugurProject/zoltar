@@ -19,9 +19,10 @@ import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUnive
 type UseTradingOperationsParameters = WriteOperationsParameters & {
 	deploymentStatuses: DeploymentStatus[]
 	enabled: boolean
+	selectedSecurityPoolAddress?: string
 }
 
-export function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
+export function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseTradingOperationsParameters) {
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
@@ -81,6 +82,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 		if (!trimmed.startsWith('0x') || trimmed.length !== 42) return undefined
 		return tryParseAddressInput(trimmed)
 	}
+	const resolveEffectiveTradingPoolAddressInput = () => (selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? tradingForm.value.securityPoolAddress : selectedSecurityPoolAddress)
 
 	const refreshTradingDetails = async (securityPoolAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {
 		if (!tradingSystemDeployed) {
@@ -138,7 +140,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 					refreshErrorFallback: 'Trading transaction succeeded, but refreshing trading details failed',
 				},
 				async walletAddress => {
-					const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+					const securityPoolAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Security pool address')
 					const result = await action(walletAddress, securityPoolAddress, currentForm)
 					return result
 				},
@@ -147,7 +149,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 					tradingResult.value = result
 					tradingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					const isCurrent = nextTradingDetailsLoad()
-					await refreshTradingDetails(currentForm.securityPoolAddress, walletAddress, isCurrent)
+					await refreshTradingDetails(result.securityPoolAddress, walletAddress, isCurrent)
 				},
 			)
 		} finally {
@@ -188,7 +190,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 				...tradingForm.value,
 				targetOutcomeIndexes: '',
 			}
-		if (resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress) === undefined) {
+		if (resolveTradingPoolAddressInput(resolveEffectiveTradingPoolAddressInput()) === undefined) {
 			tradingDetails.value = undefined
 			tradingForkUniverse.value = undefined
 			tradingError.value = undefined
@@ -199,19 +201,20 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 			tradingForkUniverse.value = undefined
 			tradingError.value = undefined
 		}
-	}, [enabled, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
+	}, [enabled, selectedSecurityPoolAddress, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
 
 	useEffect(() => {
 		if (!enabled) return
 		const isCurrent = nextTradingDetailsLoad()
 		if (!tradingSystemDeployed) return
-		if (resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress) === undefined) return
-		void refreshTradingDetails(tradingForm.value.securityPoolAddress, accountAddress, isCurrent)
-	}, [accountAddress, enabled, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
+		const effectiveSecurityPoolAddressInput = resolveEffectiveTradingPoolAddressInput()
+		if (resolveTradingPoolAddressInput(effectiveSecurityPoolAddressInput) === undefined) return
+		void refreshTradingDetails(effectiveSecurityPoolAddressInput, accountAddress, isCurrent)
+	}, [accountAddress, enabled, selectedSecurityPoolAddress, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
 
 	useEffect(() => {
 		if (!enabled) return
-		const securityPoolAddress = resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress)
+		const securityPoolAddress = resolveTradingPoolAddressInput(resolveEffectiveTradingPoolAddressInput())
 		if (securityPoolAddress === undefined || tradingForkUniverse.value === undefined) return
 
 		const defaultsKey = `${securityPoolAddress.toLowerCase()}:${tradingForkUniverse.value.universeId.toString()}:${tradingForkUniverse.value.forkTime.toString()}`
@@ -222,7 +225,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 			targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse.value),
 		}
 		targetOutcomeDefaultsKey.current = defaultsKey
-	}, [enabled, tradingForm.value.securityPoolAddress, tradingForkUniverse.value?.forkTime, tradingForkUniverse.value?.universeId])
+	}, [enabled, selectedSecurityPoolAddress, tradingForm.value.securityPoolAddress, tradingForkUniverse.value?.forkTime, tradingForkUniverse.value?.universeId])
 
 	return {
 		createCompleteSet,
