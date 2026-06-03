@@ -19,7 +19,7 @@ import { TimestampValue } from './TimestampValue.js'
 import { TruthAuctionDepthChart, type TruthAuctionDepthPoint } from './TruthAuctionDepthChart.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
-import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickSummary } from '../contracts.js'
+import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../contracts.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
@@ -37,7 +37,7 @@ import {
 	TRUTH_AUCTION_PRICE_PRECISION,
 	type ForkAuctionStageView,
 } from '../lib/forkAuction.js'
-import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { tryParseBigIntInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
@@ -111,9 +111,10 @@ function renderMetricValue(value: bigint | undefined, suffix: string, fallbackTe
 
 function renderTruthAuctionPriceValue(value: bigint | undefined, fallbackText: string = UNKNOWN_VALUE) {
 	if (value === undefined) return fallbackText
-	const formattedPrice = formatCurrencyInputBalance(value)
+	const formattedPrice = formatRoundedCurrencyBalance(value, 18, 4)
+	const exactPrice = formatCurrencyInputBalance(value)
 	return (
-		<span className='truth-auction-price-value' title={`${formattedPrice} ETH / REP`}>
+		<span className='truth-auction-price-value' title={`${exactPrice} ETH / REP`}>
 			{formattedPrice} ETH / REP
 		</span>
 	)
@@ -793,17 +794,13 @@ export function ForkAuctionSection({
 		viewerBids: [],
 		viewerBidCount: 0n,
 	})
-	const [selectedTickBids, setSelectedTickBids] = useState<TruthAuctionBidView[]>([])
 	const [selectedBookTick, setSelectedBookTick] = useState<bigint | undefined>(undefined)
-	const [selectedTickSummary, setSelectedTickSummary] = useState<TruthAuctionTickSummary | undefined>(undefined)
 	const [loadedTickPageCount, setLoadedTickPageCount] = useState(1)
 	const [loadedViewerBidPageCount, setLoadedViewerBidPageCount] = useState(1)
-	const [loadedSelectedTickBidPageCount, setLoadedSelectedTickBidPageCount] = useState(1)
 	const [loadedAuctionBidPageCount, setLoadedAuctionBidPageCount] = useState(1)
 	const [aggregatedAuctionBids, setAggregatedAuctionBids] = useState<TruthAuctionBidView[]>([])
 	const [aggregatedAuctionBidCountForLoadedTicks, setAggregatedAuctionBidCountForLoadedTicks] = useState(0n)
 	const [loadingTruthAuctionBook, setLoadingTruthAuctionBook] = useState(false)
-	const [loadingSelectedTickBids, setLoadingSelectedTickBids] = useState(false)
 	const [loadingAggregatedAuctionBids, setLoadingAggregatedAuctionBids] = useState(false)
 	const [truthAuctionBookError, setTruthAuctionBookError] = useState<string | undefined>(undefined)
 	const effectiveLockedRepInEscalationGame = (() => {
@@ -935,23 +932,17 @@ export function ForkAuctionSection({
 		truthAuction: truthAuctionStatus,
 	})
 	const viewerBidSummary = summarizeViewerTruthAuctionBids(truthAuctionBookData.viewerBids, truthAuctionStatus)
-	const selectedLoadedDepthPoint = selectedBookTick === undefined ? undefined : truthAuctionDepthPoints.find(point => point.tick === selectedBookTick)
 	const selectedLoadedTickSummary = selectedBookTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === selectedBookTick)
-	const resolvedSelectedTickSummary = selectedBookTick === undefined ? undefined : (selectedLoadedTickSummary ?? (selectedTickSummary?.tick === selectedBookTick ? selectedTickSummary : undefined))
 	const previewTickSummary = enteredBidTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === enteredBidTick)
-	const submitBidPreviewTickSummary = previewTickSummary ?? (enteredBidTick !== undefined && selectedLoadedTickSummary?.tick === enteredBidTick ? selectedLoadedTickSummary : undefined) ?? (enteredBidTick !== undefined && resolvedSelectedTickSummary?.tick === enteredBidTick ? resolvedSelectedTickSummary : undefined)
+	const submitBidPreviewTickSummary = previewTickSummary ?? (enteredBidTick !== undefined && selectedLoadedTickSummary?.tick === enteredBidTick ? selectedLoadedTickSummary : undefined)
 	const maxTickEth = truthAuctionDepthPoints.reduce((maximumEth, point) => (point.currentTotalEth > maximumEth ? point.currentTotalEth : maximumEth), 0n)
-	const knownTruthAuctionBids = dedupeTruthAuctionBids([...truthAuctionBookData.viewerBids, ...selectedTickBids, ...aggregatedAuctionBids])
+	const knownTruthAuctionBids = dedupeTruthAuctionBids([...truthAuctionBookData.viewerBids, ...aggregatedAuctionBids])
 	const hasMoreTickSummaries = BigInt(truthAuctionBookData.tickSummaries.length) < truthAuctionBookData.tickCount
 	const hasMoreViewerBids = BigInt(truthAuctionBookData.viewerBids.length) < truthAuctionBookData.viewerBidCount
 	const hasMoreAggregatedAuctionBids = BigInt(aggregatedAuctionBids.length) < aggregatedAuctionBidCountForLoadedTicks
 	const selectTruthAuctionTick = (tick: bigint) => {
 		if (selectedBookTick === tick) return
 		setSelectedBookTick(tick)
-		setSelectedTickBids([])
-		setLoadingSelectedTickBids(true)
-		const matchingSummary = activeTickSummaries.find(tickSummary => tickSummary.tick === tick)
-		setSelectedTickSummary(matchingSummary)
 	}
 	const timeLeftDisplay = (() => {
 		if (truthAuctionStatus === undefined) return truthAuctionFallback
@@ -1531,14 +1522,9 @@ export function ForkAuctionSection({
 	useEffect(() => {
 		setLoadedTickPageCount(1)
 		setLoadedViewerBidPageCount(1)
-		setLoadedSelectedTickBidPageCount(1)
 		setLoadedAuctionBidPageCount(1)
 		setSelectedBookTick(undefined)
-		setSelectedTickSummary(undefined)
 	}, [accountState.address, auctionTruthAuctionAddress])
-	useEffect(() => {
-		setLoadedSelectedTickBidPageCount(1)
-	}, [selectedBookTick])
 	useEffect(() => {
 		if (!shouldShowTruthAuctionVisualization || auctionTruthAuctionAddress === undefined || auctionTruthAuctionAddress === zeroAddress || (selectedStage !== 'auction' && selectedStage !== 'settlement')) {
 			setTruthAuctionBookData({
@@ -1547,11 +1533,8 @@ export function ForkAuctionSection({
 				viewerBids: [],
 				viewerBidCount: 0n,
 			})
-			setSelectedTickBids([])
 			setSelectedBookTick(undefined)
-			setSelectedTickSummary(undefined)
 			setLoadingTruthAuctionBook(false)
-			setLoadingSelectedTickBids(false)
 			setAggregatedAuctionBids([])
 			setAggregatedAuctionBidCountForLoadedTicks(0n)
 			setLoadingAggregatedAuctionBids(false)
@@ -1573,7 +1556,7 @@ export function ForkAuctionSection({
 					viewerBidCount: viewerBidData.bidCount,
 				})
 				setSelectedBookTick(currentSelection => {
-					if (currentSelection !== undefined && (sortedTickSummaries.some(tickSummary => tickSummary.tick === currentSelection) || (selectedTickSummary?.tick === currentSelection && selectedTickSummary.submissionCount > 0n))) return currentSelection
+					if (currentSelection !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === currentSelection)) return currentSelection
 					if (enteredBidTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === enteredBidTick)) return enteredBidTick
 					if (truthAuctionStatus?.clearingTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === truthAuctionStatus.clearingTick)) return truthAuctionStatus.clearingTick
 					return sortedTickSummaries[0]?.tick
@@ -1587,9 +1570,7 @@ export function ForkAuctionSection({
 					viewerBids: [],
 					viewerBidCount: 0n,
 				})
-				setSelectedTickBids([])
 				setSelectedBookTick(undefined)
-				setSelectedTickSummary(undefined)
 				setTruthAuctionBookError(getErrorMessage(error, 'Failed to load truth auction bidbook'))
 			})
 			.finally(() => {
@@ -1630,37 +1611,6 @@ export function ForkAuctionSection({
 			cancelled = true
 		}
 	}, [auctionTruthAuctionAddress, forkAuctionResult?.hash, loadedAuctionBidPageCount, selectedStage, shouldShowTruthAuctionVisualization, truthAuctionBookData.tickSummaries, truthAuctionReadClient])
-	useEffect(() => {
-		if (!shouldShowTruthAuctionVisualization || auctionTruthAuctionAddress === undefined || auctionTruthAuctionAddress === zeroAddress || selectedBookTick === undefined) {
-			setSelectedTickBids([])
-			setSelectedTickSummary(undefined)
-			setLoadingSelectedTickBids(false)
-			return
-		}
-		const client = truthAuctionReadClient ?? createConnectedReadClient()
-		let cancelled = false
-		setLoadingSelectedTickBids(true)
-		setTruthAuctionBookError(undefined)
-		void Promise.all([loadTruthAuctionTickSummary(client, auctionTruthAuctionAddress, selectedBookTick), loadTruthAuctionTickBidPages(client, auctionTruthAuctionAddress, selectedBookTick, loadedSelectedTickBidPageCount)])
-			.then(([tickSummary, bidData]) => {
-				if (cancelled) return
-				setSelectedTickSummary(tickSummary)
-				setSelectedTickBids(bidData.bids)
-			})
-			.catch(error => {
-				if (cancelled) return
-				setSelectedTickBids([])
-				setSelectedTickSummary(undefined)
-				setTruthAuctionBookError(getErrorMessage(error, 'Failed to load truth auction bids at the selected price level'))
-			})
-			.finally(() => {
-				if (cancelled) return
-				setLoadingSelectedTickBids(false)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [auctionTruthAuctionAddress, forkAuctionResult?.hash, loadedSelectedTickBidPageCount, selectedBookTick, shouldShowTruthAuctionVisualization, truthAuctionReadClient])
 	const latestForkAuctionAction =
 		forkAuctionResult === undefined
 			? undefined
@@ -1767,8 +1717,6 @@ export function ForkAuctionSection({
 	})()
 	const truthAuctionMarketViewSection = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
-		const selectedTickDisposition = resolvedSelectedTickSummary === undefined ? undefined : getTickDisposition(resolvedSelectedTickSummary, truthAuctionStatus)
-
 		return (
 			<SectionBlock title='Market View' description={selectedStage === 'settlement' ? 'Review prices and open one before settling.' : 'Review prices and choose one before bidding.'}>
 				{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
@@ -1777,7 +1725,6 @@ export function ForkAuctionSection({
 						<div className='truth-auction-depth-header'>
 							<div>
 								<h4>Visible Depth</h4>
-								<p className='detail'>Loaded prices only. Load more to extend the view.</p>
 							</div>
 						</div>
 						{loadingTruthAuctionBook ? <p className='detail'>Loading order book…</p> : undefined}
@@ -1836,31 +1783,6 @@ export function ForkAuctionSection({
 									</div>
 								) : undefined}
 							</div>
-						</div>
-						<div className='truth-auction-market-section truth-auction-level-detail'>
-							{resolvedSelectedTickSummary === undefined ? (
-								<p className='detail'>{loadingSelectedTickBids && selectedBookTick !== undefined ? 'Loading selected price…' : 'Select a price to inspect its bids.'}</p>
-							) : (
-								<>
-									<div className='truth-auction-level-header'>
-										<div>
-											<h4>Selected Price</h4>
-											<p className='detail'>{renderTruthAuctionPriceValue(resolvedSelectedTickSummary.price)}</p>
-										</div>
-										{selectedStage !== 'settlement' ? (
-											<button className='secondary' onClick={() => onForkAuctionFormChange({ submitBidPrice: formatCurrencyInputBalance(resolvedSelectedTickSummary.price) })} type='button'>
-												Use This Price
-											</button>
-										) : undefined}
-									</div>
-									<div className='workflow-metric-grid'>
-										<MetricField label='Live ETH'>{<CurrencyValue value={resolvedSelectedTickSummary.currentTotalEth} suffix='ETH' />}</MetricField>
-										<MetricField label='Loaded Depth'>{selectedLoadedDepthPoint === undefined ? 'Not in loaded ladder' : <CurrencyValue value={selectedLoadedDepthPoint.cumulativeEth} suffix='ETH' />}</MetricField>
-										<MetricField label='Historical Bids'>{resolvedSelectedTickSummary.submissionCount.toString()}</MetricField>
-										<MetricField label='Status'>{selectedTickDisposition?.label ?? UNKNOWN_VALUE}</MetricField>
-									</div>
-								</>
-							)}
 						</div>
 					</div>
 				</div>

@@ -1535,11 +1535,17 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border-top: 1px solid var(--divider-subtle);
 }
 
+.workflow-metric-grid .metric-label,
+.workflow-question-grid .metric-label,
+.workflow-vault-grid .metric-label {
+	display: block;
+	margin-bottom: 0.2rem;
+}
+
 .workflow-metric-grid .metric-field-value,
 .workflow-question-grid .metric-field-value,
 .workflow-vault-grid .metric-field-value {
 	display: block;
-	margin-top: 0.15rem;
 	overflow-wrap: anywhere;
 }
 
@@ -1547,7 +1553,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 .workflow-question-grid strong.metric-field-value,
 .workflow-vault-grid strong.metric-field-value {
 	display: block;
-	margin-top: 0.15rem;
 	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
@@ -2364,7 +2369,7 @@ strong.metric-value-danger {
 
 .truth-auction-market-detail-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.85fr);
+	grid-template-columns: minmax(0, 1fr);
 	align-items: start;
 }
 
@@ -2386,6 +2391,13 @@ strong.metric-value-danger {
 .truth-auction-selected-bid-summary > div {
 	padding-top: 0.65rem;
 	border-top: 1px solid var(--divider-subtle);
+}
+
+.truth-auction-wallet-summary .metric-label,
+.truth-auction-bid-coverage-summary .metric-label,
+.truth-auction-selected-bid-summary .metric-label {
+	display: block;
+	margin-bottom: 0.2rem;
 }
 
 .truth-auction-panel-header,
@@ -2510,12 +2522,12 @@ strong.metric-value-danger {
 }
 
 .truth-auction-depth-y-axis {
-	display: grid;
-	grid-template-rows: auto 1fr auto 1fr auto;
-	align-items: center;
-	justify-items: end;
+	position: relative;
+	display: flex;
+	align-items: stretch;
 	gap: 0.3rem;
 	min-width: 0;
+	min-height: 13rem;
 }
 
 .truth-auction-depth-x-axis {
@@ -2560,15 +2572,25 @@ strong.metric-value-danger {
 	overflow-wrap: anywhere;
 }
 
-.truth-auction-depth-y-axis .truth-auction-depth-axis-tick {
-	text-align: right;
+.truth-auction-depth-y-ticks {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
 }
 
-.truth-auction-depth-x-axis .truth-auction-depth-axis-tick.is-mid {
+.truth-auction-depth-y-tick {
+	position: absolute;
+	right: 0;
+	left: 0;
+	text-align: right;
+	transform: translateY(-50%);
+}
+
+.truth-auction-depth-x-tick.is-mid {
 	text-align: center;
 }
 
-.truth-auction-depth-x-axis .truth-auction-depth-axis-tick.is-min {
+.truth-auction-depth-x-tick.is-min {
 	text-align: right;
 }
 
@@ -4022,13 +4044,19 @@ button:focus-visible {
 	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.08);
 }
 
-.route-header-main,
-.section-block-header {
+.route-header-main {
 	display: flex;
 	gap: var(--space-4);
 	align-items: flex-start;
 	justify-content: space-between;
 	flex-wrap: wrap;
+}
+
+.section-block-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: var(--space-4);
+	align-items: start;
 }
 
 .route-header-copy,
@@ -4057,10 +4085,17 @@ button:focus-visible {
 }
 
 .route-header-actions,
+.section-block-badge,
 .section-block-actions {
 	display: flex;
 	gap: var(--space-3);
 	align-items: flex-start;
+}
+
+.section-block-badge {
+	margin-left: auto;
+	justify-self: end;
+	align-self: start;
 }
 
 .compact-actions {
@@ -4721,6 +4756,7 @@ button:focus-visible {
 
 	.route-header-main,
 	.section-block-header {
+		display: flex;
 		flex-direction: column;
 	}
 

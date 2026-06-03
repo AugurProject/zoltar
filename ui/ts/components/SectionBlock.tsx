@@ -9,12 +9,10 @@ export function SectionBlock({ actions, badge, children, className = '', descrip
 			{title === undefined && badge === undefined && actions === undefined && description === undefined ? undefined : (
 				<div className='section-block-header'>
 					<div className='section-block-copy'>
-						<div className='section-block-title-row'>
-							{title === undefined ? undefined : <HeadingTag>{title}</HeadingTag>}
-							{badge === undefined ? undefined : <div className='section-block-badge'>{badge}</div>}
-						</div>
+						<div className='section-block-title-row'>{title === undefined ? undefined : <HeadingTag>{title}</HeadingTag>}</div>
 						{description === undefined ? undefined : <p className='detail'>{description}</p>}
 					</div>
+					{badge === undefined ? undefined : <div className='section-block-badge'>{badge}</div>}
 					{actions === undefined ? undefined : <div className='section-block-actions'>{actions}</div>}
 				</div>
 			)}

@@ -1,6 +1,6 @@
 import { useRef } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
-import { formatCurrencyInputBalance } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 
 type TruthAuctionDisposition = {
 	label: string
@@ -35,7 +35,7 @@ const CHART_PADDING = {
 let nextDepthGradientId = 0
 
 function formatTruthAuctionPriceLabel(price: bigint) {
-	return `${formatCurrencyInputBalance(price)} ETH / REP`
+	return `${formatRoundedCurrencyBalance(price, 18, 4)} ETH / REP`
 }
 
 function getDepthRatio(value: bigint, maxDepth: bigint) {
@@ -111,6 +111,8 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 	if (points.length === 0) return null
 
 	const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right
+	const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
+	const baselineY = CHART_HEIGHT - CHART_PADDING.bottom
 	const gradientIdRef = useRef<string | undefined>(undefined)
 	if (gradientIdRef.current === undefined) {
 		gradientIdRef.current = `truth-auction-depth-fill-${nextDepthGradientId.toString()}`
@@ -123,21 +125,29 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 	const midpointPrice = midpointIndex === undefined ? undefined : points[midpointIndex]?.price
 	const maxLoadedDepth = points.reduce((currentMax, point) => (point.cumulativeEth > currentMax ? point.cumulativeEth : currentMax), 0n)
 	const midpointDepth = maxLoadedDepth >= 2n ? maxLoadedDepth / 2n : undefined
+	const getDepthYPosition = (value: bigint) => {
+		if (value <= 0n || maxLoadedDepth <= 0n) return baselineY
+		return baselineY - getDepthRatio(value, maxLoadedDepth) * plotHeight
+	}
 
 	return (
 		<>
 			<div className='truth-auction-depth-frame'>
 				<div className='truth-auction-depth-y-axis'>
 					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>Loaded Depth (ETH)</span>
-					<span className='truth-auction-depth-axis-tick is-max'>
-						<CurrencyValue copyable={false} value={maxLoadedDepth} suffix='ETH' />
-					</span>
-					{midpointDepth === undefined ? undefined : (
-						<span className='truth-auction-depth-axis-tick is-mid'>
-							<CurrencyValue copyable={false} value={midpointDepth} suffix='ETH' />
+					<div className='truth-auction-depth-y-ticks' aria-hidden='true'>
+						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-max' style={{ top: `${(getDepthYPosition(maxLoadedDepth) / CHART_HEIGHT) * 100}%` }}>
+							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix='ETH' />
 						</span>
-					)}
-					<span className='truth-auction-depth-axis-tick is-min'>0 ETH</span>
+						{midpointDepth === undefined ? undefined : (
+							<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-mid' style={{ top: `${(getDepthYPosition(midpointDepth) / CHART_HEIGHT) * 100}%` }}>
+								<CurrencyValue copyable={false} value={midpointDepth} suffix='ETH' />
+							</span>
+						)}
+						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-min' style={{ top: `${(getDepthYPosition(0n) / CHART_HEIGHT) * 100}%` }}>
+							0 ETH
+						</span>
+					</div>
 				</div>
 				<div className='truth-auction-depth-chart' role='group' aria-label='Truth auction visible depth chart'>
 					<svg aria-hidden='true' viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio='none'>
@@ -174,9 +184,9 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 				</div>
 			</div>
 			<div className={`truth-auction-depth-x-axis${midpointPrice === undefined ? ' no-midpoint' : ''}`}>
-				{highestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick is-max'>{formatTruthAuctionPriceLabel(highestLoadedPrice)}</span>}
-				{midpointPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick is-mid'>{formatTruthAuctionPriceLabel(midpointPrice)}</span>}
-				{lowestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick is-min'>{formatTruthAuctionPriceLabel(lowestLoadedPrice)}</span>}
+				{highestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-max'>{formatTruthAuctionPriceLabel(highestLoadedPrice)}</span>}
+				{midpointPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-mid'>{formatTruthAuctionPriceLabel(midpointPrice)}</span>}
+				{lowestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-min'>{formatTruthAuctionPriceLabel(lowestLoadedPrice)}</span>}
 			</div>
 			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>Price (ETH / REP)</div>
 		</>
