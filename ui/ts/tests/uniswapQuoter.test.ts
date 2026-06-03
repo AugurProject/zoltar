@@ -22,6 +22,7 @@ import {
 	quoteTokenForEth,
 } from '../lib/uniswapQuoter.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createConnectedReadClient, type ReadClient } from '../lib/clients.js'
 import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
@@ -151,6 +152,24 @@ void describe('quoteExactInput', () => {
 				currentTimestamp: 0n,
 				currentScenario: 'baseline',
 				dispose: async () => undefined,
+				exportState: async name =>
+					serializeSavedSimulationStateEnvelope({
+						baseScenario: 'baseline',
+						name,
+						savedAt: '2026-06-02T12:34:56.000Z',
+						state: {
+							blockCountSinceReset: 0n,
+							currentTimestamp: 0n,
+							queryDelayMilliseconds: 0,
+							repPerEthPrice: 2n * 10n ** 18n,
+							repPerUsdcPrice: 5n * 10n ** 6n,
+							selectedAccount: '0x00000000000000000000000000000000000000a1',
+							snapshot: {},
+							transactionCountSinceReset: 0n,
+							transactionDelayMilliseconds: 0,
+						},
+						version: 1,
+					}),
 				isActive: true,
 				isBootstrapped: true,
 				isBootstrapping: false,
@@ -162,6 +181,10 @@ void describe('quoteExactInput', () => {
 				reset: async () => undefined,
 				selectAccount: async () => undefined,
 				selectedAccount: getAddress('0x00000000000000000000000000000000000000a1'),
+				simulationSource: {
+					kind: 'scenario',
+					scenario: 'baseline',
+				},
 				setRepPerEthPrice: () => undefined,
 				setRepPerUsdcPrice: () => undefined,
 				setQueryDelayMilliseconds: () => undefined,

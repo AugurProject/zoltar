@@ -9,6 +9,7 @@ import { useRepPrices } from '../hooks/useRepPrices.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend, ReadClient } from '../lib/chainBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+import { serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -25,6 +26,24 @@ function createSimulationController(): SimulationController {
 		currentTimestamp: 0n,
 		currentScenario: 'baseline',
 		dispose: async () => undefined,
+		exportState: async name =>
+			serializeSavedSimulationStateEnvelope({
+				baseScenario: 'baseline',
+				name,
+				savedAt: '2026-06-02T12:34:56.000Z',
+				state: {
+					blockCountSinceReset: 0n,
+					currentTimestamp: 0n,
+					queryDelayMilliseconds: 0,
+					repPerEthPrice: 10n ** 18n,
+					repPerUsdcPrice: 10n ** 6n,
+					selectedAccount,
+					snapshot: {},
+					transactionCountSinceReset: 0n,
+					transactionDelayMilliseconds: 0,
+				},
+				version: 1,
+			}),
 		isActive: true,
 		isBootstrapped: true,
 		isBootstrapping: false,
@@ -36,6 +55,10 @@ function createSimulationController(): SimulationController {
 		reset: async () => undefined,
 		selectAccount: async () => undefined,
 		selectedAccount,
+		simulationSource: {
+			kind: 'scenario',
+			scenario: 'baseline',
+		},
 		setRepPerEthPrice: () => undefined,
 		setRepPerUsdcPrice: () => undefined,
 		setQueryDelayMilliseconds: () => undefined,

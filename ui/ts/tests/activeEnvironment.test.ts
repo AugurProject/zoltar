@@ -7,9 +7,11 @@ import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
 import { getActiveBackend, getActiveSimulationController, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
+import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import type { SimulationScenario } from '../simulation/scenarios.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
@@ -109,6 +111,91 @@ void describe('active environment', () => {
 			resetActiveEnvironmentForTesting()
 		}
 	}, 30_000)
+
+	void test('initializes a saved simulation state from simState query params', async () => {
+		const domEnvironment = installDomEnvironment()
+		const record = persistSavedSimulationState(
+			serializeSavedSimulationStateEnvelope({
+				baseScenario: 'baseline',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				state: {
+					blockCountSinceReset: 1n,
+					currentTimestamp: 2n,
+					queryDelayMilliseconds: 0,
+					repPerEthPrice: DEFAULT_SIMULATION_REP_PER_ETH_PRICE,
+					repPerUsdcPrice: 10n ** 6n,
+					selectedAccount: '0x00000000000000000000000000000000000000a1',
+					snapshot: {},
+					transactionCountSinceReset: 3n,
+					transactionDelayMilliseconds: 0,
+				},
+				version: 1,
+			}),
+		)
+
+		try {
+			const backend = await initializeActiveEnvironment({
+				hash: `#/zoltar?simulate=1&simState=${record.id}&simScenario=securitypoolx2`,
+				hostname: 'localhost',
+				search: '',
+			})
+			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
+			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
+			expect(simulationBackend.simulationSource.kind).toBe('saved-state')
+			expect(simulationBackend.currentScenario).toBe('baseline')
+		} finally {
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('falls back to baseline when a saved state is missing', async () => {
+		const domEnvironment = installDomEnvironment()
+
+		try {
+			const backend = await initializeActiveEnvironment({
+				hash: '#/zoltar?simulate=1&simState=missing-state',
+				hostname: 'localhost',
+				search: '',
+			})
+			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
+			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
+			expect(simulationBackend.currentScenario).toBe('baseline')
+			expect(simulationBackend.bootstrapError).toContain('could not be loaded')
+		} finally {
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('falls back to baseline when a saved state record is invalid', async () => {
+		const domEnvironment = installDomEnvironment()
+		window.localStorage.setItem(
+			'zoltar.simulation.savedStates',
+			JSON.stringify([
+				{
+					baseScenario: 'baseline',
+					id: 'broken-state',
+					name: 'Broken state',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					serialized: '{bad json',
+				},
+			]),
+		)
+
+		try {
+			const backend = await initializeActiveEnvironment({
+				hash: '#/zoltar?simulate=1&simState=broken-state',
+				hostname: 'localhost',
+				search: '',
+			})
+			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
+			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
+			expect(simulationBackend.currentScenario).toBe('baseline')
+			expect(simulationBackend.bootstrapError).toContain('could not be loaded')
+		} finally {
+			domEnvironment.cleanup()
+		}
+	})
 })
 
 void describe('simulation backend', () => {
@@ -410,6 +497,47 @@ void describe('simulation backend', () => {
 			await backend.dispose()
 		}
 	}, 90_000)
+
+	void test('exports and restores a custom saved simulation state', async () => {
+		const sourceBackend = await createSimulationBackend({ scenario: 'baseline' })
+		await sourceBackend.bootstrap()
+
+		try {
+			const secondaryAccount = sourceBackend.accounts[1]
+			if (secondaryAccount === undefined) throw new Error('Expected a secondary simulation QA account')
+
+			sourceBackend.setQueryDelayMilliseconds(250)
+			sourceBackend.setTransactionDelayMilliseconds(0)
+			sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
+			await sourceBackend.selectAccount(secondaryAccount)
+			await sourceBackend.mintRep(SIMULATION_REP_MINT_AMOUNT)
+
+			const restoredBackend = await createSimulationBackend({
+				savedState: parseSavedSimulationStateEnvelope(await sourceBackend.exportState('Saved baseline')),
+				savedStateId: 'saved-baseline-20260602123456',
+			})
+			await restoredBackend.bootstrap()
+
+			try {
+				expect(restoredBackend.simulationSource.kind).toBe('saved-state')
+				expect(restoredBackend.selectedAccount).toBe(secondaryAccount)
+				expect(restoredBackend.queryDelayMilliseconds).toBe(250)
+				expect(restoredBackend.transactionDelayMilliseconds).toBe(0)
+				expect(restoredBackend.repPerEthPrice).toBe(2n * 10n ** 18n)
+				const repBalance = await loadErc20Balance(restoredBackend.createReadClient(), restoredBackend.profile.genesisRepTokenAddress, secondaryAccount)
+				expect(repBalance >= SIMULATION_REP_MINT_AMOUNT).toBe(true)
+
+				await restoredBackend.reset()
+				expect(restoredBackend.selectedAccount).toBe(secondaryAccount)
+				expect(restoredBackend.queryDelayMilliseconds).toBe(250)
+				expect(restoredBackend.repPerEthPrice).toBe(2n * 10n ** 18n)
+			} finally {
+				await restoredBackend.dispose()
+			}
+		} finally {
+			await sourceBackend.dispose()
+		}
+	}, 60_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {
 		const backend = deployedBackend

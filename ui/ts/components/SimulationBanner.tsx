@@ -1,10 +1,15 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import { getErrorMessage } from '../lib/errors.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
+import { deleteSavedSimulationState, listSavedSimulationStateRecords, persistSavedSimulationState, type SavedSimulationStateRecord } from '../simulation/savedStates.js'
+import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
+
 const SIMULATION_TIME_PRESETS = [
 	{ label: '+1 hour', seconds: 60n * 60n },
 	{ label: '+1 day', seconds: 24n * 60n * 60n },
@@ -17,22 +22,69 @@ type SimulationBannerProps = {
 	controller: SimulationController
 	onRefresh: () => Promise<void>
 }
+
+type SimulationModal = 'delete' | 'export' | 'import' | 'save' | undefined
+
+function buildSimulationUrl(update: (nextUrl: URL) => void) {
+	const nextUrl = new URL(window.location.href)
+	nextUrl.searchParams.set('simulate', '1')
+	update(nextUrl)
+	return nextUrl
+}
+
+function navigateToBuiltInScenario(scenario: string) {
+	const nextUrl = buildSimulationUrl(url => {
+		url.searchParams.set('simScenario', scenario)
+		url.searchParams.delete('simState')
+	})
+	window.location.assign(nextUrl.toString())
+}
+
+function navigateToSavedSimulationState(stateId: string) {
+	const nextUrl = buildSimulationUrl(url => {
+		url.searchParams.delete('simScenario')
+		url.searchParams.set('simState', stateId)
+	})
+	window.location.assign(nextUrl.toString())
+}
+
 export function SimulationBanner({ controller, onRefresh }: SimulationBannerProps) {
+	const { copied, copyText } = useCopyToClipboard()
 	const busy = useSignal(false)
 	const blockCountSinceReset = useSignal(controller.blockCountSinceReset)
 	const currentTimestamp = useSignal(controller.currentTimestamp)
 	const currentScenario = useSignal(controller.currentScenario)
+	const currentSource = useSignal(controller.simulationSource)
 	const isBootstrapped = useSignal(controller.isBootstrapped)
 	const isBootstrapping = useSignal(controller.isBootstrapping)
+	const modal = useSignal<SimulationModal>(undefined)
 	const queryDelayMilliseconds = useSignal(controller.queryDelayMilliseconds.toString())
 	const repPerEthPrice = useSignal(formatCurrencyInputBalance(controller.repPerEthPrice))
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
+	const savedStateError = useSignal<string | undefined>(undefined)
+	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(listSavedSimulationStateRecords())
+	const saveName = useSignal('')
+	const exportName = useSignal('')
+	const exportStateText = useSignal('')
+	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
 	const bootstrapError = useSignal(controller.bootstrapError)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
+
+	const reloadSavedStateRecords = () => {
+		savedStateRecords.value = listSavedSimulationStateRecords()
+	}
+
+	const getDefaultSavedStateName = () => (currentSource.value.kind === 'saved-state' ? currentSource.value.name : `${getSimulationScenarioLabel(currentScenario.value)} ${new Date().toISOString().slice(0, 16)}`)
+
+	const closeModal = () => {
+		modal.value = undefined
+		savedStateError.value = undefined
+	}
+
 	const resetRepPerEthPriceInput = () => {
 		repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
 	}
@@ -48,6 +100,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				bootstrapProgress.value = controller.bootstrapProgress
 				currentTimestamp.value = controller.currentTimestamp
 				currentScenario.value = controller.currentScenario
+				currentSource.value = controller.simulationSource
 				isBootstrapped.value = controller.isBootstrapped
 				isBootstrapping.value = controller.isBootstrapping
 				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
@@ -69,6 +122,37 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 			busy.value = false
 		}
 	}
+	const runNavigationControl = async (work: () => Promise<void>) => {
+		if (busy.value) return
+		busy.value = true
+		savedStateError.value = undefined
+		try {
+			await work()
+		} catch (error) {
+			savedStateError.value = getErrorMessage(error, 'Failed to update the saved simulation state')
+		} finally {
+			busy.value = false
+		}
+	}
+
+	const showExportModal = async () => {
+		const nextName = getDefaultSavedStateName()
+		exportName.value = nextName
+		exportStateText.value = ''
+		savedStateError.value = undefined
+		modal.value = 'export'
+		try {
+			exportStateText.value = await controller.exportState(nextName)
+		} catch (error) {
+			savedStateError.value = getErrorMessage(error, 'Failed to export the current simulation state')
+		}
+	}
+
+	let scenarioDetail = bootstrapError.value
+	if (scenarioDetail === undefined) {
+		scenarioDetail = currentSource.value.kind === 'saved-state' ? `Custom state "${currentSource.value.name}" based on ${getSimulationScenarioLabel(currentSource.value.baseScenario)}. Saved ${new Date(currentSource.value.savedAt).toLocaleString()}.` : getSimulationScenarioDescription(currentScenario.value)
+	}
+
 	return (
 		<section className='panel contract-panel simulation-banner'>
 			<div className='contract-panel-header simulation-banner-header'>
@@ -104,7 +188,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							</span>
 							<h3>Scenario</h3>
 						</div>
-						<p className='detail'>{bootstrapError.value ?? getSimulationScenarioDescription(currentScenario.value)}</p>
+						<p className='detail'>{scenarioDetail}</p>
 						{bootstrapError.value === undefined && isBootstrapping.value ? (
 							<p className='detail'>
 								<span className='spinner' aria-hidden='true' />
@@ -119,21 +203,33 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					</div>
 					<select
 						className='simulation-control-select'
-						value={currentScenario.value}
+						value={currentSource.value.kind === 'saved-state' ? `saved:${currentSource.value.stateId}` : `scenario:${currentScenario.value}`}
 						disabled={busy.value || isBootstrapping.value}
 						onChange={event => {
-							const nextScenario = event.currentTarget.value
-							const nextUrl = new URL(window.location.href)
-							nextUrl.searchParams.set('simulate', '1')
-							nextUrl.searchParams.set('simScenario', nextScenario)
-							window.location.assign(nextUrl.toString())
+							const nextSelection = event.currentTarget.value
+							if (nextSelection.startsWith('saved:')) {
+								navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
+								return
+							}
+							navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
 						}}
 					>
-						{SIMULATION_SCENARIOS.map(scenario => (
-							<option key={scenario} value={scenario}>
-								{getSimulationScenarioLabel(scenario)}
-							</option>
-						))}
+						<optgroup label='Built-in scenarios'>
+							{SIMULATION_SCENARIOS.map(scenario => (
+								<option key={scenario} value={`scenario:${scenario}`}>
+									{getSimulationScenarioLabel(scenario)}
+								</option>
+							))}
+						</optgroup>
+						{savedStateRecords.value.length === 0 ? undefined : (
+							<optgroup label='Saved states'>
+								{savedStateRecords.value.map(record => (
+									<option key={record.id} value={`saved:${record.id}`}>
+										{record.name}
+									</option>
+								))}
+							</optgroup>
+						)}
 					</select>
 				</div>
 				<div className='contract-row simulation-banner-row'>
@@ -281,6 +377,43 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
 									Mint 1 million REP
 								</button>
+								<button
+									className='secondary'
+									onClick={() => {
+										saveName.value = getDefaultSavedStateName()
+										savedStateError.value = undefined
+										modal.value = 'save'
+									}}
+									disabled={busy.value || !isBootstrapped.value}
+								>
+									Save state
+								</button>
+								<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
+									Export state
+								</button>
+								<button
+									className='secondary'
+									onClick={() => {
+										importStateText.value = ''
+										savedStateError.value = undefined
+										modal.value = 'import'
+									}}
+									disabled={busy.value}
+								>
+									Import state
+								</button>
+								{currentSource.value.kind !== 'saved-state' ? undefined : (
+									<button
+										className='destructive'
+										onClick={() => {
+											savedStateError.value = undefined
+											modal.value = 'delete'
+										}}
+										disabled={busy.value}
+									>
+										Delete save
+									</button>
+								)}
 							</div>
 						</div>
 						<div className='simulation-control-group'>
@@ -296,6 +429,96 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					</div>
 				</div>
 			</div>
+			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title='Save Simulation State'>
+				<div className='field'>
+					<label htmlFor='simulation-save-name'>State name</label>
+					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} onInput={event => (saveName.value = event.currentTarget.value)} />
+				</div>
+				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<div className='actions'>
+					<button
+						type='button'
+						onClick={() =>
+							void runNavigationControl(async () => {
+								const record = persistSavedSimulationState(await controller.exportState(saveName.value))
+								reloadSavedStateRecords()
+								navigateToSavedSimulationState(record.id)
+							})
+						}
+					>
+						Save
+					</button>
+				</div>
+			</OperationModal>
+			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title='Export Simulation State'>
+				<div className='field'>
+					<label htmlFor='simulation-export-name'>Export name</label>
+					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} onInput={event => (exportName.value = event.currentTarget.value)} />
+				</div>
+				<div className='field'>
+					<label htmlFor='simulation-export-json'>JSON state</label>
+					<textarea id='simulation-export-json' rows={14} value={exportStateText.value} readOnly />
+				</div>
+				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<div className='actions'>
+					<button
+						type='button'
+						className='secondary'
+						onClick={() =>
+							void runNavigationControl(async () => {
+								exportStateText.value = await controller.exportState(exportName.value)
+							})
+						}
+					>
+						Refresh export
+					</button>
+					<button type='button' className='secondary' disabled={exportStateText.value.trim() === ''} onClick={() => void copyText(exportStateText.value)}>
+						{copied.value ? 'Copied' : 'Copy JSON'}
+					</button>
+				</div>
+			</OperationModal>
+			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title='Import Simulation State'>
+				<div className='field'>
+					<label htmlFor='simulation-import-json'>JSON state</label>
+					<textarea id='simulation-import-json' rows={14} value={importStateText.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
+				</div>
+				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<div className='actions'>
+					<button
+						type='button'
+						onClick={() =>
+							void runNavigationControl(async () => {
+								const record = persistSavedSimulationState(importStateText.value)
+								reloadSavedStateRecords()
+								navigateToSavedSimulationState(record.id)
+							})
+						}
+					>
+						Import and load
+					</button>
+				</div>
+			</OperationModal>
+			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title='Delete Saved Simulation State'>
+				<p className='detail'>{currentSource.value.kind === 'saved-state' ? `Delete the saved state "${currentSource.value.name}" from browser storage. Built-in scenarios are not affected.` : 'Built-in scenarios cannot be deleted.'}</p>
+				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
+				<div className='actions'>
+					<button
+						type='button'
+						className='destructive'
+						disabled={currentSource.value.kind !== 'saved-state'}
+						onClick={() =>
+							void runNavigationControl(async () => {
+								if (currentSource.value.kind !== 'saved-state') return
+								if (!deleteSavedSimulationState(currentSource.value.stateId)) throw new Error(`Saved simulation state "${currentSource.value.name}" no longer exists`)
+								reloadSavedStateRecords()
+								navigateToBuiltInScenario(currentSource.value.baseScenario)
+							})
+						}
+					>
+						Delete save
+					</button>
+				</div>
+			</OperationModal>
 		</section>
 	)
 }

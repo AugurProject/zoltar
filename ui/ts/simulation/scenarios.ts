@@ -4,7 +4,7 @@ export const SIMULATION_SCENARIOS = ['baseline', 'deployed', 'security-pool', 's
 
 export type SimulationScenario = (typeof SIMULATION_SCENARIOS)[number]
 
-function isSimulationScenario(value: string): value is SimulationScenario {
+export function isSimulationScenario(value: string): value is SimulationScenario {
 	return SIMULATION_SCENARIOS.includes(value as SimulationScenario)
 }
 

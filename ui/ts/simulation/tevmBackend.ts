@@ -6,6 +6,7 @@ import { createSimulationProfile } from '../lib/networkProfile.js'
 import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
+import type { SavedSimulationStateEnvelopeV1, SimulationInitialization } from './savedStates.js'
 import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
@@ -56,10 +57,21 @@ function createSimulationProvider(requestRpc: (parameters: RequestArguments) => 
 	}
 }
 
-export async function createSimulationBackend({ scenario }: { scenario: SimulationScenario }): Promise<SimulationBackend> {
+export async function createSimulationBackend({ initialBootstrapError, savedState, savedStateId, scenario }: { initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario }): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const profile = createSimulationProfile(predictSimulationTokenAddresses(primaryAccount))
+	const initialization: SimulationInitialization =
+		savedState !== undefined && savedStateId !== undefined
+			? {
+					envelope: savedState,
+					kind: 'saved-state',
+					stateId: savedStateId,
+				}
+			: {
+					kind: 'scenario',
+					scenario: scenario ?? 'baseline',
+				}
 	const listeners = createListenerMap()
 	const workerPath = resolveWorkerPath()
 	const worker = new Worker(workerPath, { type: 'module' })
@@ -166,12 +178,18 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			reject(new Error(`Simulation worker message deserialization failed (worker: ${workerPath.toString()})`))
 		}
 		worker.postMessage({
-			scenario,
+			initialization,
 			type: 'init',
 		} satisfies SimulationWorkerMessage)
 	})
 
 	await waitForReady
+
+	if (initialBootstrapError !== undefined) {
+		const state = currentState
+		if (state === undefined) throw new Error('Simulation worker state is unavailable')
+		applyState(Object.assign({}, state, { bootstrapError: initialBootstrapError }))
+	}
 
 	const requireState = () => {
 		if (currentState === undefined) throw new Error('Simulation worker state is unavailable')
@@ -194,7 +212,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		bootstrap: async () => {
 			if (bootstrapPromise === undefined) {
 				patchState({
-					bootstrapError: undefined,
+					bootstrapError: currentState?.bootstrapError,
 					bootstrapLabel: 'Starting simulation bootstrap',
 					bootstrapProgress: 0,
 					isBootstrapping: true,
@@ -271,6 +289,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			rejectPendingRequests(new Error('Simulation backend has been disposed'))
 			worker.terminate()
 		},
+		exportState: async name => await callWorker('exportState', { name }),
 		get isBootstrapped() {
 			return requireState().isBootstrapped
 		},
@@ -308,6 +327,9 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		get selectedAccount() {
 			return requireState().selectedAccount
+		},
+		get simulationSource() {
+			return requireState().currentSource
 		},
 		setRepPerEthPrice: value => {
 			patchState({

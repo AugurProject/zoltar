@@ -5,6 +5,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import type { Address } from 'viem'
 import { SimulationBanner } from '../components/SimulationBanner.js'
 import type { SimulationController } from '../simulation/controller.js'
+import { serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -23,6 +24,24 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		currentTimestamp: 1n,
 		currentScenario: 'baseline',
 		dispose: async () => undefined,
+		exportState: async name =>
+			serializeSavedSimulationStateEnvelope({
+				baseScenario: 'baseline',
+				name,
+				savedAt: '2026-06-02T12:34:56.000Z',
+				state: {
+					blockCountSinceReset: 0n,
+					currentTimestamp: 1n,
+					queryDelayMilliseconds: 0,
+					repPerEthPrice: 10n ** 18n,
+					repPerUsdcPrice: 10n ** 6n,
+					selectedAccount,
+					snapshot: {},
+					transactionCountSinceReset: 0n,
+					transactionDelayMilliseconds: 0,
+				},
+				version: 1,
+			}),
 		isActive: true,
 		isBootstrapped: true,
 		isBootstrapping: false,
@@ -34,6 +53,10 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		reset: async () => undefined,
 		selectAccount: async () => undefined,
 		selectedAccount,
+		simulationSource: {
+			kind: 'scenario',
+			scenario: 'baseline',
+		},
 		setQueryDelayMilliseconds: () => undefined,
 		setRepPerEthPrice: () => undefined,
 		setRepPerUsdcPrice: () => undefined,
@@ -169,6 +192,156 @@ describe('SimulationBanner', () => {
 			}
 		} finally {
 			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('renders saved states in the scenario picker and opens the export modal', async () => {
+		const domEnvironment = installDomEnvironment()
+		window.localStorage.setItem(
+			'zoltar.simulation.savedStates',
+			JSON.stringify([
+				{
+					baseScenario: 'baseline',
+					id: 'saved-baseline-20260602123456',
+					name: 'Saved baseline',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					serialized: serializeSavedSimulationStateEnvelope({
+						baseScenario: 'baseline',
+						name: 'Saved baseline',
+						savedAt: '2026-06-02T12:34:56.000Z',
+						state: {
+							blockCountSinceReset: 0n,
+							currentTimestamp: 1n,
+							queryDelayMilliseconds: 0,
+							repPerEthPrice: 10n ** 18n,
+							repPerUsdcPrice: 10n ** 6n,
+							selectedAccount: '0x00000000000000000000000000000000000000a1',
+							snapshot: {},
+							transactionCountSinceReset: 0n,
+							transactionDelayMilliseconds: 0,
+						},
+						version: 1,
+					}),
+				},
+			]),
+		)
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController()
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByRole('option', { name: 'Saved baseline' })).toBeTruthy()
+
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Export state' }))
+
+			await waitFor(() => {
+				const exportDialog = documentQueries.getByRole('dialog')
+				expect(within(exportDialog).getByLabelText('JSON state')).toBeTruthy()
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('imports a saved state and navigates to its saved-state URL', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController()
+		const locationAssign = mock(() => undefined)
+		window.location.assign = locationAssign as typeof window.location.assign
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+		const importedState = serializeSavedSimulationStateEnvelope({
+			baseScenario: 'baseline',
+			name: 'Imported state',
+			savedAt: '2026-06-02T12:34:56.000Z',
+			state: {
+				blockCountSinceReset: 0n,
+				currentTimestamp: 1n,
+				queryDelayMilliseconds: 0,
+				repPerEthPrice: 10n ** 18n,
+				repPerUsdcPrice: 10n ** 6n,
+				selectedAccount: '0x00000000000000000000000000000000000000a1',
+				snapshot: {},
+				transactionCountSinceReset: 0n,
+				transactionDelayMilliseconds: 0,
+			},
+			version: 1,
+		})
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Import state' }))
+			const importDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			const dialogQueries = within(importDialog)
+			const textArea = dialogQueries.getByLabelText('JSON state') as HTMLTextAreaElement
+			fireEvent.input(textArea, {
+				currentTarget: { value: importedState },
+				target: { value: importedState },
+			})
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
+
+			await waitFor(() => {
+				expect(locationAssign).toHaveBeenCalledTimes(1)
+				expect(locationAssign).toHaveBeenCalledWith(expect.stringContaining('simState=imported-state-20260602123456'))
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows inline import errors for malformed JSON', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController()
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Import state' }))
+			const importDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			const dialogQueries = within(importDialog)
+			const textArea = dialogQueries.getByLabelText('JSON state') as HTMLTextAreaElement
+			fireEvent.input(textArea, {
+				currentTarget: { value: '{bad json' },
+				target: { value: '{bad json' },
+			})
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
+
+			await waitFor(() => {
+				expect(dialogQueries.getByText(/Failed to update the saved simulation state/i)).toBeTruthy()
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows the delete control only for custom saved states', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const builtInController = createSimulationController()
+		const customController = createSimulationController({
+			simulationSource: {
+				baseScenario: 'baseline',
+				kind: 'saved-state',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				stateId: 'saved-baseline-20260602123456',
+			},
+		})
+		const builtInRendered = await renderIntoDocument(<SimulationBanner controller={builtInController} onRefresh={onRefresh} />)
+		const customRendered = await renderIntoDocument(<SimulationBanner controller={customController} onRefresh={onRefresh} />)
+
+		try {
+			expect(within(builtInRendered.container).queryByRole('button', { name: 'Delete save' })).toBeNull()
+			expect(within(customRendered.container).getByRole('button', { name: 'Delete save' })).toBeTruthy()
+		} finally {
+			await builtInRendered.cleanup()
+			await customRendered.cleanup()
 			domEnvironment.cleanup()
 		}
 	})

@@ -37,6 +37,8 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 		case 'bootstrap':
 			await engine.bootstrap()
 			return undefined
+		case 'exportState':
+			return await engine.exportState(message.params.name)
 		case 'getAccounts':
 			return await engine.getAccounts()
 		case 'getState':
@@ -96,7 +98,7 @@ scope.onmessage = event => {
 			if (message.type === 'init') {
 				if (enginePromise !== undefined) throw new Error('Simulation worker was already initialized')
 				enginePromise = createSimulationEngine({
-					scenario: message.scenario,
+					initialization: message.initialization,
 				})
 				const engine = await enginePromise
 				engine.subscribe(() => {
