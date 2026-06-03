@@ -1263,14 +1263,14 @@ export function ForkAuctionSection({
 			</div>
 		)
 	}
-	const renderAuctionBidsHeader = () => (
-		<div className='truth-auction-bid-row is-wide is-header'>
+	const renderAuctionBidsHeader = ({ showActions = false }: { showActions?: boolean }) => (
+		<div className={`truth-auction-bid-row is-wide ${showActions ? '' : 'is-no-actions'} is-header`}>
 			<span className='truth-auction-bid-row-label'>Price (ETH / REP)</span>
 			<span>Bidder</span>
 			<span>Bid Amount (ETH)</span>
 			<span>Loaded Depth (ETH)</span>
 			<span className='truth-auction-bid-row-status'>Status</span>
-			<span>Actions</span>
+			{showActions ? <span>Actions</span> : undefined}
 		</div>
 	)
 	const renderMyBidsHeader = () => (
@@ -1279,7 +1279,6 @@ export function ForkAuctionSection({
 			<span>Bid Amount (ETH)</span>
 			<span className='truth-auction-bid-row-status'>Status</span>
 			<span>Actions</span>
-			<span />
 		</div>
 	)
 	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = 'Submit Bid', variant = 'default' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
@@ -1826,7 +1825,7 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 
 		return (
-			<SectionBlock>
+			<SectionBlock title='Auction Bids'>
 				<div className='truth-auction-bid-coverage-summary'>
 					<MetricField label='Loaded Levels'>{truthAuctionBookData.tickSummaries.length.toString()}</MetricField>
 					<MetricField label='Loaded Bids'>{aggregatedAuctionBids.length.toString()}</MetricField>
@@ -1837,11 +1836,11 @@ export function ForkAuctionSection({
 				{!loadingAggregatedAuctionBids && truthAuctionBookData.tickSummaries.length > 0 && aggregatedAuctionBids.length === 0 ? <p className='detail'>No bids are currently indexed for the loaded prices.</p> : undefined}
 				{aggregatedAuctionBids.length === 0 ? undefined : (
 					<div className='truth-auction-bid-table'>
-						{renderAuctionBidsHeader()}
+						{renderAuctionBidsHeader({ showActions: false })}
 						{aggregatedAuctionBids.map(bid => {
 							const disposition = getBidDisposition(bid, truthAuctionStatus)
 							return (
-								<div className='truth-auction-bid-row is-wide' key={`aggregate:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
+								<div className='truth-auction-bid-row is-wide is-no-actions' key={`aggregate:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
 									<span className='truth-auction-bid-row-label'>{renderTruthAuctionPriceValue(getTruthAuctionPriceAtTick(bid.tick))}</span>
 									<div className='truth-auction-bid-row-address'>
 										<AddressValue address={bid.bidder} />
