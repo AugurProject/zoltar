@@ -1,12 +1,13 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
-import { deleteSavedSimulationState, listSavedSimulationStateRecords, persistSavedSimulationState, type SavedSimulationStateRecord } from '../simulation/savedStates.js'
+import { deleteSavedSimulationState, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, persistSavedSimulationState, type SavedSimulationStateRecord } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
 
@@ -25,27 +26,52 @@ type SimulationBannerProps = {
 
 type SimulationModal = 'delete' | 'export' | 'import' | 'save' | undefined
 
-function buildSimulationUrl(update: (nextUrl: URL) => void) {
-	const nextUrl = new URL(window.location.href)
-	nextUrl.searchParams.set('simulate', '1')
-	update(nextUrl)
-	return nextUrl
+function buildSimulationSearch(update: (params: URLSearchParams) => void) {
+	const params = new URLSearchParams(getRouteHashSearch())
+	params.set('simulate', '1')
+	update(params)
+	const nextSearch = params.toString()
+	return nextSearch === '' ? '' : `?${nextSearch}`
+}
+
+function navigateToSimulationSearch(nextSearch: string) {
+	window.history.pushState({}, '', buildRouteHref(getCurrentRouteHash(), nextSearch))
+	window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 function navigateToBuiltInScenario(scenario: string) {
-	const nextUrl = buildSimulationUrl(url => {
-		url.searchParams.set('simScenario', scenario)
-		url.searchParams.delete('simState')
+	const nextSearch = buildSimulationSearch(params => {
+		params.set('simScenario', scenario)
+		params.delete('simState')
 	})
-	window.location.assign(nextUrl.toString())
+	navigateToSimulationSearch(nextSearch)
 }
 
 function navigateToSavedSimulationState(stateId: string) {
-	const nextUrl = buildSimulationUrl(url => {
-		url.searchParams.delete('simScenario')
-		url.searchParams.set('simState', stateId)
+	const nextSearch = buildSimulationSearch(params => {
+		params.delete('simScenario')
+		params.set('simState', stateId)
 	})
-	window.location.assign(nextUrl.toString())
+	navigateToSimulationSearch(nextSearch)
+}
+
+function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }) {
+	if (parameters.bootstrapError !== undefined) {
+		return {
+			badgeClassName: 'error',
+			label: 'Error',
+		}
+	}
+	if (parameters.isBootstrapped) {
+		return {
+			badgeClassName: 'ok',
+			label: 'Ready',
+		}
+	}
+	return {
+		badgeClassName: 'pending',
+		label: 'Bootstrapping',
+	}
 }
 
 export function SimulationBanner({ controller, onRefresh }: SimulationBannerProps) {
@@ -63,6 +89,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const savedStateError = useSignal<string | undefined>(undefined)
 	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(listSavedSimulationStateRecords())
+	const savedStateStorageWarning = useSignal<string | undefined>(getSavedSimulationStateStorageWarning())
 	const saveName = useSignal('')
 	const exportName = useSignal('')
 	const exportStateText = useSignal('')
@@ -76,6 +103,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 
 	const reloadSavedStateRecords = () => {
 		savedStateRecords.value = listSavedSimulationStateRecords()
+		savedStateStorageWarning.value = getSavedSimulationStateStorageWarning()
 	}
 
 	const getDefaultSavedStateName = () => (currentSource.value.kind === 'saved-state' ? currentSource.value.name : `${getSimulationScenarioLabel(currentScenario.value)} ${new Date().toISOString().slice(0, 16)}`)
@@ -135,6 +163,12 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 		}
 	}
 
+	const persistAndNavigateToSavedState = async (serialized: string) => {
+		const record = persistSavedSimulationState(serialized)
+		reloadSavedStateRecords()
+		navigateToSavedSimulationState(record.id)
+	}
+
 	const showExportModal = async () => {
 		const nextName = getDefaultSavedStateName()
 		exportName.value = nextName
@@ -152,6 +186,10 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	if (scenarioDetail === undefined) {
 		scenarioDetail = currentSource.value.kind === 'saved-state' ? `Custom state "${currentSource.value.name}" based on ${getSimulationScenarioLabel(currentSource.value.baseScenario)}. Saved ${new Date(currentSource.value.savedAt).toLocaleString()}.` : getSimulationScenarioDescription(currentScenario.value)
 	}
+	const scenarioStatus = getScenarioStatus({
+		bootstrapError: bootstrapError.value,
+		isBootstrapped: isBootstrapped.value,
+	})
 
 	return (
 		<section className='panel contract-panel simulation-banner'>
@@ -165,30 +203,11 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<span
-								className={`badge ${(() => {
-									if (bootstrapError.value === undefined) {
-										if (isBootstrapped.value) return 'ok'
-
-										return 'pending'
-									}
-
-									return 'error'
-								})()}`}
-							>
-								{(() => {
-									if (bootstrapError.value === undefined) {
-										if (isBootstrapped.value) return 'Ready'
-
-										return 'Bootstrapping'
-									}
-
-									return 'Error'
-								})()}
-							</span>
+							<span className={`badge ${scenarioStatus.badgeClassName}`}>{scenarioStatus.label}</span>
 							<h3>Scenario</h3>
 						</div>
 						<p className='detail'>{scenarioDetail}</p>
+						{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 						{bootstrapError.value === undefined && isBootstrapping.value ? (
 							<p className='detail'>
 								<span className='spinner' aria-hidden='true' />
@@ -440,9 +459,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						type='button'
 						onClick={() =>
 							void runNavigationControl(async () => {
-								const record = persistSavedSimulationState(await controller.exportState(saveName.value))
-								reloadSavedStateRecords()
-								navigateToSavedSimulationState(record.id)
+								await persistAndNavigateToSavedState(await controller.exportState(saveName.value))
 							})
 						}
 					>
@@ -488,9 +505,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						type='button'
 						onClick={() =>
 							void runNavigationControl(async () => {
-								const record = persistSavedSimulationState(importStateText.value)
-								reloadSavedStateRecords()
-								navigateToSavedSimulationState(record.id)
+								await persistAndNavigateToSavedState(importStateText.value)
 							})
 						}
 					>

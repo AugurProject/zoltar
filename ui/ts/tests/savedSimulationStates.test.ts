@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, listSavedSimulationStateRecords, parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
+import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageWarning, listSavedSimulationStateRecords, parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
 function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: string }) {
@@ -38,6 +38,17 @@ describe('saved simulation states', () => {
 		expect(parsed.version).toBe(1)
 		expect(parsed.name).toBe('Saved baseline')
 		expect(parsed.state.blockCountSinceReset).toBe(1n)
+	})
+
+	test('round-trips names that look like bigint strings', () => {
+		const serialized = createSerializedSavedState({
+			name: '123n',
+			savedAt: '2026-06-02T12:34:56.000Z',
+		})
+
+		const parsed = parseSavedSimulationStateEnvelope(serialized)
+
+		expect(parsed.name).toBe('123n')
 	})
 
 	test('rejects malformed saved state json', () => {
@@ -113,6 +124,44 @@ describe('saved simulation states', () => {
 		}
 	})
 
+	test('sorts imported saves by local persistence time instead of export time', () => {
+		const domEnvironment = installDomEnvironment()
+
+		try {
+			window.localStorage.setItem(
+				'zoltar.simulation.savedStates',
+				JSON.stringify([
+					{
+						baseScenario: 'baseline',
+						id: 'older-export-20260601123456',
+						name: 'Older export',
+						persistedAt: '2026-06-03T00:10:00.000Z',
+						savedAt: '2026-06-01T12:34:56.000Z',
+						serialized: createSerializedSavedState({
+							name: 'Older export',
+							savedAt: '2026-06-01T12:34:56.000Z',
+						}),
+					},
+					{
+						baseScenario: 'baseline',
+						id: 'newer-export-20260602123456',
+						name: 'Newer export',
+						persistedAt: '2026-06-03T00:00:00.000Z',
+						savedAt: '2026-06-02T12:34:56.000Z',
+						serialized: createSerializedSavedState({
+							name: 'Newer export',
+							savedAt: '2026-06-02T12:34:56.000Z',
+						}),
+					},
+				]),
+			)
+
+			expect(listSavedSimulationStateRecords().map(record => record.id)).toEqual(['older-export-20260601123456', 'newer-export-20260602123456'])
+		} finally {
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('ignores corrupted or invalid saved-state storage records', () => {
 		const domEnvironment = installDomEnvironment()
 
@@ -141,6 +190,7 @@ describe('saved simulation states', () => {
 			)
 
 			expect(listSavedSimulationStateRecords().map(record => record.id)).toEqual(['saved-baseline-20260602123456'])
+			expect(getSavedSimulationStateStorageWarning()).toBe('Ignored 1 corrupted saved simulation state in browser storage.')
 		} finally {
 			domEnvironment.cleanup()
 		}

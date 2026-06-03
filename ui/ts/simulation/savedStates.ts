@@ -29,6 +29,7 @@ export type SavedSimulationStateRecord = {
 	baseScenario: SimulationScenario
 	id: string
 	name: string
+	persistedAt: string
 	savedAt: string
 	serialized: string
 }
@@ -61,9 +62,17 @@ type SavedSimulationStateStorageRecord = {
 	baseScenario: SimulationScenario
 	id: string
 	name: string
+	persistedAt?: string | undefined
 	savedAt: string
 	serialized: string
 }
+
+type SavedSimulationStateStorageSnapshot = {
+	droppedRecordCount: number
+	records: SavedSimulationStateStorageRecord[]
+}
+
+const BIGINT_VALUE_TAG = '$zoltarBigInt'
 
 class SavedSimulationStateError extends Error {
 	constructor(message: string) {
@@ -76,6 +85,10 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
+function isTaggedBigIntValue(value: unknown): value is Record<typeof BIGINT_VALUE_TAG, string> {
+	return isObjectRecord(value) && Object.keys(value).length === 1 && typeof value[BIGINT_VALUE_TAG] === 'string'
+}
+
 function getStorage(storage?: Storage) {
 	if (storage !== undefined) return storage
 	if (typeof window === 'undefined' || window.localStorage === undefined) throw new Error('Local storage is unavailable')
@@ -83,14 +96,14 @@ function getStorage(storage?: Storage) {
 }
 
 function stringifySimulationValue(value: unknown) {
-	const serialized = JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? `${item.toString()}n` : (item as never)), 2)
+	const serialized = JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? { [BIGINT_VALUE_TAG]: item.toString() } : (item as never)), 2)
 	if (serialized === undefined) throw new Error('Saved simulation state could not be serialized')
 	return serialized
 }
 
 function parseSimulationValue(serialized: string) {
 	return JSON.parse(serialized, (_key, value) => {
-		if (typeof value === 'string' && /^-?\d+n$/.test(value)) return BigInt(value.slice(0, -1))
+		if (isTaggedBigIntValue(value)) return BigInt(value[BIGINT_VALUE_TAG])
 		return value
 	})
 }
@@ -146,30 +159,45 @@ function assertSavedStateRecord(value: unknown): asserts value is SavedSimulatio
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state record is missing a name')
 	if (typeof value['savedAt'] !== 'string' || value['savedAt'].trim() === '') throw new SavedSimulationStateError('Saved simulation state record is missing its savedAt timestamp')
 	if (typeof value['baseScenario'] !== 'string' || !isSimulationScenario(value['baseScenario'])) throw new SavedSimulationStateError('Saved simulation state record is missing a valid baseScenario')
+	if (value['persistedAt'] !== undefined && (typeof value['persistedAt'] !== 'string' || value['persistedAt'].trim() === '' || Number.isNaN(Date.parse(value['persistedAt'])))) {
+		throw new SavedSimulationStateError('Saved simulation state record is missing a valid persistedAt timestamp')
+	}
 }
 
-function parseSavedStateStorageRecords(serialized: string | null) {
-	if (serialized === null || serialized.trim() === '') return []
+function normalizeSavedStateStorageRecord(record: SavedSimulationStateStorageRecord): SavedSimulationStateStorageRecord {
+	return {
+		...record,
+		persistedAt: record.persistedAt ?? record.savedAt,
+	}
+}
+
+function parseSavedStateStorageRecords(serialized: string | null): SavedSimulationStateStorageSnapshot {
+	if (serialized === null || serialized.trim() === '') return { droppedRecordCount: 0, records: [] }
 	let parsed: unknown
 	try {
 		parsed = JSON.parse(serialized)
 	} catch (error) {
 		if (!(error instanceof SyntaxError)) throw error
-		return []
+		return { droppedRecordCount: 1, records: [] }
 	}
-	if (!Array.isArray(parsed)) return []
+	if (!Array.isArray(parsed)) return { droppedRecordCount: 1, records: [] }
 	const validRecords: SavedSimulationStateStorageRecord[] = []
+	let droppedRecordCount = 0
 	for (const item of parsed) {
 		try {
 			assertSavedStateRecord(item)
 			parseSavedSimulationStateEnvelope(item.serialized)
-			validRecords.push(item)
+			validRecords.push(normalizeSavedStateStorageRecord(item))
 		} catch (error) {
 			if (!(error instanceof SavedSimulationStateError)) throw error
+			droppedRecordCount += 1
 			continue
 		}
 	}
-	return validRecords
+	return {
+		droppedRecordCount,
+		records: validRecords,
+	}
 }
 
 function writeSavedStateStorageRecords(records: readonly SavedSimulationStateStorageRecord[], storage?: Storage) {
@@ -191,6 +219,7 @@ function toSavedSimulationStateRecord(storageRecord: SavedSimulationStateStorage
 		baseScenario: storageRecord.baseScenario,
 		id: storageRecord.id,
 		name: storageRecord.name,
+		persistedAt: storageRecord.persistedAt ?? storageRecord.savedAt,
 		savedAt: storageRecord.savedAt,
 		serialized: storageRecord.serialized,
 	}
@@ -214,8 +243,14 @@ export function parseSavedSimulationStateEnvelope(serialized: string) {
 
 export function listSavedSimulationStateRecords(storage?: Storage) {
 	return parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
-		.map(toSavedSimulationStateRecord)
-		.sort((left, right) => right.savedAt.localeCompare(left.savedAt))
+		.records.map(toSavedSimulationStateRecord)
+		.sort((left, right) => right.persistedAt.localeCompare(left.persistedAt))
+}
+
+export function getSavedSimulationStateStorageWarning(storage?: Storage) {
+	const droppedRecordCount = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY)).droppedRecordCount
+	if (droppedRecordCount === 0) return undefined
+	return droppedRecordCount === 1 ? 'Ignored 1 corrupted saved simulation state in browser storage.' : `Ignored ${droppedRecordCount} corrupted saved simulation states in browser storage.`
 }
 
 function getSavedSimulationStateRecord(stateId: string, storage?: Storage) {
@@ -235,7 +270,8 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 		name: normalizeSavedStateName(parsedEnvelope.name),
 	}
 	const normalizedSerialized = serializeSavedSimulationStateEnvelope(envelope)
-	const currentRecords = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
+	const currentRecords = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY)).records
+	const persistedAt = new Date().toISOString()
 	const id = createSavedStateRecordId({
 		existingIds: new Set(currentRecords.map(record => record.id)),
 		name: envelope.name,
@@ -245,6 +281,7 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 		baseScenario: envelope.baseScenario,
 		id,
 		name: envelope.name,
+		persistedAt,
 		savedAt: envelope.savedAt,
 		serialized: normalizedSerialized,
 	} satisfies SavedSimulationStateStorageRecord
@@ -253,7 +290,7 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 }
 
 export function deleteSavedSimulationState(stateId: string, storage?: Storage) {
-	const currentRecords = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY))
+	const currentRecords = parseSavedStateStorageRecords(getStorage(storage).getItem(SAVED_SIMULATION_STATES_STORAGE_KEY)).records
 	const nextRecords = currentRecords.filter(record => record.id !== stateId)
 	if (nextRecords.length === currentRecords.length) return false
 	writeSavedStateStorageRecords(nextRecords, storage)

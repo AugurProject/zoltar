@@ -494,6 +494,27 @@ export async function createSimulationEngine({ initialization }: { initializatio
 			getTransactionDelay: () => 0,
 			onReceiptResolved: async () => undefined,
 		})
+	const bootstrapBuiltInScenario = async (scenario: SimulationScenario) => {
+		await bootstrapSimulationChain({
+			accounts: QA_ACCOUNTS,
+			createReadClient: createBootstrapReadClient,
+			createWriteClient: createBootstrapWriteClient,
+			memoryClient,
+			onProgress: progress => {
+				bootstrapLabel = progress.label
+				bootstrapProgress = progress.value
+				emitState()
+			},
+			primaryAccount,
+			profile,
+			scenario,
+		})
+		await refreshSimulationState()
+		baselineTransactionCount = transactionCountSinceReset
+		bootstrapLabel = 'Simulation scenario ready'
+		bootstrapProgress = 1
+		bootstrapped = true
+	}
 	const bootstrap = async () => {
 		if (bootstrapPromise !== undefined) return await bootstrapPromise
 		bootstrapping = true
@@ -504,25 +525,7 @@ export async function createSimulationEngine({ initialization }: { initializatio
 		bootstrapPromise = (async () => {
 			try {
 				if (initialization.kind === 'scenario') {
-					await bootstrapSimulationChain({
-						accounts: QA_ACCOUNTS,
-						createReadClient: createBootstrapReadClient,
-						createWriteClient: createBootstrapWriteClient,
-						memoryClient,
-						onProgress: progress => {
-							bootstrapLabel = progress.label
-							bootstrapProgress = progress.value
-							emitState()
-						},
-						primaryAccount,
-						profile,
-						scenario: initialization.scenario,
-					})
-					await refreshSimulationState()
-					baselineTransactionCount = transactionCountSinceReset
-					bootstrapLabel = 'Simulation scenario ready'
-					bootstrapProgress = 1
-					bootstrapped = true
+					await bootstrapBuiltInScenario(initialization.scenario)
 				} else {
 					await restoreSavedStateEnvelope(initialization.envelope, 'Loading saved simulation state')
 				}
@@ -643,20 +646,7 @@ export async function createSimulationEngine({ initialization }: { initializatio
 					memoryClient = createSimulationMemoryClient(profile)
 					impersonatedAccounts.clear()
 					await initializeSimulationAccounts()
-					await bootstrapSimulationChain({
-						accounts: QA_ACCOUNTS,
-						createReadClient: createBootstrapReadClient,
-						createWriteClient: createBootstrapWriteClient,
-						memoryClient,
-						onProgress: progress => {
-							bootstrapLabel = progress.label
-							bootstrapProgress = progress.value
-							emitState()
-						},
-						primaryAccount,
-						profile,
-						scenario: initialization.scenario,
-					})
+					await bootstrapBuiltInScenario(initialization.scenario)
 					selectedAccount = primaryAccount
 					transactionCountSinceReset = baselineTransactionCount
 					repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
