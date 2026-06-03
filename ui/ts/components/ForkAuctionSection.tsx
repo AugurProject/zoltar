@@ -34,7 +34,6 @@ import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluate
 import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 import type { ForkAuctionActionResult, ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
-import { formatUniverseLabel } from '../lib/universe.js'
 const UNKNOWN_VALUE = '—'
 const UNAVAILABLE_UNTIL_FORK = '-'
 const TRUTH_AUCTION_TICK_PAGE_SIZE = 25
@@ -119,15 +118,10 @@ function OutcomeChildPoolLink({
 
 	const securityPoolSearch = writeSecurityPoolQueryParam('', securityPoolAddress)
 	const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(securityPoolSearch, universeId))
-	const universeLabel = universeId === undefined ? undefined : formatUniverseLabel(universeId)
 
 	return (
 		<p className='detail'>
-			Selected {outcomeLabel} Child pool:{' '}
-			<a href={securityPoolHref}>
-				{securityPoolAddress}
-				{universeLabel === undefined ? undefined : `, ${universeLabel}`}
-			</a>
+			<a href={securityPoolHref}>Selected {outcomeLabel} Child pool</a>
 		</p>
 	)
 }
