@@ -203,9 +203,13 @@ describe('ForkAuctionSection', () => {
 		const settlementTab = documentQueries.getByRole('tab', { name: 'Settlement' })
 		const newSecurityPoolsTab = documentQueries.getByRole('tab', { name: 'New Security Pools' })
 
-		expect(forkTriggeredTab.textContent?.includes('0')).toBe(true)
+		expect(documentQueries.queryByText('View stage')).toBeNull()
+		expect(documentQueries.queryByText('Viewing stage')).toBeNull()
+		expect(documentQueries.queryByText('Current stage')).toBeNull()
+		expect(forkTriggeredTab.querySelector('.fork-workflow-stage-icon')).not.toBeNull()
 		expect(migrationTab.className.includes('is-selected')).toBe(true)
 		expect(migrationTab.className.includes('is-complete')).toBe(true)
+		expect(auctionTab.getAttribute('aria-current')).toBe('step')
 		expect(auctionTab.className.includes('is-current')).toBe(true)
 		expect(settlementTab.className.includes('is-upcoming')).toBe(true)
 		expect(newSecurityPoolsTab.className.includes('is-upcoming')).toBe(true)
@@ -221,5 +225,45 @@ describe('ForkAuctionSection', () => {
 
 		fireEvent.keyDown(migrationTab, { key: 'ArrowRight' })
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('auction')
+	})
+
+	test('keeps settlement as the current step while finalized bids are still claimable', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'settlement',
+					forkAuctionDetails: createForkAuctionDetails({
+						claimingAvailable: true,
+						systemState: 'operational',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 10n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: true,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 0n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+						},
+					}),
+					selectedStageView: 'settlement',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-current')).toBe(true)
+		expect(documentQueries.getByRole('tab', { name: 'New Security Pools' }).className.includes('is-current')).toBe(false)
+		expect(documentQueries.getByRole('tabpanel', { name: 'Settlement' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
 	})
 })

@@ -152,10 +152,10 @@ export function SecurityPoolWorkflowSection({
 	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
-	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? 'fork-triggered')
 	const previousSelectedPoolViewRef = useRef<SelectedPoolView | undefined>(undefined)
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
+	const hasManualForkWorkflowSelectionRef = useRef(false)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
@@ -230,13 +230,16 @@ export function SecurityPoolWorkflowSection({
 		selectedPool,
 	})
 	const currentForkWorkflowSelectionStage = getCurrentForkWorkflowSelectionStage({
+		claimingAvailable: currentForkAuctionDetails?.claimingAvailable ?? false,
 		currentForkStage,
 		hasForkActivity: hasCurrentSelectedPoolForkActivity({
 			forkAuctionDetails: currentForkAuctionDetails,
 			selectedPool,
 		}),
 		systemState: selectedPoolState,
+		truthAuctionFinalized: currentForkAuctionDetails?.truthAuction?.finalized ?? false,
 	})
+	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? currentForkWorkflowSelectionStage)
 	const openSelectedPoolForkWorkflow = selectedPoolHasActualForkActivity ? () => onSelectedPoolViewChange('fork-workflow') : undefined
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails &&
@@ -260,6 +263,7 @@ export function SecurityPoolWorkflowSection({
 	useEffect(() => {
 		if (legacyForkWorkflowSelectionStage === undefined) return
 		pendingLegacyForkWorkflowSelectionStageRef.current = legacyForkWorkflowSelectionStage
+		hasManualForkWorkflowSelectionRef.current = false
 		if (view !== 'fork-workflow') return
 		setForkWorkflowSelectionStage(legacyForkWorkflowSelectionStage)
 		pendingLegacyForkWorkflowSelectionStageRef.current = undefined
@@ -269,6 +273,7 @@ export function SecurityPoolWorkflowSection({
 		if (previousForkWorkflowPoolKeyRef.current === selectedPoolKey) return
 		previousForkWorkflowPoolKeyRef.current = selectedPoolKey
 		pendingLegacyForkWorkflowSelectionStageRef.current = undefined
+		hasManualForkWorkflowSelectionRef.current = false
 		setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
 	}, [currentForkWorkflowSelectionStage, selectedPool?.securityPoolAddress])
 	useEffect(() => {
@@ -277,12 +282,21 @@ export function SecurityPoolWorkflowSection({
 		if (view !== 'fork-workflow' || previousView === 'fork-workflow') return
 		const seededStage = pendingLegacyForkWorkflowSelectionStageRef.current
 		if (seededStage !== undefined) {
+			hasManualForkWorkflowSelectionRef.current = false
 			setForkWorkflowSelectionStage(seededStage)
 			pendingLegacyForkWorkflowSelectionStageRef.current = undefined
 			return
 		}
+		hasManualForkWorkflowSelectionRef.current = false
 		setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
 	}, [currentForkWorkflowSelectionStage, view])
+	useEffect(() => {
+		if (view !== 'fork-workflow') return
+		if (pendingLegacyForkWorkflowSelectionStageRef.current !== undefined) return
+		if (hasManualForkWorkflowSelectionRef.current) return
+		if (forkWorkflowSelectionStage === currentForkWorkflowSelectionStage) return
+		setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
+	}, [currentForkWorkflowSelectionStage, forkWorkflowSelectionStage, view])
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
 	const currentPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({
 		poolOracleManagerDetails,
@@ -859,7 +873,10 @@ export function SecurityPoolWorkflowSection({
 										reportingForm={reporting.reportingForm}
 										selectedStageView={forkWorkflowSelectionStage}
 										securityPools={securityPools}
-										onSelectedStageViewChange={setForkWorkflowSelectionStage}
+										onSelectedStageViewChange={stage => {
+											hasManualForkWorkflowSelectionRef.current = true
+											setForkWorkflowSelectionStage(stage)
+										}}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}
 									/>

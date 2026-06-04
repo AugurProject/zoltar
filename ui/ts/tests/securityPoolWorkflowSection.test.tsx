@@ -2401,6 +2401,110 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(selectedViews).toEqual(['fork-workflow'])
 	})
 
+	test('defaults the fork workflow to the current stage on first render', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionDetails: createForkAuctionDetails({
+							forkOutcome: 'yes',
+							migratedRep: 1n,
+							securityPoolAddress: selectedPoolAddress,
+							systemState: 'forkTruthAuction',
+							truthAuctionStartedAt: 1n,
+						}),
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							forkOutcome: 'yes',
+							migratedRep: 1n,
+							securityPoolAddress: selectedPoolAddress,
+							systemState: 'forkTruthAuction',
+							truthAuctionStartedAt: 1n,
+						}),
+					],
+					selectedPoolView: 'fork-workflow',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Truth Auction Status' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Fork Triggered' })).toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Truth Auction' }).className.includes('is-selected')).toBe(true)
+	})
+
+	test('advances the selected fork workflow panel when fresh fork details load a later current stage', async () => {
+		const selectedPoolAddress = zeroAddress
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: selectedPoolAddress,
+			forkAuction: createForkAuctionProps(),
+			securityPoolAddress: selectedPoolAddress,
+			securityPools: [
+				createSelectedPool({
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					securityPoolAddress: selectedPoolAddress,
+					systemState: 'operational',
+					truthAuctionStartedAt: 1n,
+				}),
+			],
+			selectedPoolView: 'fork-workflow',
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-selected')).toBe(true)
+
+		await act(async () => {
+			render(
+				<SecurityPoolWorkflowSection
+					{...baseProps}
+					forkAuction={createForkAuctionProps({
+						forkAuctionDetails: createForkAuctionDetails({
+							claimingAvailable: false,
+							forkOutcome: 'yes',
+							migratedRep: 1n,
+							securityPoolAddress: selectedPoolAddress,
+							systemState: 'operational',
+							truthAuction: {
+								accumulatedEth: 0n,
+								auctionEndsAt: 10n,
+								clearingPrice: 1n,
+								clearingTick: 0n,
+								ethAtClearingTick: 0n,
+								ethRaiseCap: 1n,
+								ethRaised: 0n,
+								finalized: true,
+								hitCap: false,
+								maxRepBeingSold: 1n,
+								minBidSize: 1n,
+								repPurchasableAtBid: undefined,
+								timeRemaining: 0n,
+								totalRepPurchased: 0n,
+								underfunded: false,
+							},
+							truthAuctionStartedAt: 1n,
+						}),
+					})}
+					showHeader={false}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'New Security Pools' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'New Security Pools' }).className.includes('is-selected')).toBe(true)
+	})
+
 	test('shows Trigger Zoltar Fork in the reporting workflow after non-decision', async () => {
 		let triggerZoltarForkCalls = 0
 		const selectedPoolAddress = zeroAddress

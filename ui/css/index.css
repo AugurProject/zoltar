@@ -4494,26 +4494,97 @@ button:focus-visible {
 	text-align: left;
 }
 
-.fork-workflow-stage-step {
+.fork-workflow-stage-icon {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	width: 1.9rem;
 	height: 1.9rem;
+	flex: 0 0 1.9rem;
 	border-radius: 999px;
 	background: rgba(255, 255, 255, 0.07);
-	font-size: 0.82rem;
-	font-weight: 700;
+	color: currentColor;
+}
+
+.fork-workflow-stage-icon::before,
+.fork-workflow-stage-icon::after {
+	content: "";
+	position: absolute;
 }
 
 .fork-workflow-stage-copy {
-	display: grid;
-	gap: 0.12rem;
+	display: flex;
+	align-items: center;
 }
 
-.fork-workflow-stage-copy > span:last-child {
-	font-size: 0.78rem;
-	color: var(--text-secondary);
+.fork-workflow-stage-icon-triggered::before {
+	inset: 0.44rem;
+	border-radius: 999px;
+	background: currentColor;
+}
+
+.fork-workflow-stage-icon-triggered::after {
+	inset: 0.22rem;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	opacity: 0.45;
+}
+
+.fork-workflow-stage-icon-migration::before {
+	width: 0.8rem;
+	height: 0.18rem;
+	border-radius: 999px;
+	background: currentColor;
+	transform: translate(-0.06rem, 0.14rem) rotate(-35deg);
+}
+
+.fork-workflow-stage-icon-migration::after {
+	width: 0.48rem;
+	height: 0.48rem;
+	border-top: 0.16rem solid currentColor;
+	border-right: 0.16rem solid currentColor;
+	transform: translate(0.38rem, -0.18rem) rotate(10deg);
+}
+
+.fork-workflow-stage-icon-auction::before {
+	width: 0.76rem;
+	height: 0.76rem;
+	border: 0.16rem solid currentColor;
+	border-radius: 0.16rem;
+	transform: rotate(45deg);
+}
+
+.fork-workflow-stage-icon-auction::after {
+	width: 0.16rem;
+	height: 0.96rem;
+	border-radius: 999px;
+	background: currentColor;
+	transform: rotate(45deg);
+}
+
+.fork-workflow-stage-icon-settlement::before {
+	width: 0.5rem;
+	height: 0.9rem;
+	border-right: 0.18rem solid currentColor;
+	border-bottom: 0.18rem solid currentColor;
+	transform: translateY(-0.08rem) rotate(40deg);
+}
+
+.fork-workflow-stage-icon-pools::before,
+.fork-workflow-stage-icon-pools::after {
+	width: 0.5rem;
+	height: 0.5rem;
+	border: 0.16rem solid currentColor;
+	border-radius: 0.12rem;
+}
+
+.fork-workflow-stage-icon-pools::before {
+	transform: translate(-0.22rem, -0.12rem);
+}
+
+.fork-workflow-stage-icon-pools::after {
+	transform: translate(0.22rem, 0.12rem);
 }
 
 .fork-workflow-stage.is-current {
@@ -4525,8 +4596,8 @@ button:focus-visible {
 	background: rgba(56, 213, 255, 0.1);
 }
 
-.fork-workflow-stage.is-current .fork-workflow-stage-step,
-.fork-workflow-stage.is-selected .fork-workflow-stage-step {
+.fork-workflow-stage.is-current .fork-workflow-stage-icon,
+.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
 	background: rgba(56, 213, 255, 0.18);
 }
 

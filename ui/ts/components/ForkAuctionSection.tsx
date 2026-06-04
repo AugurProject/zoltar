@@ -83,13 +83,6 @@ const FORK_WORKFLOW_STAGE_LABELS: Record<ForkWorkflowSelectionStage, string> = {
 	settlement: 'Settlement',
 	'new-security-pools': 'New Security Pools',
 }
-const FORK_WORKFLOW_STAGE_NUMBERS: Record<ForkWorkflowSelectionStage, number> = {
-	'fork-triggered': 0,
-	migration: 1,
-	auction: 2,
-	settlement: 3,
-	'new-security-pools': 4,
-}
 
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 	return FORK_WORKFLOW_STAGE_LABELS[stage]
@@ -97,6 +90,23 @@ function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 
 function getForkWorkflowStageOrder(stage: ForkWorkflowSelectionStage) {
 	return FORK_WORKFLOW_NAV_STAGES.indexOf(stage)
+}
+
+function getForkWorkflowStageIcon(stage: ForkWorkflowSelectionStage) {
+	switch (stage) {
+		case 'fork-triggered':
+			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-triggered' />
+		case 'migration':
+			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-migration' />
+		case 'auction':
+			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-auction' />
+		case 'settlement':
+			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-settlement' />
+		case 'new-security-pools':
+			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-pools' />
+		default:
+			return undefined
+	}
 }
 
 function getTruthAuctionWindow(startedAt: bigint | undefined) {
@@ -272,12 +282,6 @@ function getForkWorkflowStageClassName({ currentStage, selectedStage, stage }: {
 	if (getForkWorkflowStageOrder(stage) < getForkWorkflowStageOrder(currentStage)) classNames.push('is-complete')
 	if (getForkWorkflowStageOrder(stage) > getForkWorkflowStageOrder(currentStage)) classNames.push('is-upcoming')
 	return classNames.join(' ')
-}
-
-function getForkWorkflowStageStatusLabel({ isCurrentStage, isSelectedStage }: { isCurrentStage: boolean; isSelectedStage: boolean }) {
-	if (isCurrentStage) return 'Current stage'
-	if (isSelectedStage) return 'Viewing stage'
-	return 'View stage'
 }
 function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 	return (
@@ -830,9 +834,11 @@ export function ForkAuctionSection({
 					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
 				}))
 	const currentWorkflowStage = getCurrentForkWorkflowSelectionStage({
+		claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
 		currentForkStage: currentStage,
 		hasForkActivity: forkAuctionDetails?.hasForkActivity ?? previewPool?.hasForkActivity ?? false,
 		systemState,
+		truthAuctionFinalized: forkAuctionDetails?.truthAuction?.finalized ?? false,
 	})
 	const selectedStage = (() => {
 		if (selectedStageView !== undefined) return selectedStageView
@@ -2026,14 +2032,13 @@ export function ForkAuctionSection({
 			<div aria-label='Fork lifecycle stages' className='fork-workflow-stage-nav' role='tablist'>
 				{FORK_WORKFLOW_NAV_STAGES.map(stage => {
 					const stageLabel = getForkWorkflowStageLabel(stage)
-					const isCurrentStage = currentWorkflowStage === stage
-					const isSelectedStage = selectedStage === stage
 					return (
 						<Fragment key={stage}>
 							<button
 								aria-controls={`fork-workflow-stage-panel-${stage}`}
+								aria-current={currentWorkflowStage === stage ? 'step' : undefined}
 								aria-label={stageLabel}
-								aria-selected={isSelectedStage}
+								aria-selected={selectedStage === stage}
 								className={getForkWorkflowStageClassName({
 									currentStage: currentWorkflowStage,
 									selectedStage,
@@ -2043,13 +2048,12 @@ export function ForkAuctionSection({
 								onClick={() => onSelectedStageViewChange?.(stage)}
 								onKeyDown={event => handleForkWorkflowStageKeyDown(stage, event)}
 								role='tab'
-								tabIndex={isSelectedStage ? 0 : -1}
+								tabIndex={selectedStage === stage ? 0 : -1}
 								type='button'
 							>
-								<span className='fork-workflow-stage-step'>{FORK_WORKFLOW_STAGE_NUMBERS[stage].toString()}</span>
+								{getForkWorkflowStageIcon(stage)}
 								<span className='fork-workflow-stage-copy'>
 									<strong>{stageLabel}</strong>
-									<span>{getForkWorkflowStageStatusLabel({ isCurrentStage, isSelectedStage })}</span>
 								</span>
 							</button>
 							{stage === FORK_WORKFLOW_NAV_STAGES[FORK_WORKFLOW_NAV_STAGES.length - 1] ? undefined : (

@@ -130,8 +130,33 @@ void describe('selected pool workflow lookup state', () => {
 				currentForkStage: 'settlement',
 				hasForkActivity: true,
 				systemState: 'operational',
+				truthAuctionFinalized: true,
 			}),
 		).toBe('new-security-pools')
+		expect(
+			getCurrentForkWorkflowSelectionStage({
+				claimingAvailable: true,
+				currentForkStage: 'settlement',
+				hasForkActivity: true,
+				systemState: 'operational',
+				truthAuctionFinalized: true,
+			}),
+		).toBe('settlement')
+		expect(
+			getCurrentForkWorkflowSelectionStage({
+				currentForkStage: 'settlement',
+				hasForkActivity: true,
+				systemState: 'operational',
+				truthAuctionFinalized: false,
+			}),
+		).toBe('settlement')
+		expect(
+			getCurrentForkWorkflowSelectionStage({
+				currentForkStage: 'settlement',
+				hasForkActivity: true,
+				systemState: 'operational',
+			}),
+		).toBe('settlement')
 	})
 })
 

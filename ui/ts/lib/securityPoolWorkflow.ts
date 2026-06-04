@@ -83,9 +83,21 @@ export function normalizeForkWorkflowSelectionStage(stage: ForkAuctionStageView)
 	return stage === 'initiate' ? 'fork-triggered' : stage
 }
 
-export function getCurrentForkWorkflowSelectionStage({ currentForkStage, hasForkActivity, systemState }: { currentForkStage: ForkAuctionStageView; hasForkActivity: boolean; systemState: SecurityPoolSystemState | undefined }): ForkWorkflowSelectionStage {
+export function getCurrentForkWorkflowSelectionStage({
+	claimingAvailable = false,
+	currentForkStage,
+	hasForkActivity,
+	systemState,
+	truthAuctionFinalized = false,
+}: {
+	claimingAvailable?: boolean
+	currentForkStage: ForkAuctionStageView
+	hasForkActivity: boolean
+	systemState: SecurityPoolSystemState | undefined
+	truthAuctionFinalized?: boolean
+}): ForkWorkflowSelectionStage {
 	if (systemState === 'poolForked') return 'fork-triggered'
-	if (systemState === 'operational' && hasForkActivity) return 'new-security-pools'
+	if (systemState === 'operational' && hasForkActivity && truthAuctionFinalized && !claimingAvailable) return 'new-security-pools'
 	return normalizeForkWorkflowSelectionStage(currentForkStage)
 }
 
