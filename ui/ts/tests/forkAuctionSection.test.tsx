@@ -354,10 +354,10 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
-		expect(documentQueries.queryByText('Child universe not created for the Yes outcome yet.')).toBeNull()
+		expect(documentQueries.queryByText('Yes universe does not exist.')).toBeNull()
 	})
 
-	test('offers child-universe creation from the missing child-pool notice', async () => {
+	test('shows a missing-universe notice without a creation button', async () => {
 		const onCreateChildUniverse = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -380,10 +380,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Child universe not created for the Yes outcome yet.')).not.toBeNull()
-
-		const createChildUniverseButton = documentQueries.getByRole('button', { name: 'Create Yes Child Universe' })
-		fireEvent.click(createChildUniverseButton)
-		expect(onCreateChildUniverse).toHaveBeenCalledTimes(1)
+		expect(documentQueries.getByText('Yes universe does not exist.')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create Yes Child Universe' })).toBeNull()
+		expect(onCreateChildUniverse).not.toHaveBeenCalled()
 	})
 })

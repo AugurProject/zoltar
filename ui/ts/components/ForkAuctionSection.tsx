@@ -677,7 +677,6 @@ export function ForkAuctionSection({
 	lifecycleStateOverride,
 	loadingReportingDetails = false,
 	onClaimAuctionProceeds,
-	onCreateChildUniverse,
 	onFinalizeTruthAuction,
 	onForkAuctionFormChange,
 	onMigrateRepToZoltar,
@@ -1295,15 +1294,7 @@ export function ForkAuctionSection({
 		if (selectedAuctionChildPool === undefined)
 			return (
 				<div className='fork-workflow-outcome-notice'>
-					<p className='detail'>Child universe not created for the {selectedOutcomeLabel} outcome yet.</p>
-					<div className='actions'>
-						{renderStageActionButton({
-							action: 'createChildUniverse',
-							idleLabel: `Create ${selectedOutcomeLabel} Child Universe`,
-							onClick: onCreateChildUniverse,
-							pendingLabel: 'Creating child universe...',
-						})}
-					</div>
+					<p className='detail'>{selectedOutcomeLabel} universe does not exist.</p>
 				</div>
 			)
 
