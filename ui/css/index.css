@@ -4531,7 +4531,23 @@ button:focus-visible {
 
 .fork-workflow-stage-copy {
 	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.25rem;
+}
+
+.fork-workflow-stage-indicator {
+	display: inline-flex;
 	align-items: center;
+	padding: 0.12rem 0.45rem;
+	border: 1px solid rgba(56, 213, 255, 0.28);
+	border-radius: 999px;
+	background: rgba(56, 213, 255, 0.12);
+	color: rgba(181, 243, 255, 0.96);
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
 }
 
 .fork-workflow-stage-icon-triggered::before {
@@ -4610,12 +4626,23 @@ button:focus-visible {
 }
 
 .fork-workflow-stage.is-selected {
-	background: rgba(56, 213, 255, 0.1);
+	border-color: rgba(56, 213, 255, 0.34);
+	background: linear-gradient(135deg, rgba(56, 213, 255, 0.16), rgba(56, 213, 255, 0.06)), rgba(10, 20, 36, 0.34);
+	box-shadow: 0 0 0 1px rgba(56, 213, 255, 0.12);
+	color: rgb(233, 251, 255);
 }
 
 .fork-workflow-stage.is-current .fork-workflow-stage-icon,
 .fork-workflow-stage.is-selected .fork-workflow-stage-icon {
 	background: rgba(56, 213, 255, 0.18);
+}
+
+.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
+	box-shadow: inset 0 0 0 1px rgba(56, 213, 255, 0.18);
+}
+
+.fork-workflow-stage.is-selected .fork-workflow-stage-copy strong {
+	color: rgb(243, 253, 255);
 }
 
 .fork-workflow-stage.is-complete:not(.is-current) {

@@ -201,33 +201,28 @@ describe('ForkAuctionSection', () => {
 		const migrationTab = documentQueries.getByRole('tab', { name: 'Migration' })
 		const auctionTab = documentQueries.getByRole('tab', { name: 'Truth Auction' })
 		const settlementTab = documentQueries.getByRole('tab', { name: 'Settlement' })
-		const newSecurityPoolsTab = documentQueries.getByRole('tab', { name: 'New Security Pools' })
 
 		expect(documentQueries.queryByText('View stage')).toBeNull()
-		expect(documentQueries.queryByText('Viewing stage')).toBeNull()
 		expect(documentQueries.queryByText('Current stage')).toBeNull()
 		expect(forkTriggeredTab.querySelector('.fork-workflow-stage-icon')).not.toBeNull()
 		expect(migrationTab.className.includes('is-selected')).toBe(true)
 		expect(migrationTab.className.includes('is-complete')).toBe(true)
+		expect(within(migrationTab).getByText('Viewing')).not.toBeNull()
 		expect(auctionTab.getAttribute('aria-current')).toBe('step')
 		expect(auctionTab.className.includes('is-current')).toBe(true)
 		expect(settlementTab.className.includes('is-upcoming')).toBe(true)
-		expect(newSecurityPoolsTab.className.includes('is-upcoming')).toBe(true)
+		expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
 		const separators = Array.from(document.body.querySelectorAll('.fork-workflow-stage-separator'))
-		expect(separators).toHaveLength(4)
+		expect(separators).toHaveLength(3)
 		expect(separators[0]?.className.includes('is-complete')).toBe(true)
 		expect(separators[1]?.className.includes('is-complete')).toBe(true)
 		expect(separators[2]?.className.includes('is-upcoming')).toBe(true)
-		expect(separators[3]?.className.includes('is-upcoming')).toBe(true)
 
 		fireEvent.click(settlementTab)
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('settlement')
 
 		fireEvent.keyDown(forkTriggeredTab, { key: 'ArrowRight' })
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('migration')
-
-		fireEvent.click(newSecurityPoolsTab)
-		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('new-security-pools')
 
 		fireEvent.keyDown(migrationTab, { key: 'ArrowRight' })
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('auction')
@@ -305,18 +300,18 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-current')).toBe(true)
-		expect(documentQueries.getByRole('tab', { name: 'New Security Pools' }).className.includes('is-current')).toBe(false)
+		expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
 		expect(documentQueries.getByRole('tabpanel', { name: 'Settlement' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
 	})
 
-	test('shows the selected outcome field and child-pool link in the new security pools panel', async () => {
+	test('shows the selected outcome field and child-pool link in the settlement child pools section', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
 				createProps({
 					currentStageView: 'settlement',
-					selectedStageView: 'new-security-pools',
+					selectedStageView: 'settlement',
 				}),
 			),
 		)
@@ -325,7 +320,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'New Security Pools' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Child Security Pools' })).not.toBeNull()
 	})
 
 	test('uses the current child pool as the selected outcome pool during truth auction', async () => {
@@ -373,7 +368,7 @@ describe('ForkAuctionSection', () => {
 					}),
 					onCreateChildUniverse,
 					securityPools: [],
-					selectedStageView: 'new-security-pools',
+					selectedStageView: 'settlement',
 				}),
 			),
 		)
