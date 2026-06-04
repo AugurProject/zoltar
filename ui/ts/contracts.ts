@@ -1604,22 +1604,6 @@ export async function settleTruthAuctionBids(client: WriteClient, securityPoolAd
 			})),
 	)
 }
-
-export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly TruthAuctionSettlementBidIdentifier[]) {
-	return await executeForkAuctionAction(
-		client,
-		'claimAuctionProceeds',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'claimAuctionProceeds',
-				args: [securityPoolAddress, vaultAddress, selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids],
-			})),
-	)
-}
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,

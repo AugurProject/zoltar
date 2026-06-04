@@ -371,7 +371,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			expect(button.title).toBe('Load a pool to open this workflow.')
 		}
 		expect(documentQueries.queryByRole('tab', { name: 'Migration' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Auction' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Truth Auction' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Settlement' })).toBeNull()
 
 		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()

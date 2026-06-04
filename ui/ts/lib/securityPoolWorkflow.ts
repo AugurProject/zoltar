@@ -1,7 +1,7 @@
 import { sameAddress } from './address.js'
 import { assertNever } from './assert.js'
 import { formatDuration, formatRoundedCurrencyBalance } from './formatters.js'
-import { getForkAuctionStageView, type ForkAuctionStageView } from './forkAuction.js'
+import { deriveHasForkActivity, getForkAuctionStageView, type ForkAuctionStageView } from './forkAuction.js'
 import type { LoadableValueState } from './loadState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
 import { getTimeRemaining } from './time.js'
@@ -9,7 +9,8 @@ import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
 import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 
-export type ForkWorkflowSelectionStage = Exclude<ForkAuctionStageView, 'initiate'>
+export const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement', 'new-security-pools'] as const
+export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
 
 export const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits', 'fork-workflow']
@@ -51,15 +52,6 @@ export function isSelectedPoolForkWorkflowView(view: SelectedPoolView) {
 	return view === 'fork-workflow'
 }
 
-export function getForkStageViewForSelectedPoolView(view: SelectedPoolView): ForkAuctionStageView {
-	switch (view) {
-		case 'fork-workflow':
-			return 'migration'
-		default:
-			throw new Error(`Selected pool view ${view} does not map to a fork workflow stage`)
-	}
-}
-
 export function getSelectedPoolViewForForkStage(stage: ForkAuctionStageView): SelectedPoolView {
 	switch (stage) {
 		case 'initiate':
@@ -88,7 +80,13 @@ export function resolveForkWorkflowSelectionStage(value: string | undefined): Fo
 }
 
 export function normalizeForkWorkflowSelectionStage(stage: ForkAuctionStageView): ForkWorkflowSelectionStage {
-	return stage === 'initiate' ? 'migration' : stage
+	return stage === 'initiate' ? 'fork-triggered' : stage
+}
+
+export function getCurrentForkWorkflowSelectionStage({ currentForkStage, hasForkActivity, systemState }: { currentForkStage: ForkAuctionStageView; hasForkActivity: boolean; systemState: SecurityPoolSystemState | undefined }): ForkWorkflowSelectionStage {
+	if (systemState === 'poolForked') return 'fork-triggered'
+	if (systemState === 'operational' && hasForkActivity) return 'new-security-pools'
+	return normalizeForkWorkflowSelectionStage(currentForkStage)
 }
 
 export function getSelectedPoolForkWorkflowView({
@@ -159,6 +157,24 @@ export function getCurrentSelectedPoolForkStage({
 		systemState: selectedPool.systemState,
 		truthAuctionStartedAt: selectedPool.truthAuctionStartedAt,
 	})
+}
+
+export function hasCurrentSelectedPoolForkActivity({
+	forkAuctionDetails,
+	selectedPool,
+}: {
+	forkAuctionDetails:
+		| {
+				forkOutcome: ListedSecurityPool['forkOutcome']
+				migratedRep: bigint
+				systemState: SecurityPoolSystemState
+				truthAuctionStartedAt: bigint
+		  }
+		| undefined
+	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'hasForkActivity' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
+}) {
+	if (forkAuctionDetails !== undefined) return deriveHasForkActivity(forkAuctionDetails)
+	return selectedPool?.hasForkActivity ?? false
 }
 
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {

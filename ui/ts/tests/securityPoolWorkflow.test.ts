@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import {
+	getCurrentForkWorkflowSelectionStage,
 	getCurrentSelectedPoolForkStage,
 	getCurrentPoolOracleManagerDetails,
 	getOracleLastPriceDisplay,
@@ -52,7 +53,7 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveForkWorkflowSelectionStage('fork-migration')).toBe('migration')
 		expect(resolveForkWorkflowSelectionStage('fork-auction')).toBe('auction')
 		expect(resolveForkWorkflowSelectionStage('fork-settlement')).toBe('settlement')
-		expect(normalizeForkWorkflowSelectionStage('initiate')).toBe('migration')
+		expect(normalizeForkWorkflowSelectionStage('initiate')).toBe('fork-triggered')
 	})
 
 	void test('derives the best fork workflow stage from pool and fork-auction state', () => {
@@ -117,6 +118,20 @@ void describe('selected pool workflow lookup state', () => {
 				selectedPool: undefined,
 			}),
 		).toBe('auction')
+		expect(
+			getCurrentForkWorkflowSelectionStage({
+				currentForkStage: 'initiate',
+				hasForkActivity: false,
+				systemState: 'poolForked',
+			}),
+		).toBe('fork-triggered')
+		expect(
+			getCurrentForkWorkflowSelectionStage({
+				currentForkStage: 'settlement',
+				hasForkActivity: true,
+				systemState: 'operational',
+			}),
+		).toBe('new-security-pools')
 	})
 })
 

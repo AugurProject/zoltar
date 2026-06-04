@@ -30,8 +30,10 @@ import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
+	getCurrentForkWorkflowSelectionStage,
 	getCurrentPoolOracleManagerDetails,
 	getCurrentSelectedPoolForkStage,
+	hasCurrentSelectedPoolForkActivity,
 	getSelectedPoolCardTitle,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewLabel,
@@ -39,7 +41,6 @@ import {
 	getSelectedPoolWorkflowLockedPresentation,
 	isSelectedPoolForkWorkflowView,
 	isForkWorkflowDisabled,
-	normalizeForkWorkflowSelectionStage,
 	resolveForkWorkflowSelectionStage,
 	resolveSelectedPoolView,
 	SELECTED_POOL_PRIMARY_VIEWS,
@@ -151,7 +152,7 @@ export function SecurityPoolWorkflowSection({
 	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
-	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? 'migration')
+	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? 'fork-triggered')
 	const previousSelectedPoolViewRef = useRef<SelectedPoolView | undefined>(undefined)
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
@@ -224,12 +225,18 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolExists: selectedPool !== undefined,
 		selectedPoolUniverseMismatch,
 	})
-	const currentForkWorkflowStage = normalizeForkWorkflowSelectionStage(
-		getCurrentSelectedPoolForkStage({
+	const currentForkStage = getCurrentSelectedPoolForkStage({
+		forkAuctionDetails: currentForkAuctionDetails,
+		selectedPool,
+	})
+	const currentForkWorkflowSelectionStage = getCurrentForkWorkflowSelectionStage({
+		currentForkStage,
+		hasForkActivity: hasCurrentSelectedPoolForkActivity({
 			forkAuctionDetails: currentForkAuctionDetails,
 			selectedPool,
 		}),
-	)
+		systemState: selectedPoolState,
+	})
 	const openSelectedPoolForkWorkflow = selectedPoolHasActualForkActivity ? () => onSelectedPoolViewChange('fork-workflow') : undefined
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails &&
@@ -262,8 +269,8 @@ export function SecurityPoolWorkflowSection({
 		if (previousForkWorkflowPoolKeyRef.current === selectedPoolKey) return
 		previousForkWorkflowPoolKeyRef.current = selectedPoolKey
 		pendingLegacyForkWorkflowSelectionStageRef.current = undefined
-		setForkWorkflowSelectionStage(currentForkWorkflowStage)
-	}, [currentForkWorkflowStage, selectedPool?.securityPoolAddress])
+		setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
+	}, [currentForkWorkflowSelectionStage, selectedPool?.securityPoolAddress])
 	useEffect(() => {
 		const previousView = previousSelectedPoolViewRef.current
 		previousSelectedPoolViewRef.current = view
@@ -274,8 +281,8 @@ export function SecurityPoolWorkflowSection({
 			pendingLegacyForkWorkflowSelectionStageRef.current = undefined
 			return
 		}
-		setForkWorkflowSelectionStage(currentForkWorkflowStage)
-	}, [currentForkWorkflowStage, view])
+		setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
+	}, [currentForkWorkflowSelectionStage, view])
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
 	const currentPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({
 		poolOracleManagerDetails,

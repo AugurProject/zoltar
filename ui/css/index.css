@@ -4465,11 +4465,20 @@ button:focus-visible {
 	opacity: 0.68;
 }
 
+.fork-workflow-stage-nav-shell {
+	display: flex;
+	justify-content: center;
+}
+
 .fork-workflow-stage-nav {
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	flex-wrap: wrap;
 	gap: var(--space-2);
+	width: fit-content;
+	max-width: 100%;
+	margin: 0 auto;
 }
 
 .fork-workflow-stage {
@@ -4532,6 +4541,34 @@ button:focus-visible {
 .fork-workflow-stage-separator {
 	color: var(--text-secondary);
 	font-size: 1rem;
+}
+
+.fork-workflow-child-pool-list {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.fork-workflow-child-pool-card {
+	display: grid;
+	gap: var(--space-2);
+	padding: 0.9rem 1rem;
+	border: 1px solid var(--divider-subtle);
+	border-radius: var(--radius-panel);
+	background: rgba(10, 20, 36, 0.22);
+}
+
+.fork-workflow-child-pool-card-copy,
+.fork-workflow-child-pool-card-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+.fork-workflow-child-pool-card-copy > span,
+.fork-workflow-child-pool-card-meta > span {
+	color: var(--text-secondary);
 }
 
 .selected-pool-workflow-content {
