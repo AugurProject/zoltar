@@ -213,6 +213,12 @@ describe('ForkAuctionSection', () => {
 		expect(auctionTab.className.includes('is-current')).toBe(true)
 		expect(settlementTab.className.includes('is-upcoming')).toBe(true)
 		expect(newSecurityPoolsTab.className.includes('is-upcoming')).toBe(true)
+		const separators = Array.from(document.body.querySelectorAll('.fork-workflow-stage-separator'))
+		expect(separators).toHaveLength(4)
+		expect(separators[0]?.className.includes('is-complete')).toBe(true)
+		expect(separators[1]?.className.includes('is-complete')).toBe(true)
+		expect(separators[2]?.className.includes('is-upcoming')).toBe(true)
+		expect(separators[3]?.className.includes('is-upcoming')).toBe(true)
 
 		fireEvent.click(settlementTab)
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('settlement')
@@ -265,5 +271,53 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByRole('tab', { name: 'New Security Pools' }).className.includes('is-current')).toBe(false)
 		expect(documentQueries.getByRole('tabpanel', { name: 'Settlement' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
+	})
+
+	test('shows the selected outcome field and child-pool link in the new security pools panel', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'settlement',
+					selectedStageView: 'new-security-pools',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Outcome' })).not.toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'New Security Pools' })).not.toBeNull()
+	})
+
+	test('offers child-universe creation from the missing child-pool notice', async () => {
+		const onCreateChildUniverse = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						forkOutcome: 'none',
+						migratedRep: 0n,
+						systemState: 'poolForked',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					onCreateChildUniverse,
+					securityPools: [],
+					selectedStageView: 'new-security-pools',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Child universe not created for the Yes outcome yet.')).not.toBeNull()
+
+		const createChildUniverseButton = documentQueries.getByRole('button', { name: 'Create Yes Child Universe' })
+		fireEvent.click(createChildUniverseButton)
+		expect(onCreateChildUniverse).toHaveBeenCalledTimes(1)
 	})
 })

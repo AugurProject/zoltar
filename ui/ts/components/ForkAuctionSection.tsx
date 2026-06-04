@@ -139,18 +139,6 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
-function OutcomeChildPoolLink({ outcomeLabel, securityPoolAddress, universeId }: { outcomeLabel: string; securityPoolAddress: string | undefined; universeId: bigint | undefined }) {
-	if (securityPoolAddress === undefined) return <p className='detail'>Child universe not created for the {outcomeLabel} outcome yet.</p>
-
-	const securityPoolSearch = writeSecurityPoolQueryParam('', securityPoolAddress)
-	const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(securityPoolSearch, universeId))
-
-	return (
-		<p className='detail'>
-			<a href={securityPoolHref}>Selected {outcomeLabel} Child pool</a>
-		</p>
-	)
-}
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
 	return hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK
 }
@@ -281,6 +269,13 @@ function getForkWorkflowStageClassName({ currentStage, selectedStage, stage }: {
 	if (selectedStage === stage) classNames.push('is-selected')
 	if (getForkWorkflowStageOrder(stage) < getForkWorkflowStageOrder(currentStage)) classNames.push('is-complete')
 	if (getForkWorkflowStageOrder(stage) > getForkWorkflowStageOrder(currentStage)) classNames.push('is-upcoming')
+	return classNames.join(' ')
+}
+
+function getForkWorkflowSeparatorClassName({ currentStage, stage }: { currentStage: ForkWorkflowSelectionStage; stage: ForkWorkflowSelectionStage }) {
+	const classNames = ['fork-workflow-stage-separator']
+	if (getForkWorkflowStageOrder(stage) < getForkWorkflowStageOrder(currentStage)) classNames.push('is-complete')
+	if (getForkWorkflowStageOrder(stage) >= getForkWorkflowStageOrder(currentStage)) classNames.push('is-upcoming')
 	return classNames.join(' ')
 }
 function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
@@ -682,6 +677,7 @@ export function ForkAuctionSection({
 	lifecycleStateOverride,
 	loadingReportingDetails = false,
 	onClaimAuctionProceeds,
+	onCreateChildUniverse,
 	onFinalizeTruthAuction,
 	onForkAuctionFormChange,
 	onMigrateRepToZoltar,
@@ -773,7 +769,6 @@ export function ForkAuctionSection({
 	const [settlementActionQueue, setSettlementActionQueue] = useState<SettlementAction[]>([])
 	const [settlementBidResultRefreshToken, setSettlementBidResultRefreshToken] = useState(0)
 	const [settlementBidResultByKey, setSettlementBidResultByKey] = useState<Record<string, LocalSettlementBidStatus>>({})
-	const selectedOutcomeChildPoolNotice = <OutcomeChildPoolLink outcomeLabel={selectedOutcomeLabel} securityPoolAddress={selectedAuctionChildPool?.securityPoolAddress} universeId={selectedAuctionChildPool?.universeId} />
 	const effectiveLockedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
 		if (connectedWalletVaultSummary.lockedRepInEscalationGame > optimisticMigratedEscalationRep) {
@@ -811,7 +806,7 @@ export function ForkAuctionSection({
 						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 					</label>
 				</div>
-				{selectedOutcomeChildPoolNotice}
+				{renderSelectedOutcomeChildPoolNotice()}
 				{selectedOutcomeMigrationVaultBalanceContent}
 			</>
 		)
@@ -1291,6 +1286,30 @@ export function ForkAuctionSection({
 					reason: disabledReason,
 				}}
 			/>
+		)
+	}
+	function renderSelectedOutcomeChildPoolNotice() {
+		if (selectedAuctionChildPool === undefined)
+			return (
+				<div className='fork-workflow-outcome-notice'>
+					<p className='detail'>Child universe not created for the {selectedOutcomeLabel} outcome yet.</p>
+					<div className='actions'>
+						{renderStageActionButton({
+							action: 'createChildUniverse',
+							idleLabel: `Create ${selectedOutcomeLabel} Child Universe`,
+							onClick: onCreateChildUniverse,
+							pendingLabel: 'Creating child universe...',
+						})}
+					</div>
+				</div>
+			)
+
+		const securityPoolSearch = writeSecurityPoolQueryParam('', selectedAuctionChildPool.securityPoolAddress)
+		const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(securityPoolSearch, selectedAuctionChildPool.universeId))
+		return (
+			<p className='detail'>
+				<a href={securityPoolHref}>Selected {selectedOutcomeLabel} Child pool</a>
+			</p>
 		)
 	}
 	const renderBidActionButtons = ({ bid, hasActions = true, showViewPriceAction = true }: { bid: TruthAuctionBidView; hasActions?: boolean; showViewPriceAction?: boolean }) => {
@@ -2002,6 +2021,8 @@ export function ForkAuctionSection({
 		<fieldset aria-labelledby='fork-workflow-stage-new-security-pools' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-new-security-pools' role='tabpanel'>
 			{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 			<SectionBlock title='New Security Pools' description='Child pools created during the fork workflow appear here once they exist.'>
+				{auctionOutcomeSelector}
+				{renderSelectedOutcomeChildPoolNotice()}
 				{childSecurityPools.length === 0 ? <p className='detail'>No new security pools are available yet.</p> : null}
 				{childSecurityPools.length === 0 ? null : (
 					<div className='fork-workflow-child-pool-list'>
@@ -2057,7 +2078,13 @@ export function ForkAuctionSection({
 								</span>
 							</button>
 							{stage === FORK_WORKFLOW_NAV_STAGES[FORK_WORKFLOW_NAV_STAGES.length - 1] ? undefined : (
-								<span aria-hidden='true' className='fork-workflow-stage-separator'>
+								<span
+									aria-hidden='true'
+									className={getForkWorkflowSeparatorClassName({
+										currentStage: currentWorkflowStage,
+										stage,
+									})}
+								>
 									→
 								</span>
 							)}
@@ -2199,7 +2226,7 @@ export function ForkAuctionSection({
 						<fieldset aria-labelledby='fork-workflow-stage-auction' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-auction' role='tabpanel'>
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 							{auctionOutcomeSelector}
-							{selectedOutcomeChildPoolNotice}
+							{renderSelectedOutcomeChildPoolNotice()}
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
@@ -2215,7 +2242,7 @@ export function ForkAuctionSection({
 					<fieldset aria-labelledby='fork-workflow-stage-auction' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-auction' role='tabpanel'>
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{auctionOutcomeSelector}
-						{selectedOutcomeChildPoolNotice}
+						{renderSelectedOutcomeChildPoolNotice()}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title='Truth Auction Status'>
@@ -2248,7 +2275,7 @@ export function ForkAuctionSection({
 						<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 							{auctionOutcomeSelector}
-							{selectedOutcomeChildPoolNotice}
+							{renderSelectedOutcomeChildPoolNotice()}
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
@@ -2260,7 +2287,7 @@ export function ForkAuctionSection({
 					<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{auctionOutcomeSelector}
-						{selectedOutcomeChildPoolNotice}
+						{renderSelectedOutcomeChildPoolNotice()}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title='Settlement Status'>
