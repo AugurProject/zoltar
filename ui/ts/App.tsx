@@ -573,6 +573,7 @@ export function App() {
 			poolOracleManagerDetails,
 			poolOracleManagerError,
 			poolPriceOracleResult,
+			universeForkTime: zoltarUniverse?.forkTime,
 			selectedPoolView,
 			onSecurityPoolAddressChange: value => {
 				setSecurityPoolAddress(value)

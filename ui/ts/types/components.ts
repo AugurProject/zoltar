@@ -462,6 +462,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
+	universeForkTime?: bigint | undefined
 	selectedPoolView: string
 	securityPoolAddress: string
 	onSecurityPoolAddressChange: (value: string) => void
@@ -683,6 +684,7 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	reportingDetails?: ReportingDetails | undefined
 	reportingForm?: ReportingFormState | undefined
 	securityPools?: ListedSecurityPool[] | undefined
+	universeForkTime?: bigint | undefined
 	currentStageView?: ForkAuctionStageView | undefined
 	selectedStageView?: ForkWorkflowSelectionStage | undefined
 	stageView?: ForkAuctionStageView | undefined

@@ -2248,6 +2248,16 @@ strong.metric-value-danger {
 	line-height: 1.45;
 }
 
+.truth-auction-hero-shell {
+	display: grid;
+	gap: 0.85rem;
+}
+
+.truth-auction-hero-status {
+	display: flex;
+	justify-content: flex-start;
+}
+
 .truth-auction-hero,
 .truth-auction-market-board,
 .truth-auction-market-stack,

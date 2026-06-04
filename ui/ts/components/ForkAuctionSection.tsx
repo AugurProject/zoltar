@@ -23,7 +23,7 @@ import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkAuctionStageLabel, getForkStageDescriptionForState, getForkAuctionStageView, getTimeRemaining, getTruthAuctionBidGuardMessage, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_PRICE_PRECISION } from '../lib/forkAuction.js'
+import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining, getTruthAuctionBidGuardMessage, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_PRICE_PRECISION } from '../lib/forkAuction.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -692,6 +692,7 @@ export function ForkAuctionSection({
 	reportingForm,
 	selectedStageView,
 	securityPools = [],
+	universeForkTime,
 	stageView,
 	onSelectedStageViewChange,
 	showHeader = true,
@@ -703,6 +704,7 @@ export function ForkAuctionSection({
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
 	const systemState = forkAuctionDetails?.systemState ?? previewPool?.systemState
+	const hasTriggeredFork = universeForkTime !== undefined && universeForkTime > 0n
 	const forkOutcome = forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome
 	const questionOutcome = forkAuctionDetails?.questionOutcome ?? previewPool?.questionOutcome
 	const previewPoolHasActualForkActivity = previewPool?.hasForkActivity === true
@@ -1753,7 +1755,8 @@ export function ForkAuctionSection({
 	const truthAuctionHero = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
-			<SectionBlock badge={truthAuctionStateBadgeElement} title={selectedStage === 'settlement' ? 'Settlement Overview' : 'Truth Auction Overview'}>
+			<div className='truth-auction-hero-shell'>
+				{truthAuctionStateBadgeElement === undefined ? undefined : <div className='truth-auction-hero-status'>{truthAuctionStateBadgeElement}</div>}
 				<div className='truth-auction-hero'>
 					<div className='truth-auction-hero-primary'>
 						<div className='truth-auction-progress-group'>
@@ -1786,7 +1789,7 @@ export function ForkAuctionSection({
 						{winningThresholdPrice === undefined ? undefined : <MetricField label='Winning Threshold'>{renderTruthAuctionPriceValue(winningThresholdPrice)}</MetricField>}
 					</div>
 				</div>
-			</SectionBlock>
+			</div>
 		)
 	})()
 	const truthAuctionMarketViewSection = (() => {
@@ -2099,20 +2102,18 @@ export function ForkAuctionSection({
 		if (selectedStage === 'fork-triggered')
 			return (
 				<fieldset aria-labelledby='fork-workflow-stage-fork-triggered' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-fork-triggered' role='tabpanel'>
-					<SectionBlock title='Fork Triggered' description='This required step marks the start of the fork workflow before assets migrate or auctions begin.'>
-						{(() => {
-							const currentForkOutcome = (() => {
-								if (questionOutcome === undefined) return UNKNOWN_VALUE
-								if (questionOutcome === 'none') return 'Non-decision'
-								return getReportingOutcomeLabel(questionOutcome)
-							})()
-							return renderWorkflowMetricGrid([
-								{ label: 'Fork Type', value: resolvedForkTypeLabel },
-								{ label: 'Pool Status', value: systemState === undefined ? UNKNOWN_VALUE : getForkStageDescriptionForState(systemState) },
-								{ label: 'Current Fork Outcome', value: currentForkOutcome },
+					<SectionBlock title='Fork Triggered'>
+						{hasTriggeredFork ? (
+							renderWorkflowMetricGrid([
+								{ label: 'Status', value: 'System is forking' },
+								{
+									label: 'Triggered At',
+									value: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={universeForkTime} />,
+								},
 							])
-						})()}
-						<p className='detail'>Once the fork is triggered, child universes can be created and balances can begin migrating into the selected outcome pool.</p>
+						) : (
+							<p className='detail'>The system is not forking.</p>
+						)}
 					</SectionBlock>
 				</fieldset>
 			)

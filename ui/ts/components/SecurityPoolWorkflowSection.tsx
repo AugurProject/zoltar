@@ -128,6 +128,7 @@ export function SecurityPoolWorkflowSection({
 	poolOracleManagerDetails,
 	poolOracleManagerError,
 	poolPriceOracleResult,
+	universeForkTime,
 	onSecurityPoolAddressChange,
 	repPerEthPrice,
 	repPerEthSource,
@@ -873,6 +874,7 @@ export function SecurityPoolWorkflowSection({
 										reportingForm={reporting.reportingForm}
 										selectedStageView={forkWorkflowSelectionStage}
 										securityPools={securityPools}
+										universeForkTime={universeForkTime}
 										onSelectedStageViewChange={stage => {
 											hasManualForkWorkflowSelectionRef.current = true
 											setForkWorkflowSelectionStage(stage)

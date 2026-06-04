@@ -233,6 +233,43 @@ describe('ForkAuctionSection', () => {
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('auction')
 	})
 
+	test('shows the fork trigger timestamp when the system is forking', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 2_000n,
+					selectedStageView: 'fork-triggered',
+					universeForkTime: 1_000n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('System is forking')).not.toBeNull()
+		expect(documentQueries.getByText('1970-01-01 00:16:40 UTC')).not.toBeNull()
+		expect(documentQueries.queryByText('The system is not forking.')).toBeNull()
+		expect(documentQueries.queryByText('This required step marks the start of the fork workflow before assets migrate or auctions begin.')).toBeNull()
+	})
+
+	test('shows a not-forking message when no fork has been triggered', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					selectedStageView: 'fork-triggered',
+					universeForkTime: 0n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('The system is not forking.')).not.toBeNull()
+		expect(documentQueries.queryByText('System is forking')).toBeNull()
+	})
+
 	test('keeps settlement as the current step while finalized bids are still claimable', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
