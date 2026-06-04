@@ -196,14 +196,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Pick one or more bids to settle first.')
 				const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
 				if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
-				return await settleTruthAuctionBids(
-					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
-					details.securityPoolAddress,
-					details.universeId,
-					bidderAddress,
-					normalizedClaimBids,
-					normalizedRefundBids,
-				)
+				return await settleTruthAuctionBids(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, bidderAddress, normalizedClaimBids, normalizedRefundBids)
 			},
 			'Failed to settle finalized bid',
 			securityPoolAddressOverride,

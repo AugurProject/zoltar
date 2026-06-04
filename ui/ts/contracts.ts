@@ -1589,14 +1589,7 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 	)
 }
 
-export async function settleTruthAuctionBids(
-	client: WriteClient,
-	securityPoolAddress: Address,
-	universeId: bigint,
-	vaultAddress: Address,
-	claimTickIndices: TruthAuctionSettlementBidBatch,
-	refundTickIndices: TruthAuctionSettlementBidBatch,
-) {
+export async function settleTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, claimTickIndices: TruthAuctionSettlementBidBatch, refundTickIndices: TruthAuctionSettlementBidBatch) {
 	return await executeForkAuctionAction(
 		client,
 		'claimAuctionProceeds',

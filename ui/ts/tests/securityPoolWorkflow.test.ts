@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import {
-	getForkStageViewForSelectedPoolView,
+	getCurrentSelectedPoolForkStage,
 	getCurrentPoolOracleManagerDetails,
 	getOracleLastPriceDisplay,
 	getOraclePriceValidityPresentation,
@@ -13,7 +13,9 @@ import {
 	getSelectedPoolViewForForkStage,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
-	isSelectedPoolForkStageView,
+	isSelectedPoolForkWorkflowView,
+	normalizeForkWorkflowSelectionStage,
+	resolveForkWorkflowSelectionStage,
 	isForkWorkflowDisabled,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
@@ -34,20 +36,23 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
 		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
 		expect(resolveSelectedPoolView('fork')).toBe('vaults')
+		expect(resolveSelectedPoolView('fork-workflow')).toBe('fork-workflow')
+		expect(resolveSelectedPoolView('fork-auction')).toBe('fork-workflow')
 		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
 		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
 	})
 
-	void test('maps concrete fork stage views in both directions', () => {
-		expect(isSelectedPoolForkStageView('vaults')).toBe(false)
-		expect(isSelectedPoolForkStageView('fork-migration')).toBe(true)
-		expect(getForkStageViewForSelectedPoolView('fork-migration')).toBe('migration')
-		expect(getForkStageViewForSelectedPoolView('fork-auction')).toBe('auction')
-		expect(getForkStageViewForSelectedPoolView('fork-settlement')).toBe('settlement')
-		expect(getSelectedPoolViewForForkStage('initiate')).toBe('fork-migration')
-		expect(getSelectedPoolViewForForkStage('migration')).toBe('fork-migration')
-		expect(getSelectedPoolViewForForkStage('auction')).toBe('fork-auction')
-		expect(getSelectedPoolViewForForkStage('settlement')).toBe('fork-settlement')
+	void test('maps fork workflow routing and legacy stage aliases', () => {
+		expect(isSelectedPoolForkWorkflowView('vaults')).toBe(false)
+		expect(isSelectedPoolForkWorkflowView('fork-workflow')).toBe(true)
+		expect(getSelectedPoolViewForForkStage('initiate')).toBe('fork-workflow')
+		expect(getSelectedPoolViewForForkStage('migration')).toBe('fork-workflow')
+		expect(getSelectedPoolViewForForkStage('auction')).toBe('fork-workflow')
+		expect(getSelectedPoolViewForForkStage('settlement')).toBe('fork-workflow')
+		expect(resolveForkWorkflowSelectionStage('fork-migration')).toBe('migration')
+		expect(resolveForkWorkflowSelectionStage('fork-auction')).toBe('auction')
+		expect(resolveForkWorkflowSelectionStage('fork-settlement')).toBe('settlement')
+		expect(normalizeForkWorkflowSelectionStage('initiate')).toBe('migration')
 	})
 
 	void test('derives the best fork workflow stage from pool and fork-auction state', () => {
@@ -56,7 +61,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: undefined,
 				selectedPool: undefined,
 			}),
-		).toBe('fork-migration')
+		).toBe('fork-workflow')
 
 		expect(
 			getSelectedPoolForkWorkflowView({
@@ -68,7 +73,7 @@ void describe('selected pool workflow lookup state', () => {
 					truthAuctionStartedAt: 0n,
 				},
 			}),
-		).toBe('fork-migration')
+		).toBe('fork-workflow')
 
 		expect(
 			getSelectedPoolForkWorkflowView({
@@ -82,7 +87,7 @@ void describe('selected pool workflow lookup state', () => {
 				},
 				selectedPool: undefined,
 			}),
-		).toBe('fork-auction')
+		).toBe('fork-workflow')
 
 		expect(
 			getSelectedPoolForkWorkflowView({
@@ -98,7 +103,20 @@ void describe('selected pool workflow lookup state', () => {
 				},
 				selectedPool: undefined,
 			}),
-		).toBe('fork-settlement')
+		).toBe('fork-workflow')
+		expect(
+			getCurrentSelectedPoolForkStage({
+				forkAuctionDetails: {
+					claimingAvailable: false,
+					forkOutcome: 'yes',
+					migratedRep: 1n,
+					systemState: 'forkTruthAuction',
+					truthAuction: undefined,
+					truthAuctionStartedAt: 10n,
+				},
+				selectedPool: undefined,
+			}),
+		).toBe('auction')
 	})
 })
 

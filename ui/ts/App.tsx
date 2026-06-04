@@ -523,8 +523,7 @@ export function App() {
 				forkAuctionForm,
 				forkAuctionResult,
 				loadingForkAuctionDetails,
-				onClaimAuctionProceeds: (securityPoolAddressOverride, selectedClaimBids, selectedRefundBids) =>
-					void claimAuctionProceeds(securityPoolAddressOverride, selectedClaimBids, selectedRefundBids),
+				onClaimAuctionProceeds: (securityPoolAddressOverride, selectedClaimBids, selectedRefundBids) => void claimAuctionProceeds(securityPoolAddressOverride, selectedClaimBids, selectedRefundBids),
 				onCreateChildUniverse: () => void createChildUniverse(forkAuctionForm.selectedOutcome),
 				onFinalizeTruthAuction: securityPoolAddressOverride => void finalizeTruthAuction(securityPoolAddressOverride),
 				onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),

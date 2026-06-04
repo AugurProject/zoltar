@@ -22,15 +22,7 @@ export function getSecurityPoolLifecycleLabel(state: SecurityPoolLifecycleState 
 	}
 }
 
-export function getSecurityPoolStatusBadgeLabel({
-	hasForkActivity,
-	questionOutcome,
-	lifecycleState,
-}: {
-	hasForkActivity: boolean
-	questionOutcome?: ReportingOutcomeKey | 'none'
-	lifecycleState: SecurityPoolLifecycleState | undefined
-}) {
+export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutcome, lifecycleState }: { hasForkActivity: boolean; questionOutcome?: ReportingOutcomeKey | 'none'; lifecycleState: SecurityPoolLifecycleState | undefined }) {
 	if (lifecycleState === undefined) return 'Unknown'
 	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return 'Fork Migration'
 	if (lifecycleState === 'forkTruthAuction') return 'Truth Auction'

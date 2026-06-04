@@ -161,11 +161,15 @@ export function SecurityPoolsOverviewSection({
 										key={pool.securityPoolAddress}
 										title={getQuestionTitle(pool.marketDetails)}
 										variant='record'
-								badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolStatusBadgeLabel({
-									hasForkActivity: pool.hasForkActivity,
-									questionOutcome: pool.questionOutcome,
-									lifecycleState: displayState,
-								})}</span>}
+										badge={
+											<span className={`badge ${badgeTone}`}>
+												{getSecurityPoolStatusBadgeLabel({
+													hasForkActivity: pool.hasForkActivity,
+													questionOutcome: pool.questionOutcome,
+													lifecycleState: displayState,
+												})}
+											</span>
+										}
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (
 												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
