@@ -9,7 +9,7 @@ import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
 import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 
-export const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement', 'new-security-pools'] as const
+export const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const
 export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
 
@@ -97,7 +97,7 @@ export function getCurrentForkWorkflowSelectionStage({
 	truthAuctionFinalized?: boolean
 }): ForkWorkflowSelectionStage {
 	if (systemState === 'poolForked') return 'fork-triggered'
-	if (systemState === 'operational' && hasForkActivity && truthAuctionFinalized && !claimingAvailable) return 'new-security-pools'
+	if (systemState === 'operational' && hasForkActivity && truthAuctionFinalized && !claimingAvailable) return 'settlement'
 	return normalizeForkWorkflowSelectionStage(currentForkStage)
 }
 

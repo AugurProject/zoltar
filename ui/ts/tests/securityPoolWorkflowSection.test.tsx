@@ -2501,8 +2501,10 @@ describe('SecurityPoolWorkflowSection', () => {
 		})
 
 		documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'New Security Pools' })).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'New Security Pools' }).className.includes('is-selected')).toBe(true)
+		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Child Security Pools' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-selected')).toBe(true)
+		expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
 	})
 
 	test('shows Trigger Zoltar Fork in the reporting workflow after non-decision', async () => {

@@ -75,13 +75,12 @@ type TruthAuctionStateBadge = {
 }
 
 type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
-const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement', 'new-security-pools']
+const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement']
 const FORK_WORKFLOW_STAGE_LABELS: Record<ForkWorkflowSelectionStage, string> = {
 	'fork-triggered': 'Fork Triggered',
 	migration: 'Migration',
 	auction: 'Truth Auction',
 	settlement: 'Settlement',
-	'new-security-pools': 'New Security Pools',
 }
 
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
@@ -102,8 +101,6 @@ function getForkWorkflowStageIcon(stage: ForkWorkflowSelectionStage) {
 			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-auction' />
 		case 'settlement':
 			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-settlement' />
-		case 'new-security-pools':
-			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-pools' />
 		default:
 			return undefined
 	}
@@ -256,8 +253,6 @@ function getForkWorkflowStageAheadMessage(stage: ForkWorkflowSelectionStage, cur
 			return 'This step becomes active once migration is underway.'
 		case 'settlement':
 			return 'This step becomes active once the truth auction has started.'
-		case 'new-security-pools':
-			return 'This step becomes active once settlement completes and the new security pools are ready to inspect.'
 		default:
 			return undefined
 	}
@@ -289,6 +284,38 @@ function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 		</div>
 	)
 }
+
+function renderChildSecurityPoolsSection({ childSecurityPools, renderSelectedOutcomeChildPoolNotice, auctionOutcomeSelector }: { childSecurityPools: ListedSecurityPool[]; renderSelectedOutcomeChildPoolNotice: () => ComponentChildren; auctionOutcomeSelector: ComponentChildren }) {
+	return (
+		<SectionBlock density='compact' headingLevel={4} title='Child Security Pools' variant='embedded'>
+			{auctionOutcomeSelector}
+			{renderSelectedOutcomeChildPoolNotice()}
+			{childSecurityPools.length === 0 ? <p className='detail'>No child security pools are available yet.</p> : null}
+			{childSecurityPools.length === 0 ? null : (
+				<div className='fork-workflow-child-pool-list'>
+					{childSecurityPools.map(pool => {
+						const childPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(writeSecurityPoolQueryParam('', pool.securityPoolAddress), pool.universeId))
+						return (
+							<article className='fork-workflow-child-pool-card' key={pool.securityPoolAddress}>
+								<div className='fork-workflow-child-pool-card-copy'>
+									<strong>{pool.questionOutcome === 'none' ? 'Pending outcome' : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
+									<span>{pool.systemState === 'operational' ? 'Operational' : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
+								</div>
+								<div className='fork-workflow-child-pool-card-meta'>
+									<span>
+										<AddressValue address={pool.securityPoolAddress} />
+									</span>
+									<a href={childPoolHref}>Open security pool</a>
+								</div>
+							</article>
+						)
+					})}
+				</div>
+			)}
+		</SectionBlock>
+	)
+}
+
 function estimateBidRep(bidAmount: string, bidPrice: bigint | undefined) {
 	if (bidPrice === undefined) return undefined
 	const parsedBidAmount = bidAmount.trim() === '' ? 0n : tryParseTruthAuctionAmountInput(bidAmount)
@@ -2021,37 +2048,6 @@ export function ForkAuctionSection({
 		const nextTab = document.getElementById(`fork-workflow-stage-${nextStage}`)
 		if (nextTab instanceof HTMLElement) nextTab.focus()
 	}
-	const childSecurityPoolsPanel = (
-		<fieldset aria-labelledby='fork-workflow-stage-new-security-pools' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-new-security-pools' role='tabpanel'>
-			{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
-			<SectionBlock title='New Security Pools' description='Child pools created during the fork workflow appear here once they exist.'>
-				{auctionOutcomeSelector}
-				{renderSelectedOutcomeChildPoolNotice()}
-				{childSecurityPools.length === 0 ? <p className='detail'>No new security pools are available yet.</p> : null}
-				{childSecurityPools.length === 0 ? null : (
-					<div className='fork-workflow-child-pool-list'>
-						{childSecurityPools.map(pool => {
-							const childPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(writeSecurityPoolQueryParam('', pool.securityPoolAddress), pool.universeId))
-							return (
-								<article className='fork-workflow-child-pool-card' key={pool.securityPoolAddress}>
-									<div className='fork-workflow-child-pool-card-copy'>
-										<strong>{pool.questionOutcome === 'none' ? 'Pending outcome' : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
-										<span>{pool.systemState === 'operational' ? 'Operational' : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
-									</div>
-									<div className='fork-workflow-child-pool-card-meta'>
-										<span>
-											<AddressValue address={pool.securityPoolAddress} />
-										</span>
-										<a href={childPoolHref}>Open security pool</a>
-									</div>
-								</article>
-							)
-						})}
-					</div>
-				)}
-			</SectionBlock>
-		</fieldset>
-	)
 	const forkWorkflowStageNavigator = !hasLoadedPoolContext ? undefined : (
 		<div className='fork-workflow-stage-nav-shell'>
 			<div aria-label='Fork lifecycle stages' className='fork-workflow-stage-nav' role='tablist'>
@@ -2079,6 +2075,7 @@ export function ForkAuctionSection({
 								{getForkWorkflowStageIcon(stage)}
 								<span className='fork-workflow-stage-copy'>
 									<strong>{stageLabel}</strong>
+									{selectedStage === stage && currentWorkflowStage !== stage ? <span className='fork-workflow-stage-indicator'>Viewing</span> : undefined}
 								</span>
 							</button>
 							{stage === FORK_WORKFLOW_NAV_STAGES[FORK_WORKFLOW_NAV_STAGES.length - 1] ? undefined : (
@@ -2276,30 +2273,35 @@ export function ForkAuctionSection({
 					return (
 						<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
-							{auctionOutcomeSelector}
-							{renderSelectedOutcomeChildPoolNotice()}
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
 							{viewerTruthAuctionBidsSection}
 							{truthAuctionSettlementSection}
+							{renderChildSecurityPoolsSection({
+								auctionOutcomeSelector,
+								childSecurityPools,
+								renderSelectedOutcomeChildPoolNotice,
+							})}
 						</fieldset>
 					)
 				return (
 					<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
-						{auctionOutcomeSelector}
-						{renderSelectedOutcomeChildPoolNotice()}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title='Settlement Status'>
 							{renderWorkflowMetricGrid(settlementStatusMetrics)}
 						</SectionBlock>
 						{truthAuctionSettlementSection}
+						{renderChildSecurityPoolsSection({
+							auctionOutcomeSelector,
+							childSecurityPools,
+							renderSelectedOutcomeChildPoolNotice,
+						})}
 					</fieldset>
 				)
 			}
-			if (selectedStage === 'new-security-pools') return childSecurityPoolsPanel
 
 			return undefined
 		})()
