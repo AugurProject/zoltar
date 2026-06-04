@@ -2248,6 +2248,16 @@ strong.metric-value-danger {
 	line-height: 1.45;
 }
 
+.truth-auction-hero-shell {
+	display: grid;
+	gap: 0.85rem;
+}
+
+.truth-auction-hero-status {
+	display: flex;
+	justify-content: flex-start;
+}
+
 .truth-auction-hero,
 .truth-auction-market-board,
 .truth-auction-market-stack,
@@ -4441,30 +4451,9 @@ button:focus-visible {
 	gap: var(--space-1);
 }
 
-.selected-pool-workflow-group-fork {
-	padding-top: var(--space-2);
-	border-top: 1px solid var(--divider-subtle);
-}
-
-.selected-pool-workflow-group-fork > .view-tab {
-	padding-inline-start: 1.4rem;
-}
-
 .selected-pool-workflow-group-secondary {
 	padding-top: var(--space-2);
 	border-top: 1px solid var(--divider-subtle);
-}
-
-.selected-pool-workflow-group-label {
-	display: grid;
-	gap: 0.2rem;
-	margin: 0;
-	padding: 0.1rem 0.2rem 0.35rem;
-	font-size: 0.72rem;
-	font-weight: 700;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--text-secondary);
 }
 
 .selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] .view-tab {
@@ -4484,6 +4473,207 @@ button:focus-visible {
 
 .selected-pool-workflow-nav .view-tab:disabled {
 	opacity: 0.68;
+}
+
+.fork-workflow-stage-nav-shell {
+	display: flex;
+	justify-content: center;
+}
+
+.fork-workflow-stage-nav {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	width: fit-content;
+	max-width: 100%;
+	margin: 0 auto;
+}
+
+.fork-workflow-stage {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 11rem;
+	padding: 0.8rem 1rem;
+	border: 1px solid var(--divider-subtle);
+	border-radius: var(--radius-panel);
+	background: rgba(10, 20, 36, 0.28);
+	color: var(--text-primary);
+	text-align: left;
+	transition:
+		background-color 160ms ease,
+		border-color 160ms ease,
+		box-shadow 160ms ease,
+		color 160ms ease,
+		opacity 160ms ease;
+}
+
+.fork-workflow-stage-icon {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.9rem;
+	height: 1.9rem;
+	flex: 0 0 1.9rem;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.07);
+	color: currentColor;
+}
+
+.fork-workflow-stage-icon::before,
+.fork-workflow-stage-icon::after {
+	content: "";
+	position: absolute;
+}
+
+.fork-workflow-stage-copy {
+	display: flex;
+	align-items: center;
+}
+
+.fork-workflow-stage-icon-triggered::before {
+	inset: 0.44rem;
+	border-radius: 999px;
+	background: currentColor;
+}
+
+.fork-workflow-stage-icon-triggered::after {
+	inset: 0.22rem;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	opacity: 0.45;
+}
+
+.fork-workflow-stage-icon-migration::before {
+	width: 0.8rem;
+	height: 0.18rem;
+	border-radius: 999px;
+	background: currentColor;
+	transform: translate(-0.06rem, 0.14rem) rotate(-35deg);
+}
+
+.fork-workflow-stage-icon-migration::after {
+	width: 0.48rem;
+	height: 0.48rem;
+	border-top: 0.16rem solid currentColor;
+	border-right: 0.16rem solid currentColor;
+	transform: translate(0.38rem, -0.18rem) rotate(10deg);
+}
+
+.fork-workflow-stage-icon-auction::before {
+	width: 0.76rem;
+	height: 0.76rem;
+	border: 0.16rem solid currentColor;
+	border-radius: 0.16rem;
+	transform: rotate(45deg);
+}
+
+.fork-workflow-stage-icon-auction::after {
+	width: 0.16rem;
+	height: 0.96rem;
+	border-radius: 999px;
+	background: currentColor;
+	transform: rotate(45deg);
+}
+
+.fork-workflow-stage-icon-settlement::before {
+	width: 0.5rem;
+	height: 0.9rem;
+	border-right: 0.18rem solid currentColor;
+	border-bottom: 0.18rem solid currentColor;
+	transform: translateY(-0.08rem) rotate(40deg);
+}
+
+.fork-workflow-stage-icon-pools::before,
+.fork-workflow-stage-icon-pools::after {
+	width: 0.5rem;
+	height: 0.5rem;
+	border: 0.16rem solid currentColor;
+	border-radius: 0.12rem;
+}
+
+.fork-workflow-stage-icon-pools::before {
+	transform: translate(-0.22rem, -0.12rem);
+}
+
+.fork-workflow-stage-icon-pools::after {
+	transform: translate(0.22rem, 0.12rem);
+}
+
+.fork-workflow-stage.is-current {
+	border-color: rgba(56, 213, 255, 0.5);
+	background: linear-gradient(135deg, rgba(56, 213, 255, 0.18), rgba(56, 213, 255, 0.08)), rgba(10, 20, 36, 0.34);
+	box-shadow: 0 0 0 1px rgba(56, 213, 255, 0.24);
+}
+
+.fork-workflow-stage.is-selected {
+	background: rgba(56, 213, 255, 0.1);
+}
+
+.fork-workflow-stage.is-current .fork-workflow-stage-icon,
+.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
+	background: rgba(56, 213, 255, 0.18);
+}
+
+.fork-workflow-stage.is-complete:not(.is-current) {
+	border-color: rgba(56, 213, 255, 0.22);
+	background: linear-gradient(135deg, rgba(56, 213, 255, 0.12), rgba(56, 213, 255, 0.04)), rgba(10, 20, 36, 0.32);
+	box-shadow: inset 0 0 0 1px rgba(56, 213, 255, 0.08);
+	opacity: 0.98;
+}
+
+.fork-workflow-stage.is-upcoming:not(.is-selected) {
+	opacity: 0.68;
+}
+
+.fork-workflow-stage-separator {
+	color: var(--text-secondary);
+	font-size: 1rem;
+	transition:
+		color 160ms ease,
+		opacity 160ms ease,
+		text-shadow 160ms ease;
+}
+
+.fork-workflow-stage-separator.is-complete {
+	color: rgb(56, 213, 255);
+	opacity: 0.95;
+	text-shadow: 0 0 0.7rem rgba(56, 213, 255, 0.2);
+}
+
+.fork-workflow-stage-separator.is-upcoming {
+	opacity: 0.52;
+}
+
+.fork-workflow-child-pool-list {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.fork-workflow-child-pool-card {
+	display: grid;
+	gap: var(--space-2);
+	padding: 0.9rem 1rem;
+	border: 1px solid var(--divider-subtle);
+	border-radius: var(--radius-panel);
+	background: rgba(10, 20, 36, 0.22);
+}
+
+.fork-workflow-child-pool-card-copy,
+.fork-workflow-child-pool-card-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+.fork-workflow-child-pool-card-copy > span,
+.fork-workflow-child-pool-card-meta > span {
+	color: var(--text-secondary);
 }
 
 .selected-pool-workflow-content {
@@ -4800,18 +4990,6 @@ button:focus-visible {
 		gap: var(--space-1);
 	}
 
-	.selected-pool-workflow-group-fork {
-		padding-top: 0;
-		padding-left: var(--space-2);
-		border-top: 0;
-		border-left: 1px solid var(--divider-subtle);
-	}
-
-	.selected-pool-workflow-group-label {
-		min-width: max-content;
-		padding: 0.48rem 0.2rem 0;
-	}
-
 	.selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] .view-tab {
 		width: auto;
 		border-left-color: transparent;
@@ -4822,6 +5000,19 @@ button:focus-visible {
 	.selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] .view-tab.active {
 		border-left-color: transparent;
 		box-shadow: inset 0 -2px 0 0 var(--border-active);
+	}
+
+	.fork-workflow-stage-nav {
+		gap: var(--space-1);
+	}
+
+	.fork-workflow-stage {
+		flex: 1 1 9rem;
+		min-width: 0;
+	}
+
+	.fork-workflow-stage-separator {
+		display: none;
 	}
 
 	.selected-pool-context-stack {

@@ -38,7 +38,7 @@ export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settl
 const FORK_AUCTION_STAGE_LABELS: Record<ForkAuctionStageView, string> = {
 	initiate: 'Trigger',
 	migration: 'Migration',
-	auction: 'Auction',
+	auction: 'Truth Auction',
 	settlement: 'Settlement',
 }
 

@@ -118,7 +118,7 @@ void describe('fork auction helpers', () => {
 	void test('maps stage labels and order values', () => {
 		expect(getForkAuctionStageLabel('initiate')).toBe('Trigger')
 		expect(getForkAuctionStageLabel('migration')).toBe('Migration')
-		expect(getForkAuctionStageLabel('auction')).toBe('Auction')
+		expect(getForkAuctionStageLabel('auction')).toBe('Truth Auction')
 		expect(getForkAuctionStageLabel('settlement')).toBe('Settlement')
 
 		expect(getForkAuctionStageOrder('initiate')).toBe(0)

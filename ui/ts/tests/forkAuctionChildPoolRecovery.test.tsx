@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { waitFor, within } from '@testing-library/dom'
 import { h } from 'preact'
-import { zeroAddress, type Address } from 'viem'
+import { type Address, zeroAddress } from 'viem'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '../types/contracts.js'

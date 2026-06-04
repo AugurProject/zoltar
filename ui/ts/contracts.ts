@@ -1156,20 +1156,17 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		systemState,
 		truthAuctionStartedAt,
 	})
-	const universeForkTime =
-		truthAuctionStartedAt > 0n
-			? undefined
-			: (
-					await readRequiredMulticall(client, [
-						{
-							abi: Zoltar_Zoltar.abi,
-							functionName: 'getForkTime',
-							address: getInfraContractAddresses().zoltar,
-							args: [universeId],
-						},
-					])
-				)[0]
-	const migrationEndsAt = truthAuctionStartedAt > 0n || universeForkTime === undefined ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
+	const universeForkTime = (
+		await readRequiredMulticall(client, [
+			{
+				abi: Zoltar_Zoltar.abi,
+				functionName: 'getForkTime',
+				address: getInfraContractAddresses().zoltar,
+				args: [universeId],
+			},
+		])
+	)[0]
+	const migrationEndsAt = universeForkTime === 0n ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await readRequiredMulticall(client, [
@@ -1589,14 +1586,7 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 	)
 }
 
-export async function settleTruthAuctionBids(
-	client: WriteClient,
-	securityPoolAddress: Address,
-	universeId: bigint,
-	vaultAddress: Address,
-	claimTickIndices: TruthAuctionSettlementBidBatch,
-	refundTickIndices: TruthAuctionSettlementBidBatch,
-) {
+export async function settleTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, claimTickIndices: TruthAuctionSettlementBidBatch, refundTickIndices: TruthAuctionSettlementBidBatch) {
 	return await executeForkAuctionAction(
 		client,
 		'claimAuctionProceeds',
@@ -1608,22 +1598,6 @@ export async function settleTruthAuctionBids(
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'settleAuctionBids',
 				args: [securityPoolAddress, vaultAddress, claimTickIndices, refundTickIndices],
-			})),
-	)
-}
-
-export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly TruthAuctionSettlementBidIdentifier[]) {
-	return await executeForkAuctionAction(
-		client,
-		'claimAuctionProceeds',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'claimAuctionProceeds',
-				args: [securityPoolAddress, vaultAddress, selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids],
 			})),
 	)
 }

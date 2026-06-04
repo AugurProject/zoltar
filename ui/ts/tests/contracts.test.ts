@@ -126,6 +126,37 @@ describe('contracts helpers', () => {
 		expect(details.hasForkActivity).toBe(false)
 	})
 
+	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {
+		const questionId = 1n
+		const forkTime = 1_000n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(5n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				if (getContractFunctionName(firstContract) === 'questionId') {
+					return [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, false, 1], 4n]
+				}
+				if (getContractFunctionName(firstContract) === 'getForkTime') return [forkTime]
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				if (getContractFunctionName(firstContract) === 'computeClearing') {
+					return [[0n, 0n, 0n], 1n, 0n, false, 1n, 1n, 0n, false]
+				}
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const details = await loadForkAuctionDetails(client, securityPoolAddress)
+
+		expect(details.truthAuctionStartedAt).toBe(1n)
+		expect(details.migrationEndsAt).toBe(forkTime + 4_838_400n)
+	})
+
 	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
