@@ -1156,20 +1156,17 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		systemState,
 		truthAuctionStartedAt,
 	})
-	const universeForkTime =
-		truthAuctionStartedAt > 0n
-			? undefined
-			: (
-					await readRequiredMulticall(client, [
-						{
-							abi: Zoltar_Zoltar.abi,
-							functionName: 'getForkTime',
-							address: getInfraContractAddresses().zoltar,
-							args: [universeId],
-						},
-					])
-				)[0]
-	const migrationEndsAt = truthAuctionStartedAt > 0n || universeForkTime === undefined ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
+	const universeForkTime = (
+		await readRequiredMulticall(client, [
+			{
+				abi: Zoltar_Zoltar.abi,
+				functionName: 'getForkTime',
+				address: getInfraContractAddresses().zoltar,
+				args: [universeId],
+			},
+		])
+	)[0]
+	const migrationEndsAt = universeForkTime === 0n ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await readRequiredMulticall(client, [

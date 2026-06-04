@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
-import { type Address, zeroAddress } from 'viem'
+import { type Address, getAddress, zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
@@ -289,6 +289,35 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'New Security Pools' })).not.toBeNull()
+	})
+
+	test('uses the current child pool as the selected outcome pool during truth auction', async () => {
+		const currentChildPool = createChildPool()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					forkAuctionDetails: createForkAuctionDetails({
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f6'),
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
+		expect(documentQueries.queryByText('Child universe not created for the Yes outcome yet.')).toBeNull()
 	})
 
 	test('offers child-universe creation from the missing child-pool notice', async () => {
