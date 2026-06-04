@@ -230,7 +230,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => {
-			expect(within(document.body).queryByText('Child universe not created for the Yes outcome yet.')).toBeNull()
+			expect(within(document.body).queryByText('Yes universe does not exist.')).toBeNull()
 			expectTransactionButtonEnabled(document.body, 'Start Truth Auction')
 		})
 	})
