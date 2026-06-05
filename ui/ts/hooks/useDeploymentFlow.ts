@@ -2,23 +2,26 @@ import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { formatWriteErrorMessage } from '../lib/errors.js'
+import { createDeploymentSuccessPresentation, createDeploymentTransactionIntent } from '../lib/transactionPresentations.js'
 import { requireWallet } from '../lib/walletGuard.js'
-import type { ActionFeedback } from '../types/components.js'
+import type { WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 
 type UseDeploymentFlowParameters = {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	setDeploymentStatuses: (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => void
-	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
+export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const deploymentFeedback = useSignal<ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined>(undefined)
 	const errorMessage = useSignal<string | undefined>(undefined)
@@ -56,15 +59,15 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
 
 		try {
-			onTransactionRequested()
+			onTransactionRequested(createDeploymentTransactionIntent(step.label))
 			const client = createWalletWriteClient(accountAddress, { onTransactionSubmitted })
 			const hash = await step.deploy(client)
-			onTransaction(hash)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
 			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
+			onTransactionPresented(createDeploymentSuccessPresentation(step.label, hash))
 		} catch (error) {
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
-			errorMessage.value = message
+			onTransactionFailed?.(message)
 			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {
 			busyStepId.value = undefined

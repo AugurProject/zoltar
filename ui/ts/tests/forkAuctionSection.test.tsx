@@ -204,6 +204,7 @@ describe('ForkAuctionSection', () => {
 
 		expect(documentQueries.queryByText('View stage')).toBeNull()
 		expect(documentQueries.queryByText('Current stage')).toBeNull()
+		expect(documentQueries.queryByText('This step becomes active once migration is underway.')).toBeNull()
 		expect(forkTriggeredTab.querySelector('.fork-workflow-stage-icon')).not.toBeNull()
 		expect(migrationTab.className.includes('is-selected')).toBe(true)
 		expect(migrationTab.className.includes('is-complete')).toBe(true)
@@ -226,6 +227,28 @@ describe('ForkAuctionSection', () => {
 
 		fireEvent.keyDown(migrationTab, { key: 'ArrowRight' })
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('auction')
+	})
+
+	test('shows Viewing on the currently selected migration tab even when migration is also the current stage', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const migrationTab = documentQueries.getByRole('tab', { name: 'Migration' })
+		expect(within(migrationTab).getByText('Viewing')).not.toBeNull()
 	})
 
 	test('shows the fork trigger timestamp when the system is forking', async () => {
@@ -318,9 +341,60 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Outcome' })).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
+		expect(documentQueries.getByText('Outcome')).not.toBeNull()
+		const childPoolLink = documentQueries.getByRole('link', { name: 'Child pool' })
+		expect(childPoolLink).not.toBeNull()
+		expect(childPoolLink.closest('.fork-workflow-outcome-selector-row')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Child Security Pools' })).not.toBeNull()
+	})
+
+	test('shows only the selected-deposit migration action in the migration panel', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					securityPools: [
+						createChildPool({
+							systemState: 'forkMigration',
+							truthAuctionStartedAt: 0n,
+						}),
+					],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Migrate Selected Yes Deposits' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Migrate All Yes Deposits' })).toBeNull()
+		expect(documentQueries.getByText('Open')).not.toBeNull()
+	})
+
+	test('does not show the empty child-pools notice when a selected child pool is already known', async () => {
+		const currentChildPool = createChildPool()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'settlement',
+					previewPool: currentChildPool,
+					securityPools: [],
+					selectedStageView: 'settlement',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('link', { name: 'Child pool' })).not.toBeNull()
+		expect(documentQueries.queryByText('No child security pools are available yet.')).toBeNull()
 	})
 
 	test('uses the current child pool as the selected outcome pool during truth auction', async () => {
@@ -348,8 +422,69 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('link', { name: 'Selected Yes Child pool' })).not.toBeNull()
-		expect(documentQueries.queryByText('Yes universe does not exist.')).toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Child pool' })).not.toBeNull()
+		expect(documentQueries.queryByText('Security Pool for Yes universe does not exist.')).toBeNull()
+	})
+
+	test('shows truth auction end time as a timestamp instead of a standalone time-left field', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					currentTimestamp: 5n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Time Left')).toBeNull()
+		expect(documentQueries.getByText('Starts')).not.toBeNull()
+		expect(documentQueries.getByText('1970-01-01 00:00:01 UTC')).not.toBeNull()
+		expect(documentQueries.getByText('Ends')).not.toBeNull()
+		expect(documentQueries.getByText('1970-01-08 00:00:01 UTC')).not.toBeNull()
+		expect(documentQueries.getByText('(in 6d 23h 59m)')).not.toBeNull()
+		const truthAuctionHeading = documentQueries.getByRole('heading', { name: 'Truth Auction' })
+		const truthAuctionCard = truthAuctionHeading.closest('.section-block')
+		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
+		expect(truthAuctionCard.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Open')
+		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 	})
 
 	test('shows a missing-universe notice without a creation button', async () => {
@@ -375,8 +510,147 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Yes universe does not exist.')).not.toBeNull()
+		expect(documentQueries.getByText('Security Pool for Yes universe does not exist.')).not.toBeNull()
+		expect(documentQueries.queryByText('No child security pools are available yet.')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create Yes Child Universe' })).toBeNull()
 		expect(onCreateChildUniverse).not.toHaveBeenCalled()
+	})
+
+	test('does not show a future migration deadline once the selected child is already in truth auction', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					currentTimestamp: 1_000n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 1_000n,
+						migrationEndsAt: 5_000_000n,
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('1970-01-01 00:00:01 UTC')).not.toBeNull()
+		expect(documentQueries.getByText('(16m ago)')).not.toBeNull()
+	})
+
+	test('shows the migration start timestamp in migration status', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					currentTimestamp: 10n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 10n,
+						migrationEndsAt: 4_838_402n,
+						systemState: 'forkMigration',
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+					universeForkTime: 2n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const migrationStartedLabel = documentQueries.getByText('Migration Started')
+		const migrationStartedMetric = migrationStartedLabel.closest('div')
+		if (!(migrationStartedMetric instanceof HTMLElement)) throw new Error('Expected migration started metric')
+		expect(within(migrationStartedMetric).getByText('1970-01-01 00:00:02 UTC')).not.toBeNull()
+		expect(within(migrationStartedMetric).getByText('(less than a minute ago)')).not.toBeNull()
+		const migrationHeading = documentQueries.getByRole('heading', { name: 'Migration Status' })
+		const migrationCard = migrationHeading.closest('.section-block')
+		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
+		expect(migrationCard.querySelector('.fork-workflow-summary')).not.toBeNull()
+		expect(within(migrationCard).getByText('REP At Fork')).not.toBeNull()
+		expect(within(migrationCard).getByText('Migrated REP')).not.toBeNull()
+		expect(within(migrationCard).getByText('Collateral')).not.toBeNull()
+	})
+
+	test('shows a closed migration badge once the truth auction timeline has started', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					currentTimestamp: 1_000n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 1_000n,
+						migrationEndsAt: 5_000_000n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Closed')).not.toBeNull()
+	})
+
+	test('shows a closed migration badge at the exact migration deadline', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					currentTimestamp: 5_000_000n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5_000_000n,
+						migrationEndsAt: 5_000_000n,
+						systemState: 'forkMigration',
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Closed')).not.toBeNull()
+	})
+
+	test('shows a not-started migration badge when migration timing is unavailable', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						migrationEndsAt: undefined,
+						systemState: 'operational',
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+					universeForkTime: 0n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Not Started')).not.toBeNull()
 	})
 })

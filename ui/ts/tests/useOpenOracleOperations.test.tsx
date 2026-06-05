@@ -69,8 +69,8 @@ function createHarness(useOpenOracleOperations: UseOpenOracleOperations, onRende
 		const state = useOpenOracleOperations({
 			accountAddress: WALLET_ADDRESS,
 			enabled: true,
-			onTransaction: () => undefined,
 			onTransactionFinished: () => undefined,
+			onTransactionPresented: () => undefined,
 			onTransactionRequested: () => undefined,
 			onTransactionSubmitted: () => undefined,
 			refreshState: async () => undefined,

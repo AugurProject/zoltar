@@ -8,7 +8,6 @@ import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
-import type { TransactionActionStatus } from '../types/components.js'
 type TokenApprovalControlProps = {
 	actionLabel: string
 	allowanceError: string | undefined
@@ -21,7 +20,6 @@ type TokenApprovalControlProps = {
 	pendingLabel: string
 	requiredAmount: bigint | undefined
 	resetKey: string
-	status?: TransactionActionStatus | undefined
 	tokenSymbol: string
 	tokenUnits: number
 }
@@ -52,7 +50,7 @@ function resolveApprovalButtonLabel({
 	if (isMaxAmount) return `Approve Max ${tokenSymbol}`
 	return `Approve ${formatCurrencyBalance(nextApprovalAmount, tokenUnits)} ${tokenSymbol}`
 }
-export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, status, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
+export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
 	useEffect(() => {
@@ -134,7 +132,7 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			</label>
 
 			<div className='actions'>
-				<TransactionActionButton idleLabel={buttonLabel} pendingLabel={pendingLabel} onClick={() => onApprove(nextApprovalAmount)} pending={pending} status={status} tone='secondary' availability={{ disabled: !canApprove, reason: visibleStatusMessage ?? allowanceMessage ?? guardMessage }} />
+				<TransactionActionButton idleLabel={buttonLabel} pendingLabel={pendingLabel} onClick={() => onApprove(nextApprovalAmount)} pending={pending} tone='secondary' availability={{ disabled: !canApprove, reason: visibleStatusMessage ?? allowanceMessage ?? guardMessage }} />
 			</div>
 
 			{allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}

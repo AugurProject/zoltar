@@ -6,9 +6,11 @@ import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { UniverseLink } from './UniverseLink.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 export function OverviewPanels({
+	activeUniverseId,
 	accountState,
 	isConnectingWallet,
 	isLoadingRepPrices,
@@ -16,6 +18,7 @@ export function OverviewPanels({
 	onConnect,
 	onGoToGenesisUniverse,
 	onRefreshRepPrices,
+	parentUniverseId,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -33,6 +36,7 @@ export function OverviewPanels({
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
+	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const operationsHeaderDescription = (() => {
 		if (!universeHasForked) return undefined
 		if (universeForkTime === undefined) return 'Zoltar has forked.'
@@ -96,6 +100,11 @@ export function OverviewPanels({
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>
+					{shouldShowParentUniverse ? (
+						<MetricField label='Parent Universe'>
+							<UniverseLink universeId={parentUniverseId} />
+						</MetricField>
+					) : undefined}
 				</DataGrid>
 				{universePresentation === undefined ? undefined : (
 					<StateHint

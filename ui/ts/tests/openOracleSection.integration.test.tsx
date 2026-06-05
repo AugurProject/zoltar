@@ -52,8 +52,8 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 	const openOracle = useOpenOracleOperations({
 		accountAddress,
 		enabled: true,
-		onTransaction: (_hash: Hash) => undefined,
 		onTransactionFinished: () => undefined,
+		onTransactionPresented: () => undefined,
 		onTransactionRequested: () => undefined,
 		onTransactionSubmitted: (_hash: Hash) => undefined,
 		refreshState: async () => undefined,

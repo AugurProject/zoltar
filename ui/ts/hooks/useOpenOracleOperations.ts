@@ -27,9 +27,10 @@ import { requireDefined } from '../lib/required.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createOpenOracleWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails } from '../types/contracts.js'
 
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
@@ -66,7 +67,7 @@ function toReadError(error: unknown) {
 	return error instanceof Error ? error : new Error('Unknown read error')
 }
 
-export function useOpenOracleOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
+export function useOpenOracleOperations({ accountAddress, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
 	const loadingOpenOracleCreate = useSignal(false)
 	const oracleReportLoad = useLoadController()
 	const openOracleInitialReportPriceLoad = useLoadController()
@@ -525,10 +526,12 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			openOracleFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, openOracleError, 'Connect a wallet before operating open oracle'),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, openOracleError, 'Connect a wallet before operating open oracle', createOpenOracleTransactionIntent(actionName)),
 					formatErrorMessage: options?.formatErrorMessage,
 					onRefreshError: (message, hash) => {
 						openOracleFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						const result = openOracleResult.value
+						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message))
 					},
 					onWriteError: message => {
 						openOracleFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -544,6 +547,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				async result => {
 					openOracleResult.value = result
 					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					onTransactionPresented(createOpenOracleSuccessPresentation(result))
 					if (result.action === 'createReportInstance') openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
 					if (result.action !== 'createReportInstance' && openOracleForm.value.reportId.trim() !== '') await ensureLoadedSelectedReport({ forceReload: true })
 					if (options?.refreshInitialReportTokenAccessOnSuccess === true) await refreshOpenOracleInitialReportTokenAccess(openOracleReportDetails.value, { preserveExisting: true })

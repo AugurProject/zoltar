@@ -62,12 +62,10 @@ export function getPoolRegistryPresentation(
 				actionHint: 'Refresh pools',
 				badgeLabel: 'Not checked',
 				badgeTone: 'muted',
-				detail: 'Refresh pools to check again.',
 			})
 		return createPresentation('empty', {
 			badgeLabel: 'None yet',
 			badgeTone: 'muted',
-			detail: 'Refresh pools to check again.',
 		})
 	}
 

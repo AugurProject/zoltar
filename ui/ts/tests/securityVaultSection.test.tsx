@@ -227,7 +227,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Enter at least 1 ETH for a non-zero allowance.')
 	})
 
-	test('renders vault transaction status outside action rows', async () => {
+	test('does not render a local vault transaction status card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -241,9 +241,8 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' }).closest('.actions')).toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Vault Action' })).toBeNull()
 	})
 
 	test('allows REP redemption after the selected pool has ended while keeping collateral changes locked', async () => {

@@ -11,9 +11,10 @@ import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexes
 import { getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createReportingSuccessPresentation, createReportingTransactionIntent, createReportingWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, WriteOperationsParameters } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type UseReportingOperationsParameters = WriteOperationsParameters
@@ -49,7 +50,7 @@ function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: Reporti
 	}
 }
 
-export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: ResolvedReportingOperationsParameters) {
+export function useReportingOperations({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: ResolvedReportingOperationsParameters) {
 	const reportingLoad = useLoadController()
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
@@ -98,9 +99,11 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			reportingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market'),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market', createReportingTransactionIntent(actionName)),
 					onRefreshError: (message, hash) => {
 						reportingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						const result = reportingResult.value
+						if (result !== undefined) onTransactionPresented(createReportingWarningPresentation(result, message))
 					},
 					onWriteError: message => {
 						reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -116,6 +119,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				async result => {
 					reportingResult.value = result
 					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					onTransactionPresented(createReportingSuccessPresentation(result))
 					const details = await loadReportingDetails(createConnectedReadClient(), result.securityPoolAddress, accountAddress)
 					reportingDetails.value = details
 					setReportingForm(current => {

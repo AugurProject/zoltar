@@ -23,11 +23,12 @@ import { getTruthAuctionBidGuardMessage, getTruthAuctionTickAtPrice } from '../l
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
 import { sameAddress } from '../lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { requireDefined } from '../lib/required.js'
+import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createForkAuctionWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
 import type { SettlementSelectedBid } from '../types/components.js'
 
@@ -35,7 +36,7 @@ type UseForkAuctionOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
 }
 
-export function useForkAuctionOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseForkAuctionOperationsParameters) {
+export function useForkAuctionOperations({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseForkAuctionOperationsParameters) {
 	const forkAuctionDetails = useSignal<ForkAuctionDetails | undefined>(undefined)
 	const forkAuctionActiveAction = useSignal<ForkAuctionActionResult['action'] | undefined>(undefined)
 	const forkAuctionFeedback = useSignal<ActionFeedback<ForkAuctionActionResult['action']> | undefined>(undefined)
@@ -76,9 +77,11 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 			forkAuctionFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, forkAuctionError, 'Connect a wallet before using fork or truth auction actions'),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, forkAuctionError, 'Connect a wallet before using fork or truth auction actions', createForkAuctionTransactionIntent(actionName)),
 					onRefreshError: (message, hash) => {
 						forkAuctionFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						const result = forkAuctionResult.value
+						if (result !== undefined) onTransactionPresented(createForkAuctionWarningPresentation(result, message))
 					},
 					onWriteError: message => {
 						forkAuctionFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -95,6 +98,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				async result => {
 					forkAuctionResult.value = result
 					forkAuctionFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					onTransactionPresented(createForkAuctionSuccessPresentation(result))
 					if (securityPoolAddressOverride === undefined || sameAddress(result.securityPoolAddress, resolveForkAuctionSecurityPoolAddress())) {
 						forkAuctionDetails.value = await loadForkAuctionDetails(createConnectedReadClient(), result.securityPoolAddress)
 					}

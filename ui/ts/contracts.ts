@@ -2,6 +2,7 @@ import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractF
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
+import { sameAddress } from './lib/address.js'
 import { isIgnorableLogDecodeError } from './lib/errors.js'
 import { deriveHasForkActivity } from './lib/forkAuction.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
@@ -1632,7 +1633,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					functionName: 'securityPoolDeploymentsRange',
 					args: [0n, deploymentCount],
 				})
-	return await Promise.all(
+	const loadedPools = await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 			const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemState, totalSecurityBondAllowance, universeForkTime], marketDetails] = await Promise.all([
@@ -1734,6 +1735,10 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 			}
 		}),
 	)
+	return loadedPools.map(pool => ({
+		...pool,
+		hasForkActivity: pool.hasForkActivity || loadedPools.some(candidate => sameAddress(candidate.parent, pool.securityPoolAddress)),
+	}))
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
 	if (accountAddress === undefined) {

@@ -4,11 +4,12 @@ import type { Address, Hash } from 'viem'
 import { createMarket as createMarketTransaction } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createMarketCreationWarningPresentation } from '../lib/transactionPresentations.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
-import type { MarketFormState } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
+import type { MarketFormState, WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus, MarketCreationResult } from '../types/contracts.js'
 import { useZoltarOperations } from './useZoltarOperations.js'
 
@@ -18,15 +19,16 @@ type UseMarketCreationParameters = {
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useMarketCreation({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState })
+export function useMarketCreation({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
@@ -42,16 +44,18 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 				missingWalletMessage: 'Connect a wallet before creating a question',
 				onRefreshError: (message, hash) => {
 					marketFeedback.value = createWarningActionFeedback('createMarket', 'Question created', message, hash)
+					const result = marketResult.value
+					if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message))
 				},
-				onTransaction,
 				onTransactionRequested: () => {
 					marketCreating.value = true
-					onTransactionRequested()
+					onTransactionRequested(createMarketCreationTransactionIntent())
 				},
 				onTransactionFinished: () => {
 					marketCreating.value = false
 					onTransactionFinished()
 				},
+				onTransactionFailed,
 				onWriteError: message => {
 					marketFeedback.value = createErrorActionFeedback('createMarket', 'Question creation failed', message)
 				},
@@ -72,6 +76,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 			result => {
 				marketResult.value = result
 				marketFeedback.value = createSuccessActionFeedback('createMarket', 'Question created', result.hash)
+				onTransactionPresented(createMarketCreationSuccessPresentation(result))
 				zoltar.setZoltarForkQuestionId(result.questionId)
 			},
 		)

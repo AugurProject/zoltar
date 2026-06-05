@@ -6,24 +6,27 @@ import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createChildUniverseSuccessPresentation, createChildUniverseTransactionIntent, createChildUniverseWarningPresentation } from '../lib/transactionPresentations.js'
 import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { requireWallet } from '../lib/walletGuard.js'
-import type { ActionFeedback } from '../types/components.js'
-import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { WriteOperationsParameters } from '../types/app.js'
+import type { DeploymentStatus, MarketDetails, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarUniverseParameters = {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
+export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
 	const universeLoad = useLoadController()
 	const questionCountLoad = useLoadController()
 	const questionsLoad = useLoadController()
@@ -169,19 +172,24 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
 		try {
 			let refreshRequired = false
-			let resultHash: Hash | undefined
+			let result: ZoltarChildUniverseActionResult | undefined
 			try {
-				onTransactionRequested()
+				onTransactionRequested(createChildUniverseTransactionIntent('zoltar'))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar needs to fork before child universes can be deployed')
-				const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
-				resultHash = result.hash
+				const transaction = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
+				result = {
+					action: 'createChildUniverse',
+					hash: transaction.hash,
+					outcomeIndex,
+					universeId: universe.universeId,
+				}
 				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', 'Child universe deployed', result.hash)
-				onTransaction(result.hash)
+				onTransactionPresented(createChildUniverseSuccessPresentation(result))
 				refreshRequired = true
 			} catch (error) {
 				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
-				zoltarChildUniverseError.value = message
+				onTransactionFailed?.(message)
 				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)
 				return
 			}
@@ -192,8 +200,8 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				await refreshZoltarUniverse()
 			} catch (error) {
 				const message = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
-				zoltarChildUniverseError.value = message
-				zoltarChildUniverseFeedback.value = createWarningActionFeedback('createChildUniverse', 'Child universe deployed', message, resultHash)
+				zoltarChildUniverseFeedback.value = createWarningActionFeedback('createChildUniverse', 'Child universe deployed', message, result?.hash)
+				if (result !== undefined) onTransactionPresented(createChildUniverseWarningPresentation(result, message))
 			}
 		} finally {
 			zoltarChildUniversePendingOutcomeIndex.value = undefined

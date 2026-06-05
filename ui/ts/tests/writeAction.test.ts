@@ -1,4 +1,4 @@
-/// <reference types="bun-types" />
+/// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
@@ -15,7 +15,6 @@ describe('runWriteAction', () => {
 			{
 				accountAddress: undefined,
 				missingWalletMessage: 'Connect a wallet before creating a question',
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				refreshState: async () => undefined,
@@ -32,12 +31,15 @@ describe('runWriteAction', () => {
 
 	test('uses the action fallback when the write action fails', async () => {
 		let errorMessage: string | undefined
+		let transactionFailureMessage: string | undefined
 
 		await runWriteAction(
 			{
 				accountAddress: walletAddress,
 				missingWalletMessage: 'Connect wallet',
-				onTransaction: () => undefined,
+				onTransactionFailed: message => {
+					transactionFailureMessage = message
+				},
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				refreshState: async () => undefined,
@@ -52,6 +54,7 @@ describe('runWriteAction', () => {
 		)
 
 		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome.')
+		expect(transactionFailureMessage).toBe('Transaction failed while attempting to report on outcome.')
 	})
 
 	test('delegates missing-wallet errors to onWriteError when provided', async () => {
@@ -61,7 +64,6 @@ describe('runWriteAction', () => {
 			{
 				accountAddress: undefined,
 				missingWalletMessage: 'Please connect your wallet',
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				refreshState: async () => undefined,
@@ -86,7 +88,6 @@ describe('runWriteAction', () => {
 			{
 				accountAddress: walletAddress,
 				missingWalletMessage: 'Connect wallet',
-				onTransaction: () => undefined,
 				onTransactionFinished: () => {
 					transactionFinished = true
 				},
@@ -122,7 +123,6 @@ describe('runWriteAction', () => {
 			{
 				accountAddress: walletAddress,
 				missingWalletMessage: 'Connect wallet',
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
@@ -152,7 +152,6 @@ describe('runWriteAction', () => {
 			{
 				accountAddress: walletAddress,
 				missingWalletMessage: 'Connect wallet',
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				refreshErrorFallback: 'Refresh failure fallback',

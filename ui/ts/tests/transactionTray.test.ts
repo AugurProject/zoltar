@@ -1,0 +1,85 @@
+/// <reference types='bun-types' />
+
+import { describe, expect, test } from 'bun:test'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
+
+const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
+
+describe('transactionTray', () => {
+	test('tracks a requested transaction through submit, presentation, and finish', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const submitted = markTransactionSubmitted(requested, transactionHash)
+		const presented = markTransactionPresented(submitted, {
+			detail: 'The new question is now on-chain.',
+			dismissKey: transactionHash,
+			hash: transactionHash,
+			title: 'Question Created',
+			tone: 'success',
+		})
+		const finished = markTransactionFinished(presented)
+
+		expect(requested.inFlightCount).toBe(1)
+		expect(requested.active?.tone).toBe('awaiting-wallet')
+		expect(requested.active?.title).toBe('Creating Question')
+		expect(requested.active?.hash).toBeUndefined()
+		expect(requested.pendingIntent?.submittedTitle).toBe('Creating Question')
+		expect(submitted.active?.tone).toBe('pending')
+		expect(submitted.active?.hash).toBe(transactionHash)
+		expect(submitted.active?.title).toBe('Creating Question')
+		expect(submitted.pendingIntent).toBeUndefined()
+		expect(presented.active?.tone).toBe('success')
+		expect(presented.active?.title).toBe('Question Created')
+		expect(finished.inFlightCount).toBe(0)
+	})
+
+	test('does not underflow the in-flight count', () => {
+		const finished = markTransactionFinished(createInitialTransactionTrayState())
+
+		expect(finished.inFlightCount).toBe(0)
+	})
+
+	test('ignores submitted hashes when no pending intent exists', () => {
+		const submitted = markTransactionSubmitted(createInitialTransactionTrayState(), transactionHash)
+
+		expect(submitted.active).toBeUndefined()
+	})
+
+	test('turns a requested transaction into a dismissible failure when submission fails', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const failed = markTransactionFailed(requested, 'Action canceled in wallet.')
+
+		expect(failed.active?.tone).toBe('error')
+		expect(failed.active?.title).toBe('Creating Question')
+		expect(failed.active?.detail).toBe('Action canceled in wallet.')
+		expect(failed.active?.hash).toBeUndefined()
+		expect(failed.active?.dismissKey).toBe('transaction-request-1')
+		expect(failed.pendingIntent).toBeUndefined()
+	})
+
+	test('turns a submitted pending transaction into a failed transaction while preserving the hash', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const submitted = markTransactionSubmitted(requested, transactionHash)
+		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+
+		expect(failed.active?.tone).toBe('error')
+		expect(failed.active?.title).toBe('Creating Question')
+		expect(failed.active?.detail).toBe('Transaction reverted')
+		expect(failed.active?.hash).toBe(transactionHash)
+		expect(failed.active?.dismissKey).toBe(transactionHash)
+	})
+})

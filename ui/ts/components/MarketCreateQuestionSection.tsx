@@ -13,7 +13,6 @@ import { validateMarketForm } from '../lib/marketCreation.js'
 import { clampScalarTickIndex, parseScalarFormInputs } from '../lib/scalarOutcome.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
-import type { TransactionActionStatus } from '../types/components.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
@@ -25,12 +24,6 @@ type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
 	hasForked: boolean
 	isMainnet: boolean
-	marketFeedback:
-		| {
-				action: 'createMarket'
-				status: TransactionActionStatus
-		  }
-		| undefined
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
@@ -58,7 +51,6 @@ export function MarketCreateQuestionSection({
 	accountAddress,
 	hasForked,
 	isMainnet,
-	marketFeedback,
 	loadingZoltarQuestions,
 	marketCreating,
 	marketError,
@@ -238,7 +230,6 @@ export function MarketCreateQuestionSection({
 								pendingLabel='Creating Question...'
 								onClick={onCreateMarket}
 								pending={marketCreating}
-								status={marketFeedback?.status}
 								availability={{
 									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
 									reason: (() => {

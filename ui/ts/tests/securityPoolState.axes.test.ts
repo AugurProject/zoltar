@@ -70,6 +70,33 @@ describe('security pool state axes', () => {
 		).toBe('ended')
 		expect(
 			deriveSecurityPoolLifecycleState({
+				hasForkActivity: true,
+				isChildPool: true,
+				questionOutcome: 'yes',
+				systemState: 'operational',
+				universeHasForked: true,
+			}),
+		).toBe('operational')
+		expect(
+			deriveSecurityPoolLifecycleState({
+				hasForkActivity: false,
+				isChildPool: false,
+				questionOutcome: 'none',
+				systemState: 'operational',
+				universeHasForked: true,
+			}),
+		).toBe('poolForked')
+		expect(
+			deriveSecurityPoolLifecycleState({
+				hasForkActivity: true,
+				isChildPool: false,
+				questionOutcome: 'yes',
+				systemState: 'operational',
+				universeHasForked: true,
+			}),
+		).toBe('poolForked')
+		expect(
+			deriveSecurityPoolLifecycleState({
 				questionOutcome: 'yes',
 				systemState: 'forkMigration',
 			}),
@@ -86,6 +113,24 @@ describe('security pool state axes', () => {
 				systemState: 'operational',
 			}),
 		).toBe(true)
+		expect(
+			isSecurityPoolEnded({
+				hasForkActivity: true,
+				isChildPool: true,
+				questionOutcome: 'yes',
+				systemState: 'operational',
+				universeHasForked: true,
+			}),
+		).toBe(false)
+		expect(
+			isSecurityPoolEnded({
+				hasForkActivity: false,
+				isChildPool: false,
+				questionOutcome: 'yes',
+				systemState: 'operational',
+				universeHasForked: true,
+			}),
+		).toBe(false)
 		expect(getSecurityPoolLifecycleLabel('ended')).toBe('Ended')
 		expect(getSecurityPoolLifecycleLabel(undefined)).toBe('Unknown')
 	})

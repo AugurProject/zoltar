@@ -8,10 +8,10 @@ export function RouteHeader({ actions, badge, description, eyebrow, summary, tit
 					{eyebrow === undefined ? undefined : <p className='route-eyebrow'>{eyebrow}</p>}
 					<div className='route-title-row'>
 						<h2>{title}</h2>
-						{badge === undefined ? undefined : <div className='route-header-badge'>{badge}</div>}
 					</div>
 					{description === undefined ? undefined : <p className='detail route-description'>{description}</p>}
 				</div>
+				{badge === undefined ? undefined : <div className='route-header-badge'>{badge}</div>}
 				{actions === undefined ? undefined : <div className='route-header-actions'>{actions}</div>}
 			</div>
 			{summary === undefined ? undefined : <div className='route-summary-strip'>{summary}</div>}

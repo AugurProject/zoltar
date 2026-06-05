@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { AddressValue } from './AddressValue.js'
+import { zeroAddress } from 'viem'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
@@ -11,8 +11,6 @@ import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
-import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -44,7 +42,6 @@ export function SecurityPoolsOverviewSection({
 	repPerEthSourceUrl,
 	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
-	securityPoolOverviewFeedback,
 	securityPoolOverviewResult,
 	securityPools,
 }: SecurityPoolsOverviewSectionProps) {
@@ -52,6 +49,7 @@ export function SecurityPoolsOverviewSection({
 	const [searchText, setSearchText] = useState('')
 	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
+	const parentPoolAddressesWithLoadedChildren = new Set(securityPools.filter(pool => pool.parent !== undefined && pool.parent !== pool.securityPoolAddress).map(pool => pool.parent.toLowerCase()))
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedSecurityPools,
 		isLoading: loadingSecurityPools,
@@ -60,10 +58,14 @@ export function SecurityPoolsOverviewSection({
 	})
 	const securityPoolsWithState = securityPools.map(pool => ({
 		pool,
+		hasKnownForkActivity: pool.hasForkActivity || parentPoolAddressesWithLoadedChildren.has(pool.securityPoolAddress.toLowerCase()),
 		poolState: evaluateSecurityPoolState({
 			lifecycleState: deriveSecurityPoolLifecycleState({
+				hasForkActivity: pool.hasForkActivity || parentPoolAddressesWithLoadedChildren.has(pool.securityPoolAddress.toLowerCase()),
+				isChildPool: pool.parent !== zeroAddress,
 				questionOutcome: pool.questionOutcome,
 				systemState: pool.systemState,
+				universeHasForked: pool.universeHasForked,
 			}),
 			universeHasForked: pool.universeHasForked,
 		}),
@@ -94,17 +96,6 @@ export function SecurityPoolsOverviewSection({
 					</button>
 				}
 			>
-				{securityPoolOverviewResult === undefined ? undefined : (
-					<TransactionStatusCard
-						title='Liquidation Submitted'
-						badge={<span className='badge warn'>Check State</span>}
-						detail={
-							<>
-								Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />. Transaction: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
-							</>
-						}
-					/>
-				)}
 				<ErrorNotice message={securityPoolOverviewError} />
 				<div className='filter-toolbar'>
 					<label className='field'>
@@ -147,7 +138,7 @@ export function SecurityPoolsOverviewSection({
 
 					return (
 						<div className='entity-card-list'>
-							{filteredSecurityPools.map(({ pool, poolState }) => {
+							{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 								const displayState = poolState.lifecycleState
 								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const badgeTone = (() => {
@@ -164,7 +155,7 @@ export function SecurityPoolsOverviewSection({
 										badge={
 											<span className={`badge ${badgeTone}`}>
 												{getSecurityPoolStatusBadgeLabel({
-													hasForkActivity: pool.hasForkActivity,
+													hasForkActivity: hasKnownForkActivity,
 													questionOutcome: pool.questionOutcome,
 													lifecycleState: displayState,
 												})}
@@ -229,7 +220,6 @@ export function SecurityPoolsOverviewSection({
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolOverviewError={securityPoolOverviewError}
-				securityPoolOverviewFeedback={securityPoolOverviewFeedback}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				callerVaultSummary={callerVaultSummary}
 				targetVaultSummary={targetVaultSummary}

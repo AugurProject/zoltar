@@ -58,7 +58,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	}
 }
 
-export function DeploymentSection({ title, steps, allSteps, accountAddress, busyStepId, deploymentFeedback, isMainnet, onDeploy }: DeploymentSectionProps) {
+export function DeploymentSection({ title, steps, allSteps, accountAddress, busyStepId, isMainnet, onDeploy }: DeploymentSectionProps) {
 	return (
 		<SectionBlock className='contract-panel' title={title}>
 			<div className='contract-list'>
@@ -85,7 +85,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 								<p className='address'>{step.address}</p>
 								<p className='detail'>{stepStatus.detail}</p>
 							</div>
-							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel='Deploying...' onClick={() => void onDeploy(step.id)} pending={isBusy} status={deploymentFeedback?.action === step.id ? deploymentFeedback.status : undefined} availability={availability} />
+							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel='Deploying...' onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>
 					)
 				})}

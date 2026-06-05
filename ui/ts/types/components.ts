@@ -23,8 +23,6 @@ import type {
 	SecurityVaultDetails,
 	TradingActionResult,
 	TradingDetails,
-	ZoltarChildUniverseActionResult,
-	ZoltarForkActionResult,
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
@@ -58,6 +56,30 @@ export type NoticeItem = {
 	tone: NoticeTone
 }
 
+export type GlobalTransactionTone = 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
+
+export type GlobalTransactionRow = {
+	label: string
+	value: ComponentChildren
+}
+
+export type TransactionIntent = {
+	action: string
+	rows?: GlobalTransactionRow[]
+	source: string
+	submittedDetail: ComponentChildren
+	submittedTitle: ComponentChildren
+}
+
+export type GlobalTransactionPresentation = {
+	detail: ComponentChildren
+	dismissKey?: string
+	hash?: Hash
+	rows?: GlobalTransactionRow[]
+	title: ComponentChildren
+	tone: GlobalTransactionTone
+}
+
 export type StickyContextItem = {
 	label: string
 	value: ComponentChildren
@@ -87,30 +109,6 @@ export type ReadinessAction = {
 	readiness: 'blocked' | 'ready' | 'warning'
 	key: string
 	title: string
-}
-
-export type WorkflowOutcomePresentation = {
-	detail: ComponentChildren
-	dismissKey?: string
-	nextStep?: string
-	title: string
-}
-
-type WorkflowLatestActionRow = {
-	label: string
-	value: ComponentChildren
-}
-
-export type WorkflowLatestActionPresentation = {
-	dismissKey?: string
-	embedInCard?: boolean
-	rows: WorkflowLatestActionRow[]
-	title: string
-}
-
-export type WorkflowTransactionStatusProps = {
-	latestAction: WorkflowLatestActionPresentation | undefined
-	outcome: WorkflowOutcomePresentation | undefined
 }
 
 export type TransactionStatusCardProps = {
@@ -230,23 +228,8 @@ export type TransactionActionButtonProps = {
 	pending?: boolean
 	pendingLabel: ComponentChildren
 	showDisabledReason?: boolean
-	status?: TransactionActionStatus | undefined
 	tone?: 'primary' | 'secondary'
 	type?: 'button' | 'submit'
-}
-
-export type TransactionActionStatusTone = 'pending' | 'success' | 'warning' | 'error'
-
-export type TransactionActionStatus = {
-	detail: ComponentChildren
-	hash?: Hash
-	title: ComponentChildren
-	tone: TransactionActionStatusTone
-}
-
-export type ActionFeedback<TAction extends string> = {
-	action: TAction
-	status: TransactionActionStatus
 }
 
 export type OperationModalProps = {
@@ -262,16 +245,17 @@ export type DeploymentSectionProps = {
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined
-	deploymentFeedback?: ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined
 	isMainnet: boolean
 	busyStepId: DeploymentStepId | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
 
 export type OverviewPanelsProps = {
+	activeUniverseId: bigint
 	accountState: AccountState
 	isConnectingWallet: boolean
 	walletBootstrapComplete: boolean
+	parentUniverseId: bigint | undefined
 	universeRepBalance: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
 	universeForkTime?: bigint | undefined
@@ -306,7 +290,6 @@ export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
-	deploymentFeedback?: ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined
 	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
 	deploymentStatuses: DeploymentStatus[]
 	isLoadingDeploymentStatuses: boolean
@@ -320,7 +303,6 @@ export type MarketRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
 	activeView: ZoltarView
-	marketFeedback?: ActionFeedback<'createMarket'> | undefined
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
@@ -337,7 +319,6 @@ export type MarketRouteContentProps = {
 	loadingZoltarQuestions: boolean
 	hasLoadedZoltarQuestions: boolean
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
-	zoltarForkFeedback?: ActionFeedback<ZoltarForkActionResult['action']> | undefined
 	loadingZoltarUniverse: boolean
 	zoltarUniverseState: LoadableValueState
 	onLoadZoltarQuestions: () => Promise<void>
@@ -349,13 +330,11 @@ export type MarketRouteContentProps = {
 	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined
 	loadingZoltarForkAccess: boolean
-	zoltarChildUniverseFeedback?: ActionFeedback<ZoltarChildUniverseActionResult['action']> | undefined
 	zoltarChildUniverseError: string | undefined
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
-	zoltarMigrationFeedback?: ActionFeedback<ZoltarMigrationActionResult['action']> | undefined
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
 	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
@@ -383,7 +362,6 @@ export type SecurityPoolRouteContentProps = {
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
 	zoltarUniverseHasForked: boolean
 	securityPools: ListedSecurityPool[]
-	securityPoolCreationFeedback?: ActionFeedback<'createSecurityPool'> | undefined
 	securityPoolCreating: boolean
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
@@ -405,7 +383,6 @@ type LiquidationControlsProps = {
 	liquidationSecurityPoolAddress: Address | undefined
 	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
-	securityPoolOverviewFeedback?: ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined
 	securityPoolOverviewError: string | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
@@ -454,11 +431,9 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
-	securityPoolOverviewFeedback?: ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
-	poolOracleFeedback?: ActionFeedback<OpenOracleActionResult['action']> | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
@@ -495,7 +470,6 @@ export type SecurityVaultRouteContentProps = {
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onWithdrawRep: () => void
 	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
-	securityVaultFeedback?: ActionFeedback<SecurityVaultActionResult['action']> | undefined
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
@@ -543,7 +517,6 @@ export type OpenOracleRouteContentProps = {
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleError: string | undefined
-	openOracleFeedback?: ActionFeedback<OpenOracleActionResult['action']> | undefined
 	openOracleInitialReportState: {
 		defaultPrice: string | undefined
 		defaultPriceError: string | undefined
@@ -591,7 +564,6 @@ export type ReportingRouteContentProps = {
 	reportingActiveAction: ReportingActionResult['action'] | undefined
 	reportingDetails: ReportingDetails | undefined
 	reportingError: string | undefined
-	reportingFeedback?: ActionFeedback<ReportingActionResult['action']> | undefined
 	reportingForm: ReportingFormState
 	reportingResult: ReportingActionResult | undefined
 }
@@ -625,7 +597,6 @@ export type TradingRouteContentProps = {
 	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	tradingActiveAction: TradingActionResult['action'] | undefined
-	tradingFeedback?: ActionFeedback<TradingActionResult['action']> | undefined
 	tradingDetails: TradingDetails | undefined
 	tradingError: string | undefined
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
@@ -650,7 +621,6 @@ export type ForkAuctionRouteContentProps = {
 	forkAuctionDetails: ForkAuctionDetails | undefined
 	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined
 	forkAuctionError: string | undefined
-	forkAuctionFeedback?: ActionFeedback<ForkAuctionActionResult['action']> | undefined
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean

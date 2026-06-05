@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -12,10 +11,7 @@ import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
-import { UniverseLink } from './UniverseLink.js'
-import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { assertNever } from '../lib/assert.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
@@ -231,7 +227,6 @@ export function ReportingSection({
 	reportingDetails,
 	reportingError,
 	reportingForm,
-	reportingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
@@ -477,24 +472,8 @@ export function ReportingSection({
 				}
 			: reportingStage
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined || reportingOpenNotice !== undefined)
-	const latestReportingAction =
-		reportingResult === undefined
-			? undefined
-			: {
-					dismissKey: reportingResult.hash,
-					title: 'Latest Reporting Action',
-					embedInCard,
-					rows: [
-						{ label: 'Action', value: reportingResult.action },
-						{ label: 'Outcome', value: getReportingOutcomeLabel(reportingResult.outcome) },
-						{ label: 'Pool', value: <AddressValue address={reportingResult.securityPoolAddress} /> },
-						{ label: 'Universe', value: <UniverseLink universeId={reportingResult.universeId} /> },
-						{ label: 'Transaction', value: <TransactionHashLink hash={reportingResult.hash} /> },
-					],
-				}
 	const sections = (
 		<>
-			<WorkflowTransactionStatus latestAction={latestReportingAction} outcome={undefined} />
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (

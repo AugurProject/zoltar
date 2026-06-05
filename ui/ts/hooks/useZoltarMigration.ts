@@ -6,19 +6,21 @@ import { migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../c
 import { createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createZoltarMigrationSuccessPresentation, createZoltarMigrationTransactionIntent, createZoltarMigrationWarningPresentation } from '../lib/transactionPresentations.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
-import type { ZoltarMigrationFormState } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
+import type { WriteOperationsParameters, ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarMigrationParameters = {
 	accountAddress: Address | undefined
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 	refreshZoltarForkAccess: () => Promise<void>
@@ -45,7 +47,20 @@ function resolvePrepareMigrationAmount(amount: bigint, preparedRepBalance: bigin
 	return missingAmount
 }
 
-export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarForkAccess, refreshZoltarUniverse, zoltarForkRepBalance, zoltarMigrationPreparedRepBalance }: UseZoltarMigrationParameters) {
+export function useZoltarMigration({
+	accountAddress,
+	ensureZoltarUniverse,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+	refreshZoltarForkAccess,
+	refreshZoltarUniverse,
+	zoltarForkRepBalance,
+	zoltarMigrationPreparedRepBalance,
+}: UseZoltarMigrationParameters) {
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
 	const zoltarMigrationFeedback = useSignal<ActionFeedback<ZoltarMigrationActionResult['action']> | undefined>(undefined)
@@ -59,6 +74,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 
 	const runZoltarMigrationAction = useCallback(
 		async ({ actionName, action, errorFallback, refreshAfter, requiresOutcomeIndexes, resolveAmount = amount => amount }: RunZoltarMigrationActionParameters) => {
+			let writeFailed = false
 			if (
 				!requireWallet(
 					accountAddress,
@@ -77,7 +93,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			zoltarMigrationResult.value = undefined
 
 			try {
-				onTransactionRequested()
+				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')
 				const amount = parseRepAmountInput(zoltarMigrationForm.value.amount, 'Migration amount')
@@ -87,10 +103,11 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 				const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
 				zoltarMigrationResult.value = result
 				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
-				onTransaction(result.hash)
+				onTransactionPresented(createZoltarMigrationSuccessPresentation(result))
 			} catch (error) {
 				const message = formatWriteErrorMessage(error, errorFallback)
-				zoltarMigrationError.value = message
+				writeFailed = true
+				onTransactionFailed?.(message)
 				zoltarMigrationFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 			} finally {
 				zoltarMigrationPending.value = false
@@ -99,7 +116,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			}
 
 			try {
-				if (zoltarMigrationError.value !== undefined) return
+				if (writeFailed) return
 				if (refreshAfter) {
 					await refreshState()
 					await refreshZoltarUniverse()
@@ -107,16 +124,17 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 				await refreshZoltarForkAccess()
 			} catch (error) {
 				const message = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
-				zoltarMigrationError.value = message
 				const latestResult = zoltarMigrationResult.value
 				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? resolveActionResultName(actionName), getSuccessTitle(actionName), message, latestResult?.hash)
+				if (latestResult !== undefined) onTransactionPresented(createZoltarMigrationWarningPresentation(latestResult, message))
 			}
 		},
 		[
 			accountAddress,
 			ensureZoltarUniverse,
-			onTransaction,
 			onTransactionFinished,
+			onTransactionFailed,
+			onTransactionPresented,
 			onTransactionRequested,
 			onTransactionSubmitted,
 			refreshState,

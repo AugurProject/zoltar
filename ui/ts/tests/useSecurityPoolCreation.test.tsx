@@ -130,8 +130,8 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', false)],
 				enabled: true,
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
@@ -164,8 +164,8 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
@@ -197,8 +197,8 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
@@ -231,8 +231,8 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
@@ -276,8 +276,8 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('securityPoolFactory', false), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransaction: () => undefined,
 				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
@@ -327,7 +327,9 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		const onTransactionHashes: Hash[] = []
-		const onTransaction = (hash: Hash) => onTransactionHashes.push(hash)
+		const onTransactionPresented = (presentation: { hash?: Hash }) => {
+			if (presentation.hash !== undefined) onTransactionHashes.push(presentation.hash)
+		}
 		let refreshCalls = 0
 		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
@@ -337,8 +339,8 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransaction,
 				onTransactionFinished: () => undefined,
+				onTransactionPresented,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => {
@@ -397,7 +399,7 @@ describe('useSecurityPoolCreation', () => {
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransaction: () => {
+				onTransactionPresented: () => {
 					createdCount += 1
 				},
 				onTransactionFinished: () => undefined,

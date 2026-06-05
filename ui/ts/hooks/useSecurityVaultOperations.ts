@@ -11,15 +11,16 @@ import { formatCurrencyBalance } from '../lib/formatters.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { requireDefined } from '../lib/required.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, MIN_SECURITY_BOND_ALLOWANCE } from '../lib/securityVault.js'
+import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
 type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
@@ -27,7 +28,7 @@ type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
 }
 
-export function useSecurityVaultOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseSecurityVaultOperationsParameters) {
+export function useSecurityVaultOperations({ accountAddress, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseSecurityVaultOperationsParameters) {
 	const securityVaultLoad = useLoadController()
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultMissing = useSignal(false)
@@ -229,9 +230,11 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			securityVaultFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityVaultError, 'Connect a wallet before operating a security vault'),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, securityVaultError, 'Connect a wallet before operating a security vault', createSecurityVaultTransactionIntent(actionName)),
 					onRefreshError: (message, hash) => {
 						securityVaultFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						const result = securityVaultResult.value
+						if (result !== undefined) onTransactionPresented(createSecurityVaultWarningPresentation(result, message))
 					},
 					onWriteError: message => {
 						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -251,6 +254,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
 					securityVaultResult.value = result
 					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					onTransactionPresented(createSecurityVaultSuccessPresentation(result))
 					await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress)
 				},
 			)

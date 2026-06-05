@@ -168,19 +168,6 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 	}
 }
 
-function createReportingFeedback(overrides: Partial<NonNullable<ReportingSectionProps['reportingFeedback']>> = {}): NonNullable<ReportingSectionProps['reportingFeedback']> {
-	return {
-		action: 'reportOutcome',
-		status: {
-			detail: 'Report recorded on-chain.',
-			hash: '0x01',
-			title: 'Reporting submitted',
-			tone: 'success',
-		},
-		...overrides,
-	}
-}
-
 function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
 	return {
 		completeSetCollateralAmount: 1n * REP,
@@ -237,7 +224,6 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 		reportingActiveAction: undefined,
 		reportingDetails: createReportingDetails(),
 		reportingError: undefined,
-		reportingFeedback: undefined,
 		reportingForm: createReportingForm(),
 		reportingResult: undefined,
 		showHeader: false,
@@ -406,14 +392,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('does not render inline button-local reporting feedback when no reporting result is present', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					reportingFeedback: createReportingFeedback(),
-				}),
-			),
-		)
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -1712,11 +1691,9 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const statusStack = document.body.querySelector('.workflow-transaction-status')
-		if (!(statusStack instanceof HTMLElement)) throw new Error('Expected reporting status stack to render')
-		expect(statusStack.textContent?.includes('Reporting Contribution Submitted')).toBe(false)
-		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' }).closest('.actions')).toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
+		expect(documentQueries.queryByText('Reporting Contribution Submitted')).toBeNull()
 	})
 
 	test('uses only the latest action card after withdrawing escalation deposits', async () => {
@@ -1737,7 +1714,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 		expect(documentQueries.queryByText('Escalation Deposits Withdrawn')).toBeNull()
 		expect(documentQueries.queryByText('Eligible escalation deposits were withdrawn for the selected outcome side.')).toBeNull()
 	})

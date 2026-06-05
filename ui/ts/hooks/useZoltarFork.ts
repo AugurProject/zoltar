@@ -9,20 +9,23 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { requireWallet } from '../lib/walletGuard.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createZoltarForkSuccessPresentation, createZoltarForkTransactionIntent, createZoltarForkWarningPresentation } from '../lib/transactionPresentations.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import type { ActionFeedback } from '../types/components.js'
+import type { WriteOperationsParameters } from '../types/app.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarForkParameters = {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 	refreshZoltarUniverse: () => Promise<void>
@@ -40,7 +43,7 @@ function formatQuestionId(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
 }
 
-export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, shouldAutoLoadForkAccess, zoltarUniverse }: UseZoltarForkParameters) {
+export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, shouldAutoLoadForkAccess, zoltarUniverse }: UseZoltarForkParameters) {
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
@@ -172,7 +175,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		try {
 			let result: ZoltarForkActionResult | undefined
 			try {
-				onTransactionRequested()
+				onTransactionRequested(createZoltarForkTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				const questionId = options?.requireQuestionIdInput
 					? parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
@@ -184,10 +187,10 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 				result = await action(accountAddress, universe, questionId)
 				zoltarForkResult.value = result
 				zoltarForkFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
-				onTransaction(result.hash)
+				onTransactionPresented(createZoltarForkSuccessPresentation(result))
 			} catch (error) {
 				const message = formatWriteErrorMessage(error, errorFallback)
-				zoltarForkError.value = message
+				onTransactionFailed?.(message)
 				zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 				return
 			}
@@ -200,8 +203,8 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 				await loadZoltarForkAccess()
 			} catch (error) {
 				const message = formatRefreshErrorMessage(error, 'Zoltar fork transaction succeeded, but refreshing the UI failed')
-				zoltarForkError.value = message
 				zoltarForkFeedback.value = createWarningActionFeedback(result.action, getSuccessTitle(actionName), message, result.hash)
+				onTransactionPresented(createZoltarForkWarningPresentation(result, message))
 			}
 		} finally {
 			zoltarForkPending.value = false

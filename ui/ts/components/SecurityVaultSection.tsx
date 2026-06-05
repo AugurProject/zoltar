@@ -16,10 +16,8 @@ import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
-import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
@@ -366,18 +364,6 @@ export function SecurityVaultSection({
 
 		return undefined
 	})()
-	const latestAction =
-		securityVaultResult === undefined
-			? undefined
-			: {
-					dismissKey: securityVaultResult.hash,
-					title: 'Latest Vault Action',
-					embedInCard: compactLayout,
-					rows: [
-						{ label: 'Action', value: securityVaultResult.action },
-						{ label: 'Transaction', value: <TransactionHashLink hash={securityVaultResult.hash} /> },
-					],
-				}
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (accountState.address === undefined) return
@@ -424,7 +410,6 @@ export function SecurityVaultSection({
 	] satisfies ReadinessAction[])
 	const actionSections = modalFirst ? (
 		<>
-			<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />
 			<SectionBlock title='Vault Action Launchers'>
 				<div className='vault-action-launcher-grid'>
 					{vaultReadinessActions.map(action => (
@@ -691,7 +676,6 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
-			<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />
 			<SectionBlock title='Claim Fees'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>Refresh the vault to inspect claimable fees.</p>

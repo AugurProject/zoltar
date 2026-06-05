@@ -11,9 +11,10 @@ import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/mark
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getDefaultShareMigrationTargetOutcomeIndexes, isTradingSystemDeployed } from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { TradingFormState, WriteOperationsParameters } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
@@ -22,7 +23,7 @@ type UseTradingOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
 }
 
-export function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseTradingOperationsParameters) {
+export function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseTradingOperationsParameters) {
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
@@ -130,9 +131,11 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 			tradingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading'),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading', createTradingTransactionIntent(actionName)),
 					onRefreshError: (message, hash) => {
 						tradingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						const result = tradingResult.value
+						if (result !== undefined) onTransactionPresented(createTradingWarningPresentation(result, message))
 					},
 					onWriteError: message => {
 						tradingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -148,6 +151,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 				async (result, walletAddress) => {
 					tradingResult.value = result
 					tradingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					onTransactionPresented(createTradingSuccessPresentation(result))
 					const isCurrent = nextTradingDetailsLoad()
 					await refreshTradingDetails(result.securityPoolAddress, walletAddress, isCurrent)
 				},
