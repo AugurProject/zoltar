@@ -9,7 +9,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../types/components.js'
 
-export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentFeedback, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
+export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
@@ -31,7 +31,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentF
 				eyebrow='Deploy'
 				title='Deterministic contract deployment'
 				description='Deploy and verify the shared deterministic contracts that back the application.'
-				actions={<TransactionActionButton idleLabel={buttonContent} pendingLabel='Deploying...' onClick={onDeployNextMissing} pending={deployNextMissingPending} status={deploymentFeedback?.action === 'deployNextMissing' ? deploymentFeedback.status : undefined} availability={deployNextAvailability} />}
+				actions={<TransactionActionButton idleLabel={buttonContent} pendingLabel='Deploying...' onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
 				summary={
 					<DataGrid columns='auto'>
 						<div>
@@ -53,7 +53,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentF
 				<div className='workflow-stack'>
 					{deploymentSections.map(section => {
 						const allDeployed = section.steps.length > 0 && section.steps.every(step => step.deployed)
-						const sectionContent = <DeploymentSection title={section.title} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} deploymentFeedback={deploymentFeedback} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
+						const sectionContent = <DeploymentSection title={section.title} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
 
 						if (!allDeployed) return <div key={section.title}>{sectionContent}</div>
 

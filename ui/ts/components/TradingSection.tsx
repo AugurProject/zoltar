@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
+import { zeroAddress } from 'viem'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
-import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -12,10 +12,6 @@ import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
-import { UniverseLink } from './UniverseLink.js'
-import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
-import { assertNever } from '../lib/assert.js'
 import { tryParseBigIntListInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
@@ -35,41 +31,6 @@ import {
 import type { ReadinessAction } from '../types/components.js'
 import type { TradingSectionProps } from '../types/components.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
-function getTradingOutcomePresentation(action: TradingSectionProps['tradingResult']) {
-	if (action === undefined) return undefined
-	switch (action.action) {
-		case 'createCompleteSet':
-			return {
-				detail: 'Complete sets were minted for the selected pool.',
-				dismissKey: `${action.action}:${action.hash}:outcome`,
-				nextStep: 'Review the updated share balances before your next trading action.',
-				title: 'Complete Sets Minted',
-			}
-		case 'redeemCompleteSet':
-			return {
-				detail: 'Matching complete sets were redeemed back into collateral.',
-				dismissKey: `${action.action}:${action.hash}:outcome`,
-				nextStep: 'Review the updated share balances and wallet collateral balance.',
-				title: 'Complete Sets Redeemed',
-			}
-		case 'migrateShares':
-			return {
-				detail: 'Forked shares were migrated into the selected child universes.',
-				dismissKey: `${action.action}:${action.hash}:outcome`,
-				nextStep: 'Open the target universe or pool views to inspect the migrated balances.',
-				title: 'Shares Migrated',
-			}
-		case 'redeemShares':
-			return {
-				detail: 'Resolved shares were redeemed for the selected pool.',
-				dismissKey: `${action.action}:${action.hash}:outcome`,
-				nextStep: 'Review the updated balances and proceed with any remaining resolved positions.',
-				title: 'Resolved Shares Redeemed',
-			}
-		default:
-			return assertNever(action.action)
-	}
-}
 export function TradingSection({
 	accountState,
 	embedInCard = false,
@@ -84,11 +45,9 @@ export function TradingSection({
 	tradingDetails,
 	selectedPool,
 	tradingActiveAction,
-	tradingFeedback,
 	tradingError,
 	tradingForm,
 	tradingForkUniverse,
-	tradingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
@@ -100,8 +59,11 @@ export function TradingSection({
 		poolState ??
 		evaluateSecurityPoolState({
 			lifecycleState: deriveSecurityPoolLifecycleState({
+				hasForkActivity: selectedPool?.hasForkActivity,
+				isChildPool: selectedPool !== undefined && selectedPool.parent !== zeroAddress,
 				questionOutcome: selectedPool?.questionOutcome,
 				systemState: selectedPool?.systemState,
+				universeHasForked: poolUniverseHasForked,
 			}),
 			universeHasForked: poolUniverseHasForked,
 		})
@@ -239,27 +201,6 @@ export function TradingSection({
 		})
 	}
 	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
-	const getTradingActionStatus = (actionName: NonNullable<TradingSectionProps['tradingFeedback']>['action']) => {
-		if (tradingFeedback?.action !== actionName) return undefined
-		return tradingFeedback.status.tone === 'success' ? undefined : tradingFeedback.status
-	}
-	const latestTradingAction =
-		tradingResult === undefined
-			? undefined
-			: {
-					dismissKey: tradingResult.hash,
-					title: 'Latest Trading Action',
-					embedInCard,
-					rows: [
-						{ label: 'Action', value: tradingResult.action },
-						...(tradingResult.action !== 'migrateShares' || tradingResult.shareOutcome === undefined ? [] : [{ label: 'Share Outcome', value: tradingResult.shareOutcome }]),
-						...(tradingResult.action !== 'migrateShares' || tradingResult.targetOutcomeIndexes === undefined ? [] : [{ label: 'Target Outcome Indexes', value: tradingResult.targetOutcomeIndexes.join(', ') }]),
-						{ label: 'Pool', value: <AddressValue address={tradingResult.securityPoolAddress} /> },
-						{ label: 'Universe', value: <UniverseLink universeId={tradingResult.universeId} /> },
-						{ label: 'Transaction', value: <TransactionHashLink hash={tradingResult.hash} /> },
-					],
-				}
-	const tradingOutcome = getTradingOutcomePresentation(tradingResult)
 	const tradingLaunchers: ReadinessAction[] = [
 		{
 			actionLabel: 'Mint complete sets',
@@ -300,7 +241,6 @@ export function TradingSection({
 	]
 	const sections = (
 		<>
-			<WorkflowTransactionStatus latestAction={latestTradingAction} outcome={tradingOutcome} />
 			{!showSecurityPoolAddressInput ? undefined : (
 				<SectionBlock density='compact'>
 					<label className='field'>
@@ -348,14 +288,7 @@ export function TradingSection({
 				</label>
 				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Mint Complete Sets'
-						pendingLabel='Minting complete sets...'
-						onClick={onCreateCompleteSet}
-						pending={tradingActiveAction === 'createCompleteSet'}
-						status={getTradingActionStatus('createCompleteSet')}
-						availability={{ disabled: !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }}
-					/>
+					<TransactionActionButton idleLabel='Mint Complete Sets' pendingLabel='Minting complete sets...' onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={{ disabled: !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }} />
 				</div>
 			</OperationModal>
 
@@ -384,7 +317,6 @@ export function TradingSection({
 						pendingLabel='Redeeming complete sets...'
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						status={getTradingActionStatus('redeemCompleteSet')}
 						tone='secondary'
 						availability={{ disabled: !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: redeemCompleteSetsEnabled ? redeemCompleteSetGuardMessage : undefined }}
 					/>
@@ -412,7 +344,6 @@ export function TradingSection({
 						pendingLabel='Migrating shares...'
 						onClick={onMigrateShares}
 						pending={tradingActiveAction === 'migrateShares'}
-						status={getTradingActionStatus('migrateShares')}
 						tone='secondary'
 						availability={{ disabled: !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: migrateSharesEnabled ? migrateSharesGuardMessage : undefined }}
 					/>
@@ -427,7 +358,6 @@ export function TradingSection({
 						pendingLabel='Redeeming shares...'
 						onClick={onRedeemShares}
 						pending={tradingActiveAction === 'redeemShares'}
-						status={getTradingActionStatus('redeemShares')}
 						tone='secondary'
 						availability={{ disabled: !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: redeemSharesEnabled ? redeemSharesGuardMessage : undefined }}
 					/>

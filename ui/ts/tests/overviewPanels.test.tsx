@@ -25,6 +25,7 @@ describe('OverviewPanels', () => {
 
 	async function renderOverviewPanels(overrides: Partial<Parameters<typeof OverviewPanels>[0]> = {}) {
 		const baseProps: Parameters<typeof OverviewPanels>[0] = {
+			activeUniverseId: 0n,
 			accountState: {
 				address: undefined,
 				chainId: '0x1',
@@ -38,6 +39,7 @@ describe('OverviewPanels', () => {
 			onConnect: () => undefined,
 			onGoToGenesisUniverse: () => undefined,
 			onRefreshRepPrices: () => undefined,
+			parentUniverseId: undefined,
 			repPerEthPrice: undefined,
 			repPerEthSource: undefined,
 			repPerEthSourceUrl: undefined,
@@ -183,6 +185,44 @@ describe('OverviewPanels', () => {
 
 		expect(documentQueries.getByText('Forked')).toBeDefined()
 		expect(document.body.textContent?.includes('Zoltar forked on')).toBe(true)
+	})
+
+	test('renders the forked badge in the dedicated route-header badge slot', async () => {
+		await renderOverviewPanels({
+			universeHasForked: true,
+		})
+
+		const routeHeaderMain = document.body.querySelector('.route-header-main')
+		if (!(routeHeaderMain instanceof HTMLElement)) throw new Error('Expected route header main')
+		const routeTitleRow = routeHeaderMain.querySelector('.route-title-row')
+		if (!(routeTitleRow instanceof HTMLElement)) throw new Error('Expected route title row')
+		const badgeSlot = routeHeaderMain.querySelector('.route-header-badge')
+		if (!(badgeSlot instanceof HTMLElement)) throw new Error('Expected route header badge slot')
+
+		expect(routeTitleRow.querySelector('.route-header-badge')).toBeNull()
+		expect(routeHeaderMain.children[1]).toBe(badgeSlot)
+		expect(badgeSlot.textContent?.trim()).toBe('Forked')
+	})
+
+	test('shows the parent universe metric for child universes', async () => {
+		const documentQueries = await renderOverviewPanels({
+			activeUniverseId: 11n,
+			parentUniverseId: 3n,
+			universeLabel: 'Universe 11',
+		})
+
+		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 3' })
+		expect(parentUniverseLink).toBeDefined()
+		expect(document.body.textContent?.includes('Parent Universe')).toBe(true)
+	})
+
+	test('hides the parent universe metric for genesis', async () => {
+		const documentQueries = await renderOverviewPanels({
+			activeUniverseId: 0n,
+			parentUniverseId: 0n,
+		})
+
+		expect(documentQueries.queryByText('Parent Universe')).toBeNull()
 	})
 
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {

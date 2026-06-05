@@ -23,66 +23,39 @@ describe('TransactionActionButton', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders inline success status with a transaction hash link', async () => {
+	test('renders pending button text while the action is in flight', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(TransactionActionButton, {
 				idleLabel: 'Submit',
 				onClick: () => undefined,
+				pending: true,
 				pendingLabel: 'Submitting...',
-				status: {
-					detail: 'The transaction was accepted.',
-					hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
-					title: 'Submitted',
-					tone: 'success',
-				},
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('status')).not.toBeNull()
-		expect(documentQueries.getByText('Submitted')).not.toBeNull()
-		expect(documentQueries.getByText('The transaction was accepted.')).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Submitting...' })).not.toBeNull()
+		expect(document.body.querySelector('.spinner')).not.toBeNull()
 	})
 
-	test('renders warning feedback with status semantics', async () => {
+	test('renders the disabled reason when requested', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(TransactionActionButton, {
+				availability: {
+					disabled: true,
+					reason: 'Connect a wallet before submitting.',
+				},
 				idleLabel: 'Submit',
 				onClick: () => undefined,
 				pendingLabel: 'Submitting...',
-				status: {
-					detail: 'Refresh failed after the transaction completed.',
-					title: 'Refresh needed',
-					tone: 'warning',
-				},
+				showDisabledReason: true,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('status')).not.toBeNull()
-		expect(documentQueries.getByText('Refresh needed')).not.toBeNull()
-	})
-
-	test('renders error feedback as an alert', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(TransactionActionButton, {
-				idleLabel: 'Submit',
-				onClick: () => undefined,
-				pendingLabel: 'Submitting...',
-				status: {
-					detail: 'The transaction reverted.',
-					title: 'Submission failed',
-					tone: 'error',
-				},
-			}),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('alert')).not.toBeNull()
-		expect(documentQueries.getByText('Submission failed')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Submit' })).not.toBeNull()
+		expect(documentQueries.getByText('Connect a wallet before submitting.')).not.toBeNull()
 	})
 })

@@ -124,7 +124,7 @@ void describe('selected pool workflow lookup state', () => {
 				hasForkActivity: false,
 				systemState: 'poolForked',
 			}),
-		).toBe('fork-triggered')
+		).toBe('migration')
 		expect(
 			getCurrentForkWorkflowSelectionStage({
 				currentForkStage: 'settlement',

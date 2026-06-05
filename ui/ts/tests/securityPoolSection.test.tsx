@@ -154,10 +154,9 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const statusStack = document.body.querySelector('.workflow-transaction-status')
-		if (!(statusStack instanceof HTMLElement)) throw new Error('Expected pool creation status stack to render')
 		expect(documentQueries.getByRole('heading', { name: 'Pool Created' })).not.toBeNull()
-		expect(within(statusStack).getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
 	})
 
 	test('renders loading create labels and reasons while pool duplicate checks run', async () => {

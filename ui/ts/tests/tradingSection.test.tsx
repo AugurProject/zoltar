@@ -126,7 +126,6 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		tradingActiveAction: undefined,
 		tradingDetails: createTradingDetails(),
 		tradingError: undefined,
-		tradingFeedback: undefined,
 		tradingForkUniverse: undefined,
 		tradingForm: createTradingForm(),
 		tradingResult: undefined,
@@ -277,7 +276,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
 	})
 
-	void test('renders the latest trading action pool with the shared address value component', async () => {
+	void test('does not render a local latest trading action card when a result exists', async () => {
 		const poolAddress = '0x00000000000000000000000000000000000000ab'
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -298,11 +297,11 @@ void describe('TradingSection', () => {
 		})
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Latest Trading Action' })).not.toBeNull()
-		expect(documentQueries.getByText('Complete Sets Minted')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
-		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Latest Trading Action' }).closest('.actions')).toBeNull()
+		expect(poolAddress).toBe('0x00000000000000000000000000000000000000ab')
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Trading Action' })).toBeNull()
+		expect(documentQueries.queryByText('Complete Sets Minted')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: `Copy address ${poolAddress}` })).toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
 	})
 
 	void test('renders your share metrics using rounded values with exact copy affordances', async () => {
@@ -448,18 +447,11 @@ void describe('TradingSection', () => {
 		expect(mintButton.title).toBe('')
 	})
 
-	void test('shows mint write failures inline in the modal', async () => {
+	void test('shows mint write failures through the shared error notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					tradingFeedback: {
-						action: 'createCompleteSet',
-						status: {
-							detail: 'Transaction failed. Reason: question already resolved.',
-							title: 'Mint failed',
-							tone: 'error',
-						},
-					},
+					tradingError: 'Transaction failed. Reason: question already resolved.',
 				})}
 			/>,
 		)
@@ -471,8 +463,8 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog'))
-		expect(modalQueries.getByText('Mint failed')).not.toBeNull()
-		expect(modalQueries.getByText('Transaction failed. Reason: question already resolved.')).not.toBeNull()
+		expect(documentQueries.getByText('Transaction failed. Reason: question already resolved.')).not.toBeNull()
+		expect(modalQueries.queryByText('Mint failed')).toBeNull()
 	})
 
 	void test('keeps non-suppressed trading guard messages visible in the redeem modal', async () => {
@@ -524,7 +516,7 @@ void describe('TradingSection', () => {
 		expect(modalQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
 	})
 
-	void test('renders latest trading outcomes for completed action variants', async () => {
+	void test('does not render local trading outcome cards for completed action variants', async () => {
 		for (const scenario of [
 			{ action: 'redeemCompleteSet' as const, title: 'Complete Sets Redeemed' },
 			{ action: 'migrateShares' as const, title: 'Shares Migrated' },
@@ -542,16 +534,10 @@ void describe('TradingSection', () => {
 			cleanupRenderedComponent = renderedComponent.cleanup
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByText('Latest Trading Action')).not.toBeNull()
-			expect(documentQueries.getByText(scenario.title)).not.toBeNull()
-			expect(documentQueries.getByRole('button', { name: `Copy address ${zeroAddress}` })).not.toBeNull()
-
-			if (scenario.action === 'migrateShares') {
-				expect(documentQueries.getByText('Share Outcome')).not.toBeNull()
-				expect(documentQueries.getByText('yes')).not.toBeNull()
-				expect(documentQueries.getByText('Target Outcome Indexes')).not.toBeNull()
-				expect(documentQueries.getByText('0, 1')).not.toBeNull()
-			}
+			expect(documentQueries.queryByText('Latest Trading Action')).toBeNull()
+			expect(documentQueries.queryByText(scenario.title)).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: `Copy address ${zeroAddress}` })).toBeNull()
+			expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
 
 			await renderedComponent.cleanup()
 			cleanupRenderedComponent = undefined

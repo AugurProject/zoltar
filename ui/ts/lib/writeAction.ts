@@ -1,13 +1,14 @@
 import type { Address, Hash } from 'viem'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
 import type { WriteOperationsParameters } from '../types/app.js'
+import type { TransactionIntent } from '../types/components.js'
 
 type RunWriteActionParameters = {
 	accountAddress: Address | undefined
 	formatErrorMessage?: ((error: unknown, fallbackMessage: string) => string) | undefined
 	missingWalletMessage: string
 	onRefreshError?: ((message: string, hash?: Hash) => void) | undefined
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: ((message: string) => void) | undefined
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
 	onWriteError?: ((message: string) => void) | undefined
@@ -16,12 +17,23 @@ type RunWriteActionParameters = {
 	setErrorMessage: (message: string | undefined) => void
 }
 
-export function buildWriteActionConfig(params: Omit<WriteOperationsParameters, 'onTransactionSubmitted'>, errorSignal: { value: string | undefined }, missingWalletMessage: string) {
+type BuildWriteActionConfigParameters = {
+	accountAddress: WriteOperationsParameters['accountAddress']
+	onTransactionFailed: WriteOperationsParameters['onTransactionFailed'] | undefined
+	onTransactionFinished: WriteOperationsParameters['onTransactionFinished']
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
+	refreshState: WriteOperationsParameters['refreshState']
+}
+
+export function buildWriteActionConfig(params: BuildWriteActionConfigParameters, errorSignal: { value: string | undefined }, missingWalletMessage: string, transactionIntent: TransactionIntent) {
 	return {
 		accountAddress: params.accountAddress,
-		onTransaction: params.onTransaction,
 		onTransactionFinished: params.onTransactionFinished,
-		onTransactionRequested: params.onTransactionRequested,
+		onTransactionFailed: params.onTransactionFailed,
+		onTransactionRequested: () => {
+			params.onTransactionRequested(transactionIntent)
+		},
 		refreshState: params.refreshState,
 		setErrorMessage: (message: string | undefined) => {
 			errorSignal.value = message
@@ -47,9 +59,9 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			parameters.setErrorMessage(undefined)
 			result = await action(parameters.accountAddress)
 			if (result === undefined) return
-			await Promise.resolve(parameters.onTransaction(result.hash))
 		} catch (error) {
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
+			parameters.onTransactionFailed?.(message)
 			if (parameters.onWriteError === undefined) {
 				parameters.setErrorMessage(message)
 			} else {

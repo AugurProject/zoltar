@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { getAddress } from 'viem'
+import { getAddress, zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -14,6 +14,7 @@ import { Question } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
+import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from './SectionBlock.js'
 import { getQueuedVaultOperation, SecurityVaultSection, SelectedVaultSummarySection } from './SecurityVaultSection.js'
@@ -136,7 +137,6 @@ export function SecurityPoolWorkflowSection({
 	reporting,
 	selectedPoolView,
 	securityPoolOverviewActiveAction,
-	securityPoolOverviewFeedback,
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPoolAddress,
@@ -187,8 +187,11 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolReportingStage === 'forkTriggered' && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'
 			? 'poolForked'
 			: deriveSecurityPoolLifecycleState({
+					hasForkActivity: selectedPoolHasActualForkActivity,
+					isChildPool: effectiveSelectedPool !== undefined && effectiveSelectedPool.parent !== zeroAddress,
 					questionOutcome: selectedPoolQuestionOutcome,
 					systemState: selectedPoolState,
+					universeHasForked: effectiveSelectedPool?.universeHasForked,
 				})
 	const selectedPoolStateModel = evaluateSecurityPoolState({
 		lifecycleState: selectedPoolLifecycleState,
@@ -212,6 +215,7 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPoolReportingStage === 'forkTriggered') return true
 		return selectedPoolHasActualForkActivity
 	})()
+	const selectedPoolForkWorkflowSystemState = selectedPoolLifecycleState === undefined || selectedPoolLifecycleState === 'ended' ? selectedPoolState : selectedPoolLifecycleState
 	const reportingLockedReason = (() => {
 		if (reportingReady) return undefined
 		if (marketDetails === undefined) return 'Reporting opens after market end.'
@@ -228,7 +232,13 @@ export function SecurityPoolWorkflowSection({
 	})
 	const currentForkStage = getCurrentSelectedPoolForkStage({
 		forkAuctionDetails: currentForkAuctionDetails,
-		selectedPool,
+		selectedPool:
+			selectedPool === undefined || selectedPoolForkWorkflowSystemState === undefined
+				? selectedPool
+				: {
+						...selectedPool,
+						systemState: selectedPoolForkWorkflowSystemState,
+					},
 	})
 	const currentForkWorkflowSelectionStage = getCurrentForkWorkflowSelectionStage({
 		claimingAvailable: currentForkAuctionDetails?.claimingAvailable ?? false,
@@ -237,7 +247,7 @@ export function SecurityPoolWorkflowSection({
 			forkAuctionDetails: currentForkAuctionDetails,
 			selectedPool,
 		}),
-		systemState: selectedPoolState,
+		systemState: currentForkAuctionDetails?.systemState ?? selectedPoolForkWorkflowSystemState,
 		truthAuctionFinalized: currentForkAuctionDetails?.truthAuction?.finalized ?? false,
 	})
 	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? currentForkWorkflowSelectionStage)
@@ -343,6 +353,7 @@ export function SecurityPoolWorkflowSection({
 		forkAuctionDetails: currentForkAuctionDetails,
 		selectedPool: loadedSelectedPool,
 	})
+	const selectedPoolParentPool = selectedPoolSummaryPool === undefined || selectedPoolSummaryPool.parent === zeroAddress ? undefined : securityPools.find(pool => sameAddress(pool.securityPoolAddress, selectedPoolSummaryPool.parent))
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
@@ -641,6 +652,11 @@ export function SecurityPoolWorkflowSection({
 					<div className='selected-pool-context-summary'>
 						<div className='selected-pool-context-overview'>
 							<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
+								{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
+									<MetricField label='Parent Pool'>
+										<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
+									</MetricField>
+								)}
 								<MetricField label='Open Oracle Price' valueTagName='span'>
 									<OpenOraclePriceValue
 										currentTimestamp={currentTimestamp}
@@ -857,10 +873,7 @@ export function SecurityPoolWorkflowSection({
 								{isSelectedPoolForkWorkflowView(view) ? (
 									<ForkAuctionSection
 										{...forkAuction}
-										currentStageView={getCurrentSelectedPoolForkStage({
-											forkAuctionDetails: currentForkAuctionDetails,
-											selectedPool,
-										})}
+										currentStageView={currentForkStage}
 										currentTimestamp={currentTimestamp}
 										disabled={forkWorkflowDisabled}
 										disabledMessage={forkWorkflowDisabled ? 'This pool is currently operational, so fork and truth auction actions are read only.' : undefined}
@@ -1015,7 +1028,6 @@ export function SecurityPoolWorkflowSection({
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolOverviewError={securityPoolOverviewError}
-				securityPoolOverviewFeedback={securityPoolOverviewFeedback}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				walletEthBalance={accountState.ethBalance}
 				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}

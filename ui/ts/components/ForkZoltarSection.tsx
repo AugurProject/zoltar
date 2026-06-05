@@ -13,8 +13,7 @@ import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
-import type { ActionFeedback } from '../types/components.js'
-import type { MarketDetails, ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	hasLoadedZoltarQuestions: boolean
@@ -27,7 +26,6 @@ type ForkZoltarSectionProps = {
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined
-	zoltarForkFeedback: ActionFeedback<ZoltarForkActionResult['action']> | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
@@ -47,7 +45,6 @@ export function ForkZoltarSection({
 	zoltarForkActiveAction,
 	zoltarForkApproval,
 	zoltarForkError,
-	zoltarForkFeedback,
 	zoltarForkPending,
 	zoltarForkQuestionId,
 	zoltarForkRepBalance,
@@ -127,7 +124,6 @@ export function ForkZoltarSection({
 						pendingLabel='Approving REP Threshold...'
 						requiredAmount={rootUniverse?.forkThreshold}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
-						status={zoltarForkFeedback?.action === 'approveForkRep' ? zoltarForkFeedback.status : undefined}
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -154,7 +150,6 @@ export function ForkZoltarSection({
 							onForkZoltar()
 						}}
 						pending={zoltarForkActiveAction === 'fork'}
-						status={zoltarForkFeedback?.action === 'forkZoltar' ? zoltarForkFeedback.status : undefined}
 						availability={{ disabled: !canFork, reason: forkGuardMessage }}
 					/>
 				</div>

@@ -9,9 +9,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
@@ -21,8 +19,7 @@ import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/
 import { getUniversePresentation } from '../lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
-import type { ZoltarMigrationActionResult, ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ZoltarMigrationSectionProps = {
 	accountAddress: Address | undefined
@@ -35,11 +32,9 @@ type ZoltarMigrationSectionProps = {
 	zoltarForkRepBalance: bigint | undefined
 	zoltarForkApproval: TokenApprovalState
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
-	zoltarForkFeedback?: ActionFeedback<ZoltarForkActionResult['action']> | undefined
 	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarMigrationError: string | undefined
-	zoltarMigrationFeedback?: ActionFeedback<ZoltarMigrationActionResult['action']> | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalance: bigint | undefined
@@ -83,7 +78,6 @@ export function ZoltarMigrationSection({
 	zoltarMigrationForm,
 	zoltarMigrationPending,
 	zoltarMigrationPreparedRepBalance,
-	zoltarMigrationResult,
 	zoltarUniverse,
 	zoltarUniverseState,
 	onApproveZoltarForkRep,
@@ -168,20 +162,6 @@ export function ZoltarMigrationSection({
 		}
 		onZoltarMigrationFormChange({ outcomeIndexes: [...selectedOutcomeIndexes, outcomeIndex].map((index: bigint) => index.toString()).join(', ') })
 	}
-	const latestMigrationAction =
-		zoltarMigrationResult === undefined
-			? undefined
-			: {
-					dismissKey: zoltarMigrationResult.hash,
-					title: 'Latest Migration Action',
-					rows: [
-						{ label: 'Action', value: zoltarMigrationResult.action },
-						{ label: 'Amount', value: <CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' /> },
-						{ label: 'Outcome Indexes', value: zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ') },
-						{ label: 'Transaction', value: <TransactionHashLink hash={zoltarMigrationResult.hash} /> },
-					],
-				}
-
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
@@ -194,7 +174,6 @@ export function ZoltarMigrationSection({
 
 	return (
 		<>
-			<WorkflowTransactionStatus latestAction={latestMigrationAction} outcome={undefined} />
 			<SectionBlock title='Migrate REP' description='Prepare REP into your migration balance, choose target universes, and split migration REP across outcomes.'>
 				<DataGrid>
 					<MetricField label='Migration REP Balance'>

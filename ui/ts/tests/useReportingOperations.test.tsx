@@ -76,8 +76,8 @@ function createHarness(useReportingOperations: UseReportingOperations, onRender:
 	return function ReportingOperationsHarness() {
 		const state = useReportingOperations({
 			accountAddress: zeroAddress,
-			onTransaction: () => undefined,
 			onTransactionFinished: () => undefined,
+			onTransactionPresented: () => undefined,
 			onTransactionRequested: () => undefined,
 			onTransactionSubmitted: () => undefined,
 			refreshState: async () => undefined,

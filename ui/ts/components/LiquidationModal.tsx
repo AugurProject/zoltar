@@ -22,7 +22,6 @@ import { tryParseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 type LiquidationModalProps = {
@@ -45,7 +44,6 @@ type LiquidationModalProps = {
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
 	securityPoolOverviewError: string | undefined
-	securityPoolOverviewFeedback?: ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
@@ -146,7 +144,6 @@ export function LiquidationModal({
 	selectedPool,
 	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
-	securityPoolOverviewFeedback,
 	securityPoolOverviewResult,
 	callerVaultSummary,
 	targetVaultSummary,
@@ -158,7 +155,7 @@ export function LiquidationModal({
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const onCloseRef = useRef(closeLiquidationModal)
-	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewFeedback !== undefined || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
+	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
 	useEffect(() => {
 		onCloseRef.current = closeLiquidationModal
 	}, [closeLiquidationModal])

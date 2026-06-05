@@ -335,15 +335,6 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '5',
 			liquidationMaxAmount: 5n * 10n ** 18n,
-			securityPoolOverviewFeedback: {
-				action: 'queueLiquidation',
-				status: {
-					detail: 'Execution completed immediately.',
-					hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
-					title: 'Liquidation executed',
-					tone: 'success',
-				},
-			},
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
@@ -388,14 +379,6 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '5',
 			liquidationMaxAmount: 5n * 10n ** 18n,
-			securityPoolOverviewFeedback: {
-				action: 'queueLiquidation',
-				status: {
-					detail: 'Local Security Bond Allowance broken',
-					title: 'Liquidation failed',
-					tone: 'error',
-				},
-			},
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
@@ -419,7 +402,6 @@ describe('LiquidationModal', () => {
 	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
 		function LiquidationExecutionHarness() {
 			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
-			const [securityPoolOverviewFeedback, setSecurityPoolOverviewFeedback] = useState<Parameters<typeof LiquidationModal>[0]['securityPoolOverviewFeedback']>(undefined)
 			const [securityPoolOverviewResult, setSecurityPoolOverviewResult] = useState<SecurityPoolOverviewActionResult | undefined>(undefined)
 
 			return (
@@ -427,7 +409,6 @@ describe('LiquidationModal', () => {
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => {
 						setLiquidationModalOpen(false)
-						setSecurityPoolOverviewFeedback(undefined)
 						setSecurityPoolOverviewResult(undefined)
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
@@ -448,15 +429,6 @@ describe('LiquidationModal', () => {
 					onLiquidationAmountChange={() => undefined}
 					onQueueLiquidation={() => {
 						setLiquidationModalOpen(false)
-						setSecurityPoolOverviewFeedback({
-							action: 'queueLiquidation',
-							status: {
-								detail: 'Execution completed immediately.',
-								hash: '0x00000000000000000000000000000000000000000000000000000000000000cd',
-								title: 'Liquidation executed',
-								tone: 'success',
-							},
-						})
 						setSecurityPoolOverviewResult({
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000cd',
@@ -478,7 +450,6 @@ describe('LiquidationModal', () => {
 					})}
 					securityPoolOverviewActiveAction={undefined}
 					securityPoolOverviewError={undefined}
-					securityPoolOverviewFeedback={securityPoolOverviewFeedback}
 					securityPoolOverviewResult={securityPoolOverviewResult}
 					callerVaultSummary={createTargetVaultSummary({
 						repDepositShare: 20n * 10n ** 18n,

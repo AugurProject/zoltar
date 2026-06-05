@@ -96,7 +96,7 @@ export function getCurrentForkWorkflowSelectionStage({
 	systemState: SecurityPoolSystemState | undefined
 	truthAuctionFinalized?: boolean
 }): ForkWorkflowSelectionStage {
-	if (systemState === 'poolForked') return 'fork-triggered'
+	if (systemState === 'poolForked') return 'migration'
 	if (systemState === 'operational' && hasForkActivity && truthAuctionFinalized && !claimingAvailable) return 'settlement'
 	return normalizeForkWorkflowSelectionStage(currentForkStage)
 }

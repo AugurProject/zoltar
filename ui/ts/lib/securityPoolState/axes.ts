@@ -4,13 +4,39 @@ import { getEscalationPhase } from '../reportingDomain.js'
 import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
 import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../../types/contracts.js'
 
-export function isSecurityPoolEnded({ questionOutcome, systemState }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined }) {
-	return systemState === 'operational' && questionOutcome !== undefined && questionOutcome !== 'none'
+export function isSecurityPoolEnded({
+	hasForkActivity,
+	isChildPool,
+	questionOutcome,
+	systemState,
+	universeHasForked,
+}: {
+	hasForkActivity?: boolean | undefined
+	isChildPool?: boolean | undefined
+	questionOutcome: ReportingOutcomeKey | 'none' | undefined
+	systemState: SecurityPoolSystemState | undefined
+	universeHasForked?: boolean | undefined
+}) {
+	if (universeHasForked === true && systemState === 'operational' && isChildPool !== true) return false
+	return systemState === 'operational' && hasForkActivity !== true && questionOutcome !== undefined && questionOutcome !== 'none'
 }
 
-export function deriveSecurityPoolLifecycleState({ questionOutcome, systemState }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined }): SecurityPoolLifecycleState | undefined {
+export function deriveSecurityPoolLifecycleState({
+	hasForkActivity,
+	isChildPool,
+	questionOutcome,
+	systemState,
+	universeHasForked,
+}: {
+	hasForkActivity?: boolean | undefined
+	isChildPool?: boolean | undefined
+	questionOutcome: ReportingOutcomeKey | 'none' | undefined
+	systemState: SecurityPoolSystemState | undefined
+	universeHasForked?: boolean | undefined
+}): SecurityPoolLifecycleState | undefined {
 	if (systemState === undefined) return undefined
-	if (isSecurityPoolEnded({ questionOutcome, systemState })) return 'ended'
+	if (universeHasForked === true && systemState === 'operational' && isChildPool !== true) return 'poolForked'
+	if (isSecurityPoolEnded({ hasForkActivity, isChildPool, questionOutcome, systemState, universeHasForked })) return 'ended'
 	return systemState
 }
 

@@ -501,6 +501,57 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
 	})
 
+	test('shows a parent-pool metric for child pools in the selected summary', async () => {
+		const parentPoolAddress = getAddress('0x0000000000000000000000000000000000000200')
+		const parentPool = createSelectedPool({
+			parent: zeroAddress,
+			securityPoolAddress: parentPoolAddress,
+			universeId: 1n,
+		})
+		const selectedPool = createSelectedPool({
+			parent: parentPoolAddress,
+			securityPoolAddress: getAddress('0x0000000000000000000000000000000000000201'),
+			universeId: 11n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: selectedPool.securityPoolAddress,
+					securityPools: [parentPool, selectedPool],
+					selectedPoolView: 'fork-workflow',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const parentPoolLink = documentQueries.getByRole('link', { name: '0x0000…0200' })
+		expect(parentPoolLink).not.toBeNull()
+		expect(document.body.textContent?.includes('Parent Pool')).toBe(true)
+		expect(parentPoolLink.getAttribute('title')).toBe(parentPoolAddress)
+	})
+
+	test('does not show a parent-pool metric for root pools', async () => {
+		const selectedPool = createSelectedPool({
+			parent: zeroAddress,
+			securityPoolAddress: getAddress('0x0000000000000000000000000000000000000202'),
+		})
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: selectedPool.securityPoolAddress,
+					securityPools: [selectedPool],
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Parent Pool')).toBeNull()
+	})
+
 	test('marks selected-pool collateralization as success when it is above the multiplier threshold', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -1032,15 +1083,6 @@ describe('SecurityPoolWorkflowSection', () => {
 						pendingOperation: undefined,
 					}),
 					securityPoolAddress: selectedPoolAddress,
-					securityPoolOverviewFeedback: {
-						action: 'queueLiquidation',
-						status: {
-							detail: 'Execution completed immediately.',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000c1',
-							title: 'Liquidation executed',
-							tone: 'success',
-						},
-					},
 					securityPoolOverviewResult: {
 						action: 'queueLiquidation',
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000c1',
@@ -1074,14 +1116,6 @@ describe('SecurityPoolWorkflowSection', () => {
 						pendingOperation: undefined,
 					}),
 					securityPoolAddress: selectedPoolAddress,
-					securityPoolOverviewFeedback: {
-						action: 'queueLiquidation',
-						status: {
-							detail: 'Local Security Bond Allowance broken',
-							title: 'Liquidation failed',
-							tone: 'error',
-						},
-					},
 					securityPoolOverviewResult: {
 						action: 'queueLiquidation',
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000c2',
@@ -1544,14 +1578,6 @@ describe('SecurityPoolWorkflowSection', () => {
 							operation: 'withdrawRep',
 							operationId: 12n,
 							success: false,
-						},
-					},
-					poolOracleFeedback: {
-						action: 'executeStagedOperation',
-						status: {
-							detail: 'Local Security Bond Allowance broken',
-							title: 'Staged operation failed',
-							tone: 'error',
 						},
 					},
 					poolOracleManagerDetails: createOracleManagerDetails({
@@ -2437,6 +2463,33 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Truth Auction Status' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Triggered' })).toBeNull()
 		expect(documentQueries.getByRole('tab', { name: 'Truth Auction' }).className.includes('is-selected')).toBe(true)
+	})
+
+	test('opens the migration step for root-universe pools that present as Fork Migration after universe fork', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							securityPoolAddress: selectedPoolAddress,
+							systemState: 'operational',
+							universeHasForked: true,
+						}),
+					],
+					selectedPoolView: 'fork-migration',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Migration' }).className.includes('is-selected')).toBe(true)
+		expect(document.body.textContent?.includes('This step becomes active once the fork has been triggered.')).toBe(false)
 	})
 
 	test('advances the selected fork workflow panel when fresh fork details load a later current stage', async () => {

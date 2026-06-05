@@ -9,7 +9,6 @@ import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
@@ -18,11 +17,10 @@ type ScalarDeploymentSectionProps = {
 	isMainnet: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	questionDetails: MarketDetails | undefined
-	zoltarChildUniverseFeedback: ActionFeedback<'createChildUniverse'> | undefined
 	zoltarChildUniverseError: string | undefined
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 }
-export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniverseFeedback, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
+export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
@@ -127,7 +125,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				pending={scalarDeployPending}
 				pendingLabel='Deploying universe...'
 				requirements={scalarDeployRequirements}
-				status={zoltarChildUniverseFeedback?.action === 'createChildUniverse' ? zoltarChildUniverseFeedback.status : undefined}
 				title='Create Child Universe'
 			>
 				{selectedScalarChild === undefined ? undefined : (

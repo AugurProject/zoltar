@@ -7,20 +7,22 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
+import { createSecurityPoolCreationSuccessPresentation, createSecurityPoolCreationTransactionIntent, createSecurityPoolCreationWarningPresentation } from '../lib/transactionPresentations.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState, tryParseBigIntInput } from '../lib/marketForm.js'
-import type { SecurityPoolFormState } from '../types/app.js'
-import type { ActionFeedback } from '../types/components.js'
+import type { SecurityPoolFormState, WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
 type UseSecurityPoolCreationParameters = {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
 	enabled: boolean
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 	zoltarUniverseHasForked: boolean
@@ -38,7 +40,7 @@ function parseQuestionIdInput(marketId: string) {
 	return BigInt(trimmedMarketId)
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
@@ -133,16 +135,18 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				missingWalletMessage: 'Connect a wallet before creating a security pool',
 				onRefreshError: (message, hash) => {
 					securityPoolCreationFeedback.value = createWarningActionFeedback('createSecurityPool', 'Security pool created', message, hash)
+					const result = securityPoolResult.value
+					if (result !== undefined) onTransactionPresented(createSecurityPoolCreationWarningPresentation(result, message))
 				},
-				onTransaction,
 				onTransactionRequested: () => {
 					securityPoolCreating.value = true
-					onTransactionRequested()
+					onTransactionRequested(createSecurityPoolCreationTransactionIntent())
 				},
 				onTransactionFinished: () => {
 					securityPoolCreating.value = false
 					onTransactionFinished()
 				},
+				onTransactionFailed,
 				onWriteError: message => {
 					securityPoolCreationFeedback.value = createErrorActionFeedback('createSecurityPool', 'Security pool creation failed', message)
 				},
@@ -179,6 +183,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				}
 				securityPoolResult.value = result
 				securityPoolCreationFeedback.value = createSuccessActionFeedback('createSecurityPool', 'Security pool created', result.hash)
+				onTransactionPresented(createSecurityPoolCreationSuccessPresentation(result))
 			},
 		)
 	}

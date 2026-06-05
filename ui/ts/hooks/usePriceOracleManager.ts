@@ -6,22 +6,25 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
+import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createPoolOracleWarningPresentation } from '../lib/transactionPresentations.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
-import type { ActionFeedback } from '../types/components.js'
+import type { WriteOperationsParameters } from '../types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
 type UsePriceOracleManagerParameters = {
 	accountAddress: Address | undefined
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
+export function usePriceOracleManager({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const poolOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
@@ -61,10 +64,12 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 					missingWalletMessage: 'Connect a wallet before requesting a price',
 					onRefreshError: (message, hash) => {
 						poolOracleFeedback.value = createWarningActionFeedback('requestPrice', getSuccessTitle('requestPrice'), message, hash)
+						const result = poolPriceOracleResult.value
+						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message))
 					},
-					onTransaction,
+					onTransactionFailed,
 					onTransactionFinished,
-					onTransactionRequested,
+					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('requestPrice')),
 					onWriteError: message => {
 						poolOracleFeedback.value = createErrorActionFeedback('requestPrice', getFailureTitle('requestPrice'), message)
 					},
@@ -94,6 +99,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				result => {
 					poolPriceOracleResult.value = result
 					poolOracleFeedback.value = createSuccessActionFeedback('requestPrice', getSuccessTitle('requestPrice'), result.hash)
+					onTransactionPresented(createPoolOracleSuccessPresentation(result))
 				},
 			)
 		} finally {
@@ -112,10 +118,12 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 					missingWalletMessage: 'Connect a wallet before executing a staged operation',
 					onRefreshError: (message, hash) => {
 						poolOracleFeedback.value = createWarningActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), message, hash)
+						const result = poolPriceOracleResult.value
+						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message))
 					},
-					onTransaction,
+					onTransactionFailed,
 					onTransactionFinished,
-					onTransactionRequested,
+					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('executeStagedOperation')),
 					onWriteError: message => {
 						poolOracleFeedback.value = createErrorActionFeedback('executeStagedOperation', getFailureTitle('executeStagedOperation'), message)
 					},
@@ -133,6 +141,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				result => {
 					poolPriceOracleResult.value = result
 					poolOracleFeedback.value = createSuccessActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), result.hash)
+					onTransactionPresented(createPoolOracleSuccessPresentation(result))
 				},
 			)
 		} finally {

@@ -71,7 +71,6 @@ describe('ScalarDeploymentSection', () => {
 				}}
 				questionDetails={undefined}
 				zoltarChildUniverseError={undefined}
-				zoltarChildUniverseFeedback={undefined}
 				zoltarChildUniversePendingOutcomeIndex={undefined}
 			/>,
 		)
@@ -94,7 +93,6 @@ describe('ScalarDeploymentSection', () => {
 				}}
 				questionDetails={question}
 				zoltarChildUniverseError={undefined}
-				zoltarChildUniverseFeedback={undefined}
 				zoltarChildUniversePendingOutcomeIndex={undefined}
 			/>,
 		)
@@ -128,7 +126,6 @@ describe('ScalarDeploymentSection', () => {
 				}}
 				questionDetails={createQuestionDetails()}
 				zoltarChildUniverseError={undefined}
-				zoltarChildUniverseFeedback={undefined}
 				zoltarChildUniversePendingOutcomeIndex={undefined}
 			/>,
 		)
@@ -153,7 +150,6 @@ describe('ScalarDeploymentSection', () => {
 				}}
 				questionDetails={question}
 				zoltarChildUniverseError={undefined}
-				zoltarChildUniverseFeedback={undefined}
 				zoltarChildUniversePendingOutcomeIndex={undefined}
 			/>,
 		)

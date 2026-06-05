@@ -1,5 +1,6 @@
 import type { Address, Hash } from 'viem'
 import { useCallback, useMemo } from 'preact/hooks'
+import type { WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 import { useZoltarFork } from './useZoltarFork.js'
 import { useZoltarMigration } from './useZoltarMigration.js'
@@ -11,15 +12,16 @@ type UseZoltarOperationsParameters = {
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
-	onTransaction: (hash: Hash) => void
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
-	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted })
+export function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
+	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted })
 	const refreshZoltarUniverse = useCallback(async () => {
 		await universe.refreshZoltarUniverse()
 	}, [universe.refreshZoltarUniverse])
@@ -27,8 +29,9 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, activeZo
 		accountAddress,
 		activeUniverseId,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
-		onTransaction,
+		onTransactionFailed,
 		onTransactionFinished,
+		onTransactionPresented,
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,
@@ -44,8 +47,9 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, activeZo
 	const migration = useZoltarMigration({
 		accountAddress,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
-		onTransaction,
+		onTransactionFailed,
 		onTransactionFinished,
+		onTransactionPresented,
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,

@@ -642,15 +642,6 @@ void describe('SecurityPoolsSection', () => {
 							isPriceValid: true,
 							managerAddress: zeroAddress,
 						}),
-						securityPoolOverviewFeedback: {
-							action: 'queueLiquidation',
-							status: {
-								detail: 'Execution completed immediately.',
-								hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
-								title: 'Liquidation executed',
-								tone: 'success',
-							},
-						},
 						securityPoolOverviewResult: {
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
@@ -718,14 +709,6 @@ void describe('SecurityPoolsSection', () => {
 							isPriceValid: true,
 							managerAddress: zeroAddress,
 						}),
-						securityPoolOverviewFeedback: {
-							action: 'queueLiquidation',
-							status: {
-								detail: 'Local Security Bond Allowance broken',
-								title: 'Liquidation failed',
-								tone: 'error',
-							},
-						},
 						securityPoolOverviewResult: {
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',

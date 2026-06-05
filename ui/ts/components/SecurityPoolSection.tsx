@@ -10,7 +10,6 @@ import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
@@ -115,22 +114,6 @@ export function SecurityPoolSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Create Pool'>
-			<WorkflowTransactionStatus
-				latestAction={undefined}
-				outcome={
-					securityPoolResult === undefined
-						? undefined
-						: {
-								title: 'Security pool created',
-								detail: (
-									<>
-										Created pool <AddressValue address={securityPoolResult.securityPoolAddress} />.
-									</>
-								),
-								nextStep: 'Open the pool to begin operating vault, trading, reporting, and fork workflows.',
-							}
-				}
-			/>
 			{hasSecurityPoolResult ? (
 				<>
 					{createdPoolResult}

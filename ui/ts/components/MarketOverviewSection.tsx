@@ -16,20 +16,18 @@ import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { getUniversePresentation } from '../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
-import type { ActionFeedback } from '../types/components.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 type MarketOverviewSectionProps = {
 	accountAddress: Address | undefined
 	isMainnet: boolean
 	loadingZoltarUniverse: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
-	zoltarChildUniverseFeedback: ActionFeedback<'createChildUniverse'> | undefined
 	zoltarChildUniverseError: string | undefined
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 }
-export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarChildUniverseFeedback, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
+export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
@@ -88,7 +86,6 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							isMainnet={isMainnet}
 							onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 							questionDetails={scalarQuestionDetails}
-							zoltarChildUniverseFeedback={zoltarChildUniverseFeedback}
 							zoltarChildUniverseError={zoltarChildUniverseError}
 							zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						/>
@@ -151,7 +148,6 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						pending={selectedChildUniverse !== undefined && zoltarChildUniversePendingOutcomeIndex === selectedChildUniverse.outcomeIndex}
 						pendingLabel='Deploying universe...'
 						requirements={childUniverseRequirements}
-						status={zoltarChildUniverseFeedback?.action === 'createChildUniverse' ? zoltarChildUniverseFeedback.status : undefined}
 						title='Create Child Universe'
 					>
 						{selectedChildUniverse === undefined ? undefined : (

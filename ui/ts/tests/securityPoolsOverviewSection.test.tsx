@@ -123,7 +123,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders liquidation transaction status outside the section action row', async () => {
+	test('does not render a local liquidation transaction notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -138,10 +138,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' })).not.toBeNull()
-		expect(documentQueries.getByText('Check State')).not.toBeNull()
-		expect(documentQueries.getByText('0x1234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' }).closest('.actions')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Submitted' })).toBeNull()
+		expect(documentQueries.queryByText('Check State')).toBeNull()
+		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
 	})
 
 	test('shows Finalized as Yes for resolved operational pools', async () => {
@@ -160,6 +159,37 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Finalized as Yes')
+	})
+
+	test('shows Fork Migration for parent pools with child pools even when the loaded parent outcome is resolved', async () => {
+		const parentPool = createSecurityPool({
+			hasForkActivity: false,
+			marketDetails: createMarketDetails({ title: 'Parent pool' }),
+			questionOutcome: 'yes',
+			securityPoolAddress: '0x0000000000000000000000000000000000000100',
+			universeHasForked: true,
+		})
+		const childPool = createSecurityPool({
+			marketDetails: createMarketDetails({ title: 'Child pool' }),
+			parent: parentPool.securityPoolAddress,
+			questionOutcome: 'yes',
+			securityPoolAddress: '0x0000000000000000000000000000000000000101',
+		})
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [parentPool, childPool],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const parentCard = documentQueries.getByRole('heading', { name: 'Parent pool' }).closest('.entity-card')
+		if (!(parentCard instanceof HTMLElement)) throw new Error('Expected parent pool card')
+		const parentCardQueries = within(parentCard)
+		expect(parentCardQueries.getByText('Fork Migration')).not.toBeNull()
+		expect(parentCardQueries.queryByText('Finalized as Yes')).toBeNull()
 	})
 
 	test('shows Fork Migration for pools already in fork migration flow', async () => {
@@ -182,7 +212,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(badgeTexts).toContain('Fork Migration')
 	})
 
-	test('shows Fork Finalized for operational pools with completed fork history', async () => {
+	test('shows Fork Finalized for child pools with completed fork history', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -191,9 +221,11 @@ describe('SecurityPoolsOverviewSection', () => {
 							forkOutcome: 'yes',
 							hasForkActivity: true,
 							migratedRep: 1n,
+							parent: '0x0000000000000000000000000000000000000100',
 							systemState: 'operational',
 							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
 							truthAuctionStartedAt: 10n,
+							universeHasForked: true,
 						}),
 					],
 				})}
@@ -203,6 +235,48 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Finalized')
+	})
+
+	test('shows Fork Migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							hasForkActivity: false,
+							marketDetails: createMarketDetails({ title: 'Forked root-universe pool' }),
+							questionOutcome: 'none',
+							systemState: 'operational',
+							universeHasForked: true,
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const poolCard = documentQueries.getByRole('heading', { name: 'Forked root-universe pool' }).closest('.entity-card')
+		if (!(poolCard instanceof HTMLElement)) throw new Error('Expected forked root-universe pool card')
+		const poolCardQueries = within(poolCard)
+		expect(poolCardQueries.getByText('Fork Migration')).not.toBeNull()
+		expect(poolCardQueries.queryByText('Operational')).toBeNull()
+	})
+
+	test('does not duplicate refresh guidance when the registry is empty', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPools: true,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Refresh pools' })).not.toBeNull()
+		expect(documentQueries.queryByText('Refresh pools to check again.')).toBeNull()
 	})
 
 	test('filters the registry by the derived Ended state', async () => {

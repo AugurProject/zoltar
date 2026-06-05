@@ -1,0 +1,92 @@
+import type { Hash } from 'viem'
+import { createAwaitingWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
+import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
+
+export type TransactionTrayState = {
+	active: GlobalTransactionPresentation | undefined
+	inFlightCount: number
+	pendingIntent: TransactionIntent | undefined
+	pendingRequestKey: string | undefined
+	requestSequence: number
+}
+
+export function createInitialTransactionTrayState(): TransactionTrayState {
+	return {
+		active: undefined,
+		inFlightCount: 0,
+		pendingIntent: undefined,
+		pendingRequestKey: undefined,
+		requestSequence: 1,
+	}
+}
+
+export function markTransactionRequested(state: TransactionTrayState, pendingIntent: TransactionIntent): TransactionTrayState {
+	const requestKey = `transaction-request-${state.requestSequence}`
+	return {
+		...state,
+		active: createAwaitingWalletPresentation(pendingIntent, requestKey),
+		inFlightCount: state.inFlightCount + 1,
+		pendingIntent,
+		pendingRequestKey: requestKey,
+		requestSequence: state.requestSequence + 1,
+	}
+}
+
+export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash): TransactionTrayState {
+	const pendingIntent = state.pendingIntent
+	if (pendingIntent === undefined) return state
+
+	return {
+		...state,
+		active: {
+			detail: pendingIntent.submittedDetail,
+			dismissKey: hash,
+			hash,
+			...(pendingIntent.rows === undefined ? {} : { rows: pendingIntent.rows }),
+			title: pendingIntent.submittedTitle,
+			tone: 'pending',
+		},
+		pendingIntent: undefined,
+		pendingRequestKey: undefined,
+	}
+}
+
+export function markTransactionFailed(state: TransactionTrayState, message: string): TransactionTrayState {
+	const pendingIntent = state.pendingIntent
+	const pendingRequestKey = state.pendingRequestKey
+	if (pendingIntent !== undefined && pendingRequestKey !== undefined) {
+		return {
+			...state,
+			active: createTransactionFailurePresentation(pendingIntent, message, pendingRequestKey),
+			pendingIntent: undefined,
+			pendingRequestKey: undefined,
+		}
+	}
+
+	const active = state.active
+	if (active?.tone !== 'pending' || active.hash === undefined) return state
+
+	return {
+		...state,
+		active: {
+			...active,
+			detail: message,
+			dismissKey: active.hash,
+			tone: 'error',
+		},
+	}
+}
+
+export function markTransactionPresented(state: TransactionTrayState, active: GlobalTransactionPresentation): TransactionTrayState {
+	return {
+		...state,
+		active,
+	}
+}
+
+export function markTransactionFinished(state: TransactionTrayState): TransactionTrayState {
+	return {
+		...state,
+		inFlightCount: Math.max(0, state.inFlightCount - 1),
+	}
+}
