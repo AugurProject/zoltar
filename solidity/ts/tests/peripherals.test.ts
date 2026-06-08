@@ -1839,6 +1839,181 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.ok(childVaultAfterMigration.repDepositShare > 0n, 'child vault should still receive migrated ownership')
 	})
 
+	test('startTruthAuction skips auction startup when all REP is already migrated', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'full migration external fork source',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(client, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const denominatorBeforeStart = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
+		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(await getMigratedRep(client, yesSecurityPool.securityPool), forkData.repAtFork, 'all parent REP should already be represented by migrated vault ownership in this fast path')
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should finalize immediately when no auction is needed')
+		strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'no REP should be sold when the auction is skipped')
+		strictEqualTypeSafe(await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool), denominatorBeforeStart, 'skipping the auction should preserve the existing child ownership denominator when no REP is sold')
+	})
+
+	test('startTruthAuction skips auction startup when no collateral remains to buy', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const clientVaultBeforeFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const clientClaimBeforeFinalize = await poolOwnershipToRep(client, yesSecurityPool.securityPool, clientVaultBeforeFinalize.repDepositShare)
+
+		assert.ok(clientClaimBeforeFinalize > 0n, 'the migrated vault should retain a positive child-pool REP claim before immediate finalization')
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'the no-collateral fast path requires zero remaining parent collateral')
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should finalize immediately when there is no collateral left to buy')
+		strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'no REP should be sold when there is no collateral to buy')
+		await redeemRep(client, yesSecurityPool.securityPool, client.account.address)
+		approximatelyEqual(await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool), (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork - clientClaimBeforeFinalize, 10n, 'immediate finalization without an auction should still leave the migrated vault redeemable')
+	})
+
+	test('escalation migration remains redeemable after truth auction finalization', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const originalVaultBeforeFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const childBalanceBeforeFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
+		const originalClaimBeforeFinalize = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalVaultBeforeFinalize.repDepositShare)
+		strictEqualTypeSafe(originalClaimBeforeFinalize, childBalanceBeforeFinalize, 'before finalization the migrated vault should still claim the full child REP balance')
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork, expectedEthToBuy)
+
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		const originalVaultAfterFinalize = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const childBalanceAfterFinalize = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
+		const totalRepPurchased = await getTotalRepPurchased(client, yesSecurityPool.truthAuction)
+		const originalClaimAfterFinalize = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalVaultAfterFinalize.repDepositShare)
+		approximatelyEqual(originalClaimAfterFinalize, childBalanceAfterFinalize - totalRepPurchased, 10n, 'finalization should reserve purchased REP for auction buyers instead of inflating migrated vault claims')
+
+		await redeemRep(client, yesSecurityPool.securityPool, client.account.address)
+		approximatelyEqual(await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool), totalRepPurchased, 10n, 'redeeming the migrated vault should leave only the auction-purchased REP behind')
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
+		const auctionVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
+		const auctionClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, auctionVault.repDepositShare)
+		approximatelyEqual(auctionClaim, totalRepPurchased, 10n, 'claimAuctionProceeds should assign the reserved REP to the winning bidder')
+
+		await redeemRep(auctionParticipant, yesSecurityPool.securityPool, auctionParticipant.account.address)
+		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool), 0n, 'the child pool should stay fully redeemable after both migrated and auction-purchased REP are claimed')
+	})
+
+	test('multiple migrated holders remain redeemable after truth auction finalization', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const childRepToken = getRepTokenAddress(yesUniverse)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork, expectedEthToBuy)
+
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		const clientVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
+		const clientClaimBeforeRedeem = await poolOwnershipToRep(client, yesSecurityPool.securityPool, clientVaultBeforeRedeem.repDepositShare)
+		const attackerClaimBeforeRedeem = await poolOwnershipToRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.repDepositShare)
+		const childBalanceBeforeRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
+		const totalRepPurchased = await getTotalRepPurchased(client, yesSecurityPool.truthAuction)
+		approximatelyEqual(clientClaimBeforeRedeem + attackerClaimBeforeRedeem, childBalanceBeforeRedeem - totalRepPurchased, 10n, 'migrated holders should jointly claim only the unsold child REP after finalization')
+
+		await redeemRep(attackerClient, yesSecurityPool.securityPool, attackerClient.account.address)
+		const clientClaimAfterFirstRedeem = await poolOwnershipToRep(client, yesSecurityPool.securityPool, clientVaultBeforeRedeem.repDepositShare)
+		approximatelyEqual(clientClaimAfterFirstRedeem, clientClaimBeforeRedeem, 10n, 'redeeming one migrated holder should not brick the remaining migrated holder')
+
+		await redeemRep(client, yesSecurityPool.securityPool, client.account.address)
+		approximatelyEqual(await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool), totalRepPurchased, 10n, 'after both migrated holders redeem, only the auction-purchased REP should remain in the child pool')
+	})
+
 	test('repro: migrateRepToZoltar shares migration balance across parent pools before child creation', async () => {
 		const secondQuestionData = {
 			...questionData,
