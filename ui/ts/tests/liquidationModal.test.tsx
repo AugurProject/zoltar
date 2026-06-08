@@ -326,6 +326,41 @@ describe('LiquidationModal', () => {
 		expect(selectedViews).toEqual(['staged-operations'])
 	})
 
+	test('shows manual execution guidance for off-slot queued liquidations', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+				pendingOperation: {
+					amount: 5n,
+					initiatorVault: zeroAddress,
+					operation: 'withdrawRep',
+					operationId: 8n,
+					targetVault: '0x0000000000000000000000000000000000000001',
+				},
+				pendingOperationSlotId: 8n,
+			}),
+			liquidationAmount: '5',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+			liquidationTargetVault: zeroAddress,
+			securityPoolOverviewResult: {
+				action: 'queueLiquidation',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
+				queuedOperation: {
+					isPendingSlot: false,
+					operation: 'liquidation',
+					operationId: 10n,
+				},
+				securityPoolAddress: zeroAddress,
+			},
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
+		expect(documentQueries.getByText('#10')).not.toBeNull()
+		expect(documentQueries.getByText('Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+	})
+
 	test('shows immediate execution when liquidation uses an already valid oracle price', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({

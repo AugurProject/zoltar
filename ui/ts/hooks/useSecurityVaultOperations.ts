@@ -325,6 +325,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return {
 					action: 'queueSetSecurityBondAllowance',
 					hash: result.hash,
+					...(result.queuedOperation === undefined ? {} : { queuedOperation: result.queuedOperation }),
 					...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 				} satisfies SecurityVaultActionResult
 			},
@@ -386,6 +387,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return {
 					action: 'queueWithdrawRep',
 					hash: result.hash,
+					...(result.queuedOperation === undefined ? {} : { queuedOperation: result.queuedOperation }),
 					...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 				} satisfies SecurityVaultActionResult
 			},

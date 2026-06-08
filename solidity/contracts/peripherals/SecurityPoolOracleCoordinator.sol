@@ -50,6 +50,7 @@ contract SecurityPoolOracleCoordinator {
 	bool public immutable feeToken;
 
 	event PriceReported(uint256 reportId, uint256 price);
+	event StagedOperationQueued(uint256 operationId, OperationType operation, address initiatorVault, address targetVault, uint256 amount, bool isPendingSlot);
 	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
 	// This is not a FIFO queue. We keep an append-only operation record and a single
@@ -152,8 +153,9 @@ contract SecurityPoolOracleCoordinator {
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
 		if (pendingOperationSlotId != 0) { // TODO we maybe should allow executing couple operations?
-			executeStagedOperation(pendingOperationSlotId);
+			uint256 operationId = pendingOperationSlotId;
 			pendingOperationSlotId = 0;
+			executeStagedOperation(operationId);
 		}
 	}
 
@@ -167,13 +169,14 @@ contract SecurityPoolOracleCoordinator {
 		}
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
+		uint256 operationId = stagedOperationCounter;
 		// Capture snapshot of the target vault state at queue time to prevent manipulation.
 		// Liquidation should value the vaults full collateral claim. That means using the pools
 		// total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
 		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
-		stagedOperations[stagedOperationCounter] = StagedOperation({
+		stagedOperations[operationId] = StagedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
@@ -187,16 +190,19 @@ contract SecurityPoolOracleCoordinator {
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
 		if (isPriceValid()) {
-			executeStagedOperation(stagedOperationCounter);
+			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
+			executeStagedOperation(operationId);
 			// no cost when price is valid
 		} else if (pendingOperationSlotId == 0) {
-			pendingOperationSlotId = stagedOperationCounter;
+			pendingOperationSlotId = operationId;
+			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, true);
 			uint256 ethCost = getRequestPriceEthCost();
 			require(msg.value >= ethCost, 'not enough eth to request price');
 			retained += ethCost;
 			// Forward exactly ethCost to requestPrice to create the report
 			this.requestPrice{value: ethCost}();
 		} else {
+			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
 			// This is intentional: only one staged operation is marked as the auto-execute
 			// pending slot for the next fresh oracle report. Additional operations are still
 			// recorded and can be executed manually via executeStagedOperation once the price
@@ -264,9 +270,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}
-		if (success) {
-			stagedOperations[operationId].initiatorVault = address(0);
-		}
+		stagedOperations[operationId].initiatorVault = address(0);
 	}
 
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {

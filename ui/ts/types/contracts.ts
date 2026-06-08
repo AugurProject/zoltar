@@ -38,6 +38,12 @@ export type StagedOracleExecutionResult = {
 	success: boolean
 }
 
+export type StagedOracleQueuedResult = {
+	isPendingSlot: boolean
+	operation: OracleQueueOperation
+	operationId: bigint
+}
+
 export type QuestionData = {
 	title: string
 	description: string
@@ -149,6 +155,7 @@ export type SecurityVaultDetails = {
 
 export type SecurityVaultActionResult = ActionResult & {
 	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRep' | 'updateVaultFees'
+	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
 
@@ -171,6 +178,7 @@ export type OracleManagerDetails = {
 
 export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
+	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
 
@@ -281,6 +289,7 @@ export type SecurityPoolVaultSummary = {
 
 export type SecurityPoolOverviewActionResult = ActionResult & {
 	action: 'queueLiquidation'
+	queuedOperation?: StagedOracleQueuedResult
 	securityPoolAddress: Address
 	stagedExecution?: StagedOracleExecutionResult
 }

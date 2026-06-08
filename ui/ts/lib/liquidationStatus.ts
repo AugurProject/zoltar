@@ -16,6 +16,7 @@ export function getLiquidationNoticeState({
 }): LiquidationNoticeState | undefined {
 	if (securityPoolOverviewResult?.action !== 'queueLiquidation') return undefined
 	if (securityPoolOverviewResult.stagedExecution !== undefined) return securityPoolOverviewResult.stagedExecution.success ? 'successful' : 'failed'
+	if (securityPoolOverviewResult.queuedOperation?.operation === 'liquidation') return 'queued'
 	if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'submitted'
 	if (currentPoolOracleManagerDetails.pendingOperation?.operation === 'liquidation' && sameAddress(currentPoolOracleManagerDetails.pendingOperation.targetVault, liquidationTargetVault)) return 'queued'
 	if (currentPoolOracleManagerDetails.isPriceValid) return 'successful'

@@ -970,6 +970,63 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 	})
 
+	test('shows manual execution guidance for off-slot queued withdrawals', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
+						pendingOperation: {
+							amount: 3n * 10n ** 18n,
+							initiatorVault: zeroAddress,
+							operation: 'liquidation',
+							operationId: 6n,
+							targetVault: '0x0000000000000000000000000000000000000001',
+						},
+						pendingOperationSlotId: 6n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails(),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+						securityVaultResult: {
+							action: 'queueWithdrawRep',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000bc',
+							queuedOperation: {
+								isPendingSlot: false,
+								operation: 'withdrawRep',
+								operationId: 11n,
+							},
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
+		})
+
+		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		const dialogQueries = within(withdrawDialog)
+		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
+		expect(dialogQueries.getByText('#11')).not.toBeNull()
+		expect(dialogQueries.getByText('Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+	})
+
 	test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
@@ -1559,7 +1616,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(reportingLoadCalls).toEqual(['refresh'])
 	})
 
-	test('does not refresh the selected pool after a failed staged operation execution', async () => {
+	test('refreshes the selected pool after a failed staged operation execution', async () => {
 		const refreshSelectedPoolCalls: Array<string | undefined> = []
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const selectedPoolAddress = zeroAddress
@@ -1606,7 +1663,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(refreshSelectedPoolCalls).toEqual([])
+		expect(refreshSelectedPoolCalls).toEqual([selectedPoolAddress])
 		expect(loadSecurityVaultCalls).toEqual([])
 	})
 

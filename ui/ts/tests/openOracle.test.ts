@@ -2,7 +2,7 @@
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from 'viem'
-import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
+import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, queueOracleManagerOperation, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleDisputeSubmissionDetails,
@@ -983,6 +983,31 @@ describe('Open Oracle helpers', () => {
 		expect(details.pendingOperation?.operation).toBe('setSecurityBondsAllowance')
 		expect(details.pendingOperation?.amount).toBe(0n)
 		expect(details.pendingOperation?.targetVault).toBe(client.account.address)
+	})
+
+	test('queueOracleManagerOperation returns queued operation metadata for the pending slot', async () => {
+		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n)
+
+		expect(result.queuedOperation).toBeDefined()
+		expect(result.queuedOperation?.isPendingSlot).toBe(true)
+		expect(result.queuedOperation?.operation).toBe('setSecurityBondsAllowance')
+		expect(result.queuedOperation?.operationId).toBeGreaterThan(0n)
+		expect(result.stagedExecution).toBeUndefined()
+	})
+
+	test('queueOracleManagerOperation preserves incremental ids when another pending slot already exists', async () => {
+		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n)
+		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'withdrawRep', client.account.address, 1n)
+		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		const firstOperationId = firstResult.queuedOperation?.operationId
+		if (firstOperationId === undefined) throw new Error('Expected the first queued operation id to be defined')
+
+		expect(firstResult.queuedOperation?.isPendingSlot).toBe(true)
+		expect(secondResult.queuedOperation).toBeDefined()
+		expect(secondResult.queuedOperation?.isPendingSlot).toBe(false)
+		expect(secondResult.queuedOperation?.operationId).toBeGreaterThan(firstOperationId)
+		expect(details.pendingOperationSlotId).toBe(firstOperationId)
+		expect(details.pendingOperation?.operationId).toBe(firstOperationId)
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
