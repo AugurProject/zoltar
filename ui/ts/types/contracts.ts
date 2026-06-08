@@ -267,6 +267,7 @@ export type ListedSecurityPool = {
 	universeHasForked: boolean
 	universeId: bigint
 	vaultCount: bigint
+	hasLoadedVaults?: boolean
 	vaults: SecurityPoolVaultSummary[]
 }
 

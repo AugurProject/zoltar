@@ -53,7 +53,10 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				if (!isCurrent()) return
 				securityPoolOverviewError.value = undefined
 			},
-			load: async () => await loadAllSecurityPools(createConnectedReadClient()),
+			load: async () => {
+				const loadOptions = nextCheckedAddress === undefined ? { vaultDetailMode: 'selected' as const } : { selectedSecurityPoolAddress: nextCheckedAddress, vaultDetailMode: 'selected' as const }
+				return await loadAllSecurityPools(createConnectedReadClient(), loadOptions)
+			},
 			onSuccess: pools => {
 				hasLoadedSecurityPools.value = true
 				checkedSecurityPoolAddress.value = nextCheckedAddress

@@ -65,6 +65,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
 		universeId: 1n,
+		hasLoadedVaults: true,
 		vaultCount: 0n,
 		vaults: [],
 		...overrides,
@@ -310,5 +311,31 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		expect(documentQueries.queryByText('Operational pool')).toBeNull()
 		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
+	})
+
+	test('shows a deferred vault placeholder when browse mode has not loaded vault details yet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							hasLoadedVaults: false,
+							marketDetails: createMarketDetails({ title: 'Deferred vault pool' }),
+							securityPoolAddress: '0x0000000000000000000000000000000000000200',
+							vaultCount: 2n,
+							vaults: [],
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const poolCard = documentQueries.getByRole('heading', { name: 'Deferred vault pool' }).closest('.entity-card')
+		if (!(poolCard instanceof HTMLElement)) throw new Error('Expected deferred vault pool card')
+		const poolCardQueries = within(poolCard)
+		expect(poolCardQueries.getByText('Open this pool to load 2 vaults.')).not.toBeNull()
+		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
 	})
 })

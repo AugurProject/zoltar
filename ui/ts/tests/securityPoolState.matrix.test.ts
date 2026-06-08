@@ -12,7 +12,9 @@ describe('security pool action matrix data', () => {
 	test('lists the exact lifecycle allowlists', () => {
 		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.operational, ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'])
 		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.ended, ['redeemRep', 'redeemFees', 'redeemCompleteSet', 'redeemShares', 'requestPrice'])
-		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.forkMigration, ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'])
+		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.poolForked, ['redeemFees'])
+		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.forkMigration, ['redeemFees'])
+		expectActionSet(ENABLED_ACTIONS_BY_LIFECYCLE.forkTruthAuction, ['redeemFees'])
 	})
 
 	test('lists the exact reporting, fork, and overlay allowlists', () => {

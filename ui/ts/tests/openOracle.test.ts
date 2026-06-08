@@ -35,7 +35,7 @@ import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsu
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, wrapWeth as wrapWethTestHelper } from '../../../solidity/ts/testsuite/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, OperationType, requestPriceIfNeededAndStageOperation, wrapWeth as wrapWethTestHelper } from '../../../solidity/ts/testsuite/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -971,6 +971,18 @@ describe('Open Oracle helpers', () => {
 		expect(reportDetails.token1Decimals).toBe(18)
 		expect(reportDetails.token2Decimals).toBe(0)
 		expect(reportDetails.stateHash).toBe((await getOpenOracleExtraData(client, reportId)).stateHash)
+	})
+
+	test('loadOracleManagerDetails preserves queued zero-amount security bond allowance operations', async () => {
+		await requestPriceIfNeededAndStageOperation(client, managerAddress, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+
+		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
+
+		expect(details.pendingOperationSlotId).toBeGreaterThan(0n)
+		expect(details.pendingOperation).toBeDefined()
+		expect(details.pendingOperation?.operation).toBe('setSecurityBondsAllowance')
+		expect(details.pendingOperation?.amount).toBe(0n)
+		expect(details.pendingOperation?.targetVault).toBe(client.account.address)
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
