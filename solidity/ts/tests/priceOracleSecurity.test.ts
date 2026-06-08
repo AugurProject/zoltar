@@ -118,7 +118,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndStageOperation, but it was drained to ${balanceAfter}`)
 	})
 
-	test('failed staged operations remain retryable after oracle settlement', async () => {
+	test('failed staged operations are consumed after oracle settlement', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const impossibleAllowance = repDeposit * 10n
 
@@ -136,6 +136,13 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
+		const pendingOperationSlotId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+
 		const stagedOperation = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
@@ -143,6 +150,22 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [1n],
 		})
 
-		assert.strictEqual(stagedOperation[3], impossibleAllowance, 'failed staged operations should retain their amount so they can be retried after the state changes')
+		assert.strictEqual(pendingOperationSlotId, 0n, 'failed auto-executed operations should clear the pending slot')
+		assert.strictEqual(stagedOperation[1], addressString(0x0n), 'failed staged operations should be consumed after the execution attempt')
+		assert.strictEqual(stagedOperation[3], impossibleAllowance, 'failed staged operations should retain their record for auditability')
+		await assert.rejects(
+			async () =>
+				await writeContractAndWait(
+					client,
+					async () =>
+						await client.writeContract({
+							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+							address: priceOracle,
+							functionName: 'executeStagedOperation',
+							args: [1n],
+						}),
+				),
+			/no such operation or already executed/i,
+		)
 	})
 })

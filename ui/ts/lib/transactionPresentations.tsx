@@ -245,10 +245,16 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 }
 
 export function createSecurityVaultSuccessPresentation(result: SecurityVaultActionResult) {
+	let queuedOperationDetail: string | undefined
+	if (result.queuedOperation !== undefined) {
+		queuedOperationDetail = result.queuedOperation.isPendingSlot
+			? `Staged operation #${result.queuedOperation.operationId.toString()} was queued for the next oracle settlement.`
+			: `Staged operation #${result.queuedOperation.operationId.toString()} was queued and must be executed manually after a valid oracle price is available.`
+	}
 	return buildPresentation({
-		detail: `${humanizeAction(result.action)} completed successfully.`,
+		detail: queuedOperationDetail ?? `${humanizeAction(result.action)} completed successfully.`,
 		hash: result.hash,
-		rows: [{ label: 'Action', value: humanizeAction(result.action) }],
+		rows: [{ label: 'Action', value: humanizeAction(result.action) }, ...(result.queuedOperation === undefined ? [] : [{ label: 'Staged Operation', value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -323,10 +329,16 @@ export function createLiquidationTransactionIntent() {
 }
 
 export function createLiquidationSuccessPresentation(result: SecurityPoolOverviewActionResult) {
+	let queuedOperationDetail = 'The liquidation request was submitted successfully.'
+	if (result.queuedOperation !== undefined) {
+		queuedOperationDetail = result.queuedOperation.isPendingSlot
+			? `Liquidation staged as operation #${result.queuedOperation.operationId.toString()} for the next oracle settlement.`
+			: `Liquidation staged as operation #${result.queuedOperation.operationId.toString()} and must be executed manually after a valid oracle price is available.`
+	}
 	return buildPresentation({
-		detail: result.stagedExecution?.success === true ? 'The liquidation executed immediately.' : 'The liquidation request was submitted successfully.',
+		detail: result.stagedExecution?.success === true ? 'The liquidation executed immediately.' : queuedOperationDetail,
 		hash: result.hash,
-		rows: [{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> }],
+		rows: [{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.queuedOperation === undefined ? [] : [{ label: 'Staged Operation', value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: result.stagedExecution?.success === true ? 'Liquidation Executed' : 'Liquidation Submitted',
 		tone: 'success',
 	})

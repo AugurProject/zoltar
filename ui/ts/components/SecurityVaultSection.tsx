@@ -46,7 +46,12 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 	variant?: 'embedded' | 'record'
 }
 type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'set-bond-allowance' | 'withdraw-rep' | undefined
-type QueuedVaultOperationStatus = 'executed' | 'failed' | 'missing' | 'queued' | 'refreshing' | undefined
+type QueuedVaultOperationStatus = 'executed' | 'failed' | 'manual-queued' | 'missing' | 'queued' | 'refreshing' | undefined
+type QueuedVaultOperationView = {
+	amount: bigint | undefined
+	isPendingSlot: boolean
+	operationId: bigint
+}
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const content = (
 		<VaultMetricGrid
@@ -74,10 +79,14 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	)
 }
 export function getQueuedVaultOperation({ pendingOperation, selectedVaultAddress, securityVaultResult }: { pendingOperation: StagedOracleOperation | undefined; selectedVaultAddress: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
-	if (pendingOperation === undefined) return undefined
-	if (!sameAddress(pendingOperation.targetVault, selectedVaultAddress)) return undefined
-	if (securityVaultResult?.action === 'queueWithdrawRep' && pendingOperation.operation === 'withdrawRep') return pendingOperation
-	if (securityVaultResult?.action === 'queueSetSecurityBondAllowance' && pendingOperation.operation === 'setSecurityBondsAllowance') return pendingOperation
+	if (pendingOperation !== undefined && sameAddress(pendingOperation.targetVault, selectedVaultAddress)) {
+		if (securityVaultResult?.action === 'queueWithdrawRep' && pendingOperation.operation === 'withdrawRep') return { amount: pendingOperation.amount, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
+		if (securityVaultResult?.action === 'queueSetSecurityBondAllowance' && pendingOperation.operation === 'setSecurityBondsAllowance') return { amount: pendingOperation.amount, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
+	}
+	if (securityVaultResult?.queuedOperation === undefined) return undefined
+	if (securityVaultResult.action === 'queueWithdrawRep' && securityVaultResult.queuedOperation.operation === 'withdrawRep') return { amount: undefined, isPendingSlot: securityVaultResult.queuedOperation.isPendingSlot, operationId: securityVaultResult.queuedOperation.operationId } satisfies QueuedVaultOperationView
+	if (securityVaultResult.action === 'queueSetSecurityBondAllowance' && securityVaultResult.queuedOperation.operation === 'setSecurityBondsAllowance')
+		return { amount: undefined, isPendingSlot: securityVaultResult.queuedOperation.isPendingSlot, operationId: securityVaultResult.queuedOperation.operationId } satisfies QueuedVaultOperationView
 	return undefined
 }
 function getQueuedVaultOperationStatus({
@@ -93,8 +102,8 @@ function getQueuedVaultOperationStatus({
 }) {
 	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'queueSetSecurityBondAllowance') return undefined
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
+	if (queuedVaultOperation !== undefined) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingSecurityVault || currentPoolOracleManagerDetails === undefined) return 'refreshing'
-	if (queuedVaultOperation !== undefined) return 'queued'
 	if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
 	return 'missing'
 }
@@ -105,6 +114,7 @@ function VaultQueuedOperationStatusCard({
 	missingDescription,
 	queuedTitle,
 	queuedVaultOperation,
+	manualQueuedDescription,
 	refreshingTitle,
 	refreshingDescription,
 	status,
@@ -120,13 +130,14 @@ function VaultQueuedOperationStatusCard({
 	onViewStagedOperations: (() => void) | undefined
 	queuedTitle: string
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
+	manualQueuedDescription: string
 	refreshingDescription: string
 	refreshingTitle: string
 	status: QueuedVaultOperationStatus
 	successDescription: string
 }) {
 	if (status === undefined) return undefined
-	if (status === 'queued')
+	if (status === 'queued' || status === 'manual-queued')
 		return (
 			<WarningSurface as='section' variant='compact'>
 				<div className='entity-card-header'>
@@ -136,8 +147,13 @@ function VaultQueuedOperationStatusCard({
 				</div>
 				<div className='workflow-metric-grid'>
 					<MetricField label='Staged Operation'>{queuedVaultOperation === undefined ? 'Refreshing...' : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
-					<MetricField label='Amount'>{queuedVaultOperation === undefined ? 'Refreshing...' : <CurrencyValue value={queuedVaultOperation.amount} suffix='REP' />}</MetricField>
+					{queuedVaultOperation?.amount === undefined ? null : (
+						<MetricField label='Amount'>
+							<CurrencyValue value={queuedVaultOperation.amount} suffix='REP' />
+						</MetricField>
+					)}
 				</div>
+				{status === 'manual-queued' ? <p className='detail'>{manualQueuedDescription}</p> : null}
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={onViewStagedOperations}>
@@ -157,6 +173,7 @@ function VaultQueuedOperationStatusCard({
 					<span className='badge blocked'>Failed</span>
 				</div>
 				<p className='detail'>{errorMessage ?? 'The security pool rejected the action.'}</p>
+				<p className='detail'>Fix the underlying state and submit a new staged operation.</p>
 			</section>
 		)
 	if (status === 'executed')
@@ -500,6 +517,7 @@ export function SecurityVaultSection({
 								errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the withdrawal immediately, but the security pool rejected it.'}
 								executedTitle='REP Withdrawal Executed'
 								failedTitle='REP Withdrawal Failed'
+								manualQueuedDescription='Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.'
 								missingDescription='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.'
 								missingTitle='REP Withdrawal Submitted'
 								onViewStagedOperations={onViewStagedOperations}
@@ -606,6 +624,7 @@ export function SecurityVaultSection({
 							errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the allowance update immediately, but the security pool rejected it.'}
 							executedTitle='Bond Allowance Executed'
 							failedTitle='Bond Allowance Failed'
+							manualQueuedDescription='Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.'
 							missingDescription='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.'
 							missingTitle='Bond Allowance Submitted'
 							onViewStagedOperations={onViewStagedOperations}

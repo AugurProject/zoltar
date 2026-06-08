@@ -131,6 +131,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 					const nextResult: SecurityPoolOverviewActionResult = {
 						action: 'queueLiquidation',
 						hash: result.hash,
+						...(result.queuedOperation === undefined ? {} : { queuedOperation: result.queuedOperation }),
 						securityPoolAddress,
 						...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 					}

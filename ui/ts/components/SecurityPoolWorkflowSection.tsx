@@ -553,14 +553,10 @@ export function SecurityPoolWorkflowSection({
 			lastExecutedOperationRefreshHash.current = undefined
 			return
 		}
-		if (poolPriceOracleResult.stagedExecution?.success === false) {
-			lastExecutedOperationRefreshHash.current = poolPriceOracleResult.hash
-			return
-		}
 		if (lastExecutedOperationRefreshHash.current === poolPriceOracleResult.hash) return
 		lastExecutedOperationRefreshHash.current = poolPriceOracleResult.hash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if (poolPriceOracleResult.stagedExecution?.operation === 'withdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
+		if (poolPriceOracleResult.stagedExecution?.success === true && poolPriceOracleResult.stagedExecution.operation === 'withdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, reporting.onLoadReporting, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails, view])
 	const selectSelectedPoolView = (nextView: SelectedPoolView) => {

@@ -117,6 +117,7 @@ export type TransactionStatusCardProps = {
 	className?: string
 	detail?: ComponentChildren
 	metrics?: ComponentChildren
+	secondaryDetail?: ComponentChildren
 	title: ComponentChildren
 }
 export type RouteHeaderProps = {

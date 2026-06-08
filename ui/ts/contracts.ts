@@ -39,6 +39,7 @@ import type {
 	ReportingWithdrawalState,
 	SecurityPoolVaultSummary,
 	StagedOracleExecutionResult,
+	StagedOracleQueuedResult,
 	SecurityVaultActionResult,
 	TradingActionResult,
 	TradingDetails,
@@ -155,6 +156,30 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 				operationId: decodedLog.args.operationId,
 				success: decodedLog.args.success,
 			} satisfies StagedOracleExecutionResult
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			continue
+		}
+	}
+	return undefined
+}
+
+function getStagedOracleQueuedResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleQueuedResult | undefined {
+	for (const log of receipt.logs) {
+		try {
+			const decodedLog = decodeEventLog({
+				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				data: log.data,
+				topics: log.topics,
+			})
+			if (decodedLog.eventName !== 'StagedOperationQueued') continue
+			const operation = getOracleQueueOperationFromEventOperation(BigInt(decodedLog.args.operation))
+			if (operation !== expectedOperation) continue
+			return {
+				isPendingSlot: decodedLog.args.isPendingSlot,
+				operation,
+				operationId: decodedLog.args.operationId,
+			} satisfies StagedOracleQueuedResult
 		} catch (error) {
 			if (!isIgnorableLogDecodeError(error)) throw error
 			continue
@@ -1805,9 +1830,11 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	const queuedOperation = getStagedOracleQueuedResult(receipt, 'liquidation')
 	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation')
 	return {
 		hash,
+		...(queuedOperation === undefined ? {} : { queuedOperation }),
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	}
 }
@@ -1848,10 +1875,12 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	const queuedOperation = getStagedOracleQueuedResult(receipt, operation)
 	const stagedExecution = getStagedOracleExecutionResult(receipt, operation)
 	return {
 		action: 'queueOperation',
 		hash,
+		...(queuedOperation === undefined ? {} : { queuedOperation }),
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }

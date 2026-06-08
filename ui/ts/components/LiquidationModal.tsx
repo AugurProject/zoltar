@@ -52,6 +52,11 @@ type LiquidationModalProps = {
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	walletEthBalance?: bigint | undefined
 }
+type QueuedLiquidationOperationView = {
+	amount: bigint | undefined
+	isPendingSlot: boolean
+	operationId: bigint
+}
 function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	if (currentPoolOracleManagerDetails === undefined) return 'refreshing'
 	return currentPoolOracleManagerDetails.isPriceValid ? 'execute' : 'queue'
@@ -89,12 +94,12 @@ function renderQueuedLiquidationStatusCard({
 	securityPoolOverviewResult,
 }: {
 	onViewInStagedOperations: () => void
-	queuedLiquidationOperation: OracleManagerDetails['pendingOperation']
-	queuedLiquidationStatus: 'executed' | 'failed' | 'missing' | 'queued' | 'refreshing' | undefined
+	queuedLiquidationOperation: QueuedLiquidationOperationView | undefined
+	queuedLiquidationStatus: 'executed' | 'failed' | 'manual-queued' | 'missing' | 'queued' | 'refreshing' | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 }) {
 	if (queuedLiquidationStatus === undefined) return null
-	if (queuedLiquidationStatus === 'queued') {
+	if (queuedLiquidationStatus === 'queued' || queuedLiquidationStatus === 'manual-queued') {
 		if (queuedLiquidationOperation === undefined) return null
 		return (
 			<TransactionStatusCard
@@ -103,11 +108,14 @@ function renderQueuedLiquidationStatusCard({
 				metrics={
 					<div className='workflow-metric-grid'>
 						<MetricField label='Staged Operation'>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
-						<MetricField label='Amount'>
-							<CurrencyValue value={queuedLiquidationOperation.amount} />
-						</MetricField>
+						{queuedLiquidationOperation.amount === undefined ? null : (
+							<MetricField label='Amount'>
+								<CurrencyValue value={queuedLiquidationOperation.amount} />
+							</MetricField>
+						)}
 					</div>
 				}
+				detail={queuedLiquidationStatus === 'manual-queued' ? 'Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.' : undefined}
 				actions={
 					<button className='secondary' type='button' onClick={onViewInStagedOperations}>
 						View In Staged Operations
@@ -117,7 +125,14 @@ function renderQueuedLiquidationStatusCard({
 		)
 	}
 	if (queuedLiquidationStatus === 'failed')
-		return <TransactionStatusCard title='Liquidation Failed' badge={<span className='badge blocked'>Failed</span>} detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'} />
+		return (
+			<TransactionStatusCard
+				title='Liquidation Failed'
+				badge={<span className='badge blocked'>Failed</span>}
+				detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'}
+				secondaryDetail='Fix the underlying state and submit a new staged operation.'
+			/>
+		)
 	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
 	if (queuedLiquidationStatus === 'missing')
 		return <TransactionStatusCard title='Liquidation Submitted' badge={<span className='badge warn'>Check State</span>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
@@ -246,8 +261,22 @@ export function LiquidationModal({
 		directLiquidationReason,
 		queueLiquidationEthGuardMessage,
 	)
-	const queuedLiquidationOperation =
-		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation
+	const queuedLiquidationOperation = (() => {
+		if (securityPoolOverviewResult?.action !== 'queueLiquidation') return undefined
+		if (currentPoolOracleManagerDetails?.pendingOperation?.operation === 'liquidation' && currentPoolOracleManagerDetails.pendingOperation.targetVault === liquidationTargetVault) {
+			return {
+				amount: currentPoolOracleManagerDetails.pendingOperation.amount,
+				isPendingSlot: true,
+				operationId: currentPoolOracleManagerDetails.pendingOperation.operationId,
+			} satisfies QueuedLiquidationOperationView
+		}
+		if (securityPoolOverviewResult.queuedOperation?.operation !== 'liquidation') return undefined
+		return {
+			amount: undefined,
+			isPendingSlot: securityPoolOverviewResult.queuedOperation.isPendingSlot,
+			operationId: securityPoolOverviewResult.queuedOperation.operationId,
+		} satisfies QueuedLiquidationOperationView
+	})()
 	const queuedLiquidationStatus =
 		securityPoolOverviewResult?.action !== 'queueLiquidation'
 			? undefined
@@ -257,10 +286,10 @@ export function LiquidationModal({
 
 						return 'failed'
 					}
+					if (queuedLiquidationOperation !== undefined) return queuedLiquidationOperation.isPendingSlot ? 'queued' : 'manual-queued'
 					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 
 					return (() => {
-						if (queuedLiquidationOperation !== undefined) return 'queued'
 						if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
 
 						return 'missing'
