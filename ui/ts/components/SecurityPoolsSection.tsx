@@ -5,10 +5,10 @@ import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../types/components.js'
 
-export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolExists }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolExists: boolean }) {
+export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
 	const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? currentSecurityPoolAddress
-	return resolvedSecurityPoolAddress.trim() !== '' && !selectedPoolExists
+	return resolvedSecurityPoolAddress.trim() !== '' && !selectedPoolHasLoadedDetails
 }
 
 export function SecurityPoolsSection({ activeView, createPool, onActiveViewChange, overview, workflow }: SecurityPoolsSectionProps) {
@@ -30,8 +30,9 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveViewChang
 	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
 		onActiveViewChange(nextView)
 		const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? workflow.securityPoolAddress
-		const selectedPoolExists = overview.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, resolvedSecurityPoolAddress))
-		if (!shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress: workflow.securityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolExists })) return
+		const selectedPool = overview.securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, resolvedSecurityPoolAddress))
+		const selectedPoolHasLoadedDetails = selectedPool !== undefined && selectedPool.hasLoadedVaults !== false
+		if (!shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress: workflow.securityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails })) return
 		workflow.onRefreshSelectedPoolData(resolvedSecurityPoolAddress)
 	}
 

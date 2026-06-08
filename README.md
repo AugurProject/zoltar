@@ -55,6 +55,15 @@ If you are iterating on the app and want rebuilds, use:
 bun run app:watch
 ```
 
+## RPC Configuration
+
+The UI read backend defaults to `https://ethereum.dark.florist`, but you can override it without changing code:
+
+- Add `?rpcUrl=https://your-rpc.example` to the app URL
+- Set `localStorage['zoltar.rpcUrl']`
+- Set `globalThis.__ZOLTAR_RPC_URL__` before bootstrapping the app
+- Set the `ZOLTAR_RPC_URL` environment variable for environments that inject `process.env`
+
 ## Browser Simulation
 
 The UI also supports a walletless browser-local simulation mode for manual QA.

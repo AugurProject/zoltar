@@ -535,6 +535,17 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved/)
 	})
 
+	test('oracle-staged security bond allowance updates can clear the allowance to zero', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+
+		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+
+		const vaultAfterClearingAllowance = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(vaultAfterClearingAllowance.securityBondAllowance, 0n, 'setting the security bond allowance to zero should succeed')
+	})
+
 	test('withdrawFromEscalationGame gives safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)

@@ -41,9 +41,9 @@ export const FORK_ACTIONS: ActionList = ['forkWithOwnEscalation', 'initiateFork'
 export const ENABLED_ACTIONS_BY_LIFECYCLE: Record<SecurityPoolLifecycleState, ActionList> = {
 	operational: ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
 	ended: ['redeemRep', 'redeemFees', 'redeemCompleteSet', 'redeemShares', 'requestPrice'],
-	poolForked: ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
-	forkMigration: ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
-	forkTruthAuction: ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
+	poolForked: ['redeemFees'],
+	forkMigration: ['redeemFees'],
+	forkTruthAuction: ['redeemFees'],
 }
 
 export const ENABLED_ACTIONS_BY_REPORTING_STAGE: Record<SecurityPoolReportingStage, ActionList> = {

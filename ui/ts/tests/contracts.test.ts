@@ -8,7 +8,9 @@ import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareT
 import type { ReadClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
+const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 
@@ -166,7 +168,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n]
+					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -202,6 +204,96 @@ describe('contracts helpers', () => {
 		expect(pool.parent).toBe(zeroAddress)
 		expect(pool.forkOutcome).toBe('none')
 		expect(pool.hasForkActivity).toBe(false)
+	})
+
+	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const getVaultCalls: Address[] = []
+		const securityVaultCalls: Address[] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 5n, 0n, 0n]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				if (getContractFunctionName(firstContract) === 'securityVaults') {
+					const address = Reflect.get(firstContract, 'address')
+					if (typeof address !== 'string') throw new Error('Expected vault security pool address')
+					securityVaultCalls.push(getAddress(address))
+					return [[1n, 3n, 0n, 0n, 0n]]
+				}
+				if (getContractFunctionName(firstContract) === 'poolOwnershipToRep') return [5n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 2n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: securityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: alternateSecurityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 2n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') {
+					const address = Reflect.get(request, 'address')
+					if (typeof address !== 'string') throw new Error('Expected security pool address')
+					return getAddress(address) === securityPoolAddress ? 1n : 2n
+				}
+				if (request.functionName === 'getVaults') {
+					const address = Reflect.get(request, 'address')
+					if (typeof address !== 'string') throw new Error('Expected security pool address')
+					const normalizedAddress = getAddress(address)
+					getVaultCalls.push(normalizedAddress)
+					if (normalizedAddress === alternateSecurityPoolAddress) throw new Error('Unexpected vault load for unselected pool')
+					return [vaultAddress]
+				}
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const pools = await loadAllSecurityPools(client, {
+			selectedSecurityPoolAddress: securityPoolAddress,
+			vaultDetailMode: 'selected',
+		})
+
+		const selectedPool = pools.find(pool => pool.securityPoolAddress === securityPoolAddress)
+		const deferredPool = pools.find(pool => pool.securityPoolAddress === alternateSecurityPoolAddress)
+		if (selectedPool === undefined || deferredPool === undefined) throw new Error('Expected both security pools')
+
+		expect(getVaultCalls).toEqual([securityPoolAddress])
+		expect(securityVaultCalls).toEqual([securityPoolAddress])
+		expect(selectedPool.hasLoadedVaults).toBe(true)
+		expect(selectedPool.vaults).toHaveLength(1)
+		expect(selectedPool.totalRepDeposit).toBe(5n)
+		expect(deferredPool.hasLoadedVaults).toBe(false)
+		expect(deferredPool.vaults).toEqual([])
+		expect(deferredPool.vaultCount).toBe(2n)
 	})
 
 	test('settleOracleReport sends settle with an explicit gas limit', async () => {

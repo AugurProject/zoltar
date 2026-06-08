@@ -162,7 +162,9 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount) public payable {
-		require(amount > 0, 'need to do non zero operation');
+		if (operation != OperationType.SetSecurityBondsAllowance) {
+			require(amount > 0, 'need to do non zero operation');
+		}
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
 		// Capture snapshot of the target vault state at queue time to prevent manipulation.
@@ -210,7 +212,7 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function executeStagedOperation(uint256 operationId) public {
-		require(stagedOperations[operationId].amount > 0, 'no such operation or already executed');
+		require(stagedOperations[operationId].initiatorVault != address(0), 'no such operation or already executed');
 		require(isPriceValid(), 'price is not valid to execute');
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		bool success;
@@ -263,7 +265,7 @@ contract SecurityPoolOracleCoordinator {
 			}
 		}
 		if (success) {
-			stagedOperations[operationId].amount = 0;
+			stagedOperations[operationId].initiatorVault = address(0);
 		}
 	}
 

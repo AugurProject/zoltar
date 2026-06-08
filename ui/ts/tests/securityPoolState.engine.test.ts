@@ -123,6 +123,9 @@ describe('security pool state engine', () => {
 		expect(migration.forkStage).toBe('migration')
 		expectActionEnabled(migration, 'createChildUniverse')
 		expectActionBlocked(migration, 'initiateFork')
+		expectActionBlocked(migration, 'depositRep')
+		expectActionBlocked(migration, 'requestPrice')
+		expectActionBlocked(migration, 'executeStagedOperation')
 
 		const disabled = evaluateSecurityPoolState({
 			forkStage: 'disabled',

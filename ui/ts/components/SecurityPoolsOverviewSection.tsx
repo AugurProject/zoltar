@@ -79,8 +79,8 @@ export function SecurityPoolsOverviewSection({
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
-		if (vaultFilter === 'has-vaults' && pool.vaults.length === 0) return false
-		if (vaultFilter === 'empty' && pool.vaults.length > 0) return false
+		if (vaultFilter === 'has-vaults' && pool.vaultCount === 0n) return false
+		if (vaultFilter === 'empty' && pool.vaultCount > 0n) return false
 		if (normalizedSearchText === '') return true
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
@@ -178,18 +178,29 @@ export function SecurityPoolsOverviewSection({
 										</WorkflowSubsection>
 
 										<WorkflowSubsection title='Vaults'>
-											<SecurityPoolVaultDirectory
-												emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
-												pool={pool}
-												renderActions={vault => (
-													<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
-														Liquidate Vault
-													</button>
-												)}
-												repPerEthPrice={repPerEthPrice}
-												repPerEthSource={repPerEthSource}
-												repPerEthSourceUrl={repPerEthSourceUrl}
-											/>
+											{pool.hasLoadedVaults === false ? (
+												<StateHint
+													presentation={{
+														key: 'action_needed',
+														badgeLabel: 'Deferred',
+														badgeTone: 'muted',
+														detail: `Open this pool to load ${pool.vaultCount.toString()} vault${pool.vaultCount === 1n ? '' : 's'}.`,
+													}}
+												/>
+											) : (
+												<SecurityPoolVaultDirectory
+													emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
+													pool={pool}
+													renderActions={vault => (
+														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
+															Liquidate Vault
+														</button>
+													)}
+													repPerEthPrice={repPerEthPrice}
+													repPerEthSource={repPerEthSource}
+													repPerEthSourceUrl={repPerEthSourceUrl}
+												/>
+											)}
 										</WorkflowSubsection>
 									</EntityCard>
 								)

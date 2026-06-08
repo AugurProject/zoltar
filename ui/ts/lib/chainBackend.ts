@@ -3,8 +3,7 @@ import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.
 import { hasErrorCode, hasErrorMessage } from './errors.js'
 import { tryParseAddressInput } from './inputs.js'
 import { MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
-
-const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
+import { resolveConfiguredRpcUrl } from './rpcConfig.js'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
@@ -42,10 +41,10 @@ export type ChainBackend = {
 	waitUntilReady?(): Promise<void>
 }
 
-function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, ethereum?: InjectedEthereum): ReadClient {
+function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum) : http(DEFAULT_RPC_URL, { batch: { wait: 100 } }),
+		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum) : http(rpcUrl, { batch: { wait: 100 } }),
 	})
 }
 
@@ -84,15 +83,16 @@ function isProviderRequestError(error: unknown) {
 	return hasErrorCode(error) || hasErrorMessage(error)
 }
 
-export function createInjectedBackend(): ChainBackend {
+export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): ChainBackend {
 	const getProvider = () => getInjectedEthereum()
 	let readTransportMode: ReadTransportMode = 'provider'
+	const configuredRpcUrl = resolveConfiguredRpcUrl(rpcUrl === undefined ? {} : { overrideRpcUrl: rpcUrl })
 
 	return {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
-		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, readTransportMode, getProvider()),
+		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, readTransportMode, configuredRpcUrl, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')

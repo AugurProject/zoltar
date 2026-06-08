@@ -361,7 +361,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'browse',
 				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(false)
 
@@ -370,7 +370,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'create',
 				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(false)
 
@@ -379,7 +379,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'operate',
 				nextSecurityPoolAddress: '',
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(false)
 
@@ -388,7 +388,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'operate',
 				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: true,
+				selectedPoolHasLoadedDetails: true,
 			}),
 		).toBe(false)
 
@@ -397,7 +397,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'operate',
 				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(true)
 
@@ -406,7 +406,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'operate',
 				nextSecurityPoolAddress,
-				selectedPoolExists: true,
+				selectedPoolHasLoadedDetails: true,
 			}),
 		).toBe(false)
 
@@ -415,7 +415,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'operate',
 				nextSecurityPoolAddress,
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(true)
 
@@ -424,7 +424,7 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress: '   ',
 				nextView: 'operate',
 				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: true,
+				selectedPoolHasLoadedDetails: true,
 			}),
 		).toBe(false)
 
@@ -432,7 +432,7 @@ void describe('security pools selected tab refresh', () => {
 			shouldRefreshSelectedPoolDataOnViewOpen({
 				currentSecurityPoolAddress: '   ',
 				nextView: 'operate',
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(false)
 
@@ -441,9 +441,20 @@ void describe('security pools selected tab refresh', () => {
 				currentSecurityPoolAddress,
 				nextView: 'operate',
 				nextSecurityPoolAddress: '   ',
-				selectedPoolExists: false,
+				selectedPoolHasLoadedDetails: false,
 			}),
 		).toBe(false)
+	})
+
+	void test('refreshes selected pool data when the summary exists but vault details were deferred', () => {
+		expect(
+			shouldRefreshSelectedPoolDataOnViewOpen({
+				currentSecurityPoolAddress,
+				nextView: 'operate',
+				nextSecurityPoolAddress: currentSecurityPoolAddress,
+				selectedPoolHasLoadedDetails: false,
+			}),
+		).toBe(true)
 	})
 })
 

@@ -103,7 +103,7 @@ describe('injected backend read transport', () => {
 		expect(fetchCalled).toBe(false)
 	})
 
-	test('switches injected reads to the shared RPC backend when requested', async () => {
+	test('switches injected reads to the configured RPC backend when requested', async () => {
 		const requestCalls: string[] = []
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async parameters => {
 			requestCalls.push(parameters.method)
@@ -129,11 +129,11 @@ describe('injected backend read transport', () => {
 				},
 			})
 		})
-		const backend = createInjectedBackend()
+		const backend = createInjectedBackend({ rpcUrl: 'https://rpc.example' })
 		backend.setReadTransportMode?.('rpc')
 		const code = await backend.createReadClient().getCode({ address: zeroAddress })
 		expect(code).toBeUndefined()
-		expect(fetchCalls).toEqual(['https://ethereum.dark.florist'])
+		expect(fetchCalls).toEqual(['https://rpc.example'])
 		expect(requestCalls).toEqual([])
 	})
 
