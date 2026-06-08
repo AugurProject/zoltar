@@ -267,12 +267,12 @@ contract SecurityPoolForker is ISecurityPoolForker {
 			emit TruthAuctionStarted(parentCollateral, forkDataByPool[securityPool].migratedRep, forkDataByPool[parent].repAtFork);
 			if (forkDataByPool[securityPool].migratedRep >= forkDataByPool[parent].repAtFork) {
 				// we have acquired all the ETH already, no need for truthAuction
-				_finalizeTruthAuction(securityPool, 0);
+				_finalizeTruthAuction(securityPool);
 			} else {
 				// we need to buy all the collateral that is missing (did not migrate)
 				uint256 ethToBuy = parentCollateral - parentCollateral * forkDataByPool[securityPool].migratedRep / forkDataByPool[parent].repAtFork;
 				if (ethToBuy == 0) {
-					_finalizeTruthAuction(securityPool, 0);
+					_finalizeTruthAuction(securityPool);
 					return;
 				}
 				// Sell effectively all REP for ETH while leaving only a tiny migrated-rep residue unsold.
@@ -284,10 +284,11 @@ contract SecurityPoolForker is ISecurityPoolForker {
 			}
 		}
 
-	function _finalizeTruthAuction(ISecurityPool securityPool, uint256 repPurchased) private {
+	function _finalizeTruthAuction(ISecurityPool securityPool) private {
 		require(securityPool.systemState() == SystemState.ForkTruthAuction, 'Auction needs to have started');
 		// finalize sends ETH to securityPool
 		forkDataByPool[securityPool].truthAuction.finalize();
+		uint256 repPurchased = forkDataByPool[securityPool].truthAuction.totalRepPurchased();
 		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkDataByPool[parent].repAtFork;
@@ -298,9 +299,13 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		forkDataByPool[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
 		securityPool.setPoolFinancials(collateralAmount, parentTotalSecurityBondAllowance);
 		if (repAvailable > 0) {
-			uint256 denominator = repAvailable - repPurchased;
-			if (denominator > 0) {
-				securityPool.setOwnershipDenominator(forkDataByPool[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / denominator);
+			uint256 unsoldRep = repAvailable - repPurchased;
+			if (unsoldRep > 0) {
+				// Preserve the current vault-ownership distribution while scaling it down to the
+				// unsold REP that remains redeemable by migrated parent vaults. Auction buyers
+				// will mint into the reserved gap via `claimAuctionProceeds`.
+				uint256 currentOwnershipDenominator = securityPool.poolOwnershipDenominator();
+				securityPool.setOwnershipDenominator(currentOwnershipDenominator * repAvailable / unsoldRep);
 			} else {
 				// All rep purchased; avoid division by zero by using repAvailable directly
 				securityPool.setOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
@@ -315,7 +320,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function finalizeTruthAuction(ISecurityPool securityPool) public {
 		require(block.timestamp > forkDataByPool[securityPool].truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME, 'truthAuction still ongoing');
-		_finalizeTruthAuction(securityPool, forkDataByPool[securityPool].truthAuction.totalRepPurchased());
+		_finalizeTruthAuction(securityPool);
 	}
 
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
