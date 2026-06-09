@@ -21,14 +21,16 @@ export enum OperationType {
 	SetSecurityBondsAllowance = 2,
 }
 
-export const requestPriceIfNeededAndStageOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint) => {
+const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 24n * 60n * 60n
+
+export const requestPriceIfNeededAndStageOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [operation, targetVault, amount],
+			args: [operation, targetVault, amount, validForSeconds],
 			value: ethCost,
 		}),
 	)

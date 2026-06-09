@@ -13,10 +13,10 @@ import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.j
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { parseAddressInput } from '../lib/inputs.js'
-import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { getDefaultSecurityVaultFormState, parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { requireDefined } from '../lib/required.js'
-import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, MIN_SECURITY_BOND_ALLOWANCE } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, getStagedOperationTimeoutSeconds, MIN_SECURITY_BOND_ALLOWANCE, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -127,6 +127,13 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
 	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
+	const resolveStagedOperationValidForSeconds = () => {
+		const timeoutMinutes = parseBigIntInput(securityVaultForm.value.stagedOperationTimeoutMinutes ?? '', 'Staged operation timeout')
+		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Staged operation timeout must be at least 1 minute')
+		const timeoutSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
+		if (timeoutSeconds === undefined) throw new Error('Staged operation timeout must be at least 1 minute')
+		return timeoutSeconds
+	}
 
 	useEffect(() => {
 		if (!enabled) {
@@ -321,7 +328,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					walletEthBalance,
 				})
 				if (setBondAllowanceGuardMessage !== undefined) throw new Error(setBondAllowanceGuardMessage)
-				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount)
+				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, resolveStagedOperationValidForSeconds())
 				return {
 					action: 'queueSetSecurityBondAllowance',
 					hash: result.hash,
@@ -383,7 +390,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					walletEthBalance,
 				})
 				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
-				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount)
+				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSeconds())
 				return {
 					action: 'queueWithdrawRep',
 					hash: result.hash,

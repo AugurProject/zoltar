@@ -24,6 +24,7 @@ describe('market form defaults and conversion helpers', () => {
 		expect(getDefaultSecurityPoolFormState().currentRetentionRate).toBe('10')
 		expect(getDefaultSecurityPoolFormState().securityMultiplier).toBe('2')
 		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('0')
+		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('30')
 		expect(getDefaultReportingFormState().selectedOutcome).toBeUndefined()
 		expect(getDefaultReportingFormState().selectedWithdrawDepositIndexesByOutcome).toEqual({ invalid: [], yes: [], no: [] })
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')

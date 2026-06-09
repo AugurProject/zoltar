@@ -79,8 +79,8 @@ import { type ContractRevertReasonParams, type WriteContractClient, readRequired
 import { getInfraContractAddresses, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
-export { createSecurityPool, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
-export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarUniverseSummary } from './contracts/zoltar.js'
+export { createSecurityPool, loadSecurityPoolPage, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
+export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from './contracts/zoltar.js'
 import { loadMarketDetails } from './contracts/zoltar.js'
 export { readOptionalMulticall } from './contracts/core.js'
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
@@ -1821,12 +1821,12 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 		universeId,
 	}
 }
-export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint) {
+export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint) {
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount],
+		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount, validForSeconds],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
@@ -1866,12 +1866,12 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 	const universeMask = (1n << 248n) - 1n
 	return ((universeId & universeMask) << 8n) | (getShareMigrationOutcomeValue(outcome) & 255n)
 }
-export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint) {
+export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint) {
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [getOracleOperationType(operation), targetVault, amount],
+		args: [getOracleOperationType(operation), targetVault, amount, validForSeconds],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)

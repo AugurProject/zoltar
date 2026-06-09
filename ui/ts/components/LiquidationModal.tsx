@@ -16,11 +16,12 @@ import { assertNever } from '../lib/assert.js'
 import { sameAddress } from '../lib/address.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
-import { formatCurrencyInputBalance } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
-import { tryParseRepAmountInput } from '../lib/marketForm.js'
+import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
+import { getStagedOperationTimeoutSeconds } from '../lib/securityVault.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
@@ -34,6 +35,7 @@ type LiquidationModalProps = {
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	liquidationTimeoutMinutes: string
 	loadingPoolOracleManager: boolean
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
@@ -49,6 +51,7 @@ type LiquidationModalProps = {
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
+	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	walletEthBalance?: bigint | undefined
 }
@@ -148,6 +151,7 @@ export function LiquidationModal({
 	liquidationManagerAddress,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
+	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
 	liquidationTargetVault,
 	onLoadPoolOracleManager,
@@ -163,6 +167,7 @@ export function LiquidationModal({
 	callerVaultSummary,
 	targetVaultSummary,
 	onLiquidationAmountChange,
+	onLiquidationTimeoutMinutesChange,
 	onQueueLiquidation,
 	walletEthBalance,
 }: LiquidationModalProps) {
@@ -219,6 +224,10 @@ export function LiquidationModal({
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
+	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
+	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
+	const liquidationTimeoutHelpText =
+		liquidationTimeoutSeconds === undefined ? 'Enter whole minutes. Queued staged operations must stay executable for at least 1 minute after the oracle settlement window completes.' : `This queued staged operation will expire ${formatDuration(liquidationTimeoutSeconds)} after the oracle settlement window completes.`
 	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : 'Select a target vault that is different from the caller vault.'
 	const liquidationSimulation =
 		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.securityMultiplier === undefined || liquidationAmountValue === undefined
@@ -258,6 +267,7 @@ export function LiquidationModal({
 		trimmedLiquidationTargetVault === '' ? 'Select a target vault first.' : undefined,
 		sameVaultWarning,
 		liquidationAmount.trim() === '' ? 'Enter a liquidation amount.' : undefined,
+		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? 'Enter a liquidation timeout of at least 1 minute.' : undefined,
 		directLiquidationReason,
 		queueLiquidationEthGuardMessage,
 	)
@@ -382,7 +392,17 @@ export function LiquidationModal({
 							</button>
 						</div>
 					</label>
+					{liquidationExecutionMode === 'execute' ? null : (
+						<label className='field'>
+							<span>Manual Execution Timeout</span>
+							<div className='field-inline'>
+								<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={liquidationTimeoutDisplayValue} onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)} />
+								<span className='field-inline-action'>minutes</span>
+							</div>
+						</label>
+					)}
 				</div>
+				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
 				{liquidationSimulation === undefined ? null : (
 					<section className='entity-card compact'>
 						<div className='entity-card-header'>

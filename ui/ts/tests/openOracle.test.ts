@@ -49,6 +49,7 @@ const genesisUniverse = 0n
 const securityMultiplier = 2n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const reportedRepEthPrice = 10n
+const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 30n * 60n
 const outcomes = ['Yes', 'No']
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
@@ -986,7 +987,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('queueOracleManagerOperation returns queued operation metadata for the pending slot', async () => {
-		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n)
+		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(result.queuedOperation).toBeDefined()
 		expect(result.queuedOperation?.isPendingSlot).toBe(true)
@@ -995,9 +996,9 @@ describe('Open Oracle helpers', () => {
 		expect(result.stagedExecution).toBeUndefined()
 	})
 
-	test('queueOracleManagerOperation preserves incremental ids when another pending slot already exists', async () => {
-		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n)
-		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'withdrawRep', client.account.address, 1n)
+	test('queueOracleManagerOperation preserves incremental ids when another pending slot already exists for a liquidation target vault', async () => {
+		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const firstOperationId = firstResult.queuedOperation?.operationId
 		if (firstOperationId === undefined) throw new Error('Expected the first queued operation id to be defined')

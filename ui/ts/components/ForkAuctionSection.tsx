@@ -10,6 +10,7 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { MetricField } from './MetricField.js'
+import { PaginationControls } from './PaginationControls.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -1800,13 +1801,7 @@ export function ForkAuctionSection({
 										</div>
 									</button>
 								))}
-								{hasMoreTickSummaries ? (
-									<div className='actions'>
-										<button className='secondary' onClick={() => setLoadedTickPageCount(currentPageCount => currentPageCount + 1)} type='button'>
-											Load More Price Levels
-										</button>
-									</div>
-								) : undefined}
+								{hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} onLoadMore={() => setLoadedTickPageCount(currentPageCount => currentPageCount + 1)} loadMoreLabel='Load More Price Levels' /> : undefined}
 							</div>
 						</div>
 					</div>
@@ -1853,13 +1848,7 @@ export function ForkAuctionSection({
 						})}
 					</div>
 				)}
-				{hasMoreAggregatedAuctionBids ? (
-					<div className='actions'>
-						<button className='secondary' onClick={() => setLoadedAuctionBidPageCount(currentPageCount => currentPageCount + 1)} type='button'>
-							Load More Truth Auction Bids
-						</button>
-					</div>
-				) : undefined}
+				{hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} onLoadMore={() => setLoadedAuctionBidPageCount(currentPageCount => currentPageCount + 1)} loadMoreLabel='Load More Truth Auction Bids' /> : undefined}
 			</SectionBlock>
 		)
 	})()
@@ -1930,13 +1919,7 @@ export function ForkAuctionSection({
 						})}
 					</div>
 				)}
-				{accountState.address !== undefined && hasMoreViewerBids ? (
-					<div className='actions'>
-						<button className='secondary' onClick={() => setLoadedViewerBidPageCount(currentPageCount => currentPageCount + 1)} type='button'>
-							Load More Of My Bids
-						</button>
-					</div>
-				) : undefined}
+				{accountState.address !== undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} onLoadMore={() => setLoadedViewerBidPageCount(currentPageCount => currentPageCount + 1)} loadMoreLabel='Load More Of My Bids' /> : undefined}
 			</SectionBlock>
 		)
 	})()

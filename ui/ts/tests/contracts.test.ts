@@ -2,7 +2,20 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex } from 'viem'
-import { getOpenOracleAddress, loadAllSecurityPools, loadEscalationDeposits, loadForkAuctionDetails, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
+import {
+	getOpenOracleAddress,
+	loadAllSecurityPools,
+	loadEscalationDeposits,
+	loadForkAuctionDetails,
+	loadSecurityPoolPage,
+	loadTruthAuctionActiveTickPage,
+	loadTruthAuctionBidderBidPage,
+	loadTruthAuctionTickBidPage,
+	loadTruthAuctionTickPage,
+	loadTruthAuctionTickSummary,
+	migrateSharesFromUniverse,
+	settleOracleReport,
+} from '../contracts.js'
 import { getForkOutcomeKey } from '../contracts/helpers.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient } from '../types/contracts.js'
@@ -204,6 +217,69 @@ describe('contracts helpers', () => {
 		expect(pool.parent).toBe(zeroAddress)
 		expect(pool.forkOutcome).toBe('none')
 		expect(pool.hasForkActivity).toBe(false)
+	})
+
+	test('loadSecurityPoolPage does not infer parent fork activity from other pools on the same page', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+					const contractAddress = Reflect.get(firstContract, 'address')
+					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n, 1n]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 2n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: parentSecurityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: parentSecurityPoolAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: childSecurityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 2n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') return 0n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadSecurityPoolPage(client, 0, 2)
+		const parentPool = page.pools.find(pool => pool.securityPoolAddress === parentSecurityPoolAddress)
+		if (parentPool === undefined) throw new Error('Expected parent security pool on the loaded page')
+
+		expect(parentPool.hasForkActivity).toBe(false)
+		expect(parentPool.universeHasForked).toBe(true)
 	})
 
 	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {

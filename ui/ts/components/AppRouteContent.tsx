@@ -11,13 +11,20 @@ type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
 	market: ComponentProps<typeof MarketSection>
 	openOracle: ComponentProps<typeof OpenOracleSection>
+	readBackendMessage: string | undefined
 	route: AppRoute
 	securityPools: ComponentProps<typeof SecurityPoolsSection>
 	wrongNetworkMessage: string | undefined
 }
 
-export function AppRouteContent({ deploy, market, openOracle, route, securityPools, wrongNetworkMessage }: Props) {
-	if (wrongNetworkMessage !== undefined) return null
+export function shouldRenderRouteContent({ readBackendMessage, route, wrongNetworkMessage }: Pick<Props, 'readBackendMessage' | 'route' | 'wrongNetworkMessage'>) {
+	if (wrongNetworkMessage !== undefined) return false
+	if (route !== 'deploy' && readBackendMessage !== undefined) return false
+	return true
+}
+
+export function AppRouteContent({ deploy, market, openOracle, readBackendMessage, route, securityPools, wrongNetworkMessage }: Props) {
+	if (!shouldRenderRouteContent({ readBackendMessage, route, wrongNetworkMessage })) return null
 
 	switch (route) {
 		case 'deploy':

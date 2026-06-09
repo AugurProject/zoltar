@@ -1,10 +1,10 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LiquidationModal } from './LiquidationModal.js'
-import { LoadingText } from './LoadingText.js'
+import { PaginationControls } from './PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
@@ -14,25 +14,29 @@ import { StateHint } from './StateHint.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
+import { SECURITY_POOL_PAGE_SIZE } from '../lib/pagination.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
+
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
-	hasLoadedSecurityPools,
+	hasLoadedSecurityPoolPage,
 	liquidationAmount,
 	liquidationMaxAmount,
 	liquidationManagerAddress,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
+	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
-	loadingSecurityPools,
+	loadingSecurityPoolPage,
 	onLiquidationAmountChange,
+	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
-	onLoadSecurityPools,
+	onLoadSecurityPoolPage,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onSelectSecurityPool,
@@ -40,28 +44,51 @@ export function SecurityPoolsOverviewSection({
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	securityPoolBrowseCount,
+	securityPoolPage,
 	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
-	securityPools,
 }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const [pageIndex, setPageIndex] = useState(0)
+	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
 	const [searchText, setSearchText] = useState('')
 	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
-	const parentPoolAddressesWithLoadedChildren = new Set(securityPools.filter(pool => pool.parent !== undefined && pool.parent !== pool.securityPoolAddress).map(pool => pool.parent.toLowerCase()))
+	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
+	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
+	const effectivePoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
+	let poolPageCount: number | undefined
+	if (effectivePoolCount === undefined) {
+		poolPageCount = undefined
+	} else if (effectivePoolCount === 0n) {
+		poolPageCount = 0
+	} else {
+		poolPageCount = Math.ceil(Number(effectivePoolCount) / SECURITY_POOL_PAGE_SIZE)
+	}
+	let resolvedPageIndex = pageIndex
+	if (poolPageCount === 0) {
+		resolvedPageIndex = 0
+	} else if (poolPageCount !== undefined) {
+		resolvedPageIndex = Math.min(pageIndex, poolPageCount - 1)
+	}
+	const currentPageRequestKey = `${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
+	const hasCurrentPageData = securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
+	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
+	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
 	const registryPresentation = getPoolRegistryPresentation({
-		hasLoaded: hasLoadedSecurityPools,
-		isLoading: loadingSecurityPools,
+		hasLoaded: hasLoadedSecurityPoolPage && hasCurrentPageData,
+		isLoading: loadingSecurityPoolPage || isWaitingForPageData,
 		mode: 'collection',
-		poolCount: securityPools.length,
+		poolCount: pagedSecurityPools.length,
 	})
-	const securityPoolsWithState = securityPools.map(pool => ({
+	const securityPoolsWithState = pagedSecurityPools.map(pool => ({
 		pool,
-		hasKnownForkActivity: pool.hasForkActivity || parentPoolAddressesWithLoadedChildren.has(pool.securityPoolAddress.toLowerCase()),
+		hasKnownForkActivity: pool.hasForkActivity,
 		poolState: evaluateSecurityPoolState({
 			lifecycleState: deriveSecurityPoolLifecycleState({
-				hasForkActivity: pool.hasForkActivity || parentPoolAddressesWithLoadedChildren.has(pool.securityPoolAddress.toLowerCase()),
+				hasForkActivity: pool.hasForkActivity,
 				isChildPool: pool.parent !== zeroAddress,
 				questionOutcome: pool.questionOutcome,
 				systemState: pool.systemState,
@@ -76,6 +103,25 @@ export function SecurityPoolsOverviewSection({
 	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
+	const hasPreviousPage = resolvedPageIndex > 0
+	const hasNextPage = poolPageCount === undefined ? false : resolvedPageIndex + 1 < poolPageCount
+	useEffect(() => {
+		if (resolvedPageIndex === pageIndex) return
+		setPageIndex(resolvedPageIndex)
+	}, [pageIndex, resolvedPageIndex])
+	useEffect(() => {
+		let cancelled = false
+		setActivePageRequestKey(currentPageRequestKey)
+		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE))
+			.catch(() => undefined)
+			.finally(() => {
+				if (cancelled) return
+				setActivePageRequestKey(current => (current === currentPageRequestKey ? undefined : current))
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [currentPageRequestKey, resolvedPageIndex])
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
@@ -91,9 +137,18 @@ export function SecurityPoolsOverviewSection({
 				title='Pool Registry'
 				description='Browse deployed pools, inspect their vaults, and open a selected pool workflow.'
 				actions={
-					<button className='secondary' onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
-						{loadingSecurityPools ? <LoadingText>Loading pools...</LoadingText> : 'Refresh pools'}
-					</button>
+					<PaginationControls
+						hasNextPage={hasNextPage}
+						hasPreviousPage={hasPreviousPage}
+						loading={loadingSecurityPoolPage}
+						onNextPage={() => {
+							setPageIndex(current => current + 1)
+						}}
+						onPreviousPage={() => {
+							setPageIndex(current => Math.max(0, current - 1))
+						}}
+						summary={securityPoolPage === undefined || poolPageCount === undefined ? undefined : `Page ${resolvedPageIndex + 1} of ${Math.max(poolPageCount, 1)}`}
+					/>
 				}
 			>
 				<ErrorNotice message={securityPoolOverviewError} />
@@ -122,14 +177,14 @@ export function SecurityPoolsOverviewSection({
 						</select>
 					</label>
 				</div>
-				{securityPools.length > 0 ? (
+				{pagedSecurityPools.length > 0 ? (
 					<p className='detail'>
-						{filteredSecurityPools.length.toString()} of {securityPools.length.toString()} pools shown.
+						{filteredSecurityPools.length.toString()} of {pagedSecurityPools.length.toString()} pools shown on this page.
 					</p>
 				) : undefined}
 
 				{(() => {
-					if (securityPools.length === 0) {
+					if (pagedSecurityPools.length === 0) {
 						if (registryPresentation === undefined) return undefined
 
 						return <StateHint presentation={registryPresentation} />
@@ -220,6 +275,7 @@ export function SecurityPoolsOverviewSection({
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+				liquidationTimeoutMinutes={liquidationTimeoutMinutes}
 				loadingPoolOracleManager={loadingPoolOracleManager}
 				liquidationTargetVault={liquidationTargetVault}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
@@ -235,6 +291,7 @@ export function SecurityPoolsOverviewSection({
 				callerVaultSummary={callerVaultSummary}
 				targetVaultSummary={targetVaultSummary}
 				onLiquidationAmountChange={onLiquidationAmountChange}
+				onLiquidationTimeoutMinutesChange={onLiquidationTimeoutMinutesChange}
 				onQueueLiquidation={onQueueLiquidation}
 			/>
 		</RouteWorkflowPanel>

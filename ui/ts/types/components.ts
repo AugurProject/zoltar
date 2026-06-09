@@ -9,6 +9,7 @@ import type {
 	ListedSecurityPool,
 	MarketCreationResult,
 	MarketDetails,
+	MarketDetailsPage,
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
 	OracleManagerDetails,
@@ -17,6 +18,7 @@ import type {
 	ReportingDetails,
 	ReportingOutcomeKey,
 	SecurityPoolCreationResult,
+	SecurityPoolPage,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
 	SecurityVaultActionResult,
@@ -323,11 +325,13 @@ export type MarketRouteContentProps = {
 	loadingZoltarUniverse: boolean
 	zoltarUniverseState: LoadableValueState
 	onLoadZoltarQuestions: () => Promise<void>
+	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarQuestionCount: bigint | undefined
+	zoltarQuestionPage: MarketDetailsPage | undefined
 	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined
 	loadingZoltarForkAccess: boolean
@@ -382,11 +386,13 @@ type LiquidationControlsProps = {
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	liquidationTimeoutMinutes: string
 	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	securityPoolOverviewError: string | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
+	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
@@ -397,11 +403,16 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
 	checkedSecurityPoolAddress: string | undefined
 	hasLoadedSecurityPools: boolean
+	hasLoadedSecurityPoolPage: boolean
+	loadingSecurityPoolPage: boolean
 	loadingSecurityPools: boolean
+	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number) => void
 	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
+	securityPoolBrowseCount: bigint | undefined
+	securityPoolPage: SecurityPoolPage | undefined
 	securityPools: ListedSecurityPool[]
 } & LiquidationControlsProps &
 	RepPerEthPriceProps
@@ -420,9 +431,11 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
 	liquidationTargetVault: string
+	liquidationTimeoutMinutes: string
 	loadingPoolOracleManager: boolean
 	loadingSecurityPools: boolean
 	onLiquidationAmountChange: (value: string) => void
+	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void

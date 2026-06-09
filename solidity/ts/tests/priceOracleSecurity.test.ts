@@ -18,6 +18,7 @@ import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Price Oracle Refund Security Tests', () => {
+	const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 30n * 60n
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -106,7 +107,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.WithdrawRep, caller, 100n],
+					args: [OperationType.WithdrawRep, caller, 100n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
 					value: sendValue,
 				}),
 		)
@@ -129,7 +130,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, client.account.address, impossibleAllowance],
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, impossibleAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
 					value: ethCost,
 				}),
 		)
@@ -166,6 +167,256 @@ describe('Price Oracle Refund Security Tests', () => {
 						}),
 				),
 			/no such operation or already executed/i,
+		)
+	})
+
+	test('newer self operations do not replace an existing pending slot and stay manually executable', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					value: ethCost,
+				}),
+		)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 2n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+				}),
+		)
+
+		const pendingOperationSlotId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+		assert.strictEqual(pendingOperationSlotId, 1n, 'first queued self operation should keep the auto-execute slot')
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [2n],
+				}),
+		)
+
+		const stagedOperation1 = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [1n],
+		})
+		const stagedOperation2 = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [2n],
+		})
+		assert.strictEqual(stagedOperation1[1], addressString(0n), 'pending-slot operation should be consumed after the oracle settles it')
+		assert.strictEqual(stagedOperation2[3], 2n, 'later self operation should retain its requested amount until manual execution')
+		assert.strictEqual(stagedOperation2[2], client.account.address, 'later self operation should still target the initiator vault')
+	})
+
+	test('staged operations can only be executed once', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					value: ethCost,
+				}),
+		)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+				}),
+		)
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [2n],
+				}),
+		)
+
+		await assert.rejects(
+			async () =>
+				await writeContractAndWait(
+					client,
+					async () =>
+						await client.writeContract({
+							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+							address: priceOracle,
+							functionName: 'executeStagedOperation',
+							args: [2n],
+						}),
+				),
+			/no such operation or already executed/i,
+		)
+	})
+
+	test('non-liquidation staged operations require the initiator vault as target', async () => {
+		const otherVault = addressString(TEST_ADDRESSES[1])
+		const nonLiquidationOperations = [OperationType.WithdrawRep, OperationType.SetSecurityBondsAllowance]
+
+		for (const operation of nonLiquidationOperations) {
+			await assert.rejects(
+				async () =>
+					await writeContractAndWait(
+						client,
+						async () =>
+							await client.writeContract({
+								abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+								address: priceOracle,
+								functionName: 'requestPriceIfNeededAndStageOperation',
+								args: [operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+							}),
+					),
+				/self operation target must match initiator/i,
+			)
+		}
+	})
+
+	test('staged liquidations expire after their caller-selected validity window', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const liquidationTimeoutSeconds = 60n
+		const targetVault = addressString(TEST_ADDRESSES[1])
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds],
+					value: ethCost,
+				}),
+		)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds],
+				}),
+		)
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		await mockWindow.advanceTime(liquidationTimeoutSeconds + 1n)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPrice',
+					value: ethCost,
+				}),
+		)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		await assert.rejects(
+			async () =>
+				await writeContractAndWait(
+					client,
+					async () =>
+						await client.writeContract({
+							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+							address: priceOracle,
+							functionName: 'executeStagedOperation',
+							args: [2n],
+						}),
+				),
+			/expired/i,
+		)
+	})
+
+	test('staged self operations expire after their caller-selected validity window', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const selfOperationTimeoutSeconds = 60n
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.Liquidation, client.account.address, 1n, selfOperationTimeoutSeconds],
+					value: ethCost,
+				}),
+		)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 1n, selfOperationTimeoutSeconds],
+				}),
+		)
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		await mockWindow.advanceTime(selfOperationTimeoutSeconds + 1n)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPrice',
+					value: ethCost,
+				}),
+		)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		await assert.rejects(
+			async () =>
+				await writeContractAndWait(
+					client,
+					async () =>
+						await client.writeContract({
+							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+							address: priceOracle,
+							functionName: 'executeStagedOperation',
+							args: [2n],
+						}),
+				),
+			/staged operation expired/,
 		)
 	})
 })

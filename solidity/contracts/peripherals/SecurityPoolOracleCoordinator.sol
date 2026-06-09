@@ -15,16 +15,18 @@ enum OperationType {
 	SetSecurityBondsAllowance
 }
 
-struct StagedOperation {
-	OperationType operation;
-	address initiatorVault;
-	address targetVault;
-	uint256 amount;
-	uint256 snapshotTargetOwnership;
-	uint256 snapshotTargetAllowance;
-	uint256 snapshotTotalRep;
-	uint256 snapshotDenominator;
-}
+	struct StagedOperation {
+		OperationType operation;
+		address initiatorVault;
+		address targetVault;
+		uint256 amount;
+		uint256 queuedAt;
+		uint256 validForSeconds;
+		uint256 snapshotTargetOwnership;
+		uint256 snapshotTargetAllowance;
+		uint256 snapshotTotalRep;
+		uint256 snapshotDenominator;
+	}
 
 contract SecurityPoolOracleCoordinator {
 	uint256 public pendingReportId;
@@ -163,9 +165,13 @@ contract SecurityPoolOracleCoordinator {
 		return lastSettlementTimestamp != 0 && lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
-	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount) public payable {
+	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount, uint256 validForSeconds) public payable {
 		if (operation != OperationType.SetSecurityBondsAllowance) {
 			require(amount > 0, 'need to do non zero operation');
+		}
+		require(validForSeconds > 0, 'operation timeout must be positive');
+		if (operation != OperationType.Liquidation) {
+			require(targetVault == msg.sender, 'self operation target must match initiator');
 		}
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
@@ -181,6 +187,8 @@ contract SecurityPoolOracleCoordinator {
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
 			amount: amount,
+			queuedAt: block.timestamp,
+			validForSeconds: validForSeconds,
 			snapshotTargetOwnership: snapshotTargetOwnership,
 			snapshotTargetAllowance: snapshotTargetAllowance,
 			snapshotTotalRep: snapshotTotalRep,
@@ -218,10 +226,10 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function executeStagedOperation(uint256 operationId) public {
-		require(stagedOperations[operationId].initiatorVault != address(0), 'no such operation or already executed');
+		StagedOperation storage stagedOperation = stagedOperations[operationId];
+		require(stagedOperation.initiatorVault != address(0), 'no such operation or already executed');
 		require(isPriceValid(), 'price is not valid to execute');
-		StagedOperation memory stagedOperation = stagedOperations[operationId];
-		bool success;
+		require(block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds, 'staged operation expired');
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			try
 					securityPool.performLiquidation(
@@ -234,7 +242,6 @@ contract SecurityPoolOracleCoordinator {
 						stagedOperation.snapshotDenominator
 					)
 			{
-				success = true;
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -247,7 +254,6 @@ contract SecurityPoolOracleCoordinator {
 			try
 				securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount)
 			{
-				success = true;
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -260,7 +266,6 @@ contract SecurityPoolOracleCoordinator {
 			try
 				securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount)
 			{
-				success = true;
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -270,7 +275,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}
-		stagedOperations[operationId].initiatorVault = address(0);
+		stagedOperation.initiatorVault = address(0);
 	}
 
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {

@@ -139,9 +139,11 @@ describe('LiquidationModal', () => {
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
 				liquidationTargetVault={defaultTargetVaultAddress}
+				liquidationTimeoutMinutes='30'
 				loadingPoolOracleManager={false}
 				onLoadPoolOracleManager={() => undefined}
 				onLiquidationAmountChange={() => undefined}
+				onLiquidationTimeoutMinutesChange={() => undefined}
 				onQueueLiquidation={() => undefined}
 				onSelectedPoolViewChange={() => undefined}
 				repPerEthPrice={1n * 10n ** 18n}
@@ -186,6 +188,29 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Queue Liquidation')
+	})
+
+	test('defaults queued liquidation timeout copy to 30 minutes', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('This queued staged operation will expire 30m after the oracle settlement window completes.')).toBe(true)
+	})
+
+	test('requires a queued liquidation timeout of at least 1 minute', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+			}),
+			liquidationTimeoutMinutes: '0',
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Enter a liquidation timeout of at least 1 minute.')
 	})
 
 	test('traps focus while open and restores it when closed', async () => {
@@ -245,10 +270,12 @@ describe('LiquidationModal', () => {
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
+					liquidationTimeoutMinutes='30'
 					loadingPoolOracleManager={false}
 					liquidationTargetVault={zeroAddress}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={setLiquidationAmount}
+					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => undefined}
 					onSelectedPoolViewChange={() => undefined}
 					repPerEthPrice={1n * 10n ** 18n}
@@ -459,9 +486,11 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
+					liquidationTimeoutMinutes='30'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
+					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => {
 						setLiquidationModalOpen(false)
 						setSecurityPoolOverviewResult({
@@ -551,9 +580,11 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
+					liquidationTimeoutMinutes='30'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
+					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => {
 						setLiquidationModalOpen(false)
 						setSecurityPoolOverviewError('Liquidation execution reverted')
@@ -656,9 +687,11 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
+					liquidationTimeoutMinutes='30'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
+					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => undefined}
 					onSelectedPoolViewChange={() => undefined}
 					repPerEthPrice={1n * 10n ** 18n}
@@ -851,9 +884,11 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
+					liquidationTimeoutMinutes='30'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={setLiquidationAmount}
+					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => undefined}
 					onSelectedPoolViewChange={() => undefined}
 					repPerEthPrice={3n * 10n ** 18n}

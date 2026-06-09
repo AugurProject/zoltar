@@ -349,20 +349,32 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 }
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice') {
+	let submittedTitle = 'Executing Staged Operation'
+	let submittedDetail = 'Staged-operation transaction submitted.'
+	if (actionName === 'requestPrice') {
+		submittedTitle = 'Requesting Price'
+		submittedDetail = 'Price request transaction submitted.'
+	}
 	return buildIntent({
 		action: actionName,
 		source: 'pool-oracle',
-		submittedTitle: actionName === 'requestPrice' ? 'Requesting Price' : 'Executing Staged Operation',
-		submittedDetail: actionName === 'requestPrice' ? 'Price request transaction submitted.' : 'Staged-operation transaction submitted.',
+		submittedTitle,
+		submittedDetail,
 	})
 }
 
 export function createPoolOracleSuccessPresentation(result: OpenOracleActionResult) {
+	let detail = 'The staged oracle-manager operation was executed successfully.'
+	let title = 'Staged Operation Executed'
+	if (result.action === 'requestPrice') {
+		detail = 'A new oracle price was requested successfully.'
+		title = 'Price Requested'
+	}
 	return buildPresentation({
-		detail: result.action === 'requestPrice' ? 'A new oracle price was requested successfully.' : 'The staged oracle-manager operation was executed successfully.',
+		detail,
 		hash: result.hash,
 		rows: [{ label: 'Action', value: humanizeAction(result.action) }],
-		title: result.action === 'requestPrice' ? 'Price Requested' : 'Staged Operation Executed',
+		title,
 		tone: 'success',
 	})
 }

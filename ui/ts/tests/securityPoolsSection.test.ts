@@ -9,7 +9,7 @@ import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolPage } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -247,9 +247,11 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
+		liquidationTimeoutMinutes: '30',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
+		onLiquidationTimeoutMinutesChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,
 		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
@@ -280,21 +282,37 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 }
 
 function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteContentProps> = {}): SecurityPoolsOverviewRouteContentProps {
+	const securityPools = overrides.securityPools ?? []
+	const securityPoolPage: SecurityPoolPage | undefined =
+		overrides.securityPoolPage ??
+		(securityPools.length === 0
+			? undefined
+			: {
+					pageIndex: 0,
+					pageSize: 6,
+					poolCount: BigInt(securityPools.length),
+					pools: securityPools,
+				})
 	return {
 		accountState: createAccountState(),
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
 		hasLoadedSecurityPools: false,
+		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		liquidationAmount: '',
 		liquidationMaxAmount: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
+		liquidationTimeoutMinutes: '30',
 		loadingPoolOracleManager: false,
+		loadingSecurityPoolPage: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
+		onLiquidationTimeoutMinutesChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,
+		onLoadSecurityPoolPage: () => undefined,
 		onLoadSecurityPools: () => undefined,
 		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
@@ -302,10 +320,12 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
+		securityPoolBrowseCount: securityPoolPage?.poolCount,
+		securityPoolPage,
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
 		securityPoolOverviewResult: undefined,
-		securityPools: [],
+		securityPools,
 		...overrides,
 	}
 }
@@ -494,27 +514,27 @@ void describe('SecurityPoolsSection', () => {
 		const calls: string[] = []
 		const initialProps = createSecurityPoolsSectionProps({
 			overview: createOverviewProps({
-				hasLoadedSecurityPools: false,
-				loadingSecurityPools: false,
-				onLoadSecurityPools: () => {
-					calls.push('load')
+				hasLoadedSecurityPoolPage: false,
+				loadingSecurityPoolPage: false,
+				onLoadSecurityPoolPage: (pageIndex, pageSize) => {
+					calls.push(`${pageIndex}:${pageSize}`)
 				},
 			}),
 		})
 
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, initialProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(calls).toEqual(['load'])
+		expect(calls).toEqual(['0:6'])
 
 		await act(() => {
 			render(
 				h(SecurityPoolsSection, {
 					...initialProps,
 					overview: createOverviewProps({
-						hasLoadedSecurityPools: false,
-						loadingSecurityPools: false,
-						onLoadSecurityPools: () => {
-							calls.push('rerender')
+						hasLoadedSecurityPoolPage: false,
+						loadingSecurityPoolPage: false,
+						onLoadSecurityPoolPage: (pageIndex, pageSize) => {
+							calls.push(`rerender:${pageIndex}:${pageSize}`)
 						},
 					}),
 				}),
@@ -522,7 +542,7 @@ void describe('SecurityPoolsSection', () => {
 			)
 		})
 
-		expect(calls).toEqual(['load'])
+		expect(calls).toEqual(['0:6'])
 	})
 
 	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {

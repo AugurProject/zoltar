@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { loadMarketDetails, loadZoltarUniverseSummary } from '../contracts/zoltar.js'
+import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../contracts/zoltar.js'
 
 const QUESTION_TUPLE_BINARY = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 100n, '']
 const QUESTION_TUPLE_SCALAR = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units']
@@ -71,6 +71,27 @@ describe('zoltar contract helpers', () => {
 		expect(market.marketType).toBe('binary')
 		expect(market.outcomeLabels).toEqual(outcomeLabels)
 		expect(readContractCalls).toEqual(['getOutcomeLabels'])
+	})
+
+	test('loadZoltarQuestionPage loads only the requested page of questions', async () => {
+		const client = createReadClient({
+			multicallResponses: [
+				[QUESTION_TUPLE_BINARY, 1n],
+				[QUESTION_TUPLE_SCALAR, 1n],
+			],
+			readContractHandlers: {
+				getQuestionCount: async () => 5n,
+				getQuestions: async () => [101n, 102n],
+				getOutcomeLabels: async () => ['Yes', 'No'],
+			},
+		})
+
+		const page = await loadZoltarQuestionPage(client, 1, 2)
+
+		expect(page.questionCount).toBe(5n)
+		expect(page.pageIndex).toBe(1)
+		expect(page.pageSize).toBe(2)
+		expect(page.questions.map(question => question.questionId)).toEqual(['0x65', '0x66'])
 	})
 
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {

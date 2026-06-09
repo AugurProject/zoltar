@@ -2,7 +2,7 @@ import { zeroAddress } from 'viem'
 import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
 import { addressString } from '../bigint'
-import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../constants'
+import { GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../constants'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals'
 import { approveToken, contractExists, getERC20Balance } from '../utilities'
 import { WriteClient } from '../viem'
@@ -65,7 +65,7 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
 	await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
 
-	await mockWindow.advanceTime(DAY)
+	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 
 	await openOracleSettle(client, pendingReportId)
 }

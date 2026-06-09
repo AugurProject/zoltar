@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
+import { loadAllSecurityPools, loadOracleManagerDetails, loadSecurityPoolPage, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -10,11 +10,12 @@ import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
-import { parseRepAmountInput } from '../lib/marketForm.js'
+import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { WriteOperationsParameters } from '../types/app.js'
-import type { ListedSecurityPool, SecurityPoolOverviewActionResult } from '../types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
 	accountAddress: Address | undefined
@@ -30,11 +31,16 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	const liquidationAmount = useSignal('0')
 	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
+	const liquidationTimeoutMinutes = useSignal(DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString())
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
+	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
+	const securityPoolPage = useSignal<SecurityPoolPage | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
+	const securityPoolPageLoad = useLoadController()
 	const hasLoadedSecurityPools = useSignal(false)
+	const hasLoadedSecurityPoolPage = useSignal(false)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewFeedback = useSignal<ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined>(undefined)
@@ -42,6 +48,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 	const nextSecurityPoolsLoad = useRequestGuard()
+	const nextSecurityPoolPageLoad = useRequestGuard()
 
 	const loadSecurityPools = async (securityPoolAddress?: string) => {
 		const normalizedCheckedAddress = normalizeAddress(securityPoolAddress)
@@ -68,6 +75,26 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		})
 	}
 
+	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number) => {
+		const isCurrent = nextSecurityPoolPageLoad()
+		await securityPoolPageLoad.run({
+			isCurrent,
+			onStart: () => {
+				if (!isCurrent()) return
+				securityPoolOverviewError.value = undefined
+			},
+			load: async () => await loadSecurityPoolPage(createConnectedReadClient(), pageIndex, pageSize),
+			onSuccess: page => {
+				hasLoadedSecurityPoolPage.value = true
+				securityPoolBrowseCount.value = page.poolCount
+				securityPoolPage.value = page
+			},
+			onError: error => {
+				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pool registry page')
+			},
+		})
+	}
+
 	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
 		securityPoolOverviewError.value = undefined
 		securityPoolOverviewFeedback.value = undefined
@@ -76,6 +103,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		liquidationMaxAmount.value = maxAmount
 		liquidationSecurityPoolAddress.value = securityPoolAddress
 		liquidationTargetVault.value = vaultAddress
+		liquidationTimeoutMinutes.value = DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString()
 		liquidationModalOpen.value = true
 	}
 
@@ -124,7 +152,11 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 					if (liquidationGuardMessage !== undefined) throw new Error(liquidationGuardMessage)
 					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 					const amount = parseRepAmountInput(liquidationAmount.value, 'Liquidation amount')
-					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
+					const timeoutMinutes = parseBigIntInput(liquidationTimeoutMinutes.value, 'Liquidation timeout')
+					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
+					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
+					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be at least 1 minute')
+					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount, validForSeconds)
 				},
 				'Failed to queue liquidation',
 				async result => {
@@ -153,20 +185,29 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		liquidationManagerAddress: liquidationManagerAddress.value,
 		liquidationModalOpen: liquidationModalOpen.value,
 		liquidationTargetVault: liquidationTargetVault.value,
+		liquidationTimeoutMinutes: liquidationTimeoutMinutes.value,
 		checkedSecurityPoolAddress: checkedSecurityPoolAddress.value,
 		hasLoadedSecurityPools: hasLoadedSecurityPools.value,
+		hasLoadedSecurityPoolPage: hasLoadedSecurityPoolPage.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
+		loadingSecurityPoolPage: securityPoolPageLoad.isLoading.value,
 		loadingSecurityPools: securityPoolsLoad.isLoading.value,
 		closeLiquidationModal,
+		loadBrowseSecurityPoolPage,
 		openLiquidationModal,
 		queueLiquidation,
 		securityPoolOverviewActiveAction: securityPoolOverviewActiveAction.value,
 		securityPoolOverviewError: securityPoolOverviewError.value,
 		securityPoolOverviewFeedback: securityPoolOverviewFeedback.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
+		securityPoolBrowseCount: securityPoolBrowseCount.value,
+		securityPoolPage: securityPoolPage.value,
 		securityPools: securityPools.value,
 		setLiquidationAmount: (value: string) => {
 			liquidationAmount.value = value
+		},
+		setLiquidationTimeoutMinutes: (value: string) => {
+			liquidationTimeoutMinutes.value = value
 		},
 		setLiquidationTargetVault: (value: string) => {
 			liquidationTargetVault.value = value

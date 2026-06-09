@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { DataGrid } from './DataGrid.js'
 import { ForkZoltarSection } from './ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
@@ -12,7 +12,6 @@ import type { MarketSectionProps } from '../types/components.js'
 
 export function MarketSection({
 	accountState,
-	activeUniverseId,
 	activeView,
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
@@ -29,7 +28,7 @@ export function MarketSection({
 	onCreateChildUniverseForOutcomeIndex,
 	onCreateMarket,
 	onForkZoltar,
-	onLoadZoltarQuestions,
+	onLoadZoltarQuestionPage,
 	onMarketFormChange,
 	onMigrateInternalRep,
 	onPrepareRepForMigration,
@@ -53,6 +52,7 @@ export function MarketSection({
 	zoltarMigrationPreparedRepBalance,
 	zoltarMigrationResult,
 	zoltarQuestionCount,
+	zoltarQuestionPage,
 	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseState,
@@ -61,7 +61,6 @@ export function MarketSection({
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
-	const lastAutoLoadedQuestionsUniverseId = useRef<bigint | undefined>(undefined)
 	const [forkModalOpen, setForkModalOpen] = useState(false)
 
 	useEffect(() => {
@@ -70,21 +69,6 @@ export function MarketSection({
 		if (hasForked) return
 		onActiveViewChange('questions')
 	}, [hasForked, onActiveViewChange, view, zoltarUniverse])
-
-	useEffect(() => {
-		if (view !== 'questions') return
-		if (loadingZoltarQuestionCount) return
-		if (zoltarQuestionCount === undefined) return
-		if (zoltarQuestionCount === 0n) return
-		if (loadingZoltarQuestions) return
-		if (hasLoadedZoltarQuestions) return
-		if (lastAutoLoadedQuestionsUniverseId.current === activeUniverseId) return
-		lastAutoLoadedQuestionsUniverseId.current = activeUniverseId
-		void Promise.resolve(onLoadZoltarQuestions()).catch(error => {
-			lastAutoLoadedQuestionsUniverseId.current = undefined
-			console.error('[market] failed to auto-load zoltar questions', error)
-		})
-	}, [activeUniverseId, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount])
 
 	return (
 		<div className='route-view-flow'>
@@ -131,15 +115,14 @@ export function MarketSection({
 						) : undefined}
 						<MarketQuestionsSection
 							hasForked={hasForked}
-							hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
+							onLoadZoltarQuestionPage={onLoadZoltarQuestionPage}
 							loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 							loadingZoltarQuestions={loadingZoltarQuestions}
-							onLoadZoltarQuestions={onLoadZoltarQuestions}
 							onOpenForkTab={() => onActiveViewChange('fork')}
 							onUseQuestionForFork={onUseQuestionForFork}
 							onUseQuestionForPool={onUseQuestionForPool}
 							zoltarQuestionCount={zoltarQuestionCount}
-							zoltarQuestions={zoltarQuestions}
+							zoltarQuestionPage={zoltarQuestionPage}
 						/>
 					</>
 				) : undefined}

@@ -32,9 +32,18 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const nextPoolOracleManagerLoad = useRequestGuard()
-	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => (actionName === 'requestPrice' ? 'Requesting price' : 'Executing staged operation')
-	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => (actionName === 'requestPrice' ? 'Price requested' : 'Staged operation executed')
-	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => (actionName === 'requestPrice' ? 'Price request failed' : 'Staged operation failed')
+	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
+		if (actionName === 'requestPrice') return 'Requesting price'
+		return 'Executing staged operation'
+	}
+	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
+		if (actionName === 'requestPrice') return 'Price requested'
+		return 'Staged operation executed'
+	}
+	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
+		if (actionName === 'requestPrice') return 'Price request failed'
+		return 'Staged operation failed'
+	}
 
 	const loadPoolOracleManager = async (managerAddress: Address) => {
 		const isCurrent = nextPoolOracleManagerLoad()

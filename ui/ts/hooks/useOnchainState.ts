@@ -21,6 +21,14 @@ type ChainClock = {
 	currentTimestamp: bigint | undefined
 }
 
+function getExpectedReadChainId(backend: ChainBackend) {
+	return backend.profile.chain.id
+}
+
+function buildReadBackendMismatchMessage(backend: ChainBackend, actualChainId: number) {
+	return `Configured read RPC reports chain ${actualChainId.toString()}, but this app requires ${backend.profile.displayName} (${getExpectedReadChainId(backend).toString()}).`
+}
+
 type LoadWalletStateParameters = {
 	chainIdPromise: Promise<string> | undefined
 	connectedAddress: Address | undefined
@@ -127,6 +135,13 @@ export function useOnchainState() {
 	const nextRefresh = useRequestGuard()
 	const nextChainClockRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
+	const readBackendMessage = useSignal<string | undefined>(undefined)
+	const readBackendValidated = useSignal(false)
+	const clearChainClock = () => {
+		currentBlockNumber.value = undefined
+		currentTimestamp.value = undefined
+	}
+	const isReadBackendReady = () => readBackendValidated.value && readBackendMessage.value === undefined
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		const updated = update(deploymentStatuses.value)
 		deploymentStatuses.value = updated
@@ -144,10 +159,42 @@ export function useOnchainState() {
 		const shouldLoadWalletState = options.loadWalletState ?? true
 		const backend = getActiveBackend()
 		const isCurrent = nextRefresh()
+		let connectedAddress: Address | undefined
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
-		backend.setReadTransportMode?.('rpc')
-		void refreshChainClock(backend)
+		readBackendMessage.value = undefined
+		readBackendValidated.value = false
+		if (shouldLoadWalletState) {
+			try {
+				const accounts = await backend.getAccounts()
+				if (!isCurrent()) return
+				connectedAddress = normalizeAccount(accounts[0])
+			} catch (error) {
+				if (!isCurrent()) return
+				walletBootstrapComplete.value = true
+				errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
+				return
+			}
+		}
+		backend.setReadTransportMode?.(connectedAddress === undefined ? 'rpc' : 'provider')
+		if (connectedAddress === undefined) {
+			clearChainClock()
+			try {
+				const readChainId = await backend.createReadClient().getChainId()
+				if (!isCurrent()) return
+				if (readChainId !== getExpectedReadChainId(backend)) {
+					readBackendMessage.value = buildReadBackendMismatchMessage(backend, readChainId)
+					clearChainClock()
+				}
+				readBackendValidated.value = true
+			} catch (error) {
+				if (!isCurrent()) return
+				errorMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
+			}
+		} else {
+			readBackendValidated.value = true
+		}
+		if (isReadBackendReady()) void refreshChainClock(backend)
 
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
@@ -158,7 +205,7 @@ export function useOnchainState() {
 			environmentBootstrapError.value = undefined
 		}
 
-		if (backend.isBootstrapped !== false)
+		if (backend.isBootstrapped !== false && readBackendMessage.value === undefined)
 			void deploymentStatusLoad.track(async () => {
 				try {
 					const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
@@ -176,9 +223,6 @@ export function useOnchainState() {
 
 		await walletStateLoad.track(async () => {
 			try {
-				const accounts = await backend.getAccounts()
-				if (!isCurrent()) return
-				const connectedAddress = normalizeAccount(accounts[0])
 				accountState.value = {
 					address: connectedAddress,
 					chainId: accountState.value.chainId,
@@ -286,7 +330,7 @@ export function useOnchainState() {
 			environmentBootstrapLabel.value = backend.bootstrapLabel
 			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = backend.isBootstrapped ?? true
-			void refreshChainClock(backend)
+			if (isReadBackendReady()) void refreshChainClock(backend)
 		})
 		const handleWalletChange = () => {
 			void refreshState()
@@ -304,16 +348,18 @@ export function useOnchainState() {
 	useEffect(() => {
 		const backend = getActiveBackend()
 		if (backend.isBootstrapped === false) return
+		if (!isReadBackendReady()) return
 
 		void refreshChainClock(backend)
 		const intervalId = window.setInterval(() => {
+			if (!isReadBackendReady()) return
 			void refreshChainClock(backend)
 		}, CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS)
 
 		return () => {
 			window.clearInterval(intervalId)
 		}
-	}, [environmentReady.value])
+	}, [environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
 	return {
 		accountState: accountState.value,
@@ -322,6 +368,7 @@ export function useOnchainState() {
 		currentTimestamp: currentTimestamp.value,
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
+		readBackendMessage: readBackendMessage.value,
 		environmentBootstrapError: environmentBootstrapError.value,
 		environmentBootstrapLabel: environmentBootstrapLabel.value,
 		environmentBootstrapProgress: environmentBootstrapProgress.value,

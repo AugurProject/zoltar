@@ -89,6 +89,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		onCreateChildUniverseForOutcomeIndex: () => undefined,
 		onCreateMarket: () => undefined,
 		onForkZoltar: () => undefined,
+		onLoadZoltarQuestionPage: async () => undefined,
 		onLoadZoltarQuestions: async () => undefined,
 		onMarketFormChange: () => undefined,
 		onMigrateInternalRep: () => undefined,
@@ -117,6 +118,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		zoltarMigrationPreparedRepBalance: 0n,
 		zoltarMigrationResult: undefined,
 		zoltarQuestionCount: 0n,
+		zoltarQuestionPage: undefined,
 		zoltarQuestions: [],
 		zoltarUniverse: createZoltarUniverse(),
 		zoltarUniverseState: 'ready',
@@ -158,10 +160,9 @@ describe('MarketSection', () => {
 		const calls: string[] = []
 		const initialProps = createMarketSectionProps({
 			activeUniverseId: 7n,
-			hasLoadedZoltarQuestions: false,
 			loadingZoltarQuestions: false,
-			onLoadZoltarQuestions: async () => {
-				calls.push('load')
+			onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+				calls.push(`${pageIndex}:${pageSize}`)
 			},
 			zoltarQuestionCount: 3n,
 			zoltarUniverse: createZoltarUniverse({ universeId: 7n }),
@@ -169,21 +170,56 @@ describe('MarketSection', () => {
 
 		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(calls).toEqual(['load'])
+		expect(within(document.body).getByText('Loading questions...')).not.toBeNull()
+		await waitFor(() => {
+			expect(calls).toEqual(['0:10'])
+		})
 
 		await act(() => {
 			render(
 				h(MarketSection, {
 					...initialProps,
-					onLoadZoltarQuestions: async () => {
-						calls.push('rerender')
+					onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+						calls.push(`rerender:${pageIndex}:${pageSize}`)
 					},
 				}),
 				renderedComponent.container,
 			)
 		})
 
-		expect(calls).toEqual(['load'])
+		expect(calls).toEqual(['0:10'])
+	})
+
+	test('stops showing a loading state when a requested question page fails to load', async () => {
+		const failedPageLoad = createDeferred<void>()
+		const initialProps = createMarketSectionProps({
+			onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+				if (pageIndex === 1 && pageSize === 10) return await failedPageLoad.promise
+			},
+			zoltarQuestionCount: 12n,
+			zoltarQuestionPage: {
+				pageIndex: 0,
+				pageSize: 10,
+				questionCount: 12n,
+				questions: [createBinaryForkQuestion()],
+			},
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		await act(() => {
+			fireEvent.click(nextPageButton)
+		})
+		expect(documentQueries.getByText('Loading questions...')).not.toBeNull()
+
+		void failedPageLoad.promise.catch(() => undefined)
+		failedPageLoad.reject(new Error('page load failed'))
+		await waitFor(() => {
+			expect(documentQueries.queryByText('Loading questions...')).toBeNull()
+			expect(documentQueries.getByText('Questions for this page have not loaded yet.')).not.toBeNull()
+		})
 	})
 
 	test('does not auto-load questions while the question count is unresolved', async () => {
@@ -192,7 +228,7 @@ describe('MarketSection', () => {
 			h(
 				MarketSection,
 				createMarketSectionProps({
-					onLoadZoltarQuestions: async () => {
+					onLoadZoltarQuestionPage: async () => {
 						calls.push('load')
 					},
 					zoltarQuestionCount: undefined,
@@ -210,7 +246,7 @@ describe('MarketSection', () => {
 			h(
 				MarketSection,
 				createMarketSectionProps({
-					onLoadZoltarQuestions: async () => {
+					onLoadZoltarQuestionPage: async () => {
 						calls.push('load')
 					},
 					zoltarQuestionCount: 0n,
@@ -228,11 +264,16 @@ describe('MarketSection', () => {
 			h(
 				MarketSection,
 				createMarketSectionProps({
-					hasLoadedZoltarQuestions: true,
-					onLoadZoltarQuestions: async () => {
+					onLoadZoltarQuestionPage: async () => {
 						calls.push('load')
 					},
 					zoltarQuestionCount: 3n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 3n,
+						questions: [createBinaryForkQuestion()],
+					},
 				}),
 			),
 		)
@@ -246,8 +287,8 @@ describe('MarketSection', () => {
 		const initialProps = createMarketSectionProps({
 			activeUniverseId: 12n,
 			loadingZoltarQuestionCount: true,
-			onLoadZoltarQuestions: async () => {
-				calls.push('load')
+			onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+				calls.push(`${pageIndex}:${pageSize}`)
 			},
 			zoltarQuestionCount: undefined,
 			zoltarUniverse: undefined,
@@ -272,15 +313,17 @@ describe('MarketSection', () => {
 			)
 		})
 
-		expect(calls).toEqual(['load'])
+		await waitFor(() => {
+			expect(calls).toEqual(['0:10'])
+		})
 	})
 
 	test('does not auto-load questions again on rerender when the active universe id is unchanged', async () => {
 		const calls: string[] = []
 		const initialProps = createMarketSectionProps({
 			activeUniverseId: 13n,
-			onLoadZoltarQuestions: async () => {
-				calls.push('load')
+			onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+				calls.push(`${pageIndex}:${pageSize}`)
 			},
 			zoltarQuestionCount: 3n,
 			zoltarUniverse: undefined,
@@ -289,7 +332,9 @@ describe('MarketSection', () => {
 
 		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(calls).toEqual(['load'])
+		await waitFor(() => {
+			expect(calls).toEqual(['0:10'])
+		})
 
 		await act(() => {
 			render(
@@ -297,8 +342,8 @@ describe('MarketSection', () => {
 					MarketSection,
 					createMarketSectionProps({
 						...initialProps,
-						onLoadZoltarQuestions: async () => {
-							calls.push('rerender')
+						onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+							calls.push(`rerender:${pageIndex}:${pageSize}`)
 						},
 					}),
 				),
@@ -306,36 +351,52 @@ describe('MarketSection', () => {
 			)
 		})
 
-		expect(calls).toEqual(['load'])
+		expect(calls).toEqual(['0:10'])
 	})
 
-	test('retries question auto-load when the previous automatic load fails', async () => {
+	test('retries question auto-load when the user leaves and re-enters the failed page', async () => {
 		const calls: string[] = []
 		const initialLoad = createDeferred<void>()
+		const firstPageQuestion = createBinaryForkQuestion()
+		const secondPageQuestion = {
+			...createBinaryForkQuestion(),
+			questionId: '0x02',
+			title: 'Second page question',
+		}
 		const renderedComponent = await renderIntoDocument(
 			h(
 				MarketSection,
 				createMarketSectionProps({
 					activeUniverseId: 9n,
-					hasLoadedZoltarQuestions: false,
 					loadingZoltarQuestions: false,
-					onLoadZoltarQuestions: async () => {
-						calls.push('load')
-						return await initialLoad.promise
+					onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+						calls.push(`load:${pageIndex}:${pageSize}`)
+						if (pageIndex === 1 && pageSize === 10) return await initialLoad.promise
 					},
-					zoltarQuestionCount: 3n,
+					zoltarQuestionCount: 12n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 12n,
+						questions: [firstPageQuestion],
+					},
 					zoltarUniverse: undefined,
 					zoltarUniverseState: 'unknown',
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		await waitFor(() => {
-			expect(calls).toEqual(['load'])
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Next Page' }))
 		})
 		await act(async () => {
 			initialLoad.reject(new Error('temporary failure'))
 			await expect(initialLoad.promise).rejects.toThrow('temporary failure')
+		})
+		await waitFor(() => {
+			expect(calls).toEqual(['load:1:10'])
 		})
 
 		await act(() => {
@@ -344,12 +405,17 @@ describe('MarketSection', () => {
 					MarketSection,
 					createMarketSectionProps({
 						activeUniverseId: 9n,
-						hasLoadedZoltarQuestions: false,
 						loadingZoltarQuestions: false,
-						onLoadZoltarQuestions: async () => {
-							calls.push('retry')
+						onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+							calls.push(`retry:${pageIndex}:${pageSize}`)
 						},
-						zoltarQuestionCount: 3n,
+						zoltarQuestionCount: 12n,
+						zoltarQuestionPage: {
+							pageIndex: 0,
+							pageSize: 10,
+							questionCount: 12n,
+							questions: [firstPageQuestion],
+						},
 						zoltarUniverse: undefined,
 						zoltarUniverseState: 'unknown',
 					}),
@@ -358,7 +424,125 @@ describe('MarketSection', () => {
 			)
 		})
 
-		expect(calls).toEqual(['load', 'retry'])
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Previous Page' }))
+		})
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						activeUniverseId: 9n,
+						loadingZoltarQuestions: false,
+						onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+							calls.push(`retry:${pageIndex}:${pageSize}`)
+						},
+						zoltarQuestionCount: 12n,
+						zoltarQuestionPage: {
+							pageIndex: 0,
+							pageSize: 10,
+							questionCount: 12n,
+							questions: [firstPageQuestion],
+						},
+						zoltarUniverse: undefined,
+						zoltarUniverseState: 'unknown',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Next Page' }))
+		})
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						activeUniverseId: 9n,
+						loadingZoltarQuestions: false,
+						onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+							calls.push(`retry:${pageIndex}:${pageSize}`)
+						},
+						zoltarQuestionCount: 12n,
+						zoltarQuestionPage: {
+							pageIndex: 1,
+							pageSize: 10,
+							questionCount: 12n,
+							questions: [secondPageQuestion],
+						},
+						zoltarUniverse: undefined,
+						zoltarUniverseState: 'unknown',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(calls).toEqual(['load:1:10', 'retry:1:10'])
+		})
+	})
+
+	test('invalidates stale paged question data when the question count changes', async () => {
+		const calls: string[] = []
+		const initialProps = createMarketSectionProps({
+			onLoadZoltarQuestionPage: async () => undefined,
+			zoltarQuestionCount: 1n,
+			zoltarQuestionPage: {
+				pageIndex: 0,
+				pageSize: 10,
+				questionCount: 1n,
+				questions: [createBinaryForkQuestion()],
+			},
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						...initialProps,
+						onLoadZoltarQuestionPage: async (pageIndex, pageSize) => {
+							calls.push(`${pageIndex}:${pageSize}`)
+						},
+						zoltarQuestionCount: 2n,
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(calls).toEqual(['0:10'])
+		})
+	})
+
+	test('shows a not-yet-loaded question state instead of rendering an empty page', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					loadingZoltarQuestionCount: false,
+					loadingZoltarQuestions: false,
+					onLoadZoltarQuestionPage: async () => undefined,
+					zoltarQuestionCount: 3n,
+					zoltarQuestionPage: {
+						pageIndex: 1,
+						pageSize: 10,
+						questionCount: 3n,
+						questions: [],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('No questions were returned for the selected page.')).toBeNull()
+		expect(documentQueries.getByText('Loading questions...')).not.toBeNull()
 	})
 
 	test('does not render redundant universe summary cards for questions view', async () => {
