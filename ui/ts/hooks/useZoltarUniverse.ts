@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
-import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
+import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
@@ -12,7 +12,18 @@ import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import type { WriteOperationsParameters } from '../types/app.js'
-import type { DeploymentStatus, MarketDetails, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
+
+function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
+	const questionCount = BigInt(questions.length)
+	const startIndex = currentPage.pageIndex * currentPage.pageSize
+	return {
+		pageIndex: currentPage.pageIndex,
+		pageSize: currentPage.pageSize,
+		questionCount,
+		questions: questions.slice(startIndex, startIndex + currentPage.pageSize),
+	}
+}
 
 type UseZoltarUniverseParameters = {
 	accountAddress: Address | undefined
@@ -35,6 +46,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarUniverseResolvedId = useSignal<bigint | undefined>(undefined)
 	const hasLoadedZoltarQuestions = useSignal(false)
 	const zoltarQuestionCount = useSignal<bigint | undefined>(undefined)
+	const zoltarQuestionPage = useSignal<MarketDetailsPage | undefined>(undefined)
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
@@ -54,6 +66,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarChildUniversePendingOutcomeIndex.value = undefined
 		hasLoadedZoltarQuestions.value = false
 		zoltarQuestionCount.value = undefined
+		zoltarQuestionPage.value = undefined
 		zoltarQuestions.value = []
 	}
 
@@ -145,6 +158,45 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				if (!isMounted.current) return
 				zoltarQuestions.value = questions
 				hasLoadedZoltarQuestions.value = true
+				const currentQuestionPage = zoltarQuestionPage.value
+				if (currentQuestionPage !== undefined) {
+					zoltarQuestionPage.value = buildQuestionPageFromQuestions(questions, currentQuestionPage)
+				}
+			},
+			onError: error => {
+				loadError = loadError ?? error
+			},
+		})
+
+		await Promise.allSettled([countTask, questionsTask])
+		if (loadError !== undefined) throw loadError
+	}
+
+	const loadQuestionsPage = async (pageIndex: number, pageSize: number): Promise<void> => {
+		if (!isMounted.current) return
+		const isCountCurrent = nextQuestionCountLoad()
+		const isQuestionsCurrent = nextQuestionsLoad()
+		const readClient = createConnectedReadClient()
+		let loadError: unknown
+
+		const countTask = questionCountLoad.run({
+			isCurrent: isCountCurrent,
+			load: async () => await loadZoltarQuestionCount(readClient),
+			onSuccess: questionCount => {
+				if (!isMounted.current) return
+				zoltarQuestionCount.value = questionCount
+			},
+			onError: error => {
+				loadError = loadError ?? error
+			},
+		})
+
+		const questionsTask = questionsLoad.run({
+			isCurrent: isQuestionsCurrent,
+			load: async () => await loadZoltarQuestionPage(readClient, pageIndex, pageSize),
+			onSuccess: page => {
+				if (!isMounted.current) return
+				zoltarQuestionPage.value = page
 			},
 			onError: error => {
 				loadError = loadError ?? error
@@ -229,12 +281,14 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		loadingZoltarQuestions: questionsLoad.isLoading.value,
 		loadingZoltarUniverse: universeLoad.isLoading.value,
 		loadZoltarQuestionCount: loadZoltarQuestionCountData,
+		loadZoltarQuestionPage: loadQuestionsPage,
 		loadZoltarQuestions: loadQuestions,
 		loadZoltarUniverse,
 		zoltarChildUniverseFeedback: zoltarChildUniverseFeedback.value,
 		refreshZoltarUniverse,
 		zoltarChildUniverseError: zoltarChildUniverseError.value,
 		zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex.value,
+		zoltarQuestionPage: zoltarQuestionPage.value,
 		zoltarQuestionCount: zoltarQuestionCount.value,
 		zoltarQuestions: zoltarQuestions.value,
 		zoltarUniverse: zoltarUniverseLoadedId.value === activeUniverseId ? zoltarUniverse.value : undefined,

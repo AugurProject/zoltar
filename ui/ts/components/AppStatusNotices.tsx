@@ -6,6 +6,7 @@ import type { NoticeItem } from '../types/components.js'
 
 type AppStatusNoticesProps = {
 	errorMessage: string | undefined
+	readBackendMessage: string | undefined
 	wrongNetworkMessage: string | undefined
 	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
@@ -13,7 +14,7 @@ type AppStatusNoticesProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, wrongNetworkMessage, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, readBackendMessage, wrongNetworkMessage, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: 'Simulation bootstrap failed' })
 	if (showZoltarUniverseForkedWarning && zoltarUniverse !== undefined)
@@ -35,6 +36,7 @@ export function AppStatusNotices({ errorMessage, wrongNetworkMessage, simulation
 			tone: 'blocking',
 			title: 'Wrong network',
 		})
+	if (readBackendMessage !== undefined) items.push({ detail: readBackendMessage, id: 'read-backend-mismatch', tone: 'blocking', title: 'Read RPC mismatch' })
 	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: 'Error' })
 
 	return <NoticeStack items={items} />

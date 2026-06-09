@@ -46,6 +46,7 @@ export type SecurityVaultFormState = {
 	repWithdrawAmount: string
 	selectedVaultAddress: string
 	securityPoolAddress: string
+	stagedOperationTimeoutMinutes?: string
 }
 
 export type OpenOracleFormState = {

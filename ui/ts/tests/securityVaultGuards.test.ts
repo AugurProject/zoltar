@@ -65,6 +65,7 @@ describe('security vault guards', () => {
 				isMainnet: true,
 				requestPriceEthCost: undefined,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				withdrawAmount: 1n,
 				withdrawableRepAmount: 1n,
 				walletEthBalance: 1n,
@@ -78,6 +79,7 @@ describe('security vault guards', () => {
 				isMainnet: true,
 				requestPriceEthCost: undefined,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				withdrawAmount: 10_000n * 10n ** 18n,
 				withdrawableRepAmount: 2_500n * 10n ** 18n,
 				walletEthBalance: 1n,
@@ -93,6 +95,7 @@ describe('security vault guards', () => {
 				securityBondAllowanceAmount: undefined,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				walletEthBalance: 1n,
 			}),
 		).toBe('Enter a valid security bond allowance.')
@@ -106,6 +109,7 @@ describe('security vault guards', () => {
 				securityBondAllowanceAmount: 0n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				walletEthBalance: 1n,
 			}),
 		).toBeUndefined()
@@ -119,6 +123,7 @@ describe('security vault guards', () => {
 				securityBondAllowanceAmount: 5n * 10n ** 17n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				walletEthBalance: 1n,
 			}),
 		).toBe('Enter at least 1 ETH for a non-zero allowance.')
@@ -132,6 +137,7 @@ describe('security vault guards', () => {
 				securityBondAllowanceAmount: 6n * 10n ** 18n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				walletEthBalance: 1n,
 			}),
 		).toBe('Reduce the security bond allowance to 5 ETH or less.')
@@ -206,6 +212,7 @@ describe('security vault guards', () => {
 				isMainnet: true,
 				requestPriceEthCost: 10n * ETH,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				withdrawAmount: 1n * ETH,
 				withdrawableRepAmount: 5n * ETH,
 				walletEthBalance: 5n * ETH,
@@ -221,6 +228,7 @@ describe('security vault guards', () => {
 				securityBondAllowanceAmount: 0n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 30n,
 				walletEthBalance: 5n * ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to queue this bond allowance update.')

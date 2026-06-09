@@ -130,6 +130,13 @@ export type MarketDetails = QuestionData & {
 	questionId: string
 }
 
+export type MarketDetailsPage = {
+	pageIndex: number
+	pageSize: number
+	questionCount: bigint
+	questions: MarketDetails[]
+}
+
 export type SecurityPoolCreationResult = {
 	deployPoolHash: Hash
 	questionId: string
@@ -277,6 +284,13 @@ export type ListedSecurityPool = {
 	vaultCount: bigint
 	hasLoadedVaults?: boolean
 	vaults: SecurityPoolVaultSummary[]
+}
+
+export type SecurityPoolPage = {
+	pageIndex: number
+	pageSize: number
+	poolCount: bigint
+	pools: ListedSecurityPool[]
 }
 
 export type SecurityPoolVaultSummary = {

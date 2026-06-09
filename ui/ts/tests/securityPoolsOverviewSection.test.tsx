@@ -1,11 +1,12 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { waitFor, within } from '@testing-library/dom'
+import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, SecurityPoolPage } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -20,6 +21,16 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 		wethBalance: 0n,
 		...overrides,
 	}
+}
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
 }
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
@@ -77,21 +88,34 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 }
 
 function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {}): SecurityPoolsOverviewSectionProps {
+	const defaultPools = [createSecurityPool()]
+	const securityPools = overrides.securityPools ?? defaultPools
+	const defaultPage: SecurityPoolPage = {
+		pageIndex: 0,
+		pageSize: 6,
+		poolCount: BigInt(securityPools.length),
+		pools: securityPools,
+	}
 	return {
 		accountState: createAccountState(),
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
 		hasLoadedSecurityPools: true,
+		hasLoadedSecurityPoolPage: true,
 		liquidationAmount: '',
 		liquidationMaxAmount: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
+		liquidationTimeoutMinutes: '30',
 		loadingPoolOracleManager: false,
+		loadingSecurityPoolPage: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
+		onLiquidationTimeoutMinutesChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,
+		onLoadSecurityPoolPage: () => undefined,
 		onLoadSecurityPools: () => undefined,
 		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
@@ -100,10 +124,12 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
+		securityPoolBrowseCount: overrides.securityPoolPage?.poolCount ?? BigInt(securityPools.length),
+		securityPoolPage: overrides.securityPoolPage ?? defaultPage,
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
 		securityPoolOverviewResult: undefined,
-		securityPools: [createSecurityPool()],
+		securityPools,
 		...overrides,
 	}
 }
@@ -276,8 +302,51 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Refresh pools' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Refresh pools' })).toBeNull()
 		expect(documentQueries.queryByText('Refresh pools to check again.')).toBeNull()
+	})
+
+	test('shows a loading browse state before the first registry page loads', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPoolPage: false,
+					loadingSecurityPoolPage: false,
+					securityPoolPage: undefined,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
+		expect(documentQueries.queryByText('None yet')).toBeNull()
+	})
+
+	test('does not infer browse page count from selected-pool cache before the first registry page loads', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPoolPage: false,
+					loadingSecurityPoolPage: false,
+					securityPoolBrowseCount: undefined,
+					securityPoolPage: undefined,
+					securityPools: [
+						createSecurityPool({
+							marketDetails: createMarketDetails({ title: 'Selected-pool cache entry' }),
+							securityPoolAddress: '0x0000000000000000000000000000000000000abc',
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Page 1 of 1')).toBeNull()
+		expect(documentQueries.queryByText('Selected-pool cache entry')).toBeNull()
+		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 	})
 
 	test('filters the registry by the derived Ended state', async () => {
@@ -313,6 +382,98 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
 	})
 
+	test('clamps the current page when the loaded pool count shrinks', async () => {
+		const loadPageCalls: Array<{ pageIndex: number; pageSize: number }> = []
+		const initialProps = createProps({
+			onLoadSecurityPoolPage: (pageIndex, pageSize) => {
+				loadPageCalls.push({ pageIndex, pageSize })
+			},
+			securityPoolPage: {
+				pageIndex: 0,
+				pageSize: 6,
+				poolCount: 12n,
+				pools: [
+					createSecurityPool({
+						marketDetails: createMarketDetails({ title: 'Paged pool' }),
+						securityPoolAddress: '0x0000000000000000000000000000000000000300',
+					}),
+				],
+			},
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		await act(() => {
+			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+		})
+		expect(documentQueries.getByText('Page 2 of 2')).not.toBeNull()
+
+		const shrunkProps = createProps({
+			onLoadSecurityPoolPage: initialProps.onLoadSecurityPoolPage,
+			securityPoolPage: {
+				pageIndex: 0,
+				pageSize: 6,
+				poolCount: 1n,
+				pools: [
+					createSecurityPool({
+						marketDetails: createMarketDetails({ title: 'Shrunk pool' }),
+						securityPoolAddress: '0x0000000000000000000000000000000000000301',
+					}),
+				],
+			},
+		})
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...shrunkProps} />, renderedComponent.container)
+		})
+
+		expect(documentQueries.getByText('Page 1 of 1')).not.toBeNull()
+		expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
+	})
+
+	test('stops showing a loading state when a requested registry page fails to load', async () => {
+		const failedPageLoad = createDeferred<void>()
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					onLoadSecurityPoolPage: async pageIndex => {
+						if (pageIndex === 1) return await failedPageLoad.promise
+					},
+					securityPoolPage: {
+						pageIndex: 0,
+						pageSize: 6,
+						poolCount: 12n,
+						pools: [
+							createSecurityPool({
+								marketDetails: createMarketDetails({ title: 'Paged pool' }),
+								securityPoolAddress: '0x0000000000000000000000000000000000000400',
+							}),
+						],
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		await act(() => {
+			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+		})
+		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
+
+		void failedPageLoad.promise.catch(() => undefined)
+		failedPageLoad.reject(new Error('page load failed'))
+		await act(async () => {
+			await failedPageLoad.promise.catch(() => undefined)
+		})
+		await waitFor(() => {
+			expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
+			expect(documentQueries.getByText('Refresh pools')).not.toBeNull()
+		})
+	})
+
 	test('shows a deferred vault placeholder when browse mode has not loaded vault details yet', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -337,5 +498,39 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.getByText('Open this pool to load 2 vaults.')).not.toBeNull()
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
+	})
+
+	test('renders browse-mode vault previews when the paged pool data includes loaded vaults', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							marketDetails: createMarketDetails({ title: 'Pool with preview vaults' }),
+							securityPoolAddress: '0x0000000000000000000000000000000000000500',
+							vaultCount: 1n,
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 5n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000501',
+								},
+							],
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const poolCard = documentQueries.getByRole('heading', { name: 'Pool with preview vaults' }).closest('.entity-card')
+		if (!(poolCard instanceof HTMLElement)) throw new Error('Expected pool card')
+		const poolCardQueries = within(poolCard)
+		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
+		expect(poolCardQueries.getByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).not.toBeNull()
+		expect(poolCardQueries.getByRole('button', { name: 'Liquidate Vault' })).not.toBeNull()
 	})
 })

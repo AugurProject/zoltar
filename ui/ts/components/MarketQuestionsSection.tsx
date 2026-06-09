@@ -1,51 +1,90 @@
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
+import { PaginationControls } from './PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
-import type { MarketDetails } from '../types/contracts.js'
+import { QUESTION_PAGE_SIZE } from '../lib/pagination.js'
+import type { MarketDetailsPage } from '../types/contracts.js'
+
+function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: number, questionCount: bigint | undefined) {
+	return page?.pageIndex === pageIndex && page.pageSize === QUESTION_PAGE_SIZE && (questionCount === undefined || page.questionCount === questionCount)
+}
+
 type MarketQuestionsSectionProps = {
 	hasForked: boolean
-	hasLoadedZoltarQuestions: boolean
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
-	onLoadZoltarQuestions: () => Promise<void>
+	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onOpenForkTab: () => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
 	zoltarQuestionCount: bigint | undefined
-	zoltarQuestions: MarketDetails[]
+	zoltarQuestionPage: MarketDetailsPage | undefined
 }
-export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
+export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestionPage, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestionPage }: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
+	const [pageIndex, setPageIndex] = useState(0)
+	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
+	const [lastFailedPageRequestKey, setLastFailedPageRequestKey] = useState<string | undefined>(undefined)
+	const lastRequestedPageKeyRef = useRef<string | undefined>(undefined)
+	const currentPageRequestKey = `${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount?.toString() ?? 'unknown'}`
+	const hasCurrentPageData = isCurrentQuestionPage(zoltarQuestionPage, pageIndex, zoltarQuestionCount)
+	const effectiveQuestionCount = zoltarQuestionPage?.questionCount ?? zoltarQuestionCount
+	const questionPageCount = effectiveQuestionCount === undefined || effectiveQuestionCount === 0n ? 0 : Math.ceil(Number(effectiveQuestionCount) / QUESTION_PAGE_SIZE)
+	const visibleQuestions = hasCurrentPageData && zoltarQuestionPage !== undefined ? zoltarQuestionPage.questions : []
+	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
+	useEffect(() => {
+		setPageIndex(0)
+	}, [zoltarQuestionCount])
+	useEffect(() => {
+		setLastFailedPageRequestKey(undefined)
+		lastRequestedPageKeyRef.current = undefined
+	}, [currentPageRequestKey])
+	useEffect(() => {
+		if (loadingZoltarQuestionCount) return
+		if (zoltarQuestionCount === undefined || zoltarQuestionCount === 0n) return
+		const pageRequestKey = `${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount.toString()}`
+		const hasCurrentPageData = isCurrentQuestionPage(zoltarQuestionPage, pageIndex, zoltarQuestionCount)
+		if (hasCurrentPageData) {
+			if (lastFailedPageRequestKey === pageRequestKey) setLastFailedPageRequestKey(undefined)
+			if (activePageRequestKey === pageRequestKey) setActivePageRequestKey(undefined)
+			return
+		}
+		if (lastFailedPageRequestKey === pageRequestKey) return
+		if (activePageRequestKey === pageRequestKey) return
+		if (lastRequestedPageKeyRef.current === pageRequestKey) return
+		lastRequestedPageKeyRef.current = pageRequestKey
+		setActivePageRequestKey(pageRequestKey)
+		void Promise.resolve(onLoadZoltarQuestionPage(pageIndex, QUESTION_PAGE_SIZE))
+			.catch(() => {
+				setLastFailedPageRequestKey(current => (current === undefined ? pageRequestKey : current))
+			})
+			.finally(() => {
+				setActivePageRequestKey(current => (current === pageRequestKey ? undefined : current))
+			})
+	}, [activePageRequestKey, lastFailedPageRequestKey, loadingZoltarQuestionCount, onLoadZoltarQuestionPage, pageIndex, zoltarQuestionCount, zoltarQuestionPage])
+	const hasPreviousPage = pageIndex > 0
+	const hasNextPage = pageIndex + 1 < questionPageCount
 	return (
 		<SectionBlock
 			density='compact'
 			title='Questions'
 			actions={
-				<button
-					className='secondary'
-					onClick={() => {
-						void onLoadZoltarQuestions()
-					}}
-					disabled={loadingZoltarQuestions || noQuestionsAvailable}
-				>
-					{loadingZoltarQuestions ? (
-						<LoadingText>Loading Questions...</LoadingText>
-					) : (
-						(() => {
-							if (noQuestionsAvailable) return 'No Questions'
-							if (hasLoadedZoltarQuestions) return 'Refresh Questions'
-
-							return 'Fetch Questions'
-						})()
-					)}
-				</button>
+				<PaginationControls
+					hasNextPage={hasNextPage}
+					hasPreviousPage={hasPreviousPage}
+					loading={loadingZoltarQuestions}
+					onNextPage={() => setPageIndex(current => current + 1)}
+					onPreviousPage={() => setPageIndex(current => Math.max(0, current - 1))}
+					summary={zoltarQuestionPage === undefined ? undefined : `Page ${pageIndex + 1} of ${Math.max(questionPageCount, 1)}`}
+				/>
 			}
 		>
-			{zoltarQuestions.length === 0 ? (
+			{visibleQuestions.length === 0 ? (
 				(() => {
-					if (loadingZoltarQuestionCount || loadingZoltarQuestions)
+					if (loadingZoltarQuestionCount || loadingZoltarQuestions || isWaitingForPageData)
 						return (
 							<p className='detail'>
 								<LoadingText>Loading questions...</LoadingText>
@@ -63,12 +102,13 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 								title='No questions'
 							/>
 						)
+					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <StateHint presentation={{ key: 'not_checked', badgeLabel: 'Not checked', badgeTone: 'muted', detail: 'Questions for this page have not loaded yet.' }} />
 
 					return undefined
 				})()
 			) : (
 				<div className='entity-card-list'>
-					{zoltarQuestions.map(question => (
+					{visibleQuestions.map(question => (
 						<EntityCard
 							key={question.questionId}
 							title={getQuestionTitle(question)}

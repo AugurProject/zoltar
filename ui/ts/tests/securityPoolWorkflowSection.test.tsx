@@ -307,9 +307,11 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
+		liquidationTimeoutMinutes: '30',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
+		onLiquidationTimeoutMinutesChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,
 		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
@@ -2199,6 +2201,37 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
+	})
+
+	test('does not show staged-operation cancellation actions', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const targetVault = getAddress('0x00000000000000000000000000000000000000a2')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ address: walletAddress }),
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({
+						pendingOperation: {
+							amount: 1n,
+							initiatorVault: walletAddress,
+							operation: 'liquidation',
+							operationId: 9n,
+							targetVault,
+						},
+						pendingOperationSlotId: 9n,
+					}),
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'staged-operations',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Cancel Staged Operation' })).toBeNull()
 	})
 
 	test('blocks staged-operation execution after the selected pool has ended', async () => {

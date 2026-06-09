@@ -19,16 +19,18 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
-import { tryParseRepAmountInput } from '../lib/marketForm.js'
+import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import {
+	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesLoadedSecurityVaultMatchSelection,
 	getSecurityVaultMaxBondAllowanceAmount,
+	getStagedOperationTimeoutSeconds,
 	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultAddress,
 	hasValidSecurityVaultOraclePrice,
@@ -256,6 +258,7 @@ export function SecurityVaultSection({
 		securityBondAllowanceAmount: securityVaultForm.securityBondAllowanceAmount ?? '0',
 		securityPoolAddress: securityVaultForm.securityPoolAddress ?? '',
 		selectedVaultAddress: securityVaultForm.selectedVaultAddress ?? '',
+		stagedOperationTimeoutMinutes: securityVaultForm.stagedOperationTimeoutMinutes ?? DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString(),
 	}
 	const selectedVaultAddress = getSelectedVaultAddress(normalizedSecurityVaultForm.selectedVaultAddress, accountState.address)
 	const currentSelectedVaultDetails = doesLoadedSecurityVaultMatchSelection({
@@ -271,6 +274,8 @@ export function SecurityVaultSection({
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
 	const securityBondAllowanceAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount)
 	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
+	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
+	const stagedOperationTimeoutSeconds = getStagedOperationTimeoutSeconds(stagedOperationTimeoutMinutes)
 	const securityBondAllowance = currentSelectedVaultDetails?.securityBondAllowance ?? 0n
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
@@ -320,6 +325,7 @@ export function SecurityVaultSection({
 		securityBondAllowanceAmount,
 		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
+		stagedOperationTimeoutMinutes,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const depositGuardMessage = getVaultDepositGuardMessage({
@@ -337,6 +343,7 @@ export function SecurityVaultSection({
 		isMainnet,
 		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
 		selectedVaultIsOwnedByAccount,
+		stagedOperationTimeoutMinutes,
 		withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
 		withdrawableRepAmount,
 		walletEthBalance: accountState.ethBalance,
@@ -370,6 +377,31 @@ export function SecurityVaultSection({
 		queuedVaultOperation,
 		securityVaultResult,
 	})
+	const stagedOperationTimeoutHelpText =
+		stagedOperationTimeoutSeconds === undefined
+			? 'Enter whole minutes. Queued self-service operations must stay executable for at least 1 minute after the oracle settlement window completes.'
+			: `This queued self-service operation will expire ${formatDuration(stagedOperationTimeoutSeconds)} after the oracle settlement window completes.`
+	const renderStagedOperationTimeoutField = () => (
+		<>
+			<label className='field'>
+				<span>Manual Execution Timeout</span>
+				<div className='field-inline'>
+					<FormInput
+						className='field-inline-input'
+						inputMode='numeric'
+						min='1'
+						pattern='[0-9]*'
+						step='1'
+						value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes}
+						onInput={event => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes: event.currentTarget.value })}
+						disabled={!poolCollateralActionsEnabled}
+					/>
+					<span className='field-inline-action'>minutes</span>
+				</div>
+			</label>
+			<p className='detail'>{stagedOperationTimeoutHelpText}</p>
+		</>
+	)
 	const vaultLoadNotice = (() => {
 		if (loadingSecurityVault)
 			return (
@@ -579,6 +611,7 @@ export function SecurityVaultSection({
 								</div>
 							</label>
 						)}
+						{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
 						<RequirementsChecklist
 							items={
 								effectiveRepExitMode === 'redeem'
@@ -596,6 +629,7 @@ export function SecurityVaultSection({
 											{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
 											{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
 											{ key: 'withdrawable', label: 'The vault has withdrawable REP', resolved: withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n },
+											{ key: 'timeout', label: 'Manual execution timeout is at least 1 minute', resolved: stagedOperationTimeoutSeconds !== undefined },
 										]
 							}
 						/>
@@ -650,11 +684,13 @@ export function SecurityVaultSection({
 								</button>
 							</div>
 						</label>
+						{renderStagedOperationTimeoutField()}
 						<RequirementsChecklist
 							items={[
 								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
 								{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
 								{ key: 'allowance', label: `Allowance amount is zero or at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH`, resolved: hasValidSecurityBondAllowanceAmount },
+								{ key: 'timeout', label: 'Manual execution timeout is at least 1 minute', resolved: stagedOperationTimeoutSeconds !== undefined },
 							]}
 						/>
 						<div className='actions'>
@@ -783,6 +819,7 @@ export function SecurityVaultSection({
 								</button>
 							</div>
 						</label>
+						{renderStagedOperationTimeoutField()}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel='Set Security Bond Allowance'
@@ -841,6 +878,7 @@ export function SecurityVaultSection({
 						</div>
 					</label>
 				)}
+				{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={repExitActionLabel}

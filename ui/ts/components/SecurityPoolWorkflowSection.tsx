@@ -115,9 +115,11 @@ export function SecurityPoolWorkflowSection({
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
+	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
 	loadingSecurityPools,
 	onLiquidationAmountChange,
+	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
@@ -379,6 +381,7 @@ export function SecurityPoolWorkflowSection({
 		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
 		resolvedPendingOperationId,
 	})
+	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
 	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = (() => {
 		if (securityVault.loadingSecurityVault)
@@ -897,23 +900,23 @@ export function SecurityPoolWorkflowSection({
 									<SectionBlock density='compact' title='Staged Operations'>
 										<ErrorNotice message={poolOracleManagerError} />
 										<SectionBlock density='compact' headingLevel={4} title='Staged Operations List' variant='embedded'>
-											{currentPoolOracleManagerDetails?.pendingOperation === undefined ? null : (
+											{pendingOperation === undefined ? null : (
 												<WarningSurface as='article' className='warning-entity-card' variant='compact'>
 													<div className='entity-card-header'>
 														<div className='entity-card-copy'>
-															<h3>{getPendingOperationLabel(currentPoolOracleManagerDetails.pendingOperation.operation)}</h3>
+															<h3>{getPendingOperationLabel(pendingOperation.operation)}</h3>
 														</div>
 													</div>
 													<div className='entity-card-body workflow-metric-grid'>
-														<MetricField label='Operation Id'>{currentPoolOracleManagerDetails.pendingOperation.operationId.toString()}</MetricField>
+														<MetricField label='Operation Id'>{pendingOperation.operationId.toString()}</MetricField>
 														<MetricField label='Initiator'>
-															<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.initiatorVault} />
+															<AddressValue address={pendingOperation.initiatorVault} />
 														</MetricField>
 														<MetricField label='Target Vault'>
-															<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.targetVault} />
+															<AddressValue address={pendingOperation.targetVault} />
 														</MetricField>
 														<MetricField label='Amount'>
-															<CurrencyValue value={currentPoolOracleManagerDetails.pendingOperation.amount} />
+															<CurrencyValue value={pendingOperation.amount} />
 														</MetricField>
 													</div>
 												</WarningSurface>
@@ -1013,6 +1016,7 @@ export function SecurityPoolWorkflowSection({
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+				liquidationTimeoutMinutes={liquidationTimeoutMinutes}
 				loadingPoolOracleManager={loadingPoolOracleManager}
 				liquidationTargetVault={liquidationTargetVault}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
@@ -1029,6 +1033,7 @@ export function SecurityPoolWorkflowSection({
 				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}
 				targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}
 				onLiquidationAmountChange={onLiquidationAmountChange}
+				onLiquidationTimeoutMinutesChange={onLiquidationTimeoutMinutesChange}
 				onQueueLiquidation={onQueueLiquidation}
 			/>
 		</RouteWorkflowPanel>

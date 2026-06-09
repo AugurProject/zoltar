@@ -353,7 +353,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				universeId: 0n,
 			} as never
 		}),
-		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint) => {
+		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint) => {
 			state.callLog.queueOracleManagerOperation += 1
 			if (operation === 'setSecurityBondsAllowance') {
 				pendingOperations[managerAddress] = {

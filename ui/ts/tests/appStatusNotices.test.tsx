@@ -27,6 +27,7 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
+				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
@@ -45,6 +46,7 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
+				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
@@ -63,6 +65,7 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
+				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: 'Anvil boot failed',
@@ -77,10 +80,30 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Anvil boot failed')).not.toBeNull()
 	})
 
+	test('shows a read RPC mismatch notice', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).',
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: undefined,
+				wrongNetworkMessage: undefined,
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Read RPC mismatch')).not.toBeNull()
+		expect(documentQueries.getByText('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).')).not.toBeNull()
+	})
+
 	test('shows deployment setup and custom wrong-network guidance together', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: 'Top-level error',
+				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: true,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
@@ -103,6 +126,7 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
+				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: true,
 				simulationBootstrapError: undefined,

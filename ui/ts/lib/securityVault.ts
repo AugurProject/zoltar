@@ -6,6 +6,8 @@ import { sameAddress } from './address.js'
 export const MIN_SECURITY_VAULT_REP_DEPOSIT = 10n * 10n ** 18n
 export const MIN_SECURITY_BOND_ALLOWANCE = 1n * 10n ** 18n
 export const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 60n * 60n
+export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 30n
+export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 const PRICE_PRECISION = 10n ** 18n
 
 export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
@@ -107,6 +109,11 @@ export function getSecurityVaultMaxBondAllowanceAmount({
 export function getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp: bigint | undefined) {
 	if (lastSettlementTimestamp === undefined || lastSettlementTimestamp === 0n) return undefined
 	return lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS
+}
+
+export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {
+	if (timeoutMinutes === undefined || timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return undefined
+	return timeoutMinutes * 60n
 }
 
 export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'managerAddress'> | undefined) {

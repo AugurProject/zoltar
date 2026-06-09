@@ -8,7 +8,7 @@ import type { Address } from 'viem'
 import { getAddress } from 'viem'
 import type { ChainBackend, ReadClient } from '../lib/chainBackend.js'
 import { getDeploymentSteps } from '../contracts.js'
-import { MAINNET_NETWORK_PROFILE, type NetworkProfile } from '../lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile } from '../lib/networkProfile.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -43,6 +43,7 @@ function createReadClient({ ethBalance = 0n, blockNumber = 10n, blockTimestamp =
 	return {
 		getBalance: async () => ethBalance,
 		getBlock: async () => ({ number: blockNumber, timestamp: blockTimestamp }),
+		getChainId: async () => 1,
 		readContract: async () => 0n,
 		getCode: async () => '0x',
 	} as unknown as ReadClient
@@ -241,6 +242,81 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
+
+		resetEnvironment()
+	})
+
+	test('surfaces a blocking error when the configured read RPC is on the wrong chain', async () => {
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses,
+		}))
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot,
+			loadErc20Balance: mock(async () => 0n),
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const wrongChainReadClient = {
+			...createReadClient(),
+			getBlock: async () => ({ number: 999n, timestamp: 1234n }),
+			getChainId: async () => 11155111,
+		} as ReadClient
+		const { backend, subscriptionState } = createBackend({ hasWallet: false, readClient: wrongChainReadClient })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).'))
+		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
+		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
+		await act(async () => {
+			subscriptionState.stateHandler?.()
+			await Promise.resolve()
+		})
+		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
+		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
+		expect(loadDeploymentStatusOracleSnapshot).not.toHaveBeenCalled()
+
+		resetEnvironment()
+	})
+
+	test('uses the active backend label when surfacing a read-RPC chain mismatch', async () => {
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses,
+		}))
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot,
+			loadErc20Balance: mock(async () => 0n),
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const wrongChainReadClient = {
+			...createReadClient(),
+			getChainId: async () => 11155111,
+		} as ReadClient
+		const profile = createSimulationProfile({
+			genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f1'),
+			wethAddress: getAddress('0x00000000000000000000000000000000000000f2'),
+		})
+		const { backend } = createBackend({ hasWallet: false, profile, readClient: wrongChainReadClient })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Browser Simulation (1337).'))
+		expect(loadDeploymentStatusOracleSnapshot).not.toHaveBeenCalled()
 
 		resetEnvironment()
 	})
@@ -663,6 +739,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		await waitFor(() => expect(requireHookState(hookState).augurPlaceHolderDeployed).toBe(false))
 		const deployButton = within(document.body).getByRole('button', { name: 'Mark deployments deployed' })
 		await act(async () => {
 			fireEvent.click(deployButton)

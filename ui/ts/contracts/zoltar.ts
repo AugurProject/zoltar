@@ -1,6 +1,6 @@
 import { parseAbiItem, zeroAddress, type Address } from 'viem'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
-import type { MarketCreationResult, MarketDetails, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { getMarketType, getQuestionId, getQuestionIdHex, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
@@ -72,6 +72,19 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 	return questionIds
 }
 
+async function loadQuestionIdsPage(client: ReadClient, startIndex: bigint, count: bigint) {
+	if (count === 0n) return []
+	const page = await client.readContract({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'getQuestions',
+		address: getDeploymentStepAddress('zoltarQuestionData'),
+		args: [startIndex, count],
+	})
+	if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
+	if (!page.every((questionId): questionId is bigint => typeof questionId === 'bigint')) throw new Error('Unexpected question id page response')
+	return page
+}
+
 export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
 	const [question, createdAt] = await readRequiredMulticall(client, [
 		{
@@ -122,6 +135,29 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 		address: getDeploymentStepAddress('zoltarQuestionData'),
 		args: [],
 	})
+}
+
+export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: number, pageSize: number): Promise<MarketDetailsPage> {
+	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Question page index must be a non-negative integer')
+	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Question page size must be a positive integer')
+	const questionCount = await loadZoltarQuestionCount(client)
+	const startIndex = BigInt(pageIndex * pageSize)
+	if (startIndex >= questionCount) {
+		return {
+			pageIndex,
+			pageSize,
+			questionCount,
+			questions: [],
+		}
+	}
+	const count = questionCount - startIndex < BigInt(pageSize) ? questionCount - startIndex : BigInt(pageSize)
+	const questionIds = await loadQuestionIdsPage(client, startIndex, count)
+	return {
+		pageIndex,
+		pageSize,
+		questionCount,
+		questions: await Promise.all(questionIds.map(async questionId => await loadMarketDetails(client, questionId))),
+	}
 }
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {

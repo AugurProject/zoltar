@@ -14,6 +14,7 @@ import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
+import { PaginationControls } from './PaginationControls.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StickyObjectContext } from './StickyObjectContext.js'
@@ -869,14 +870,14 @@ export function OpenOracleSection({
 				<div className='workflow-stack route-workflow-stack'>
 					<SectionBlock
 						actions={
-							<div className='actions'>
-								<button className='secondary' type='button' onClick={() => setBrowsePageIndex(current => Math.max(0, current - 1))} disabled={!browseHasPreviousPage || loadingBrowse}>
-									Previous Page
-								</button>
-								<button className='secondary' type='button' onClick={() => setBrowsePageIndex(current => current + 1)} disabled={!browseHasNextPage || loadingBrowse}>
-									Next Page
-								</button>
-							</div>
+							<PaginationControls
+								hasNextPage={browseHasNextPage}
+								hasPreviousPage={browseHasPreviousPage}
+								loading={loadingBrowse}
+								onNextPage={() => setBrowsePageIndex(current => current + 1)}
+								onPreviousPage={() => setBrowsePageIndex(current => Math.max(0, current - 1))}
+								summary={browsePage === undefined ? undefined : `Page ${browsePageIndex + 1} of ${Math.max(browsePageCount, 1)}`}
+							/>
 						}
 						density='compact'
 						title='Browse Reports'

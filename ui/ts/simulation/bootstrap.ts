@@ -52,6 +52,7 @@ const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
 const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
+const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 30n * 60n
 const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 20_000_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
 const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
@@ -428,7 +429,7 @@ async function configureSecurityBondAllowance({
 	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance)
+	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
 	if (queueResult.stagedExecution?.success === false) throw new Error(queueResult.stagedExecution.errorMessage ?? `Failed to seed security bond allowance for ${accountAddress}`)
 	let updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
 	if (updatedVault.securityBondAllowance !== securityBondAllowance) {
@@ -487,7 +488,7 @@ async function settleSeededOracleReport({
 	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance)
+	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
 	await onProgressStep(`Configuring oracle manager for ${poolLabel}`)
 
 	const oracleManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
