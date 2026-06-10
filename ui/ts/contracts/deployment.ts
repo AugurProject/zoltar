@@ -1,15 +1,13 @@
 import { encodeDeployData, getAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from '../abis.js'
-import { createDeploymentStatusOracleAddressHelper } from '../shared/deploymentAddresses.js'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../contractArtifact.js'
+import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import {
 	MULTICALL3_BYTECODE,
-	OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
 	PROXY_DEPLOYER_ADDRESS,
 	ZERO_SALT,
 	getEscalationGameFactoryByteCode,
 	getInfraContractAddresses,
-	getOpenOracleCreate2DeploymentBytecode,
 	getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
@@ -23,7 +21,6 @@ import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
 const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
-const OPEN_ORACLE_CREATE2_DEPLOYER_RUNTIME_CODE = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' satisfies Hex
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 
@@ -92,15 +89,6 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	return hash
 }
 
-async function deployOpenOracleViaCreate2(client: WriteClient) {
-	const hash = await client.sendTransaction({
-		to: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
-		data: getOpenOracleCreate2DeploymentBytecode(),
-	})
-	await client.waitForTransactionReceipt({ hash })
-	return hash
-}
-
 async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code !== undefined && code !== '0x') return undefined
@@ -123,19 +111,6 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	})
 	await client.waitForTransactionReceipt({ hash: deployHash })
 	return deployHash
-}
-
-async function ensureOpenOracleCreate2DeployerDeployed(client: WriteClient) {
-	const code = await client.getCode({ address: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS })
-	if (code !== undefined && code !== '0x') return undefined
-	if (client.installSimulationProxyDeployer !== undefined) {
-		await client.installSimulationProxyDeployer({
-			address: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
-			runtimeCode: OPEN_ORACLE_CREATE2_DEPLOYER_RUNTIME_CODE,
-		})
-		return ZERO_HASH
-	}
-	throw new Error(`OpenOracle CREATE2 deployer missing at ${OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS}`)
 }
 
 async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
@@ -202,11 +177,8 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'openOracle',
 			label: 'OpenOracle',
 			address: addresses.openOracle,
-			dependencies: [],
-			deploy: async client => {
-				await ensureOpenOracleCreate2DeployerDeployed(client)
-				return await deployOpenOracleViaCreate2(client)
-			},
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
 		},
 		{
 			id: 'zoltarQuestionData',

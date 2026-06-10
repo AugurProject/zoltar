@@ -548,11 +548,9 @@ const runSharedBuild = async (reason: string) => {
 		return
 	}
 	sharedBuildRunning = true
-	console.log(`[ui:watch] Rebuilding shared UI helper assets because ${reason} changed`)
+	console.log(`[ui:watch] Rebuilding shared package outputs because ${reason} changed`)
 	const builtSharedOutputs = await runSharedBuildStep(['bun', 'run', 'shared:build'], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
 	if (!builtSharedOutputs) return
-	const mirroredSharedOutputs = await runSharedBuildStep(['bun', 'run', 'ui:shared'], REPOSITORY_ROOT_PATH, 'Shared UI asset mirror')
-	if (!mirroredSharedOutputs) return
 	sharedBuildRunning = false
 	if (sharedBuildQueued) {
 		sharedBuildQueued = false

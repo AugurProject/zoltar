@@ -1,6 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert/strict'
-import type { Address } from 'viem'
+import { type Address, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -152,8 +152,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 
 		assert.strictEqual(pendingOperationSlotId, 0n, 'failed auto-executed operations should clear the pending slot')
-		assert.strictEqual(stagedOperation[1], addressString(0x0n), 'failed staged operations should be consumed after the execution attempt')
+		assert.strictEqual(stagedOperation[1], zeroAddress, 'failed staged operations should be consumed after their first execution attempt')
 		assert.strictEqual(stagedOperation[3], impossibleAllowance, 'failed staged operations should retain their record for auditability')
+
 		await assert.rejects(
 			async () =>
 				await writeContractAndWait(
@@ -166,12 +167,14 @@ describe('Price Oracle Refund Security Tests', () => {
 							args: [1n],
 						}),
 				),
-			/no such operation or already executed/i,
+			/no such operation/i,
 		)
 	})
 
 	test('newer self operations do not replace an existing pending slot and stay manually executable', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const firstAllowance = repDeposit / 4n
+		const secondAllowance = repDeposit / 5n
 
 		await writeContractAndWait(
 			client,
@@ -180,7 +183,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
 					value: ethCost,
 				}),
 		)
@@ -191,7 +194,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 2n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
 				}),
 		)
 
@@ -227,13 +230,15 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'stagedOperations',
 			args: [2n],
 		})
-		assert.strictEqual(stagedOperation1[1], addressString(0n), 'pending-slot operation should be consumed after the oracle settles it')
-		assert.strictEqual(stagedOperation2[3], 2n, 'later self operation should retain its requested amount until manual execution')
+		assert.strictEqual(stagedOperation1[1], zeroAddress, 'pending-slot operation should be consumed after the oracle settles it')
+		assert.strictEqual(stagedOperation2[1], zeroAddress, 'manually executed operations should be consumed after success')
+		assert.strictEqual(stagedOperation2[3], secondAllowance, 'later self operation should retain its requested amount until manual execution')
 		assert.strictEqual(stagedOperation2[2], client.account.address, 'later self operation should still target the initiator vault')
 	})
 
 	test('staged operations can only be executed once', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const successfulAllowance = repDeposit / 4n
 
 		await writeContractAndWait(
 			client,
@@ -253,7 +258,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, successfulAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
 				}),
 		)
 
@@ -281,7 +286,7 @@ describe('Price Oracle Refund Security Tests', () => {
 							args: [2n],
 						}),
 				),
-			/no such operation or already executed/i,
+			/no such operation/i,
 		)
 	})
 

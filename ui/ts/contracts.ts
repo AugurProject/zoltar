@@ -1,6 +1,6 @@
 import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
-import { sortBigIntsAscending } from './shared/bigInt.js'
+import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from './lib/assert.js'
 import { sameAddress } from './lib/address.js'
 import { isIgnorableLogDecodeError } from './lib/errors.js'

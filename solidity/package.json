@@ -4,16 +4,20 @@
 	"description": "Zoltar Contracts",
 	"scripts": {
 		"preinstall": "bun ../scripts/link-shared-node-modules.mjs",
+		"shared": "cd .. && bun run shared:build",
 		"ensure-contract-artifacts": "bun ../scripts/ensure-contract-artifacts.mts",
 		"setup": "bun install --frozen-lockfile && bun run compile-contracts",
 		"generate:contract-artifacts": "bun run compile-contracts",
-		"compile-contracts": "bun tsc --project tsconfig-compile.json && bun ./js/compile.js && cd .. && bun run generate:ui-contract-artifact",
-		"gas-costs": "bun tsc && bun run ./js/gas-costs.js",
+		"compile-contracts": "bun run shared && bun tsc --project tsconfig-compile.json && bun ./js/compile.js && cd .. && bun run generate:ui-contract-artifact",
+		"gas-costs": "bun run shared && bun tsc && bun run ./js/gas-costs.js",
 		"test": "bun run ensure-contract-artifacts && bun tsc && bun test --timeout 300000 ./js/tests/"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
+	"dependencies": {
+		"@zoltar/shared": "file:../shared"
+	},
 	"devDependencies": {
 		"esbuild": "0.25.8",
 		"funtypes": "5.1.1",

@@ -17,6 +17,12 @@ COPY ./ui/scripts/ /source/ui/scripts/
 COPY ./package.json ./bun.lock /source/
 RUN bun install --frozen-lockfile
 
+# Shared package metadata and outputs for local package resolution
+COPY ./shared/package.json /source/shared/package.json
+COPY ./shared/tsconfig.json /source/shared/tsconfig.json
+COPY ./shared/js/ /source/shared/js/
+COPY ./shared/ts/ /source/shared/ts/
+
 # Install Solidity dependencies
 COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
 RUN cd /source/solidity && bun install --frozen-lockfile
@@ -29,10 +35,6 @@ RUN cd /source/ui && bun install --frozen-lockfile
 COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
 COPY ./ui/build/ /source/ui/build/
 COPY ./ui/index.html /source/ui/index.html
-
-# Shared TypeScript source used by both UI and simulator helpers
-COPY ./shared/tsconfig.json /source/shared/tsconfig.json
-COPY ./shared/ts/ /source/shared/ts/
 
 # Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json

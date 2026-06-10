@@ -1,5 +1,4 @@
 import 'viem/window'
-import { ReadContractReturnType } from 'viem'
 import type { Address, Hex } from 'viem'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { WETH_ADDRESS } from '../constants'
@@ -66,12 +65,12 @@ interface ExtraReportData {
 	trackDisputes: boolean
 }
 
-function isOpenOracleExtraData(value: ReadContractReturnType): value is readonly [Hex, Address, bigint, bigint, Address, boolean] {
+function isOpenOracleExtraData(value: unknown): value is readonly [Hex, Address, bigint, bigint, Address, boolean] {
 	return Array.isArray(value) && value.length === 6
 }
 
 export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bigint): Promise<ExtraReportData> => {
-	const result = await client.readContract({
+	const result: unknown = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'extraData',
 		address: getInfraContractAddresses().openOracle,

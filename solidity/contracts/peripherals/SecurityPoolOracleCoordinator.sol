@@ -221,21 +221,22 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function executeStagedOperation(uint256 operationId) public {
-		StagedOperation storage stagedOperation = stagedOperations[operationId];
-		require(stagedOperation.initiatorVault != address(0), 'no such operation or already executed');
+		StagedOperation memory stagedOperation = stagedOperations[operationId];
+		require(stagedOperation.initiatorVault != address(0), 'no such operation');
 		require(isPriceValid(), 'price is not valid to execute');
 		require(block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds, 'staged operation expired');
+		stagedOperations[operationId].initiatorVault = address(0);
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			try
-					securityPool.performLiquidation(
-						stagedOperation.initiatorVault,
-						stagedOperation.targetVault,
-						stagedOperation.amount,
-						stagedOperation.snapshotTargetOwnership,
-						stagedOperation.snapshotTargetAllowance,
-						stagedOperation.snapshotTotalRep,
-						stagedOperation.snapshotDenominator
-					)
+				securityPool.performLiquidation(
+					stagedOperation.initiatorVault,
+					stagedOperation.targetVault,
+					stagedOperation.amount,
+					stagedOperation.snapshotTargetOwnership,
+					stagedOperation.snapshotTargetAllowance,
+					stagedOperation.snapshotTotalRep,
+					stagedOperation.snapshotDenominator
+				)
 			{
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
@@ -270,7 +271,6 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}
-		stagedOperation.initiatorVault = address(0);
 	}
 
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {

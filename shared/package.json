@@ -1,0 +1,29 @@
+{
+	"name": "@zoltar/shared",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		"./addressDerivation": {
+			"types": "./ts/addressDerivation.ts",
+			"default": "./js/addressDerivation.js"
+		},
+		"./bigInt": {
+			"types": "./ts/bigInt.ts",
+			"default": "./js/bigInt.js"
+		},
+		"./deploymentAddresses": {
+			"types": "./ts/deploymentAddresses.ts",
+			"default": "./js/deploymentAddresses.js"
+		}
+	},
+	"files": [
+		"js",
+		"ts"
+	],
+	"scripts": {
+		"build": "bun x tsc --project tsconfig.json"
+	},
+	"dependencies": {
+		"viem": "2.38.3"
+	}
+}

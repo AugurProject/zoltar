@@ -3,6 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadSecurityVaultDetails, loadZoltarUniverseSummary } from '../contracts.js'
+import { getDeploymentSteps } from '../contracts/deployment.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
@@ -309,7 +310,9 @@ void describe('simulation backend', () => {
 			const readClient = backend.createReadClient()
 			const primaryBalanceBefore = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
 			const secondaryBalanceBefore = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, secondaryAccount)
+			const blockBefore = await readClient.getBlock()
 			const blockCountBefore = backend.blockCountSinceReset
+			const timestampBefore = backend.currentTimestamp
 			const transactionCountBefore = backend.transactionCountSinceReset
 
 			await backend.selectAccount(secondaryAccount)
@@ -317,10 +320,14 @@ void describe('simulation backend', () => {
 
 			const primaryBalanceAfter = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
 			const secondaryBalanceAfter = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, secondaryAccount)
+			const blockAfter = await readClient.getBlock()
 
 			expect(primaryBalanceAfter).toBe(primaryBalanceBefore)
 			expect(secondaryBalanceAfter).toBe(secondaryBalanceBefore + SIMULATION_REP_MINT_AMOUNT)
+			expect(blockAfter.number).toBe(blockBefore.number)
+			expect(blockAfter.timestamp).toBe(blockBefore.timestamp)
 			expect(backend.blockCountSinceReset).toBe(blockCountBefore)
+			expect(backend.currentTimestamp).toBe(timestampBefore)
 			expect(backend.transactionCountSinceReset).toBe(transactionCountBefore)
 		} finally {
 			await backend.dispose()
@@ -332,10 +339,13 @@ void describe('simulation backend', () => {
 
 		try {
 			const readClient = backend.createReadClient()
+			const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
+			if (zoltarStep === undefined) throw new Error('Expected the Zoltar deployment step')
 			const universeSummaryBefore = await loadZoltarUniverseSummary(readClient, 0n)
 			if (universeSummaryBefore === undefined) {
 				throw new Error('Expected the genesis Zoltar universe to be available in the deployed scenario')
 			}
+			const zoltarBalanceBefore = await readClient.getBalance({ address: zoltarStep.address })
 
 			await backend.mintRep(SIMULATION_REP_MINT_AMOUNT)
 
@@ -343,9 +353,11 @@ void describe('simulation backend', () => {
 			if (universeSummaryAfter === undefined) {
 				throw new Error('Expected the genesis Zoltar universe after minting REP')
 			}
+			const zoltarBalanceAfter = await readClient.getBalance({ address: zoltarStep.address })
 
 			expect(universeSummaryAfter.totalTheoreticalSupply).toBe(universeSummaryBefore.totalTheoreticalSupply + SIMULATION_REP_MINT_AMOUNT)
 			expect(universeSummaryAfter.forkThreshold).toBe(universeSummaryBefore.forkThreshold + SIMULATION_REP_MINT_AMOUNT / 20n)
+			expect(zoltarBalanceAfter).toBe(zoltarBalanceBefore)
 		} finally {
 			await backend.dispose()
 		}

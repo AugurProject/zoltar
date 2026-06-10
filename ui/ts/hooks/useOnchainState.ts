@@ -21,12 +21,35 @@ type ChainClock = {
 	currentTimestamp: bigint | undefined
 }
 
+type ReadBackendValidationResult = {
+	readBackendMessage: string | undefined
+	validated: boolean
+}
+
 function getExpectedReadChainId(backend: ChainBackend) {
 	return backend.profile.chain.id
 }
 
 function buildReadBackendMismatchMessage(backend: ChainBackend, actualChainId: number) {
 	return `Configured read RPC reports chain ${actualChainId.toString()}, but this app requires ${backend.profile.displayName} (${getExpectedReadChainId(backend).toString()}).`
+}
+
+async function validateConfiguredReadBackend(backend: ChainBackend): Promise<ReadBackendValidationResult> {
+	try {
+		const readChainId = await backend.createReadClient().getChainId()
+		if (readChainId !== getExpectedReadChainId(backend)) {
+			return {
+				readBackendMessage: buildReadBackendMismatchMessage(backend, readChainId),
+				validated: true,
+			}
+		}
+		return {
+			readBackendMessage: undefined,
+			validated: true,
+		}
+	} catch (error) {
+		throw new Error(getErrorMessage(error, 'Failed to validate the configured read RPC'))
+	}
 }
 
 type LoadWalletStateParameters = {
@@ -160,6 +183,7 @@ export function useOnchainState() {
 		const backend = getActiveBackend()
 		const isCurrent = nextRefresh()
 		let connectedAddress: Address | undefined
+		let connectedChainId: string | undefined
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
 		readBackendMessage.value = undefined
@@ -176,17 +200,27 @@ export function useOnchainState() {
 				return
 			}
 		}
-		backend.setReadTransportMode?.(connectedAddress === undefined ? 'rpc' : 'provider')
-		if (connectedAddress === undefined) {
+		if (connectedAddress !== undefined) {
+			try {
+				connectedChainId = await backend.getChainId()
+				if (!isCurrent()) return
+			} catch (error) {
+				if (!isCurrent()) return
+				walletBootstrapComplete.value = true
+				errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
+				return
+			}
+		}
+		const walletOnExpectedChain = connectedChainId === backend.profile.chainIdHex
+		backend.setReadTransportMode?.(walletOnExpectedChain ? 'provider' : 'rpc')
+		if (!walletOnExpectedChain) {
 			clearChainClock()
 			try {
-				const readChainId = await backend.createReadClient().getChainId()
+				const validation = await validateConfiguredReadBackend(backend)
 				if (!isCurrent()) return
-				if (readChainId !== getExpectedReadChainId(backend)) {
-					readBackendMessage.value = buildReadBackendMismatchMessage(backend, readChainId)
-					clearChainClock()
-				}
-				readBackendValidated.value = true
+				readBackendMessage.value = validation.readBackendMessage
+				readBackendValidated.value = validation.validated
+				if (validation.readBackendMessage !== undefined) clearChainClock()
 			} catch (error) {
 				if (!isCurrent()) return
 				errorMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
@@ -233,12 +267,11 @@ export function useOnchainState() {
 				walletBootstrapComplete.value = true
 
 				if (connectedAddress !== undefined) {
-					const chainIdPromise = backend.getChainId()
 					const readClient = createConnectedReadClient()
 					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
 					const wethBalancePromise = loadErc20Balance(readClient, getWethAddress(), connectedAddress)
 					void loadWalletState({
-						chainIdPromise,
+						chainIdPromise: Promise.resolve(connectedChainId ?? backend.profile.chainIdHex),
 						connectedAddress,
 						ethBalancePromise,
 						fallbackChainId: backend.profile.chainIdHex,
