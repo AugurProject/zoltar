@@ -18,6 +18,8 @@ import {
 
 export const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 export const ZERO_SALT = toHex(0, { size: 32 })
+export const OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS = bigintToAddress(0x4e59b44847b379578588920ca78fbf26c0b4956cn)
+const OPEN_ORACLE_CREATE2_SALT = '0xf5b91b18c7242605256d8b307d4a5bd3d398aa87a1d89917c9fa68c624e8399a' satisfies Hex
 export const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
@@ -30,9 +32,7 @@ const ORACLE_FEE_PERCENTAGE = 10000
 const ORACLE_MULTIPLIER = 140
 const ORACLE_TIME_TYPE = true
 const ORACLE_TRACK_DISPUTES = false
-const ORACLE_KEEP_FEE = false
 const ORACLE_PROTOCOL_FEE_RECIPIENT = bigintToAddress(0x0n)
-const ORACLE_FEE_TOKEN = true
 
 const getSecurityPoolUtilsAddress = () =>
 	getCreate2Address({
@@ -76,8 +76,8 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 	concatHex([
 		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 		encodeAbiParameters(
-			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'bool' }],
-			[MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_KEEP_FEE, ORACLE_PROTOCOL_FEE_RECIPIENT, ORACLE_FEE_TOKEN],
+			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }],
+			[MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_PROTOCOL_FEE_RECIPIENT],
 		),
 	])
 
@@ -142,6 +142,10 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getZoltarQuestionDataAddress,
 	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+	openOracleCreate2Inputs: {
+		proxyDeployerAddress: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
+		salt: OPEN_ORACLE_CREATE2_SALT,
+	},
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
 	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
@@ -149,6 +153,10 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
 	zeroSalt: ZERO_SALT,
 })
+
+export function getOpenOracleCreate2DeploymentBytecode() {
+	return concatHex([OPEN_ORACLE_CREATE2_SALT, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`])
+}
 
 export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle

@@ -7,6 +7,7 @@ import {
 	loadAllSecurityPools,
 	loadEscalationDeposits,
 	loadForkAuctionDetails,
+	loadOpenOracleReportSummaries,
 	loadSecurityPoolPage,
 	loadTruthAuctionActiveTickPage,
 	loadTruthAuctionBidderBidPage,
@@ -18,6 +19,7 @@ import {
 } from '../contracts.js'
 import { getForkOutcomeKey } from '../contracts/helpers.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { getOpenOracleReportStatus } from '../lib/openOracle.js'
 import type { ReadClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
@@ -25,6 +27,8 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
+const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
+const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 
 type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
@@ -170,6 +174,42 @@ describe('contracts helpers', () => {
 
 		expect(details.truthAuctionStartedAt).toBe(1n)
 		expect(details.migrationEndsAt).toBe(forkTime + 4_838_400n)
+	})
+
+	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
+		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'reportMeta') {
+					return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
+				}
+				if (functionName === 'reportStatus') {
+					return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
+				}
+				if (functionName === 'extraData') {
+					return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 2, 0, zeroAddress, false]]
+				}
+				if (functionName === 'decimals') return [18n, 18n]
+				if (functionName === 'symbol') return ['REP', 'WETH']
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 2n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadOpenOracleReportSummaries(client, 0, 10)
+		const [report] = page.reports
+		if (report === undefined) throw new Error('Expected one open oracle report summary')
+
+		expect(report.currentReporter).toBe(initialReporter)
+		expect(report.disputeOccurred).toBe(true)
+		expect(getOpenOracleReportStatus(report)).toBe('Disputed')
 	})
 
 	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {

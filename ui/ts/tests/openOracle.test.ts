@@ -146,7 +146,6 @@ function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof der
 			disputeDelay: 10n,
 			escalationHalt: 200n,
 			feePercentage: 1_000_000n,
-			feeToken: false,
 			isDistributed: false,
 			multiplier: 20_000n,
 			protocolFee: 500_000n,
@@ -284,7 +283,7 @@ describe('Open Oracle helpers', () => {
 	test('initial report price helpers derive a Uniswap default price and preserve quote failure metadata', async () => {
 		const quote = await loadOpenOracleInitialReportPrice(createQuoteClient(25n), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)
 		expect(quote).toEqual({
-			price: 4_000_000_000_000_000_000n,
+			price: 4_000_000_000_000_000_000_000_000_000_000n,
 			priceSource: 'Uniswap V4',
 			token2Amount: 25n,
 		})
@@ -324,7 +323,7 @@ describe('Open Oracle helpers', () => {
 		fallbackClient.simulateContract = simulateContract
 
 		await expect(loadOpenOracleInitialReportPrice(fallbackClient, REP_ADDRESS, WETH_ADDRESS, 100n * 10n ** 18n)).resolves.toEqual({
-			price: 500_000_000_000_000_000_000n,
+			price: 500_000_000_000_000_000_000_000_000_000_000n,
 			priceSource: 'Uniswap V3',
 			token2Amount: 200_000_000_000_000_000n,
 		})
@@ -341,7 +340,7 @@ describe('Open Oracle helpers', () => {
 		fallbackClient.simulateContract = simulateContract
 
 		await expect(loadOpenOracleInitialReportPrice(fallbackClient, USDC_ADDRESS, WETH_ADDRESS, 100n)).resolves.toEqual({
-			price: 2_000_000_000_000_000_000n,
+			price: 2_000_000_000_000_000_000_000_000_000_000n,
 			priceSource: 'Uniswap V3',
 			token2Amount: 50n,
 		})
@@ -354,7 +353,7 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.priceSource).toBe('Uniswap V4')
 		expect(preview.priceSourceUrl).toBe('https://app.uniswap.org/explore/pools/ethereum/0xpool')
-		expect(preview.price).toBe(4_000_000_000_000_000_000n)
+		expect(preview.price).toBe(4_000_000_000_000_000_000_000_000_000_000n)
 		expect(preview.amount1).toBe(100n)
 		expect(preview.amount2).toBe(25n)
 		expect(preview.token2Approval.neededAmount).toBe(1n)
@@ -365,12 +364,10 @@ describe('Open Oracle helpers', () => {
 		})
 	})
 
-	test('dispute submission helper computes token contributions across both swap directions and fee-token modes', () => {
+	test('dispute submission helper computes token contributions across both swap directions', () => {
 		const cases = [
-			{ disputeTokenToSwap: 'token1' as const, feeToken: false, expectedToken1Contribution: 300n, expectedToken2Contribution: 37n },
-			{ disputeTokenToSwap: 'token1' as const, feeToken: true, expectedToken1Contribution: 315n, expectedToken2Contribution: 30n },
-			{ disputeTokenToSwap: 'token2' as const, feeToken: false, expectedToken1Contribution: 115n, expectedToken2Contribution: 130n },
-			{ disputeTokenToSwap: 'token2' as const, feeToken: true, expectedToken1Contribution: 100n, expectedToken2Contribution: 137n },
+			{ disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 315n, expectedToken2Contribution: 30n },
+			{ disputeTokenToSwap: 'token2' as const, expectedToken1Contribution: 100n, expectedToken2Contribution: 137n },
 		]
 
 		for (const testCase of cases) {
@@ -385,7 +382,6 @@ describe('Open Oracle helpers', () => {
 					disputeDelay: 10n,
 					escalationHalt: 200n,
 					feePercentage: 1_000_000n,
-					feeToken: testCase.feeToken,
 					isDistributed: false,
 					multiplier: 20_000n,
 					protocolFee: 500_000n,
@@ -478,7 +474,7 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.priceSource).toBe('Manual override')
-		expect(preview.price).toBe(4_000_000_000_000_000_000n)
+		expect(preview.price).toBe(4_000_000_000_000_000_000_000_000_000_000n)
 		expect(preview.blockMessage).toEqual({
 			kind: 'visible',
 			message: 'XYZ approval required',
@@ -1065,12 +1061,10 @@ describe('Open Oracle helpers', () => {
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
 		await submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)
 
-		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)).rejects.toThrow(/report submitted/i)
+		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)).rejects.toThrow(/0xcc0220a9|reportalreadysubmitted|custom error/i)
 	})
 
-	// Temporarily disabled because `eth_simulate` changes the state hash while testing in
-	// Interceptor, so this validation must stay commented out for that flow.
-	test('submitInitialOracleReport accepts an invalid state hash', async () => {
+	test('submitInitialOracleReport rejects an invalid state hash', async () => {
 		await requestOraclePrice(uiWriteClient, managerAddress)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
@@ -1087,12 +1081,7 @@ describe('Open Oracle helpers', () => {
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
 		const invalidStateHash = stateHash === '0x0000000000000000000000000000000000000000000000000000000000000000' ? '0x0000000000000000000000000000000000000000000000000000000000000001' : '0x0000000000000000000000000000000000000000000000000000000000000000'
 
-		await submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)
-
-		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
-		expect(reportDetails.currentAmount1).toBe(amount1)
-		expect(reportDetails.currentAmount2).toBe(amount2)
-		expect(getOpenOracleReportStatus(reportDetails)).toBe('Pending')
+		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)).rejects.toThrow(/0x937d7862|invalidstatehash|custom error/i)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

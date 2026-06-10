@@ -84,22 +84,12 @@ describe('contracts helpers', () => {
 		expect(requireOpenOracleReportMetaTupleArray(oneValidMetaTuple, 'oracle meta')).toEqual(oneValidMetaTuple)
 		expect(() => requireOpenOracleReportMetaTupleArray([[1n, 2n] as never], 'oracle meta')).toThrow('Unexpected oracle meta response')
 
-		const validStatusTuple: [bigint, bigint, bigint, `0x${string}`, bigint, bigint, `0x${string}`, bigint, boolean, boolean] = [1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000d4'), 1n, 2n, getAddress('0x00000000000000000000000000000000000000e5'), 3n, true, false]
+		const validStatusTuple: [bigint, bigint, `0x${string}`, bigint, bigint, `0x${string}`, bigint] = [1n, 2n, getAddress('0x00000000000000000000000000000000000000d4'), 1n, 2n, getAddress('0x00000000000000000000000000000000000000e5'), 3n]
 		expect(requireOpenOracleReportStatusTuple(validStatusTuple, 'oracle status')).toEqual(validStatusTuple)
 		expect(requireOpenOracleReportStatusTupleArray([validStatusTuple], 'oracle status')).toEqual([validStatusTuple])
 		expect(() => requireOpenOracleReportStatusTupleArray([[1n, 2n] as never], 'oracle status')).toThrow('Unexpected oracle status response')
 
-		const validExtraData: [`0x${string}`, `0x${string}`, bigint, bigint, `0x${string}`, `0x${string}`, boolean, boolean, boolean] = [
-			'0x00000000000000000000000000000000000000f6',
-			getAddress('0x00000000000000000000000000000000000000f7'),
-			1n,
-			2n,
-			getAddress('0x00000000000000000000000000000000000000f6'),
-			zeroAddress,
-			true,
-			false,
-			true,
-		]
+		const validExtraData: [`0x${string}`, `0x${string}`, bigint, bigint, `0x${string}`, boolean] = ['0x00000000000000000000000000000000000000f6', getAddress('0x00000000000000000000000000000000000000f7'), 1n, 2n, getAddress('0x00000000000000000000000000000000000000f6'), false]
 		expect(requireOpenOracleExtraDataTuple(validExtraData, 'oracle extra data')).toEqual(validExtraData)
 		expect(() => requireOpenOracleExtraDataTuple(['0x00', zeroAddress, 1] as never, 'oracle extra data')).toThrow('Unexpected oracle extra data response')
 	})

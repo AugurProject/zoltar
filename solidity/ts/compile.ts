@@ -1,9 +1,9 @@
+import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import solc from 'solc'
 import * as funtypes from 'funtypes'
 import * as url from 'url'
-import { createHash } from 'crypto'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
@@ -11,6 +11,13 @@ const CONTRACT_PATH_RUNTIME = path.join(directoryOfThisFile, '..', 'types', 'con
 const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
+const OPEN_ORACLE_LOCAL_PATH = 'contracts/peripherals/openOracle/OpenOracle.sol'
+const OPEN_ORACLE_LOCAL_VENDOR_PREFIX = 'contracts/peripherals/openOracle/openzeppelin/contracts/'
+const OPEN_ORACLE_UPSTREAM_PATH = 'src/OpenOracleL1.sol'
+const OPEN_ORACLE_IMPORT_PREFIX = '@openzeppelin/contracts/'
+const OPEN_ORACLE_EXACT_PRAGMA = 'pragma solidity 0.8.28;'
+const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity >=0.8.28 <0.9.0;'
+const OPEN_ORACLE_SOLC_VERSION = 'v0.8.28+commit.7893614a'
 
 const CompileError = funtypes.ReadonlyObject({
 	severity: funtypes.String,
@@ -42,7 +49,6 @@ const AbiEntry = funtypes.ReadonlyPartial({
 	outputs: funtypes.ReadonlyArray(AbiParameter),
 })
 
-// Contract data may have abi and evm optional (if compilation failed for that contract)
 const ContractData = funtypes.ReadonlyPartial({
 	abi: funtypes.ReadonlyArray(AbiEntry),
 	evm: funtypes.ReadonlyPartial({
@@ -65,27 +71,63 @@ const HashCache = funtypes.ReadonlyPartial({
 	hash: funtypes.String,
 })
 
+const mainCompilerSettings = {
+	viaIR: true,
+	optimizer: {
+		enabled: true,
+		runs: 200,
+	},
+	outputSelection: {
+		'*': {
+			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.opcodes', 'evm.bytecode.sourceMap', 'evm.deployedBytecode.object', 'evm.deployedBytecode.opcodes', 'evm.deployedBytecode.sourceMap'],
+		},
+	},
+}
+
+const openOracleCompilerSettings = {
+	viaIR: true,
+	optimizer: {
+		enabled: true,
+		runs: 50000,
+	},
+	outputSelection: mainCompilerSettings.outputSelection,
+	evmVersion: 'cancun',
+}
+
+type SolcCompiler = {
+	compile(input: string): string
+	version(): string
+}
+
+let openOracleCompilerPromise: Promise<SolcCompiler> | undefined
+
 class CompilationError extends Error {
 	errors: string[]
+
 	constructor(errors: string[]) {
 		super('compilation error')
 		this.name = 'CompilationError'
 		this.errors = errors
 	}
+
 	override toString() {
 		const unescape = (str: string) => str.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-		return `${this.name}: ${this.message}\n errors:\n${this.errors.map((e, i) => `  [${i}] ${unescape(e)}`).join('\n')}`
+		return `${this.name}: ${this.message}\n errors:\n${this.errors.map((error, index) => `  [${index}] ${unescape(error)}`).join('\n')}`
 	}
 }
 
-async function exists(path: string) {
+async function exists(filePath: string) {
 	try {
-		await fs.stat(path)
+		await fs.stat(filePath)
 		return true
 	} catch (error) {
-		if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
-		return false
+		if (hasNodeErrorCode(error, 'ENOENT')) return false
+		throw error
 	}
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+	return isObjectRecord(error) && error['code'] === code
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -96,36 +138,54 @@ function isCompileError(value: unknown): value is { severity: string; formattedM
 	return isObjectRecord(value) && typeof value['severity'] === 'string' && typeof value['formattedMessage'] === 'string'
 }
 
-// Compiler settings that affect output - must be included in hash
-const compilerSettings = {
-	viaIR: true,
-	optimizer: {
-		enabled: true,
-		runs: 1,
-		details: {
-			inliner: true,
-		},
-	},
-	outputSelection: {
-		'*': {
-			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.opcodes', 'evm.bytecode.sourceMap', 'evm.deployedBytecode.object', 'evm.deployedBytecode.opcodes', 'evm.deployedBytecode.sourceMap'],
-		},
-	},
+function isFuntypesValidationError(error: unknown): error is Error {
+	return error instanceof Error && error.name === 'ValidationError'
+}
+
+function getCompilerVersion(compiler: SolcCompiler): string {
+	return compiler.version()
+}
+
+async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
+	if (openOracleCompilerPromise) return openOracleCompilerPromise
+
+	openOracleCompilerPromise = new Promise((resolve, reject) => {
+		solc.loadRemoteVersion(OPEN_ORACLE_SOLC_VERSION, (error, compiler) => {
+			if (error !== undefined && error !== null) {
+				reject(error)
+				return
+			}
+			if (compiler === undefined || typeof compiler.compile !== 'function' || typeof compiler.version !== 'function') {
+				reject(new Error(`Failed to load ${OPEN_ORACLE_SOLC_VERSION}`))
+				return
+			}
+			resolve(compiler)
+		})
+	})
+
+	return openOracleCompilerPromise
 }
 
 async function computeContractHash(sourceFiles: Map<string, string>): Promise<string> {
 	const hasher = createHash('sha256')
 
-	// Include compiler version to detect solc upgrades
-	if (!('version' in solc) || typeof solc.version !== 'function') throw new Error('solc.version is unavailable')
-	hasher.update(solc.version())
+	hasher.update(getCompilerVersion(solc))
+	hasher.update('\n')
+	hasher.update(OPEN_ORACLE_SOLC_VERSION)
+	hasher.update('\n')
+	hasher.update(
+		JSON.stringify({
+			mainCompilerSettings,
+			openOracleCompilerSettings,
+			openOracleLocalPath: OPEN_ORACLE_LOCAL_PATH,
+			openOracleLocalVendorPrefix: OPEN_ORACLE_LOCAL_VENDOR_PREFIX,
+			openOracleUpstreamPath: OPEN_ORACLE_UPSTREAM_PATH,
+			openOracleImportPrefix: OPEN_ORACLE_IMPORT_PREFIX,
+			openOracleMainPassPragma: OPEN_ORACLE_MAIN_PASS_PRAGMA,
+		}),
+	)
 	hasher.update('\n')
 
-	// Include compiler settings in the hash
-	hasher.update(JSON.stringify(compilerSettings))
-	hasher.update('\n')
-
-	// Hash all source files
 	const sortedPaths = Array.from(sourceFiles.keys()).sort()
 	for (const relativePath of sortedPaths) {
 		hasher.update(relativePath)
@@ -133,6 +193,7 @@ async function computeContractHash(sourceFiles: Map<string, string>): Promise<st
 		hasher.update(sourceFiles.get(relativePath) ?? '')
 		hasher.update('\n')
 	}
+
 	return hasher.digest('hex')
 }
 
@@ -144,9 +205,10 @@ async function loadHashCache(): Promise<{ hash: string | undefined }> {
 			return { hash: parsed.hash }
 		}
 	} catch (error) {
-		if (error instanceof SyntaxError || (error instanceof Error && (('code' in error && error.code === 'ENOENT') || error.name === 'ZodError'))) return { hash: undefined }
-		// ignore
+		if (error instanceof SyntaxError || hasNodeErrorCode(error, 'ENOENT') || isFuntypesValidationError(error)) return { hash: undefined }
+		throw error
 	}
+
 	return { hash: undefined }
 }
 
@@ -156,14 +218,9 @@ async function saveHashCache(contractHash: string): Promise<void> {
 }
 
 const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
-	// Set base directory on first call and resolve to absolute canonical path (resolve symlinks)
 	if (!baseDir) baseDir = await fs.realpath(dirPath)
-	// Initialize visited set on first call
 	const visitedSet = visited ?? new Set<string>()
-
-	// Get canonical path of current directory to detect cycles
 	const canonicalDir = await fs.realpath(dirPath)
-	// Skip if already visited (symlink loop detection)
 	if (visitedSet.has(canonicalDir)) return fileList
 	visitedSet.add(canonicalDir)
 
@@ -171,28 +228,22 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 	for (const file of files) {
 		const filePath = path.join(dirPath, file.name)
 
-		// Resolve symbolic links to their target for security check and recursion
 		let targetPath = filePath
 		if (file.isSymbolicLink()) {
 			targetPath = await fs.realpath(filePath)
-		} else {
-			// For regular files/directories, just use absolute path (no need to resolve symlinks in parent chain again)
-			// Since dirPath is already resolved (canonical), filePath is already absolute.
-			// We'll use filePath for security check and recursion for non-symlinks.
-			targetPath = filePath
 		}
 
-		// Security check: ensure targetPath is within baseDir
 		const relative = path.relative(baseDir, targetPath)
 		if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
 
-		// Recurse into directories (including symlinked directories that passed the check)
 		if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
 			await getAllFiles(targetPath, baseDir, fileList, visitedSet)
-		} else {
-			fileList.push(filePath)
+			continue
 		}
+
+		fileList.push(filePath)
 	}
+
 	return fileList
 }
 
@@ -211,17 +262,142 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 			contractData,
 		}))
 	})
-	if (new Set(contracts.map(x => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
+	if (new Set(contracts.map(contract => contract.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
 	const typescriptString = contracts.map(contract => `export const ${contract.contractName} = ${JSON.stringify(contract.contractData, null, 4)} as const`).join('\r\n\r\n')
 	await fs.mkdir(path.dirname(CONTRACT_PATH_RUNTIME), { recursive: true })
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
 	await fs.writeFile(CONTRACT_PATH_RUNTIME, `${typescriptString}\n`)
 }
 
+function buildSourceObject(sources: Map<string, string>) {
+	const sourceObject: { [key: string]: { content: string } } = {}
+	for (const [sourcePath, content] of sources) {
+		sourceObject[sourcePath] = { content }
+	}
+	return sourceObject
+}
+
+function addOpenOracleImportAliases(targetSources: Map<string, string>, sourceFiles: Map<string, string>) {
+	for (const [sourcePath, content] of sourceFiles) {
+		if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) continue
+		const aliasedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`
+		targetSources.set(aliasedPath, content)
+	}
+}
+
+function createMainCompilerSources(sourceFiles: Map<string, string>) {
+	const mainSources = new Map(sourceFiles)
+	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
+	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
+	if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`)
+	mainSources.set(OPEN_ORACLE_LOCAL_PATH, openOracleSource.replace(OPEN_ORACLE_EXACT_PRAGMA, OPEN_ORACLE_MAIN_PASS_PRAGMA))
+	addOpenOracleImportAliases(mainSources, sourceFiles)
+	return mainSources
+}
+
+function createOpenOracleCompilerSources(sourceFiles: Map<string, string>) {
+	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
+	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
+	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, openOracleSource]])
+	for (const [sourcePath, content] of sourceFiles) {
+		if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) continue
+		const remappedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`
+		openOracleSources.set(remappedPath, content)
+	}
+	return openOracleSources
+}
+
+function compileSourceMap(label: string, compiler: SolcCompiler, sources: Map<string, string>, settings: Record<string, unknown>) {
+	const input = {
+		language: 'Solidity',
+		sources: buildSourceObject(sources),
+		settings,
+	}
+
+	console.time(`${label} compilation`)
+	const output = compiler.compile(JSON.stringify(input))
+	console.timeEnd(`${label} compilation`)
+
+	const result = CompileResult.parse(JSON.parse(output))
+	const diagnostics = Array.isArray(result.errors) ? result.errors : []
+	const errors: string[] = []
+	const warnings: string[] = []
+
+	for (const diagnostic of diagnostics) {
+		if (!isCompileError(diagnostic)) continue
+		if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
+		if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
+	}
+
+	if (errors.length > 0) throw new CompilationError(errors.map(error => `${label}: ${error}`))
+	if (warnings.length > 0) warnings.forEach(warning => console.warn(`${label}: ${warning}`))
+
+	return result
+}
+
+function isTemporaryCompilerSourcePath(sourcePath: string) {
+	return sourcePath === OPEN_ORACLE_UPSTREAM_PATH || sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX)
+}
+
+function isReplacedLocalOracleSourcePath(sourcePath: string) {
+	return sourcePath === OPEN_ORACLE_LOCAL_PATH || sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)
+}
+
+function remapOpenOracleSourcePath(sourcePath: string): string | undefined {
+	if (sourcePath === OPEN_ORACLE_UPSTREAM_PATH) return OPEN_ORACLE_LOCAL_PATH
+	return undefined
+}
+
+function mergeCompileSources(mainSources: unknown, openOracleSources: unknown) {
+	const mergedSources: Record<string, unknown> = {}
+
+	if (isObjectRecord(mainSources)) {
+		for (const [sourcePath, sourceData] of Object.entries(mainSources)) {
+			if (isTemporaryCompilerSourcePath(sourcePath) || isReplacedLocalOracleSourcePath(sourcePath)) continue
+			mergedSources[sourcePath] = sourceData
+		}
+	}
+
+	if (isObjectRecord(openOracleSources)) {
+		for (const [sourcePath, sourceData] of Object.entries(openOracleSources)) {
+			const remappedPath = remapOpenOracleSourcePath(sourcePath)
+			if (remappedPath === undefined) continue
+			mergedSources[remappedPath] = sourceData
+		}
+	}
+
+	return Object.keys(mergedSources).length > 0 ? mergedSources : undefined
+}
+
+function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, openOracleResult: funtypes.Static<typeof CompileResult>) {
+	const mergedContracts: Record<string, Record<string, unknown>> = {}
+
+	if (mainResult.contracts) {
+		for (const [sourcePath, contractFile] of Object.entries(mainResult.contracts)) {
+			if (isTemporaryCompilerSourcePath(sourcePath) || isReplacedLocalOracleSourcePath(sourcePath)) continue
+			if (!isObjectRecord(contractFile)) throw new Error(`Invalid contract output for ${sourcePath}`)
+			mergedContracts[sourcePath] = contractFile
+		}
+	}
+
+	if (openOracleResult.contracts) {
+		for (const [sourcePath, contractFile] of Object.entries(openOracleResult.contracts)) {
+			const remappedPath = remapOpenOracleSourcePath(sourcePath)
+			if (remappedPath === undefined) continue
+			if (!isObjectRecord(contractFile)) throw new Error(`Invalid contract output for ${sourcePath}`)
+			mergedContracts[remappedPath] = contractFile
+		}
+	}
+
+	return {
+		contracts: mergedContracts,
+		sources: mergeCompileSources(mainResult.sources, openOracleResult.sources),
+	}
+}
+
 const compileContracts = async () => {
 	console.log('Computing contract hash...')
 
-	// Load all source files once
 	const files = await getAllFiles('contracts')
 	const sources = new Map<string, string>()
 	for (const file of files) {
@@ -229,21 +405,17 @@ const compileContracts = async () => {
 		sources.set(relativePath, await fs.readFile(file, 'utf8'))
 	}
 
-	// Compute hash from loaded sources (no additional I/O)
 	const currentContractHash = await computeContractHash(sources)
 	const cache = await loadHashCache()
-
-	// Determine if recompilation is needed
 	let needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
 
 	if (!needsRecompilation) {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
-		// Validate artifact file exists, is accessible, and contains valid data
 		try {
 			const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8')
 			CompileResult.parse(JSON.parse(artifactContent))
 		} catch (error) {
-			if (!(error instanceof SyntaxError) && !(error instanceof Error && (('code' in error && error.code === 'ENOENT') || error.name === 'ZodError'))) throw error
+			if (!(error instanceof SyntaxError) && !hasNodeErrorCode(error, 'ENOENT') && !isFuntypesValidationError(error)) throw error
 			console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...')
 			needsRecompilation = true
 		}
@@ -251,45 +423,17 @@ const compileContracts = async () => {
 
 	if (needsRecompilation) {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
-
-		// Convert Map to object for solc input
-		const sourcesObj: { [key: string]: { content: string } } = {}
-		for (const [key, value] of sources) {
-			sourcesObj[key] = { content: value }
-		}
-
-		const input = {
-			language: 'Solidity',
-			sources: sourcesObj,
-			settings: compilerSettings,
-		}
-
-		console.time('solc compilation')
-		const output = solc.compile(JSON.stringify(input))
-		console.timeEnd('solc compilation')
-
-		const result = CompileResult.parse(JSON.parse(output))
-		const diagnostics = Array.isArray(result.errors) ? result.errors : []
-		const errors: string[] = []
-		const warnings: string[] = []
-		for (const diagnostic of diagnostics) {
-			if (!isCompileError(diagnostic)) continue
-			if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
-			if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
-		}
-		if (errors.length) throw new CompilationError(errors)
-
-		if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
+		const openOracleCompiler = await loadOpenOracleCompiler()
+		const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings)
+		const openOracleResult = compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings)
+		const mergedResult = CompileResult.parse(mergeCompileResults(mainResult, openOracleResult))
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
-		await fs.writeFile(ARTIFACTS_JSON, output)
-
-		// Save updated hash after successful compilation
+		await fs.writeFile(ARTIFACTS_JSON, JSON.stringify(mergedResult))
 		await saveHashCache(currentContractHash)
 		console.log('Compilation complete. Hash cache updated.')
 	}
 
-	// Always regenerate TypeScript artifact to reflect any changes in the generation logic
 	await copySolidityContractArtifact(ARTIFACTS_JSON)
 	console.log('TypeScript artifact generated.')
 }
@@ -300,6 +444,5 @@ compileContracts().catch((error: unknown) => {
 	} else {
 		console.error(error)
 	}
-	debugger
 	process.exit(1)
 })

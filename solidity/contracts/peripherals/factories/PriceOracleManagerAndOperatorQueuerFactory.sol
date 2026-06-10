@@ -20,9 +20,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 	uint16 public immutable multiplier;
 	bool public immutable timeType;
 	bool public immutable trackDisputes;
-	bool public immutable keepFee;
 	address public immutable protocolFeeRecipient;
-	bool public immutable feeToken;
 
 	constructor(
 		IWeth9 _weth,
@@ -36,9 +34,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		uint16 _multiplier,
 		bool _timeType,
 		bool _trackDisputes,
-		bool _keepFee,
-		address _protocolFeeRecipient,
-		bool _feeToken
+		address _protocolFeeRecipient
 	) {
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
@@ -51,9 +47,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		multiplier = _multiplier;
 		timeType = _timeType;
 		trackDisputes = _trackDisputes;
-		keepFee = _keepFee;
 		protocolFeeRecipient = _protocolFeeRecipient;
-		feeToken = _feeToken;
 	}
 
 	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, bytes32 salt) external returns (SecurityPoolOracleCoordinator) {
@@ -71,9 +65,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 			multiplier,
 			timeType,
 			trackDisputes,
-			keepFee,
-			protocolFeeRecipient,
-			feeToken
+			protocolFeeRecipient
 		);
 	}
 }

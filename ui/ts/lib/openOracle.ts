@@ -7,11 +7,11 @@ import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } fro
 import { tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
-const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
+const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n
 const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
 const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 const OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n
-const OPEN_ORACLE_MULTIPLIER_PRECISION = 10n ** 4n
+const OPEN_ORACLE_MULTIPLIER_PRECISION = 100n
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'settle' | 'read-only'
 export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
@@ -88,11 +88,11 @@ export function formatOpenOracleInitialReportWriteErrorMessage(error: unknown, f
 	const normalizedDetail = detail?.toLowerCase()
 	if (normalizedDetail === undefined) return 'Transaction failed while submitting the initial report. Reload the report and try again.'
 	if (genericMessage === detail) return detail
-	if (normalizedDetail.includes('report submitted')) return 'This report already has an initial report.'
-	if (normalizedDetail.includes('report id')) return 'This report is no longer valid. Reload it before submitting the initial report again.'
-	if (normalizedDetail.includes('token1 amount')) return 'The required token1 amount changed on-chain. Reload the report before submitting the initial report again.'
-	if (normalizedDetail.includes('token2 amount')) return 'The selected price produces an invalid token2 amount for the initial report.'
-	if (normalizedDetail.includes('state hash')) return 'This report changed on-chain. Reload the report before submitting the initial report again.'
+	if (normalizedDetail.includes('report submitted') || normalizedDetail.includes('reportalreadysubmitted') || normalizedDetail.includes('0xcc0220a9')) return 'This report already has an initial report.'
+	if (normalizedDetail.includes('report id') || normalizedDetail.includes('invalidreportid')) return 'This report is no longer valid. Reload it before submitting the initial report again.'
+	if (normalizedDetail.includes('token1 amount') || normalizedDetail.includes('invalidamount1')) return 'The required token1 amount changed on-chain. Reload the report before submitting the initial report again.'
+	if (normalizedDetail.includes('token2 amount') || normalizedDetail.includes('invalidamount2')) return 'The selected price produces an invalid token2 amount for the initial report.'
+	if (normalizedDetail.includes('state hash') || normalizedDetail.includes('invalidstatehash') || normalizedDetail.includes('0x937d7862')) return 'This report changed on-chain. Reload the report before submitting the initial report again.'
 	if (
 		normalizedDetail.includes('allowance') ||
 		normalizedDetail.includes('balance') ||
@@ -114,9 +114,9 @@ export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallback
 	if (normalizedDetail === undefined) return 'Transaction failed while settling the report. Reload the report and try again.'
 	if (genericMessage === detail) return detail
 	if (normalizedDetail.includes('0x98bdb2e0') || normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('invalid gas limit')) return 'This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.'
-	if (normalizedDetail.includes('settlement')) return 'This report is not ready to settle yet.'
-	if (normalizedDetail.includes('report settled')) return 'This report is already settled.'
-	if (normalizedDetail.includes('no initial report')) return 'Submit an initial report before settling this report.'
+	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('settlement')) return 'This report is not ready to settle yet.'
+	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
+	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('no initial report')) return 'Submit an initial report before settling this report.'
 	return `Transaction failed while settling the report. Reason: ${detail}`
 }
 export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to dispute report') {
@@ -126,10 +126,10 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	const normalizedDetail = detail?.toLowerCase()
 	if (normalizedDetail === undefined) return 'Transaction failed while disputing the report. Reload the report and try again.'
 	if (genericMessage === detail) return detail
-	if (normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute yet.'
-	if (normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle Report instead.'
-	if (normalizedDetail.includes('report settled')) return 'This report is already settled.'
-	if (normalizedDetail.includes('no report to dispute')) return 'Submit an initial report before disputing this report.'
+	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute yet.'
+	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle Report instead.'
+	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
+	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'Submit an initial report before disputing this report.'
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
@@ -139,8 +139,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, sett
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
 	const settlerReward = tryParseBigIntInput(settlerRewardInput)
 	if (settlerReward === undefined) return 'Enter a valid settler reward.'
-	if (ethValue <= 100n) return 'ETH value to send must be greater than 100 wei.'
-	if (ethValue <= settlerReward) return 'ETH value to send must exceed the settler reward.'
+	if (ethValue < settlerReward) return 'ETH value to send must be at least the settler reward.'
 	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
 	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected Open Oracle game.`
 	return undefined
@@ -284,10 +283,10 @@ function calculateOpenOracleToken2Amount(token1Amount: bigint, price: bigint) {
 	return (token1Amount * OPEN_ORACLE_PRICE_PRECISION) / price
 }
 function tryParseOpenOraclePriceInput(value: string) {
-	return tryParseDecimalInput(value)
+	return tryParseDecimalInput(value, 30)
 }
 export function formatOpenOraclePriceInput(price: bigint | undefined) {
-	return price === undefined ? '' : formatCurrencyInputBalance(price)
+	return price === undefined ? '' : formatCurrencyInputBalance(price, 30)
 }
 function resolveOpenOracleTokenLabel({ fallbackLabel, tokenAddress, tokenSymbol }: { fallbackLabel: string; tokenAddress: string | undefined; tokenSymbol: string | undefined }) {
 	const resolvedSymbol = tokenSymbol?.trim()
@@ -358,35 +357,21 @@ function formatOpenOracleDisputeBalanceStatusUnavailableMessage({ reason, tokenL
 function formatOpenOracleDisputeInsufficientBalanceMessage({ available, required, tokenDecimals, tokenLabel }: { available: bigint; required: bigint; tokenDecimals: number | undefined; tokenLabel: string }) {
 	return `Insufficient ${tokenLabel} balance for this dispute. Need ${formatCurrencyBalance(required, tokenDecimals ?? 18)}, wallet has ${formatCurrencyBalance(available, tokenDecimals ?? 18)}.`
 }
-function resolveOpenOracleDisputeToken1Contribution({ feeToken, feePercentage, oldAmount1, protocolFee, requiredToken1Contribution, tokenToSwap }: { feePercentage: bigint; feeToken: boolean; oldAmount1: bigint; protocolFee: bigint; requiredToken1Contribution: bigint; tokenToSwap: 'token1' | 'token2' }) {
+function resolveOpenOracleDisputeToken1Contribution({ feePercentage, oldAmount1, protocolFee, requiredToken1Contribution, tokenToSwap }: { feePercentage: bigint; oldAmount1: bigint; protocolFee: bigint; requiredToken1Contribution: bigint; tokenToSwap: 'token1' | 'token2' }) {
 	if (tokenToSwap === 'token1') {
-		if (feeToken) {
-			const fee = (oldAmount1 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
-			const protocolFeeAmount = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
-			return requiredToken1Contribution + oldAmount1 + fee + protocolFeeAmount
-		}
-		return requiredToken1Contribution + oldAmount1
+		const fee = (oldAmount1 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		const protocolFeeAmount = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		return requiredToken1Contribution + oldAmount1 + fee + protocolFeeAmount
 	}
-	if (feeToken) return requiredToken1Contribution > oldAmount1 ? requiredToken1Contribution - oldAmount1 : 0n
-	const fee = (oldAmount1 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
-	const protocolFeeAmount = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
-	const totalContribution = requiredToken1Contribution + fee + protocolFeeAmount
-	return totalContribution > oldAmount1 ? totalContribution - oldAmount1 : 0n
+	return requiredToken1Contribution > oldAmount1 ? requiredToken1Contribution - oldAmount1 : 0n
 }
-function resolveOpenOracleDisputeToken2Contribution({ feeToken, feePercentage, newAmount2, oldAmount2, protocolFee, tokenToSwap }: { feePercentage: bigint; feeToken: boolean; newAmount2: bigint; oldAmount2: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }) {
+function resolveOpenOracleDisputeToken2Contribution({ feePercentage, newAmount2, oldAmount2, protocolFee, tokenToSwap }: { feePercentage: bigint; newAmount2: bigint; oldAmount2: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }) {
 	if (tokenToSwap === 'token1') {
-		if (feeToken) return newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n
-		const fee = (oldAmount2 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
-		const protocolFeeAmount = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
-		const totalContribution = newAmount2 + fee + protocolFeeAmount
-		return totalContribution >= oldAmount2 ? totalContribution - oldAmount2 : 0n
+		return newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n
 	}
-	if (feeToken) {
-		const fee = (oldAmount2 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
-		const protocolFeeAmount = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
-		return newAmount2 + oldAmount2 + fee + protocolFeeAmount
-	}
-	return newAmount2 + oldAmount2
+	const fee = (oldAmount2 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
+	const protocolFeeAmount = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+	return newAmount2 + oldAmount2 + fee + protocolFeeAmount
 }
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
 	if (!isRepPricingEnabled())
@@ -682,25 +667,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	reportDetails:
 		| Pick<
 				OpenOracleReportDetails,
-				| 'currentAmount1'
-				| 'currentAmount2'
-				| 'currentBlockNumber'
-				| 'currentReporter'
-				| 'currentTime'
-				| 'disputeDelay'
-				| 'escalationHalt'
-				| 'feePercentage'
-				| 'feeToken'
-				| 'isDistributed'
-				| 'multiplier'
-				| 'protocolFee'
-				| 'reportTimestamp'
-				| 'settlementTime'
-				| 'timeType'
-				| 'token1'
-				| 'token1Symbol'
-				| 'token2'
-				| 'token2Symbol'
+				'currentAmount1' | 'currentAmount2' | 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'escalationHalt' | 'feePercentage' | 'isDistributed' | 'multiplier' | 'protocolFee' | 'reportTimestamp' | 'settlementTime' | 'timeType' | 'token1' | 'token1Symbol' | 'token2' | 'token2Symbol'
 		  >
 		| undefined
 	token1AllowanceError: string | undefined
@@ -725,7 +692,14 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	let expectedNewAmount1: bigint | undefined
 	let newAmount1: bigint | undefined
 	let newAmount2: bigint | undefined
-	if (reportDetails !== undefined) expectedNewAmount1 = reportDetails.escalationHalt > reportDetails.currentAmount1 ? (reportDetails.currentAmount1 * reportDetails.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION : reportDetails.currentAmount1 + 1n
+	if (reportDetails !== undefined)
+		expectedNewAmount1 =
+			reportDetails.escalationHalt > reportDetails.currentAmount1
+				? (() => {
+						const multiplied = (reportDetails.currentAmount1 * reportDetails.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION
+						return multiplied > reportDetails.escalationHalt ? reportDetails.escalationHalt : multiplied
+					})()
+				: reportDetails.currentAmount1 + 1n
 	newAmount1 = tryParseBigIntInput(disputeNewAmount1Input)
 	newAmount2 = tryParseBigIntInput(disputeNewAmount2Input)
 	const token1ContributionAmount =
@@ -733,7 +707,6 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 			? undefined
 			: resolveOpenOracleDisputeToken1Contribution({
 					feePercentage: reportDetails.feePercentage,
-					feeToken: reportDetails.feeToken,
 					oldAmount1: reportDetails.currentAmount1,
 					protocolFee: reportDetails.protocolFee,
 					requiredToken1Contribution: expectedNewAmount1,
@@ -744,7 +717,6 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 			? undefined
 			: resolveOpenOracleDisputeToken2Contribution({
 					feePercentage: reportDetails.feePercentage,
-					feeToken: reportDetails.feeToken,
 					newAmount2,
 					oldAmount2: reportDetails.currentAmount2,
 					protocolFee: reportDetails.protocolFee,

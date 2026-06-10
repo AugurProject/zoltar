@@ -7,8 +7,8 @@ type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], IntegerLike, bigint, IntegerLike, bigint, boolean]
 type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, IntegerLike, Address, boolean, IntegerLike, IntegerLike, IntegerLike, IntegerLike]
-type OpenOracleReportStatusTuple = readonly [bigint, bigint, bigint, Address, IntegerLike, IntegerLike, Address, IntegerLike, boolean, boolean]
-type OpenOracleExtraDataTuple = readonly [Hex, Address, IntegerLike, IntegerLike, Hex, Address, boolean, boolean, boolean]
+type OpenOracleReportStatusTuple = readonly [bigint, bigint, Address, IntegerLike, IntegerLike, Address, IntegerLike]
+type OpenOracleExtraDataTuple = readonly [Hex, Address, IntegerLike, IntegerLike, Address, boolean]
 
 export function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -121,20 +121,7 @@ export function requireOpenOracleReportMetaTupleArray(value: unknown, context: s
 }
 
 function isOpenOracleReportStatusTuple(value: unknown): value is OpenOracleReportStatusTuple {
-	return (
-		Array.isArray(value) &&
-		value.length === 10 &&
-		typeof value[0] === 'bigint' &&
-		typeof value[1] === 'bigint' &&
-		typeof value[2] === 'bigint' &&
-		typeof value[3] === 'string' &&
-		isIntegerLike(value[4]) &&
-		isIntegerLike(value[5]) &&
-		typeof value[6] === 'string' &&
-		isIntegerLike(value[7]) &&
-		typeof value[8] === 'boolean' &&
-		typeof value[9] === 'boolean'
-	)
+	return Array.isArray(value) && value.length === 7 && typeof value[0] === 'bigint' && typeof value[1] === 'bigint' && typeof value[2] === 'string' && isIntegerLike(value[3]) && isIntegerLike(value[4]) && typeof value[5] === 'string' && isIntegerLike(value[6])
 }
 
 export function requireOpenOracleReportStatusTuple(value: unknown, context: string): OpenOracleReportStatusTuple {
@@ -148,23 +135,16 @@ export function requireOpenOracleReportStatusTupleArray(value: unknown, context:
 }
 
 function isOpenOracleExtraDataTuple(value: unknown): value is OpenOracleExtraDataTuple {
-	return (
-		Array.isArray(value) &&
-		value.length === 9 &&
-		typeof value[0] === 'string' &&
-		typeof value[1] === 'string' &&
-		isIntegerLike(value[2]) &&
-		isIntegerLike(value[3]) &&
-		typeof value[4] === 'string' &&
-		typeof value[5] === 'string' &&
-		typeof value[6] === 'boolean' &&
-		typeof value[7] === 'boolean' &&
-		typeof value[8] === 'boolean'
-	)
+	return Array.isArray(value) && value.length === 6 && typeof value[0] === 'string' && typeof value[1] === 'string' && isIntegerLike(value[2]) && isIntegerLike(value[3]) && typeof value[4] === 'string' && typeof value[5] === 'boolean'
 }
 
 export function requireOpenOracleExtraDataTuple(value: unknown, context: string): OpenOracleExtraDataTuple {
 	if (isOpenOracleExtraDataTuple(value)) return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
+export function requireOpenOracleExtraDataTupleArray(value: unknown, context: string): OpenOracleExtraDataTuple[] {
+	if (Array.isArray(value) && value.every(isOpenOracleExtraDataTuple)) return value
 	throw new Error(`Unexpected ${context} response`)
 }
 

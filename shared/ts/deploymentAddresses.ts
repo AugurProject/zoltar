@@ -36,6 +36,10 @@ type InfraContractAddressConfig = {
 	securityPoolUtilsBytecode: Hex
 	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
 	zeroSalt: Hex
+	openOracleCreate2Inputs?: {
+		proxyDeployerAddress: Address
+		salt: Hex
+	}
 	getZoltarAddress: () => Address
 	getZoltarQuestionDataAddress: () => Address
 }
@@ -101,7 +105,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 		const addresses = {
 			multicall3: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.multicall3Bytecode),
 			securityPoolUtils: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolUtilsBytecode),
-			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
+			openOracle: getProxyDeployerCreate2Address(config.openOracleCreate2Inputs?.proxyDeployerAddress ?? config.proxyDeployerAddress, config.openOracleCreate2Inputs?.salt ?? config.zeroSalt, config.openOracleBytecode),
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
 			zoltar: config.getZoltarAddress(),
 			shareTokenFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getShareTokenFactoryByteCode(config.getZoltarAddress())),

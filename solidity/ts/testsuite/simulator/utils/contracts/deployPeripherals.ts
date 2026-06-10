@@ -30,6 +30,8 @@ import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
+const OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS = '0x4e59b44847b379578588920ca78fbf26c0b4956c' satisfies Address
+const OPEN_ORACLE_CREATE2_SALT = '0xf5b91b18c7242605256d8b307d4a5bd3d398aa87a1d89917c9fa68c624e8399a' satisfies Hex
 const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
@@ -42,9 +44,7 @@ const ORACLE_FEE_PERCENTAGE = 10000
 const ORACLE_MULTIPLIER = 140
 const ORACLE_TIME_TYPE = true
 const ORACLE_TRACK_DISPUTES = false
-const ORACLE_KEEP_FEE = false
 const ORACLE_PROTOCOL_FEE_RECIPIENT = addressString(0x0n)
-const ORACLE_FEE_TOKEN = true
 
 const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
 
@@ -66,8 +66,8 @@ function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
 	return concatHex([
 		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 		encodeAbiParameters(
-			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'bool' }],
-			[MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_KEEP_FEE, ORACLE_PROTOCOL_FEE_RECIPIENT, ORACLE_FEE_TOKEN],
+			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }],
+			[MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_PROTOCOL_FEE_RECIPIENT],
 		),
 	])
 }
@@ -151,6 +151,10 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getZoltarQuestionDataAddress,
 	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+	openOracleCreate2Inputs: {
+		proxyDeployerAddress: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
+		salt: OPEN_ORACLE_CREATE2_SALT,
+	},
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
@@ -165,6 +169,8 @@ export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracle
 	zeroSalt: ZERO_SALT,
 })
 
+const getOpenOracleCreate2DeploymentBytecode = (): Hex => concatHex([OPEN_ORACLE_CREATE2_SALT, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`])
+
 export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getEscalationGameInitCode: securityPool =>
 		encodeDeployData({
@@ -177,42 +183,8 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 		concatHex([
 			`0x${peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.evm.bytecode.object}`,
 			encodeAbiParameters(
-				[
-					{ type: 'address' },
-					{ type: 'address' },
-					{ type: 'address' },
-					{ type: 'uint256' },
-					{ type: 'uint32' },
-					{ type: 'uint256' },
-					{ type: 'uint48' },
-					{ type: 'uint24' },
-					{ type: 'uint24' },
-					{ type: 'uint24' },
-					{ type: 'uint16' },
-					{ type: 'bool' },
-					{ type: 'bool' },
-					{ type: 'bool' },
-					{ type: 'address' },
-					{ type: 'bool' },
-				],
-				[
-					openOracle,
-					repToken,
-					MAINNET_WETH_ADDRESS,
-					ORACLE_REPORT_GAS,
-					ORACLE_SETTLEMENT_GAS,
-					ORACLE_EXACT_TOKEN1_REPORT,
-					ORACLE_SETTLEMENT_TIME,
-					ORACLE_DISPUTE_DELAY,
-					ORACLE_PROTOCOL_FEE,
-					ORACLE_FEE_PERCENTAGE,
-					ORACLE_MULTIPLIER,
-					ORACLE_TIME_TYPE,
-					ORACLE_TRACK_DISPUTES,
-					ORACLE_KEEP_FEE,
-					ORACLE_PROTOCOL_FEE_RECIPIENT,
-					ORACLE_FEE_TOKEN,
-				],
+				[{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }],
+				[openOracle, repToken, MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_PROTOCOL_FEE_RECIPIENT],
 			),
 		]),
 	getRepTokenAddress,
@@ -306,16 +278,21 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		await client.waitForTransactionReceipt({ hash })
 	}
 
+	const deployOpenOracle = async () => {
+		const hash = await client.sendTransaction({ to: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS, data: getOpenOracleCreate2DeploymentBytecode() })
+		await client.waitForTransactionReceipt({ hash })
+	}
+
 	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
-	if (!existence.multicall3) await deployBytecode(MULTICALL3_BYTECODE)
-	if (!existence.uniformPriceDualCapBatchAuctionFactory) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
-	if (!existence.scalarOutcomes) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
-	if (!existence.securityPoolUtils) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-	if (!existence.openOracle) await deployBytecode(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
-	if (!existence.zoltarQuestionData) await deployBytecode(getZoltarQuestionDataByteCode())
-	if (!existence.zoltar) {
+	if (!existence['multicall3']) await deployBytecode(MULTICALL3_BYTECODE)
+	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
+	if (!existence['scalarOutcomes']) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
+	if (!existence['securityPoolUtils']) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
+	if (!existence['openOracle']) await deployOpenOracle()
+	if (!existence['zoltarQuestionData']) await deployBytecode(getZoltarQuestionDataByteCode())
+	if (!existence['zoltar']) {
 		const initCode = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
@@ -323,11 +300,11 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		})
 		await deployBytecode(initCode)
 	}
-	if (!existence.shareTokenFactory) await deployBytecode(getShareTokenFactoryByteCode(getZoltarAddress()))
-	if (!existence.priceOracleManagerAndOperatorQueuerFactory) await deployBytecode(getPriceOracleManagerAndOperatorQueuerFactoryByteCode())
-	if (!existence.securityPoolForker) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
-	if (!existence.escalationGameFactory) await deployBytecode(getEscalationGameFactoryByteCode())
-	if (!existence.securityPoolFactory)
+	if (!existence['shareTokenFactory']) await deployBytecode(getShareTokenFactoryByteCode(getZoltarAddress()))
+	if (!existence['priceOracleManagerAndOperatorQueuerFactory']) await deployBytecode(getPriceOracleManagerAndOperatorQueuerFactoryByteCode())
+	if (!existence['securityPoolForker']) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
+	if (!existence['escalationGameFactory']) await deployBytecode(getEscalationGameFactoryByteCode())
+	if (!existence['securityPoolFactory'])
 		await deployBytecode(
 			getSecurityPoolFactoryByteCode({
 				escalationGameFactory: contractAddresses.escalationGameFactory,

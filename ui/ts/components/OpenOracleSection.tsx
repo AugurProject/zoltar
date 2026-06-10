@@ -48,6 +48,7 @@ import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
 const BROWSE_PAGE_SIZE = 10
+const OPEN_ORACLE_PRICE_UNITS = 30
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
 type BrowseStatusFilter = 'all' | 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
@@ -125,7 +126,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 						<AddressValue address={report.token1} /> / <AddressValue address={report.token2} />
 					</>,
 				)}
-				{renderReportField('Current Price', <CurrencyValue value={report.price} suffix={`${report.token1Symbol} / ${report.token2Symbol}`} copyable={false} />)}
+				{renderReportField('Current Price', <CurrencyValue value={report.price} suffix={`${report.token1Symbol} / ${report.token2Symbol}`} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />)}
 				{renderReportField('Current Reporter', report.currentReporter === zeroAddress ? 'None' : <AddressValue address={report.currentReporter} />)}
 				{renderReportField('Current Amount1', <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} />)}
 				{renderReportField('Current Amount2', <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
@@ -525,7 +526,7 @@ function renderReportDetailsCard(
 					{ label: 'Stage', value: stage.label },
 					{ label: 'Token Pair', value: `${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}` },
 					{ label: 'Reporter', value: openOracleReportDetails.currentReporter === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-					{ label: 'Price', value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} /> },
+					{ label: 'Price', value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} /> },
 				]}
 			/>
 			<LifecycleStageBanner stage={stage} />
@@ -542,7 +543,7 @@ function renderReportDetailsCard(
 					{renderReportField('Report ID', openOracleReportDetails.reportId.toString())}
 					{renderReportField('Oracle Address', <AddressValue address={openOracleReportDetails.openOracleAddress} />)}
 					{renderReportField('Current Reporter', openOracleReportDetails.currentReporter === zeroAddress ? 'None (awaiting initial report)' : <AddressValue address={openOracleReportDetails.currentReporter} />)}
-					{renderReportField('Current Price', <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} />)}
+					{renderReportField('Current Price', <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />)}
 					{renderReportField('Settlement Timestamp', <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />)}
 				</DataGrid>
 			</SectionBlock>
@@ -588,7 +589,7 @@ function renderReportDetailsCard(
 						},
 						{
 							label: 'Price',
-							value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />,
 						},
 						{
 							label: 'Fee',
@@ -616,7 +617,7 @@ function renderReportDetailsCard(
 							value: openOracleReportDetails.disputeOccurred ? 'Yes' : 'No',
 						},
 						{
-							label: 'Distributed',
+							label: 'Settled',
 							value: openOracleReportDetails.isDistributed ? 'Yes' : 'No',
 						},
 						{
@@ -666,10 +667,6 @@ function renderReportDetailsCard(
 							value: openOracleReportDetails.callbackContract === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.callbackContract} />,
 						},
 						{
-							label: 'Callback Selector',
-							value: openOracleReportDetails.callbackSelector === '0x00000000' ? 'None' : openOracleReportDetails.callbackSelector,
-						},
-						{
 							label: 'Callback Gas Limit',
 							value: openOracleReportDetails.callbackGasLimit === 0 ? 'None' : openOracleReportDetails.callbackGasLimit.toString(),
 						},
@@ -680,14 +677,6 @@ function renderReportDetailsCard(
 						{
 							label: 'Track Disputes',
 							value: openOracleReportDetails.trackDisputes ? 'Yes' : 'No',
-						},
-						{
-							label: 'Keep Fee',
-							value: openOracleReportDetails.keepFee ? 'Yes' : 'No',
-						},
-						{
-							label: 'Fee Token',
-							value: openOracleReportDetails.feeToken ? openOracleReportDetails.token1Symbol : 'ETH',
 						},
 						{
 							label: 'Number of Reports',
