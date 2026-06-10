@@ -414,6 +414,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
+		require(!ISecurityPoolForker(securityPoolForker).hasInheritedEscalation(this), 'child pool uses inherited escalation');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'question has not ended');
@@ -430,8 +431,7 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'System is not operational');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
-		bool gameCanceledByExternalFork = questionOutcome == BinaryOutcomes.BinaryOutcome.None && zoltar.getForkTime(universeId) > 0 && !escalationGame.hasReachedNonDecision();
-		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None || gameCanceledByExternalFork, 'Question has not finalized!');
+		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		address beneficiaryVault = address(0x0);
 		uint256 totalAmountToWithdraw = 0;
 		uint256 totalOriginalDepositAmount = 0;
@@ -439,15 +439,10 @@ contract SecurityPool is ISecurityPool {
 			address depositor;
 			uint256 amountToWithdraw;
 			uint256 originalDepositAmount;
-			if (gameCanceledByExternalFork) {
-				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome);
-				originalDepositAmount = amountToWithdraw;
+			if (outcome == questionOutcome) {
+				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
 			} else {
-				if (outcome == questionOutcome) {
-					(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
-				} else {
-					(depositor, originalDepositAmount) = escalationGame.forfeitLosingDeposit(depositIndexes[index], outcome);
-				}
+				(depositor, originalDepositAmount) = escalationGame.forfeitLosingDeposit(depositIndexes[index], outcome);
 			}
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
@@ -489,6 +484,27 @@ contract SecurityPool is ISecurityPool {
 		require(totalLockedRepInEscalationGame >= repAmount, 'insufficient total locked REP');
 		securityVaults[vault].lockedRepInEscalationGame -= repAmount;
 		totalLockedRepInEscalationGame -= repAmount;
+	}
+
+	function creditImportedEscalationPosition(address vault, uint256 repAmount) external onlyForker {
+		require(vault != address(0x0), 'invalid vault');
+		_trackVault(vault);
+		securityVaults[vault].poolOwnership += repToPoolOwnership(repAmount);
+		securityVaults[vault].lockedRepInEscalationGame += repAmount;
+		totalLockedRepInEscalationGame += repAmount;
+	}
+
+	function settleImportedEscalation(address vault, uint256 originalDepositAmount, uint256 amountToWithdraw) external onlyForker {
+		require(vault != address(0x0), 'invalid vault');
+		require(securityVaults[vault].lockedRepInEscalationGame >= originalDepositAmount, 'insufficient locked REP');
+		require(totalLockedRepInEscalationGame >= originalDepositAmount, 'insufficient total locked REP');
+		securityVaults[vault].lockedRepInEscalationGame -= originalDepositAmount;
+		totalLockedRepInEscalationGame -= originalDepositAmount;
+		if (amountToWithdraw > originalDepositAmount) {
+			securityVaults[vault].poolOwnership += repToPoolOwnership(amountToWithdraw - originalDepositAmount);
+		} else if (amountToWithdraw < originalDepositAmount) {
+			securityVaults[vault].poolOwnership -= repToPoolOwnership(originalDepositAmount - amountToWithdraw);
+		}
 	}
 
 	function _trackVault(address vault) private {

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as url from 'node:url'
+import { Buffer as BrowserBuffer } from 'buffer/index.js'
 import { buildProductionBundle } from './production.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
@@ -19,6 +20,10 @@ const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.joi
 let server: Bun.Server | undefined
 
 beforeAll(async () => {
+	if (typeof BrowserBuffer.from !== 'function') {
+		throw new Error('buffer package is required for production builds')
+	}
+
 	await buildProductionBundle()
 
 	server = Bun.serve({

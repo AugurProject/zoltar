@@ -282,7 +282,10 @@ contract EscalationGame {
 	}
 
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
-		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker can withdraw'
+		);
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
@@ -291,7 +294,10 @@ contract EscalationGame {
 	}
 
 	function forfeitLosingDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 originalDepositAmount) {
-		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker can withdraw'
+		);
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();

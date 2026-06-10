@@ -8,13 +8,18 @@ import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuc
 interface ISecurityPoolForker {
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) external;
-	function createChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) external;
-	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) external;
+	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external;
+	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) external;
 	function migrateFromEscalationGame(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] memory depositIndexes) external;
+	function migrateInheritedEscalationToBranch(ISecurityPool securityPool, address vault, uint256 branchOutcomeIndex, BinaryOutcomes.BinaryOutcome marketOutcome, uint256[] memory depositIndexes) external;
+	function settleInheritedEscalation(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome marketOutcome, uint256[] memory depositIndexes) external;
+	function forkZoltarWithInheritedEscalationGame(ISecurityPool securityPool) external;
+	function migrateInheritedEscalationToGrandchild(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome marketOutcome, uint256[] memory depositIndexes) external;
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external;
 	function settleAuctionBids(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices, IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices) external;
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome);
+	function hasInheritedEscalation(ISecurityPool securityPool) external view returns (bool);
 }

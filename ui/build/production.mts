@@ -2,12 +2,18 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { Buffer as BrowserBuffer } from 'buffer/index.js'
 import esbuild from 'esbuild'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const DIST_ROOT_PATH = path.join(UI_ROOT_PATH, 'dist')
 const DIST_ASSETS_PATH = path.join(DIST_ROOT_PATH, 'assets')
+
+if (typeof BrowserBuffer.from !== 'function') {
+	throw new Error('buffer package is required for production builds')
+}
+
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
 	env: {},

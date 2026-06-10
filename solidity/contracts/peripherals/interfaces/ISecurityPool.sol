@@ -87,6 +87,8 @@ interface ISecurityPool {
 	function setSystemState(SystemState newState) external;
 	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 vaultFeeIndex) external;
 	function clearEscalationLockForForkMigration(address vault, uint256 repAmount) external;
+	function creditImportedEscalationPosition(address vault, uint256 repAmount) external;
+	function settleImportedEscalation(address vault, uint256 originalDepositAmount, uint256 amountToWithdraw) external;
 	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
 	function setTotalShares(uint256 newTotalShares) external;

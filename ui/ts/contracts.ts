@@ -92,7 +92,7 @@ const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address 
 const CONTRACT_PAGE_SIZE = 30n
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, bigint]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type TruthAuctionTickSummaryStruct = {
 	tick: bigint
@@ -1496,7 +1496,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'createChildUniverse',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
 	)
 }
@@ -1568,7 +1568,7 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
 	)
 }

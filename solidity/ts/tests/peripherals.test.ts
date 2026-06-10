@@ -19,7 +19,23 @@ import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import {
+	claimAuctionProceeds,
+	createChildUniverse,
+	finalizeTruthAuction,
+	forkZoltarWithInheritedEscalationGame,
+	getMigratedRep,
+	getQuestionOutcome,
+	getSecurityPoolForkerForkData,
+	initiateSecurityPoolFork,
+	migrateFromEscalationGame,
+	migrateInheritedEscalationToBranch,
+	migrateInheritedEscalationToGrandchild,
+	migrateRepToZoltar,
+	migrateVault,
+	settleInheritedEscalation,
+	startTruthAuction,
+} from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond, getUnsettledDepositIndexesByOutcomeAndDepositor } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
@@ -149,6 +165,35 @@ describe('Peripherals Contract Test Suite', () => {
 	const getVaultRepClaim = async (vaultAddress: Address) => {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
 		return await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+	}
+
+	const getVaultRepClaimForPool = async (securityPoolAddress: Address, vaultAddress: Address) => {
+		const vault = await getSecurityVault(client, securityPoolAddress, vaultAddress)
+		return await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
+	}
+
+	const lowerExternalForkThreshold = async () => {
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const slot5 = `0x${5n.toString(16).padStart(64, '0')}`
+		await mockWindow.addStateOverrides({
+			[repToken]: {
+				stateDiff: {
+					[slot5]: repDeposit * 10n,
+				},
+			},
+		})
+	}
+
+	const forkUniverseOnOtherEndedQuestion = async (forkClient: WriteClient, title: string) => {
+		const otherQuestionData = {
+			...questionData,
+			title,
+		}
+		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
+		await createQuestion(forkClient, otherQuestionData, outcomes)
+		await approveToken(forkClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(forkClient, genesisUniverse, otherQuestionId)
+		return otherQuestionId
 	}
 
 	const finalizeQuestionAsYesWithoutFork = async () => {
@@ -674,58 +719,31 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(secondWinnerVaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'the second winner should have no REP left locked after withdrawal')
 	})
 
-	test('can refund escalation deposits after zoltar forks on another question', async () => {
+	test('unrelated external fork blocks refunds and imported escalation stays locked in a child branch', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		const winningDeposit = reportBond + 1n
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
+		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)
-		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+		await lowerExternalForkThreshold()
+		await forkUniverseOnOtherEndedQuestion(client, 'external fork source question')
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 
-		const aliceDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
-		const bobDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
-		const aliceDeposit = ensureDefined(aliceDeposits[0], 'alice escalation deposit missing')
-		const bobDeposit = ensureDefined(bobDeposits[0], 'bob escalation deposit missing')
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /System is not operational/)
 
-		const aliceVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const bobVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateInheritedEscalationToBranch(client, securityPoolAddresses.securityPool, client.account.address, BigInt(QuestionOutcome.Yes), QuestionOutcome.Yes, [0n])
 
-		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
-		await mockWindow.addStateOverrides({
-			[repToken]: {
-				stateDiff: {
-					[slot5]: repDeposit * 10n,
-				},
-			},
-		})
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 
-		const otherQuestionData = {
-			...questionData,
-			title: 'fork source question',
-		}
-		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
-		await createQuestion(attackerClient, otherQuestionData, outcomes)
-		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
-
-		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'external fork should cancel the game outcome')
-
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex])
-		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex])
-
-		const aliceVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const bobVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
-
-		const aliceOwnershipDelta = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, aliceVaultAfter.repDepositShare - aliceVaultBefore.repDepositShare)
-		const bobOwnershipDelta = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, bobVaultAfter.repDepositShare - bobVaultBefore.repDepositShare)
-
-		strictEqualTypeSafe(aliceOwnershipDelta, 0n, 'alice refund should only unlock principal after external fork')
-		strictEqualTypeSafe(bobOwnershipDelta, 0n, 'bob refund should only unlock principal after external fork')
-		strictEqualTypeSafe(aliceVaultAfter.lockedRepInEscalationGame, 0n, 'alice escalation lock should be released')
-		strictEqualTypeSafe(bobVaultAfter.lockedRepInEscalationGame, 0n, 'bob escalation lock should be released')
+		strictEqualTypeSafe(parentVaultBeforeMigration.lockedRepInEscalationGame - parentVaultAfterMigration.lockedRepInEscalationGame, winningDeposit, 'importing inherited escalation should release the matching principal from the parent lock')
+		strictEqualTypeSafe(childVaultAfterMigration.lockedRepInEscalationGame, winningDeposit, 'the imported child position should keep the original principal locked')
+		assert.ok(childVaultAfterMigration.repDepositShare > 0n, 'the child vault should receive ownership for the imported principal')
 	})
 
 	test('withdrawFromEscalationGame rejects wrong outcome after normal resolution', async () => {
@@ -755,34 +773,46 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /deposit already settled/)
 	})
 
-	test('withdrawFromEscalationGame rejects none outcome after external fork cancellation', async () => {
+	test('settleInheritedEscalation realizes imported wins and losses after root resolution', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
-		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
-		await mockWindow.addStateOverrides({
-			[repToken]: {
-				stateDiff: {
-					[slot5]: repDeposit * 10n,
-				},
-			},
-		})
+		const winningDeposit = reportBond + 1n
+		const losingDeposit = reportBond
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
 
-		const otherQuestionData = {
-			...questionData,
-			title: 'fork none outcome source question',
-		}
-		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
-		await createQuestion(attackerClient, otherQuestionData, outcomes)
-		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+		await lowerExternalForkThreshold()
+		await forkUniverseOnOtherEndedQuestion(client, 'external fork source question for inherited settlement')
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /Invalid outcome: None/)
+		await migrateInheritedEscalationToBranch(client, securityPoolAddresses.securityPool, client.account.address, BigInt(QuestionOutcome.Yes), QuestionOutcome.Yes, [0n])
+		await migrateInheritedEscalationToBranch(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, BigInt(QuestionOutcome.Yes), QuestionOutcome.No, [0n])
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const winnerClaimBeforeSettlement = await getVaultRepClaimForPool(yesSecurityPool.securityPool, client.account.address)
+		const loserClaimBeforeSettlement = await getVaultRepClaimForPool(yesSecurityPool.securityPool, attackerClient.account.address)
+
+		await mockWindow.advanceTime(10n * DAY)
+
+		await settleInheritedEscalation(client, yesSecurityPool.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+		await settleInheritedEscalation(client, yesSecurityPool.securityPool, attackerClient.account.address, QuestionOutcome.No, [0n])
+
+		const winnerVaultAfterSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const loserVaultAfterSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
+		const winnerClaimAfterSettlement = await getVaultRepClaimForPool(yesSecurityPool.securityPool, client.account.address)
+		const loserClaimAfterSettlement = await getVaultRepClaimForPool(yesSecurityPool.securityPool, attackerClient.account.address)
+
+		strictEqualTypeSafe(winnerVaultAfterSettlement.lockedRepInEscalationGame, 0n, 'winner settlement should clear the imported escalation lock')
+		strictEqualTypeSafe(loserVaultAfterSettlement.lockedRepInEscalationGame, 0n, 'loser settlement should clear the imported escalation lock')
+		assert.ok(winnerClaimAfterSettlement > winnerClaimBeforeSettlement, 'the imported winning side should still receive upside after settlement')
+		approximatelyEqual(loserClaimAfterSettlement, loserClaimBeforeSettlement - losingDeposit, 1n, 'the imported losing side should still realize its normal loss')
+		await assert.rejects(settleInheritedEscalation(client, yesSecurityPool.securityPool, attackerClient.account.address, QuestionOutcome.No, [0n]), /deposit already settled/)
 	})
 
 	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
@@ -809,24 +839,45 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /deposit already settled/)
 	})
 
-	test('canceled escalation deposits cannot be refunded twice after an external fork', async () => {
+	test('inherited non-decision escalation can fork a child universe and migrate into the matching grandchild', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const otherQuestionData = {
-			...questionData,
-			title: 'duplicate canceled settlement source question',
-		}
-		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
-		await createQuestion(attackerClient, otherQuestionData, outcomes)
-		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /deposit already settled/)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		const nonDecisionThreshold = await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame)
+		await approveAndDepositRep(client, nonDecisionThreshold, questionId)
+		await approveAndDepositRep(attackerClient, nonDecisionThreshold, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, nonDecisionThreshold - reportBond)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, nonDecisionThreshold)
+		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.None, 'the root escalation game should be at non-decision before the unrelated fork')
+
+		await forkUniverseOnOtherEndedQuestion(client, 'external fork source question for inherited nondecision')
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateInheritedEscalationToBranch(client, securityPoolAddresses.securityPool, client.account.address, BigInt(QuestionOutcome.Yes), QuestionOutcome.Yes, [0n, 1n])
+		await migrateInheritedEscalationToBranch(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, BigInt(QuestionOutcome.Yes), QuestionOutcome.No, [0n])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the inherited child should become operational before it forks on the market question')
+		await forkZoltarWithInheritedEscalationGame(client, yesSecurityPool.securityPool)
+		await migrateRepToZoltar(client, yesSecurityPool.securityPool, [QuestionOutcome.Yes])
+		await migrateInheritedEscalationToGrandchild(client, yesSecurityPool.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
+
+		const grandchildUniverse = getChildUniverseId(yesUniverse, QuestionOutcome.Yes)
+		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, securityMultiplier)
+		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const grandchildVaultAfterMigration = await getSecurityVault(client, grandchildSecurityPool.securityPool, client.account.address)
+
+		strictEqualTypeSafe(childVaultAfterMigration.lockedRepInEscalationGame, 0n, 'moving an inherited non-decision position into the matching grandchild should clear the child-side lock')
+		assert.ok(grandchildVaultAfterMigration.repDepositShare > 0n, 'the matching grandchild should receive the migrated non-decision ownership')
 	})
 
 	test('cannot refund an active escalation deposit before zoltar forks', async () => {
@@ -1204,7 +1255,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'rep at fork does not match deposit rep')
 		strictEqualTypeSafe(forkData.migratedRep, 0n, 'migrated rep should be 0 so far')
-		strictEqualTypeSafe(forkData.outcomeIndex, 0, 'there should be no outcome')
+		strictEqualTypeSafe(forkData.outcomeIndex, 0n, 'there should be no outcome')
 		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
 		const totalFeesOwedToVaultsRightAfterFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
@@ -1800,7 +1851,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(vaultAfterVaultMigration.securityBondAllowance, securityPoolAllowance, 'migrateVault should add the parent bond allowance on top of escalation migration state')
 	})
 
-	test('migrateFromEscalationGame rejects unresolved deposits after an unrelated external fork', async () => {
+	test('migrateFromEscalationGame rejects unrelated external forks and points callers to the inherited path', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit / 10n)
@@ -1817,7 +1868,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 
-		await assert.rejects(migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /escalation game has not reached non-decision/i)
+		await assert.rejects(migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /use inherited/i)
 	})
 
 	test('migrateFromEscalationGame only counts principal toward migrated rep and clears parent escalation locks', async () => {

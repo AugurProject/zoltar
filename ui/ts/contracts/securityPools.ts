@@ -18,7 +18,7 @@ import { loadMarketDetails } from './zoltar.js'
 
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, bigint]
 type SecurityPoolDeploymentQueryResult = {
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address

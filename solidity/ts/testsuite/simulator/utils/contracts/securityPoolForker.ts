@@ -53,7 +53,7 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVault',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, Number(outcome)],
+			args: [securityPoolAddress, BigInt(outcome)],
 		}),
 	)
 
@@ -115,13 +115,13 @@ export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress
 	})
 }
 
-export const createChildUniverse = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome) =>
+export const createChildUniverse = async (client: WriteClient, securityPoolAddress: Address, outcome: bigint | QuestionOutcome) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'createChildUniverse',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, Number(outcome)],
+			args: [securityPoolAddress, BigInt(outcome)],
 		}),
 	)
 
@@ -143,5 +143,45 @@ export const migrateFromEscalationGame = async (client: WriteClient, parentSecur
 			functionName: 'migrateFromEscalationGame',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes],
+		}),
+	)
+
+export const migrateInheritedEscalationToBranch = async (client: WriteClient, parentSecurityPool: Address, vault: Address, branchOutcomeIndex: bigint, marketOutcome: QuestionOutcome, depositIndexes: bigint[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateInheritedEscalationToBranch',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [parentSecurityPool, vault, branchOutcomeIndex, Number(marketOutcome), depositIndexes],
+		}),
+	)
+
+export const settleInheritedEscalation = async (client: WriteClient, childSecurityPool: Address, vault: Address, marketOutcome: QuestionOutcome, depositIndexes: bigint[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'settleInheritedEscalation',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [childSecurityPool, vault, Number(marketOutcome), depositIndexes],
+		}),
+	)
+
+export const forkZoltarWithInheritedEscalationGame = async (client: WriteClient, securityPoolAddress: Address) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'forkZoltarWithInheritedEscalationGame',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+	)
+
+export const migrateInheritedEscalationToGrandchild = async (client: WriteClient, childSecurityPool: Address, vault: Address, marketOutcome: QuestionOutcome, depositIndexes: bigint[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateInheritedEscalationToGrandchild',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [childSecurityPool, vault, Number(marketOutcome), depositIndexes],
 		}),
 	)

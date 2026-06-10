@@ -1,5 +1,4 @@
 import 'viem/window'
-import { ReadContractReturnType } from 'viem'
 import type { Address, Hex } from 'viem'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { WETH_ADDRESS } from '../constants'
@@ -62,34 +61,76 @@ interface ExtraReportData {
 	callbackContract: Address
 	numReports: number
 	callbackGasLimit: number
+	callbackSelector: Hex
 	protocolFeeRecipient: Address
 	trackDisputes: boolean
+	keepFee: boolean
+	feeToken: boolean
 }
 
-function isOpenOracleExtraData(value: ReadContractReturnType): value is readonly [Hex, Address, bigint, bigint, Address, boolean] {
-	return Array.isArray(value) && value.length === 6
+function requireHexValue(value: unknown, fieldName: string): Hex {
+	if (typeof value !== 'string') throw new Error(`OpenOracle extraData ${fieldName} returned an unexpected type`)
+	if (!value.startsWith('0x')) throw new Error(`OpenOracle extraData ${fieldName} returned a non-hex string`)
+	return value as Hex
+}
+
+function requireAddressValue(value: unknown, fieldName: string): Address {
+	if (typeof value !== 'string') throw new Error(`OpenOracle extraData ${fieldName} returned an unexpected type`)
+	if (!value.startsWith('0x')) throw new Error(`OpenOracle extraData ${fieldName} returned a non-address string`)
+	return value as Address
+}
+
+function requireBooleanValue(value: unknown, fieldName: string): boolean {
+	if (typeof value !== 'boolean') throw new Error(`OpenOracle extraData ${fieldName} returned an unexpected type`)
+	return value
+}
+
+function requireNumberLikeValue(value: unknown, fieldName: string): bigint | number {
+	if (typeof value === 'bigint' || typeof value === 'number') return value
+	throw new Error(`OpenOracle extraData ${fieldName} returned an unexpected type`)
 }
 
 export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bigint): Promise<ExtraReportData> => {
-	const result = await client.readContract({
+	const result: unknown = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'extraData',
 		address: getInfraContractAddresses().openOracle,
 		args: [extraDataId],
 	})
 
-	if (!isOpenOracleExtraData(result)) throw new Error('OpenOracle extraData returned an unexpected shape')
+	if (!Array.isArray(result)) throw new Error('OpenOracle extraData returned an unexpected shape')
 
-	const [stateHash, callbackContract, numReports, callbackGasLimit, protocolFeeRecipient, trackDisputes] = result
-
-	return {
-		stateHash,
-		callbackContract,
-		numReports: Number(numReports),
-		callbackGasLimit: Number(callbackGasLimit),
-		protocolFeeRecipient,
-		trackDisputes,
+	if (result.length === 6) {
+		const [stateHash, callbackContract, numReports, callbackGasLimit, protocolFeeRecipient, trackDisputes] = result
+		return {
+			stateHash: requireHexValue(stateHash, 'stateHash'),
+			callbackContract: requireAddressValue(callbackContract, 'callbackContract'),
+			numReports: Number(requireNumberLikeValue(numReports, 'numReports')),
+			callbackGasLimit: Number(requireNumberLikeValue(callbackGasLimit, 'callbackGasLimit')),
+			callbackSelector: '0x00000000',
+			protocolFeeRecipient: requireAddressValue(protocolFeeRecipient, 'protocolFeeRecipient'),
+			trackDisputes: requireBooleanValue(trackDisputes, 'trackDisputes'),
+			keepFee: false,
+			feeToken: false,
+		}
 	}
+
+	if (result.length === 9) {
+		const [stateHash, callbackContract, numReports, callbackGasLimit, callbackSelector, protocolFeeRecipient, trackDisputes, keepFee, feeToken] = result
+		return {
+			stateHash: requireHexValue(stateHash, 'stateHash'),
+			callbackContract: requireAddressValue(callbackContract, 'callbackContract'),
+			numReports: Number(requireNumberLikeValue(numReports, 'numReports')),
+			callbackGasLimit: Number(requireNumberLikeValue(callbackGasLimit, 'callbackGasLimit')),
+			callbackSelector: requireHexValue(callbackSelector, 'callbackSelector'),
+			protocolFeeRecipient: requireAddressValue(protocolFeeRecipient, 'protocolFeeRecipient'),
+			trackDisputes: requireBooleanValue(trackDisputes, 'trackDisputes'),
+			keepFee: requireBooleanValue(keepFee, 'keepFee'),
+			feeToken: requireBooleanValue(feeToken, 'feeToken'),
+		}
+	}
+
+	throw new Error('OpenOracle extraData returned an unexpected shape')
 }
 
 export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) =>

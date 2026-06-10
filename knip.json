@@ -1,5 +1,18 @@
 {
-	"entry": ["solidity/ts/compile.ts", "solidity/ts/gas-costs.ts", "solidity/ts/tests/**/*.ts", "solidity/ts/types/bun-test.d.ts", "solidity/ts/types/index.d.ts", "ui/ts/tests/**/*.ts", "ui/ts/tests/**/*.tsx", "ui/ts/index.ts", "ui/build/vendor.mts", "ui/build/tests.mts"],
-	"project": ["solidity/ts/**/*.ts", "ui/ts/**/*.ts", "ui/ts/**/*.tsx", "ui/build/**/*.mts"],
-	"ignoreDependencies": ["solc", "better-typescript-lib"]
+	"workspaces": {
+		".": {
+			"entry": ["shared/ts/**/*.ts", "scripts/**/*.mts"],
+			"project": ["scripts/**/*.mts", "shared/ts/**/*.ts"],
+			"ignoreDependencies": ["better-typescript-lib", "buffer"]
+		},
+		"ui": {
+			"entry": ["build/**/*.mts", "ts/index.ts", "ts/index.dev.ts", "ts/tests/**/*.ts", "ts/tests/**/*.tsx"],
+			"project": ["build/**/*.mts", "scripts/**/*.mjs", "ts/**/*.ts", "ts/**/*.tsx"],
+			"ignoreDependencies": ["better-typescript-lib"]
+		},
+		"solidity": {
+			"entry": ["ts/compile.ts", "ts/gas-costs.ts", "ts/tests/**/*.ts"],
+			"project": ["ts/**/*.ts"]
+		}
+	}
 }
