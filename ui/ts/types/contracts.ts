@@ -244,12 +244,9 @@ export type OpenOracleReportDetails = {
 	isDistributed: boolean
 	stateHash: Hex
 	callbackContract: Address
-	callbackSelector: Hex
 	callbackGasLimit: number
 	protocolFeeRecipient: Address
 	trackDisputes: boolean
-	keepFee: boolean
-	feeToken: boolean
 	numReports: bigint
 	lastReportOppoTime: bigint
 	token1Decimals: number

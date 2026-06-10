@@ -145,7 +145,6 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	return {
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
-		callbackSelector: '0x00000000',
 		currentBlockNumber: 0n,
 		currentAmount1: 0n,
 		currentAmount2: 0n,
@@ -157,10 +156,8 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		exactToken1Report: 10n ** 18n,
 		fee: 10n ** 15n,
 		feePercentage: 1000000000000000n,
-		feeToken: false,
 		initialReporter: zeroAddress,
 		isDistributed: false,
-		keepFee: false,
 		lastReportOppoTime: 0n,
 		multiplier: 2n * 10n ** 18n,
 		numReports: 0n,

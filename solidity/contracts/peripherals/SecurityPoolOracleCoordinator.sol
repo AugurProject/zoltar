@@ -8,6 +8,7 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 1 hours;
+uint256 constant PRICE_PRECISION = 1e18;
 
 enum OperationType {
 	Liquidation,
@@ -47,9 +48,7 @@ contract SecurityPoolOracleCoordinator {
 	uint16 public immutable multiplier;
 	bool public immutable timeType;
 	bool public immutable trackDisputes;
-	bool public immutable keepFee;
 	address public immutable protocolFeeRecipient;
-	bool public immutable feeToken;
 
 	event PriceReported(uint256 reportId, uint256 price);
 	event StagedOperationQueued(uint256 operationId, OperationType operation, address initiatorVault, address targetVault, uint256 amount, bool isPendingSlot);
@@ -74,9 +73,7 @@ contract SecurityPoolOracleCoordinator {
 		uint16 _multiplier,
 		bool _timeType,
 		bool _trackDisputes,
-		bool _keepFee,
-		address _protocolFeeRecipient,
-		bool _feeToken
+		address _protocolFeeRecipient
 	) {
 		reputationToken = _reputationToken;
 		openOracle = _openOracle;
@@ -91,9 +88,7 @@ contract SecurityPoolOracleCoordinator {
 		multiplier = _multiplier;
 		timeType = _timeType;
 		trackDisputes = _trackDisputes;
-		keepFee = _keepFee;
 		protocolFeeRecipient = _protocolFeeRecipient;
-		feeToken = _feeToken;
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
@@ -107,20 +102,23 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {
-		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
 		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice) + 101;
 		return ethCost;
 	}
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
-		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
 		uint256 ethCost = getRequestPriceEthCost();
 		require(msg.value >= ethCost, 'not big enough eth bounty');
+		uint256 escalationHalt = reputationToken.totalSupply() / 100000;
+		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
+		require(exactToken1Report <= type(uint128).max, 'exactToken1Report too large');
+		require(escalationHalt <= type(uint128).max, 'escalation halt too large');
+		require(settlerReward <= type(uint96).max, 'settler reward too large');
 
 		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
-			exactToken1Report: exactToken1Report,
-			escalationHalt: reputationToken.totalSupply() / 100000, // amount of token1 past which escalation stops but disputes can still happen
-			settlerReward: block.basefee * 2 * gasConsumedOpenOracleReportPrice, // eth paid to settler in wei
+			exactToken1Report: uint128(exactToken1Report),
+			escalationHalt: uint128(escalationHalt), // amount of token1 past which escalation stops but disputes can still happen
+			settlerReward: uint96(settlerReward), // eth paid to settler in wei
 			token1Address: address(reputationToken), // address of token1 in the oracle report instance
 			settlementTime: settlementTime,
 			disputeDelay: disputeDelay,
@@ -131,11 +129,8 @@ contract SecurityPoolOracleCoordinator {
 			multiplier: multiplier,
 			timeType: timeType,
 			trackDisputes: trackDisputes,
-			keepFee: keepFee,
 			callbackContract: address(this), // contract address for settle to call back into
-			callbackSelector: this.openOracleReportPrice.selector, // method in the callbackContract you want called.
-			protocolFeeRecipient: protocolFeeRecipient,
-			feeToken: feeToken
+			protocolFeeRecipient: protocolFeeRecipient
 		});
 
 		pendingReportId = openOracle.createReportInstance{value: ethCost}(reportparams);
@@ -147,12 +142,12 @@ contract SecurityPoolOracleCoordinator {
 			require(sent, 'failed to refund excess');
 		}
 	}
-	function openOracleReportPrice(uint256 reportId, uint256 price, uint256, address, address) external {
+	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
 		pendingReportId = 0;
 		lastSettlementTimestamp = block.timestamp;
-		lastPrice = price;
+		lastPrice = amount2 == 0 ? 0 : (amount1 * PRICE_PRECISION) / amount2;
 		emit PriceReported(reportId, lastPrice);
 		if (pendingOperationSlotId != 0) { // TODO we maybe should allow executing couple operations?
 			uint256 operationId = pendingOperationSlotId;

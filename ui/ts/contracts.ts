@@ -89,6 +89,7 @@ const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const CONTRACT_PAGE_SIZE = 30n
+const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -691,6 +692,16 @@ function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOpe
 			throw new Error(`Unknown oracle operation: ${operation}`)
 	}
 }
+
+function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
+	return amount2 === 0n ? 0n : (amount1 * 10n ** OPEN_ORACLE_PRICE_UNITS) / amount2
+}
+
+function hasOpenOracleDisputeOccurred(currentReporter: Address, initialReporter: Address, numReports: bigint) {
+	if (numReports > 1n) return true
+	if (currentReporter === zeroAddress || initialReporter === zeroAddress) return false
+	return !sameAddress(currentReporter, initialReporter)
+}
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('./types/contracts.js').OpenOracleReportDetails> {
 	const [[meta, status, extra], block] = await Promise.all([
 		readRequiredMulticall(client, [
@@ -765,23 +776,20 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		disputeDelay: BigInt(reportMeta[11]),
 		currentAmount1: reportStatus[0],
 		currentAmount2: reportStatus[1],
-		price: reportStatus[2],
-		currentReporter: reportStatus[3],
-		reportTimestamp: BigInt(reportStatus[4]),
-		settlementTimestamp: BigInt(reportStatus[5]),
-		initialReporter: reportStatus[6],
-		disputeOccurred: reportStatus[8],
-		isDistributed: reportStatus[9],
+		price: calculateOpenOraclePrice(reportStatus[0], reportStatus[1]),
+		currentReporter: reportStatus[2],
+		reportTimestamp: BigInt(reportStatus[3]),
+		settlementTimestamp: BigInt(reportStatus[4]),
+		initialReporter: reportStatus[5],
+		disputeOccurred: hasOpenOracleDisputeOccurred(reportStatus[2], reportStatus[5], BigInt(reportExtra[2])),
+		isDistributed: BigInt(reportStatus[4]) > 0n,
 		stateHash: reportExtra[0],
 		callbackContract: reportExtra[1],
 		numReports: BigInt(reportExtra[2]),
 		callbackGasLimit: Number(reportExtra[3]),
-		callbackSelector: reportExtra[4],
-		protocolFeeRecipient: reportExtra[5],
-		trackDisputes: reportExtra[6],
-		keepFee: reportExtra[7],
-		feeToken: reportExtra[8],
-		lastReportOppoTime: BigInt(reportStatus[7]),
+		protocolFeeRecipient: reportExtra[4],
+		trackDisputes: reportExtra[5],
+		lastReportOppoTime: BigInt(reportStatus[6]),
 		token1Decimals: Number(token1Decimals),
 		token2Decimals: Number(token2Decimals),
 		token1Symbol: String(token1Symbol),
@@ -898,14 +906,14 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		return {
 			currentAmount1: status[0],
 			currentAmount2: status[1],
-			currentReporter: status[3],
-			disputeOccurred: status[8],
+			currentReporter: status[2],
+			disputeOccurred: hasOpenOracleDisputeOccurred(status[2], status[5], 0n),
 			exactToken1Report: meta[0],
-			isDistributed: status[9],
-			price: status[2],
+			isDistributed: BigInt(status[4]) > 0n,
+			price: calculateOpenOraclePrice(status[0], status[1]),
 			reportId,
-			reportTimestamp: BigInt(status[4]),
-			settlementTimestamp: BigInt(status[5]),
+			reportTimestamp: BigInt(status[3]),
+			settlementTimestamp: BigInt(status[4]),
 			token1: meta[4],
 			token2: meta[6],
 			token1Decimals: token1Metadata.decimals,

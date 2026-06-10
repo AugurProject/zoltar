@@ -90,4 +90,12 @@ declare module 'solc' {
 	}
 	type ReadCallback = (path: string) => { contents?: string; error?: string }
 	function compile(input: string, readCallback?: ReadCallback): string
+	function version(): string
+	function loadRemoteVersion(version: string, callback: (error: Error | undefined, compiler: { compile(input: string, readCallback?: ReadCallback): string; version(): string } | undefined) => void): void
+	const solc: {
+		readonly compile: typeof compile
+		readonly version: typeof version
+		readonly loadRemoteVersion: typeof loadRemoteVersion
+	}
+	export default solc
 }

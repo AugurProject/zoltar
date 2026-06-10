@@ -13,6 +13,8 @@ const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
 const DEFAULT_APPROVAL_AMOUNT = 1000000000000000000000000000000n
 const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
+const OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
+const OPEN_ORACLE_CREATE2_DEPLOYER_BYTECODE = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3'
 
 function hexToBytes(value: string) {
 	const result = new Uint8Array((value.length - 2) / 2)
@@ -89,6 +91,11 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
 			code: hexToBytes(proxyDeployerBytecode),
+		},
+	})
+	await anvilWindowEthereum.addStateOverrides({
+		[OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS]: {
+			code: hexToBytes(OPEN_ORACLE_CREATE2_DEPLOYER_BYTECODE),
 		},
 	})
 
