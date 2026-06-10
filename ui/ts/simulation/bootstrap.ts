@@ -25,7 +25,7 @@ import {
 	submitInitialOracleReport,
 	submitTruthAuctionBid,
 } from '../contracts.js'
-import { ReputationToken_ReputationToken, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/forkAuction.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
@@ -39,11 +39,9 @@ type BootstrapProgressHandler = (progress: { label: string; value: number }) => 
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
 const ETH_BALANCE_AMOUNT = 10n ** 30n
-const ERC20_TOTAL_SUPPLY_SLOT = 2n
 const GENESIS_UNIVERSE_ID = 0n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const SEEDED_REP_ETH_PRICE = 3n * 10n ** 18n
-const REP_TOTAL_THEORETICAL_SUPPLY_SLOT = 5n
 const REP_TOKEN_MINT_AMOUNT = 100_000_000n * 10n ** 18n
 const SECURITY_MULTIPLIER = 2n
 const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
@@ -103,17 +101,6 @@ function storageValue(value: bigint) {
 	return toHex(value, { size: 32 })
 }
 
-async function readStorageValue(memoryClient: TevmLikeClient, address: Address, slot: Hex) {
-	const storageValueHex = await memoryClient.getStorageAt({
-		address,
-		slot,
-	})
-	if (storageValueHex === undefined || storageValueHex === '0x') {
-		return 0n
-	}
-	return BigInt(storageValueHex)
-}
-
 function requireReceiptContractAddress(code: Hex | undefined, address: Address, label: string) {
 	if (code === undefined || code === '0x') throw new Error(`Failed to deploy ${label} at ${address}`)
 }
@@ -123,10 +110,6 @@ async function deployContract(writeClient: WriteClient, address: Address, label:
 	await writeClient.waitForTransactionReceipt({ hash })
 	const code = await writeClient.getCode({ address })
 	requireReceiptContractAddress(code, address, label)
-}
-
-function getErc20BalanceSlot(accountAddress: Address) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [accountAddress, 0n]))
 }
 
 function getZoltarUniverseBaseSlot(universeId: bigint) {
@@ -145,34 +128,72 @@ async function seedAccountBalances(memoryClient: TevmLikeClient, accounts: reado
 	}
 }
 
-async function seedGenesisRepTokenState(memoryClient: TevmLikeClient, repAddress: Address, accounts: readonly Address[], onProgress?: BootstrapProgressHandler) {
-	let totalSupply = 0n
-	for (const [index, account] of accounts.entries()) {
-		totalSupply += REP_TOKEN_MINT_AMOUNT
-		await memoryClient.setStorageAt({
-			address: repAddress,
-			index: getErc20BalanceSlot(account),
-			value: storageValue(REP_TOKEN_MINT_AMOUNT),
-		})
-		await reportBootstrapProgress(onProgress, `Seeding REP balances ${index + 1} of ${accounts.length}`, 0.16 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
+async function withSimulationAuthorityAccount<TResult>(memoryClient: TevmLikeClient, accountAddress: Address, work: () => Promise<TResult>) {
+	const originalBalance = await memoryClient.getBalance({ address: accountAddress })
+	await memoryClient.impersonateAccount({ address: accountAddress })
+	await memoryClient.setBalance({ address: accountAddress, value: ETH_BALANCE_AMOUNT })
+	try {
+		return await work()
+	} finally {
+		await memoryClient.setBalance({ address: accountAddress, value: originalBalance })
 	}
-
-	await memoryClient.setStorageAt({
-		address: repAddress,
-		index: storageIndex(ERC20_TOTAL_SUPPLY_SLOT),
-		value: storageValue(totalSupply),
-	})
-	await memoryClient.setStorageAt({
-		address: repAddress,
-		index: storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT),
-		value: storageValue(totalSupply),
-	})
-	await reportBootstrapProgress(onProgress, 'Finalizing REP token state', 0.23)
 }
 
-export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, zoltarAddress: Address, repAddress: Address) {
+async function seedGenesisRepTokenState({
+	accounts,
+	createWriteClient,
+	memoryClient,
+	onProgress,
+	repAddress,
+	zoltarAddress,
+}: {
+	accounts: readonly Address[]
+	createWriteClient: (accountAddress: Address) => WriteClient
+	memoryClient: TevmLikeClient
+	onProgress: BootstrapProgressHandler | undefined
+	repAddress: Address
+	zoltarAddress: Address
+}) {
+	const originalNonce = await memoryClient.getTransactionCount({ address: zoltarAddress })
+	try {
+		await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
+			const zoltarWriteClient = createWriteClient(zoltarAddress)
+			let totalSupply = 0n
+			for (const [index, account] of accounts.entries()) {
+				totalSupply += REP_TOKEN_MINT_AMOUNT
+				const hash = await zoltarWriteClient.writeContract({
+					address: repAddress,
+					abi: ReputationToken_ReputationToken.abi,
+					functionName: 'mint',
+					args: [account, REP_TOKEN_MINT_AMOUNT],
+				})
+				await zoltarWriteClient.waitForTransactionReceipt({ hash })
+				await reportBootstrapProgress(onProgress, `Seeding REP balances ${index + 1} of ${accounts.length}`, 0.16 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
+			}
+
+			const syncHash = await zoltarWriteClient.writeContract({
+				address: repAddress,
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'setMaxTheoreticalSupply',
+				args: [totalSupply],
+			})
+			await zoltarWriteClient.waitForTransactionReceipt({ hash: syncHash })
+			await reportBootstrapProgress(onProgress, 'Finalizing REP token state', 0.23)
+		})
+	} finally {
+		await memoryClient.setNonce({ address: zoltarAddress, nonce: originalNonce })
+	}
+}
+
+export async function updateZoltarGenesisRepToken({ createWriteClient, memoryClient, repAddress, zoltarAddress }: { createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
 	const universeBaseSlot = getZoltarUniverseBaseSlot(GENESIS_UNIVERSE_ID)
-	const genesisTheoreticalSupply = await readStorageValue(memoryClient, repAddress, storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT))
+	const readClient = createWriteClient(zoltarAddress)
+	const genesisTheoreticalSupply = await readClient.readContract({
+		address: repAddress,
+		abi: ReputationToken_ReputationToken.abi,
+		functionName: 'getTotalTheoreticalSupply',
+		args: [],
+	})
 
 	await memoryClient.setStorageAt({
 		address: zoltarAddress,
@@ -184,44 +205,75 @@ export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, 
 		index: storageIndex(getZoltarUniverseTheoreticalSupplySlot(GENESIS_UNIVERSE_ID)),
 		value: storageValue(genesisTheoreticalSupply),
 	})
+
+	const patchedRepToken = await readClient.readContract({
+		address: zoltarAddress,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getRepToken',
+		args: [GENESIS_UNIVERSE_ID],
+	})
+	if (patchedRepToken.toLowerCase() !== repAddress.toLowerCase()) {
+		throw new Error(`Failed to patch simulation Zoltar genesis REP token. Expected ${repAddress}, received ${patchedRepToken}.`)
+	}
+
+	const patchedTheoreticalSupply = await readClient.readContract({
+		address: zoltarAddress,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getUniverseTheoreticalSupply',
+		args: [GENESIS_UNIVERSE_ID],
+	})
+	if (patchedTheoreticalSupply !== genesisTheoreticalSupply) {
+		throw new Error(`Failed to patch simulation Zoltar theoretical supply. Expected ${genesisTheoreticalSupply.toString()}, received ${patchedTheoreticalSupply.toString()}.`)
+	}
 }
 
-export async function mintSimulationGenesisRep({ accountAddress, amount, memoryClient, repAddress, zoltarAddress }: { accountAddress: Address; amount: bigint; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
+export async function mintSimulationGenesisRep({ accountAddress, amount, createWriteClient, memoryClient, repAddress, zoltarAddress }: { accountAddress: Address; amount: bigint; createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
 	if (amount <= 0n) {
 		throw new Error('Simulation REP mint amount must be greater than zero')
 	}
 
-	const balanceSlot = getErc20BalanceSlot(accountAddress)
-	const totalSupplySlot = storageIndex(ERC20_TOTAL_SUPPLY_SLOT)
-	const theoreticalSupplySlot = storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT)
-	const currentBalance = await readStorageValue(memoryClient, repAddress, balanceSlot)
-	const currentTotalSupply = await readStorageValue(memoryClient, repAddress, totalSupplySlot)
-	const currentTheoreticalSupply = await readStorageValue(memoryClient, repAddress, theoreticalSupplySlot)
+	const originalNonce = await memoryClient.getTransactionCount({ address: zoltarAddress })
+	try {
+		await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
+			const zoltarWriteClient = createWriteClient(zoltarAddress)
+			const mintHash = await zoltarWriteClient.writeContract({
+				address: repAddress,
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'mint',
+				args: [accountAddress, amount],
+			})
+			await zoltarWriteClient.waitForTransactionReceipt({ hash: mintHash })
+			const totalSupply = await zoltarWriteClient.readContract({
+				address: repAddress,
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'totalSupply',
+				args: [],
+			})
+			const syncHash = await zoltarWriteClient.writeContract({
+				address: repAddress,
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'setMaxTheoreticalSupply',
+				args: [totalSupply],
+			})
+			await zoltarWriteClient.waitForTransactionReceipt({ hash: syncHash })
 
-	await memoryClient.setStorageAt({
-		address: repAddress,
-		index: balanceSlot,
-		value: storageValue(currentBalance + amount),
-	})
-	await memoryClient.setStorageAt({
-		address: repAddress,
-		index: totalSupplySlot,
-		value: storageValue(currentTotalSupply + amount),
-	})
-	await memoryClient.setStorageAt({
-		address: repAddress,
-		index: theoreticalSupplySlot,
-		value: storageValue(currentTheoreticalSupply + amount),
-	})
+			const zoltarCode = await memoryClient.getCode({
+				address: zoltarAddress,
+			})
+			if (zoltarCode === undefined || zoltarCode === '0x') {
+				return
+			}
 
-	const zoltarCode = await memoryClient.getCode({
-		address: zoltarAddress,
-	})
-	if (zoltarCode === undefined || zoltarCode === '0x') {
-		return
+			await updateZoltarGenesisRepToken({
+				createWriteClient,
+				memoryClient,
+				repAddress,
+				zoltarAddress,
+			})
+		})
+	} finally {
+		await memoryClient.setNonce({ address: zoltarAddress, nonce: originalNonce })
 	}
-
-	await updateZoltarGenesisRepToken(memoryClient, zoltarAddress, repAddress)
 }
 
 async function deploySimulationTokens({
@@ -255,7 +307,14 @@ async function deploySimulationTokens({
 		bytecode: `0x${peripherals_WETH9_WETH9.evm.deployedBytecode.object}`,
 	})
 	await reportBootstrapProgress(onProgress, 'Installing simulation WETH token', 0.2)
-	await seedGenesisRepTokenState(memoryClient, profile.genesisRepTokenAddress, accounts, onProgress)
+	await seedGenesisRepTokenState({
+		accounts,
+		createWriteClient,
+		memoryClient,
+		onProgress,
+		repAddress: profile.genesisRepTokenAddress,
+		zoltarAddress,
+	})
 }
 
 export function predictSimulationTokenAddresses(accountAddress: Address): { genesisRepTokenAddress: Address; wethAddress: Address } {

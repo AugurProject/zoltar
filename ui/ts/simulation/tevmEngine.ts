@@ -14,6 +14,11 @@ import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
 type MemoryClientLike = ReturnType<typeof createMemoryClient>
 type DumpedTevmState = Awaited<ReturnType<MemoryClientLike['tevmDumpState']>>['state']
+type DumpedTevmAccountState = DumpedTevmState[string]
+type TemporarySimulationAccountCopy = {
+	address: Address
+	mode: 'full' | 'storage'
+}
 type RequestArguments = {
 	method: string
 	params?: unknown
@@ -233,6 +238,56 @@ async function requireSuccessfulLoadState(memoryClient: MemoryClientLike, state:
 	throw new Error(result.errors.map(error => error.message).join(', '))
 }
 
+async function requireSuccessfulDumpState(memoryClient: MemoryClientLike): Promise<DumpedTevmState> {
+	const result = await memoryClient.tevmDumpState()
+	if (result.errors === undefined || result.errors.length === 0) return result.state
+	throw new Error(result.errors.map(error => error.message).join(', '))
+}
+
+function getDumpedAccountState(state: DumpedTevmState, address: Address) {
+	const normalizedAddress = address.toLowerCase()
+	const matchingEntry = Object.entries(state).find(([candidateAddress]) => candidateAddress.toLowerCase() === normalizedAddress)
+	return matchingEntry?.[1]
+}
+
+function normalizeDumpedStorage(storage: NonNullable<DumpedTevmAccountState['storage']>): Record<Hex, Hex> {
+	const normalizedStorage: Record<Hex, Hex> = {}
+	for (const [key, value] of Object.entries(storage)) {
+		normalizedStorage[key as Hex] = value as Hex
+	}
+	return normalizedStorage
+}
+
+async function applyDumpedAccountState(memoryClient: MemoryClientLike, address: Address, state: DumpedTevmState) {
+	const accountState = getDumpedAccountState(state, address)
+	if (accountState === undefined) throw new Error(`Missing simulation account state for ${address}`)
+
+	const setAccountResult = await memoryClient.tevmSetAccount({
+		address,
+		balance: BigInt(accountState.balance),
+		...(accountState.deployedBytecode === undefined ? {} : { deployedBytecode: accountState.deployedBytecode }),
+		nonce: BigInt(accountState.nonce),
+		...(accountState.storage === undefined ? {} : { state: normalizeDumpedStorage(accountState.storage) }),
+	})
+	if (setAccountResult.errors !== undefined && setAccountResult.errors.length > 0) {
+		throw new Error(setAccountResult.errors.map(error => error.message).join(', '))
+	}
+}
+
+async function applyDumpedStorageState(memoryClient: MemoryClientLike, address: Address, state: DumpedTevmState) {
+	const accountState = getDumpedAccountState(state, address)
+	if (accountState === undefined) throw new Error(`Missing simulation account state for ${address}`)
+	if (accountState.storage === undefined) throw new Error(`Missing simulation storage state for ${address}`)
+
+	for (const [index, value] of Object.entries(accountState.storage)) {
+		await memoryClient.setStorageAt({
+			address,
+			index: index as Hex,
+			value: value as Hex,
+		})
+	}
+}
+
 export async function createSimulationEngine({ initialization }: { initialization: SimulationInitialization }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
@@ -282,6 +337,75 @@ export async function createSimulationEngine({ initialization }: { initializatio
 		const chainState = await getSimulationChainState(memoryClient)
 		currentTimestamp = chainState.currentTimestamp
 		blockCountSinceReset = chainState.blockNumber
+	}
+	const createMemoryBackedWriteClient = ({ accountAddress, memoryClientInstance }: { accountAddress: Address; memoryClientInstance: MemoryClientLike }): WriteClient => {
+		const readClient = createPublicClient({
+			chain: profile.chain,
+			transport: custom({
+				request: async parameters => await (memoryClientInstance.request as (parameters: RequestArguments) => Promise<unknown>)(parameters),
+			}),
+		})
+		const sendTransaction = async ({ account, data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: SimulationSendTransactionRequest) => {
+			const senderAddress = normalizeRequestedAccount(account, accountAddress)
+			await memoryClientInstance.impersonateAccount({ address: senderAddress })
+			const result = await memoryClientInstance.tevmCall(
+				createTevmTransactionRequest({
+					data: data ?? '0x',
+					from: senderAddress,
+					gas,
+					gasPrice,
+					maxFeePerGas,
+					maxPriorityFeePerGas,
+					nonce: normalizeNonce(nonce),
+					to,
+					value,
+				}),
+			)
+			const hash = requireTransactionHash(result.txHash, 'temporary simulation transaction')
+			const chainTimestamp = await getSimulationChainTimestamp(memoryClientInstance)
+			await minePendingSimulationTransactionAtTimestamp(memoryClientInstance, hash, getNextSimulationTimestamp(chainTimestamp))
+			return hash
+		}
+		const writeContract: WriteClient['writeContract'] = async parameters =>
+			await sendTransaction({
+				account: parameters.account,
+				data: encodeFunctionData(parameters as Parameters<typeof encodeFunctionData>[0]),
+				gas: parameters.gas,
+				maxFeePerGas: parameters.maxFeePerGas,
+				maxPriorityFeePerGas: parameters.maxPriorityFeePerGas,
+				to: parameters.address,
+				value: parameters.value,
+			})
+
+		return {
+			account: accountAddress,
+			getCode: async (parameters: Parameters<typeof readClient.getCode>[0]) => await readClient.getCode(parameters),
+			readContract: async (parameters: Parameters<typeof readClient.readContract>[0]) => await readClient.readContract(parameters as never),
+			sendTransaction,
+			waitForTransactionReceipt: async (parameters: Parameters<typeof readClient.getTransactionReceipt>[0]) => await readClient.getTransactionReceipt({ hash: parameters.hash }),
+			writeContract,
+		} as never
+	}
+	const applyTemporarySimulationAccountChanges = async ({ accountsToCopy, mutate }: { accountsToCopy: readonly TemporarySimulationAccountCopy[]; mutate: (context: { createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: MemoryClientLike }) => Promise<void> }) => {
+		const baseSnapshot = await requireSuccessfulDumpState(memoryClient)
+		const temporaryMemoryClient = createSimulationMemoryClient(profile)
+		await requireSuccessfulLoadState(temporaryMemoryClient, baseSnapshot)
+		await mutate({
+			createWriteClient: accountAddress =>
+				createMemoryBackedWriteClient({
+					accountAddress,
+					memoryClientInstance: temporaryMemoryClient,
+				}),
+			memoryClient: temporaryMemoryClient,
+		})
+		const mutatedSnapshot = await requireSuccessfulDumpState(temporaryMemoryClient)
+		for (const { address, mode } of accountsToCopy) {
+			if (mode === 'storage') {
+				await applyDumpedStorageState(memoryClient, address, mutatedSnapshot)
+				continue
+			}
+			await applyDumpedAccountState(memoryClient, address, mutatedSnapshot)
+		}
 	}
 	const restoreSavedStateEnvelope = async (envelope: SavedSimulationStateEnvelopeV1, progressLabel: string) => {
 		bootstrapError = undefined
@@ -470,7 +594,17 @@ export async function createSimulationEngine({ initialization }: { initializatio
 					})
 				},
 				patchSimulationGenesisRepToken: async ({ zoltarAddress }) => {
-					await updateZoltarGenesisRepToken(memoryClient, zoltarAddress, profile.genesisRepTokenAddress)
+					await applyTemporarySimulationAccountChanges({
+						accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
+						mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
+							await updateZoltarGenesisRepToken({
+								createWriteClient,
+								memoryClient: temporaryMemoryClient,
+								repAddress: profile.genesisRepTokenAddress,
+								zoltarAddress,
+							})
+						},
+					})
 				},
 				sendRawTransaction,
 				sendTransaction,
@@ -617,13 +751,30 @@ export async function createSimulationEngine({ initialization }: { initializatio
 			}
 
 			const zoltarAddress = getZoltarAddress()
-			await mintSimulationGenesisRep({
-				accountAddress: selectedAccount,
-				amount,
-				memoryClient,
-				repAddress: profile.genesisRepTokenAddress,
-				zoltarAddress,
+			const zoltarCode = await memoryClient.getCode({
+				address: zoltarAddress,
 			})
+			const accountsToCopy: readonly TemporarySimulationAccountCopy[] =
+				zoltarCode === undefined || zoltarCode === '0x'
+					? [{ address: profile.genesisRepTokenAddress, mode: 'full' }]
+					: [
+							{ address: profile.genesisRepTokenAddress, mode: 'full' },
+							{ address: zoltarAddress, mode: 'storage' },
+						]
+			await applyTemporarySimulationAccountChanges({
+				accountsToCopy,
+				mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
+					await mintSimulationGenesisRep({
+						accountAddress: selectedAccount,
+						amount,
+						createWriteClient,
+						memoryClient: temporaryMemoryClient,
+						repAddress: profile.genesisRepTokenAddress,
+						zoltarAddress,
+					})
+				},
+			})
+			await refreshSimulationState()
 			emitState()
 		},
 		mineBlock: async () => {
@@ -632,7 +783,17 @@ export async function createSimulationEngine({ initialization }: { initializatio
 			emitState()
 		},
 		patchSimulationGenesisRepToken: async ({ zoltarAddress }) => {
-			await updateZoltarGenesisRepToken(memoryClient, zoltarAddress, profile.genesisRepTokenAddress)
+			await applyTemporarySimulationAccountChanges({
+				accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
+				mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
+					await updateZoltarGenesisRepToken({
+						createWriteClient,
+						memoryClient: temporaryMemoryClient,
+						repAddress: profile.genesisRepTokenAddress,
+						zoltarAddress,
+					})
+				},
+			})
 		},
 		request: async parameters => await requestRpc(parameters),
 		reset: async () => {

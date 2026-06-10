@@ -15,6 +15,96 @@ type MemoryStorageCall = {
 	value: string
 }
 
+type RepTokenMockState = {
+	balances: Map<string, bigint>
+	theoreticalSupply: bigint
+	totalSupply: bigint
+}
+
+function createSuccessfulReceipt(accountAddress: Address) {
+	return {
+		status: 'success',
+		blockHash: '0x0',
+		blockNumber: 0n,
+		contractAddress: null,
+		cumulativeGasUsed: 0n,
+		from: accountAddress,
+		gasUsed: 0n,
+		logs: [],
+		logsBloom: '0x',
+		to: accountAddress,
+		transactionHash: `0x${'0'.repeat(64)}`,
+		transactionIndex: 0n,
+		type: 'eip1559',
+	} as never
+}
+
+function createRepTokenMockState(): RepTokenMockState {
+	return {
+		balances: new Map<string, bigint>(),
+		theoreticalSupply: 0n,
+		totalSupply: 0n,
+	}
+}
+
+function createRepTokenWriteClient({ accountAddress, repAddress, repState, zoltarAddress }: { accountAddress: Address; repAddress: Address; repState: RepTokenMockState; zoltarAddress: Address }) {
+	return {
+		readContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
+			if (address.toLowerCase() === repAddress.toLowerCase()) {
+				switch (functionName) {
+					case 'balanceOf': {
+						const requestedAddress = args?.[0]
+						if (typeof requestedAddress !== 'string') throw new Error('Missing balanceOf account argument')
+						return repState.balances.get(requestedAddress.toLowerCase()) ?? 0n
+					}
+					case 'getTotalTheoreticalSupply':
+						return repState.theoreticalSupply
+					case 'totalSupply':
+						return repState.totalSupply
+					default:
+						throw new Error(`Unexpected REP read function ${functionName}`)
+				}
+			}
+			if (address.toLowerCase() !== zoltarAddress.toLowerCase()) throw new Error(`Unexpected contract read for ${address}`)
+			switch (functionName) {
+				case 'getRepToken':
+					return repAddress
+				case 'getUniverseTheoreticalSupply':
+					return repState.theoreticalSupply
+				default:
+					throw new Error(`Unexpected Zoltar read function ${functionName}`)
+			}
+		},
+		waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
+		writeContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
+			if (address.toLowerCase() !== repAddress.toLowerCase()) throw new Error(`Unexpected contract write for ${address}`)
+			if (accountAddress.toLowerCase() !== zoltarAddress.toLowerCase()) throw new Error(`Expected REP writes from ${zoltarAddress}, got ${accountAddress}`)
+
+			switch (functionName) {
+				case 'mint': {
+					const recipient = args?.[0]
+					const amount = args?.[1]
+					if (typeof recipient !== 'string' || typeof amount !== 'bigint') throw new Error('Invalid mint arguments')
+					const normalizedRecipient = recipient.toLowerCase()
+					repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
+					repState.totalSupply += amount
+					break
+				}
+				case 'setMaxTheoreticalSupply': {
+					const nextTheoreticalSupply = args?.[0]
+					if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
+					repState.theoreticalSupply = nextTheoreticalSupply
+					break
+				}
+				default:
+					throw new Error(`Unexpected write function ${functionName}`)
+			}
+
+			return '0x01'
+		},
+	} as never
+}
+
 function createBaselineProfile(overrides: Partial<NetworkProfile> = {}): NetworkProfile {
 	return {
 		...MAINNET_NETWORK_PROFILE,
@@ -48,6 +138,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	]
 	const poolAddresses: Address[] = [getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000b2')]
 	const firstDeploymentAddress = deployments[0]?.address ?? getAddress('0x00000000000000000000000000000000000000a1')
+	const zoltarAddress = firstDeploymentAddress
 	const primaryPoolAddress = poolAddresses[0] ?? getAddress('0x00000000000000000000000000000000000000b1')
 	const secondaryPoolAddress = poolAddresses[1] ?? getAddress('0x00000000000000000000000000000000000000b2')
 	const yesChildPoolAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -55,6 +146,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const managerByPool = new Map<Address, Address>()
 	const openOracleByManager = new Map<Address, Address>()
 	const managerToPool = new Map<Address, Address>()
+	const repState = createRepTokenMockState()
 	const vaultAddressByPool: Record<Address, Address[]> = {}
 	if (scenario === 'security-pool') {
 		vaultAddressByPool[primaryPoolAddress] = [getAddress(accounts[0] ?? MOCK_PRIMARY_ACCOUNT)]
@@ -415,47 +507,70 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 
 	const memoryClient = {
 		getBlock: async () => ({ timestamp: 1_000n }),
+		getBalance: async () => 0n,
 		getStorageAt: async () => toHex(0n, { size: 32 }),
 		setStorageAt: async () => undefined,
 		getCode: async ({ address }: { address: Address }) => {
 			state.deploymentCodeRequests.push(address)
 			return deployedCodes.get(address) ?? '0x'
 		},
+		getTransactionCount: async () => 0n,
 		setCode: async ({ address, bytecode }: { address: Address; bytecode: string }) => {
 			state.callLog.setSimulationCodeCalls += 1
 			deployedCodes.set(address, bytecode === '' ? '0x' : '0x01')
 		},
 		impersonateAccount: async () => undefined,
 		setBalance: async () => undefined,
+		setNonce: async () => undefined,
 		tevmReady: async () => undefined,
 	} as never
 
 	const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
 	const createWriteClient = (accountAddress: Address) =>
 		({
+			readContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
+				if (address.toLowerCase() !== profile.genesisRepTokenAddress.toLowerCase()) throw new Error(`Unexpected contract read for ${address}`)
+				switch (functionName) {
+					case 'getTotalTheoreticalSupply':
+						return repState.theoreticalSupply
+					case 'totalSupply':
+						return repState.totalSupply
+					case 'balanceOf': {
+						const requestedAddress = args?.[0]
+						if (typeof requestedAddress !== 'string') throw new Error('Missing balanceOf account argument')
+						return repState.balances.get(requestedAddress.toLowerCase()) ?? 0n
+					}
+					default:
+						throw new Error(`Unexpected read function ${functionName}`)
+				}
+			},
 			account: accountAddress,
 			sendTransaction: async (request: { to?: Address; value?: bigint }) => {
 				writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
 				return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
 			},
-			waitForTransactionReceipt: async () =>
-				({
-					status: 'success',
-					blockHash: '0x0',
-					blockNumber: 0n,
-					contractAddress: null,
-					cumulativeGasUsed: 0n,
-					from: accountAddress,
-					gasUsed: 0n,
-					logs: [],
-					logsBloom: '0x',
-					to: accountAddress,
-					transactionHash: `0x${'0'.repeat(64)}`,
-					transactionIndex: 0n,
-					type: 'eip1559',
-				}) as never,
+			waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
 			getCode: async () => '0x01',
-			writeContract: async ({ address }: { address: Address }) => {
+			writeContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
+				if (address.toLowerCase() === profile.genesisRepTokenAddress.toLowerCase()) {
+					if (accountAddress.toLowerCase() !== zoltarAddress.toLowerCase()) throw new Error(`Expected REP writes from Zoltar, got ${accountAddress}`)
+					if (functionName === 'mint') {
+						const recipient = args?.[0]
+						const amount = args?.[1]
+						if (typeof recipient !== 'string' || typeof amount !== 'bigint') throw new Error('Invalid mint arguments')
+						const normalizedRecipient = recipient.toLowerCase()
+						repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
+						repState.totalSupply += amount
+						return '0x01'
+					}
+					if (functionName === 'setMaxTheoreticalSupply') {
+						const nextTheoreticalSupply = args?.[0]
+						if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
+						repState.theoreticalSupply = nextTheoreticalSupply
+						return '0x01'
+					}
+					throw new Error(`Unexpected REP write function ${functionName}`)
+				}
 				state.callLog.writeContract += 1
 				const pending = pendingOperations[address]
 				if (pending !== undefined) {
@@ -471,23 +586,29 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 function createBootstrapMemoryClient(
 	overrides: Partial<{
 		getBlock: () => Promise<{ timestamp: bigint }>
+		getBalance: (args: { address: string }) => Promise<bigint>
 		getStorageAt: (args: { address: string; index: string }) => Promise<string>
 		setStorageAt: (payload: { address: string; index: string; value: string }) => Promise<void>
 		getCode: (args: { address: string }) => Promise<`0x${string}`>
+		getTransactionCount: (args: { address: string }) => Promise<bigint>
 		tevmReady: () => Promise<void>
 		impersonateAccount: (args: { address: string }) => Promise<void>
 		setBalance: (args: { address: string; value: bigint }) => Promise<void>
+		setNonce: (args: { address: string; nonce: bigint }) => Promise<void>
 		setCode: (args: { address: string; bytecode: string }) => Promise<void>
 	}> = {},
 ) {
 	return {
 		getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
+		getBalance: async () => 0n,
 		getStorageAt: async () => toHex(0n, { size: 32 }),
 		setStorageAt: async () => undefined,
 		getCode: async () => '0x01',
+		getTransactionCount: async () => 0n,
 		tevmReady: async () => undefined,
 		impersonateAccount: async () => undefined,
 		setBalance: async () => undefined,
+		setNonce: async () => undefined,
 		setCode: async () => undefined,
 		...overrides,
 	} as never
@@ -506,11 +627,19 @@ describe('simulation bootstrap', () => {
 	})
 
 	test('mints simulation REP with a positive-amount guard', async () => {
-		const memoryClient = { getBlock: async () => ({ timestamp: 0n }) } as never
+		const memoryClient = {
+			getBlock: async () => ({ timestamp: 0n }),
+			getBalance: async () => 0n,
+			getTransactionCount: async () => 0n,
+			impersonateAccount: async () => undefined,
+			setBalance: async () => undefined,
+			setNonce: async () => undefined,
+		} as never
 		await expect(
 			mintSimulationGenesisRep({
 				accountAddress: MOCK_PRIMARY_ACCOUNT,
 				amount: 0n,
+				createWriteClient: () => ({}) as never,
 				memoryClient,
 				repAddress: getAddress('0x00000000000000000000000000000000000000b1'),
 				zoltarAddress: getAddress('0x00000000000000000000000000000000000000b2'),
@@ -518,61 +647,69 @@ describe('simulation bootstrap', () => {
 		).rejects.toThrow('Simulation REP mint amount must be greater than zero')
 	})
 
-	test('updates mocked REP balances and skips Zoltar bootstrap when token code is missing', async () => {
+	test('mints mocked REP balances through the token ABI and skips Zoltar bootstrap when token code is missing', async () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const storageWrites: MemoryStorageCall[] = []
-		const getStorageAt = mock(async () => '0x')
+		const repState = createRepTokenMockState()
 		const setStorageAt = mock(async (payload: { address: string; index: string; value: string }) => {
 			storageWrites.push(payload)
 		})
 		const memoryClient = {
-			getStorageAt,
 			setStorageAt,
 			getCode: async () => '0x',
+			getBalance: async () => 0n,
+			getTransactionCount: async () => 0n,
+			impersonateAccount: async () => undefined,
+			setBalance: async () => undefined,
+			setNonce: async () => undefined,
 		} as never
 
 		await mintSimulationGenesisRep({
 			accountAddress: MOCK_PRIMARY_ACCOUNT,
 			amount: 11n,
+			createWriteClient: accountAddress => createRepTokenWriteClient({ accountAddress, repAddress, repState, zoltarAddress }),
 			memoryClient,
 			repAddress,
 			zoltarAddress,
 		})
 
-		const repWrites = storageWrites.filter(write => write.address === repAddress)
-		const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
-		const repValues = repWrites.map(write => BigInt(write.value))
-
-		expect(repWrites).toHaveLength(3)
-		expect(new Set(repValues)).toEqual(new Set([11n]))
-		expect(zoltarWrites).toHaveLength(0)
+		expect(repState.totalSupply).toBe(11n)
+		expect(repState.theoreticalSupply).toBe(11n)
+		expect(repState.balances.get(MOCK_PRIMARY_ACCOUNT.toLowerCase())).toBe(11n)
+		expect(storageWrites).toHaveLength(0)
 	})
 
 	test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
 		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
 		const storageWrites: MemoryStorageCall[] = []
+		const repState = createRepTokenMockState()
 		const memoryClient = {
-			getStorageAt: async () => toHex(0n, { size: 32 }),
 			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
 				storageWrites.push(payload)
 			},
 			getCode: async ({ address }: { address: string }) => (address.toLowerCase() === repAddress.toLowerCase() ? '0x01' : '0x01'),
+			getBalance: async () => 0n,
+			getTransactionCount: async () => 0n,
+			impersonateAccount: async () => undefined,
+			setBalance: async () => undefined,
+			setNonce: async () => undefined,
 		} as never
 
 		await mintSimulationGenesisRep({
 			accountAddress: MOCK_PRIMARY_ACCOUNT,
 			amount: 11n,
+			createWriteClient: accountAddress => createRepTokenWriteClient({ accountAddress, repAddress, repState, zoltarAddress }),
 			memoryClient,
 			repAddress,
 			zoltarAddress,
 		})
 
-		const repWrites = storageWrites.filter(write => write.address === repAddress)
 		const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
 
-		expect(repWrites).toHaveLength(3)
+		expect(repState.totalSupply).toBe(11n)
+		expect(repState.theoreticalSupply).toBe(11n)
 		expect(zoltarWrites).toHaveLength(2)
 	})
 
@@ -586,11 +723,14 @@ describe('simulation bootstrap', () => {
 		const memoryClient = {
 			tevmReady: async () => undefined,
 			getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
+			getBalance: async () => 0n,
 			getStorageAt: async () => toHex(0n, { size: 32 }),
 			setStorageAt: async () => undefined,
+			getTransactionCount: async () => 0n,
 			setCode: async () => undefined,
 			impersonateAccount: async () => undefined,
 			setBalance: async () => undefined,
+			setNonce: async () => undefined,
 			getCode: async () => '0x01',
 		} as never
 		const createWriteClient = (accountAddress: Address) =>
@@ -599,9 +739,9 @@ describe('simulation bootstrap', () => {
 					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
 					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
 				},
-				waitForTransactionReceipt: async () =>
-					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
 				getCode: async () => '0x01',
+				writeContract: async () => '0x01',
 			}) as never
 
 		await bootstrapSimulationChain({
@@ -632,9 +772,9 @@ describe('simulation bootstrap', () => {
 					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
 					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
 				},
-				waitForTransactionReceipt: async () =>
-					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
 				getCode: async () => '0x01',
+				writeContract: async () => '0x01',
 			}) as never
 
 		await expect(
@@ -660,9 +800,9 @@ describe('simulation bootstrap', () => {
 					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
 					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
 				},
-				waitForTransactionReceipt: async () =>
-					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
 				getCode: async () => '0x01',
+				writeContract: async () => '0x01',
 			}) as never
 
 		await expect(
@@ -691,9 +831,9 @@ describe('simulation bootstrap', () => {
 					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
 					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
 				},
-				waitForTransactionReceipt: async () =>
-					({ status: 'success', blockHash: '0x0', blockNumber: 0n, contractAddress: null, cumulativeGasUsed: 0n, from: accountAddress, gasUsed: 0n, logs: [], logsBloom: '0x', to: accountAddress, transactionHash: `0x${'0'.repeat(64)}`, transactionIndex: 0n, type: 'eip1559' }) as never,
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
 				getCode: async () => '0x01',
+				writeContract: async () => '0x01',
 			}) as never
 
 		await bootstrapSimulationChain({
@@ -723,23 +863,9 @@ describe('simulation bootstrap', () => {
 		const createWriteClient = () =>
 			({
 				sendTransaction: async () => '0x01',
-				waitForTransactionReceipt: async () =>
-					({
-						status: 'success',
-						blockHash: '0x0',
-						blockNumber: 0n,
-						contractAddress: null,
-						cumulativeGasUsed: 0n,
-						from: MOCK_PRIMARY_ACCOUNT,
-						gasUsed: 0n,
-						logs: [],
-						logsBloom: '0x',
-						to: MOCK_PRIMARY_ACCOUNT,
-						transactionHash: `0x${'0'.repeat(64)}`,
-						transactionIndex: 0n,
-						type: 'eip1559',
-					}) as never,
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(MOCK_PRIMARY_ACCOUNT),
 				getCode: async () => '0x01',
+				writeContract: async () => '0x01',
 			}) as never
 
 		globalThis.setTimeout = ((handler: TimerHandler) => {

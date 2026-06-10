@@ -26,6 +26,7 @@ type BackendSubscriptionState = {
 	stateHandler: (() => void) | undefined
 	accountHandler: (() => void) | undefined
 	chainHandler: (() => void) | undefined
+	readTransportModes: ('provider' | 'rpc')[]
 	unsub: UnsubCounter
 }
 
@@ -79,6 +80,7 @@ function createBackend({
 		stateHandler: undefined,
 		accountHandler: undefined,
 		chainHandler: undefined,
+		readTransportModes: [],
 		unsub: { subscribe: 0, accounts: 0, chain: 0 },
 	}
 
@@ -99,7 +101,9 @@ function createBackend({
 		isBootstrapping,
 		profile,
 		requestAccounts: requestAccounts ?? (async () => accounts),
-		setReadTransportMode: () => undefined,
+		setReadTransportMode: mode => {
+			subscriptionState.readTransportModes.push(mode)
+		},
 		subscribe: handler => {
 			subscriptionState.stateHandler = handler
 			return () => {
@@ -204,7 +208,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('loads wallet and deployment status data when connected', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a1')
-		const { backend } = createBackend({
+		const { backend, subscriptionState } = createBackend({
 			accountAddress: account,
 			readClient: createReadClient({ ethBalance: 123n, blockNumber: 100n, blockTimestamp: 200n }),
 		})
@@ -240,6 +244,7 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
 		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
 		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
+		expect(subscriptionState.readTransportModes).toEqual(['provider'])
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
 
@@ -275,6 +280,7 @@ describe('useOnchainState (integration)', () => {
 		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).'))
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
+		expect(subscriptionState.readTransportModes).toEqual(['rpc'])
 		await act(async () => {
 			subscriptionState.stateHandler?.()
 			await Promise.resolve()
@@ -282,6 +288,56 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 		expect(loadDeploymentStatusOracleSnapshot).not.toHaveBeenCalled()
+
+		resetEnvironment()
+	})
+
+	test('keeps RPC-backed reads active when a connected wallet is on the wrong chain', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a3')
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses,
+		}))
+		const loadErc20Balance = mock(async () => 777n)
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot,
+			loadErc20Balance,
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const rpcReadClient = {
+			...createReadClient({ blockNumber: 321n, blockTimestamp: 654n, ethBalance: 123n }),
+			getChainId: async () => 1,
+		} as ReadClient
+		const { backend, subscriptionState } = createBackend({
+			accountAddress: account,
+			profile: MAINNET_NETWORK_PROFILE,
+			readClient: rpcReadClient,
+		})
+		backend.getChainId = async () => '0xaa36a7'
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+
+		expect(requireHookState(hookState).accountState).toMatchObject({
+			address: account,
+			chainId: '0xaa36a7',
+			ethBalance: 123n,
+			wethBalance: 777n,
+		})
+		expect(requireHookState(hookState).readBackendMessage).toBeUndefined()
+		expect(requireHookState(hookState).currentBlockNumber).toBe(321n)
+		expect(requireHookState(hookState).currentTimestamp).toBe(654n)
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+		expect(subscriptionState.readTransportModes).toEqual(['rpc'])
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 
 		resetEnvironment()
 	})

@@ -41,6 +41,19 @@ export type SimulationWorkerCallMap = {
 }
 
 export type SimulationWorkerCallMethod = keyof SimulationWorkerCallMap
+type SimulationWorkerCallResult = {
+	[TMethod in SimulationWorkerCallMethod]: SimulationWorkerCallMap[TMethod]['result']
+}[SimulationWorkerCallMethod]
+export type SimulationWorkerJsonValue =
+	| string
+	| number
+	| boolean
+	| bigint
+	| null
+	| { [key: string]: SimulationWorkerJsonValue }
+	| SimulationWorkerJsonValue[]
+	| readonly SimulationWorkerJsonValue[]
+export type SimulationWorkerResultValue = SimulationWorkerCallResult | SimulationWorkerJsonValue
 
 export type SimulationWorkerInitMessage = {
 	initialization: SimulationInitialization
@@ -73,7 +86,7 @@ export type SimulationWorkerReadyEvent = {
 export type SimulationWorkerResultEvent = {
 	id: number
 	type: 'result'
-	value: unknown
+	value: SimulationWorkerResultValue
 }
 
 export type SimulationWorkerErrorEvent = {

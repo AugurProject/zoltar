@@ -7,7 +7,7 @@ import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
 import type { SavedSimulationStateEnvelopeV1, SimulationInitialization } from './savedStates.js'
-import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
+import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
 
@@ -18,7 +18,7 @@ type RequestArguments = {
 
 type PendingRequest = {
 	reject: (error: Error) => void
-	resolve: (value: unknown) => void
+	resolve: (value: SimulationWorkerResultValue) => void
 }
 
 type WorkerRequestMessage = Omit<SimulationWorkerCallMessage, 'id'> | Omit<SimulationWorkerRpcMessage, 'id'>

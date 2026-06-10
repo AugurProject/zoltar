@@ -3,6 +3,9 @@
   "configVersion": 0,
   "workspaces": {
     "": {
+      "dependencies": {
+        "@zoltar/shared": "file:../shared",
+      },
       "devDependencies": {
         "bun-types": "1.3.11",
         "esbuild": "0.25.8",
@@ -99,6 +102,8 @@
     "@snyk/github-codeowners": ["@snyk/github-codeowners@1.1.0", "", { "dependencies": { "commander": "^4.1.1", "ignore": "^5.1.8", "p-map": "^4.0.0" }, "bin": { "github-codeowners": "dist/cli.js" } }, "sha512-lGFf08pbkEac0NYgVf4hdANpAgApRjNByLXB+WBip3qj1iendOIyAwP2GKkKbQMNVy2r1xxDf0ssfWscoiC+Vw=="],
 
     "@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
+
+    "@zoltar/shared": ["@zoltar/shared@file:../shared", { "dependencies": { "viem": "2.38.3" } }],
 
     "abitype": ["abitype@1.1.0", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3.22.0 || ^4.0.0" }, "optionalPeers": ["zod"] }, ""],
 

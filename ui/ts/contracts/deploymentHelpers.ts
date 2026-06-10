@@ -1,5 +1,5 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from 'viem'
-import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../shared/deploymentAddresses.js'
+import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { bigintToAddress } from './helpers.js'
 import {
 	ScalarOutcomes_ScalarOutcomes,
@@ -18,8 +18,6 @@ import {
 
 export const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 export const ZERO_SALT = toHex(0, { size: 32 })
-export const OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS = bigintToAddress(0x4e59b44847b379578588920ca78fbf26c0b4956cn)
-const OPEN_ORACLE_CREATE2_SALT = '0xf5b91b18c7242605256d8b307d4a5bd3d398aa87a1d89917c9fa68c624e8399a' satisfies Hex
 export const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
@@ -142,10 +140,6 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getZoltarQuestionDataAddress,
 	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
-	openOracleCreate2Inputs: {
-		proxyDeployerAddress: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
-		salt: OPEN_ORACLE_CREATE2_SALT,
-	},
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
 	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
@@ -153,10 +147,6 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
 	zeroSalt: ZERO_SALT,
 })
-
-export function getOpenOracleCreate2DeploymentBytecode() {
-	return concatHex([OPEN_ORACLE_CREATE2_SALT, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`])
-}
 
 export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle

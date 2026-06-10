@@ -13,21 +13,9 @@ const sharedSourceRoot = path.join(sharedRoot, 'ts')
 
 const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(solidityRoot, 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
 const requiredSharedOutputs = [path.join(sharedRoot, 'js', 'addressDerivation.js'), path.join(sharedRoot, 'js', 'bigInt.js'), path.join(sharedRoot, 'js', 'deploymentAddresses.js')]
-const requiredUiSharedOutputs = [
-	path.join(repositoryRoot, 'ui', 'js', 'shared', 'addressDerivation.js'),
-	path.join(repositoryRoot, 'ui', 'js', 'shared', 'bigInt.js'),
-	path.join(repositoryRoot, 'ui', 'js', 'shared', 'deploymentAddresses.js'),
-	path.join(repositoryRoot, 'ui', 'ts', 'shared', 'addressDerivation.js'),
-	path.join(repositoryRoot, 'ui', 'ts', 'shared', 'bigInt.js'),
-	path.join(repositoryRoot, 'ui', 'ts', 'shared', 'deploymentAddresses.js'),
-	path.join(repositoryRoot, 'ui', 'ts', 'shared', 'addressDerivation.d.ts'),
-	path.join(repositoryRoot, 'ui', 'ts', 'shared', 'bigInt.d.ts'),
-	path.join(repositoryRoot, 'ui', 'ts', 'shared', 'deploymentAddresses.d.ts'),
-]
 
 const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'ui', 'build', 'projectArtifacts.mts')]
 const sharedFreshnessInputs = [path.join(sharedRoot, 'tsconfig.json')]
-const uiSharedFreshnessInputs = [path.join(repositoryRoot, 'ui', 'build', 'shared.mts')]
 
 function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
 	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
@@ -110,10 +98,6 @@ async function runSharedBuild(): Promise<void> {
 	await runBunScript(['run', 'shared:build'], `bun run shared:build`)
 }
 
-async function runUiSharedMirror(): Promise<void> {
-	await runBunScript(['run', 'ui:shared'], `bun run ui:shared`)
-}
-
 async function runBunScript(args: string[], label: string): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
 		const child = spawn(process.execPath, args, {
@@ -146,30 +130,11 @@ async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
 	return undefined
 }
 
-async function getUiSharedMirrorRegenerationReason(): Promise<string | undefined> {
-	for (const outputPath of requiredUiSharedOutputs) {
-		if (!(await exists(outputPath))) return `missing ui shared mirror output: ${path.relative(repositoryRoot, outputPath)}`
-	}
-
-	const newestInputMtime = await getNewestMtime([...uiSharedFreshnessInputs, ...requiredSharedOutputs])
-	const oldestOutputMtime = await getOldestMtime(requiredUiSharedOutputs)
-
-	if (newestInputMtime > oldestOutputMtime) return 'UI shared mirror outputs are older than the shared build outputs or mirror script'
-
-	return undefined
-}
-
 export async function ensureContractArtifactsAreCurrent(): Promise<void> {
 	const sharedRegenerationReason = await getSharedBuildRegenerationReason()
 	if (sharedRegenerationReason !== undefined) {
 		console.log(`Regenerating shared build outputs before tests: ${sharedRegenerationReason}`)
 		await runSharedBuild()
-	}
-
-	const uiSharedMirrorReason = await getUiSharedMirrorRegenerationReason()
-	if (uiSharedMirrorReason !== undefined) {
-		console.log(`Regenerating ui shared mirror outputs before tests: ${uiSharedMirrorReason}`)
-		await runUiSharedMirror()
 	}
 
 	const regenerationReason = await getArtifactRegenerationReason()

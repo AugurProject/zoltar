@@ -7,27 +7,22 @@ const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
 const uiContractsPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts.ts')
 const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deploymentHelpers.ts')
-const sharedBrowserArtifacts = [
-	path.join(repositoryRootPath, 'ui', 'js', 'shared', 'addressDerivation.js'),
-	path.join(repositoryRootPath, 'ui', 'js', 'shared', 'bigInt.js'),
-	path.join(repositoryRootPath, 'ui', 'js', 'shared', 'deploymentAddresses.js'),
-	path.join(repositoryRootPath, 'ui', 'ts', 'shared', 'addressDerivation.js'),
-	path.join(repositoryRootPath, 'ui', 'ts', 'shared', 'bigInt.js'),
-	path.join(repositoryRootPath, 'ui', 'ts', 'shared', 'deploymentAddresses.js'),
-	path.join(repositoryRootPath, 'ui', 'ts', 'shared', 'addressDerivation.d.ts'),
-	path.join(repositoryRootPath, 'ui', 'ts', 'shared', 'bigInt.d.ts'),
-	path.join(repositoryRootPath, 'ui', 'ts', 'shared', 'deploymentAddresses.d.ts'),
-]
+const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
+const sharedBrowserArtifacts = [path.join(repositoryRootPath, 'shared', 'js', 'bigInt.js'), path.join(repositoryRootPath, 'shared', 'js', 'deploymentAddresses.js')]
 
-test('shared helper assets are mirrored into deployable ui paths', () => {
+test('shared helper package imports resolve to browser-served shared outputs', () => {
 	const contractsSource = fs.readFileSync(uiContractsPath, 'utf8')
 	const deploymentHelpersSource = fs.readFileSync(uiDeploymentHelpersPath, 'utf8')
+	const uiIndexHtml = fs.readFileSync(uiIndexHtmlPath, 'utf8')
 
 	expect(contractsSource).toContain("from './contracts/helpers.js'")
 	expect(contractsSource).toContain("from './contracts/deploymentHelpers.js'")
-	expect(contractsSource).not.toContain('../../shared/js/')
-	expect(deploymentHelpersSource).toContain("from '../shared/deploymentAddresses.js'")
-	expect(deploymentHelpersSource).not.toContain('../../../shared/js/')
+	expect(contractsSource).toContain("from '@zoltar/shared/bigInt'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
+	expect(contractsSource).not.toContain('./shared/bigInt.js')
+	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
 		expect(fs.existsSync(artifactPath)).toBe(true)

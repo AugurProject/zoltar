@@ -1,7 +1,7 @@
 import 'viem/window'
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from 'viem'
-import { createSecurityPoolAddressHelper } from '../../../../../../shared/js/addressDerivation.js'
-import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../../../../../shared/js/deploymentAddresses.js'
+import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
+import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { WriteClient, writeContractAndWait } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
@@ -30,8 +30,6 @@ import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
-const OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS = '0x4e59b44847b379578588920ca78fbf26c0b4956c' satisfies Address
-const OPEN_ORACLE_CREATE2_SALT = '0xf5b91b18c7242605256d8b307d4a5bd3d398aa87a1d89917c9fa68c624e8399a' satisfies Hex
 const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
@@ -151,10 +149,6 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getZoltarQuestionDataAddress,
 	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
-	openOracleCreate2Inputs: {
-		proxyDeployerAddress: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
-		salt: OPEN_ORACLE_CREATE2_SALT,
-	},
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
@@ -168,8 +162,6 @@ export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracle
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	zeroSalt: ZERO_SALT,
 })
-
-const getOpenOracleCreate2DeploymentBytecode = (): Hex => concatHex([OPEN_ORACLE_CREATE2_SALT, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`])
 
 export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getEscalationGameInitCode: securityPool =>
@@ -278,11 +270,6 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		await client.waitForTransactionReceipt({ hash })
 	}
 
-	const deployOpenOracle = async () => {
-		const hash = await client.sendTransaction({ to: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS, data: getOpenOracleCreate2DeploymentBytecode() })
-		await client.waitForTransactionReceipt({ hash })
-	}
-
 	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
@@ -290,7 +277,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence['scalarOutcomes']) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 	if (!existence['securityPoolUtils']) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-	if (!existence['openOracle']) await deployOpenOracle()
+	if (!existence['openOracle']) await deployBytecode(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode(getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
 		const initCode = encodeDeployData({

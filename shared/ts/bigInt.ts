@@ -1,4 +1,4 @@
-export function compareBigIntAscending(left: bigint, right: bigint) {
+function compareBigIntAscending(left: bigint, right: bigint) {
 	if (left < right) return -1
 	if (left > right) return 1
 	return 0

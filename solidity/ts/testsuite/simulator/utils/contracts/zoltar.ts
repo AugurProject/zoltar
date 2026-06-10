@@ -1,6 +1,6 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { createRepTokenAddressHelper } from '../../../../../../shared/js/addressDerivation.js'
-import { createZoltarAddressHelpers } from '../../../../../../shared/js/deploymentAddresses.js'
+import { createRepTokenAddressHelper } from '@zoltar/shared/addressDerivation'
+import { createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, type Address, type Hex, toHex } from 'viem'

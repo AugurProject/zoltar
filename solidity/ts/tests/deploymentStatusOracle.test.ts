@@ -14,8 +14,6 @@ import { PROXY_DEPLOYER_ADDRESS } from '../testsuite/simulator/utils/constants'
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
-const OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
-const OPEN_ORACLE_CREATE2_SALT = '0xf5b91b18c7242605256d8b307d4a5bd3d398aa87a1d89917c9fa68c624e8399a' satisfies Hex
 
 describe('Deployment Status Oracle Test Suite', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -26,14 +24,6 @@ describe('Deployment Status Oracle Test Suite', () => {
 		const hash = await client.sendTransaction({
 			to: addressString(PROXY_DEPLOYER_ADDRESS),
 			data: bytecode,
-		})
-		await client.waitForTransactionReceipt({ hash })
-	}
-
-	const deployOpenOracle = async () => {
-		const hash = await client.sendTransaction({
-			to: OPEN_ORACLE_CREATE2_DEPLOYER_ADDRESS,
-			data: `${OPEN_ORACLE_CREATE2_SALT}${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}` as Hex,
 		})
 		await client.waitForTransactionReceipt({ hash })
 	}
@@ -58,7 +48,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 		await deployViaProxy(MULTICALL3_BYTECODE)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
-		await deployOpenOracle()
+		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
@@ -67,7 +57,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {
 		await deployViaProxy(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-		await deployOpenOracle()
+		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 		await deployViaProxy(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 
