@@ -143,6 +143,11 @@ export function requireOpenOracleExtraDataTuple(value: unknown, context: string)
 	throw new Error(`Unexpected ${context} response`)
 }
 
+export function requireOpenOracleExtraDataTupleArray(value: unknown, context: string): OpenOracleExtraDataTuple[] {
+	if (Array.isArray(value) && value.every(isOpenOracleExtraDataTuple)) return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
 export function getQuestionId(questionData: QuestionData, outcomeOptions: readonly string[]) {
 	return BigInt(
 		keccak256(

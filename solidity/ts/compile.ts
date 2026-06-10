@@ -75,7 +75,7 @@ const mainCompilerSettings = {
 	viaIR: true,
 	optimizer: {
 		enabled: true,
-		runs: 190,
+		runs: 200,
 	},
 	outputSelection: {
 		'*': {

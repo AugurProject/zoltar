@@ -68,6 +68,7 @@ import {
 	isBigintTriple,
 	requireEscalationGameTuple,
 	requireOpenOracleExtraDataTuple,
+	requireOpenOracleExtraDataTupleArray,
 	requireOpenOracleReportMetaTuple,
 	requireOpenOracleReportMetaTupleArray,
 	requireOpenOracleReportStatusTuple,
@@ -832,7 +833,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		reportIds.push(reportId)
 		if (reportId === pageStartId) break
 	}
-	const [metaResults, statusResults] = await Promise.all([
+	const [metaResults, statusResults, extraResults] = await Promise.all([
 		readRequiredMulticall(
 			client,
 			reportIds.map(reportId => ({
@@ -851,9 +852,19 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 				args: [reportId],
 			})),
 		),
+		readRequiredMulticall(
+			client,
+			reportIds.map(reportId => ({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'extraData',
+				address: openOracleAddress,
+				args: [reportId],
+			})),
+		),
 	])
 	const metas = requireOpenOracleReportMetaTupleArray(metaResults, 'open oracle report metas')
 	const statuses = requireOpenOracleReportStatusTupleArray(statusResults, 'open oracle report statuses')
+	const extras = requireOpenOracleExtraDataTupleArray(extraResults, 'open oracle report extras')
 	const tokenAddresses = new Set<Address>()
 	for (const meta of metas) {
 		if (meta[4] !== zeroAddress) tokenAddresses.add(meta[4])
@@ -899,7 +910,8 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 	const reports = reportIds.map((reportId, index) => {
 		const meta = metas[index]
 		const status = statuses[index]
-		if (meta === undefined || status === undefined) throw new Error('Unexpected oracle report summary response')
+		const extra = extras[index]
+		if (meta === undefined || status === undefined || extra === undefined) throw new Error('Unexpected oracle report summary response')
 		const token1Metadata = tokenMetadata.get(meta[4])
 		const token2Metadata = tokenMetadata.get(meta[6])
 		if (token1Metadata === undefined || token2Metadata === undefined) throw new Error('Unexpected oracle token metadata response')
@@ -907,7 +919,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			currentAmount1: status[0],
 			currentAmount2: status[1],
 			currentReporter: status[2],
-			disputeOccurred: hasOpenOracleDisputeOccurred(status[2], status[5], 0n),
+			disputeOccurred: hasOpenOracleDisputeOccurred(status[2], status[5], BigInt(extra[2])),
 			exactToken1Report: meta[0],
 			isDistributed: BigInt(status[4]) > 0n,
 			price: calculateOpenOraclePrice(status[0], status[1]),
