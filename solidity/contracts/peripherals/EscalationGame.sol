@@ -391,6 +391,7 @@ contract EscalationGame {
 
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
+		require(getQuestionResolution() == outcome, 'outcome not winning');
 		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex);
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
@@ -400,41 +401,34 @@ contract EscalationGame {
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
-	function exportUnresolvedForkDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
+	function exportUnresolvedDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		uint8 outcomeIndex = uint8(outcome);
-		require(depositIndex <= type(uint128).max, 'carry exports require proofs');
 		Deposit memory deposit = _consumeLocalDeposit(outcomeIndex, depositIndex);
 		depositor = deposit.depositor;
 		amount = deposit.amount;
 		parentDepositIndex = _getStableLocalParentDepositIndex(depositIndex);
 	}
 
-	function withdrawCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public onlySecurityPoolOrForker returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
-		uint8 outcomeIndex = uint8(outcome);
-		depositor = proof.depositor;
-		originalDepositAmount = proof.amount;
-		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
-		uint256 burnAmount;
-		(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(outcomeIndex, proof.amount, proof.cumulativeAmount);
-
-		emit ClaimDeposit(amountToWithdraw, burnAmount);
-	}
-
-	function forfeitCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public onlySecurityPoolOrForker returns (address depositor, uint256 originalDepositAmount) {
+	function withdrawDeposit(CarriedDepositProof calldata proof, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
-		require(outcome != questionResolution, 'Winning deposits must withdraw');
 		uint8 outcomeIndex = uint8(outcome);
 		depositor = proof.depositor;
 		originalDepositAmount = proof.amount;
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
+		if (outcome == questionResolution) {
+			uint256 burnAmount;
+			(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(outcomeIndex, proof.amount, proof.cumulativeAmount);
+			emit ClaimDeposit(amountToWithdraw, burnAmount);
+			emit WithdrawDeposit(depositor, outcome, amountToWithdraw, proof.parentDepositIndex);
+			return (depositor, amountToWithdraw, originalDepositAmount);
+		}
 		emit WithdrawDeposit(depositor, outcome, 0, proof.parentDepositIndex);
 	}
 
-	function exportUnresolvedCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
+	function exportUnresolvedDeposit(CarriedDepositProof calldata proof, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		uint8 outcomeIndex = uint8(outcome);
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);

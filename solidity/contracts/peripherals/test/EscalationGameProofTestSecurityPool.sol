@@ -37,11 +37,11 @@ contract EscalationGameProofTestSecurityPool {
 		);
 	}
 
-	function withdrawCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof)
+	function withdrawDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof)
 		external
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
-		return escalationGame.withdrawCarriedDeposit(outcome, proof);
+		return escalationGame.withdrawDeposit(proof, outcome);
 	}
 
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
