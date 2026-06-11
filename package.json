@@ -19,6 +19,7 @@
 		"typescript": "5.8.2"
 	},
 	"dependencies": {
+		"@zoltar/shared": "file:./shared",
 		"@preact/signals": "2.0.1",
 		"tevm": "1.0.0-next.149",
 		"viem": "2.38.3"

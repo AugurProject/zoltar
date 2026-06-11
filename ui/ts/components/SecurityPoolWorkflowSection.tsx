@@ -34,6 +34,8 @@ import { getPoolCollateralizationPercent } from '../lib/trading.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
+	getCurrentSelectedPoolReportingDetails,
+	getCurrentSelectedPoolForkAuctionDetails,
 	getCurrentForkWorkflowSelectionStage,
 	getCurrentPoolOracleManagerDetails,
 	getCurrentSelectedPoolForkStage,
@@ -50,6 +52,7 @@ import {
 	SELECTED_POOL_PRIMARY_VIEWS,
 	SELECTED_POOL_SECONDARY_VIEWS,
 	SELECTED_POOL_VIEWS,
+	shouldReloadSelectedPoolDetails,
 	shouldShowSelectedPoolWorkflowDetails,
 	type ForkWorkflowSelectionStage,
 	type SelectedPoolView,
@@ -135,6 +138,7 @@ export function SecurityPoolWorkflowSection({
 	poolOracleManagerError,
 	poolPriceOracleResult,
 	universeForkTime,
+	selectedPoolRefreshNonce,
 	onSecurityPoolAddressChange,
 	repPerEthPrice,
 	repPerEthSource,
@@ -164,12 +168,22 @@ export function SecurityPoolWorkflowSection({
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
 	const hasManualForkWorkflowSelectionRef = useRef(false)
+	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
+	const lastHandledForkAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 	const normalizedReportingFormPoolAddress = normalizeAddress(reporting.reportingForm.securityPoolAddress)
-	const currentReportingDetails = sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? reporting.reportingDetails : undefined
-	const currentForkAuctionDetails = sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? forkAuction.forkAuctionDetails : undefined
+	const loadedReportingDetails = sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? reporting.reportingDetails : undefined
+	const currentReportingDetails = getCurrentSelectedPoolReportingDetails({
+		reportingDetails: loadedReportingDetails,
+		selectedPool,
+	})
+	const loadedForkAuctionDetails = sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? forkAuction.forkAuctionDetails : undefined
+	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
+		forkAuctionDetails: loadedForkAuctionDetails,
+		selectedPool,
+	})
 	const selectedPoolLookupState = resolveRequestedLoadableValueState({
 		currentKey: normalizeAddress(securityPoolAddress),
 		isLoading: loadingSecurityPools,
@@ -224,6 +238,9 @@ export function SecurityPoolWorkflowSection({
 	})()
 	const selectedPoolForkWorkflowSystemState = selectedPoolLifecycleState === undefined || selectedPoolLifecycleState === 'ended' ? selectedPoolState : selectedPoolLifecycleState
 	const reportingLockedReason = (() => {
+		if (selectedPoolState === 'poolForked') return 'This parent pool is forked. Continue in the Fork Workflow for migration and settlement.'
+		if (selectedPoolState === 'forkMigration') return 'This pool is in fork migration. Reporting actions unlock once the pool becomes operational.'
+		if (selectedPoolState === 'forkTruthAuction') return 'This pool is in truth auction. Reporting actions unlock once the pool becomes operational.'
 		if (reportingReady) return undefined
 		if (marketDetails === undefined) return 'Reporting opens after market end.'
 
@@ -260,8 +277,7 @@ export function SecurityPoolWorkflowSection({
 	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? currentForkWorkflowSelectionStage)
 	const openSelectedPoolForkWorkflow = selectedPoolHasActualForkActivity ? () => onSelectedPoolViewChange('fork-workflow') : undefined
 	const shouldRefreshSelectedPoolReporting =
-		showSelectedPoolWorkflowDetails &&
-		(sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || ((view === 'reporting' || view === 'withdraw-escalation-deposits') && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
+		showSelectedPoolWorkflowDetails && (sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || (view === 'reporting' && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
 	const selectedPoolWorkflowGuardMessage = getSelectedPoolWorkflowGuardMessage({
 		hasSelectedPoolAddress,
 		selectedPoolLookupState,
@@ -525,25 +541,35 @@ export function SecurityPoolWorkflowSection({
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		const shouldAutoloadReportingForFork = view === 'fork-workflow'
-		const shouldAutoloadReportingForCurrentView = view === 'reporting' || view === 'withdraw-escalation-deposits' || shouldAutoloadReportingForFork
+		const shouldAutoloadReportingForCurrentView = view === 'reporting' || shouldAutoloadReportingForFork
 		if (!shouldAutoloadReportingForCurrentView || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
 			return
 		}
-		if (sameAddress(reporting.reportingDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
 		if (normalizedReportingFormPoolAddress === undefined || normalizedReportingFormPoolAddress !== normalizedSelectedPoolAddress) return
 		if (reporting.loadingReportingDetails) return
-		const reportingAutoLoadKey = `${normalizedSelectedPoolAddress}:${normalizedReportingFormPoolAddress}`
+		const shouldReloadReporting = shouldReloadSelectedPoolDetails({
+			currentDetailsAvailable: currentReportingDetails !== undefined,
+			lastHandledRefreshNonce: lastHandledReportingRefreshNonceRef.current,
+			loadedDetailsAddress: loadedReportingDetails?.securityPoolAddress,
+			refreshNonce: selectedPoolRefreshNonce,
+			selectedPoolAddress: normalizedSelectedPoolAddress,
+		})
+		if (!shouldReloadReporting && sameAddress(loadedReportingDetails?.securityPoolAddress, normalizedSelectedPoolAddress) && currentReportingDetails !== undefined) return
+		const reportingAutoLoadKey = `${normalizedSelectedPoolAddress}:${normalizedReportingFormPoolAddress}:${selectedPoolRefreshNonce}`
 		if (lastReportingAutoLoadKey.current === reportingAutoLoadKey) return
 		lastReportingAutoLoadKey.current = reportingAutoLoadKey
+		lastHandledReportingRefreshNonceRef.current = selectedPoolRefreshNonce
 		void reporting.onLoadReporting()
 	}, [
 		normalizedReportingFormPoolAddress,
 		normalizedSelectedPoolAddress,
+		currentReportingDetails,
+		loadedReportingDetails?.securityPoolAddress,
 		reporting.loadingReportingDetails,
 		reporting.onLoadReporting,
-		reporting.reportingDetails?.securityPoolAddress,
 		reportingReady,
+		selectedPoolRefreshNonce,
 		selectedPoolHasActualForkActivity,
 		selectedPoolQuestionOutcome,
 		selectedPoolState,
@@ -553,10 +579,18 @@ export function SecurityPoolWorkflowSection({
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (!isSelectedPoolForkWorkflowView(view) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
-		if (sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
 		if (forkAuction.loadingForkAuctionDetails) return
+		const shouldReloadForkAuction = shouldReloadSelectedPoolDetails({
+			currentDetailsAvailable: currentForkAuctionDetails !== undefined,
+			lastHandledRefreshNonce: lastHandledForkAuctionRefreshNonceRef.current,
+			loadedDetailsAddress: loadedForkAuctionDetails?.securityPoolAddress,
+			refreshNonce: selectedPoolRefreshNonce,
+			selectedPoolAddress: normalizedSelectedPoolAddress,
+		})
+		if (!shouldReloadForkAuction && sameAddress(loadedForkAuctionDetails?.securityPoolAddress, normalizedSelectedPoolAddress) && currentForkAuctionDetails !== undefined) return
+		lastHandledForkAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
 		void forkAuction.onLoadForkAuction(getAddress(normalizedSelectedPoolAddress))
-	}, [forkAuction.forkAuctionDetails?.securityPoolAddress, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+	}, [currentForkAuctionDetails, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, loadedForkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress, selectedPoolRefreshNonce, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		const reportingRefreshHash = reporting.reportingResult?.hash
 		if (reportingRefreshHash === undefined) {
@@ -582,10 +616,22 @@ export function SecurityPoolWorkflowSection({
 		if (showSelectedPoolWorkflowDetails && nextForkAuctionResult.action === 'startTruthAuction') {
 			void forkAuction.onLoadForkAuction(nextForkAuctionResult.securityPoolAddress)
 		}
-		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault && (nextForkAuctionResult.action === 'claimAuctionProceeds' || nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateVault' || nextForkAuctionResult.action === 'startTruthAuction')) {
+		if (
+			showSelectedPoolWorkflowDetails &&
+			hasLoadedCurrentVault &&
+			(nextForkAuctionResult.action === 'claimAuctionProceeds' ||
+				nextForkAuctionResult.action === 'migrateEscalationDeposits' ||
+				nextForkAuctionResult.action === 'migrateUnresolvedEscalation' ||
+				nextForkAuctionResult.action === 'migrateVault' ||
+				nextForkAuctionResult.action === 'settleForkedEscalation' ||
+				nextForkAuctionResult.action === 'startTruthAuction')
+		) {
 			void securityVault.onLoadSecurityVault()
 		}
-		if (shouldRefreshSelectedPoolReporting && (nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'startTruthAuction')) {
+		if (
+			shouldRefreshSelectedPoolReporting &&
+			(nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateUnresolvedEscalation' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'settleForkedEscalation' || nextForkAuctionResult.action === 'startTruthAuction')
+		) {
 			void reporting.onLoadReporting()
 		}
 	}, [forkAuction.forkAuctionResult, forkAuction.onLoadForkAuction, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
@@ -905,25 +951,6 @@ export function SecurityPoolWorkflowSection({
 									/>
 								) : undefined}
 
-								{view === 'withdraw-escalation-deposits' ? (
-									<ReportingSection
-										{...reporting}
-										currentTimestamp={currentTimestamp}
-										embedInCard
-										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
-										lockedReason={reportingLockedReason}
-										mode='withdraw-only'
-										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
-										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
-										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
-										reportingDetails={currentReportingDetails}
-										showHeader={false}
-										showSecurityPoolAddressInput={false}
-										triggerZoltarForkAvailability={triggerZoltarForkAvailability}
-										triggerZoltarForkPending={forkAuction.forkAuctionActiveAction === 'forkWithOwnEscalation'}
-									/>
-								) : undefined}
-
 								{isSelectedPoolForkWorkflowView(view) ? (
 									<ForkAuctionSection
 										{...forkAuction}
@@ -940,6 +967,7 @@ export function SecurityPoolWorkflowSection({
 										reportingDetails={currentReportingDetails}
 										reportingForm={reporting.reportingForm}
 										selectedStageView={forkWorkflowSelectionStage}
+										selectedPoolRefreshNonce={selectedPoolRefreshNonce}
 										securityPools={securityPools}
 										universeForkTime={universeForkTime}
 										onSelectedStageViewChange={stage => {

@@ -90,20 +90,20 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(20n),
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		sides: [
-			{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-			{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-			{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+			{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
 		activationTime: 120n,
 		startBond: rep(3n),
 		status: 'active',
+		systemState: 'operational',
 		totalCost: rep(20n),
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 1n * REP,
@@ -114,9 +114,9 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 
 function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	const sides = overrides.sides ?? [
-		{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-		{ balance: rep(8n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-		{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+		{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+		{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+		{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 	]
 	const startBond = overrides.startBond ?? rep(1n)
 	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
@@ -138,16 +138,16 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		sides,
 		startBond,
 		activationTime,
 		status: 'active',
+		systemState: 'operational',
 		totalCost: 0n,
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 1n * REP,
@@ -176,13 +176,13 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(50n),
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		startBond: rep(3n),
 		status: 'not-started',
+		systemState: 'operational',
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 0n,
@@ -312,7 +312,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
-		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+		expect(document.body.textContent?.includes('Settle Escalation Deposits')).toBe(true)
 	})
 
 	test('suppresses the Pending Start banner once an escalation game has been initialized', async () => {
@@ -389,6 +389,43 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Open' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Load reporting details to view the escalation state for this pool.')).toBe(true)
+	})
+
+	test('shows resolved state for finalized pools even when no escalation game was started', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails({
+						questionOutcome: 'yes',
+						settlementState: 'resolved',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(true)
+	})
+
+	test('does not show resolved state before an own-fork child pool becomes operational', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails({
+						questionOutcome: 'yes',
+						systemState: 'forkMigration',
+						settlementState: 'locked',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Resolved' })).toBeNull()
+		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(false)
 	})
 
 	test('does not render inline button-local reporting feedback when no reporting result is present', async () => {
@@ -468,7 +505,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Report No', 'Connect a wallet before reporting on a market.')
-		expect(document.body.querySelector('button[title="Connect a wallet before withdrawing escalation deposits."]')).toBeNull()
+		expect(document.body.querySelector('button[title="Connect a wallet before settling escalation deposits."]')).toBeNull()
 	})
 
 	test('shows the selected side details after an explicit outcome choice', async () => {
@@ -528,9 +565,9 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Yes Deposits')
-		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits')
+		expect(documentQueries.getByRole('heading', { name: 'Settle Escalation Deposits' })).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
 	})
 
 	test('keeps finalized withdrawals enabled in withdraw-only mode after escalation closes', async () => {
@@ -541,9 +578,8 @@ describe('ReportingSection', () => {
 					mode: 'withdraw-only',
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
-						resolution: 'yes',
-						withdrawalEnabled: true,
-						withdrawalState: 'resolved',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
 					}),
 					reportingForm: createReportingForm({
 						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
@@ -558,8 +594,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(false)
-		expectTransactionButtonEnabled(document.body, 'Withdraw Selected Yes Deposits')
-		expectTransactionButtonEnabled(document.body, 'Withdraw All Yes Deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle Selected Yes Deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 	})
 
 	test('shows a loading notice and disables withdraw-only controls while deposits refresh', async () => {
@@ -571,9 +607,8 @@ describe('ReportingSection', () => {
 					mode: 'withdraw-only',
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
-						resolution: 'yes',
-						withdrawalEnabled: true,
-						withdrawalState: 'resolved',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
 					}),
 				}),
 			),
@@ -584,8 +619,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Yes Deposits', 'Loading escalation deposits.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Loading escalation deposits.')
 	})
 
 	test('shows the time-left metric inside Escalation Metrics', async () => {
@@ -668,7 +703,6 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
-						resolution: 'yes',
 					}),
 				}),
 			),
@@ -679,6 +713,26 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Resolved' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(true)
 		expect(document.body.textContent?.includes('Review any remaining deposits below.')).toBe(false)
+	})
+
+	test('does not show the resolved banner when the child outcome is known before operational finalization', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({
+						questionOutcome: 'yes',
+						systemState: 'forkTruthAuction',
+						settlementState: 'locked',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Resolved' })).toBeNull()
+		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(false)
 	})
 
 	test('disables reporting after the escalation timer ends', async () => {
@@ -972,9 +1026,9 @@ describe('ReportingSection', () => {
 					reportingDetails: createDynamicReportingDetails({
 						nonDecisionThreshold: rep(10n),
 						sides: [
-							{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 					}),
 					reportingForm: createReportingForm({
@@ -998,9 +1052,9 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingDetails: createDynamicReportingDetails({
 						sides: [
-							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(19n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-							{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 					}),
 					reportingForm: createReportingForm({
@@ -1052,9 +1106,9 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						nonDecisionThreshold: rep(20n),
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(19n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(4n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						startBond: rep(1n),
 						viewerVaultAvailableEscalationRep: rep(10n),
@@ -1081,9 +1135,9 @@ describe('ReportingSection', () => {
 				initialProps={{
 					reportingDetails: createReportingDetails({
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(18n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(4n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(18n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						nonDecisionThreshold: rep(20n),
 						startBond: rep(1n),
@@ -1191,9 +1245,9 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingDetails: createReportingDetails({
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(18n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(4n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(18n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						nonDecisionThreshold: rep(20n),
 						startBond: rep(1n),
@@ -1220,9 +1274,9 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						hasReachedNonDecision: true,
 						sides: [
-							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 					}),
 				}),
@@ -1231,7 +1285,27 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits', 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
+	})
+
+	test('shows when the unresolved escalation migration window has closed', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					forkAlreadyTriggered: true,
+					reportingDetails: createReportingDetails({
+						settlementState: 'migration-expired',
+						systemState: 'poolForked',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('The migration window for these unresolved escalation deposits has closed.')).toBe(true)
+		expect(document.body.textContent?.includes('must migrate in the Fork Workflow')).toBe(false)
+		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
 	})
 
 	test('shows a Trigger Zoltar Fork action when non-decision blocks escalation deposits', async () => {
@@ -1342,9 +1416,9 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						nonDecisionThreshold: rep(20n),
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(19n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						startBond: rep(1n),
 					}),
@@ -1392,15 +1466,15 @@ describe('ReportingSection', () => {
 					mode: 'withdraw-only',
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
-						withdrawalEnabled: true,
-						withdrawalState: 'resolved',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
 					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Yes Deposits', 'Select at least one deposit to withdraw or use Withdraw all for this side.')
-		expectTransactionButtonEnabled(document.body, 'Withdraw All Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Select at least one deposit to settle or use Settle all for this side.')
+		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
 		expect(document.body.textContent?.includes('Current claim type: Winning payout')).toBe(true)
 		expect(document.body.textContent?.includes('Initially deposited:')).toBe(true)
@@ -1416,12 +1490,12 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
 						sides: [
-							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						withdrawalEnabled: true,
-						withdrawalState: 'resolved',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
 					}),
 				}),
 			),
@@ -1429,8 +1503,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(true)
-		expect(within(document.body).queryByRole('button', { name: /Withdraw Selected/i })).toBeNull()
-		expect(within(document.body).queryByRole('button', { name: /Withdraw All/i })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: /Settle Selected/i })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: /Settle All/i })).toBeNull()
 	})
 
 	test('updates selected withdrawal indexes from deposit checkboxes in withdraw-only mode', async () => {
@@ -1449,15 +1523,16 @@ describe('ReportingSection', () => {
 							{
 								balance: rep(5n),
 								deposits: [],
+								importedUserDeposits: [],
 								key: 'yes',
 								label: 'Yes',
 								userDeposits: [createDeposit(), createDeposit({ amount: rep(2n), cumulativeAmount: rep(3n), depositIndex: 1n })],
 							},
-							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						withdrawalEnabled: true,
-						withdrawalState: 'resolved',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
 					}),
 				}),
 			),
@@ -1485,12 +1560,12 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
 						sides: [
-							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [createDeposit()] },
-							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [createDeposit()] },
+							{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						withdrawalEnabled: true,
-						withdrawalState: 'resolved',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
 					}),
 				}),
 			),
@@ -1501,10 +1576,10 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Invalid' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Yes' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No' })).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Invalid Deposits', 'Select at least one deposit to withdraw or use Withdraw all for this side.')
-		expectTransactionButtonEnabled(document.body, 'Withdraw All Invalid Deposits')
-		expectTransactionButtonEnabled(document.body, 'Withdraw Selected Yes Deposits')
-		expectTransactionButtonEnabled(document.body, 'Withdraw All Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Invalid Deposits', 'Select at least one deposit to settle or use Settle all for this side.')
+		expectTransactionButtonEnabled(document.body, 'Settle All Invalid Deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle Selected Yes Deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 
 		const depositLabels = document.body.querySelectorAll('.withdraw-deposit-option')
 		expect(depositLabels).toHaveLength(2)
@@ -1520,9 +1595,9 @@ describe('ReportingSection', () => {
 						currentRequiredBond: rep(1_000n),
 						nonDecisionThreshold: rep(2_000n),
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						startBond: rep(1n),
 					}),
@@ -1550,9 +1625,9 @@ describe('ReportingSection', () => {
 						currentRequiredBond: rep(1_000n),
 						nonDecisionThreshold: rep(2_000n),
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						startBond: rep(1n),
 					}),
@@ -1580,9 +1655,9 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingDetails: createReportingDetails({
 						sides: [
-							{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
-							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 					}),
 					reportingForm: createReportingForm({
@@ -1606,9 +1681,9 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingDetails: createReportingDetails({
 						sides: [
-							{ balance: rep(15n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-							{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(15n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 						],
 					}),
 					reportingForm: createReportingForm({

@@ -50,20 +50,20 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		},
 		nonDecisionThreshold: 20n,
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress,
 		sides: [
-			{ balance: 5n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-			{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
-			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
 		activationTime: 120n,
 		startBond: 1n,
 		status: 'active',
 		totalCost: 0n,
+		systemState: 'operational',
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 8n,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 2n,
@@ -220,13 +220,13 @@ describe('useReportingOperations', () => {
 			},
 			nonDecisionThreshold: 20n * REP,
 			questionOutcome: 'none',
-			resolution: 'none',
 			securityPoolAddress,
 			startBond: 1n * REP,
 			status: 'not-started',
+			systemState: 'operational',
 			universeId: 1n,
-			withdrawalEnabled: false,
-			withdrawalState: 'not-finalized',
+			settlementState: 'locked',
+			parentWithdrawalEnabled: false,
 			viewerVaultAvailableEscalationRep: 8n * REP,
 			viewerVaultExists: true,
 			viewerVaultLockedRepInEscalationGame: 0n,
@@ -276,17 +276,67 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the threshold')
 	})
 
+	test('reportOutcome blocks writes while the pool is not operational', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
+		const loadReportingDetails = mock(async () =>
+			createReportingDetails(securityPoolAddress, {
+				systemState: 'forkTruthAuction',
+			}),
+		)
+		const reportOutcomeInSecurityPool = mock(async () => {
+			throw new Error('reportOutcomeInSecurityPool should not be called while the pool is not operational')
+		})
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool,
+			withdrawEscalationFromSecurityPool: mock(async () => {
+				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(useReportingOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				reportAmount: '5',
+				securityPoolAddress,
+				selectedOutcome: 'yes',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+
+		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
+		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
+		expect(requireHookState(hookState).reportingResult).toBeUndefined()
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational')
+	})
+
 	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const loadReportingDetails = mock(async () =>
 			createReportingDetails(securityPoolAddress, {
 				sides: [
-					{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-					{ balance: 5n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-					{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 1n, depositor: zeroAddress }] },
+					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 1n, depositor: zeroAddress }] },
 				],
-				withdrawalEnabled: true,
-				withdrawalState: 'resolved',
+				settlementState: 'resolved',
+				parentWithdrawalEnabled: true,
 			}),
 		)
 		const withdrawEscalationFromSecurityPool = mock(async () => {
@@ -327,17 +377,76 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to withdraw on No')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No')
+	})
+
+	test('withdrawEscalation reports when the unresolved escalation migration window has closed', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const loadReportingDetails = mock(async () =>
+			createReportingDetails(securityPoolAddress, {
+				settlementState: 'migration-expired',
+				sides: [
+					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+					{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				],
+			}),
+		)
+		const withdrawEscalationFromSecurityPool = mock(async () => {
+			throw new Error('withdrawEscalationFromSecurityPool should not be called when the migration window has closed')
+		})
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool: mock(async () => {
+				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
+			}),
+			withdrawEscalationFromSecurityPool,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(useReportingOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				securityPoolAddress,
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [0n],
+					yes: [],
+					no: [],
+				},
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawEscalation('invalid')
+		})
+
+		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
+		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
+		expect(requireHookState(hookState).reportingResult).toBeUndefined()
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('The migration window for these unresolved escalation deposits has closed')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const latestDetails = createReportingDetails(securityPoolAddress, {
 			sides: [
-				{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
 				{
 					balance: 5n,
 					deposits: [],
+					importedUserDeposits: [],
 					key: 'yes',
 					label: 'Yes',
 					userDeposits: [
@@ -345,19 +454,19 @@ describe('useReportingOperations', () => {
 						{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress },
 					],
 				},
-				{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			withdrawalEnabled: true,
-			withdrawalState: 'resolved',
+			settlementState: 'resolved',
+			parentWithdrawalEnabled: true,
 		})
 		const refreshedDetails = createReportingDetails(securityPoolAddress, {
 			sides: [
-				{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-				{ balance: 3n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress }] },
-				{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress }] },
+				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			withdrawalEnabled: true,
-			withdrawalState: 'resolved',
+			settlementState: 'resolved',
+			parentWithdrawalEnabled: true,
 		})
 		const loadResponses = [latestDetails, refreshedDetails]
 		const loadReportingDetails = mock(async () => {

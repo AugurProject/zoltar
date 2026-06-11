@@ -5,7 +5,7 @@ type IntegerLike = bigint | number
 
 type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
-type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], IntegerLike, bigint, IntegerLike, bigint, boolean]
+type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, IntegerLike, bigint, boolean]
 type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, IntegerLike, Address, boolean, IntegerLike, IntegerLike, IntegerLike, IntegerLike]
 type OpenOracleReportStatusTuple = readonly [bigint, bigint, Address, IntegerLike, IntegerLike, Address, IntegerLike]
 type OpenOracleExtraDataTuple = readonly [Hex, Address, IntegerLike, IntegerLike, Address, boolean]
@@ -62,18 +62,17 @@ export function requireUniverseTupleArray(value: unknown, context: string): Univ
 function isEscalationGameTuple(value: unknown): value is EscalationGameTuple {
 	return (
 		Array.isArray(value) &&
-		value.length === 11 &&
+		value.length === 10 &&
 		typeof value[0] === 'bigint' &&
 		typeof value[1] === 'bigint' &&
 		typeof value[2] === 'bigint' &&
 		typeof value[3] === 'bigint' &&
 		typeof value[4] === 'bigint' &&
 		isBigintTriple(value[5]) &&
-		isIntegerLike(value[6]) &&
-		typeof value[7] === 'bigint' &&
-		isIntegerLike(value[8]) &&
-		typeof value[9] === 'bigint' &&
-		typeof value[10] === 'boolean'
+		typeof value[6] === 'bigint' &&
+		isIntegerLike(value[7]) &&
+		typeof value[8] === 'bigint' &&
+		typeof value[9] === 'boolean'
 	)
 }
 

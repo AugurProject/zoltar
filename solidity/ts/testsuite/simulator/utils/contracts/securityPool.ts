@@ -4,6 +4,16 @@ import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 
+const getAwaitingForkContinuationAbi = [
+	{
+		inputs: [],
+		name: 'awaitingForkContinuation',
+		outputs: [{ type: 'bool', name: '' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
+
 export const depositToEscalationGame = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, amount: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
@@ -25,6 +35,16 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	)
 	return hash
 }
+
+export const withdrawForkedEscalationDeposits = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, depositIndexes: bigint[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'withdrawForkedEscalationDeposits',
+			address: securityPoolAddress,
+			args: [outcome, depositIndexes],
+		}),
+	)
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: Address, amount: bigint) =>
 	await writeContractAndWait(client, () =>
@@ -85,6 +105,14 @@ export const getSystemState = async (client: ReadClient, securityPoolAddress: Ad
 	await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'systemState',
+		address: securityPoolAddress,
+		args: [],
+	})
+
+export const getAwaitingForkContinuation = async (client: ReadClient, securityPoolAddress: Address) =>
+	await client.readContract({
+		abi: getAwaitingForkContinuationAbi,
+		functionName: 'awaitingForkContinuation',
 		address: securityPoolAddress,
 		args: [],
 	})

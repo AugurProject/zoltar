@@ -57,6 +57,18 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
+export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, childOutcome: bigint | QuestionOutcome, invalidDepositIndexes: bigint[], yesDepositIndexes: bigint[], noDepositIndexes: bigint[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateVaultWithUnresolvedEscalation',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, Number(childOutcome), invalidDepositIndexes, yesDepositIndexes, noDepositIndexes],
+		}),
+	)
+
+export const encodeImportedForkDepositIndex = (depositIndex: bigint) => (1n << 256n) - 1n - depositIndex
+
 export const startTruthAuction = async (client: WriteClient, securityPoolAddress: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
@@ -132,8 +144,20 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
 	})
-	const [repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, ownFork, outcomeIndex] = data
-	return { repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, ownFork, outcomeIndex }
+	const [repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, escalationElapsedAtFork, escalationStartBondAtFork, escalationNonDecisionThresholdAtFork, ownFork, unresolvedEscalationAtFork, outcomeIndex] = data
+	return {
+		repAtFork,
+		truthAuction,
+		truthAuctionStarted,
+		migratedRep,
+		auctionedSecurityBondAllowance,
+		escalationElapsedAtFork,
+		escalationStartBondAtFork,
+		escalationNonDecisionThresholdAtFork,
+		ownFork,
+		unresolvedEscalationAtFork,
+		outcomeIndex,
+	}
 }
 
 export const migrateFromEscalationGame = async (client: WriteClient, parentSecurityPool: Address, vault: Address, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>

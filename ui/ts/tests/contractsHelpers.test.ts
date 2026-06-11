@@ -66,7 +66,7 @@ describe('contracts helpers', () => {
 	})
 
 	test('tuple validators require exact tuple structure and throw with unexpected responses', () => {
-		const validEscalationTuple: [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, bigint, bigint, bigint, boolean] = [1n, 2n, 3n, 4n, 5n, [6n, 7n, 8n], 9n, 10n, 11n, 12n, true]
+		const validEscalationTuple: [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, bigint, bigint, boolean] = [1n, 2n, 3n, 4n, 5n, [6n, 7n, 8n], 9n, 10n, 11n, true]
 		expect(requireEscalationGameTuple(validEscalationTuple, 'escalation response')).toEqual(validEscalationTuple)
 		expect(() => requireEscalationGameTuple([1n, 2n], 'escalation response')).toThrow('Unexpected escalation response')
 

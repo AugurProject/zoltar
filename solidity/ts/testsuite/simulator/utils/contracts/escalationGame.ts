@@ -77,6 +77,14 @@ export const getUnsettledDepositIndexesByOutcomeAndDepositor = async (client: Re
 		args: [outcome, depositor, startIndex, scanCount],
 	})
 
+export const getUnsettledImportedDepositIndexesByOutcomeAndDepositor = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome, depositor: AccountAddress, startIndex: bigint, scanCount: bigint) =>
+	await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor',
+		address: escalationGame,
+		args: [outcome, depositor, startIndex, scanCount],
+	})
+
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
@@ -111,6 +119,14 @@ export const getActivationTime = async (client: ReadClient, escalationGame: Acco
 	await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'activationTime',
+		address: escalationGame,
+		args: [],
+	})
+
+export const getEscalationGameTotalCost = async (client: ReadClient, escalationGame: AccountAddress) =>
+	await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'totalCost',
 		address: escalationGame,
 		args: [],
 	})

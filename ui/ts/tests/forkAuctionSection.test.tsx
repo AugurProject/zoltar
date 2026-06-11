@@ -6,8 +6,8 @@ import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
-import type { AccountState, ForkAuctionFormState } from '../types/app.js'
-import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient } from '../types/contracts.js'
+import type { AccountState, ForkAuctionFormState, ReportingFormState } from '../types/app.js'
+import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, ReportingDetails } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -58,6 +58,65 @@ function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): F
 		submitBidAmount: '',
 		submitBidPrice: '',
 		vaultAddress: '',
+		...overrides,
+	}
+}
+
+function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
+	return {
+		reportAmount: '',
+		securityPoolAddress: PARENT_POOL_ADDRESS,
+		selectedOutcome: 'yes',
+		selectedWithdrawDepositIndexesByOutcome: {
+			invalid: [],
+			yes: [],
+			no: [],
+		},
+		...overrides,
+	}
+}
+
+function createReportingDeposit(overrides: Partial<EscalationDeposit> = {}): EscalationDeposit {
+	return {
+		amount: 10n,
+		cumulativeAmount: 10n,
+		depositIndex: 0n,
+		depositor: zeroAddress,
+		...overrides,
+	}
+}
+
+function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {}): ReportingDetails {
+	return {
+		bindingCapital: 5n,
+		completeSetCollateralAmount: 0n,
+		currentRequiredBond: 1n,
+		currentTime: 3n,
+		escalationEndTime: 50n,
+		escalationGameAddress: getAddress('0x00000000000000000000000000000000000000fa'),
+		forkThreshold: 100n,
+		hasReachedNonDecision: false,
+		marketDetails: createMarketDetails(),
+		nonDecisionThreshold: 100n,
+		questionOutcome: 'none',
+		securityPoolAddress: PARENT_POOL_ADDRESS,
+		settlementState: 'locked',
+		sides: [
+			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+		],
+		startBond: 1n,
+		status: 'active',
+		systemState: 'operational',
+		universeId: 1n,
+		parentWithdrawalEnabled: false,
+		viewerVaultAvailableEscalationRep: 0n,
+		viewerVaultExists: false,
+		viewerVaultLockedRepInEscalationGame: 0n,
+		viewerVaultRepDepositShare: 0n,
+		activationTime: 1n,
+		totalCost: 1n,
 		...overrides,
 	}
 }
@@ -157,12 +216,14 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
 		onMigrateEscalationDeposits: () => undefined,
+		onMigrateUnresolvedEscalation: (_selectedChildOutcome, _selectedByOutcome) => undefined,
 		onMigrateRepToZoltar: () => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,
 		onSelectedStageViewChange: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
+		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
 		securityPools: [createChildPool()],
 		selectedStageView: 'migration',
 		showHeader: false,
@@ -377,6 +438,234 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('Open')).not.toBeNull()
 	})
 
+	test('disables unresolved escalation migration after the migration window closes', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ab')
+		const unresolvedDeposit = createReportingDeposit({
+			amount: 12n,
+			cumulativeAmount: 18n,
+			depositIndex: 4n,
+			depositor: walletAddress,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					currentTimestamp: 200n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 200n,
+						migrationEndsAt: 100n,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					reportingDetails: createActiveReportingDetails({
+						settlementState: 'migration-required',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 12n, deposits: [unresolvedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [unresolvedDeposit] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						viewerVaultExists: true,
+						viewerVaultLockedRepInEscalationGame: 12n,
+						viewerVaultRepDepositShare: 12n,
+					}),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: {
+							invalid: [],
+							yes: [4n],
+							no: [],
+						},
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
+		expect(button.disabled).toBe(true)
+		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
+	})
+
+	test('does not fall back to resolved-deposit migration after unresolved escalation migration expires', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ae')
+		const unresolvedDeposit = createReportingDeposit({
+			amount: 12n,
+			cumulativeAmount: 18n,
+			depositIndex: 4n,
+			depositor: walletAddress,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					reportingDetails: createActiveReportingDetails({
+						settlementState: 'migration-expired',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 12n, deposits: [unresolvedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [unresolvedDeposit] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						viewerVaultExists: true,
+						viewerVaultLockedRepInEscalationGame: 12n,
+						viewerVaultRepDepositShare: 12n,
+					}),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: {
+							invalid: [],
+							yes: [4n],
+							no: [],
+						},
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('The migration window for these unresolved parent escalation deposits has closed.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migrate Unresolved Escalation Locks' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Migrate Resolved Escalation Deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Migrate Selected Yes Deposits' })).toBeNull()
+	})
+
+	test('disables vault migration after the migration window closes', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ac')
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					currentTimestamp: 200n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 200n,
+						migrationEndsAt: 100n,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					previewPool: createChildPool({
+						vaults: [
+							{
+								lockedRepInEscalationGame: 0n,
+								repDepositShare: 20n,
+								securityBondAllowance: 3n,
+								unpaidEthFees: 0n,
+								vaultAddress: walletAddress,
+							},
+						],
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Migrate Vault To Yes' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
+		expect(button.disabled).toBe(true)
+		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
+	})
+
+	test('keeps fork-carried settlement disabled until the child pool question finalizes', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'settlement',
+					reportingDetails: createActiveReportingDetails({
+						questionOutcome: 'none',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{
+								balance: 12n,
+								deposits: [],
+								importedUserDeposits: [
+									{
+										amount: 12n,
+										cumulativeAmount: 6n,
+										depositor: walletAddress,
+										parentDepositIndex: 9n,
+									},
+								],
+								key: 'yes',
+								label: 'Yes',
+								userDeposits: [],
+							},
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
+					selectedStageView: 'settlement',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
+		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
+		expect(button.disabled).toBe(true)
+		expect(button.getAttribute('title')).toBe('Fork-carried escalation deposits can be settled after this child pool finalizes.')
+	})
+
+	test('keeps fork-carried settlement disabled when the child outcome is known before the pool becomes operational', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000af')
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'settlement',
+					reportingDetails: createActiveReportingDetails({
+						questionOutcome: 'yes',
+						systemState: 'forkTruthAuction',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{
+								balance: 12n,
+								deposits: [],
+								importedUserDeposits: [
+									{
+										amount: 12n,
+										cumulativeAmount: 6n,
+										depositor: walletAddress,
+										parentDepositIndex: 9n,
+									},
+								],
+								key: 'yes',
+								label: 'Yes',
+								userDeposits: [],
+							},
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
+					selectedStageView: 'settlement',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
+		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
+		expect(button.disabled).toBe(true)
+		expect(button.getAttribute('title')).toBe('Fork-carried escalation deposits can be settled after this child pool finalizes.')
+	})
+
 	test('does not show the empty child-pools notice when a selected child pool is already known', async () => {
 		const currentChildPool = createChildPool()
 		const renderedComponent = await renderIntoDocument(
@@ -429,6 +718,7 @@ describe('ForkAuctionSection', () => {
 	test('shows truth auction end time as a timestamp instead of a standalone time-left field', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
 			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
 			truthAuctionStartedAt: 1n,
 		})

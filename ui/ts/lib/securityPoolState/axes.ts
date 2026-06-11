@@ -1,6 +1,6 @@
 import { assertNever } from '../assert.js'
 import type { ForkAuctionStageView } from '../forkAuction.js'
-import { getEscalationPhase } from '../reportingDomain.js'
+import { getEscalationPhase, isPoolQuestionFinalized } from '../reportingDomain.js'
 import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
 import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../../types/contracts.js'
 
@@ -43,6 +43,7 @@ export function deriveSecurityPoolLifecycleState({
 export function deriveSecurityPoolReportingStage({ reportingDetails, reportingReady }: { reportingDetails: ReportingDetails | undefined; reportingReady: boolean | undefined }): SecurityPoolReportingStage | undefined {
 	if (reportingReady === false) return 'preOpen'
 	if (reportingDetails === undefined) return undefined
+	if (isPoolQuestionFinalized(reportingDetails)) return 'resolved'
 	if (reportingDetails.status === 'not-started') return 'notStarted'
 
 	const escalationPhase = getEscalationPhase(reportingDetails)
@@ -55,7 +56,8 @@ export function deriveSecurityPoolReportingStage({ reportingDetails, reportingRe
 			return 'timedOut'
 		case 'Pending Start':
 		case 'Active':
-			return reportingDetails.withdrawalEnabled ? 'activeWithdrawable' : 'activeLocked'
+			if (reportingDetails.settlementState === 'migration-required' || reportingDetails.settlementState === 'migration-expired') return 'forkTriggered'
+			return reportingDetails.parentWithdrawalEnabled ? 'activeWithdrawable' : 'activeLocked'
 		default:
 			return assertNever(escalationPhase)
 	}

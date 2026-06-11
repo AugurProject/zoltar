@@ -18,7 +18,7 @@ import { loadMarketDetails } from './zoltar.js'
 
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
 type SecurityPoolDeploymentQueryResult = {
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
@@ -306,7 +306,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 				loadMarketDetails(client, questionId),
 				loadSecurityPoolVaultSummaries(client, securityPoolAddress),
 			])
-			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkData as ForkDataTuple
+			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkData as ForkDataTuple
 			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 			const systemState = getSecurityPoolSystemState(systemStateValue)
 			const hasForkActivity = deriveHasForkActivity({

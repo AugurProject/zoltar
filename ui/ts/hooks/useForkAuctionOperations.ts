@@ -10,12 +10,14 @@ import {
 	initiateSecurityPoolFork,
 	loadForkAuctionDetails,
 	migrateEscalationDeposits,
+	migrateVaultWithUnresolvedEscalation,
 	migrateRepToZoltarFromSecurityPool,
 	migrateSecurityVault,
 	refundTruthAuctionBid,
 	settleTruthAuctionBids,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
+	withdrawForkedEscalationDeposits,
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -144,6 +146,13 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 			'Failed to migrate escalation deposits',
 		)
 
+	const migrateUnresolvedEscalation = async (selectedChildOutcome: ReportingOutcomeKey, selectedByOutcome: Record<ReportingOutcomeKey, bigint[]>) =>
+		await runForkAuctionAction(
+			'migrateUnresolvedEscalation',
+			async (walletAddress, details) => await migrateVaultWithUnresolvedEscalation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, selectedChildOutcome, selectedByOutcome.invalid, selectedByOutcome.yes, selectedByOutcome.no),
+			'Failed to migrate unresolved escalation deposits',
+		)
+
 	const startTruthAuction = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction('startTruthAuction', async (walletAddress, details) => await startTruthAuctionForSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to start truth auction', securityPoolAddressOverride)
 
@@ -206,6 +215,9 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 			securityPoolAddressOverride,
 		)
 
+	const settleForkedEscalation = async (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) =>
+		await runForkAuctionAction('settleForkedEscalation', async (walletAddress, details) => await withdrawForkedEscalationDeposits(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, outcome, parentDepositIndexes), 'Failed to settle fork-carried escalation deposits')
+
 	const forkUniverse = async () =>
 		await runForkAuctionAction(
 			'forkUniverse',
@@ -229,10 +241,12 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 		loadForkAuction,
 		loadingForkAuctionDetails: forkAuctionLoad.isLoading.value,
 		migrateEscalation: migrateEscalation,
+		migrateUnresolvedEscalation,
 		migrateRepToZoltar,
 		migrateVault,
 		refundLosingBids,
 		setForkAuctionForm,
+		settleForkedEscalation,
 		startTruthAuction,
 		submitBid,
 		finalizeTruthAuction,

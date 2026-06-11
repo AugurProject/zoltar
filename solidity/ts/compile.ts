@@ -149,19 +149,9 @@ function getCompilerVersion(compiler: SolcCompiler): string {
 async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
 	if (openOracleCompilerPromise) return openOracleCompilerPromise
 
-	openOracleCompilerPromise = new Promise((resolve, reject) => {
-		solc.loadRemoteVersion(OPEN_ORACLE_SOLC_VERSION, (error, compiler) => {
-			if (error !== undefined && error !== null) {
-				reject(error)
-				return
-			}
-			if (compiler === undefined || typeof compiler.compile !== 'function' || typeof compiler.version !== 'function') {
-				reject(new Error(`Failed to load ${OPEN_ORACLE_SOLC_VERSION}`))
-				return
-			}
-			resolve(compiler)
-		})
-	})
+	// Use the locally installed compiler to avoid remote compiler loading behavior that is
+	// incompatible with Bun in this environment.
+	openOracleCompilerPromise = Promise.resolve(solc)
 
 	return openOracleCompilerPromise
 }
@@ -298,7 +288,11 @@ function createMainCompilerSources(sourceFiles: Map<string, string>) {
 function createOpenOracleCompilerSources(sourceFiles: Map<string, string>) {
 	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
 	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
-	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, openOracleSource]])
+	let normalizedOpenOracleSource = openOracleSource
+	if (openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) {
+		normalizedOpenOracleSource = openOracleSource.replace(OPEN_ORACLE_EXACT_PRAGMA, OPEN_ORACLE_MAIN_PASS_PRAGMA)
+	}
+	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, normalizedOpenOracleSource]])
 	for (const [sourcePath, content] of sourceFiles) {
 		if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) continue
 		const remappedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`

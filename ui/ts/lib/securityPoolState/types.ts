@@ -27,11 +27,13 @@ export type SecurityPoolActionId =
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
 	| 'migrateEscalationDeposits'
+	| 'migrateUnresolvedEscalation'
 	| 'startTruthAuction'
 	| 'submitBid'
 	| 'finalizeTruthAuction'
 	| 'refundLosingBids'
 	| 'claimAuctionProceeds'
+	| 'settleForkedEscalation'
 
 export type SecurityPoolActionState = {
 	enabled: boolean

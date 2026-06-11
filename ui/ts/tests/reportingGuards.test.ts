@@ -232,7 +232,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				reportingStatus: 'active',
 			}),
-		).toBe('Connect a wallet before withdrawing escalation deposits.')
+		).toBe('Connect a wallet before settling escalation deposits.')
 
 		expect(
 			getReportingWithdrawGuardMessage({
@@ -240,7 +240,7 @@ describe('reporting guards', () => {
 				isMainnet: false,
 				reportingStatus: 'active',
 			}),
-		).toBe('Switch to Ethereum mainnet before withdrawing escalation deposits.')
+		).toBe('Switch to Ethereum mainnet before settling escalation deposits.')
 
 		expect(
 			getReportingWithdrawGuardMessage({
@@ -248,7 +248,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				reportingStatus: 'missing',
 			}),
-		).toBe('Load reporting details before withdrawing escalation deposits.')
+		).toBe('Load reporting details before settling escalation deposits.')
 	})
 
 	test('leaves withdrawal lifecycle handling to the shared action matrix', () => {

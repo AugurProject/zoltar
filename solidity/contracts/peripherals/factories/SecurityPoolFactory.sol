@@ -14,6 +14,7 @@ import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
+import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory shareTokenFactory;
@@ -24,6 +25,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	EscalationGameFactory escalationGameFactory;
 	ZoltarQuestionData questionData;
 	ISecurityPoolForker securityPoolForker;
+	SecurityPoolDeployer securityPoolDeployer;
 	SecurityPoolDeployment[] private securityPoolDeployments;
 
 	event DeploySecurityPool(ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount);
@@ -37,6 +39,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		openOracle = _openOracle;
 		escalationGameFactory = _escalationGameFactory;
 		questionData = _questionData;
+		securityPoolDeployer = new SecurityPoolDeployer();
 	}
 
 	function securityPoolDeploymentCount() external view returns (uint256) {
@@ -44,8 +47,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments) {
-		require(startIndex <= securityPoolDeployments.length, 'range start out of bounds');
-		require(count <= securityPoolDeployments.length - startIndex, 'range end out of bounds');
+		require(startIndex <= securityPoolDeployments.length, 'start oob');
+		require(count <= securityPoolDeployments.length - startIndex, 'end oob');
 		deployments = new SecurityPoolDeployment[](count);
 		for (uint256 index = 0; index < count; index++) {
 			deployments[index] = securityPoolDeployments[startIndex + index];
@@ -53,17 +56,23 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
-		require(msg.sender == address(securityPoolForker), 'only securityPoolForker');
+		require(msg.sender == address(securityPoolForker), 'only forker');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
 		truthAuction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(address(securityPoolForker), securityPoolSalt);
-
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, address(truthAuction));
-
-		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
-		securityPool.setStartingParams(currentRetentionRate, completeSetCollateralAmount);
+		securityPool = deploySecurityPool(
+			shareToken,
+			parent,
+			priceOracleManagerAndOperatorQueuer,
+			universeId,
+			questionId,
+			securityMultiplier,
+			currentRetentionRate,
+			completeSetCollateralAmount,
+			address(truthAuction))
+		;
 		securityPoolDeployments.push(SecurityPoolDeployment(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, securityMultiplier, currentRetentionRate, completeSetCollateralAmount));
 
 		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, securityMultiplier, currentRetentionRate, completeSetCollateralAmount);
@@ -71,13 +80,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate) external returns (ISecurityPool securityPool) {
 		// Validate that the question exists
-		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
+		require(questionData.questionCreatedTimestamp(questionId) > 0, 'question missing');
 
 		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
 		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);
-		require(outcomes.length == 2, 'Question must have exactly 2 outcomes');
-		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'First outcome must be "Yes"');
-		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Second outcome must be "No"');
+		require(outcomes.length == 2, 'need 2 outcomes');
+		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'first != Yes');
+		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'second != No');
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
@@ -86,15 +95,52 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		// sharetoken has different salt as sharetoken address does not change in forks
 		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, questionId));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt, questionId);
-
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier, address(0));
-
-		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
-		securityPool.setStartingParams(currentRetentionRate, 0);
+		securityPool = deploySecurityPool(
+			shareToken,
+			ISecurityPool(payable(address(0))),
+			priceOracleManagerAndOperatorQueuer,
+			universeId,
+			questionId,
+			securityMultiplier,
+			currentRetentionRate,
+			0,
+			address(0))
+		;
 
 		shareToken.authorize(securityPool);
-		securityPoolDeployments.push(SecurityPoolDeployment(securityPool, UniformPriceDualCapBatchAuction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, 0));
+		securityPoolDeployments.push(SecurityPoolDeployment(securityPool, UniformPriceDualCapBatchAuction(address(0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(address(0))), universeId, questionId, securityMultiplier, currentRetentionRate, 0));
 
-		emit DeploySecurityPool(securityPool, UniformPriceDualCapBatchAuction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, 0);
+		emit DeploySecurityPool(securityPool, UniformPriceDualCapBatchAuction(address(0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(address(0))), universeId, questionId, securityMultiplier, currentRetentionRate, 0);
+	}
+
+	function deploySecurityPool(
+		IShareToken shareToken,
+		ISecurityPool parent,
+		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier,
+		uint256 currentRetentionRate,
+		uint256 completeSetCollateralAmount,
+		address truthAuction
+	) private returns (ISecurityPool securityPool) {
+		securityPool = securityPoolDeployer.deploy(
+			address(securityPoolForker),
+			this,
+			questionData,
+			escalationGameFactory,
+			priceOracleManagerAndOperatorQueuer,
+			shareToken,
+			openOracle,
+			parent,
+			zoltar,
+			universeId,
+			questionId,
+			securityMultiplier,
+			truthAuction
+		);
+
+		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
+		securityPool.setStartingParams(currentRetentionRate, completeSetCollateralAmount);
 	}
 }

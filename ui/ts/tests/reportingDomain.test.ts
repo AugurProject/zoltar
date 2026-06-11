@@ -11,6 +11,7 @@ import {
 	getEscalationTimeRemaining,
 	getEscalationPhase,
 	getEscalationDepositClaimAmount,
+	getImportedEscalationDepositClaimAmount,
 	getMaxProfitContribution,
 	getMinimumOutcomeChangeContribution,
 	getRemainingSelectedOutcomeContributionCapacity,
@@ -61,20 +62,20 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(100n),
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		sides: [
-			{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-			{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-			{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
 		activationTime: 120n,
 		startBond: rep(3n),
 		status: 'active',
+		systemState: 'operational',
 		totalCost: rep(20n),
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 1n * REP,
@@ -91,13 +92,13 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(50n),
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		startBond: rep(3n),
 		status: 'not-started',
+		systemState: 'operational',
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 0n,
@@ -108,9 +109,9 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 
 function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	const sides = overrides.sides ?? [
-		{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-		{ balance: rep(8n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-		{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+		{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+		{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+		{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 	]
 	const startBond = overrides.startBond ?? rep(1n)
 	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
@@ -132,16 +133,16 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
 		questionOutcome: 'none',
-		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		sides,
 		startBond,
 		activationTime,
 		status: 'active',
+		systemState: 'operational',
 		totalCost: 0n,
 		universeId: 1n,
-		withdrawalEnabled: false,
-		withdrawalState: 'not-finalized',
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 1n * REP,
@@ -215,9 +216,9 @@ describe('reportingDomain', () => {
 			currentRequiredBond: rep(1_000n),
 			nonDecisionThreshold: rep(2_000n),
 			sides: [
-				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			startBond: rep(1n),
 		})
@@ -231,9 +232,9 @@ describe('reportingDomain', () => {
 	test('getMinimumOutcomeChangeContribution respects startBond when the lead delta is smaller than the minimum report', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			startBond: rep(3n),
 		})
@@ -246,11 +247,11 @@ describe('reportingDomain', () => {
 
 	test('getMinimumOutcomeChangeContribution returns zero when the selected side already resolves', () => {
 		const details = createReportingDetails({
-			resolution: 'yes',
+			questionOutcome: 'yes',
 			sides: [
-				{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 		})
 
@@ -260,12 +261,81 @@ describe('reportingDomain', () => {
 		})
 	})
 
+	test('getImportedEscalationDepositClaimAmount stays pending until pool-level question finalization', () => {
+		const details = createReportingDetails({
+			questionOutcome: 'none',
+			sides: [
+				{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{
+					balance: rep(5n),
+					deposits: [],
+					importedUserDeposits: [
+						{
+							amount: rep(2n),
+							cumulativeAmount: rep(1n),
+							depositor: zeroAddress,
+							parentDepositIndex: 7n,
+						},
+					],
+					key: 'yes',
+					label: 'Yes',
+					userDeposits: [],
+				},
+				{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+		})
+
+		expect(
+			getImportedEscalationDepositClaimAmount(details, 'yes', {
+				amount: rep(2n),
+				cumulativeAmount: rep(1n),
+				depositor: zeroAddress,
+				parentDepositIndex: 7n,
+			}),
+		).toBeUndefined()
+	})
+
+	test('getImportedEscalationDepositClaimAmount stays pending when a child outcome is known before the pool becomes operational', () => {
+		const details = createReportingDetails({
+			questionOutcome: 'yes',
+			systemState: 'forkTruthAuction',
+			sides: [
+				{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{
+					balance: rep(5n),
+					deposits: [],
+					importedUserDeposits: [
+						{
+							amount: rep(2n),
+							cumulativeAmount: rep(1n),
+							depositor: zeroAddress,
+							parentDepositIndex: 7n,
+						},
+					],
+					key: 'yes',
+					label: 'Yes',
+					userDeposits: [],
+				},
+				{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+		})
+
+		expect(
+			getImportedEscalationDepositClaimAmount(details, 'yes', {
+				amount: rep(2n),
+				cumulativeAmount: rep(1n),
+				depositor: zeroAddress,
+				parentDepositIndex: 7n,
+			}),
+		).toBeUndefined()
+	})
+
 	test('getReportingMinimumOutcomeChangeContribution disables the preset when the selected side already leads', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			],
 		})
 
@@ -279,9 +349,9 @@ describe('reportingDomain', () => {
 		const details = createReportingDetails({
 			nonDecisionThreshold: rep(20n),
 			sides: [
-				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(19n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			startBond: rep(1n),
 		})
@@ -304,9 +374,9 @@ describe('reportingDomain', () => {
 			currentRequiredBond: rep(1_000n),
 			nonDecisionThreshold: rep(2_000n),
 			sides: [
-				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			startBond: rep(1n),
 		})
@@ -320,9 +390,9 @@ describe('reportingDomain', () => {
 	test('getMaxProfitContribution is unavailable when the reward window is already filled', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: rep(15n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(15n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			],
 		})
 
@@ -337,8 +407,8 @@ describe('reportingDomain', () => {
 			getMaxProfitContribution(
 				createReportingDetails({
 					sides: [
-						{ balance: rep(10n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-						{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 					],
 				}),
 				'invalid',
@@ -353,9 +423,9 @@ describe('reportingDomain', () => {
 		const details = createReportingDetails({
 			nonDecisionThreshold: rep(5000n),
 			sides: [
-				{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(4n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(10n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 			startBond: rep(1n),
 		})
@@ -394,7 +464,7 @@ describe('reportingDomain', () => {
 
 	test('reporting preset helpers disable both presets once the escalation game is resolved', () => {
 		const details = createReportingDetails({
-			resolution: 'yes',
+			questionOutcome: 'yes',
 		})
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
@@ -482,9 +552,9 @@ describe('reportingDomain', () => {
 	test('projectEscalationEndTime reflects the tie-adjusted accepted amount', () => {
 		const details = createDynamicReportingDetails({
 			sides: [
-				{ balance: rep(5n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 		})
 
@@ -495,9 +565,9 @@ describe('reportingDomain', () => {
 		const details = createDynamicReportingDetails({
 			nonDecisionThreshold: rep(10n),
 			sides: [
-				{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 		})
 
@@ -512,9 +582,9 @@ describe('reportingDomain', () => {
 		const details = createReportingDetails({
 			nonDecisionThreshold: rep(40n),
 			sides: [
-				{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(20n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 		})
 
@@ -527,9 +597,9 @@ describe('reportingDomain', () => {
 	test('calculateEstimatedEscalationReturn matches the pro-rata reward schedule inside the window', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: 0n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(20n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			],
 		})
 
@@ -552,7 +622,7 @@ describe('reportingDomain', () => {
 		expect(
 			getSelectedOutcomeRewardWindowFillTimestamp(
 				createReportingDetails({
-					sides: [{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] }],
+					sides: [{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] }],
 				}),
 				'yes',
 				rep(1n),
@@ -575,8 +645,8 @@ describe('reportingDomain', () => {
 	test('returns reward-window metadata in no-op forms and missing-side paths', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: rep(3n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 			],
 		})
 		expect(getRemainingSelectedOutcomeContributionCapacity(details, 'no')).toBe(0n)
@@ -600,7 +670,7 @@ describe('reportingDomain', () => {
 			previewReportingContribution(
 				{
 					...createReportingDetails(),
-					resolution: 'yes',
+					questionOutcome: 'yes',
 				},
 				'yes',
 				rep(1n),
@@ -615,9 +685,9 @@ describe('reportingDomain', () => {
 					...createReportingDetails(),
 					nonDecisionThreshold: rep(10n),
 					sides: [
-						{ balance: rep(10n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-						{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
-						{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 					],
 				},
 				'yes',
@@ -632,11 +702,12 @@ describe('reportingDomain', () => {
 	test('uses the reward floor when the selected resolved side has no reward-eligible principal', () => {
 		const details = createReportingDetails({
 			questionOutcome: 'yes',
-			withdrawalEnabled: true,
+			parentWithdrawalEnabled: true,
+			settlementState: 'resolved',
 			sides: [
-				{ balance: 0n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(10n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			],
 		})
 
@@ -656,9 +727,9 @@ describe('reportingDomain', () => {
 				{
 					...createReportingDetails(),
 					sides: [
-						{ balance: rep(100n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-						{ balance: rep(1n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-						{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						{ balance: rep(100n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 					],
 				},
 				'yes',
@@ -673,9 +744,9 @@ describe('reportingDomain', () => {
 	test('returns pure deposit payout when reward eligibility is effectively empty', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: rep(0n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(0n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(0n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(0n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(0n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(0n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
 		})
 
@@ -691,8 +762,8 @@ describe('reportingDomain', () => {
 				{
 					...createReportingDetails(),
 					sides: [
-						{ balance: rep(1n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-						{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 					],
 				},
 				'yes',

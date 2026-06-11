@@ -21,7 +21,21 @@ export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
-export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds' | 'forkUniverse'
+export type ForkAuctionAction =
+	| 'forkWithOwnEscalation'
+	| 'initiateFork'
+	| 'createChildUniverse'
+	| 'migrateRepToZoltar'
+	| 'migrateVault'
+	| 'migrateEscalationDeposits'
+	| 'migrateUnresolvedEscalation'
+	| 'startTruthAuction'
+	| 'submitBid'
+	| 'refundLosingBids'
+	| 'finalizeTruthAuction'
+	| 'claimAuctionProceeds'
+	| 'settleForkedEscalation'
+	| 'forkUniverse'
 export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 export type StagedOracleOperation = {
 	amount: bigint
@@ -332,15 +346,23 @@ export type EscalationDeposit = {
 	depositor: Address
 }
 
+export type ImportedEscalationDeposit = {
+	amount: bigint
+	cumulativeAmount: bigint
+	depositor: Address
+	parentDepositIndex: bigint
+}
+
 export type EscalationSide = {
 	balance: bigint
 	deposits: EscalationDeposit[]
+	importedUserDeposits: ImportedEscalationDeposit[]
 	key: ReportingOutcomeKey
 	label: string
 	userDeposits: EscalationDeposit[]
 }
 
-export type ReportingWithdrawalState = 'not-finalized' | 'resolved' | 'canceled-by-external-fork'
+export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-required' | 'migration-expired'
 
 type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
@@ -349,12 +371,12 @@ type ReportingDetailsBase = {
 	marketDetails: MarketDetails
 	nonDecisionThreshold: bigint
 	questionOutcome: ReportingOutcomeKey | 'none'
-	resolution: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
+	settlementState: ReportingSettlementState
 	startBond: bigint
+	systemState: SecurityPoolSystemState
 	universeId: bigint
-	withdrawalEnabled: boolean
-	withdrawalState: ReportingWithdrawalState
+	parentWithdrawalEnabled: boolean
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
 	viewerVaultLockedRepInEscalationGame: bigint | undefined

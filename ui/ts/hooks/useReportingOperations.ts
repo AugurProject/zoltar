@@ -60,9 +60,9 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
 	const nextReportingLoad = useRequestGuard()
 
-	const getPendingTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Submitting report' : 'Withdrawing escalation deposits')
-	const getSuccessTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits withdrawn')
-	const getFailureTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report failed' : 'Withdrawal failed')
+	const getPendingTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Submitting report' : 'Settling escalation deposits')
+	const getSuccessTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits settled')
+	const getFailureTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report failed' : 'Settlement failed')
 
 	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
 		if (selectedOutcome !== undefined) return selectedOutcome
@@ -144,6 +144,7 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 				const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
+				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
 				const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
 				if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
 				if (!latestDetails.viewerVaultExists) throw new Error('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
@@ -168,28 +169,31 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 				if (latestDetails.status !== 'active') {
 					throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
 				}
+				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
 				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
 				if (selectedSide === undefined) {
 					throw new Error('Unable to load deposits for the requested outcome side.')
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (!latestDetails.withdrawalEnabled) throw new Error('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error('Unresolved escalation deposits must migrate in the Fork Workflow.')
+				if (latestDetails.settlementState === 'migration-expired') throw new Error('The migration window for these unresolved escalation deposits has closed.')
+				if (!latestDetails.parentWithdrawalEnabled) throw new Error('Escalation deposits cannot be settled until the question is finalized.')
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
 				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
 				if (missingSelectedDepositIndex !== undefined) {
-					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on ${selectedSide.label}.`)
+					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to settle on ${selectedSide.label}.`)
 				}
 
 				const depositIndexes = requestedDepositIndexes
 				if (depositIndexes.length === 0) {
-					throw new Error('Select at least one deposit to withdraw or use Withdraw all for this side.')
+					throw new Error('Select at least one deposit to settle or use Settle all for this side.')
 				}
 
 				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, outcome, depositIndexes)
 			},
-			'Failed to withdraw escalation deposits',
+			'Failed to settle escalation deposits',
 		)
 
 	return {
