@@ -69,20 +69,12 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 	return pages
 }
 
-export const getUnsettledDepositIndexesByOutcomeAndDepositor = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome, depositor: AccountAddress, startIndex: bigint, scanCount: bigint) =>
+export const getEscalationGameOutcomeState = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
 	await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getUnsettledDepositIndexesByOutcomeAndDepositor',
+		functionName: 'getOutcomeState',
 		address: escalationGame,
-		args: [outcome, depositor, startIndex, scanCount],
-	})
-
-export const getUnsettledImportedDepositIndexesByOutcomeAndDepositor = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome, depositor: AccountAddress, startIndex: bigint, scanCount: bigint) =>
-	await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor',
-		address: escalationGame,
-		args: [outcome, depositor, startIndex, scanCount],
+		args: [outcome],
 	})
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
@@ -106,13 +98,27 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 }
 
 export const getBalances = async (client: ReadClient, escalationGame: AccountAddress) => {
-	const [invalid, yes, no] = await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getBalances',
-		address: escalationGame,
-		args: [],
-	})
-	return { invalid, yes, no }
+	const [invalidState, yesState, noState] = await Promise.all([
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getOutcomeState',
+			address: escalationGame,
+			args: [0],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getOutcomeState',
+			address: escalationGame,
+			args: [1],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getOutcomeState',
+			address: escalationGame,
+			args: [2],
+		}),
+	])
+	return { invalid: invalidState.balance, yes: yesState.balance, no: noState.balance }
 }
 
 export const getActivationTime = async (client: ReadClient, escalationGame: AccountAddress) =>

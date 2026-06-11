@@ -57,17 +57,15 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
-export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, childOutcome: bigint | QuestionOutcome, invalidDepositIndexes: bigint[], yesDepositIndexes: bigint[], noDepositIndexes: bigint[]) =>
+export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, childOutcome: bigint | QuestionOutcome) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, Number(childOutcome), invalidDepositIndexes, yesDepositIndexes, noDepositIndexes],
+			args: [securityPoolAddress, Number(childOutcome)],
 		}),
 	)
-
-export const encodeImportedForkDepositIndex = (depositIndex: bigint) => (1n << 256n) - 1n - depositIndex
 
 export const startTruthAuction = async (client: WriteClient, securityPoolAddress: Address) =>
 	await writeContractAndWait(client, () =>

@@ -8,6 +8,7 @@ import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
 import { EscalationGame } from '../EscalationGame.sol';
+import { CarriedDepositProof } from '../EscalationGame.sol';
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 
 struct SecurityVault {
@@ -77,7 +78,7 @@ interface ISecurityPool {
 	function performWithdrawRep(address vault, uint256 repAmount) external;
 	function depositRep(uint256 repAmount) external;
 	function redeemRep(address vault) external;
-	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, uint256[] memory parentDepositIndexes) external;
+	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external;
 	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, uint256 snapshotTotalRep, uint256 snapshotDenominator) external;
 	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) external;
 
@@ -86,6 +87,7 @@ interface ISecurityPool {
 
 	function escalationGame() external view returns (EscalationGame);
 	function initializeForkedEscalationGame(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external;
+	function initializeForkCarrySnapshot(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;

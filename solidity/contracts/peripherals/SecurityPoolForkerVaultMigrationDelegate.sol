@@ -10,6 +10,10 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 
+interface ISecurityPoolForkerChildEscalationInitializer {
+	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) external;
+}
+
 struct VaultMigrationForkData {
 	uint256 repAtFork;
 	UniformPriceDualCapBatchAuction truthAuction;
@@ -99,17 +103,7 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) private {
-		VaultMigrationForkData storage parentForkData = forkDataByPool[parent];
-		if (!parentForkData.unresolvedEscalationAtFork) return;
-		if (address(child.escalationGame()) != address(0x0)) return;
-		child.initializeForkedEscalationGame(
-			parentForkData.escalationStartBondAtFork,
-			parentForkData.escalationNonDecisionThresholdAtFork,
-			parentForkData.escalationElapsedAtFork
-		);
-		if (child.systemState() == SystemState.Operational) {
-			child.resumeForkedEscalationGame();
-		}
+		ISecurityPoolForkerChildEscalationInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(parent, child);
 	}
 
 	function _creditMigratedEscalationPrincipal(ISecurityPool parent, ISecurityPool child, uint256 migratedPrincipal) private {
@@ -119,27 +113,6 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 		if (parentRepAtFork > 0) {
 			parent.transferEth(payable(child), parent.completeSetCollateralAmount() * migratedPrincipal / parentRepAtFork);
 		}
-	}
-
-	function _migrateEscalationDeposits(
-		ISecurityPool parent,
-		ISecurityPool child,
-		address vault,
-		BinaryOutcomes.BinaryOutcome sourceOutcome,
-		uint256[] memory depositIndexes
-	) private returns (uint256 migratedPrincipal) {
-		if (depositIndexes.length == 0) return 0;
-		EscalationGame escalationGame = parent.escalationGame();
-		require(address(escalationGame) != address(0x0), 'e4');
-		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amount, uint256 parentDepositIndex) = escalationGame.exportUnresolvedForkDeposit(depositIndexes[index], sourceOutcome);
-			require(depositor == vault, 'e5');
-			parent.clearEscalationLockForForkMigration(vault, amount);
-			child.addEscalationLockForForkMigration(vault, amount);
-			child.escalationGame().importForkedDeposit(vault, sourceOutcome, parentDepositIndex, amount);
-			migratedPrincipal += amount;
-		}
-		_creditMigratedEscalationPrincipal(parent, child, migratedPrincipal);
 	}
 
 	function _migrateVaultUnlockedState(ISecurityPool parent, ISecurityPool child, address vault, uint256 lockedRepAlreadyMigrated) private {
@@ -221,13 +194,7 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 		_migrateVaultUnlockedState(parent, child, msg.sender, 0);
 	}
 
-	function migrateVaultWithUnresolvedEscalation(
-		ISecurityPool parent,
-		uint8 childOutcomeIndex,
-		uint256[] memory invalidDepositIndexes,
-		uint256[] memory yesDepositIndexes,
-		uint256[] memory noDepositIndexes
-	) public {
+	function migrateVaultWithUnresolvedEscalation(ISecurityPool parent, uint8 childOutcomeIndex) public {
 		VaultMigrationForkData storage parentForkData = forkDataByPool[parent];
 		require(parentForkData.unresolvedEscalationAtFork, 'ee');
 		require(block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'migration window closed');
@@ -235,13 +202,9 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 		(, , , , uint256 parentLockedRepInEscalationGame) = parent.securityVaults(msg.sender);
 		require(parentLockedRepInEscalationGame > 0, 'ef');
 		ISecurityPool child = _getOrDeployChildPool(parent, childOutcomeIndex);
-		uint256 migratedPrincipal = 0;
-		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.Invalid, invalidDepositIndexes);
-		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.Yes, yesDepositIndexes);
-		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.No, noDepositIndexes);
-		require(migratedPrincipal > 0, 'f0');
-		(, , , , uint256 remainingLockedRep) = parent.securityVaults(msg.sender);
-		require(remainingLockedRep == 0, 'f1');
-		_migrateVaultUnlockedState(parent, child, msg.sender, migratedPrincipal);
+		parent.clearEscalationLockForForkMigration(msg.sender, parentLockedRepInEscalationGame);
+		child.addEscalationLockForForkMigration(msg.sender, parentLockedRepInEscalationGame);
+		_creditMigratedEscalationPrincipal(parent, child, parentLockedRepInEscalationGame);
+		_migrateVaultUnlockedState(parent, child, msg.sender, parentLockedRepInEscalationGame);
 	}
 }

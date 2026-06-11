@@ -7,15 +7,15 @@ import { EscalationGame } from '../EscalationGame.sol';
 contract EscalationGameFactory {
 	function deployEscalationGame(uint256 startBond, uint256 _nonDecisionThreshold) external returns (EscalationGame) {
 		ISecurityPool securityPool = ISecurityPool(payable(msg.sender));
-		EscalationGame game = new EscalationGame{ salt: bytes32(uint256(0x0)) }(securityPool);
-		game.start(startBond, _nonDecisionThreshold);
-		return game;
+		EscalationGame gameImplementation = new EscalationGame{ salt: bytes32(uint256(0x0)) }(securityPool);
+		gameImplementation.start(startBond, _nonDecisionThreshold);
+		return EscalationGame(payable(address(gameImplementation)));
 	}
 
 	function deployEscalationGameFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external returns (EscalationGame) {
 		ISecurityPool securityPool = ISecurityPool(payable(msg.sender));
-		EscalationGame game = new EscalationGame{ salt: bytes32(uint256(0x0)) }(securityPool);
-		game.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
-		return game;
+		EscalationGame gameImplementation = new EscalationGame{ salt: bytes32(uint256(0x0)) }(securityPool);
+		gameImplementation.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+		return EscalationGame(payable(address(gameImplementation)));
 	}
 }
