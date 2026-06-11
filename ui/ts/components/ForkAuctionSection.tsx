@@ -721,7 +721,6 @@ export function ForkAuctionSection({
 	const showSelectedEscalationMigrationDeposits = !loadingReportingDetails && reportingDetails?.status === 'active'
 	const hasSelectedEscalationMigrationDeposits = selectedEscalationMigrationDeposits.length > 0
 	const unresolvedMigrationSides = activeReportingDetails?.sides ?? []
-	const selectedUnresolvedMigrationDepositIndexesByOutcome = reportingForm?.selectedWithdrawDepositIndexesByOutcome ?? { invalid: [], yes: [], no: [] }
 	const [selectedOutcomeMigrationSeedStatus, setSelectedOutcomeMigrationSeedStatus] = useState<ForkOutcomeMigrationSeedStatus | undefined>(undefined)
 	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
 	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
@@ -820,14 +819,6 @@ export function ForkAuctionSection({
 	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? 'No locked REP remains to migrate for the connected wallet.' : undefined
 	const totalUnresolvedMigrationDepositCount = unresolvedMigrationSides.reduce((count, side) => count + side.userDeposits.length, 0)
 	const hasUnresolvedMigrationDeposits = totalUnresolvedMigrationDepositCount > 0
-	const selectedUnresolvedMigrationDepositCount = unresolvedMigrationSides.reduce((count, side) => count + selectedUnresolvedMigrationDepositIndexesByOutcome[side.key].length, 0)
-	const unresolvedMigrationSelectionComplete =
-		unresolvedMigrationSides.every(side =>
-			sameBigIntArray(
-				selectedUnresolvedMigrationDepositIndexesByOutcome[side.key],
-				side.userDeposits.map(deposit => deposit.depositIndex),
-			),
-		) && selectedUnresolvedMigrationDepositCount === totalUnresolvedMigrationDepositCount
 	const importedForkSettlementSides = activeReportingDetails?.sides.filter(side => side.importedUserDeposits.length > 0) ?? []
 	const hasImportedForkSettlementDeposits = importedForkSettlementSides.length > 0
 	const importedForkSettlementResolved = isPoolQuestionFinalized(activeReportingDetails)
@@ -1113,7 +1104,6 @@ export function ForkAuctionSection({
 		if (loadingReportingDetails) return 'Loading unresolved escalation deposits.'
 		if (activeReportingDetails === undefined) return 'Unresolved escalation deposit details are unavailable for this pool right now.'
 		if (!hasUnresolvedMigrationDeposits) return 'No unresolved parent escalation deposits remain for the connected wallet.'
-		if (!unresolvedMigrationSelectionComplete) return 'All remaining unresolved parent escalation deposits for this vault must migrate together.'
 		return undefined
 	})()
 	const migratePoolToUniverseGuardMessage = (() => {
@@ -1267,7 +1257,7 @@ export function ForkAuctionSection({
 	const onMigrateUnresolvedEscalationSubmit = () => {
 		setPendingEscalationMigrationSelection(undefined)
 		setIsVaultMigrationPending(true)
-		onMigrateUnresolvedEscalation(forkAuctionForm.selectedOutcome, selectedUnresolvedMigrationDepositIndexesByOutcome)
+		onMigrateUnresolvedEscalation(forkAuctionForm.selectedOutcome)
 	}
 	const onWithdrawForkedEscalationSubmit = (outcome: ReportingOutcomeKey) => {
 		const selectedDepositIndexes = selectedImportedForkDepositIndexesByOutcome[outcome]
@@ -2227,7 +2217,7 @@ export function ForkAuctionSection({
 							<>
 								{hasUnresolvedMigrationState ? (
 									<SectionBlock density='compact' headingLevel={4} title='Migrate Unresolved Escalation Locks' variant='embedded'>
-										<p className='detail'>{isMigrationExpired ? 'The migration window for these unresolved parent escalation deposits has closed.' : 'Unresolved parent escalation locks migrate together with your vault into the selected child universe.'}</p>
+										<p className='detail'>{isMigrationExpired ? 'The migration window for these unresolved parent escalation deposits has closed.' : 'All unresolved parent escalation locks on this wallet will migrate together with your vault into the selected child universe.'}</p>
 										{loadingReportingDetails ? <p className='detail'>Loading unresolved escalation deposits for the connected wallet…</p> : undefined}
 										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>Unresolved escalation deposit details are unavailable for this pool right now.</p>}
 										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits ? <p className='detail'>No unresolved parent escalation deposits remain for the connected wallet.</p> : undefined}
@@ -2240,7 +2230,7 @@ export function ForkAuctionSection({
 															<p className='detail'>No {side.label.toLowerCase()} unresolved deposits remain for this wallet.</p>
 														) : (
 															<EscalationDepositSelectionList
-																disabled={forkAuctionActiveAction === 'migrateUnresolvedEscalation' || isMigrationExpired}
+																disabled
 																items={side.userDeposits.map(deposit => ({
 																	deposit,
 																	details: [
@@ -2253,21 +2243,12 @@ export function ForkAuctionSection({
 																		</>,
 																	],
 																}))}
-																onSelectionChange={nextSelectedDepositIndexes => {
-																	if (onReportingFormChange === undefined || reportingForm === undefined) return
-																	onReportingFormChange({
-																		selectedWithdrawDepositIndexesByOutcome: {
-																			...reportingForm.selectedWithdrawDepositIndexesByOutcome,
-																			[side.key]: nextSelectedDepositIndexes,
-																		},
-																	})
-																}}
-																selectedDepositIndexes={selectedUnresolvedMigrationDepositIndexesByOutcome[side.key]}
+																onSelectionChange={() => undefined}
+																selectedDepositIndexes={side.userDeposits.map(deposit => deposit.depositIndex)}
 															/>
 														)}
 													</div>
 												))}
-										{unresolvedMigrationSelectionComplete || isMigrationExpired ? undefined : <p className='detail'>All remaining unresolved parent escalation deposits for this vault must migrate together.</p>}
 										{isMigrationExpired ? undefined : (
 											<div className='actions'>
 												{renderStageActionButton({

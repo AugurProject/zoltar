@@ -1649,7 +1649,7 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 			})),
 	)
 }
-export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey, invalidDepositIndexes: bigint[], yesDepositIndexes: bigint[], noDepositIndexes: bigint[]) {
+export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(
 		client,
 		'migrateUnresolvedEscalation',
@@ -1660,7 +1660,7 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome), toUint8Array(invalidDepositIndexes), toUint8Array(yesDepositIndexes), toUint8Array(noDepositIndexes)],
+				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
 			})),
 	)
 }

@@ -8,7 +8,7 @@ import { addressString } from '../bigint'
 import { contractExists } from '../utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
-	peripherals_EscalationGame_EscalationGame,
+	peripherals_EscalationGameCarryTree_EscalationGameCarryTree,
 	peripherals_Multicall3_Multicall3,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
@@ -166,8 +166,8 @@ export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracle
 export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getEscalationGameInitCode: securityPool =>
 		encodeDeployData({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			bytecode: `0x${peripherals_EscalationGameCarryTree_EscalationGameCarryTree.evm.bytecode.object}`,
 			args: [securityPool],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),

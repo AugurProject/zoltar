@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, type Address } from 'viem'
+import { concatHex, decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -10,7 +10,12 @@ import assert from 'node:assert/strict'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
+import {
+	peripherals_EscalationGameCarryTree_EscalationGameCarryTree,
+	peripherals_EscalationGame_EscalationGame,
+	peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool,
+	peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool,
+} from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 const ESCALATION_TIME_LENGTH = 4233600n
@@ -86,6 +91,121 @@ describe('Escalation Game Test Suite', () => {
 		})
 		return { escalationGameAddress, testSecurityPoolAddress }
 	}
+
+	const deployEscalationGameCarryTree = async () => {
+		const zoltarAddress = getZoltarAddress()
+		const deploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+				bytecode: `0x${peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.evm.bytecode.object}`,
+				args: [zoltarAddress, 0n, client.account.address],
+			}),
+		})
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		const testSecurityPoolAddress = deploymentReceipt.contractAddress
+		if (testSecurityPoolAddress === undefined || testSecurityPoolAddress === null) throw new Error('carry tree test security pool deployment address missing')
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'deployEscalationGameCarryTree',
+					args: [],
+				}),
+		)
+		const escalationGameAddress = await client.readContract({
+			abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+			functionName: 'escalationGameCarryTree',
+			address: testSecurityPoolAddress,
+			args: [],
+		})
+		return { escalationGameAddress, testSecurityPoolAddress }
+	}
+
+	const startCarryTree = async (testSecurityPoolAddress: Address, startBond: bigint, nonDecisionThreshold: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'startCarryTree',
+					args: [startBond, nonDecisionThreshold],
+				}),
+		)
+
+	const startCarryTreeFromFork = async (testSecurityPoolAddress: Address, startBond: bigint, nonDecisionThreshold: bigint, elapsedAtFork: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'startCarryTreeFromFork',
+					args: [startBond, nonDecisionThreshold, elapsedAtFork],
+				}),
+		)
+
+	const depositOnCarryTreeOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'depositOnCarryTreeOutcome',
+					args: [depositor, outcome, amount],
+				}),
+		)
+
+	const importCarryTreeForkDepositViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, parentDepositIndex: bigint, amount: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'importCarryTreeForkDeposit',
+					args: [depositor, outcome, parentDepositIndex, amount],
+				}),
+		)
+
+	const branchCarryTreeFromForkViaTestSecurityPool = async (testSecurityPoolAddress: Address, parentBranchId: bigint, forkedFromNodeId: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'branchCarryTreeFromFork',
+					args: [parentBranchId, forkedFromNodeId],
+				}),
+		)
+
+	const activateCarryTreeBranchViaTestSecurityPool = async (testSecurityPoolAddress: Address, branchId: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'activateCarryTreeBranch',
+					args: [branchId],
+				}),
+		)
+
+	const withdrawImportedCarryTreeForkDepositViaTestSecurityPool = async (testSecurityPoolAddress: Address, parentDepositIndex: bigint, outcome: QuestionOutcome) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'withdrawImportedCarryTreeForkDeposit',
+					args: [parentDepositIndex, outcome],
+				}),
+		)
 
 	const depositOnOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
 		await writeContractAndWait(
@@ -246,6 +366,210 @@ describe('Escalation Game Test Suite', () => {
 					}),
 			),
 		)
+	})
+
+	test('carry tree eager imported deposits preserve parent ordering even when imported out of order', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameCarryTree()
+		await startCarryTreeFromFork(testSecurityPoolAddress, reportBond, nonDecisionThreshold, 0n)
+		await importCarryTreeForkDepositViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n, reportBond)
+		await importCarryTreeForkDepositViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 2n * reportBond)
+
+		const firstImportedDeposit = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'importedDeposits',
+			args: [1n, 1n],
+		})
+		const secondImportedDeposit = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'importedDeposits',
+			args: [1n, 3n],
+		})
+
+		assert.deepStrictEqual(firstImportedDeposit, [client.account.address, 2n * reportBond, 0n, false])
+		assert.deepStrictEqual(secondImportedDeposit, [client.account.address, reportBond, 2n * reportBond, false])
+	})
+
+	test('carry tree maintains an append-only MMR root for inherited carryover deposits', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameCarryTree()
+		await startCarryTree(testSecurityPoolAddress, reportBond, nonDecisionThreshold)
+
+		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+
+		const genesisBranchId = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'genesisBranchId',
+			args: [],
+		})
+		const firstLeafHash = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'previewLeafHash',
+			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
+		})
+		const rootAfterFirstDeposit = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBranchCarriedRoot',
+			args: [genesisBranchId, QuestionOutcome.Yes],
+		})
+		assert.strictEqual(rootAfterFirstDeposit, firstLeafHash, 'single appended leaf should be its own MMR root')
+
+		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const secondLeafHash = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'previewLeafHash',
+			args: [client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n],
+		})
+		const expectedTwoLeafRoot = keccak256(concatHex([firstLeafHash, secondLeafHash]))
+		const rootAfterSecondDeposit = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBranchCarriedRoot',
+			args: [genesisBranchId, QuestionOutcome.Yes],
+		})
+		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected MMR root')
+	})
+
+	test('carry tree child branches inherit the parent MMR root without eager migration', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameCarryTree()
+		await startCarryTree(testSecurityPoolAddress, reportBond, nonDecisionThreshold)
+		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 2n * reportBond)
+
+		const genesisBranchId = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'genesisBranchId',
+			args: [],
+		})
+		const parentYesRoot = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBranchCarriedRoot',
+			args: [genesisBranchId, QuestionOutcome.Yes],
+		})
+		const parentNoRoot = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBranchCarriedRoot',
+			args: [genesisBranchId, QuestionOutcome.No],
+		})
+
+		const branchCreationHash = await branchCarryTreeFromForkViaTestSecurityPool(testSecurityPoolAddress, genesisBranchId, 0n)
+		const branchCreationReceipt = await client.waitForTransactionReceipt({ hash: branchCreationHash })
+		const branchCreatedLog = branchCreationReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'BranchCreated')
+		if (branchCreatedLog === undefined) throw new Error('BranchCreated log missing')
+		const childBranchId = branchCreatedLog.args.branchId
+
+		const childYesRoot = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBranchCarriedRoot',
+			args: [childBranchId, QuestionOutcome.Yes],
+		})
+		const childNoRoot = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBranchCarriedRoot',
+			args: [childBranchId, QuestionOutcome.No],
+		})
+
+		assert.strictEqual(childYesRoot, parentYesRoot, 'forked child should inherit the parent yes-outcome MMR root')
+		assert.strictEqual(childNoRoot, parentNoRoot, 'forked child should inherit the parent no-outcome MMR root')
+
+		const expectedNoLeaf = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [client.account.address, QuestionOutcome.No, 2n * reportBond, 0n, 2n * reportBond, 2n]))
+		assert.strictEqual(parentNoRoot, expectedNoLeaf, 'single-leaf MMR root should match the encoded leaf hash')
+	})
+
+	test('carry tree child branch can settle an inherited parent deposit without eager import migration', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameCarryTree()
+		await startCarryTree(testSecurityPoolAddress, reportBond, nonDecisionThreshold)
+		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+
+		const genesisBranchId = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'genesisBranchId',
+			args: [],
+		})
+		const branchCreationHash = await branchCarryTreeFromForkViaTestSecurityPool(testSecurityPoolAddress, genesisBranchId, 0n)
+		const branchCreationReceipt = await client.waitForTransactionReceipt({ hash: branchCreationHash })
+		const branchCreatedLog = branchCreationReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'BranchCreated')
+		if (branchCreatedLog === undefined) throw new Error('BranchCreated log missing')
+		const childBranchId = branchCreatedLog.args.branchId
+
+		await activateCarryTreeBranchViaTestSecurityPool(testSecurityPoolAddress, childBranchId)
+
+		const balancesBeforeSettlement = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getBalances',
+			args: [],
+		})
+		assert.deepStrictEqual(balancesBeforeSettlement, [0n, reportBond, 0n])
+
+		const activationTime = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'activationTime',
+			args: [],
+		})
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+
+		const resolution = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getQuestionResolution',
+			args: [],
+		})
+		assert.strictEqual(resolution, QuestionOutcome.Yes)
+
+		const unsettledImportedIndexes = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor',
+			args: [QuestionOutcome.Yes, client.account.address, 0n, 10n],
+		})
+		assert.deepStrictEqual(unsettledImportedIndexes, [0n])
+
+		await withdrawImportedCarryTreeForkDepositViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		const unsettledImportedIndexesAfterSettlement = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor',
+			args: [QuestionOutcome.Yes, client.account.address, 0n, 10n],
+		})
+		assert.deepStrictEqual(unsettledImportedIndexesAfterSettlement, [])
 	})
 
 	// =================== Attrition Cost Function Tests ===================

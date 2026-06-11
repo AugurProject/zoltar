@@ -5,7 +5,7 @@ import { ReputationToken } from '../ReputationToken.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
-import { EscalationGame } from './EscalationGame.sol';
+import { Deposit, EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
@@ -27,6 +27,8 @@ struct VaultMigrationForkData {
 }
 
 contract SecurityPoolForkerVaultMigrationDelegate {
+	uint256 private constant ESCALATION_MIGRATION_SCAN_PAGE_SIZE = 50;
+
 	Zoltar public immutable zoltar;
 
 	mapping(ISecurityPool => VaultMigrationForkData) internal forkDataByPool;
@@ -121,18 +123,37 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 		}
 	}
 
-	function _migrateEscalationDeposits(
-		ISecurityPool parent,
-		ISecurityPool child,
-		address vault,
-		BinaryOutcomes.BinaryOutcome sourceOutcome,
-		uint256[] memory depositIndexes
-	) private returns (uint256 migratedPrincipal) {
-		if (depositIndexes.length == 0) return 0;
+	function _encodeImportedForkDepositIndex(uint256 parentDepositIndex) private pure returns (uint256) {
+		return ~parentDepositIndex;
+	}
+
+	function _migrateEscalationDeposits(ISecurityPool parent, ISecurityPool child, address vault, BinaryOutcomes.BinaryOutcome sourceOutcome) private returns (uint256 migratedPrincipal) {
 		EscalationGame escalationGame = parent.escalationGame();
 		require(address(escalationGame) != address(0x0), 'e4');
-		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amount, uint256 parentDepositIndex) = escalationGame.exportUnresolvedForkDeposit(depositIndexes[index], sourceOutcome);
+		uint256 startIndex = 0;
+		while (true) {
+			Deposit[] memory deposits = escalationGame.getDepositsByOutcome(sourceOutcome, startIndex, ESCALATION_MIGRATION_SCAN_PAGE_SIZE);
+			if (deposits.length == 0) break;
+			for (uint256 index = 0; index < deposits.length; index++) {
+				Deposit memory deposit = deposits[index];
+				if (deposit.depositor != vault || deposit.amount == 0) continue;
+				(address depositor, uint256 amount, uint256 parentDepositIndex) = escalationGame.exportUnresolvedForkDeposit(startIndex + index, sourceOutcome);
+				require(depositor == vault, 'e5');
+				parent.clearEscalationLockForForkMigration(vault, amount);
+				child.addEscalationLockForForkMigration(vault, amount);
+				child.escalationGame().importForkedDeposit(vault, sourceOutcome, parentDepositIndex, amount);
+				migratedPrincipal += amount;
+			}
+			if (deposits.length < ESCALATION_MIGRATION_SCAN_PAGE_SIZE) break;
+			startIndex += ESCALATION_MIGRATION_SCAN_PAGE_SIZE;
+		}
+		while (true) {
+			uint256[] memory importedDepositIndexes = escalationGame.getUnsettledImportedDepositIndexesByOutcomeAndDepositor(sourceOutcome, vault, 0, 1);
+			if (importedDepositIndexes.length == 0) break;
+			(address depositor, uint256 amount, uint256 parentDepositIndex) = escalationGame.exportUnresolvedForkDeposit(
+				_encodeImportedForkDepositIndex(importedDepositIndexes[0]),
+				sourceOutcome
+			);
 			require(depositor == vault, 'e5');
 			parent.clearEscalationLockForForkMigration(vault, amount);
 			child.addEscalationLockForForkMigration(vault, amount);
@@ -221,13 +242,7 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 		_migrateVaultUnlockedState(parent, child, msg.sender, 0);
 	}
 
-	function migrateVaultWithUnresolvedEscalation(
-		ISecurityPool parent,
-		uint8 childOutcomeIndex,
-		uint256[] memory invalidDepositIndexes,
-		uint256[] memory yesDepositIndexes,
-		uint256[] memory noDepositIndexes
-	) public {
+	function migrateVaultWithUnresolvedEscalation(ISecurityPool parent, uint8 childOutcomeIndex) public {
 		VaultMigrationForkData storage parentForkData = forkDataByPool[parent];
 		require(parentForkData.unresolvedEscalationAtFork, 'ee');
 		require(block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'migration window closed');
@@ -236,9 +251,9 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 		require(parentLockedRepInEscalationGame > 0, 'ef');
 		ISecurityPool child = _getOrDeployChildPool(parent, childOutcomeIndex);
 		uint256 migratedPrincipal = 0;
-		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.Invalid, invalidDepositIndexes);
-		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.Yes, yesDepositIndexes);
-		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.No, noDepositIndexes);
+		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.Invalid);
+		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.Yes);
+		migratedPrincipal += _migrateEscalationDeposits(parent, child, msg.sender, BinaryOutcomes.BinaryOutcome.No);
 		require(migratedPrincipal > 0, 'f0');
 		(, , , , uint256 remainingLockedRep) = parent.securityVaults(msg.sender);
 		require(remainingLockedRep == 0, 'f1');

@@ -22,7 +22,6 @@ import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTyp
 import {
 	claimAuctionProceeds,
 	createChildUniverse,
-	encodeImportedForkDepositIndex,
 	finalizeTruthAuction,
 	getMigratedRep,
 	getQuestionOutcome,
@@ -840,7 +839,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes))
 		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [0n], [])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -891,7 +890,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.ok(await contractExists(client, childEscalationGame), 'child should initialize the paused continuation game as soon as the branch exists')
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), true, 'child should await fork continuation while unresolved migration is pending')
 
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [0n], [])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), true, 'one remaining parent lock should still keep the branch paused during the migration window')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -901,7 +900,7 @@ describe('Peripherals Contract Test Suite', () => {
 		}
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child should become operational even before continuation migration')
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the migration deadline should clear the await marker even if another vault never migrates')
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [1n], []), /migration window closed/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes), /migration window closed/)
 	})
 
 	test('large imported continuation migration keeps discovery bounded by scan window', async () => {
@@ -914,9 +913,7 @@ describe('Peripherals Contract Test Suite', () => {
 		let depositCount = capacity > requestedDepositCount ? requestedDepositCount : capacity
 		if (depositCount > 1n) depositCount -= 1n
 		else depositCount = 1n
-		const depositIndexes: bigint[] = []
 		for (let index = 0n; index < depositCount; index += 1n) {
-			depositIndexes.push(index)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + index)
 		}
 
@@ -934,7 +931,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], depositIndexes, [])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -1009,7 +1006,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(attackerClient, genesisUniverse, forkSourceQuestionId)
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [0n], [])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -1051,8 +1048,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(attackerClient, genesisUniverse, firstForkQuestionId)
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [0n], [])
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [], [0n])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -1086,7 +1083,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(attackerClient, yesUniverse, secondForkQuestionId)
 		await initiateSecurityPoolFork(client, yesSecurityPool.securityPool)
 		await migrateRepToZoltar(client, yesSecurityPool.securityPool, [QuestionOutcome.Yes])
-		await migrateVaultWithUnresolvedEscalation(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, [], [encodeImportedForkDepositIndex(importedYesIndexes[0])], [])
+		await migrateVaultWithUnresolvedEscalation(client, yesSecurityPool.securityPool, QuestionOutcome.Yes)
 
 		const grandchildUniverse = getChildUniverseId(yesUniverse, QuestionOutcome.Yes)
 		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, securityMultiplier)
@@ -1126,9 +1123,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes, QuestionOutcome.No])
 
-		const firstForkIndexes: bigint[] = depositIndexes.map(index => index)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], firstForkIndexes, [])
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [], [], [0n])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
@@ -1166,8 +1162,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await initiateSecurityPoolFork(client, firstChildPool.securityPool)
 		await migrateRepToZoltar(client, firstChildPool.securityPool, [QuestionOutcome.Yes, QuestionOutcome.No])
 
-		const encodedFirstChildYes = firstChildImportedYes.map(depositIndex => encodeImportedForkDepositIndex(depositIndex))
-		await migrateVaultWithUnresolvedEscalation(client, firstChildPool.securityPool, QuestionOutcome.Yes, [], encodedFirstChildYes, [])
+		await migrateVaultWithUnresolvedEscalation(client, firstChildPool.securityPool, QuestionOutcome.Yes)
 
 		const secondChildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.Yes)
 		const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, securityMultiplier)

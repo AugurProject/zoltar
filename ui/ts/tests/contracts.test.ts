@@ -677,7 +677,7 @@ describe('contracts helpers', () => {
 		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
 
-	test('migrateVaultWithUnresolvedEscalation helper encodes invalid, yes, and no deposit indexes correctly', async () => {
+	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(request => {
@@ -685,7 +685,7 @@ describe('contracts helpers', () => {
 			capturedTo = request.to
 		})
 
-		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, 9n, 'no', [1n, 4n], [7n], [9n, 10n])
+		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, 9n, 'no')
 
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
@@ -694,7 +694,7 @@ describe('contracts helpers', () => {
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
-		expect(decodedCall.args).toEqual([securityPoolAddress, 2, [1n, 4n], [7n], [9n, 10n]])
+		expect(decodedCall.args).toEqual([securityPoolAddress, 2])
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
 			hash: transactionHash,

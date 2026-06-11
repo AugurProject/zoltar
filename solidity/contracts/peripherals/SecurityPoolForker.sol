@@ -352,13 +352,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		_delegateVaultMigrationCall();
 	}
 
-	function migrateVaultWithUnresolvedEscalation(
-		ISecurityPool,
-		uint8,
-		uint256[] memory,
-		uint256[] memory,
-		uint256[] memory
-	) public {
+	function migrateVaultWithUnresolvedEscalation(ISecurityPool, uint8) public {
 		_delegateVaultMigrationCall();
 	}
 

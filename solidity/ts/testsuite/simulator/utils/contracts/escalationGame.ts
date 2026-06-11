@@ -1,5 +1,5 @@
 import { encodeDeployData, getCreate2Address, numberToBytes } from 'viem'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGameCarryTree_EscalationGameCarryTree, peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
@@ -96,8 +96,8 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 	)
 	return getCreate2Address({
 		bytecode: encodeDeployData({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			bytecode: `0x${peripherals_EscalationGameCarryTree_EscalationGameCarryTree.evm.bytecode.object}`,
 			args: [writeClient.account.address],
 		}),
 		from: getInfraContractAddresses().escalationGameFactory,
