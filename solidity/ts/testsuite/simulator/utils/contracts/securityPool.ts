@@ -11,8 +11,8 @@ type CarriedDepositProof = {
 	cumulativeAmount: bigint
 	sourceNodeId: bigint
 	leafIndex: bigint
-	mmrSiblings: readonly Hex[]
-	mmrPeakIndex: bigint
+	merkleMountainRangeSiblings: readonly Hex[]
+	merkleMountainRangePeakIndex: bigint
 	nullifierSiblings: readonly Hex[]
 }
 
@@ -54,7 +54,14 @@ export const withdrawForkedEscalationDeposits = async (client: WriteClient, secu
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'withdrawForkedEscalationDeposits',
 			address: securityPoolAddress,
-			args: [outcome, proofs.map(proof => ({ ...proof, mmrSiblings: Array.from(proof.mmrSiblings), nullifierSiblings: Array.from(proof.nullifierSiblings) }))],
+			args: [
+				outcome,
+				proofs.map(proof => ({
+					...proof,
+					merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
+					nullifierSiblings: Array.from(proof.nullifierSiblings),
+				})),
+			],
 		}),
 	)
 

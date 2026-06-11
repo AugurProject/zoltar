@@ -651,7 +651,7 @@ describe('contracts helpers', () => {
 	test('withdrawForkedEscalationDeposits helper encodes proof batches correctly', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
-		const mmrSibling = ('0x' + '11'.repeat(32)) as Hex
+		const merkleMountainRangeSibling = ('0x' + '11'.repeat(32)) as Hex
 		const nullifierSibling = ('0x' + '22'.repeat(32)) as Hex
 		const client = createMockWriteClient(request => {
 			capturedData = request.data
@@ -666,8 +666,8 @@ describe('contracts helpers', () => {
 				cumulativeAmount: 8n,
 				sourceNodeId: 2n,
 				leafIndex: 1n,
-				mmrSiblings: [mmrSibling],
-				mmrPeakIndex: 1n,
+				merkleMountainRangeSiblings: [merkleMountainRangeSibling],
+				merkleMountainRangePeakIndex: 1n,
 				nullifierSiblings: [nullifierSibling],
 			},
 		])
@@ -689,8 +689,8 @@ describe('contracts helpers', () => {
 					cumulativeAmount: 8n,
 					sourceNodeId: 2n,
 					leafIndex: 1n,
-					mmrSiblings: [mmrSibling],
-					mmrPeakIndex: 1n,
+					merkleMountainRangeSiblings: [merkleMountainRangeSibling],
+					merkleMountainRangePeakIndex: 1n,
 					nullifierSiblings: [nullifierSibling],
 				},
 			],

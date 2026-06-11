@@ -65,7 +65,7 @@ import {
 	withdrawFromEscalationGame,
 	withdrawForkedEscalationDeposits,
 } from '../testsuite/simulator/utils/contracts/securityPool'
-import { peripherals_EscalationGameCarryTree_EscalationGameCarryTree, peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -225,9 +225,9 @@ describe('Peripherals Contract Test Suite', () => {
 		}
 	}
 
-	const createCarryTreeProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, mmrPeakIndex: bigint, mmrSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
+	const createCarryTreeProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
 		const node = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getNode',
 			args: [leafIndex + 1n],
@@ -239,8 +239,8 @@ describe('Peripherals Contract Test Suite', () => {
 			cumulativeAmount: node[5],
 			sourceNodeId: leafIndex + 1n,
 			leafIndex,
-			mmrSiblings,
-			mmrPeakIndex,
+			merkleMountainRangeSiblings,
+			merkleMountainRangePeakIndex,
 			nullifierSiblings,
 		}
 	}
@@ -976,13 +976,13 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(childCarryTotalBeforeSettlement, 3n * reportBond, 'child carry total should equal the inherited unresolved principal before proof settlement')
 
 		const firstLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: securityPoolAddresses.escalationGame,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
 		})
 		const secondLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: securityPoolAddresses.escalationGame,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n],

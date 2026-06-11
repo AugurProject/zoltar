@@ -360,8 +360,8 @@ export type CarriedDepositProof = {
 	cumulativeAmount: bigint
 	sourceNodeId: bigint
 	leafIndex: bigint
-	mmrSiblings: Hex[]
-	mmrPeakIndex: bigint
+	merkleMountainRangeSiblings: Hex[]
+	merkleMountainRangePeakIndex: bigint
 	nullifierSiblings: Hex[]
 }
 

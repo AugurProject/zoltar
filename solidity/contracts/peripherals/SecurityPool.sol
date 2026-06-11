@@ -9,8 +9,7 @@ import { ISecurityPool, SecurityVault, SystemState, QuestionOutcome, ISecurityPo
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
-import { EscalationGame } from './EscalationGame.sol';
-import { EscalationGameCarryTree, CarriedDepositProof } from './EscalationGameCarryTree.sol';
+import { EscalationGame, CarriedDepositProof } from './EscalationGame.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
@@ -419,7 +418,7 @@ contract SecurityPool is ISecurityPool {
 		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
 		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'invalid none');
 
-		EscalationGameCarryTree carryTreeEscalationGame = EscalationGameCarryTree(payable(address(escalationGame)));
+		EscalationGame escalationGameContract = EscalationGame(payable(address(escalationGame)));
 		address beneficiaryVault = address(0x0);
 		uint256 totalAmountToWithdraw = 0;
 		uint256 totalOriginalDepositAmount = 0;
@@ -428,9 +427,9 @@ contract SecurityPool is ISecurityPool {
 			uint256 amountToWithdraw;
 			uint256 originalDepositAmount;
 			if (withdrawalOutcome == questionOutcome) {
-				(depositor, amountToWithdraw, originalDepositAmount) = carryTreeEscalationGame.withdrawCarriedDeposit(withdrawalOutcome, proofs[index]);
+				(depositor, amountToWithdraw, originalDepositAmount) = escalationGameContract.withdrawCarriedDeposit(withdrawalOutcome, proofs[index]);
 			} else {
-				(depositor, originalDepositAmount) = carryTreeEscalationGame.forfeitCarriedDeposit(withdrawalOutcome, proofs[index]);
+				(depositor, originalDepositAmount) = escalationGameContract.forfeitCarriedDeposit(withdrawalOutcome, proofs[index]);
 			}
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
@@ -520,7 +519,7 @@ contract SecurityPool is ISecurityPool {
 		bytes32[3] memory inheritedNullifierRoots
 	) external onlyForker {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
-		EscalationGameCarryTree(payable(address(escalationGame))).initializeForkCarrySnapshot(
+		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshot(
 			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
 			inheritedCarryTotals,

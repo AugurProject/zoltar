@@ -11,7 +11,6 @@ import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
 	peripherals_EscalationGame_EscalationGame,
-	peripherals_EscalationGameCarryTree_EscalationGameCarryTree,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -257,7 +256,7 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 	const carryLeaves: CarryTreeLeafViewStruct[] = []
 	while (true) {
 		const page = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryLeafPageByOutcome',
 			args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
@@ -276,7 +275,7 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 	const parentDepositIndexes: bigint[] = []
 	while (true) {
 		const page = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 			args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
@@ -293,7 +292,7 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 async function readCarryTreeForkContinuation(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
 	try {
 		return await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'forkContinuation',
 			args: [],
@@ -316,19 +315,19 @@ async function loadRecursiveCarrySnapshot(
 }> {
 	const [carryRoot, carryLeafCount, nullifierRoot, forkContinuation, localLeaves] = await Promise.all([
 		client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryRoot',
 			args: [getReportingOutcomeValue(outcome)],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [getReportingOutcomeValue(outcome)],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [getReportingOutcomeValue(outcome)],
@@ -346,7 +345,7 @@ async function loadRecursiveCarrySnapshot(
 		}
 	}
 	const securityPoolAddress = await client.readContract({
-		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		abi: peripherals_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
 		functionName: 'securityPool',
 		args: [],
@@ -446,7 +445,7 @@ function compareBigintAscending(left: bigint, right: bigint) {
 	return 0
 }
 
-function buildCarryTreeMmrProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
+function buildCarryTreeMerkleMountainRangeProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
 	const leafCount = BigInt(leafHashes.length)
 	const peakHeights = buildCarryTreePeakHeights(leafCount)
 	let offset = 0
@@ -463,13 +462,13 @@ function buildCarryTreeMmrProof(leafHashes: readonly Hex[], targetLeafIndex: num
 			for (let index = 0; index < levelHashes.length; index += 2) {
 				const left = levelHashes[index]
 				const right = levelHashes[index + 1]
-				if (left === undefined || right === undefined) throw new Error('Invalid carry MMR level')
+				if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
 				nextLevelHashes.push(hashCarryTreeParent(left, right))
 			}
 			levelHashes = nextLevelHashes
 		}
 		const peakRoot = levelHashes[0]
-		if (peakRoot === undefined) throw new Error('Missing carry MMR peak root')
+		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
 		peakRootsByHeight.set(peakHeight, peakRoot)
 		if (targetLeafIndex >= offset && targetLeafIndex < offset + peakSize) {
 			targetPeakHeight = peakHeight
@@ -478,20 +477,22 @@ function buildCarryTreeMmrProof(leafHashes: readonly Hex[], targetLeafIndex: num
 		}
 		offset += peakSize
 	}
-	if (targetPeakHeight === undefined || targetPeakLeaves === undefined || targetPeakOffset === undefined) throw new Error('Target carry leaf is not inside the MMR')
+	if (targetPeakHeight === undefined || targetPeakLeaves === undefined || targetPeakOffset === undefined) {
+		throw new Error('Target carry leaf is not inside the Merkle Mountain Range')
+	}
 	let relativeLeafIndex = targetLeafIndex - targetPeakOffset
 	let levelHashes = [...targetPeakLeaves]
-	const mmrSiblings: Hex[] = []
+	const merkleMountainRangeSiblings: Hex[] = []
 	while (levelHashes.length > 1) {
 		const siblingIndex = relativeLeafIndex ^ 1
 		const siblingHash = levelHashes[siblingIndex]
-		if (siblingHash === undefined) throw new Error('Missing carry MMR sibling')
-		mmrSiblings.push(siblingHash)
+		if (siblingHash === undefined) throw new Error('Missing carry Merkle Mountain Range sibling')
+		merkleMountainRangeSiblings.push(siblingHash)
 		const nextLevelHashes: Hex[] = []
 		for (let index = 0; index < levelHashes.length; index += 2) {
 			const left = levelHashes[index]
 			const right = levelHashes[index + 1]
-			if (left === undefined || right === undefined) throw new Error('Invalid carry MMR level')
+			if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
 			nextLevelHashes.push(hashCarryTreeParent(left, right))
 		}
 		levelHashes = nextLevelHashes
@@ -501,16 +502,16 @@ function buildCarryTreeMmrProof(leafHashes: readonly Hex[], targetLeafIndex: num
 	for (const peakHeight of orderedPeakHeights) {
 		if (peakHeight === targetPeakHeight) continue
 		const peakRoot = peakRootsByHeight.get(peakHeight)
-		if (peakRoot === undefined) throw new Error('Missing carry MMR peak root')
-		mmrSiblings.push(peakRoot)
+		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
+		merkleMountainRangeSiblings.push(peakRoot)
 	}
 	const orderedPeaks = orderedPeakHeights.map(peakHeight => {
 		const peakRoot = peakRootsByHeight.get(peakHeight)
-		if (peakRoot === undefined) throw new Error('Missing carry MMR peak root')
+		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
 		return peakRoot
 	})
 	const root = bagCarryTreePeaks(orderedPeaks)
-	return { mmrPeakIndex: BigInt(targetPeakHeight), mmrSiblings, root }
+	return { merkleMountainRangePeakIndex: BigInt(targetPeakHeight), merkleMountainRangeSiblings, root }
 }
 
 function buildCarryTreeZeroHashes() {
@@ -2449,7 +2450,7 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
 		client.readContract({
 			address: childEscalationGameAddress,
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getNullifierRoot',
 			args: [getReportingOutcomeValue(outcome)],
 		}),
@@ -2458,7 +2459,7 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 	if (BigInt(orderedLeaves.length) !== parentCarryLeafCount) throw new Error('Parent carry snapshot is not locally reconstructible.')
 	const leafHashes = orderedLeaves.map(leaf => hashCarryTreeLeaf(leaf, outcome))
 	if (leafHashes.length > 0) {
-		const { root: reconstructedRoot } = buildCarryTreeMmrProof(leafHashes, 0)
+		const { root: reconstructedRoot } = buildCarryTreeMerkleMountainRangeProof(leafHashes, 0)
 		if (reconstructedRoot !== parentCarryRoot) throw new Error('Parent carry snapshot root is not locally reconstructible.')
 	}
 	const nullifierTree = new CarryTreeSparseNullifier(consumedParentDepositIndexes)
@@ -2469,15 +2470,15 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 		if (leafIndex === -1) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
 		const targetLeaf = orderedLeaves[leafIndex]
 		if (targetLeaf === undefined) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
-		const { mmrPeakIndex, mmrSiblings } = buildCarryTreeMmrProof(leafHashes, leafIndex)
+		const { merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryTreeMerkleMountainRangeProof(leafHashes, leafIndex)
 		const nullifierSiblings = nullifierTree.getProof(parentDepositIndex)
 		proofs.push({
 			amount: targetLeaf.amount,
 			cumulativeAmount: targetLeaf.cumulativeAmount,
 			depositor: targetLeaf.depositor,
 			leafIndex: BigInt(leafIndex),
-			mmrPeakIndex,
-			mmrSiblings,
+			merkleMountainRangePeakIndex,
+			merkleMountainRangeSiblings,
 			nullifierSiblings,
 			parentDepositIndex: targetLeaf.parentDepositIndex,
 			sourceNodeId: targetLeaf.sourceNodeId,
@@ -2503,7 +2504,7 @@ export async function withdrawForkedEscalationDeposits(client: WriteClient, secu
 					getReportingOutcomeValue(outcome),
 					proofs.map(proof => ({
 						...proof,
-						mmrSiblings: Array.from(proof.mmrSiblings),
+						merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
 						nullifierSiblings: Array.from(proof.nullifierSiblings),
 					})),
 				],

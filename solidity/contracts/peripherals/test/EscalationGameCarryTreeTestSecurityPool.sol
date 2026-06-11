@@ -3,13 +3,13 @@ pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
-import { EscalationGameCarryTree, CarriedDepositProof } from '../EscalationGameCarryTree.sol';
+import { EscalationGame, CarriedDepositProof } from '../EscalationGame.sol';
 
 contract EscalationGameCarryTreeTestSecurityPool {
 	Zoltar public immutable zoltar;
 	uint248 public immutable universeId;
 	address public immutable securityPoolForker;
-	EscalationGameCarryTree public escalationGameCarryTree;
+	EscalationGame public escalationGameCarryTree;
 
 	constructor(Zoltar zoltarAddress, uint248 configuredUniverseId, address configuredSecurityPoolForker) {
 		zoltar = zoltarAddress;
@@ -17,7 +17,7 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		securityPoolForker = configuredSecurityPoolForker;
 	}
 
-	function setEscalationGameCarryTree(EscalationGameCarryTree game) external {
+	function setEscalationGameCarryTree(EscalationGame game) external {
 		require(address(escalationGameCarryTree) == address(0), 'carry tree already configured');
 		escalationGameCarryTree = game;
 	}

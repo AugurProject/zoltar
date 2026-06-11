@@ -6,7 +6,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { EscalationGameCarryTree } from './EscalationGameCarryTree.sol';
+import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
@@ -109,9 +109,9 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 				parentForkData.escalationElapsedAtFork
 			);
 		}
-		EscalationGameCarryTree childEscalationGame = EscalationGameCarryTree(payable(address(child.escalationGame())));
+		EscalationGame childEscalationGame = EscalationGame(payable(address(child.escalationGame())));
 		if (!childEscalationGame.forkCarrySnapshotInitialized()) {
-			EscalationGameCarryTree parentEscalationGame = EscalationGameCarryTree(payable(address(parent.escalationGame())));
+			EscalationGame parentEscalationGame = EscalationGame(payable(address(parent.escalationGame())));
 			bytes32[64][3] memory inheritedCarryPeaks = [
 				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.Invalid),
 				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.Yes),

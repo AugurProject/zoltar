@@ -1,5 +1,5 @@
 import { encodeDeployData, getCreate2Address, numberToBytes } from 'viem'
-import { peripherals_EscalationGameCarryTree_EscalationGameCarryTree, peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
@@ -79,7 +79,7 @@ export const getUnsettledDepositIndexesByOutcomeAndDepositor = async (client: Re
 
 export const getCarryRoot = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
 	await client.readContract({
-		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'getCarryRoot',
 		address: escalationGame,
 		args: [outcome],
@@ -87,7 +87,7 @@ export const getCarryRoot = async (client: ReadClient, escalationGame: AccountAd
 
 export const getCarryLeafCount = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
 	await client.readContract({
-		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'getCarryLeafCount',
 		address: escalationGame,
 		args: [outcome],
@@ -95,7 +95,7 @@ export const getCarryLeafCount = async (client: ReadClient, escalationGame: Acco
 
 export const getCarryTotal = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
 	await client.readContract({
-		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'getCarryTotal',
 		address: escalationGame,
 		args: [outcome],
@@ -112,8 +112,8 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 	)
 	return getCreate2Address({
 		bytecode: encodeDeployData({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
-			bytecode: `0x${peripherals_EscalationGameCarryTree_EscalationGameCarryTree.evm.bytecode.object}`,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
 			args: [writeClient.account.address],
 		}),
 		from: getInfraContractAddresses().escalationGameFactory,

@@ -10,12 +10,7 @@ import assert from 'node:assert/strict'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import {
-	peripherals_EscalationGameCarryTree_EscalationGameCarryTree,
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool,
-	peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool,
-} from '../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameCarryTreeTestSecurityPool_EscalationGameCarryTreeTestSecurityPool, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 const ESCALATION_TIME_LENGTH = 4233600n
@@ -107,8 +102,8 @@ describe('Escalation Game Test Suite', () => {
 		if (testSecurityPoolAddress === undefined || testSecurityPoolAddress === null) throw new Error('carry tree test security pool deployment address missing')
 		const carryTreeDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
-				bytecode: `0x${peripherals_EscalationGameCarryTree_EscalationGameCarryTree.evm.bytecode.object}`,
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
 				args: [testSecurityPoolAddress],
 			}),
 		})
@@ -133,7 +128,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'start',
 					args: [startBond, nonDecisionThreshold],
@@ -145,7 +140,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
 					args: [startBond, nonDecisionThreshold, elapsedAtFork],
@@ -157,7 +152,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'resumeFromFork',
 					args: [],
@@ -178,7 +173,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readCarryPeaks = async (escalationGameAddress: Address, outcome: QuestionOutcome) =>
 		await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryPeaks',
 			args: [outcome],
@@ -223,8 +218,8 @@ describe('Escalation Game Test Suite', () => {
 			cumulativeAmount: bigint
 			sourceNodeId: bigint
 			leafIndex: bigint
-			mmrSiblings: readonly Hex[]
-			mmrPeakIndex: bigint
+			merkleMountainRangeSiblings: readonly Hex[]
+			merkleMountainRangePeakIndex: bigint
 			nullifierSiblings: readonly Hex[]
 		},
 	) =>
@@ -304,9 +299,9 @@ describe('Escalation Game Test Suite', () => {
 		}
 	}
 
-	const createCarryTreeProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, mmrPeakIndex: bigint, mmrSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
+	const createCarryTreeProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
 		const node = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getNode',
 			args: [leafIndex + 1n],
@@ -318,8 +313,8 @@ describe('Escalation Game Test Suite', () => {
 			cumulativeAmount: node[5],
 			sourceNodeId: leafIndex + 1n,
 			leafIndex,
-			mmrSiblings,
-			mmrPeakIndex,
+			merkleMountainRangeSiblings,
+			merkleMountainRangePeakIndex,
 			nullifierSiblings,
 		}
 	}
@@ -485,41 +480,41 @@ describe('Escalation Game Test Suite', () => {
 		)
 	})
 
-	test('carry tree maintains an append-only MMR root for inherited carryover deposits', async () => {
+	test('carry tree maintains an append-only Merkle Mountain Range root for inherited carryover deposits', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameCarryTree()
 		await startCarryTree(escalationGameAddress, reportBond, nonDecisionThreshold)
 
 		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 
 		const firstLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
 		})
 		const rootAfterFirstDeposit = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryRoot',
 			args: [QuestionOutcome.Yes],
 		})
-		assert.strictEqual(rootAfterFirstDeposit, firstLeafHash, 'single appended leaf should be its own MMR root')
+		assert.strictEqual(rootAfterFirstDeposit, firstLeafHash, 'single appended leaf should be its own Merkle Mountain Range root')
 
 		await depositOnCarryTreeOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const secondLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n],
 		})
 		const expectedTwoLeafRoot = keccak256(concatHex([firstLeafHash, secondLeafHash]))
 		const rootAfterSecondDeposit = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryRoot',
 			args: [QuestionOutcome.Yes],
 		})
-		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected MMR root')
+		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected Merkle Mountain Range root')
 	})
 
 	test('carry tree child instances can settle multiple inherited carried deposits from proofs only', async () => {
@@ -529,19 +524,19 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnCarryTreeOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 
 		const parentLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Yes],
@@ -549,13 +544,13 @@ describe('Escalation Game Test Suite', () => {
 		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const firstLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
 		})
 		const secondLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n],
@@ -574,7 +569,7 @@ describe('Escalation Game Test Suite', () => {
 		await withdrawCarriedDepositViaTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, secondProof)
 
 		const remainingCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
@@ -588,19 +583,19 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnCarryTreeOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 
 		const parentLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Yes],
@@ -626,37 +621,37 @@ describe('Escalation Game Test Suite', () => {
 		const parentInvalidPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentInvalidLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Invalid],
 		})
 		const parentLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentInvalidCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Invalid],
 		})
 		const parentCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentInvalidNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Invalid],
 		})
 		const parentNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Yes],
@@ -671,50 +666,50 @@ describe('Escalation Game Test Suite', () => {
 		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
 		const childInvalidLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Invalid],
 		})
 		const childLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Yes],
 		})
 		const childInvalidCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Invalid],
 		})
 		const childCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		const childInvalidNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Invalid],
 		})
 		const childNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Yes],
 		})
 
 		const parentLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n],
 		})
 		const childLocalLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, reportBond, 1n << 255n, 4n * reportBond, 1n],
@@ -732,26 +727,26 @@ describe('Escalation Game Test Suite', () => {
 			cumulativeAmount: 3n * reportBond,
 			sourceNodeId: 2n,
 			leafIndex: 0n,
-			mmrPeakIndex: 1n,
-			mmrSiblings: [childLocalLeafHash],
+			merkleMountainRangePeakIndex: 1n,
+			merkleMountainRangeSiblings: [childLocalLeafHash],
 			nullifierSiblings: nullifierTree.getProof(0n),
 		}
 		await withdrawCarriedDepositViaTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
 
 		const remainingCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: grandchild.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		assert.strictEqual(remainingCarryTotal, reportBond, 'only the child-local unresolved carry should remain after settling the inherited parent leaf')
 		const grandchildRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: grandchild.escalationGameAddress,
 			functionName: 'getCarryRoot',
 			args: [QuestionOutcome.Yes],
 		})
-		assert.strictEqual(grandchildRoot, keccak256(concatHex([parentLeafHash, childLocalLeafHash])), 'grandchild should snapshot the recursive child carry set as a true two-leaf MMR')
+		assert.strictEqual(grandchildRoot, keccak256(concatHex([parentLeafHash, childLocalLeafHash])), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
 	})
 
 	test('carry tree grandchild instances reject child-local leaves that were already settled before the recursive fork', async () => {
@@ -763,37 +758,37 @@ describe('Escalation Game Test Suite', () => {
 		const parentInvalidPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentInvalidLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Invalid],
 		})
 		const parentYesLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentInvalidCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Invalid],
 		})
 		const parentYesCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentInvalidNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Invalid],
 		})
 		const parentYesNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Yes],
@@ -809,43 +804,43 @@ describe('Escalation Game Test Suite', () => {
 		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
 		const childInvalidLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Invalid],
 		})
 		const childYesLeafCount = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryLeafCount',
 			args: [QuestionOutcome.Yes],
 		})
 		const childInvalidCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Invalid],
 		})
 		const childYesCarryTotal = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getCarryTotal',
 			args: [QuestionOutcome.Yes],
 		})
 		const childInvalidNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Invalid],
 		})
 		const childYesNullifierRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getNullifierRoot',
 			args: [QuestionOutcome.Yes],
 		})
 		const parentLeafHash = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: parent.escalationGameAddress,
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n],
@@ -862,8 +857,8 @@ describe('Escalation Game Test Suite', () => {
 			cumulativeAmount: 4n * reportBond,
 			sourceNodeId: 1n,
 			leafIndex: 1n,
-			mmrPeakIndex: 1n,
-			mmrSiblings: [parentLeafHash],
+			merkleMountainRangePeakIndex: 1n,
+			merkleMountainRangeSiblings: [parentLeafHash],
 			nullifierSiblings: nullifierTree.getProof(1n << 255n),
 		}
 
@@ -874,7 +869,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 
 		const grandchildRoot = await client.readContract({
-			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: grandchild.escalationGameAddress,
 			functionName: 'getCarryRoot',
 			args: [QuestionOutcome.Yes],
