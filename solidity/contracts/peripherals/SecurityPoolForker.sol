@@ -220,26 +220,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		EscalationGame childEscalationGame = EscalationGame(payable(address(child.escalationGame())));
 		if (!childEscalationGame.forkCarrySnapshotInitialized()) {
 			EscalationGame parentEscalationGame = EscalationGame(payable(address(parent.escalationGame())));
-			bytes32[64][3] memory inheritedCarryPeaks = [
-				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.Invalid),
-				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.Yes),
-				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.No)
-			];
-			uint256[3] memory inheritedCarryLeafCounts = [
-				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.Invalid),
-				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.Yes),
-				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.No)
-			];
-			uint256[3] memory inheritedCarryTotals = [
-				parentEscalationGame.getCarryTotal(BinaryOutcomes.BinaryOutcome.Invalid),
-				parentEscalationGame.getCarryTotal(BinaryOutcomes.BinaryOutcome.Yes),
-				parentEscalationGame.getCarryTotal(BinaryOutcomes.BinaryOutcome.No)
-			];
-			bytes32[3] memory inheritedNullifierRoots = [
-				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.Invalid),
-				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.Yes),
-				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.No)
-			];
+			(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) =
+				parentEscalationGame.getForkCarrySnapshot();
 			child.initializeForkCarrySnapshot(inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots);
 		}
 		if (child.systemState() == SystemState.Operational) {

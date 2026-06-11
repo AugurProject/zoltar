@@ -303,6 +303,15 @@ async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, es
 	}
 }
 
+async function readEscalationOutcomeState(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
+	return await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		address: escalationGameAddress,
+		functionName: 'getOutcomeState',
+		args: [getReportingOutcomeValue(outcome)],
+	})
+}
+
 async function loadRecursiveCarrySnapshot(
 	client: Pick<ReadClient, 'readContract'>,
 	escalationGameAddress: Address,
@@ -313,28 +322,8 @@ async function loadRecursiveCarrySnapshot(
 	carryLeafCount: bigint
 	nullifierRoot: Hex
 }> {
-	const [carryRoot, carryLeafCount, nullifierRoot, forkContinuation, localLeaves] = await Promise.all([
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'getCarryRoot',
-			args: [getReportingOutcomeValue(outcome)],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'getCarryLeafCount',
-			args: [getReportingOutcomeValue(outcome)],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'getNullifierRoot',
-			args: [getReportingOutcomeValue(outcome)],
-		}),
-		readForkContinuation(client, escalationGameAddress),
-		loadCarryLeafPage(client, escalationGameAddress, outcome),
-	])
+	const [outcomeState, forkContinuation, localLeaves] = await Promise.all([readEscalationOutcomeState(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress), loadCarryLeafPage(client, escalationGameAddress, outcome)])
+	const { currentCarryRoot: carryRoot, currentLeafCount: carryLeafCount, currentNullifierRoot: nullifierRoot } = outcomeState
 	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigintAscending(left.parentDepositIndex, right.parentDepositIndex))
 	if (forkContinuation !== true) {
 		return {
@@ -2445,16 +2434,12 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 		args: [],
 	})
 	if (parentEscalationGameAddress === zeroAddress) throw new Error('Parent escalation game unavailable for fork-carried settlement.')
-	const [parentSnapshot, consumedParentDepositIndexes, childNullifierRoot] = await Promise.all([
+	const [parentSnapshot, consumedParentDepositIndexes, childOutcomeState] = await Promise.all([
 		loadRecursiveCarrySnapshot(client, parentEscalationGameAddress, outcome),
 		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
-		client.readContract({
-			address: childEscalationGameAddress,
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getNullifierRoot',
-			args: [getReportingOutcomeValue(outcome)],
-		}),
+		readEscalationOutcomeState(client, childEscalationGameAddress, outcome),
 	])
+	const { currentNullifierRoot: childNullifierRoot } = childOutcomeState
 	const { orderedLeaves, carryRoot: parentCarryRoot, carryLeafCount: parentCarryLeafCount } = parentSnapshot
 	if (BigInt(orderedLeaves.length) !== parentCarryLeafCount) throw new Error('Parent carry snapshot is not locally reconstructible.')
 	const leafHashes = orderedLeaves.map(leaf => hashCarryLeaf(leaf, outcome))
