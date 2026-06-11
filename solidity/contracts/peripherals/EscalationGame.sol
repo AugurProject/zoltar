@@ -30,8 +30,8 @@ uint256 constant FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX = 1 << 255;
 contract EscalationGame {
 	uint256 public constant activationDelay = 3 days;
 	uint256 public activationTime;
-	uint256[3] public balances; // outcome -> amount
-	mapping(uint8 => Deposit[]) public deposits; // make a fixed array with dynamic
+	uint256[3] public balances; // [outcomeIndex 0..2] => total principal currently assigned to that outcome.
+	mapping(uint8 => Deposit[]) public deposits; // [outcomeIndex 0..2] => local deposits in arrival order for payout ordering.
 	ISecurityPool public securityPool;
 	uint256 public nonDecisionThreshold;
 	uint256 public startBond;
@@ -42,15 +42,15 @@ contract EscalationGame {
 	bool public forkContinuationResumed;
 	uint256 public forkElapsedAtStart;
 	uint256 public forkResumedAt;
-	// [outcome][parentDepositIndex] => imported deposit record carried from a parent or ancestor continuation game.
+	// [outcomeIndex 0..2][parentDepositIndex] => imported deposit record carried from a parent or ancestor continuation game.
 	mapping(uint256 => ImportedDeposit)[3] public importedDeposits;
-	// [outcome][fenwickNodeIndex] => Fenwick tree node sum used to compute imported principal before a given parentDepositIndex.
+	// [outcomeIndex 0..2][fenwickNodeIndex] => Fenwick tree node sum used to compute imported principal before a given parentDepositIndex.
 	mapping(uint256 => uint256)[3] private importedPrefixTree;
 	uint256[3] private importedTotalAmount;
 	uint256[3] private importedMaxKeyAmount;
-	// [outcome][depositor] => unsettled imported parentDepositIndexes owned by that depositor, used for bounded discovery/pagination.
+	// [outcomeIndex 0..2][depositor] => unsettled imported parentDepositIndexes owned by that depositor, used for bounded discovery and pagination.
 	mapping(address => uint256[])[3] private unsettledImportedDepositIndexesByDepositor;
-	// [outcome][depositor][parentDepositIndex] => 1-based position of that imported index inside unsettledImportedDepositIndexesByDepositor for O(1) swap-and-pop removal.
+	// [outcomeIndex 0..2][depositor][parentDepositIndex] => 1-based position of that imported index inside unsettledImportedDepositIndexesByDepositor for O(1) swap-and-pop removal.
 	mapping(address => mapping(uint256 => uint256))[3] private importedDepositorIndexPosition;
 	uint256[3] public importedBalances;
 
