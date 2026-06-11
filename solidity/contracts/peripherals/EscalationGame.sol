@@ -19,6 +19,27 @@ struct ImportedDeposit {
 	bool settled;
 }
 
+struct OutcomeState {
+	// Total principal currently assigned to this outcome, including imported continuation deposits.
+	uint256 balance;
+	// Local deposits placed directly in this escalation game, preserved in arrival order for payout ordering.
+	Deposit[] deposits;
+	// [parentDepositIndex] => imported deposit record carried from a parent or ancestor continuation game.
+	mapping(uint256 => ImportedDeposit) importedDeposits;
+	// [fenwickNodeIndex] => Fenwick tree node sum used to compute imported principal before a given parentDepositIndex.
+	mapping(uint256 => uint256) importedPrefixTree;
+	// [depositor] => unsettled imported parentDepositIndexes owned by that depositor, used for bounded discovery and pagination.
+	mapping(address => uint256[]) unsettledImportedDepositIndexesByDepositor;
+	// [depositor][parentDepositIndex] => 1-based position inside unsettledImportedDepositIndexesByDepositor for O(1) swap-and-pop removal.
+	mapping(address => mapping(uint256 => uint256)) importedDepositorIndexPosition;
+	// Total imported principal tracked in this outcome's imported prefix accounting.
+	uint256 importedTotalAmount;
+	// Imported principal sitting at the sentinel max key, excluded from normal Fenwick prefix traversal.
+	uint256 importedMaxKeyAmount;
+	// Total imported continuation principal currently assigned to this outcome.
+	uint256 importedBalance;
+}
+
 uint256 constant escalationTimeLength = 4233600; // 7 weeks
 uint256 constant SCALE = 1e6;
 uint256 constant LN2_SCALED = 693147;
@@ -30,8 +51,6 @@ uint256 constant FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX = 1 << 255;
 contract EscalationGame {
 	uint256 public constant activationDelay = 3 days;
 	uint256 public activationTime;
-	uint256[3] public balances; // [outcomeIndex 0..2] => total principal currently assigned to that outcome.
-	mapping(uint8 => Deposit[]) public deposits; // [outcomeIndex 0..2] => local deposits in arrival order for payout ordering.
 	ISecurityPool public securityPool;
 	uint256 public nonDecisionThreshold;
 	uint256 public startBond;
@@ -42,17 +61,9 @@ contract EscalationGame {
 	bool public forkContinuationResumed;
 	uint256 public forkElapsedAtStart;
 	uint256 public forkResumedAt;
-	// [outcomeIndex 0..2][parentDepositIndex] => imported deposit record carried from a parent or ancestor continuation game.
-	mapping(uint256 => ImportedDeposit)[3] public importedDeposits;
-	// [outcomeIndex 0..2][fenwickNodeIndex] => Fenwick tree node sum used to compute imported principal before a given parentDepositIndex.
-	mapping(uint256 => uint256)[3] private importedPrefixTree;
-	uint256[3] private importedTotalAmount;
-	uint256[3] private importedMaxKeyAmount;
-	// [outcomeIndex 0..2][depositor] => unsettled imported parentDepositIndexes owned by that depositor, used for bounded discovery and pagination.
-	mapping(address => uint256[])[3] private unsettledImportedDepositIndexesByDepositor;
-	// [outcomeIndex 0..2][depositor][parentDepositIndex] => 1-based position of that imported index inside unsettledImportedDepositIndexesByDepositor for O(1) swap-and-pop removal.
-	mapping(address => mapping(uint256 => uint256))[3] private importedDepositorIndexPosition;
-	uint256[3] public importedBalances;
+	// Outcome-indexed state uses 0 = Invalid, 1 = Yes, 2 = No.
+	// Each bucket owns its local deposits, imported continuation deposits, and aggregate balances.
+	OutcomeState[3] private outcomeState;
 
 	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event GameContinuedFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork);
@@ -107,8 +118,26 @@ contract EscalationGame {
 		emit ForkContinuationResumed(block.timestamp);
 	}
 
+	function balances(uint256 outcomeIndex) public view returns (uint256) {
+		return outcomeState[outcomeIndex].balance;
+	}
+
+	function deposits(uint8 outcomeIndex, uint256 depositIndex) public view returns (address depositor, uint256 amount, uint256 cumulativeAmount) {
+		Deposit storage deposit = outcomeState[outcomeIndex].deposits[depositIndex];
+		return (deposit.depositor, deposit.amount, deposit.cumulativeAmount);
+	}
+
+	function importedDeposits(uint256 outcomeIndex, uint256 parentDepositIndex) public view returns (address depositor, uint256 amount, uint256 cumulativeAmount, bool settled) {
+		ImportedDeposit storage deposit = outcomeState[outcomeIndex].importedDeposits[parentDepositIndex];
+		return (deposit.depositor, deposit.amount, deposit.cumulativeAmount, deposit.settled);
+	}
+
+	function importedBalances(uint256 outcomeIndex) public view returns (uint256) {
+		return outcomeState[outcomeIndex].importedBalance;
+	}
+
 	function getBalances() public view returns (uint256[3] memory) {
-		return [balances[0], balances[1], balances[2]];
+		return [outcomeState[0].balance, outcomeState[1].balance, outcomeState[2].balance];
 	}
 
 	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
@@ -220,31 +249,37 @@ contract EscalationGame {
 
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome){
 		uint256 currentTotalCost = totalCost();
-		uint8 invalidOver = balances[0] >= currentTotalCost ? 1 : 0;
-		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
-		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
+		uint8 invalidOver = outcomeState[0].balance >= currentTotalCost ? 1 : 0;
+		uint8 yesOver = outcomeState[1].balance >= currentTotalCost ? 1 : 0;
+		uint8 noOver = outcomeState[2].balance >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return BinaryOutcomes.BinaryOutcome.None; // if two or more outcomes are over the total cost, the game is still going
-		if (balances[0] == 0 && balances[1] == 0 && balances[2] == 0) return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (outcomeState[0].balance == 0 && outcomeState[1].balance == 0 && outcomeState[2].balance == 0) return BinaryOutcomes.BinaryOutcome.Invalid;
 		// the game has ended due to timeout
-		if (balances[0] > balances[1] && balances[0] > balances[2]) return BinaryOutcomes.BinaryOutcome.Invalid;
-		if (balances[1] > balances[0] && balances[1] > balances[2]) return BinaryOutcomes.BinaryOutcome.Yes;
+		if (outcomeState[0].balance > outcomeState[1].balance && outcomeState[0].balance > outcomeState[2].balance) return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (outcomeState[1].balance > outcomeState[0].balance && outcomeState[1].balance > outcomeState[2].balance) return BinaryOutcomes.BinaryOutcome.Yes;
 		return BinaryOutcomes.BinaryOutcome.No;
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
-		uint8 invalidOver = balances[0] >= nonDecisionThreshold ? 1 : 0;
-		uint8 yesOver = balances[1] >= nonDecisionThreshold ? 1 : 0;
-		uint8 noOver = balances[2] >= nonDecisionThreshold ? 1 : 0;
+		uint8 invalidOver = outcomeState[0].balance >= nonDecisionThreshold ? 1 : 0;
+		uint8 yesOver = outcomeState[1].balance >= nonDecisionThreshold ? 1 : 0;
+		uint8 noOver = outcomeState[2].balance >= nonDecisionThreshold ? 1 : 0;
 		return invalidOver + yesOver + noOver >= 2;
 	}
 
 	function getBindingCapital() public view returns (uint256) {
-		if ((balances[0] >= balances[1] && balances[0] <= balances[2]) || (balances[0] >= balances[2] && balances[0] <= balances[1])) {
-			return balances[0];
-		} else if ((balances[1] >= balances[0] && balances[1] <= balances[2]) || (balances[1] >= balances[2] && balances[1] <= balances[0])) {
-			return balances[1];
+		if (
+			(outcomeState[0].balance >= outcomeState[1].balance && outcomeState[0].balance <= outcomeState[2].balance) ||
+			(outcomeState[0].balance >= outcomeState[2].balance && outcomeState[0].balance <= outcomeState[1].balance)
+		) {
+			return outcomeState[0].balance;
+		} else if (
+			(outcomeState[1].balance >= outcomeState[0].balance && outcomeState[1].balance <= outcomeState[2].balance) ||
+			(outcomeState[1].balance >= outcomeState[2].balance && outcomeState[1].balance <= outcomeState[0].balance)
+		) {
+			return outcomeState[1].balance;
 		}
-		return balances[2];
+		return outcomeState[2].balance;
 	}
 
 	// deposits on question outcome, returns how much user actually ended depositing
@@ -253,18 +288,19 @@ contract EscalationGame {
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
-		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
+		require(outcomeState[uint256(outcome)].balance < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		uint256 outcomeIdx = uint256(outcome);
-		uint256 currentBalance = balances[outcomeIdx];
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIdx];
+		uint256 currentBalance = selectedOutcomeState.balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
 		uint256 effectiveDeposit = amount > room ? room : amount;
 		uint256 newBalance = currentBalance + effectiveDeposit;
 
 		// Snapshot all balances for tie detection
-		uint256 b0 = balances[0];
-		uint256 b1 = balances[1];
-		uint256 b2 = balances[2];
+		uint256 b0 = outcomeState[0].balance;
+		uint256 b1 = outcomeState[1].balance;
+		uint256 b2 = outcomeState[2].balance;
 		uint256 maxBal = b0 > b1 ? (b0 > b2 ? b0 : b2) : (b1 > b2 ? b1 : b2);
 
 		// Check if new balance ties with existing maximum and another outcome has that maximum, and max is below threshold.
@@ -279,16 +315,16 @@ contract EscalationGame {
 			}
 
 		// Update the balance
-		balances[outcomeIdx] = newBalance;
+		selectedOutcomeState.balance = newBalance;
 		depositAmount = effectiveDeposit;
 
 		// Record deposit
 		Deposit memory deposit;
 		deposit.depositor = depositor;
 		deposit.amount = depositAmount;
-		deposit.cumulativeAmount = balances[outcomeIdx];
-		deposits[uint8(outcome)].push(deposit);
-		emit DepositOnOutcome(depositor, outcome, deposit.amount, deposits[uint8(outcome)].length - 1, deposit.cumulativeAmount);
+		deposit.cumulativeAmount = selectedOutcomeState.balance;
+		selectedOutcomeState.deposits.push(deposit);
+		emit DepositOnOutcome(depositor, outcome, deposit.amount, selectedOutcomeState.deposits.length - 1, deposit.cumulativeAmount);
 		if (hasReachedNonDecision()) {
 			nonDecisionTimestamp = block.timestamp;
 		}
@@ -300,15 +336,16 @@ contract EscalationGame {
 			'Only Security Pool or designated forker can withdraw'
 		);
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
-		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
+		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
 		require(deposit.amount > 0, 'deposit already settled');
-		deposits[uint8(outcome)][depositIndex].amount = 0;
+		selectedOutcomeState.deposits[depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
 		uint256 depositStart = deposit.cumulativeAmount - deposit.amount;
 		uint256 bindingCapitalAmount = getBindingCapital();
 		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 winningOutcomeBalance = balances[uint8(outcome)];
+		uint256 winningOutcomeBalance = selectedOutcomeState.balance;
 		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
 		uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
 		uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
@@ -340,9 +377,10 @@ contract EscalationGame {
 			'Only Security Pool or designated forker can withdraw'
 		);
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
 		if (depositIndex > type(uint128).max) {
 			uint256 importedDepositIndex = ~depositIndex;
-			ImportedDeposit storage importedDeposit = importedDeposits[uint8(outcome)][importedDepositIndex];
+			ImportedDeposit storage importedDeposit = selectedOutcomeState.importedDeposits[importedDepositIndex];
 			require(importedDeposit.depositor != address(0x0), 'unknown imported deposit');
 			require(!importedDeposit.settled, 'deposit already settled');
 			importedDeposit.settled = true;
@@ -351,9 +389,9 @@ contract EscalationGame {
 			parentDepositIndex = importedDepositIndex;
 			return (depositor, amount, parentDepositIndex);
 		}
-		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
 		require(deposit.amount > 0, 'deposit already settled');
-		deposits[uint8(outcome)][depositIndex].amount = 0;
+		selectedOutcomeState.deposits[depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		amount = deposit.amount;
 		parentDepositIndex = forkContinuation ? FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX | depositIndex : depositIndex;
@@ -367,16 +405,18 @@ contract EscalationGame {
 		require(forkContinuation, 'not fork continuation');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		require(amount > 0, 'amount must be positive');
-		ImportedDeposit storage deposit = importedDeposits[uint8(outcome)][parentDepositIndex];
+		uint8 outcomeIndex = uint8(outcome);
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
+		ImportedDeposit storage deposit = selectedOutcomeState.importedDeposits[parentDepositIndex];
 		require(deposit.depositor == address(0x0), 'deposit already imported');
 		deposit.depositor = depositor;
 		deposit.amount = amount;
-		deposit.cumulativeAmount = _getImportedPrefixAmount(uint8(outcome), parentDepositIndex);
-		importedBalances[uint8(outcome)] += amount;
-		balances[uint8(outcome)] += amount;
-		_addImportedPrefixAmount(uint8(outcome), parentDepositIndex, amount);
-		unsettledImportedDepositIndexesByDepositor[uint8(outcome)][depositor].push(parentDepositIndex);
-		importedDepositorIndexPosition[uint8(outcome)][depositor][parentDepositIndex] = unsettledImportedDepositIndexesByDepositor[uint8(outcome)][depositor].length;
+		deposit.cumulativeAmount = _getImportedPrefixAmount(outcomeIndex, parentDepositIndex);
+		selectedOutcomeState.importedBalance += amount;
+		selectedOutcomeState.balance += amount;
+		_addImportedPrefixAmount(outcomeIndex, parentDepositIndex, amount);
+		selectedOutcomeState.unsettledImportedDepositIndexesByDepositor[depositor].push(parentDepositIndex);
+		selectedOutcomeState.importedDepositorIndexPosition[depositor][parentDepositIndex] = selectedOutcomeState.unsettledImportedDepositIndexesByDepositor[depositor].length;
 		emit ImportedForkDeposit(depositor, outcome, parentDepositIndex, amount);
 	}
 
@@ -386,17 +426,19 @@ contract EscalationGame {
 			'Only Security Pool or designated forker can withdraw'
 		);
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
-		ImportedDeposit storage deposit = importedDeposits[uint8(outcome)][parentDepositIndex];
+		uint8 outcomeIndex = uint8(outcome);
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
+		ImportedDeposit storage deposit = selectedOutcomeState.importedDeposits[parentDepositIndex];
 		require(deposit.depositor != address(0x0), 'unknown imported deposit');
 		require(!deposit.settled, 'deposit already settled');
 		deposit.settled = true;
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
-		_removeUnsettledImportedDeposit(uint8(outcome), depositor, parentDepositIndex);
+		_removeUnsettledImportedDeposit(outcomeIndex, depositor, parentDepositIndex);
 		uint256 depositStart = deposit.cumulativeAmount;
 		uint256 bindingCapitalAmount = getBindingCapital();
 		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 winningOutcomeBalance = balances[uint8(outcome)];
+		uint256 winningOutcomeBalance = selectedOutcomeState.balance;
 		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
 		uint256 burnAmount;
 		if (rewardEligiblePrincipalAmount == 0) {
@@ -429,13 +471,15 @@ contract EscalationGame {
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		require(outcome != questionResolution, 'Winning deposits must withdraw');
-		ImportedDeposit storage deposit = importedDeposits[uint8(outcome)][parentDepositIndex];
+		uint8 outcomeIndex = uint8(outcome);
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
+		ImportedDeposit storage deposit = selectedOutcomeState.importedDeposits[parentDepositIndex];
 		require(deposit.depositor != address(0x0), 'unknown imported deposit');
 		require(!deposit.settled, 'deposit already settled');
 		deposit.settled = true;
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
-		_removeUnsettledImportedDeposit(uint8(outcome), depositor, parentDepositIndex);
+		_removeUnsettledImportedDeposit(outcomeIndex, depositor, parentDepositIndex);
 		emit WithdrawDeposit(depositor, outcome, 0, parentDepositIndex);
 	}
 
@@ -443,9 +487,10 @@ contract EscalationGame {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(securityPool.zoltar().getForkTime(securityPool.universeId()) > 0, 'Zoltar has not forked');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
-		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
+		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
 		require(deposit.amount > 0, 'deposit already settled');
-		deposits[uint8(outcome)][depositIndex].amount = 0;
+		selectedOutcomeState.deposits[depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		amountToWithdraw = deposit.amount;
 		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
@@ -458,7 +503,7 @@ contract EscalationGame {
 		uint256 scanCount
 	) external view returns (uint256[] memory depositIndexes) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
-		uint256[] storage depositorIndexes = unsettledImportedDepositIndexesByDepositor[uint8(outcome)][depositor];
+		uint256[] storage depositorIndexes = outcomeState[uint8(outcome)].unsettledImportedDepositIndexesByDepositor[depositor];
 		if (startIndex >= depositorIndexes.length || scanCount == 0) return new uint256[](0);
 		uint256 endIndex = startIndex + scanCount;
 		if (endIndex > depositorIndexes.length) {
@@ -489,10 +534,11 @@ contract EscalationGame {
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		require(outcome != questionResolution, 'Winning deposits must withdraw');
-		require(depositIndex < deposits[uint8(outcome)].length, 'Invalid deposit index');
-		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
+		require(depositIndex < selectedOutcomeState.deposits.length, 'Invalid deposit index');
+		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
 		require(deposit.amount > 0, 'deposit already settled');
-		deposits[uint8(outcome)][depositIndex].amount = 0;
+		selectedOutcomeState.deposits[depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
 		emit WithdrawDeposit(depositor, outcome, 0, depositIndex);
@@ -505,7 +551,7 @@ contract EscalationGame {
 		uint256 scanCount
 	) external view returns (uint256[] memory depositIndexes) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
-		Deposit[] storage outcomeDeposits = deposits[uint8(outcome)];
+		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
 		if (startIndex >= outcomeDeposits.length || scanCount == 0) return new uint256[](0);
 		uint256 endIndex = startIndex + scanCount;
 		if (endIndex > outcomeDeposits.length) {
@@ -533,51 +579,55 @@ contract EscalationGame {
 
 	// TODO, for the UI, we probably want to retrieve multiple outcomes at once
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
-		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;
+		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
+		uint256 iterateUntil = startIndex + numberOfEntries > outcomeDeposits.length ? outcomeDeposits.length : startIndex + numberOfEntries;
 		if (iterateUntil <= startIndex) return new Deposit[](0);
 		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
-			returnDeposits[i - startIndex] = deposits[uint8(outcome)][i];
+			returnDeposits[i - startIndex] = outcomeDeposits[i];
 		}
 	}
 
 	function _removeUnsettledImportedDeposit(uint8 outcomeIndex, address depositor, uint256 parentDepositIndex) private {
-		uint256[] storage depositorIndexes = unsettledImportedDepositIndexesByDepositor[outcomeIndex][depositor];
-		uint256 positionPlusOne = importedDepositorIndexPosition[outcomeIndex][depositor][parentDepositIndex];
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
+		uint256[] storage depositorIndexes = selectedOutcomeState.unsettledImportedDepositIndexesByDepositor[depositor];
+		uint256 positionPlusOne = selectedOutcomeState.importedDepositorIndexPosition[depositor][parentDepositIndex];
 		require(positionPlusOne != 0, 'deposit not unsettled');
 		uint256 position = positionPlusOne - 1;
 		uint256 lastIndex = depositorIndexes.length - 1;
 		if (position != lastIndex) {
 			uint256 movedDepositIndex = depositorIndexes[lastIndex];
 			depositorIndexes[position] = movedDepositIndex;
-			importedDepositorIndexPosition[outcomeIndex][depositor][movedDepositIndex] = positionPlusOne;
+			selectedOutcomeState.importedDepositorIndexPosition[depositor][movedDepositIndex] = positionPlusOne;
 		}
 		depositorIndexes.pop();
-		delete importedDepositorIndexPosition[outcomeIndex][depositor][parentDepositIndex];
+		delete selectedOutcomeState.importedDepositorIndexPosition[depositor][parentDepositIndex];
 	}
 
 	function _getImportedPrefixAmount(uint8 outcomeIndex, uint256 parentDepositIndex) internal view returns (uint256 prefixAmount) {
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		if (parentDepositIndex == 0) {
 			return 0;
 		}
 		if (parentDepositIndex == type(uint256).max) {
-			return importedTotalAmount[outcomeIndex] - importedMaxKeyAmount[outcomeIndex];
+			return selectedOutcomeState.importedTotalAmount - selectedOutcomeState.importedMaxKeyAmount;
 		}
 		for (uint256 index = parentDepositIndex; index > 0;) {
-			prefixAmount += importedPrefixTree[outcomeIndex][index];
+			prefixAmount += selectedOutcomeState.importedPrefixTree[index];
 			uint256 lowBit = index & (~index + 1);
 			index -= lowBit;
 		}
 	}
 
 	function _addImportedPrefixAmount(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amount) internal {
-		importedTotalAmount[outcomeIndex] += amount;
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
+		selectedOutcomeState.importedTotalAmount += amount;
 		if (parentDepositIndex == type(uint256).max) {
-			importedMaxKeyAmount[outcomeIndex] += amount;
+			selectedOutcomeState.importedMaxKeyAmount += amount;
 			return;
 		}
 		for (uint256 index = parentDepositIndex + 1; index > 0;) {
-			importedPrefixTree[outcomeIndex][index] += amount;
+			selectedOutcomeState.importedPrefixTree[index] += amount;
 			uint256 lowBit = index & (~index + 1);
 			unchecked {
 				index += lowBit;
