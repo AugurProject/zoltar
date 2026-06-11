@@ -463,6 +463,23 @@ describe('contracts helpers', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'startBond') return 7n
+				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'activationTime') return 12n
+				if (request.functionName === 'totalCost') return 22n
+				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'getOutcomeState') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
+					if (args[0] === 0) return { balance: 1n }
+					if (args[0] === 1) return { balance: 14n }
+					if (args[0] === 2) return { balance: 3n }
+					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
+				}
+				if (request.functionName === 'getEscalationGameEndDate') return 150n
+				if (request.functionName === 'getQuestionOutcome') return 3
+				if (request.functionName === 'getForkTime') return 123n
+				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -505,6 +522,23 @@ describe('contracts helpers', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'startBond') return 7n
+				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'activationTime') return 12n
+				if (request.functionName === 'totalCost') return 22n
+				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'getOutcomeState') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
+					if (args[0] === 0) return { balance: 1n }
+					if (args[0] === 1) return { balance: 14n }
+					if (args[0] === 2) return { balance: 3n }
+					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
+				}
+				if (request.functionName === 'getEscalationGameEndDate') return 99n
+				if (request.functionName === 'getQuestionOutcome') return 3
+				if (request.functionName === 'getForkTime') return 120n
+				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']

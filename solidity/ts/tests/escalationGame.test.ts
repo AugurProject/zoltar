@@ -184,6 +184,21 @@ describe('Escalation Game Test Suite', () => {
 	const readCarryLeafCount = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentLeafCount
 	const readCarryTotal = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryTotal
 	const readNullifierRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentNullifierRoot
+	const readForkCarrySnapshotInitialized = async (escalationGameAddress: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'forkCarrySnapshotInitialized',
+			args: [],
+		})
+
+	const readCarryLeafPage = async (escalationGameAddress: Address, outcome: QuestionOutcome, startNodeId: bigint, maxEntries: bigint) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'getCarryLeafPageByOutcome',
+			args: [outcome, startNodeId, maxEntries],
+		})
 
 	type PeakArray = Awaited<ReturnType<typeof readCarryPeaks>>
 
@@ -511,6 +526,81 @@ describe('Escalation Game Test Suite', () => {
 		const expectedTwoLeafRoot = keccak256(concatHex([firstLeafHash, secondLeafHash]))
 		const rootAfterSecondDeposit = await readCarryRoot(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected Merkle Mountain Range root')
+	})
+
+	test('fork carry leaf paging uses node cursors and skips consumed local leaves', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
+		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+
+		await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+
+		const [firstPage, firstNextNodeId] = await readCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 1n)
+		assert.strictEqual(firstPage.length, 1, 'first page should include one unresolved leaf')
+		assert.strictEqual(firstPage[0]?.parentDepositIndex, 2n, 'first page should start from the newest unresolved leaf')
+		assert.strictEqual(firstPage[0]?.amount, 3n * reportBond, 'first page should preserve the newest unresolved leaf amount')
+		assert.strictEqual(firstNextNodeId, 2n, 'first page should return the next raw node cursor')
+
+		const [secondPage, secondNextNodeId] = await readCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, firstNextNodeId, 2n)
+		assert.strictEqual(secondPage.length, 1, 'second page should skip the consumed middle leaf and include the oldest unresolved leaf')
+		assert.strictEqual(secondPage[0]?.parentDepositIndex, 0n, 'second page should return the remaining unresolved oldest leaf')
+		assert.strictEqual(secondPage[0]?.amount, reportBond, 'second page should preserve the oldest unresolved leaf amount')
+		assert.strictEqual(secondNextNodeId, 0n, 'second page should finish the cursor traversal')
+	})
+
+	test('fork carry leaf paging rejects cursors from another outcome chain', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
+		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 2n * reportBond)
+
+		const [yesPage] = await readCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 1n)
+		const yesNodeId = yesPage[0]?.sourceNodeId
+		assert.notStrictEqual(yesNodeId, undefined)
+		await assert.rejects(readCarryLeafPage(escalationGameAddress, QuestionOutcome.No, yesNodeId ?? 0n, 1n), /cursor outcome mismatch/i)
+	})
+
+	test('fork carry snapshot initialization normalizes zero nullifier roots to the empty sparse-tree root', async () => {
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+
+		const initializeSnapshotHash = await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+
+		const emptyNullifierRoot = new SparseNullifierTree().root
+		const snapshotInitialized = await readForkCarrySnapshotInitialized(child.escalationGameAddress)
+		const yesNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+		const forkCarrySnapshot = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: child.escalationGameAddress,
+			functionName: 'getForkCarrySnapshot',
+			args: [],
+		})
+		const initializeSnapshotReceipt = await client.waitForTransactionReceipt({ hash: initializeSnapshotHash })
+		const snapshotInitializedLog = initializeSnapshotReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ForkCarrySnapshotInitialized')
+
+		if (snapshotInitializedLog === undefined) {
+			throw new Error('missing ForkCarrySnapshotInitialized log')
+		}
+
+		assert.strictEqual(snapshotInitialized, true, 'initialized snapshots with empty nullifier roots should not look uninitialized')
+		assert.strictEqual(yesNullifierRoot, emptyNullifierRoot, 'outcome state should expose the normalized empty nullifier root')
+		assert.strictEqual(forkCarrySnapshot[3][1], emptyNullifierRoot, 'fork carry snapshots should export normalized empty nullifier roots')
+		assert.deepStrictEqual(snapshotInitializedLog.args.inheritedNullifierRoots, [emptyNullifierRoot, emptyNullifierRoot, emptyNullifierRoot], 'snapshot initialization logs should emit normalized empty nullifier roots')
 	})
 
 	test('fork carry child instances can settle multiple inherited carried deposits from proofs only', async () => {

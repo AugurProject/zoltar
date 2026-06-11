@@ -6,10 +6,13 @@ import { Zoltar } from '../Zoltar.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
+
+interface ISecurityPoolForkerChildEscalationInitializer {
+	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) external;
+}
 
 struct VaultMigrationForkData {
 	uint256 repAtFork;
@@ -100,25 +103,7 @@ contract SecurityPoolForkerVaultMigrationDelegate {
 	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) private {
-		VaultMigrationForkData storage parentForkData = forkDataByPool[parent];
-		if (!parentForkData.unresolvedEscalationAtFork) return;
-		if (address(child.escalationGame()) == address(0x0)) {
-			child.initializeForkedEscalationGame(
-				parentForkData.escalationStartBondAtFork,
-				parentForkData.escalationNonDecisionThresholdAtFork,
-				parentForkData.escalationElapsedAtFork
-			);
-		}
-		EscalationGame childEscalationGame = EscalationGame(payable(address(child.escalationGame())));
-		if (!childEscalationGame.forkCarrySnapshotInitialized()) {
-			EscalationGame parentEscalationGame = EscalationGame(payable(address(parent.escalationGame())));
-			(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) =
-				parentEscalationGame.getForkCarrySnapshot();
-			child.initializeForkCarrySnapshot(inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots);
-		}
-		if (child.systemState() == SystemState.Operational) {
-			child.resumeForkedEscalationGame();
-		}
+		ISecurityPoolForkerChildEscalationInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(parent, child);
 	}
 
 	function _creditMigratedEscalationPrincipal(ISecurityPool parent, ISecurityPool child, uint256 migratedPrincipal) private {

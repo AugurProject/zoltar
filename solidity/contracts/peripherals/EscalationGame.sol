@@ -30,6 +30,10 @@ struct CarryLeafView {
 }
 
 struct OutcomeState {
+	// Snapshot fields are the inherited proof baseline for this outcome.
+	// currentNullifierRoot tracks which inherited proof indexes have been consumed in this instance.
+	// localHeadNodeId/localUnresolvedTotal track append-only local carry added after the inherited snapshot.
+	// Descendant carry export is rebuilt lazily from the snapshot plus unresolved local nodes.
 	// Total principal currently assigned to this outcome by local deposits placed directly in this escalation game.
 	uint256 balance;
 	// Local deposits placed directly in this escalation game, preserved in arrival order for payout ordering.
@@ -41,10 +45,10 @@ struct OutcomeState {
 	// The current unresolved carry state after local and inherited deposits are consumed.
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
-	uint256 currentLeafCount;
-	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	uint256 localUnresolvedTotal;
+	// Authoritative settled-set for inherited and local carried parentDepositIndexes in this instance.
 	mapping(uint256 => bool) consumedParentDepositIndexes;
+	// Enumerable mirror of consumed proof indexes used for recursive offchain proof reconstruction.
 	uint256[] proofConsumedDepositIndexes;
 }
 
@@ -89,15 +93,16 @@ struct CarriedDepositProof {
 contract EscalationGame {
 	uint256 public constant activationDelay = 3 days;
 	uint256 public activationTime;
-	ISecurityPool public securityPool;
+	ISecurityPool public immutable securityPool;
 	uint256 public nonDecisionThreshold;
 	uint256 public startBond;
 	uint256 public lnRatioScaled;
-	address public owner;
+	address public immutable owner;
 	uint256 public nonDecisionTimestamp;
 	bool public forkContinuation;
 	uint256 public forkElapsedAtStart;
 	uint256 public forkResumedAt;
+	bytes32 private immutable EMPTY_NULLIFIER_ROOT;
 	// Outcome-indexed state uses 0 = Invalid, 1 = Yes, 2 = No.
 	OutcomeState[3] private outcomeState;
 	uint256 public nextNodeId = 1;
@@ -113,17 +118,21 @@ contract EscalationGame {
 	event LocalDepositAppended(uint256 indexed nodeId, BinaryOutcomes.BinaryOutcome outcome, address depositor, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount);
 	event CarriedDepositClaimed(BinaryOutcomes.BinaryOutcome outcome, address depositor, uint256 amount, uint256 parentDepositIndex, uint256 sourceNodeId, bytes32 leafHash);
 
-	modifier onlyOwner() {
-		require(msg.sender == owner, 'only owner');
+	modifier onlySecurityPoolOrForker() {
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker'
+		);
 		_;
 	}
 
 	constructor(ISecurityPool _securityPool) {
 		securityPool = _securityPool;
 		owner = msg.sender;
+		EMPTY_NULLIFIER_ROOT = _computeEmptyNullifierRoot();
 	}
 
-	function start(uint256 _startBond, uint256 _nonDecisionThreshold) public {
+	function start(uint256 _startBond, uint256 _nonDecisionThreshold) external {
 		require(owner == msg.sender, 'only owner can start');
 		require(activationTime == 0, 'already started');
 		require(_nonDecisionThreshold > _startBond, 'threshold must exceed start bond');
@@ -137,7 +146,7 @@ contract EscalationGame {
 		emit GameStarted(activationTime, startBond, nonDecisionThreshold);
 	}
 
-	function startFromFork(uint256 _startBond, uint256 _nonDecisionThreshold, uint256 elapsedAtFork) public {
+	function startFromFork(uint256 _startBond, uint256 _nonDecisionThreshold, uint256 elapsedAtFork) external {
 		require(owner == msg.sender, 'only owner can start');
 		require(activationTime == 0, 'already started');
 		require(_nonDecisionThreshold > _startBond, 'threshold must exceed start bond');
@@ -153,29 +162,30 @@ contract EscalationGame {
 		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 
-	function initializeForkCarrySnapshot(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput, uint256[3] memory snapshotLeafCountsInput, uint256[3] memory snapshotCarryTotals, bytes32[3] memory snapshotNullifierRoots) public {
+	function initializeForkCarrySnapshot(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput, uint256[3] memory snapshotLeafCountsInput, uint256[3] memory snapshotCarryTotals, bytes32[3] memory snapshotNullifierRoots) external {
 		require(msg.sender == address(securityPool), 'only security pool can initialize carry snapshot');
 		require(forkContinuation, 'not fork continuation');
 		require(!forkCarrySnapshotInitialized(), 'carry snapshot already initialized');
 
+		bytes32[3] memory normalizedNullifierRoots;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
-			state.currentNullifierRoot = snapshotNullifierRoots[outcomeIndex];
+			bytes32 normalizedNullifierRoot = snapshotNullifierRoots[outcomeIndex] == bytes32(0) ? EMPTY_NULLIFIER_ROOT : snapshotNullifierRoots[outcomeIndex];
+			normalizedNullifierRoots[outcomeIndex] = normalizedNullifierRoot;
+			state.currentNullifierRoot = normalizedNullifierRoot;
 			state.snapshotLeafCount = snapshotLeafCountsInput[outcomeIndex];
-			state.currentLeafCount = snapshotLeafCountsInput[outcomeIndex];
-				for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
-					bytes32 peak = snapshotPeaksInput[outcomeIndex][peakIndex];
-					state.snapshotPeaks[peakIndex] = peak;
-					state.currentPeaks[peakIndex] = peak;
-				}
-				state.balance = snapshotCarryTotals[outcomeIndex];
-				state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
+			for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
+				bytes32 peak = snapshotPeaksInput[outcomeIndex][peakIndex];
+				state.snapshotPeaks[peakIndex] = peak;
 			}
+			state.balance = snapshotCarryTotals[outcomeIndex];
+			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
+		}
 
-		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, snapshotNullifierRoots);
+		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
 	}
 
-	function resumeFromFork() public {
+	function resumeFromFork() external {
 		require(owner == msg.sender || address(securityPool) == msg.sender, 'only owner can resume');
 		require(forkContinuation, 'not fork continuation');
 		require(forkResumedAt == 0, 'already resumed');
@@ -187,37 +197,31 @@ contract EscalationGame {
 		return forkResumedAt != 0;
 	}
 
+	// Snapshot initialization is contract-wide, and outcome 0 is used as the sentinel because
+	// initializeForkCarrySnapshot() sets every outcome's nullifier root in the same loop.
 	function forkCarrySnapshotInitialized() public view returns (bool) {
 		return outcomeState[0].currentNullifierRoot != bytes32(0);
 	}
 
-	function balances(uint256 outcomeIndex) public view returns (uint256) {
-		return outcomeState[outcomeIndex].balance;
-	}
-
-	function deposits(uint8 outcomeIndex, uint256 depositIndex) public view returns (address depositor, uint256 amount, uint256 cumulativeAmount) {
-		Deposit storage deposit = outcomeState[outcomeIndex].deposits[depositIndex];
-		return (deposit.depositor, deposit.amount, deposit.cumulativeAmount);
-	}
-
 	function getOutcomeState(BinaryOutcomes.BinaryOutcome outcome) external view returns (OutcomeStateView memory stateView) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) {
-			bytes32 emptyNullifierRoot = _getEmptyNullifierRoot();
-			stateView.currentNullifierRoot = emptyNullifierRoot;
+			stateView.currentNullifierRoot = EMPTY_NULLIFIER_ROOT;
 			return stateView;
 		}
-		OutcomeState storage state = outcomeState[uint8(outcome)];
+		uint8 outcomeIndex = uint8(outcome);
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory currentPeaks, uint256 currentLeafCount, bytes32 currentCarryRoot, uint256 currentCarryTotal) = _getMaterializedCarrySnapshot(outcomeIndex);
 		stateView.balance = state.balance;
 		stateView.snapshotLeafCount = state.snapshotLeafCount;
 		stateView.snapshotPeaks = state.snapshotPeaks;
 		stateView.inheritedUnresolvedTotal = state.inheritedUnresolvedTotal;
-		stateView.currentNullifierRoot = state.currentNullifierRoot;
+		stateView.currentNullifierRoot = _getCurrentNullifierRoot(outcomeIndex);
 		stateView.localHeadNodeId = state.localHeadNodeId;
-		stateView.currentLeafCount = state.currentLeafCount;
-		stateView.currentPeaks = state.currentPeaks;
+		stateView.currentLeafCount = currentLeafCount;
+		stateView.currentPeaks = currentPeaks;
 		stateView.localUnresolvedTotal = state.localUnresolvedTotal;
-		stateView.currentCarryRoot = _getCurrentCarryRoot(uint8(outcome));
-		stateView.currentCarryTotal = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
+		stateView.currentCarryRoot = currentCarryRoot;
+		stateView.currentCarryTotal = currentCarryTotal;
 	}
 
 	function getForkCarrySnapshot() external view returns (
@@ -227,16 +231,11 @@ contract EscalationGame {
 		bytes32[3] memory nullifierRoots
 	) {
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			(carryPeaks[outcomeIndex], carryLeafCounts[outcomeIndex]) = _materializeCurrentCarrySnapshot(outcomeIndex);
 			OutcomeState storage state = outcomeState[outcomeIndex];
-			carryPeaks[outcomeIndex] = state.currentPeaks;
-			carryLeafCounts[outcomeIndex] = state.currentLeafCount;
 			carryTotals[outcomeIndex] = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
-			nullifierRoots[outcomeIndex] = state.currentNullifierRoot;
+			nullifierRoots[outcomeIndex] = _getCurrentNullifierRoot(outcomeIndex);
 		}
-	}
-
-	function getBalances() public view returns (uint256[3] memory) {
-		return [outcomeState[0].balance, outcomeState[1].balance, outcomeState[2].balance];
 	}
 
 	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
@@ -349,7 +348,7 @@ contract EscalationGame {
 		return outcomeState[2].balance;
 	}
 
-	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
+	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
@@ -360,22 +359,7 @@ contract EscalationGame {
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		uint256 currentBalance = selectedOutcomeState.balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
-		uint256 effectiveDeposit = amount > room ? room : amount;
-		uint256 newBalance = currentBalance + effectiveDeposit;
-
-		uint256 invalidBalance = outcomeState[0].balance;
-		uint256 yesBalance = outcomeState[1].balance;
-		uint256 noBalance = outcomeState[2].balance;
-		uint256 maxBalance = invalidBalance > yesBalance ? (invalidBalance > noBalance ? invalidBalance : noBalance) : (yesBalance > noBalance ? yesBalance : noBalance);
-
-		bool otherHasMax = outcomeIndex == 0 ? (yesBalance == maxBalance || noBalance == maxBalance) :
-			outcomeIndex == 1 ? (invalidBalance == maxBalance || noBalance == maxBalance) :
-			(invalidBalance == maxBalance || yesBalance == maxBalance);
-		if (newBalance == maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
-			effectiveDeposit -= 1;
-			require(effectiveDeposit >= startBond, 'tie adjustment would break min deposit');
-			newBalance = currentBalance + effectiveDeposit;
-		}
+		(uint256 effectiveDeposit, uint256 newBalance) = _getAcceptedDepositAmount(outcomeIndex, amount, currentBalance, room);
 
 		selectedOutcomeState.balance += effectiveDeposit;
 		depositAmount = effectiveDeposit;
@@ -398,10 +382,6 @@ contract EscalationGame {
 		node.cumulativeAmount = deposit.cumulativeAmount;
 		selectedOutcomeState.localHeadNodeId = nodeId;
 		selectedOutcomeState.localUnresolvedTotal += depositAmount;
-		_appendCarriedLeafToMerkleMountainRange(
-			selectedOutcomeState,
-			MerkleMountainRange.hashLeaf(depositor, outcome, depositAmount, stableParentDepositIndex, deposit.cumulativeAmount, nodeId)
-		);
 		emit LocalDepositAppended(nodeId, outcome, depositor, depositAmount, stableParentDepositIndex, deposit.cumulativeAmount);
 		emit DepositOnOutcome(depositor, outcome, deposit.amount, depositIndex, deposit.cumulativeAmount);
 		if (hasReachedNonDecision()) {
@@ -409,107 +389,40 @@ contract EscalationGame {
 		}
 	}
 
-	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
-		require(
-			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only Security Pool or designated forker can withdraw'
-		);
+	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
-		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
-		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
-		require(deposit.amount > 0, 'deposit already settled');
-		selectedOutcomeState.deposits[depositIndex].amount = 0;
-		_markLocalDepositConsumed(uint8(outcome), depositIndex, deposit.amount);
+		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex);
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
-		uint256 depositStart = deposit.cumulativeAmount - deposit.amount;
-		uint256 bindingCapitalAmount = getBindingCapital();
-		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 winningOutcomeBalance = outcomeState[uint8(outcome)].balance;
-		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
-		uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
-		uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
 		uint256 burnAmount;
-		if (rewardEligiblePrincipalAmount == 0) {
-			amountToWithdraw = deposit.amount;
-			burnAmount = 0;
-		} else {
-			uint256 eligibleEndAmount = deposit.cumulativeAmount < rewardEligibleCapAmount ? deposit.cumulativeAmount : rewardEligibleCapAmount;
-			uint256 rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
-			if (rewardEligibleDepositAmount > deposit.amount) rewardEligibleDepositAmount = deposit.amount;
-			uint256 bonusShare = rewardEligibleDepositAmount * rewardBonusPoolAmount / rewardEligiblePrincipalAmount;
-			burnAmount = rewardEligibleDepositAmount * totalHaircutAmount / rewardEligiblePrincipalAmount;
-			amountToWithdraw = deposit.amount + bonusShare;
-		}
-
-		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
-		if (actualForkThreshold < nonDecisionThreshold) {
-			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
-		}
+		(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(uint8(outcome), deposit.amount, deposit.cumulativeAmount);
 
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
-	function exportUnresolvedForkDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
-		require(
-			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only Security Pool or designated forker can withdraw'
-		);
+	function exportUnresolvedForkDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		uint8 outcomeIndex = uint8(outcome);
 		require(depositIndex <= type(uint128).max, 'carry exports require proofs');
-		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
-		require(deposit.amount > 0, 'deposit already settled');
-		selectedOutcomeState.deposits[depositIndex].amount = 0;
-		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amount);
+		Deposit memory deposit = _consumeLocalDeposit(outcomeIndex, depositIndex);
 		depositor = deposit.depositor;
 		amount = deposit.amount;
 		parentDepositIndex = _getStableLocalParentDepositIndex(depositIndex);
 	}
 
-	function withdrawCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
-		require(
-			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only Security Pool or designated forker can withdraw'
-		);
+	function withdrawCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public onlySecurityPoolOrForker returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		uint8 outcomeIndex = uint8(outcome);
 		depositor = proof.depositor;
 		originalDepositAmount = proof.amount;
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
-		uint256 depositStart = proof.cumulativeAmount - proof.amount;
-		uint256 bindingCapitalAmount = getBindingCapital();
-		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 winningOutcomeBalance = outcomeState[outcomeIndex].balance;
-		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
 		uint256 burnAmount;
-		if (rewardEligiblePrincipalAmount == 0) {
-			amountToWithdraw = originalDepositAmount;
-		} else {
-			uint256 eligibleEndAmount = proof.cumulativeAmount < rewardEligibleCapAmount ? proof.cumulativeAmount : rewardEligibleCapAmount;
-			uint256 rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
-			if (rewardEligibleDepositAmount > originalDepositAmount) rewardEligibleDepositAmount = originalDepositAmount;
-			uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
-			uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
-			uint256 bonusShare = rewardEligibleDepositAmount * rewardBonusPoolAmount / rewardEligiblePrincipalAmount;
-			burnAmount = rewardEligibleDepositAmount * totalHaircutAmount / rewardEligiblePrincipalAmount;
-			amountToWithdraw = originalDepositAmount + bonusShare;
-		}
-
-		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
-		if (actualForkThreshold < nonDecisionThreshold) {
-			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
-		}
+		(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(outcomeIndex, proof.amount, proof.cumulativeAmount);
 
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
-	function forfeitCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public returns (address depositor, uint256 originalDepositAmount) {
-		require(
-			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only Security Pool or designated forker can withdraw'
-		);
+	function forfeitCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public onlySecurityPoolOrForker returns (address depositor, uint256 originalDepositAmount) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
@@ -521,11 +434,7 @@ contract EscalationGame {
 		emit WithdrawDeposit(depositor, outcome, 0, proof.parentDepositIndex);
 	}
 
-	function exportUnresolvedCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
-		require(
-			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only Security Pool or designated forker can withdraw'
-		);
+	function exportUnresolvedCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		uint8 outcomeIndex = uint8(outcome);
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
@@ -534,33 +443,46 @@ contract EscalationGame {
 		parentDepositIndex = proof.parentDepositIndex;
 	}
 
-	function refundCanceledDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
-		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
-		require(securityPool.zoltar().getForkTime(securityPool.universeId()) > 0, 'Zoltar has not forked');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
-		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
-		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
-		require(deposit.amount > 0, 'deposit already settled');
-		selectedOutcomeState.deposits[depositIndex].amount = 0;
-		_markLocalDepositConsumed(uint8(outcome), depositIndex, deposit.amount);
-		depositor = deposit.depositor;
-		amountToWithdraw = deposit.amount;
-		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
-	}
-
-	function getCarryLeafPageByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (CarryLeafView[] memory carryLeaves) {
-		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new CarryLeafView[](0);
+	// Pages unresolved local carry leaves only, in newest-first local linked-list order.
+	// Inherited snapshot leaves are exposed through getForkCarrySnapshot().
+	function getCarryLeafPageByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startNodeId, uint256 maxEntries) external view returns (CarryLeafView[] memory carryLeaves, uint256 nextPageNodeId) {
+		if (outcome == BinaryOutcomes.BinaryOutcome.None) return (new CarryLeafView[](0), 0);
 		uint8 outcomeIndex = uint8(outcome);
-		CarryLeafView[] memory orderedLeaves = _getCarryLeavesByOutcome(outcomeIndex);
-		if (startIndex >= orderedLeaves.length || numberOfEntries == 0) return new CarryLeafView[](0);
-		uint256 endIndex = startIndex + numberOfEntries;
-		if (endIndex > orderedLeaves.length) endIndex = orderedLeaves.length;
-		carryLeaves = new CarryLeafView[](endIndex - startIndex);
-		for (uint256 index = startIndex; index < endIndex; index++) {
-			carryLeaves[index - startIndex] = orderedLeaves[index];
+		if (maxEntries == 0) return (new CarryLeafView[](0), startNodeId);
+
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		uint256 nodeId = startNodeId == 0 ? state.localHeadNodeId : startNodeId;
+		if (nodeId != 0) {
+			require(nodes[nodeId].outcome == outcome, 'cursor outcome mismatch');
 		}
+		carryLeaves = new CarryLeafView[](maxEntries);
+		uint256 writeIndex = 0;
+		while (nodeId != 0 && writeIndex < maxEntries) {
+			Node storage currentNode = nodes[nodeId];
+			uint256 parentNodeId = currentNode.parentNodeId;
+			require(currentNode.outcome == outcome, 'cursor outcome mismatch');
+			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
+				carryLeaves[writeIndex] = CarryLeafView({
+					depositor: currentNode.depositor,
+					amount: currentNode.amount,
+					parentDepositIndex: currentNode.parentDepositIndex,
+					cumulativeAmount: currentNode.cumulativeAmount,
+					sourceNodeId: nodeId
+				});
+				writeIndex += 1;
+			}
+			nodeId = parentNodeId;
+		}
+		nextPageNodeId = nodeId;
+		if (writeIndex == maxEntries) return (carryLeaves, nextPageNodeId);
+		CarryLeafView[] memory trimmedCarryLeaves = new CarryLeafView[](writeIndex);
+		for (uint256 index = 0; index < writeIndex; index++) {
+			trimmedCarryLeaves[index] = carryLeaves[index];
+		}
+		return (trimmedCarryLeaves, nextPageNodeId);
 	}
 
+	// Returns proof-consumed inherited indexes in proof-consumption order, not sorted parentDepositIndex order.
 	function getProofConsumedCarriedDepositIndexesByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory parentDepositIndexes) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new uint256[](0);
 		uint256[] storage consumedIndexes = outcomeState[uint8(outcome)].proofConsumedDepositIndexes;
@@ -573,27 +495,18 @@ contract EscalationGame {
 		}
 	}
 
-	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
-		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
-		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
-		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
-		(depositor, amountToWithdraw, originalDepositAmount) = claimDepositForWinning(depositIndex, questionResolution);
-		emit WithdrawDeposit(depositor, questionResolution, amountToWithdraw, depositIndex);
-	}
-
-	function forfeitLosingDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 originalDepositAmount) {
+	function withdrawDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
-		require(outcome != questionResolution, 'Winning deposits must withdraw');
-		OutcomeState storage selectedOutcomeState = outcomeState[uint8(outcome)];
-		require(depositIndex < selectedOutcomeState.deposits.length, 'Invalid deposit index');
-		Deposit memory deposit = selectedOutcomeState.deposits[depositIndex];
-		require(deposit.amount > 0, 'deposit already settled');
-		selectedOutcomeState.deposits[depositIndex].amount = 0;
-		_markLocalDepositConsumed(uint8(outcome), depositIndex, deposit.amount);
+		if (outcome == questionResolution) {
+			(depositor, amountToWithdraw, originalDepositAmount) = claimDepositForWinning(depositIndex, questionResolution);
+			emit WithdrawDeposit(depositor, questionResolution, amountToWithdraw, depositIndex);
+			return (depositor, amountToWithdraw, originalDepositAmount);
+		}
+		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex);
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
 		emit WithdrawDeposit(depositor, outcome, 0, depositIndex);
@@ -607,17 +520,8 @@ contract EscalationGame {
 		if (endIndex > outcomeDeposits.length) {
 			endIndex = outcomeDeposits.length;
 		}
-
-		uint256 matchCount = 0;
-		for (uint256 index = startIndex; index < endIndex; index++) {
-			Deposit storage deposit = outcomeDeposits[index];
-			if (deposit.depositor == depositor && deposit.amount > 0) {
-				matchCount += 1;
-			}
-		}
-
-		depositIndexes = new uint256[](matchCount);
 		uint256 writeIndex = 0;
+		depositIndexes = new uint256[](endIndex - startIndex);
 		for (uint256 index = startIndex; index < endIndex; index++) {
 			Deposit storage deposit = outcomeDeposits[index];
 			if (deposit.depositor == depositor && deposit.amount > 0) {
@@ -625,6 +529,12 @@ contract EscalationGame {
 				writeIndex += 1;
 			}
 		}
+		if (writeIndex == depositIndexes.length) return depositIndexes;
+		uint256[] memory trimmedDepositIndexes = new uint256[](writeIndex);
+		for (uint256 index = 0; index < writeIndex; index++) {
+			trimmedDepositIndexes[index] = depositIndexes[index];
+		}
+		return trimmedDepositIndexes;
 	}
 
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
@@ -674,20 +584,21 @@ contract EscalationGame {
 		}
 	}
 
-	function _appendCarriedLeafToMerkleMountainRange(OutcomeState storage state, bytes32 leafHash) private {
-		uint256 leafCount = state.currentLeafCount;
+	function _appendCarriedLeafToMerkleMountainRange(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory currentPeaks, uint256 currentLeafCount, bytes32 leafHash) private pure returns (bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory updatedPeaks, uint256 updatedLeafCount) {
+		updatedPeaks = currentPeaks;
+		uint256 leafCount = currentLeafCount;
 		uint256 peakIndex = 0;
 		bytes32 carryHash = leafHash;
 
 		while (((leafCount >> peakIndex) & 1) == 1) {
-			carryHash = MerkleMountainRange.hashParent(state.currentPeaks[peakIndex], carryHash);
-			delete state.currentPeaks[peakIndex];
+			carryHash = MerkleMountainRange.hashParent(updatedPeaks[peakIndex], carryHash);
+			delete updatedPeaks[peakIndex];
 			peakIndex += 1;
 		}
 
 		require(peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'Merkle Mountain Range peak overflow');
-		state.currentPeaks[peakIndex] = carryHash;
-		state.currentLeafCount = leafCount + 1;
+		updatedPeaks[peakIndex] = carryHash;
+		updatedLeafCount = leafCount + 1;
 	}
 
 	function _bagCarryPeaks(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes, uint256 leafCount) private pure returns (bytes32) {
@@ -712,18 +623,13 @@ contract EscalationGame {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
-	function _getCurrentCarryRoot(uint8 outcomeIndex) private view returns (bytes32) {
-		OutcomeState storage state = outcomeState[outcomeIndex];
-		return _bagCarryPeaks(state.currentPeaks, state.currentLeafCount);
-	}
-
 	function _getCurrentNullifierRoot(uint8 outcomeIndex) private view returns (bytes32) {
 		bytes32 root = outcomeState[outcomeIndex].currentNullifierRoot;
 		if (root != bytes32(0)) return root;
-		return _getEmptyNullifierRoot();
+		return EMPTY_NULLIFIER_ROOT;
 	}
 
-	function _getEmptyNullifierRoot() private pure returns (bytes32 root) {
+	function _computeEmptyNullifierRoot() private pure returns (bytes32 root) {
 		root = bytes32(0);
 		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
 			root = MerkleMountainRange.hashParent(root, root);
@@ -808,6 +714,25 @@ contract EscalationGame {
 		}
 	}
 
+	function _getAcceptedDepositAmount(uint256 outcomeIndex, uint256 requestedAmount, uint256 currentBalance, uint256 room) private view returns (uint256 acceptedAmount, uint256 newBalance) {
+		acceptedAmount = requestedAmount > room ? room : requestedAmount;
+		newBalance = currentBalance + acceptedAmount;
+
+		uint256 invalidBalance = outcomeState[0].balance;
+		uint256 yesBalance = outcomeState[1].balance;
+		uint256 noBalance = outcomeState[2].balance;
+		uint256 maxBalance = invalidBalance > yesBalance ? (invalidBalance > noBalance ? invalidBalance : noBalance) : (yesBalance > noBalance ? yesBalance : noBalance);
+		bool otherHasMax = outcomeIndex == 0 ? (yesBalance == maxBalance || noBalance == maxBalance) :
+			outcomeIndex == 1 ? (invalidBalance == maxBalance || noBalance == maxBalance) :
+			(invalidBalance == maxBalance || yesBalance == maxBalance);
+
+		if (newBalance == maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
+			acceptedAmount -= 1;
+			require(acceptedAmount >= startBond, 'tie adjustment would break min deposit');
+			newBalance = currentBalance + acceptedAmount;
+		}
+	}
+
 	function _getStableLocalParentDepositIndex(uint256 depositIndex) private view returns (uint256) {
 		return forkContinuation ? FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX | depositIndex : depositIndex;
 	}
@@ -818,7 +743,6 @@ contract EscalationGame {
 		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotal -= amount;
-		_rebuildCurrentCarryState(outcomeIndex);
 	}
 
 	function _consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amount) private {
@@ -832,40 +756,62 @@ contract EscalationGame {
 		return outcomeState[outcomeIndex].consumedParentDepositIndexes[parentDepositIndex];
 	}
 
-	function _rebuildCurrentCarryState(uint8 outcomeIndex) private {
+	function _getMaterializedCarrySnapshot(uint8 outcomeIndex) private view returns (bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory currentPeaks, uint256 currentLeafCount, bytes32 currentCarryRoot, uint256 currentCarryTotal) {
+		(currentPeaks, currentLeafCount) = _materializeCurrentCarrySnapshot(outcomeIndex);
+		currentCarryRoot = _bagCarryPeaks(currentPeaks, currentLeafCount);
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		state.currentLeafCount = state.snapshotLeafCount;
+		currentCarryTotal = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
+	}
+
+	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmount, uint256 cumulativeAmount) private view returns (uint256 amountToWithdraw, uint256 burnAmount) {
+		uint256 depositStart = cumulativeAmount - depositAmount;
+		uint256 bindingCapitalAmount = getBindingCapital();
+		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
+		uint256 winningOutcomeBalance = outcomeState[outcomeIndex].balance;
+		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
+		if (rewardEligiblePrincipalAmount == 0) {
+			amountToWithdraw = depositAmount;
+		} else {
+			uint256 eligibleEndAmount = cumulativeAmount < rewardEligibleCapAmount ? cumulativeAmount : rewardEligibleCapAmount;
+			uint256 rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
+			if (rewardEligibleDepositAmount > depositAmount) rewardEligibleDepositAmount = depositAmount;
+			uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
+			uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
+			uint256 bonusShare = rewardEligibleDepositAmount * rewardBonusPoolAmount / rewardEligiblePrincipalAmount;
+			burnAmount = rewardEligibleDepositAmount * totalHaircutAmount / rewardEligiblePrincipalAmount;
+			amountToWithdraw = depositAmount + bonusShare;
+		}
+
+		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
+		if (actualForkThreshold < nonDecisionThreshold) {
+			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
+		}
+	}
+
+	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex) private returns (Deposit memory deposit) {
+		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
+		require(depositIndex < selectedOutcomeState.deposits.length, 'Invalid deposit index');
+		deposit = selectedOutcomeState.deposits[depositIndex];
+		require(deposit.amount > 0, 'deposit already settled');
+		selectedOutcomeState.deposits[depositIndex].amount = 0;
+		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amount);
+	}
+
+	function _materializeCurrentCarrySnapshot(uint8 outcomeIndex) private view returns (bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory currentPeaks, uint256 currentLeafCount) {
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		currentLeafCount = state.snapshotLeafCount;
 		for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
-			state.currentPeaks[peakIndex] = state.snapshotPeaks[peakIndex];
+			currentPeaks[peakIndex] = state.snapshotPeaks[peakIndex];
 		}
 
-		uint256 nodeId = state.localHeadNodeId;
-		uint256 unresolvedLeafCount = 0;
-		while (nodeId != 0) {
-			Node storage currentNode = nodes[nodeId];
-			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
-				unresolvedLeafCount += 1;
-			}
-			nodeId = currentNode.parentNodeId;
-		}
-
-		uint256[] memory unresolvedNodeIds = new uint256[](unresolvedLeafCount);
-		nodeId = state.localHeadNodeId;
-		uint256 writeIndex = unresolvedLeafCount;
-		while (nodeId != 0) {
-			Node storage currentNode = nodes[nodeId];
-			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
-				writeIndex -= 1;
-				unresolvedNodeIds[writeIndex] = nodeId;
-			}
-			nodeId = currentNode.parentNodeId;
-		}
-
+		uint256[] memory unresolvedNodeIds = _getUnresolvedLocalNodeIds(state);
+		uint256 unresolvedLeafCount = unresolvedNodeIds.length;
 		for (uint256 unresolvedIndex = 0; unresolvedIndex < unresolvedLeafCount; unresolvedIndex++) {
 			uint256 unresolvedNodeId = unresolvedNodeIds[unresolvedIndex];
 			Node storage unresolvedNode = nodes[unresolvedNodeId];
-			_appendCarriedLeafToMerkleMountainRange(
-				state,
+			(currentPeaks, currentLeafCount) = _appendCarriedLeafToMerkleMountainRange(
+				currentPeaks,
+				currentLeafCount,
 				MerkleMountainRange.hashLeaf(
 					unresolvedNode.depositor,
 					unresolvedNode.outcome,
@@ -878,48 +824,27 @@ contract EscalationGame {
 		}
 	}
 
-	function _getCarryLeavesByOutcome(uint8 outcomeIndex) private view returns (CarryLeafView[] memory carryLeaves) {
-		OutcomeState storage state = outcomeState[outcomeIndex];
+	function _getUnresolvedLocalNodeIds(OutcomeState storage state) private view returns (uint256[] memory unresolvedNodeIds) {
 		uint256 nodeId = state.localHeadNodeId;
-		uint256 leafCount = 0;
+		uint256 unresolvedLeafCount = 0;
 		while (nodeId != 0) {
 			Node storage currentNode = nodes[nodeId];
 			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
-				leafCount += 1;
+				unresolvedLeafCount += 1;
 			}
 			nodeId = currentNode.parentNodeId;
 		}
-		carryLeaves = new CarryLeafView[](leafCount);
-		uint256 writeIndex = 0;
-		nodeId = state.localHeadNodeId;
-		while (nodeId != 0) {
-			Node storage storedNode = nodes[nodeId];
-			if (state.consumedParentDepositIndexes[storedNode.parentDepositIndex]) {
-				nodeId = storedNode.parentNodeId;
-				continue;
-			}
-			CarryLeafView memory currentLeaf = CarryLeafView({
-				depositor: storedNode.depositor,
-				amount: storedNode.amount,
-				parentDepositIndex: storedNode.parentDepositIndex,
-				cumulativeAmount: storedNode.cumulativeAmount,
-				sourceNodeId: nodeId
-			});
-			uint256 insertIndex = writeIndex;
-			while (insertIndex > 0 && _compareParentDepositIndexes(currentLeaf.parentDepositIndex, carryLeaves[insertIndex - 1].parentDepositIndex)) {
-				carryLeaves[insertIndex] = carryLeaves[insertIndex - 1];
-				insertIndex -= 1;
-			}
-			carryLeaves[insertIndex] = currentLeaf;
-			writeIndex += 1;
-			nodeId = storedNode.parentNodeId;
-		}
-	}
 
-	function _compareParentDepositIndexes(uint256 leftParentDepositIndex, uint256 rightParentDepositIndex) private pure returns (bool) {
-		if (leftParentDepositIndex == rightParentDepositIndex) return false;
-		if (leftParentDepositIndex == type(uint256).max) return false;
-		if (rightParentDepositIndex == type(uint256).max) return true;
-		return leftParentDepositIndex < rightParentDepositIndex;
+		unresolvedNodeIds = new uint256[](unresolvedLeafCount);
+		nodeId = state.localHeadNodeId;
+		uint256 writeIndex = unresolvedLeafCount;
+		while (nodeId != 0) {
+			Node storage currentNode = nodes[nodeId];
+			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
+				writeIndex -= 1;
+				unresolvedNodeIds[writeIndex] = nodeId;
+			}
+			nodeId = currentNode.parentNodeId;
+		}
 	}
 }

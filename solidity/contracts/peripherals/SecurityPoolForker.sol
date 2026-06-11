@@ -8,7 +8,6 @@ import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAucti
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
@@ -227,6 +226,11 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		if (child.systemState() == SystemState.Operational) {
 			child.resumeForkedEscalationGame();
 		}
+	}
+
+	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) external {
+		require(msg.sender == address(this), 'only self');
+		_initializeChildForkedEscalationGameIfNeeded(parent, child);
 	}
 
 	function _creditMigratedEscalationPrincipal(ISecurityPool parent, ISecurityPool child, uint256 migratedPrincipal) private {

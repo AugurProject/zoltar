@@ -106,13 +106,27 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 }
 
 export const getBalances = async (client: ReadClient, escalationGame: AccountAddress) => {
-	const [invalid, yes, no] = await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getBalances',
-		address: escalationGame,
-		args: [],
-	})
-	return { invalid, yes, no }
+	const [invalidState, yesState, noState] = await Promise.all([
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getOutcomeState',
+			address: escalationGame,
+			args: [0],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getOutcomeState',
+			address: escalationGame,
+			args: [1],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getOutcomeState',
+			address: escalationGame,
+			args: [2],
+		}),
+	])
+	return { invalid: invalidState.balance, yes: yesState.balance, no: noState.balance }
 }
 
 export const getActivationTime = async (client: ReadClient, escalationGame: AccountAddress) =>

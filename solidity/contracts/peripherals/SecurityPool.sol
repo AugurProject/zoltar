@@ -479,11 +479,7 @@ contract SecurityPool is ISecurityPool {
 			address depositor;
 			uint256 amountToWithdraw;
 			uint256 originalDepositAmount;
-			if (outcome == questionOutcome) {
-				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
-			} else {
-				(depositor, originalDepositAmount) = escalationGame.forfeitLosingDeposit(depositIndexes[index], outcome);
-			}
+			(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index], outcome);
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
 			}

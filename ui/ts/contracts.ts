@@ -68,7 +68,6 @@ import {
 	hasTimestamp,
 	hasTimestampAndNumber,
 	isBigintTriple,
-	requireEscalationGameTuple,
 	requireOpenOracleExtraDataTuple,
 	requireOpenOracleExtraDataTupleArray,
 	requireOpenOracleReportMetaTuple,
@@ -252,20 +251,22 @@ function isCarryLeafView(value: unknown): value is CarryLeafViewStruct {
 }
 
 async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
-	let startIndex = 0n
+	let startNodeId = 0n
 	const carryLeaves: CarryLeafViewStruct[] = []
 	while (true) {
-		const page = await client.readContract({
+		const result = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getCarryLeafPageByOutcome',
-			args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
+			args: [getReportingOutcomeValue(outcome), startNodeId, CONTRACT_PAGE_SIZE],
 		})
-		if (!Array.isArray(page)) throw new Error('Unexpected carry leaf page response')
+		if (!Array.isArray(result) || result.length !== 2) throw new Error('Unexpected carry leaf page response')
+		const [page, nextNodeId] = result
+		if (!Array.isArray(page) || typeof nextNodeId !== 'bigint') throw new Error('Unexpected carry leaf page response')
 		const normalizedPage = page.filter(isCarryLeafView)
 		carryLeaves.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
-		startIndex += CONTRACT_PAGE_SIZE
+		if (nextNodeId === 0n) break
+		startNodeId = nextNodeId
 	}
 	return carryLeaves
 }
@@ -686,71 +687,66 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			parentWithdrawalEnabled: false,
 			...viewerVaultState,
 		}
-	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = requireEscalationGameTuple(
-		await readRequiredMulticall(client, [
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'startBond',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'nonDecisionThreshold',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'activationTime',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'totalCost',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getBindingCapital',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getBalances',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getEscalationGameEndDate',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: QUESTION_OUTCOME_ABI,
-				functionName: 'getQuestionOutcome',
-				address: getInfraContractAddresses().securityPoolForker,
-				args: [securityPoolAddress],
-			},
-			{
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'getForkTime',
-				address: getInfraContractAddresses().zoltar,
-				args: [universeId],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'hasReachedNonDecision',
-				address: escalationGameAddress,
-				args: [],
-			},
-		]),
-		'escalation game',
-	)
+	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'startBond',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'nonDecisionThreshold',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'activationTime',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'totalCost',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getBindingCapital',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		readEscalationOutcomeState(client, escalationGameAddress, 'invalid'),
+		readEscalationOutcomeState(client, escalationGameAddress, 'yes'),
+		readEscalationOutcomeState(client, escalationGameAddress, 'no'),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getEscalationGameEndDate',
+			address: escalationGameAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: QUESTION_OUTCOME_ABI,
+			functionName: 'getQuestionOutcome',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+		client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getForkTime',
+			address: getInfraContractAddresses().zoltar,
+			args: [universeId],
+		}),
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'hasReachedNonDecision',
+			address: escalationGameAddress,
+			args: [],
+		}),
+	])
+	const balances: [bigint, bigint, bigint] = [invalidOutcomeState.balance, yesOutcomeState.balance, noOutcomeState.balance]
 	const useCarrySnapshot = forkContinuationSnapshot !== undefined
 	const [invalidDeposits, yesDeposits, noDeposits, invalidParentSnapshotDeposits, yesParentSnapshotDeposits, noParentSnapshotDeposits] = await Promise.all([
 		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
