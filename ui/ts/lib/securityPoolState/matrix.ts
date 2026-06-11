@@ -25,18 +25,35 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'migrateRepToZoltar',
 	'migrateVault',
 	'migrateEscalationDeposits',
+	'migrateUnresolvedEscalation',
 	'startTruthAuction',
 	'submitBid',
 	'finalizeTruthAuction',
 	'refundLosingBids',
 	'claimAuctionProceeds',
+	'settleForkedEscalation',
 ]
 
 export const LIFECYCLE_ACTIONS: ActionList = ['approveRep', 'depositRep', 'queueWithdrawRep', 'redeemRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'migrateShares', 'redeemShares', 'requestPrice', 'executeStagedOperation', 'queueLiquidation']
 
 export const REPORTING_ACTIONS: ActionList = ['reportOutcome', 'withdrawEscalation']
 
-export const FORK_ACTIONS: ActionList = ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse', 'createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'startTruthAuction', 'submitBid', 'finalizeTruthAuction', 'refundLosingBids', 'claimAuctionProceeds']
+export const FORK_ACTIONS: ActionList = [
+	'forkWithOwnEscalation',
+	'initiateFork',
+	'forkUniverse',
+	'createChildUniverse',
+	'migrateRepToZoltar',
+	'migrateVault',
+	'migrateEscalationDeposits',
+	'migrateUnresolvedEscalation',
+	'startTruthAuction',
+	'submitBid',
+	'finalizeTruthAuction',
+	'refundLosingBids',
+	'claimAuctionProceeds',
+	'settleForkedEscalation',
+]
 
 export const ENABLED_ACTIONS_BY_LIFECYCLE: Record<SecurityPoolLifecycleState, ActionList> = {
 	operational: ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
@@ -59,9 +76,9 @@ export const ENABLED_ACTIONS_BY_REPORTING_STAGE: Record<SecurityPoolReportingSta
 export const ENABLED_ACTIONS_BY_FORK_STAGE: Record<SecurityPoolForkStage, ActionList> = {
 	disabled: [],
 	initiate: ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'],
-	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'startTruthAuction'],
+	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'],
 	auction: ['submitBid', 'finalizeTruthAuction', 'refundLosingBids'],
-	settlement: ['claimAuctionProceeds'],
+	settlement: ['claimAuctionProceeds', 'settleForkedEscalation'],
 }
 
 export const UNIVERSE_FORKED_ENABLE: ActionList = ['migrateShares']

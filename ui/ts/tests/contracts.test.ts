@@ -1,43 +1,53 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex } from 'viem'
+import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import {
 	getOpenOracleAddress,
 	loadAllSecurityPools,
 	loadEscalationDeposits,
 	loadForkAuctionDetails,
+	loadImportedEscalationDeposits,
 	loadOpenOracleReportSummaries,
+	loadReportingDetails,
 	loadSecurityPoolPage,
 	loadTruthAuctionActiveTickPage,
 	loadTruthAuctionBidderBidPage,
 	loadTruthAuctionTickBidPage,
 	loadTruthAuctionTickPage,
 	loadTruthAuctionTickSummary,
+	migrateVaultWithUnresolvedEscalation,
 	migrateSharesFromUniverse,
 	settleOracleReport,
+	withdrawForkedEscalationDeposits,
 } from '../contracts.js'
 import { getForkOutcomeKey } from '../contracts/helpers.js'
-import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import { getOpenOracleReportStatus } from '../lib/openOracle.js'
-import type { ReadClient } from '../types/contracts.js'
+import type { EscalationSide, ReadClient, WriteClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
+const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
+const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 
-type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
 type MockLoaderClient = Parameters<typeof loadAllSecurityPools>[0]
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 type MockReadContractHandler = (request: MockReadContractRequest) => Promise<unknown>
 type MockLoaderMulticallRequest = Parameters<MockLoaderClient['multicall']>[0]
 type MockLoaderMulticallHandler = (request: MockLoaderMulticallRequest) => Promise<unknown>
+type MockWriteClient = {
+	readContract: ReadClient['readContract']
+	sendTransaction: WriteClient['sendTransaction']
+	waitForTransactionReceipt: (_request: { hash: Hash }) => Promise<Pick<TransactionReceipt, 'status'>>
+}
 
 function getContractFunctionName(contract: unknown) {
 	if (typeof contract !== 'object' || contract === null || !('functionName' in contract)) throw new Error('Unexpected multicall contract')
@@ -72,7 +82,11 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 			return transactionHash
 		},
 		waitForTransactionReceipt: async () => ({ status: 'success' }),
-	} satisfies MockWriteClient
+	}
+}
+
+function asWriteClient(client: MockWriteClient): WriteClient {
+	return client as unknown as WriteClient
 }
 
 function createMockReadClient(readContract: MockReadContractHandler): MockReadClient {
@@ -435,6 +449,196 @@ describe('contracts helpers', () => {
 		expect(decodedCall.args).toEqual([7n])
 	})
 
+	test('loadImportedEscalationDeposits pages imported indexes and maps imported deposits correctly', async () => {
+		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
+		const requestedPageStarts: bigint[] = []
+		const importedIndexesByStart = new Map<bigint, bigint[]>([
+			[0n, Array.from({ length: 30 }, (_, index) => BigInt(index + 1))],
+			[30n, [31n]],
+		])
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor') {
+				const args = request.args
+				if (!Array.isArray(args) || typeof args[2] !== 'bigint') throw new Error('Expected imported pagination args')
+				requestedPageStarts.push(args[2])
+				return importedIndexesByStart.get(args[2]) ?? []
+			}
+			if (request.functionName === 'importedDeposits') {
+				const args = request.args
+				if (!Array.isArray(args) || typeof args[1] !== 'bigint') throw new Error('Expected imported deposit args')
+				return [depositor, args[1] * 10n, args[1] * 100n, false]
+			}
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		const deposits = await loadImportedEscalationDeposits(client, escalationGameAddress, 'yes', depositor)
+
+		expect(requestedPageStarts).toEqual([0n, 30n])
+		expect(deposits).toHaveLength(31)
+		expect(deposits[0]).toEqual({
+			amount: 10n,
+			cumulativeAmount: 100n,
+			depositor,
+			parentDepositIndex: 1n,
+		})
+		expect(deposits[30]).toEqual({
+			amount: 310n,
+			cumulativeAmount: 3100n,
+			depositor,
+			parentDepositIndex: 31n,
+		})
+	})
+
+	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
+		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ef')
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x1234' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getDepositsByOutcome') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
+					if (args[0] === 1) {
+						return [{ amount: 9n, cumulativeAmount: 17n, depositor: viewerAddress }]
+					}
+					return []
+				}
+				if (request.functionName === 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected imported outcome args')
+					return args[0] === 1 ? [41n] : []
+				}
+				if (request.functionName === 'importedDeposits') return [viewerAddress, 8n, 16n, false]
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		expect(details.status).toBe('active')
+		expect(details.settlementState).toBe('migration-required')
+		expect(details.parentWithdrawalEnabled).toBe(false)
+		const yesSide = details.sides.find((side: EscalationSide) => side.key === 'yes')
+		if (yesSide === undefined) throw new Error('Expected yes side')
+		expect(yesSide.userDeposits).toHaveLength(1)
+		expect(yesSide.importedUserDeposits).toEqual([
+			{
+				amount: 8n,
+				cumulativeAmount: 16n,
+				depositor: viewerAddress,
+				parentDepositIndex: 41n,
+			},
+		])
+	})
+
+	test('loadReportingDetails keeps parent settlement locked when the unrelated external fork happened after escalation ended', async () => {
+		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ee')
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x1234' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getDepositsByOutcome') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
+					if (args[0] === 1) {
+						return [{ amount: 9n, cumulativeAmount: 17n, depositor: viewerAddress }]
+					}
+					return []
+				}
+				if (request.functionName === 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		expect(details.settlementState).toBe('locked')
+		expect(details.parentWithdrawalEnabled).toBe(false)
+	})
+
+	test('loadReportingDetails keeps pool-level finality when no escalation game exists', async () => {
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 1n]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+
+		expect(details.status).toBe('not-started')
+		expect(details.questionOutcome).toBe('yes')
+		expect(details.settlementState).toBe('resolved')
+		expect(details.parentWithdrawalEnabled).toBe(false)
+	})
+
+	test('loadReportingDetails keeps a known child outcome locked until the pool becomes operational', async () => {
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 2n, 1n]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+
+		expect(details.status).toBe('not-started')
+		expect(details.questionOutcome).toBe('yes')
+		expect(details.systemState).toBe('forkMigration')
+		expect(details.settlementState).toBe('locked')
+		expect(details.parentWithdrawalEnabled).toBe(false)
+	})
+
 	test('loadEscalationDeposits continues paging past settled entries on a full page', async () => {
 		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000d4')
 		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
@@ -471,6 +675,58 @@ describe('contracts helpers', () => {
 		expect(deposits.some(deposit => deposit.amount === 0n)).toBe(false)
 		expect(deposits[28]?.depositIndex).toBe(28n)
 		expect(deposits[29]?.depositIndex).toBe(30n)
+	})
+
+	test('migrateVaultWithUnresolvedEscalation helper encodes invalid, yes, and no deposit indexes correctly', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(request => {
+			capturedData = request.data
+			capturedTo = request.to
+		})
+
+		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, 9n, 'no', [1n, 4n], [7n], [9n, 10n])
+
+		expect(capturedTo).toBeDefined()
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
+		expect(decodedCall.args).toEqual([securityPoolAddress, 2, [1n, 4n], [7n], [9n, 10n]])
+		expect(result).toEqual({
+			action: 'migrateUnresolvedEscalation',
+			hash: transactionHash,
+			securityPoolAddress,
+			universeId: 9n,
+		})
+	})
+
+	test('withdrawForkedEscalationDeposits helper encodes parent deposit indexes correctly', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(request => {
+			capturedData = request.data
+			capturedTo = request.to
+		})
+
+		const result = await withdrawForkedEscalationDeposits(asWriteClient(client), securityPoolAddress, 'yes', [3n, 8n])
+
+		expect(capturedTo).toBe(securityPoolAddress)
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		expect(decodedCall.functionName).toBe('withdrawForkedEscalationDeposits')
+		expect(decodedCall.args).toEqual([1, [3n, 8n]])
+		expect(result).toEqual({
+			action: 'settleForkedEscalation',
+			hash: transactionHash,
+			securityPoolAddress,
+			universeId: 12n,
+		})
 	})
 
 	test('truth auction page loaders validate page inputs before reading', async () => {

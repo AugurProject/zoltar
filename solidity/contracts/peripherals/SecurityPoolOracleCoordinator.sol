@@ -171,9 +171,13 @@ contract SecurityPoolOracleCoordinator {
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-		// Capture snapshot of the target vault state at queue time to prevent manipulation.
-		// Liquidation should value the vaults full collateral claim. That means using the pools
-		// total REP balance here rather than only the currently withdrawable balance.
+			// Capture the target vault state at queue time on purpose.
+			// Liquidations are intentionally valued against the vault state that existed when the
+			// caller requested the oracle-backed operation, so the target cannot escape by
+			// depositing REP or reducing allowance after the request is staged but before the
+			// oracle report settles.
+			// Liquidation should value the vault's full collateral claim. That means using the
+			// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
 		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();

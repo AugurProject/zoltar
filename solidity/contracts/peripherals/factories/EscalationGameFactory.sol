@@ -11,4 +11,11 @@ contract EscalationGameFactory {
 		game.start(startBond, _nonDecisionThreshold);
 		return game;
 	}
+
+	function deployEscalationGameFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external returns (EscalationGame) {
+		ISecurityPool securityPool = ISecurityPool(payable(msg.sender));
+		EscalationGame game = new EscalationGame{ salt: bytes32(uint256(0x0)) }(securityPool);
+		game.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+		return game;
+	}
 }

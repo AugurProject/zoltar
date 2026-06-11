@@ -5,7 +5,7 @@ import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash } from 'viem'
+import { getAddress, zeroAddress, zeroHash, type Address } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
@@ -152,11 +152,13 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
 		onMigrateEscalationDeposits: (_outcome, _depositIndexes) => undefined,
+		onMigrateUnresolvedEscalation: (_selectedChildOutcome, _selectedByOutcome) => undefined,
 		onMigrateRepToZoltar: _outcomes => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,
 		onStartTruthAuction: () => undefined,
-		onSubmitBid: () => undefined,
+		onSubmitBid: (_securityPoolAddressOverride?: Address) => undefined,
+		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
 		...overrides,
 	}
 }
@@ -260,6 +262,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		onRequestPoolPrice: () => undefined,
 		onSelectedPoolViewChange: () => undefined,
 		onSecurityPoolAddressChange: () => undefined,
+		selectedPoolRefreshNonce: 0,
 		onViewPendingReport: () => undefined,
 		poolOracleActiveAction: undefined,
 		poolOracleManagerDetails: undefined,

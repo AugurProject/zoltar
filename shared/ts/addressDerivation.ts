@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, getCreate2Address, keccak256, numberToBytes, zeroAddress, type Address, type Hex } from 'viem'
+import { encodeAbiParameters, getAddress, getCreate2Address, getCreateAddress, keccak256, numberToBytes, zeroAddress, type Address, type Hex } from 'viem'
 
 type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address
@@ -60,6 +60,13 @@ function getShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
 	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
 }
 
+function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
+	return getCreateAddress({
+		from: securityPoolFactory,
+		nonce: 1n,
+	})
+}
+
 export function createRepTokenAddressHelper(config: RepTokenAddressConfig) {
 	const getRepTokenAddress = (universeId: bigint) => {
 		const zoltarAddress = config.getZoltarAddress()
@@ -112,7 +119,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 				zoltar: infraContracts.zoltar,
 				zoltarQuestionData: infraContracts.zoltarQuestionData,
 			}),
-			from: infraContracts.securityPoolFactory,
+			from: getSecurityPoolDeployerAddress(infraContracts.securityPoolFactory),
 			salt: numberToBytes(0, { size: 32 }),
 		})
 		const escalationGame = getCreate2Address({

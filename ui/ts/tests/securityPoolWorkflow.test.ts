@@ -4,6 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import {
 	getCurrentForkWorkflowSelectionStage,
+	getCurrentSelectedPoolForkAuctionDetails,
+	getCurrentSelectedPoolReportingDetails,
 	getCurrentSelectedPoolForkStage,
 	getCurrentPoolOracleManagerDetails,
 	getOracleLastPriceDisplay,
@@ -157,6 +159,161 @@ void describe('selected pool workflow lookup state', () => {
 				systemState: 'operational',
 			}),
 		).toBe('settlement')
+	})
+
+	void test('ignores stale non-operational fork-auction details once the selected pool is operational again', () => {
+		expect(
+			getCurrentSelectedPoolForkStage({
+				forkAuctionDetails: {
+					claimingAvailable: false,
+					forkOutcome: 'yes',
+					migratedRep: 5n,
+					systemState: 'forkTruthAuction',
+					truthAuction: undefined,
+					truthAuctionStartedAt: 10n,
+				},
+				selectedPool: {
+					forkOutcome: 'yes',
+					hasForkActivity: true,
+					migratedRep: 5n,
+					systemState: 'operational',
+					truthAuctionStartedAt: 10n,
+				},
+			}),
+		).toBe('settlement')
+	})
+
+	void test('ignores stale operational fork-auction details once the selected pool enters fork mode', () => {
+		expect(
+			getCurrentSelectedPoolForkAuctionDetails({
+				forkAuctionDetails: {
+					claimingAvailable: false,
+					forkOutcome: 'none',
+					migratedRep: 0n,
+					systemState: 'operational',
+					truthAuction: undefined,
+					truthAuctionStartedAt: 0n,
+				},
+				selectedPool: {
+					hasForkActivity: true,
+					systemState: 'forkTruthAuction',
+				},
+			}),
+		).toBeUndefined()
+	})
+
+	void test('ignores stale non-operational reporting details once the selected pool is operational again', () => {
+		expect(
+			getCurrentSelectedPoolReportingDetails({
+				reportingDetails: {
+					completeSetCollateralAmount: 1n,
+					currentTime: 5n,
+					forkThreshold: 100n,
+					marketDetails: {
+						answerUnit: '',
+						createdAt: 1n,
+						description: 'Question description',
+						displayValueMax: 100n,
+						displayValueMin: 0n,
+						endTime: 2n,
+						exists: true,
+						marketType: 'binary',
+						numTicks: 2n,
+						outcomeLabels: ['Yes', 'No'],
+						questionId: '0x01',
+						startTime: 1n,
+						title: 'Will this resolve?',
+					},
+					nonDecisionThreshold: 50n,
+					parentWithdrawalEnabled: false,
+					questionOutcome: 'none',
+					securityPoolAddress: zeroAddress,
+					settlementState: 'locked',
+					startBond: 1n,
+					status: 'active',
+					systemState: 'forkTruthAuction',
+					universeId: 1n,
+					viewerVaultAvailableEscalationRep: 0n,
+					viewerVaultExists: false,
+					viewerVaultLockedRepInEscalationGame: 0n,
+					viewerVaultRepDepositShare: 0n,
+					activationTime: 1n,
+					bindingCapital: 1n,
+					currentRequiredBond: 1n,
+					escalationEndTime: 10n,
+					escalationGameAddress: zeroAddress,
+					hasReachedNonDecision: false,
+					sides: [
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+					],
+					totalCost: 1n,
+				},
+				selectedPool: {
+					hasForkActivity: true,
+					questionOutcome: 'yes',
+					systemState: 'operational',
+				},
+			}),
+		).toBeUndefined()
+	})
+
+	void test('ignores stale operational reporting details once the selected pool enters fork mode', () => {
+		expect(
+			getCurrentSelectedPoolReportingDetails({
+				reportingDetails: {
+					completeSetCollateralAmount: 1n,
+					currentTime: 5n,
+					forkThreshold: 100n,
+					marketDetails: {
+						answerUnit: '',
+						createdAt: 1n,
+						description: 'Question description',
+						displayValueMax: 100n,
+						displayValueMin: 0n,
+						endTime: 2n,
+						exists: true,
+						marketType: 'binary',
+						numTicks: 2n,
+						outcomeLabels: ['Yes', 'No'],
+						questionId: '0x01',
+						startTime: 1n,
+						title: 'Will this resolve?',
+					},
+					nonDecisionThreshold: 50n,
+					parentWithdrawalEnabled: true,
+					questionOutcome: 'yes',
+					securityPoolAddress: zeroAddress,
+					settlementState: 'resolved',
+					startBond: 1n,
+					status: 'active',
+					systemState: 'operational',
+					universeId: 1n,
+					viewerVaultAvailableEscalationRep: 0n,
+					viewerVaultExists: false,
+					viewerVaultLockedRepInEscalationGame: 0n,
+					viewerVaultRepDepositShare: 0n,
+					activationTime: 1n,
+					bindingCapital: 1n,
+					currentRequiredBond: 1n,
+					escalationEndTime: 10n,
+					escalationGameAddress: zeroAddress,
+					hasReachedNonDecision: false,
+					sides: [
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+					],
+					totalCost: 1n,
+				},
+				selectedPool: {
+					hasForkActivity: true,
+					questionOutcome: 'yes',
+					systemState: 'forkMigration',
+				},
+			}),
+		).toBeUndefined()
 	})
 })
 

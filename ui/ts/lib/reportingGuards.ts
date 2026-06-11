@@ -48,8 +48,8 @@ export function getReportingReportGuardMessage({
 }
 
 export function getReportingWithdrawGuardMessage({ accountAddress, isMainnet, reportingStatus }: { accountAddress: Address | undefined; isMainnet: boolean; reportingStatus: ReportingStatus }) {
-	if (accountAddress === undefined) return 'Connect a wallet before withdrawing escalation deposits.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing escalation deposits.'
-	if (reportingStatus === 'missing') return 'Load reporting details before withdrawing escalation deposits.'
+	if (accountAddress === undefined) return 'Connect a wallet before settling escalation deposits.'
+	if (!isMainnet) return 'Switch to Ethereum mainnet before settling escalation deposits.'
+	if (reportingStatus === 'missing') return 'Load reporting details before settling escalation deposits.'
 	return undefined
 }

@@ -26,6 +26,7 @@ import type {
 	ForkAuctionAction,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
+	ImportedEscalationDeposit,
 	ListedSecurityPool,
 	OpenOracleActionResult,
 	OracleManagerDetails,
@@ -36,7 +37,7 @@ import type {
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
-	ReportingWithdrawalState,
+	ReportingSettlementState,
 	SecurityPoolVaultSummary,
 	StagedOracleExecutionResult,
 	StagedOracleQueuedResult,
@@ -92,7 +93,7 @@ const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address 
 const CONTRACT_PAGE_SIZE = 30n
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type TruthAuctionTickSummaryStruct = {
 	tick: bigint
@@ -111,7 +112,8 @@ type TruthAuctionBidViewStruct = {
 	claimed: boolean
 	refunded: boolean
 }
-type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint]
+type ImportedDepositTuple = readonly [Address, bigint, bigint, boolean]
+type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint, bigint, bigint]
 type LoadAllSecurityPoolsOptions = {
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
@@ -233,6 +235,52 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 	}
 	return deposits
 }
+
+function isImportedDepositTuple(value: unknown): value is ImportedDepositTuple {
+	return Array.isArray(value) && value.length === 4 && typeof value[0] === 'string' && typeof value[1] === 'bigint' && typeof value[2] === 'bigint' && typeof value[3] === 'boolean'
+}
+
+function requireImportedDepositTuple(value: unknown, context: string): ImportedDepositTuple {
+	if (isImportedDepositTuple(value)) return value
+	throw new Error(`Unexpected imported escalation deposit response for ${context}`)
+}
+
+export async function loadImportedEscalationDeposits(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
+	let startIndex = 0n
+	const importedDeposits: ImportedEscalationDeposit[] = []
+	while (true) {
+		const page = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor',
+			args: [getReportingOutcomeValue(outcome), depositor, startIndex, BigInt(CONTRACT_PAGE_SIZE)],
+		})
+		if (!Array.isArray(page)) throw new Error('Unexpected imported escalation index page response')
+		const parentDepositIndexes = page.filter((value): value is bigint => typeof value === 'bigint')
+		if (parentDepositIndexes.length !== page.length) throw new Error('Unexpected imported escalation index page response')
+		for (const parentDepositIndex of parentDepositIndexes) {
+			const importedDepositTuple = requireImportedDepositTuple(
+				await client.readContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					address: escalationGameAddress,
+					functionName: 'importedDeposits',
+					args: [BigInt(getReportingOutcomeValue(outcome)), parentDepositIndex],
+				}),
+				`${outcome}:${parentDepositIndex.toString()}`,
+			)
+			const [loadedDepositor, amount, cumulativeAmount] = importedDepositTuple
+			importedDeposits.push({
+				amount,
+				cumulativeAmount,
+				depositor: loadedDepositor,
+				parentDepositIndex,
+			})
+		}
+		if (BigInt(parentDepositIndexes.length) !== CONTRACT_PAGE_SIZE) break
+		startIndex += CONTRACT_PAGE_SIZE
+	}
+	return importedDeposits
+}
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
@@ -306,8 +354,22 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: securityPoolAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'systemState',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: QUESTION_OUTCOME_ABI,
+			functionName: 'getQuestionOutcome',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		},
 	]
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = (await readRequiredMulticall(client, reportingPoolReads)) as unknown as ReportingBootstrapReadResult
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue] = (await readRequiredMulticall(client, reportingPoolReads)) as unknown as ReportingBootstrapReadResult
+	const systemState = getSecurityPoolSystemState(systemStateValue)
+	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),
@@ -328,17 +390,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			forkThreshold,
 			marketDetails,
 			nonDecisionThreshold: forkThreshold / 2n,
-			questionOutcome: 'none',
-			resolution: 'none',
+			questionOutcome: normalizedQuestionOutcome,
 			securityPoolAddress,
+			settlementState: normalizedQuestionOutcome !== 'none' && systemState === 'operational' ? 'resolved' : 'locked',
 			startBond: initialEscalationGameDeposit,
 			status: 'not-started',
+			systemState,
 			universeId,
-			withdrawalEnabled: false,
-			withdrawalState: 'not-finalized',
+			parentWithdrawalEnabled: false,
 			...viewerVaultState,
 		}
-	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = requireEscalationGameTuple(
+	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = requireEscalationGameTuple(
 		await readRequiredMulticall(client, [
 			{
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -378,12 +440,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			},
 			{
 				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getQuestionResolution',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
 				functionName: 'getEscalationGameEndDate',
 				address: escalationGameAddress,
 				args: [],
@@ -409,18 +465,24 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		]),
 		'escalation game',
 	)
-	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
+	const [invalidDeposits, yesDeposits, noDeposits, invalidImportedDeposits, yesImportedDeposits, noImportedDeposits] = await Promise.all([
+		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
+		loadEscalationDeposits(client, escalationGameAddress, 'yes'),
+		loadEscalationDeposits(client, escalationGameAddress, 'no'),
+		accountAddress === undefined ? Promise.resolve([]) : loadImportedEscalationDeposits(client, escalationGameAddress, 'invalid', accountAddress),
+		accountAddress === undefined ? Promise.resolve([]) : loadImportedEscalationDeposits(client, escalationGameAddress, 'yes', accountAddress),
+		accountAddress === undefined ? Promise.resolve([]) : loadImportedEscalationDeposits(client, escalationGameAddress, 'no', accountAddress),
+	])
 	const sides: EscalationSide[] = [
-		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
-		{ balance: balances[1] ?? 0n, deposits: yesDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
-		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, importedUserDeposits: invalidImportedDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[1] ?? 0n, deposits: yesDeposits, importedUserDeposits: yesImportedDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[2] ?? 0n, deposits: noDeposits, importedUserDeposits: noImportedDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
-	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
-	let withdrawalState: ReportingWithdrawalState = 'not-finalized'
-	if (normalizedQuestionOutcome !== 'none') {
-		withdrawalState = 'resolved'
-	} else if (universeForkTime > 0n && hasReachedNonDecision === false) {
-		withdrawalState = 'canceled-by-external-fork'
+	let settlementState: ReportingSettlementState = 'locked'
+	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
+		settlementState = 'resolved'
+	} else if (universeForkTime > 0n && universeForkTime < escalationEndTime && hasReachedNonDecision === false) {
+		settlementState = block.timestamp <= universeForkTime + MIGRATION_TIME_LENGTH ? 'migration-required' : 'migration-expired'
 	}
 	return {
 		bindingCapital,
@@ -434,16 +496,16 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		marketDetails,
 		nonDecisionThreshold,
 		questionOutcome: normalizedQuestionOutcome,
-		resolution: getReportingOutcomeKey(resolution),
 		securityPoolAddress,
 		sides,
 		startBond,
 		status: 'active',
+		systemState,
+		settlementState,
 		activationTime,
 		totalCost,
 		universeId,
-		withdrawalEnabled: withdrawalState !== 'not-finalized',
-		withdrawalState,
+		parentWithdrawalEnabled: settlementState === 'resolved',
 		...viewerVaultState,
 	}
 }
@@ -1198,7 +1260,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
 	const forkDataTuple: ForkDataTuple = forkData
-	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
+	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
 	const hasForkActivity = deriveHasForkActivity({
@@ -1587,6 +1649,21 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 			})),
 	)
 }
+export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey, invalidDepositIndexes: bigint[], yesDepositIndexes: bigint[], noDepositIndexes: bigint[]) {
+	return await executeForkAuctionAction(
+		client,
+		'migrateUnresolvedEscalation',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
+				address: getInfraContractAddresses().securityPoolForker,
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'migrateVaultWithUnresolvedEscalation',
+				args: [securityPoolAddress, getReportingOutcomeValue(outcome), toUint8Array(invalidDepositIndexes), toUint8Array(yesDepositIndexes), toUint8Array(noDepositIndexes)],
+			})),
+	)
+}
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1756,7 +1833,7 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 				shouldLoadVaults ? loadSecurityPoolVaultSummaries(client, securityPoolAddress) : Promise.all([getSecurityPoolVaultCount(client, securityPoolAddress)]).then(([vaultCount]) => ({ hasLoadedVaults: vaultCount === 0n, vaultCount, vaults: [] })),
 			])
 			const forkDataTuple: ForkDataTuple = forkData
-			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
+			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple
 			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 			const poolSystemState = getSecurityPoolSystemState(systemState)
 			const hasForkActivity = deriveHasForkActivity({
@@ -2036,4 +2113,20 @@ export async function withdrawEscalationFromSecurityPool(client: WriteClient, se
 		securityPoolAddress,
 		universeId,
 	} satisfies ReportingActionResult
+}
+export async function withdrawForkedEscalationDeposits(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) {
+	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+	return await executeForkAuctionAction(
+		client,
+		'settleForkedEscalation',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
+				address: securityPoolAddress,
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'withdrawForkedEscalationDeposits',
+				args: [getReportingOutcomeValue(outcome), toUint8Array(parentDepositIndexes)],
+			})),
+	)
 }

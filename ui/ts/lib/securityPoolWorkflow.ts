@@ -7,13 +7,13 @@ import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
 import { getTimeRemaining } from './time.js'
 import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
-import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 
 export const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const
 export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]
-export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
+export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
 
-export const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits', 'fork-workflow']
+export const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'fork-workflow']
 export const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle']
 export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
 
@@ -25,8 +25,6 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 			return 'Trading'
 		case 'reporting':
 			return 'Reporting'
-		case 'withdraw-escalation-deposits':
-			return 'Withdraw Escalation Deposits'
 		case 'fork-workflow':
 			return 'Fork Workflow'
 		case 'staged-operations':
@@ -40,6 +38,7 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
 	const normalizedValue = (() => {
 		if (value === 'resolution') return 'reporting'
+		if (value === 'withdraw-escalation-deposits') return 'reporting'
 		if (value === 'oracle') return 'staged-operations'
 		if (value === 'fork-migration' || value === 'fork-auction' || value === 'fork-settlement') return 'fork-workflow'
 
@@ -115,17 +114,21 @@ export function getSelectedPoolForkWorkflowView({
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
+	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
 }) {
-	if (forkAuctionDetails !== undefined)
+	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
+		forkAuctionDetails,
+		selectedPool,
+	})
+	if (currentForkAuctionDetails !== undefined)
 		return getSelectedPoolViewForForkStage(
 			getForkAuctionStageView({
-				claimingAvailable: forkAuctionDetails.claimingAvailable,
-				forkOutcome: forkAuctionDetails.forkOutcome,
-				migratedRep: forkAuctionDetails.migratedRep,
-				systemState: forkAuctionDetails.systemState,
-				truthAuction: forkAuctionDetails.truthAuction,
-				truthAuctionStartedAt: forkAuctionDetails.truthAuctionStartedAt,
+				claimingAvailable: currentForkAuctionDetails.claimingAvailable,
+				forkOutcome: currentForkAuctionDetails.forkOutcome,
+				migratedRep: currentForkAuctionDetails.migratedRep,
+				systemState: currentForkAuctionDetails.systemState,
+				truthAuction: currentForkAuctionDetails.truthAuction,
+				truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
 			}),
 		)
 	if (selectedPool === undefined) return 'fork-workflow'
@@ -151,16 +154,20 @@ export function getCurrentSelectedPoolForkStage({
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
+	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
 }): ForkAuctionStageView {
-	if (forkAuctionDetails !== undefined)
+	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
+		forkAuctionDetails,
+		selectedPool,
+	})
+	if (currentForkAuctionDetails !== undefined)
 		return getForkAuctionStageView({
-			claimingAvailable: forkAuctionDetails.claimingAvailable,
-			forkOutcome: forkAuctionDetails.forkOutcome,
-			migratedRep: forkAuctionDetails.migratedRep,
-			systemState: forkAuctionDetails.systemState,
-			truthAuction: forkAuctionDetails.truthAuction,
-			truthAuctionStartedAt: forkAuctionDetails.truthAuctionStartedAt,
+			claimingAvailable: currentForkAuctionDetails.claimingAvailable,
+			forkOutcome: currentForkAuctionDetails.forkOutcome,
+			migratedRep: currentForkAuctionDetails.migratedRep,
+			systemState: currentForkAuctionDetails.systemState,
+			truthAuction: currentForkAuctionDetails.truthAuction,
+			truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
 		})
 	if (selectedPool === undefined) return 'migration'
 	return getForkAuctionStageView({
@@ -185,8 +192,52 @@ export function hasCurrentSelectedPoolForkActivity({
 		| undefined
 	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'hasForkActivity' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
 }) {
-	if (forkAuctionDetails !== undefined) return deriveHasForkActivity(forkAuctionDetails)
+	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
+		forkAuctionDetails,
+		selectedPool,
+	})
+	if (currentForkAuctionDetails !== undefined) return deriveHasForkActivity(currentForkAuctionDetails)
 	return selectedPool?.hasForkActivity ?? false
+}
+
+export function getCurrentSelectedPoolForkAuctionDetails<T extends { systemState: SecurityPoolSystemState }>({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: T | undefined; selectedPool: { hasForkActivity?: boolean; systemState: SecurityPoolSystemState } | undefined }) {
+	if (forkAuctionDetails === undefined) return undefined
+	if (forkAuctionDetails.systemState === 'operational' && selectedPool !== undefined && selectedPool.systemState !== 'operational') return undefined
+	if (forkAuctionDetails.systemState === 'operational') return forkAuctionDetails
+	if (selectedPool?.systemState === 'operational' && selectedPool.hasForkActivity === true) return undefined
+	return forkAuctionDetails
+}
+
+export function shouldReloadSelectedPoolDetails({
+	currentDetailsAvailable,
+	lastHandledRefreshNonce,
+	loadedDetailsAddress,
+	refreshNonce,
+	selectedPoolAddress,
+}: {
+	currentDetailsAvailable: boolean
+	lastHandledRefreshNonce: number
+	loadedDetailsAddress: string | undefined
+	refreshNonce: number
+	selectedPoolAddress: string | undefined
+}) {
+	if (selectedPoolAddress === undefined) return false
+	if (refreshNonce !== lastHandledRefreshNonce) return true
+	if (!sameAddress(loadedDetailsAddress, selectedPoolAddress)) return true
+	return !currentDetailsAvailable
+}
+
+export function getCurrentSelectedPoolReportingDetails({ reportingDetails, selectedPool }: { reportingDetails: ReportingDetails | undefined; selectedPool: Pick<ListedSecurityPool, 'hasForkActivity' | 'questionOutcome' | 'systemState'> | undefined }) {
+	if (reportingDetails === undefined) return undefined
+	if (reportingDetails.systemState === 'operational') {
+		if (selectedPool !== undefined && selectedPool.systemState !== 'operational') return undefined
+		if (selectedPool?.systemState === 'operational' && selectedPool.questionOutcome !== undefined && selectedPool.questionOutcome !== 'none' && reportingDetails.questionOutcome !== selectedPool.questionOutcome) {
+			return undefined
+		}
+		return reportingDetails
+	}
+	if (selectedPool?.systemState === 'operational' && selectedPool.hasForkActivity === true) return undefined
+	return reportingDetails
 }
 
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {

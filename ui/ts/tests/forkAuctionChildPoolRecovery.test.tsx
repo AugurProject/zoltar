@@ -2,7 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { waitFor, within } from '@testing-library/dom'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { type Address, zeroAddress } from 'viem'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
@@ -17,13 +18,19 @@ const actualClients = await import('../lib/clients.js')
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
 const YES_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa1'
+const STALE_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa2'
 
 let recoveredPools: ListedSecurityPool[] = []
+let loadForkAuctionDetailsCalls = 0
+let childAuctionDetailsFactory = (securityPoolAddress: Address) => createChildAuctionDetails(securityPoolAddress)
 
 mock.module('../contracts.js', () => ({
 	...actualContracts,
 	loadAllSecurityPools: mock(async () => recoveredPools),
-	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => createChildAuctionDetails(securityPoolAddress)),
+	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
+		loadForkAuctionDetailsCalls += 1
+		return childAuctionDetailsFactory(securityPoolAddress)
+	}),
 }))
 
 mock.module('../lib/clients.js', () => ({
@@ -109,7 +116,7 @@ function createParentDetails(): ForkAuctionDetails {
 	}
 }
 
-function createChildPool(): ListedSecurityPool {
+function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
 		completeSetCollateralAmount: 1n,
 		currentRetentionRate: 10n,
@@ -135,6 +142,7 @@ function createChildPool(): ListedSecurityPool {
 		universeId: 11n,
 		vaultCount: 0n,
 		vaults: [],
+		...overrides,
 	}
 }
 
@@ -162,6 +170,14 @@ function createChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDet
 	}
 }
 
+function createStaleChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDetails {
+	return {
+		...createChildAuctionDetails(securityPoolAddress),
+		systemState: 'forkTruthAuction',
+		truthAuctionAddress: STALE_TRUTH_AUCTION_ADDRESS,
+	}
+}
+
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
 	return {
 		accountState: createAccountState(),
@@ -186,11 +202,13 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
 		onMigrateEscalationDeposits: () => undefined,
+		onMigrateUnresolvedEscalation: (_selectedChildOutcome, _selectedByOutcome) => undefined,
 		onMigrateRepToZoltar: () => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
+		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
 		previewPool: {
 			...createChildPool(),
 			parent: zeroAddress,
@@ -214,6 +232,8 @@ describe('ForkAuctionSection child pool recovery', () => {
 
 	beforeEach(() => {
 		recoveredPools = []
+		loadForkAuctionDetailsCalls = 0
+		childAuctionDetailsFactory = securityPoolAddress => createChildAuctionDetails(securityPoolAddress)
 		cleanupDom = installDomEnvironment().cleanup
 	})
 
@@ -232,6 +252,78 @@ describe('ForkAuctionSection child pool recovery', () => {
 		await waitFor(() => {
 			expect(within(document.body).queryByText('Yes universe does not exist.')).toBeNull()
 			expectTransactionButtonEnabled(document.body, 'Start Truth Auction')
+		})
+	})
+
+	test('ignores stale loaded child auction details once the recovered child pool is already operational', async () => {
+		recoveredPools = [
+			createChildPool({
+				hasForkActivity: true,
+				systemState: 'operational',
+				truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+				truthAuctionStartedAt: 10n,
+			}),
+		]
+		childAuctionDetailsFactory = securityPoolAddress => createStaleChildAuctionDetails(securityPoolAddress)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(within(document.body).queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+		})
+
+		expect(within(document.body).queryByRole('button', { name: `Copy address ${STALE_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
+	})
+
+	test('reloads selected child auction details after a selected-pool refresh', async () => {
+		recoveredPools = [createChildPool()]
+		const secondTruthAuctionAddress: Address = '0x0000000000000000000000000000000000000ab2'
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					selectedPoolRefreshNonce: 0,
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(loadForkAuctionDetailsCalls).toBe(1)
+			expect(within(document.body).queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+		})
+
+		childAuctionDetailsFactory = securityPoolAddress => ({
+			...createChildAuctionDetails(securityPoolAddress),
+			truthAuctionAddress: securityPoolAddress === YES_CHILD_POOL_ADDRESS ? secondTruthAuctionAddress : YES_TRUTH_AUCTION_ADDRESS,
+		})
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						currentStageView: 'auction',
+						selectedPoolRefreshNonce: 1,
+						selectedStageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(loadForkAuctionDetailsCalls).toBe(2)
+			expect(within(document.body).queryByRole('button', { name: `Copy address ${secondTruthAuctionAddress}` })).not.toBeNull()
 		})
 	})
 })

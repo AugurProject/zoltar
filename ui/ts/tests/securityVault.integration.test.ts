@@ -108,6 +108,6 @@ describe('Security vault integration', () => {
 
 		await approveErc20(uiWriteClient, vaultDetails.repToken, securityPoolAddress, belowMinimumDepositAmount, 'approveRep')
 
-		await expect(depositRepToSecurityPool(uiWriteClient, securityPoolAddress, belowMinimumDepositAmount)).rejects.toThrow('min deposit requirement')
+		await expect(depositRepToSecurityPool(uiWriteClient, securityPoolAddress, belowMinimumDepositAmount)).rejects.toThrow('min rep')
 	})
 })

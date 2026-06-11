@@ -2,7 +2,7 @@
 
 import { assertNever } from '../lib/assert.js'
 import { createSimulationEngine } from './tevmEngine.js'
-import type { SimulationWorkerCallMessage, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerRpcMessage } from './tevmWorkerProtocol.js'
+import type { SimulationWorkerCallMessage, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage } from './tevmWorkerProtocol.js'
 
 function isDedicatedWorkerGlobalScope(value: typeof globalThis): value is typeof globalThis & DedicatedWorkerGlobalScope {
 	return typeof value.postMessage === 'function' && 'onmessage' in value
@@ -85,10 +85,10 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 
 async function handleRpc(message: SimulationWorkerRpcMessage) {
 	const engine = await getEngine()
-	return await engine.request({
+	return (await engine.request({
 		method: message.method,
 		params: message.params,
-	})
+	})) as SimulationWorkerResultValue
 }
 
 scope.onmessage = event => {

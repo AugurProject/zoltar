@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { AppHeaderShell } from './components/AppHeaderShell.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
@@ -42,6 +42,7 @@ import type { DeploymentRouteContentProps, GlobalTransactionPresentation, Market
 export function App() {
 	const transactionState = useSignal<TransactionTrayState>(createInitialTransactionTrayState())
 	const deployNextMissingPending = useSignal(false)
+	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolsView, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransactionRequested = (intent: TransactionIntent) => {
@@ -239,10 +240,12 @@ export function App() {
 		loadForkAuction,
 		loadingForkAuctionDetails,
 		migrateEscalation,
+		migrateUnresolvedEscalation,
 		migrateRepToZoltar,
 		migrateVault,
 		refundLosingBids,
 		setForkAuctionForm,
+		settleForkedEscalation,
 		startTruthAuction,
 		submitBid,
 	} = useForkAuctionOperations({ ...baseHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
@@ -321,6 +324,7 @@ export function App() {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
 		if (!nextSecurityPoolAddress.startsWith('0x') || nextSecurityPoolAddress.length !== 42) return
+		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
 	}
 	const onDeployNextMissing = async () => {
@@ -530,11 +534,13 @@ export function App() {
 						outcome,
 						...(depositIndexes === undefined ? {} : { depositIndexes }),
 					}),
+				onMigrateUnresolvedEscalation: (selectedChildOutcome, selectedByOutcome) => void migrateUnresolvedEscalation(selectedChildOutcome, selectedByOutcome),
 				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
 				onMigrateVault: () => void migrateVault(),
 				onRefundLosingBids: (securityPoolAddressOverride, selectedBids) => void refundLosingBids(securityPoolAddressOverride, selectedBids),
 				onStartTruthAuction: securityPoolAddressOverride => void startTruthAuction(securityPoolAddressOverride),
 				onSubmitBid: securityPoolAddressOverride => void submitBid(securityPoolAddressOverride),
+				onWithdrawForkedEscalation: (outcome, parentDepositIndexes) => void settleForkedEscalation(outcome, parentDepositIndexes),
 			},
 			liquidationAmount,
 			liquidationMaxAmount,
@@ -567,6 +573,7 @@ export function App() {
 			poolOracleManagerDetails,
 			poolOracleManagerError,
 			poolPriceOracleResult,
+			selectedPoolRefreshNonce,
 			universeForkTime: zoltarUniverse?.forkTime,
 			selectedPoolView,
 			onSecurityPoolAddressChange: value => {

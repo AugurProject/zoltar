@@ -12,12 +12,20 @@ struct Deposit {
 	uint256 cumulativeAmount;
 }
 
+struct ImportedDeposit {
+	address depositor;
+	uint256 amount;
+	uint256 cumulativeAmount;
+	bool settled;
+}
+
 uint256 constant escalationTimeLength = 4233600; // 7 weeks
 uint256 constant SCALE = 1e6;
 uint256 constant LN2_SCALED = 693147;
 uint256 constant MAX_ATANH_ITERATIONS = 16;
 uint256 constant MAX_EXP_ITERATIONS = 16;
 uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
+uint256 constant FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX = 1 << 255;
 
 contract EscalationGame {
 	uint256 public constant activationDelay = 3 days;
@@ -30,11 +38,29 @@ contract EscalationGame {
 	uint256 public lnRatioScaled;
 	address public owner;
 	uint256 public nonDecisionTimestamp;
+	bool public forkContinuation;
+	bool public forkContinuationResumed;
+	uint256 public forkElapsedAtStart;
+	uint256 public forkResumedAt;
+	// [outcome][parentDepositIndex] => imported deposit record carried from a parent or ancestor continuation game.
+	mapping(uint256 => ImportedDeposit)[3] public importedDeposits;
+	// [outcome][fenwickNodeIndex] => Fenwick tree node sum used to compute imported principal before a given parentDepositIndex.
+	mapping(uint256 => uint256)[3] private importedPrefixTree;
+	uint256[3] private importedTotalAmount;
+	uint256[3] private importedMaxKeyAmount;
+	// [outcome][depositor] => unsettled imported parentDepositIndexes owned by that depositor, used for bounded discovery/pagination.
+	mapping(address => uint256[])[3] private unsettledImportedDepositIndexesByDepositor;
+	// [outcome][depositor][parentDepositIndex] => 1-based position of that imported index inside unsettledImportedDepositIndexesByDepositor for O(1) swap-and-pop removal.
+	mapping(address => mapping(uint256 => uint256))[3] private importedDepositorIndexPosition;
+	uint256[3] public importedBalances;
 
 	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
+	event GameContinuedFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork);
+	event ForkContinuationResumed(uint256 resumedAt);
 	event DepositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
 	event WithdrawDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountToWithdraw, uint256 depositIndex);
 	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
+	event ImportedForkDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 parentDepositIndex, uint256 amount);
 
 	constructor(ISecurityPool _securityPool) {
 		securityPool = _securityPool;
@@ -53,6 +79,32 @@ contract EscalationGame {
 		startBond = _startBond;
 		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
 		emit GameStarted(activationTime, startBond, nonDecisionThreshold);
+	}
+
+	function startFromFork(uint256 _startBond, uint256 _nonDecisionThreshold, uint256 elapsedAtFork) public {
+		require(owner == msg.sender, 'only owner can start');
+		require(activationTime == 0, 'already started');
+		require(_nonDecisionThreshold > _startBond, 'threshold must exceed start bond');
+		require(_startBond > 0, 'start bond must be positive');
+		require(_startBond >= 1e18, 'start bond must be at least 1 ether');
+		require(_nonDecisionThreshold >= 1e18, 'threshold must be at least 1 ether');
+		require(elapsedAtFork <= escalationTimeLength, 'Invalid time');
+		forkContinuation = true;
+		forkContinuationResumed = false;
+		forkElapsedAtStart = elapsedAtFork;
+		startBond = _startBond;
+		nonDecisionThreshold = _nonDecisionThreshold;
+		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
+		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+	}
+
+	function resumeFromFork() public {
+		require(owner == msg.sender || address(securityPool) == msg.sender, 'only owner can resume');
+		require(forkContinuation, 'not fork continuation');
+		require(!forkContinuationResumed, 'already resumed');
+		forkContinuationResumed = true;
+		forkResumedAt = block.timestamp;
+		emit ForkContinuationResumed(block.timestamp);
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {
@@ -142,14 +194,28 @@ contract EscalationGame {
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
 		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
+		if (forkContinuation) {
+			if (!forkContinuationResumed) return type(uint256).max;
+			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCost(getBindingCapital());
+			if (requiredElapsed <= forkElapsedAtStart) return forkResumedAt;
+			return forkResumedAt + (requiredElapsed - forkElapsedAtStart);
+		}
 		return activationTime + computeTimeSinceStartFromAttritionCost(getBindingCapital());
 	}
 
 	function totalCost() public view returns (uint256) {
+		if (forkContinuation && !forkContinuationResumed && forkElapsedAtStart == 0) return 0;
+		if (forkContinuation && !forkContinuationResumed) return computeIterativeAttritionCost(forkElapsedAtStart);
+		if (forkContinuation) {
+			uint256 forkElapsed = forkElapsedAtStart + (block.timestamp - forkResumedAt);
+			if (forkElapsed == 0) return 0;
+			if (forkElapsed >= escalationTimeLength) return nonDecisionThreshold;
+			return computeIterativeAttritionCost(forkElapsed);
+		}
 		if (activationTime >= block.timestamp) return 0;
-		uint256 timeFromStart = block.timestamp - activationTime;
-		if (timeFromStart >= escalationTimeLength) return nonDecisionThreshold;
-		return computeIterativeAttritionCost(timeFromStart);
+		uint256 elapsedSinceActivation = block.timestamp - activationTime;
+		if (elapsedSinceActivation >= escalationTimeLength) return nonDecisionThreshold;
+		return computeIterativeAttritionCost(elapsedSinceActivation);
 	}
 
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome){
@@ -169,8 +235,7 @@ contract EscalationGame {
 		uint8 invalidOver = balances[0] >= nonDecisionThreshold ? 1 : 0;
 		uint8 yesOver = balances[1] >= nonDecisionThreshold ? 1 : 0;
 		uint8 noOver = balances[2] >= nonDecisionThreshold ? 1 : 0;
-		if (invalidOver + yesOver + noOver >= 2) return true;
-		return false;
+		return invalidOver + yesOver + noOver >= 2;
 	}
 
 	function getBindingCapital() public view returns (uint256) {
@@ -269,6 +334,111 @@ contract EscalationGame {
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
+	function exportUnresolvedForkDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker can withdraw'
+		);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		if (depositIndex > type(uint128).max) {
+			uint256 importedDepositIndex = ~depositIndex;
+			ImportedDeposit storage importedDeposit = importedDeposits[uint8(outcome)][importedDepositIndex];
+			require(importedDeposit.depositor != address(0x0), 'unknown imported deposit');
+			require(!importedDeposit.settled, 'deposit already settled');
+			importedDeposit.settled = true;
+			depositor = importedDeposit.depositor;
+			amount = importedDeposit.amount;
+			parentDepositIndex = importedDepositIndex;
+			return (depositor, amount, parentDepositIndex);
+		}
+		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		require(deposit.amount > 0, 'deposit already settled');
+		deposits[uint8(outcome)][depositIndex].amount = 0;
+		depositor = deposit.depositor;
+		amount = deposit.amount;
+		parentDepositIndex = forkContinuation ? FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX | depositIndex : depositIndex;
+	}
+
+	function importForkedDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 parentDepositIndex, uint256 amount) public {
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker can withdraw'
+		);
+		require(forkContinuation, 'not fork continuation');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		require(amount > 0, 'amount must be positive');
+		ImportedDeposit storage deposit = importedDeposits[uint8(outcome)][parentDepositIndex];
+		require(deposit.depositor == address(0x0), 'deposit already imported');
+		deposit.depositor = depositor;
+		deposit.amount = amount;
+		deposit.cumulativeAmount = _getImportedPrefixAmount(uint8(outcome), parentDepositIndex);
+		importedBalances[uint8(outcome)] += amount;
+		balances[uint8(outcome)] += amount;
+		_addImportedPrefixAmount(uint8(outcome), parentDepositIndex, amount);
+		unsettledImportedDepositIndexesByDepositor[uint8(outcome)][depositor].push(parentDepositIndex);
+		importedDepositorIndexPosition[uint8(outcome)][depositor][parentDepositIndex] = unsettledImportedDepositIndexesByDepositor[uint8(outcome)][depositor].length;
+		emit ImportedForkDeposit(depositor, outcome, parentDepositIndex, amount);
+	}
+
+	function withdrawImportedForkDeposit(uint256 parentDepositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker can withdraw'
+		);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		ImportedDeposit storage deposit = importedDeposits[uint8(outcome)][parentDepositIndex];
+		require(deposit.depositor != address(0x0), 'unknown imported deposit');
+		require(!deposit.settled, 'deposit already settled');
+		deposit.settled = true;
+		depositor = deposit.depositor;
+		originalDepositAmount = deposit.amount;
+		_removeUnsettledImportedDeposit(uint8(outcome), depositor, parentDepositIndex);
+		uint256 depositStart = deposit.cumulativeAmount;
+		uint256 bindingCapitalAmount = getBindingCapital();
+		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
+		uint256 winningOutcomeBalance = balances[uint8(outcome)];
+		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
+		uint256 burnAmount;
+		if (rewardEligiblePrincipalAmount == 0) {
+			amountToWithdraw = originalDepositAmount;
+		} else {
+			uint256 eligibleEndAmount = depositStart + originalDepositAmount < rewardEligibleCapAmount ? depositStart + originalDepositAmount : rewardEligibleCapAmount;
+			uint256 rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
+			if (rewardEligibleDepositAmount > originalDepositAmount) rewardEligibleDepositAmount = originalDepositAmount;
+			uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
+			uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
+			uint256 bonusShare = rewardEligibleDepositAmount * rewardBonusPoolAmount / rewardEligiblePrincipalAmount;
+			burnAmount = rewardEligibleDepositAmount * totalHaircutAmount / rewardEligiblePrincipalAmount;
+			amountToWithdraw = originalDepositAmount + bonusShare;
+		}
+
+		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
+		if (actualForkThreshold < nonDecisionThreshold) {
+			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
+		}
+
+		emit ClaimDeposit(amountToWithdraw, burnAmount);
+	}
+
+	function forfeitImportedForkDeposit(uint256 parentDepositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 originalDepositAmount) {
+		require(
+			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
+			'Only Security Pool or designated forker can withdraw'
+		);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
+		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
+		require(outcome != questionResolution, 'Winning deposits must withdraw');
+		ImportedDeposit storage deposit = importedDeposits[uint8(outcome)][parentDepositIndex];
+		require(deposit.depositor != address(0x0), 'unknown imported deposit');
+		require(!deposit.settled, 'deposit already settled');
+		deposit.settled = true;
+		depositor = deposit.depositor;
+		originalDepositAmount = deposit.amount;
+		_removeUnsettledImportedDeposit(uint8(outcome), depositor, parentDepositIndex);
+		emit WithdrawDeposit(depositor, outcome, 0, parentDepositIndex);
+	}
+
 	function refundCanceledDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(securityPool.zoltar().getForkTime(securityPool.universeId()) > 0, 'Zoltar has not forked');
@@ -279,6 +449,28 @@ contract EscalationGame {
 		depositor = deposit.depositor;
 		amountToWithdraw = deposit.amount;
 		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
+	}
+
+	function getUnsettledImportedDepositIndexesByOutcomeAndDepositor(
+		BinaryOutcomes.BinaryOutcome outcome,
+		address depositor,
+		uint256 startIndex,
+		uint256 scanCount
+	) external view returns (uint256[] memory depositIndexes) {
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		uint256[] storage depositorIndexes = unsettledImportedDepositIndexesByDepositor[uint8(outcome)][depositor];
+		if (startIndex >= depositorIndexes.length || scanCount == 0) return new uint256[](0);
+		uint256 endIndex = startIndex + scanCount;
+		if (endIndex > depositorIndexes.length) {
+			endIndex = depositorIndexes.length;
+		}
+		depositIndexes = new uint256[](endIndex - startIndex);
+		uint256 writeIndex = 0;
+		for (uint256 index = startIndex; index < endIndex; index++) {
+			uint256 depositIndex = depositorIndexes[index];
+			depositIndexes[writeIndex] = depositIndex;
+			writeIndex += 1;
+		}
 	}
 
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
@@ -346,6 +538,50 @@ contract EscalationGame {
 		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
 			returnDeposits[i - startIndex] = deposits[uint8(outcome)][i];
+		}
+	}
+
+	function _removeUnsettledImportedDeposit(uint8 outcomeIndex, address depositor, uint256 parentDepositIndex) private {
+		uint256[] storage depositorIndexes = unsettledImportedDepositIndexesByDepositor[outcomeIndex][depositor];
+		uint256 positionPlusOne = importedDepositorIndexPosition[outcomeIndex][depositor][parentDepositIndex];
+		require(positionPlusOne != 0, 'deposit not unsettled');
+		uint256 position = positionPlusOne - 1;
+		uint256 lastIndex = depositorIndexes.length - 1;
+		if (position != lastIndex) {
+			uint256 movedDepositIndex = depositorIndexes[lastIndex];
+			depositorIndexes[position] = movedDepositIndex;
+			importedDepositorIndexPosition[outcomeIndex][depositor][movedDepositIndex] = positionPlusOne;
+		}
+		depositorIndexes.pop();
+		delete importedDepositorIndexPosition[outcomeIndex][depositor][parentDepositIndex];
+	}
+
+	function _getImportedPrefixAmount(uint8 outcomeIndex, uint256 parentDepositIndex) internal view returns (uint256 prefixAmount) {
+		if (parentDepositIndex == 0) {
+			return 0;
+		}
+		if (parentDepositIndex == type(uint256).max) {
+			return importedTotalAmount[outcomeIndex] - importedMaxKeyAmount[outcomeIndex];
+		}
+		for (uint256 index = parentDepositIndex; index > 0;) {
+			prefixAmount += importedPrefixTree[outcomeIndex][index];
+			uint256 lowBit = index & (~index + 1);
+			index -= lowBit;
+		}
+	}
+
+	function _addImportedPrefixAmount(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amount) internal {
+		importedTotalAmount[outcomeIndex] += amount;
+		if (parentDepositIndex == type(uint256).max) {
+			importedMaxKeyAmount[outcomeIndex] += amount;
+			return;
+		}
+		for (uint256 index = parentDepositIndex + 1; index > 0;) {
+			importedPrefixTree[outcomeIndex][index] += amount;
+			uint256 lowBit = index & (~index + 1);
+			unchecked {
+				index += lowBit;
+			}
 		}
 	}
 }

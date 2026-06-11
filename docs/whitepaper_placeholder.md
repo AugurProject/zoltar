@@ -2,9 +2,9 @@
 
 ## Abstract
 
-Augur Placeholder is a prediction-market and oracle-security protocol built on top of Zoltar. Zoltar supplies forkable universes, question registration, outcome encoding, and post-fork REP splitting across disputed branches of reality. Augur Placeholder adds question-specific security pools, ETH-collateralized complete sets, escalation-driven local resolution, and a fork-recovery path that migrates economic state into child universes and, when needed, restores missing collateral through a truth auction.
+Augur Placeholder is a prediction-market and oracle-security protocol built on top of Zoltar. Zoltar supplies forkable universes, question registration, outcome encoding, and post-fork REP splitting across disputed child universes. Augur Placeholder adds question-specific security pools, ETH-collateralized complete sets, escalation-driven local resolution, and a fork-recovery path that migrates economic state into child universes and, when needed, restores missing collateral through a truth auction.
 
-The result is a layered design. REP vaults underwrite open interest, users mint and hold outcome shares backed by collateral, and disputes resolve locally whenever possible before escalating into a fork.
+In practice, REP vaults underwrite open interest, users mint ETH-backed outcome shares, disputes try to resolve locally, and Zoltar forks are used only when local resolution fails.
 
 ## 1. System Overview
 
@@ -22,9 +22,46 @@ Augur Placeholder is responsible for the economic system on top of that substrat
 - [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) complete sets and outcome shares
 - a local escalation game
 - migration of pool state after a fork
-- a batch auction that can restore missing collateral in a surviving branch
+- a batch auction that can restore missing collateral in a surviving child universe
 
 What it does not add is an exchange venue. Users can receive `Invalid`, `Yes`, and `No` shares from complete sets and can transfer those [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) positions to other users, but secondary-market trading is left outside Placeholder itself.
+
+Protocol flow in one pass:
+
+1. A question is registered in Zoltar and a Placeholder security pool is deployed for that question in one universe.
+2. REP vaults fund underwriting capacity and users mint ETH-backed complete sets.
+3. After question end, disputes first try to resolve locally through the escalation game.
+4. If local resolution fails and the system reaches non-decision, Zoltar forks and Placeholder migrates pool state into child universes.
+5. If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.
+6. The child pool in the economically dominant child universe resumes operation and users settle or redeem positions there.
+
+Lifecycle state machine:
+
+```
+Operational parent pool
+        |
+        v
+ Question ends
+        |
+        v
+ Escalation game
+   |            |
+   | resolves   | non-decision
+   v            v
+ Finalization   Zoltar fork
+                     |
+                     v
+          Parent pool migration
+                     |
+                     v
+            Child pool created
+                     |
+                     v
+      Truth auction only if collateral is short
+                     |
+                     v
+          Operational child pool
+```
 
 Contract responsibility map:
 
@@ -53,16 +90,19 @@ Contract responsibility map:
 
 ## 2. Architecture
 
-Augur Placeholder is the system described by the peripheral contracts. It adds an underwriting and collateral system around individual questions.
+Augur Placeholder is the system described by the peripheral contracts. Architecturally, it wraps each Zoltar question with a question-specific underwriting, collateral, dispute, migration, and collateral-repair system. The sections below unpack those pieces in contract terms rather than repeating the overview list above.
 
-At a high level, Augur Placeholder adds:
+### Glossary
 
-- one security pool per question per universe
-- REP vaults that underwrite open interest
-- ETH-backed complete sets and redeemable outcome shares
-- a local escalation game that tries to settle disputes before a global fork
-- migration of pool state into child universes after a Zoltar fork
-- a truth auction that can sell REP for ETH when a child pool needs to rebuild missing collateral
+- `universe`: a Zoltar fork domain. A parent universe can split into multiple child universes after a fork.
+- `pool`: an Augur Placeholder `SecurityPool` for one question in one universe.
+- `vault`: a pool-specific REP account whose owner provides underwriting capacity.
+- `complete set`: one `Invalid`, one `Yes`, and one `No` share minted together against ETH collateral.
+- `escalation game`: the local dispute process that tries to pick a single winning outcome before a fork.
+- `non-decision`: the unresolved escalation state that opens the Zoltar fork path.
+- `migration`: the process that moves REP, shares, collateral accounting, and eligible escalation positions from a parent pool into child pools.
+- `truth auction`: the batch auction that lets a child pool sell child-universe REP for ETH when migrated collateral is incomplete.
+- `migrated REP`: REP backing that has been carried from a parent universe into a child universe and is available to support the child pool.
 
 ## 3. Core Economic Roles
 
@@ -73,7 +113,7 @@ Augur Placeholder introduces a set of economic roles above the Zoltar substrate.
 - Users mint complete sets with ETH and hold outcome shares.
 - Escalation-game participants stake behind `Invalid`, `Yes`, or `No` after a question ends in order to settle locally or force a non-decision, meaning an unresolved state that opens the fork path.
 - Fork migrators move REP, shares, and vault state from a parent universe into child universes after a Zoltar fork.
-- Truth-auction bidders buy REP with ETH when a child branch needs to restore missing collateral.
+- Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral.
 - Liquidators move undercollateralized bond allowance away from unsafe vaults.
 - Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for bond accounting, not a truth outcome for the question itself.
 
@@ -138,8 +178,7 @@ Users call `createCompleteSet` with ETH. The pool mints a complete set, meaning 
 Complete-set lifecycle:
 
 - before finalization, a full complete set can be burned with `redeemCompleteSet` to recover its pro rata share of collateral
-- after finalization, users no longer redeem a full set
-- instead, they redeem only the winning outcome through `redeemShares`, as described in Section 5
+- after finalization, users redeem only the winning outcome through `redeemShares`, as described in Section 5
 
 ### Fee extraction and retention rate
 
@@ -263,9 +302,9 @@ Because the legs are ERC-1155 positions, they can be transferred between users b
 
 Before finalization, a user who holds a complete set can burn all three legs and recover collateral through the parent security pool. After finalization, a user can redeem only the winning outcome through `redeemShares`.
 
-At the implementation level, `redeemShares` burns the holder’s full balance of the winning token id and pays `sharesToCash(amount)` out of the pool’s current collateral accounting. In the healthy case, this should correspond to a clean `1:1` redemption outcome against the economic meaning of a complete-set claim, subject to the pool’s collateral accounting remaining intact through migration and any required auction repair. The important edge case is fork recovery: if a child pool emerges from migration with incomplete collateral, the truth auction exists to sell REP for ETH so that the child branch can restore the collateral base needed for clean redemption.
+At the implementation level, `redeemShares` burns the holder’s full balance of the winning token id and pays `sharesToCash(amount)` out of the pool’s current collateral accounting. In the healthy case, this should correspond to a clean `1:1` redemption outcome against the economic meaning of a complete-set claim, subject to the pool’s collateral accounting remaining intact through migration and any required auction repair. The important edge case is fork recovery: if a child pool emerges from migration with incomplete collateral, the truth auction exists to sell REP for ETH so that the child pool can restore the collateral base needed for clean redemption.
 
-Shares can also migrate across forks. `ShareToken.migrate` burns a parent-universe token id and mints corresponding child-universe token ids for one or more target outcomes, provided the target outcomes are valid and non-malformed for the fork question. If multiple target outcomes are selected, the holder’s full burned balance is reproduced into each selected child branch. This colored-coin style branching behavior depends directly on Zoltar’s universe and fork state, which is described in [whitepaper_zoltar.md](./whitepaper_zoltar.md).
+Shares can also migrate across forks. `ShareToken.migrate` burns a parent-universe token id and mints corresponding child-universe token ids for one or more target outcomes, provided the target outcomes are valid and non-malformed for the fork question. If multiple target outcomes are selected, the holder’s full burned balance is reproduced into each selected child universe. This colored-coin style duplication behavior depends directly on Zoltar’s universe and fork state, which is described in [whitepaper_zoltar.md](./whitepaper_zoltar.md).
 
 ## 6. Escalation Resolution
 
@@ -377,7 +416,14 @@ winning depth above 15      -> returned at par
 
 After that, one more adjustment can apply. If the actual Zoltar fork threshold for the universe is lower than the escalation game’s configured `nonDecisionThreshold`, the payout is scaled down proportionally by `actualForkThreshold / nonDecisionThreshold`.
 
-If the game resolves locally without a fork, users withdraw through `SecurityPool.withdrawFromEscalationGame`, which applies the winning payout on the parent pool and adjusts the vault’s pool ownership by the gain or loss relative to the original locked REP. If the game reaches non-decision and the pool forks, the parent pool does not pay those winnings out directly in operational mode. Instead, `SecurityPoolForker.migrateFromEscalationGame` calls `claimDepositForWinning` for the selected child outcome, credits the resulting REP amount into the child pool as new ownership, and migrates proportional parent collateral alongside it. If an unrelated external Zoltar fork cancels the local game before it reaches non-decision, deposits are refunded rather than paid as winners.
+If the game resolves locally without a fork, users withdraw through `SecurityPool.withdrawFromEscalationGame`, which applies the winning payout on the parent pool and adjusts the vault’s pool ownership by the gain or loss relative to the original locked REP. If the game reaches non-decision and the pool forks, the parent pool does not pay those winnings out directly in operational mode. Instead, `SecurityPoolForker.migrateFromEscalationGame` calls `claimDepositForWinning` for the selected child outcome, credits the resulting REP amount into the child pool as new ownership, and migrates proportional parent collateral alongside it.
+
+If an unrelated external Zoltar fork interrupts the local escalation game before it resolves, those unresolved escalation deposits stop being withdrawable on the parent pool. The vault owner must move them into the child universe selected for that vault's migration by calling `migrateVaultWithUnresolvedEscalation`. That call moves two things together in one transaction:
+
+- the vault’s unresolved escalation deposits
+- the rest of the vault’s pool state into the same child pool in that universe
+
+The child pool in that child universe then continues the unresolved escalation game with those migrated deposits. The call must migrate all of that vault's remaining unresolved parent escalation locks for the chosen child universe; a partial migration reverts. This migration must happen before the normal fork-migration deadline. If a vault does not migrate in time, its unresolved escalation position is left behind and is burned under the same fork-migration rules that burn other non-migrated parent-pool state.
 
 ```
 Question end
@@ -399,7 +445,7 @@ Question end
 
 Fork handling spans both layers.
 
-At the Zoltar layer, universes fork and REP holders split post-fork claims across selected child branches. At the Augur Placeholder layer, the parent `SecurityPool` and its economic state must also move.
+At the Zoltar layer, universes fork and REP holders split post-fork claims across selected child universes. At the Augur Placeholder layer, the parent `SecurityPool` and its economic state must also move.
 
 The pool states are:
 
@@ -425,19 +471,42 @@ After a Zoltar fork:
 
 - the parent pool enters fork mode
 - child security pools are created in child universes
-- vaults can call `migrateVault` to move pool ownership and bond allowance
+- vaults can call `migrateVault` to move pool ownership and bond allowance when they do not have unresolved external-fork escalation locks
+- vaults with unresolved external-fork escalation locks call `migrateVaultWithUnresolvedEscalation`, as described in the continuation section below
 - escalation-game winnings can migrate into child pools through `migrateFromEscalationGame`
 - parent collateral is partially transferred into child pools in proportion to migrated REP
 - shares migrate independently through `ShareToken.migrate`
 
 This separation is important. Post-fork REP splitting is a Zoltar primitive, described in [whitepaper_zoltar.md](./whitepaper_zoltar.md). Vault migration, collateral transfer, and child-pool initialization are Augur Placeholder primitives built on top of it.
 
-### Worked Example: Branch Collateral Repair
+### External-Fork Continuation of Unresolved Escalation
+
+When a pool forks while its escalation game is still unresolved, the parent forker snapshots the unresolved game’s `startBond`, `nonDecisionThreshold`, and elapsed escalation time at the moment of fork. The child pool in the child universe then continues that unresolved escalation game from the fork snapshot rather than starting a separate fresh game.
+
+The first time the relevant child pool is created in a child universe, it immediately deploys a child continuation escalation game in paused fork-continuation mode. That child continuation game preserves:
+
+- the original escalation side for each unresolved deposit
+- the original parent deposit index for payout ordering
+- the elapsed escalation time at the moment of fork
+
+The continuation game remains paused during the migration window so that child deployment and vault migration do not silently consume escalation time. While the child pool is still waiting for continuation processing, `SecurityPool.depositToEscalationGame` rejects new live child deposits through the `awaitingForkContinuation` guard. In user terms, no participant can open fresh child escalation deposits until the child pool clears that wait marker and resumes the continuation game.
+
+The unresolved-carry path is therefore:
+
+1. the parent pool forks and snapshots unresolved escalation state
+2. the child pool is created in the selected child universe and marks itself as awaiting fork continuation
+3. the child continuation escalation game is deployed immediately, but remains paused
+4. affected vaults migrate unresolved parent locks through `migrateVaultWithUnresolvedEscalation`
+5. after the migration window and any required truth auction, the child pool becomes operational, clears the wait marker, and resumes the paused continuation game
+
+This makes unresolved external-fork escalation migration part of the vault-migration flow itself. Parent-side resolution for those unresolved positions is migration into the child continuation game.
+
+### Worked Example: Child-Universe Collateral Repair
 
 Suppose a parent pool has:
 
 - `50 ETH` of collateral supporting clean redemption
-- `200 REP` worth of branch-defining security capital at fork time
+- `200 REP` worth of child-universe-defining security capital at fork time
 
 Now suppose a fork happens and REP claims are split as follows:
 
@@ -449,23 +518,30 @@ If parent-side collateral follows the same proportion into child pools, then:
 - the user-preferred child pool begins with `47.5 ETH`
 - the false child pool begins with `2.5 ETH`
 
-The child branch that a user expects to preserve economically meaningful claims is also the branch that user expects to continue supporting clean redemption. On those numbers, it is short by:
+The child universe that a user expects to preserve economically meaningful claims is also the child universe where that user expects the child pool to continue supporting clean redemption. On those numbers, that child pool is short by:
 
 $$
 \text{ethCollateralToBuy} = 50 \text{ ETH} - 47.5 \text{ ETH} = 2.5 \text{ ETH}
 $$
 
-The truth auction then sells that child branch’s REP for `2.5 ETH`. If bidders supply that ETH, the user-preferred child pool returns to the full `50 ETH` collateral base and can continue operating cleanly. The false child branch, by contrast, keeps only its `2.5 ETH` and whatever branch-local economic activity it can attract.
+The truth auction then sells that child universe's REP for `2.5 ETH`. If bidders supply that ETH, the user-preferred child pool returns to the full `50 ETH` collateral base and can continue operating cleanly. The false child universe, by contrast, keeps only its `2.5 ETH` and whatever universe-local economic activity it can attract.
 
-In contract terms, Zoltar first handles the universe fork and the splitting of post-fork REP claims into child universes. The Placeholder parent pool then separately enters its own fork lifecycle through `initiateSecurityPoolFork` and `activateForkMode`; the Zoltar fork and the pool-fork transition are related, but they are not the same contract step. Augur Placeholder creates the relevant child pool, migrates vault state and any eligible escalation-game winnings into it through `migrateVault` and `migrateFromEscalationGame`, and then starts a REP-for-ETH sale through `startTruthAuction` if the child branch still lacks its intended collateral base. If bidders supply the missing ETH, the child pool resumes operation with repaired collateral. If the auction is underfunded, the branch still continues, but collateral repair is incomplete.
+In contract terms, Zoltar first handles the universe fork and the splitting of post-fork REP claims into child universes. The Placeholder parent pool then separately enters its own fork lifecycle through `initiateSecurityPoolFork` and `activateForkMode`; the Zoltar fork and the pool-fork transition are related, but they are not the same contract step. Augur Placeholder creates the relevant child pool, migrates vault state and eligible escalation-game positions through `migrateVault`, `migrateVaultWithUnresolvedEscalation`, and `migrateFromEscalationGame`, and starts `startTruthAuction` only if the child pool still lacks its intended collateral base. If bidders supply the missing ETH, the child pool resumes operation with repaired collateral. If the auction is underfunded, the child universe still continues, but collateral repair is incomplete.
 
 ## 8. Truth Auction
 
-After migration, a child pool may still have less ETH collateral than is needed to represent that branch’s intended collateral base. This happens because migration can move less than the full parent-side economic state into that child universe.
+After migration, a child pool may still hold less ETH than participants in that child universe would want for clean redemption. The truth auction is the repair mechanism for that gap: the child pool sells some child-universe REP for ETH.
 
-More precisely, the parent pool may have outstanding complete-set obligations and collateral that were economically tied to the parent universe, while only some fraction of REP-backed security and vault state migrates into a given child branch. The child branch may therefore inherit a partial economic state: enough to exist, but not enough to cleanly support the level of collateralization that participants in that branch would want if it were to continue as a standalone market.
+Key points:
 
-To repair that mismatch, the child pool can sell REP through [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol).
+- the child pool computes an ETH repair target
+- the auction can sell only up to a fixed REP inventory
+- bidders compete on a discrete ETH/REP price ladder
+- the child pool resumes with repaired collateral if enough ETH is raised, or with partially repaired collateral if demand is weak
+
+The reason this repair step exists is that complete-set obligations and collateral were economically attached to the parent universe, while only some fraction of REP-backed vault state may migrate into a given child universe. A child pool can therefore arrive with enough state to exist, but not enough ETH to preserve the collateral level users would want in that universe.
+
+The repair auction is implemented by [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol).
 
 In the actual `startTruthAuction` logic, the ETH repair target, when `repAtForkAmount > 0` and the child has not already migrated all fork REP, is:
 
@@ -473,7 +549,7 @@ $$
 \text{ethCollateralToBuy} = \text{parentCollateralAmount} - \frac{\text{parentCollateralAmount} \cdot \text{migratedRepAmount}}{\text{repAtForkAmount}}
 $$
 
-This is the contract’s direct statement of the gap: `ethCollateralToBuy` is the amount of ETH collateral the child branch is still missing after accounting for the fraction of REP-backed state that has already been split into it.
+This is the contract’s direct statement of the gap: `ethCollateralToBuy` is the missing ETH collateral after accounting for the fraction of REP-backed state that has already migrated into the child universe.
 
 If `repAtForkAmount` is zero, the contract does not evaluate this division path. It finalizes immediately because `migratedRepAmount >= repAtForkAmount` already holds.
 
@@ -506,15 +582,13 @@ In other words, a bid at a higher tick is simply a bid willing to pay a higher E
   - the auction has raised enough ETH to hit `ethRaiseCap`
   - the ETH collected so far, at that price, would buy all `maxRepBeingSold`
 
-In normal clearing mode:
+Normal clearing:
 
 - bids above the clearing tick win in full
 - bids below the clearing tick lose and receive full ETH refunds
 - bids exactly at the clearing tick are filled in submission order until the remaining capacity at that tick is exhausted
 
-This submission ordering at the clearing tick is important. The contract stores each bid with a cumulative ETH total for that price level, and uses that running total to determine how much of each same-tick bid was actually used.
-
-In underfunded mode:
+Underfunded clearing:
 
 - the auction cannot discover a standard clearing tick
 - the contract computes an `underfundedThreshold = ethRaised / maxRepBeingSold`
@@ -528,7 +602,7 @@ This is why the auction is dual-capped: it is trying to repair up to a target am
 ```
 Auction inputs
 
-    Child branch needs ETH repair
+    Child pool needs ETH repair
                 |
                 v
      +-----------------------+
@@ -553,38 +627,6 @@ Auction inputs
         |                     |
         v                     v
    Normal clearing         Underfunded path
-```
-
-```
-Normal clearing intuition
-
-price (ETH/REP)
-high
-  ^
-  |   tick 103  ##########         fully filled
-  |   tick 102  #######            fully filled
-  |   tick 101  #####|---          partially filled here
-  |   tick 100  ###                refunded
-  |   tick  99  ##                 refunded
-  +----------------------------------------------> cumulative demand
-
-            clearing tick = 101
-```
-
-```
-Same-tick ordering
-
-Suppose three bids arrive at the same clearing tick:
-
-  Alice: 2 ETH   cumulative 2
-  Bob:   3 ETH   cumulative 5
-  Carol: 4 ETH   cumulative 9
-
-If only 6 ETH can be used at tick 101:
-
-  Alice: full fill   (2 / 2 used)
-  Bob:   full fill   (3 / 3 used)
-  Carol: partial     (1 / 4 used)
 ```
 
 ```
@@ -642,28 +684,9 @@ If “profit” is measured as execution surplus relative to each bidder’s own
   - execution surplus on the filled portion: `0 ETH`
   - refund on the unfilled portion: `1 ETH`
 
-Higher-priced bids establish priority, but everyone who clears pays the same effective ETH/REP execution price, except that the marginal price level may be only partially filled.
+Higher-priced bids establish priority, but everyone who clears pays the same effective ETH/REP execution price, except that the marginal price level may be only partially filled. At the clearing tick, earlier bids at that same tick are filled before later bids at that tick.
 
-The purpose of this auction is to let a child Augur Placeholder branch reassemble collateral completeness after a Zoltar fork. REP is sold here because it is the branch-native scarce asset that migrated into the child universe along with that branch’s security claims. The auction converts part of that security capital back into the ETH collateral required for the child market to continue operating cleanly. Put differently, it monetizes branch-native REP, not trader share balances or direct vault claims.
-
-```
-Zoltar fork
-    |
-    v
-Parent Placeholder pool
-    |
-    +--> child pool created
-    |
-    +--> vaults / shares / collateral migrate
-    |
-    +--> if collateral is incomplete
-           |
-           v
-      Truth auction sells REP for ETH
-           |
-           v
-      Child pool returns to Operational
-```
+The purpose of this auction is to let a child Augur Placeholder pool reassemble collateral completeness after a Zoltar fork. REP is sold here because it is the child-universe scarce asset that migrated into the child universe along with that universe's security claims. The auction converts part of that security capital back into the ETH collateral required for the child market to continue operating cleanly. Put differently, it monetizes child-universe REP, not trader share balances or direct vault claims.
 
 ```
 Fork repair path with the auction in context
@@ -672,13 +695,13 @@ Parent pool
   collateral: parent collateral amount
   REP-at-fork: total REP at fork
         |
-        | migrate a child branch with migrated REP
+        | migrate a child pool with migrated REP
         v
 Child pool before auction
   migrated collateral ~= parent collateral amount * migrated REP / total REP at fork
   missing collateral  = parent collateral amount - migrated collateral
         |
-        | sell branch REP for ETH
+        | sell child-universe REP for ETH
         v
 Truth auction
   raise up to missing collateral
@@ -707,13 +730,25 @@ This is therefore not the oracle for determining whether a question resolves `Ye
 
 Augur Placeholder adds external collateral, underwriting, and auction-based repair on top of Zoltar. Its security argument therefore depends on stronger assumptions than the base Colored Coins substrate alone.
 
-The main assumptions are:
+### Protocol assumptions
 
 - the economic value of REP backing remains larger than the value of the obligations that REP is securing
-- users who want clean resolution continue in the branch they expect other users to keep valuing
-- the child-branch truth auction can attract enough demand for branch-native REP to repair missing ETH collateral when repair is needed
+- users accept that, after a fork, the protocol may sell part of a child universe's REP backing in the truth auction to refill missing ETH collateral
+
+### Market and liquidity assumptions
+
+- the child-universe truth auction can attract enough demand for child-universe REP to repair missing ETH collateral when repair is needed
 - REP and ETH can be exchanged with sufficient liquidity and price discovery that collateral repair and solvency operations do not fail purely because markets are too thin
-- users accept that fork recovery may convert part of branch-native security capital into collateral repair through the truth auction
+
+### Coordination assumptions
+
+- users who want clean resolution continue in the child universe they expect other users to keep valuing
+
+### Operational failure modes
+
+- if truth-auction demand is weak, a child pool can resume with only partial collateral repair
+- if REP/ETH liquidity is thin or price discovery is poor, solvency-sensitive operations become less trustworthy
+- if users and capital split across multiple child universes, no single child universe may recover the dominant economic value assumed by the simpler fork story
 
 The key inequality behind the design is:
 
@@ -721,11 +756,11 @@ $$
 \text{REP value securing the system} > \text{value of the obligations secured by that REP}
 $$
 
-Zoltar forks only create branches, and Placeholder carries underwriting state, collateral state, and outcome shares into them. If a participant drags value into a branch they expect others to abandon, they may capture some local advantage but also destroy the value of the branch-native REP and underwriting base they rely on there. If users and bidders instead coordinate on the branch they expect to keep using, REP migration, proportional collateral migration, and truth-auction repair can rebuild a usable market state in that branch.
-
-This argument has limits. If multiple branches retain substantial durable value, the simple “one branch gets almost all the value” intuition weakens. If REP/ETH liquidity is poor or truth-auction demand is weak, collateral repair may be incomplete. If REP/ETH price discovery is unreliable, solvency operations become less trustworthy. The escalation game helps avoid unnecessary forks, but it does not remove the need for these higher-level coordination and valuation assumptions.
+Zoltar forks only create child universes, and Placeholder carries underwriting state, collateral state, and outcome shares into them. If a participant drags value into a child universe they expect others to abandon, they may capture some local advantage but also destroy the value of the child-universe REP and underwriting base they rely on there. If users and bidders instead coordinate on the child universe they expect to keep using, REP migration, proportional collateral migration, and truth-auction repair can rebuild a usable market state in that child universe.
 
 ## 11. Current Parameter Values
+
+### Escalation parameters
 
 | Parameter | Current value | Meaning |
 | --- | --- | --- |
@@ -733,15 +768,30 @@ This argument has limits. If multiple branches retain substantial durable value,
 | `TODO_INITIAL_ESCALATION_GAME_DEPOSIT` | `1 ether` | Fixed initial deposit used when the escalation game is first deployed |
 | Escalation `nonDecisionThreshold` | `totalTheoreticalRepSupply / 40` | Deployed as `repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2)` |
 | `EXCESS_REWARD_WINDOW_DIVISOR` | `2` | Extends the escalation reward-eligible cap to `bindingCapitalAmount + bindingCapitalAmount / 2`, so the `safety boundary` covers the extra `50%` region above binding capital |
+
+### Migration and auction parameters
+
+| Parameter | Current value | Meaning |
+| --- | --- | --- |
 | `MIGRATION_TIME` | `8 weeks` | Fork-migration window before truth auction can start |
 | `AUCTION_TIME` | `1 week` | Truth-auction duration |
+| `MAX_AUCTION_VAULT_HAIRCUT_DIVISOR` | `1000000` | Small haircut divisor used when reserving a tiny amount of REP from auction sale |
+
+### Solvency and retention parameters
+
+| Parameter | Current value | Meaning |
+| --- | --- | --- |
 | `PRICE_PRECISION` | `1e18` | Fixed-point precision for REP/ETH and retention-rate math |
 | `MAX_RETENTION_RATE` | `999999996848000000` | Upper retention-rate bound, annotated in code as approximately 90% yearly retention |
 | `MIN_RETENTION_RATE` | `999999977880000000` | Lower retention-rate bound, annotated in code as approximately 50% yearly retention |
 | `RETENTION_RATE_DIP` | `80` | Utilization point at which the retention curve reaches its minimum |
 | `MIN_SECURITY_BOND_DEBT` | `1 ether` | Minimum non-zero bond allowance a vault can carry |
 | `MIN_REP_DEPOSIT` | `10 ether` | Minimum REP backing for a non-empty vault |
-| `MAX_AUCTION_VAULT_HAIRCUT_DIVISOR` | `1000000` | Small haircut divisor used when reserving a tiny amount of REP from auction sale |
+
+### Oracle parameters
+
+| Parameter | Current value | Meaning |
+| --- | --- | --- |
 | `PRICE_VALID_FOR_SECONDS` | `1 hour` | How long a settled REP/ETH price remains valid |
 | `gasConsumedOpenOracleReportPrice` | `100000` | Coordinator gas estimate for report submission |
 | `gasConsumedSettlement` | `1000000` | Coordinator gas estimate for settlement callback |
@@ -762,52 +812,14 @@ This argument has limits. If multiple branches retain substantial durable value,
 
 ## 12. End-to-End Example
 
-An end-to-end lifecycle under the current contracts looks like this:
+This section is only a recap. The canonical lifecycle is the state machine in section 1, and sections 6 through 8 contain the actual escalation, migration, and auction rules.
 
-```
-Question registered in Zoltar
-            |
-            v
-Placeholder pool deployed
-            |
-            v
-REP vaults fund security
-            |
-            v
-Users mint complete sets
-            |
-            v
-Question ends
-            |
-            v
-Escalation game
-     |                    |
-     | local winner       | non-decision
-     v                    v
-share redemption      Zoltar fork path
-                            |
-                            v
-                 pool / vault / share migration
-                            |
-                            v
-                 truth auction if collateral is short
-                            |
-                            v
-                  child pool resumes operation
-```
-
-1. A binary question is registered in [`ZoltarQuestionData`](../solidity/contracts/ZoltarQuestionData.sol).
-2. An Augur Placeholder origin security pool is deployed for that question through [`SecurityPoolFactory`](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol). The current implementation requires the exact categorical outcomes `Yes` and `No`.
-3. REP vault operators deposit REP with `depositRep` and set bond allowance, thereby funding security capacity.
-4. Users mint ETH-backed complete sets through `createCompleteSet` and receive `Invalid`, `Yes`, and `No` [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) shares.
-5. The question end time arrives.
-6. Participants use the Placeholder escalation game to attempt local resolution.
-7. If the escalation game converges, the question finalizes locally and winning shares can be redeemed.
-8. If the escalation game reaches non-decision, a Zoltar fork path can be triggered.
-9. Zoltar-side REP branching and Placeholder-side pool branching are related but distinct. The universe forks in Zoltar, and the parent pool then separately moves out of `Operational` state through `initiateSecurityPoolFork` and related logic.
-10. REP claims are split in Zoltar across child universes. Placeholder vaults, collateral, and shares then migrate into child pools through calls such as `migrateVault`.
-11. If a child pool lacks enough ETH collateral after migration, it starts a truth auction with `startTruthAuction` and sells REP for ETH.
-12. The surviving child pool resumes operation, or users redeem final payouts once the outcome becomes final in that branch.
+1. A question exists in one Zoltar universe, and Augur Placeholder creates one pool for that question in that universe.
+2. Vault operators deposit REP to underwrite open interest, and users mint ETH-backed complete sets.
+3. After question end, the escalation game either resolves locally or reaches non-decision.
+4. If it resolves locally, users redeem against the resolved pool. If it reaches non-decision, Zoltar forks and Placeholder migrates eligible state into child pools in child universes.
+5. If a child pool arrives short of ETH collateral, it runs a truth auction to sell child-universe REP for ETH.
+6. Once migration and any required collateral repair finish, the child pool becomes operational and normal settlement resumes in the child universe that retains economic value.
 
 ## 13. Current Implementation Constraints
 

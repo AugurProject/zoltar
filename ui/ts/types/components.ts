@@ -488,6 +488,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onRequestPoolPrice: (managerAddress: Address) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
+	selectedPoolRefreshNonce: number
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
@@ -691,11 +692,13 @@ export type ForkAuctionRouteContentProps = {
 	onInitiateFork: () => void
 	onLoadForkAuction: (securityPoolAddressOverride?: Address) => void
 	onMigrateEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
+	onMigrateUnresolvedEscalation: (selectedChildOutcome: ReportingOutcomeKey, selectedByOutcome: Record<ReportingOutcomeKey, bigint[]>) => void
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
 	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
 	onStartTruthAuction: (securityPoolAddressOverride?: Address) => void
 	onSubmitBid: (securityPoolAddressOverride?: Address) => void
+	onWithdrawForkedEscalation: (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) => void
 }
 
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
@@ -712,6 +715,7 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	reportingDetails?: ReportingDetails | undefined
 	reportingForm?: ReportingFormState | undefined
 	securityPools?: ListedSecurityPool[] | undefined
+	selectedPoolRefreshNonce?: number | undefined
 	universeForkTime?: bigint | undefined
 	currentStageView?: ForkAuctionStageView | undefined
 	selectedStageView?: ForkWorkflowSelectionStage | undefined

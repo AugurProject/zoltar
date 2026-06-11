@@ -1,4 +1,4 @@
-import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { requireDefined } from './required.js'
@@ -67,11 +67,14 @@ export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 function hasEscalationTimedOut(details: ActiveReportingDetails) {
 	return details.currentTime >= details.escalationEndTime
 }
+export function isPoolQuestionFinalized(details: Pick<ReportingDetails, 'questionOutcome' | 'systemState'> | undefined) {
+	return details !== undefined && details.systemState === 'operational' && details.questionOutcome !== 'none'
+}
 export function isReportingClosed(details: ActiveReportingDetails) {
-	return details.resolution !== 'none' || details.hasReachedNonDecision || hasEscalationTimedOut(details)
+	return isPoolQuestionFinalized(details) || details.hasReachedNonDecision || hasEscalationTimedOut(details)
 }
 export function getEscalationPhase(details: ActiveReportingDetails): EscalationPhase {
-	if (details.resolution !== 'none') return 'Resolved'
+	if (isPoolQuestionFinalized(details)) return 'Resolved'
 	if (details.hasReachedNonDecision) return 'Fork Triggered'
 	if (details.currentTime < details.activationTime) return 'Pending Start'
 	if (hasEscalationTimedOut(details)) return 'Timed Out'
@@ -145,13 +148,39 @@ function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails,
 	if (details.forkThreshold < details.nonDecisionThreshold) return (amountToWithdraw * details.forkThreshold) / details.nonDecisionThreshold
 	return amountToWithdraw
 }
+function getWinningImportedEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: ImportedEscalationDeposit) {
+	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
+	if (winningOutcomeBalance === undefined) return undefined
+	const bindingCapitalAmount = details.bindingCapital
+	const rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / 2n
+	const rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount
+	const rewardBonusPoolAmount = (bindingCapitalAmount * 3n) / 5n
+	let amountToWithdraw: bigint
+	if (rewardEligiblePrincipalAmount === 0n) {
+		amountToWithdraw = deposit.amount
+	} else {
+		const depositStart = deposit.cumulativeAmount
+		const depositEnd = deposit.cumulativeAmount + deposit.amount
+		const eligibleEndAmount = depositEnd < rewardEligibleCapAmount ? depositEnd : rewardEligibleCapAmount
+		const rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0n
+		const cappedRewardEligibleDepositAmount = rewardEligibleDepositAmount > deposit.amount ? deposit.amount : rewardEligibleDepositAmount
+		const bonusShare = (cappedRewardEligibleDepositAmount * rewardBonusPoolAmount) / rewardEligiblePrincipalAmount
+		amountToWithdraw = deposit.amount + bonusShare
+	}
+	if (details.forkThreshold < details.nonDecisionThreshold) return (amountToWithdraw * details.forkThreshold) / details.nonDecisionThreshold
+	return amountToWithdraw
+}
 export function getEscalationDepositClaimAmount(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
-	if (details === undefined || details.status !== 'active' || !details.withdrawalEnabled) return undefined
-	if (details.withdrawalState === 'canceled-by-external-fork') return deposit.amount
-	const resolvedOutcome = details.questionOutcome !== 'none' ? details.questionOutcome : details.resolution
-	if (resolvedOutcome === 'none') return undefined
-	if (resolvedOutcome !== outcome) return 0n
+	if (details === undefined || details.status !== 'active' || !details.parentWithdrawalEnabled) return undefined
+	if (!isPoolQuestionFinalized(details)) return undefined
+	if (details.questionOutcome !== outcome) return 0n
 	return getWinningEscalationDepositClaimAmount(details, outcome, deposit)
+}
+export function getImportedEscalationDepositClaimAmount(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey, deposit: ImportedEscalationDeposit) {
+	if (details === undefined || details.status !== 'active') return undefined
+	if (!isPoolQuestionFinalized(details)) return undefined
+	if (details.questionOutcome !== outcome) return 0n
+	return getWinningImportedEscalationDepositClaimAmount(details, outcome, deposit)
 }
 
 export function getRemainingSelectedOutcomeContributionCapacity(details: ReportingDetails, outcome: ReportingOutcomeKey) {
@@ -209,7 +238,7 @@ export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
 export function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return { amount: undefined, reason: 'Selected side is unavailable.' }
-	if (details.resolution === selectedOutcome || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amount: 0n, reason: undefined }
+	if ((isPoolQuestionFinalized(details) && details.questionOutcome === selectedOutcome) || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amount: 0n, reason: undefined }
 	const requiredLeadAmount = largestOtherBalance + 1n - selectedSide.balance
 	const enteredAmount = details.startBond > requiredLeadAmount ? details.startBond : requiredLeadAmount
 	const amount = roundUpToRepUnit(enteredAmount)
@@ -240,7 +269,7 @@ export function getReportingMinimumOutcomeChangeContribution(details: ReportingD
 			amount: details.startBond,
 			reason: undefined,
 		}
-	if (details.resolution !== 'none')
+	if (isPoolQuestionFinalized(details))
 		return {
 			amount: undefined,
 			reason: ESCALATION_RESOLVED_REASON,
@@ -293,7 +322,7 @@ export function getReportingMaxProfitContribution(details: ReportingDetails | un
 			amount: undefined,
 			reason: MAX_PROFIT_NOT_STARTED_REASON,
 		}
-	if (details.resolution !== 'none')
+	if (isPoolQuestionFinalized(details))
 		return {
 			amount: undefined,
 			reason: ESCALATION_RESOLVED_REASON,
@@ -366,7 +395,7 @@ function getEscalationSide(details: ActiveReportingDetails, outcome: ReportingOu
 	return details.sides.find(side => side.key === outcome)
 }
 function previewEscalationContribution(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): EscalationContributionPreview {
-	if (details.resolution !== 'none')
+	if (isPoolQuestionFinalized(details))
 		return {
 			actualDepositAmount: undefined,
 			reason: 'Escalation is already resolved.',

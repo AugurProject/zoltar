@@ -46,11 +46,13 @@ describe('security pool state engine', () => {
 				'migrateRepToZoltar',
 				'migrateVault',
 				'migrateEscalationDeposits',
+				'migrateUnresolvedEscalation',
 				'startTruthAuction',
 				'submitBid',
 				'finalizeTruthAuction',
 				'refundLosingBids',
 				'claimAuctionProceeds',
+				'settleForkedEscalation',
 			]),
 		)
 		expectActionBlocked(model, 'redeemRep')

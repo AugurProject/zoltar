@@ -41,6 +41,7 @@ interface ISecurityPool {
 	function completeSetCollateralAmount() external view returns (uint256);
 	function poolOwnershipDenominator() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
+	function totalLockedRepInEscalationGame() external view returns (uint256);
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
@@ -76,6 +77,7 @@ interface ISecurityPool {
 	function performWithdrawRep(address vault, uint256 repAmount) external;
 	function depositRep(uint256 repAmount) external;
 	function redeemRep(address vault) external;
+	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, uint256[] memory parentDepositIndexes) external;
 	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, uint256 snapshotTotalRep, uint256 snapshotDenominator) external;
 	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) external;
 
@@ -83,9 +85,13 @@ interface ISecurityPool {
 	function redeemCompleteSet(uint256 amount) external;
 
 	function escalationGame() external view returns (EscalationGame);
+	function initializeForkedEscalationGame(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external;
+	function resumeForkedEscalationGame() external;
+	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
 	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 vaultFeeIndex) external;
+	function addEscalationLockForForkMigration(address vault, uint256 repAmount) external;
 	function clearEscalationLockForForkMigration(address vault, uint256 repAmount) external;
 	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
