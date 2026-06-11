@@ -220,10 +220,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		EscalationGameCarryTree childEscalationGame = EscalationGameCarryTree(payable(address(child.escalationGame())));
 		if (!childEscalationGame.forkCarrySnapshotInitialized()) {
 			EscalationGameCarryTree parentEscalationGame = EscalationGameCarryTree(payable(address(parent.escalationGame())));
-			bytes32[3] memory inheritedCarryRoots = [
-				parentEscalationGame.getCarryRoot(BinaryOutcomes.BinaryOutcome.Invalid),
-				parentEscalationGame.getCarryRoot(BinaryOutcomes.BinaryOutcome.Yes),
-				parentEscalationGame.getCarryRoot(BinaryOutcomes.BinaryOutcome.No)
+			bytes32[64][3] memory inheritedCarryPeaks = [
+				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.Invalid),
+				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.Yes),
+				parentEscalationGame.getCarryPeaks(BinaryOutcomes.BinaryOutcome.No)
 			];
 			uint256[3] memory inheritedCarryLeafCounts = [
 				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.Invalid),
@@ -240,7 +240,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.Yes),
 				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.No)
 			];
-			child.initializeForkCarrySnapshot(inheritedCarryRoots, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots);
+			child.initializeForkCarrySnapshot(inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots);
 		}
 		if (child.systemState() == SystemState.Operational) {
 			child.resumeForkedEscalationGame();
@@ -254,27 +254,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		if (parentRepAtFork > 0) {
 			parent.transferEth(payable(child), parent.completeSetCollateralAmount() * migratedPrincipal / parentRepAtFork);
 		}
-	}
-
-	function _migrateEscalationDeposits(
-		ISecurityPool parent,
-		ISecurityPool child,
-		address vault,
-		BinaryOutcomes.BinaryOutcome sourceOutcome,
-		uint256[] memory depositIndexes
-	) private returns (uint256 migratedPrincipal) {
-		if (depositIndexes.length == 0) return 0;
-		EscalationGame escalationGame = parent.escalationGame();
-		require(address(escalationGame) != address(0x0), 'e4');
-		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amount, uint256 parentDepositIndex) = escalationGame.exportUnresolvedForkDeposit(depositIndexes[index], sourceOutcome);
-			require(depositor == vault, 'e5');
-			parent.clearEscalationLockForForkMigration(vault, amount);
-			child.addEscalationLockForForkMigration(vault, amount);
-			child.escalationGame().importForkedDeposit(vault, sourceOutcome, parentDepositIndex, amount);
-			migratedPrincipal += amount;
-		}
-		_creditMigratedEscalationPrincipal(parent, child, migratedPrincipal);
 	}
 
 	function _migrateVaultUnlockedState(ISecurityPool parent, ISecurityPool child, address vault, uint256 lockedRepAlreadyMigrated) private {

@@ -48,11 +48,11 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	return hash
 }
 
-export const withdrawForkedEscalationDepositsWithProofs = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, proofs: readonly CarriedDepositProof[]) =>
+export const withdrawForkedEscalationDeposits = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, proofs: readonly CarriedDepositProof[]) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'withdrawForkedEscalationDepositsWithProofs',
+			functionName: 'withdrawForkedEscalationDeposits',
 			address: securityPoolAddress,
 			args: [outcome, proofs.map(proof => ({ ...proof, mmrSiblings: Array.from(proof.mmrSiblings), nullifierSiblings: Array.from(proof.nullifierSiblings) }))],
 		}),

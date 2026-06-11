@@ -26,25 +26,14 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		return escalationGameCarryTree.depositOnOutcome(depositor, outcome, amount);
 	}
 
-	function importCarryTreeForkDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 parentDepositIndex, uint256 amount) external {
-		escalationGameCarryTree.importForkedDeposit(depositor, outcome, parentDepositIndex, amount);
-	}
-
-	function withdrawImportedCarryTreeForkDeposit(uint256 parentDepositIndex, BinaryOutcomes.BinaryOutcome outcome)
-		external
-		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
-	{
-		return escalationGameCarryTree.withdrawImportedForkDeposit(parentDepositIndex, outcome);
-	}
-
 	function initializeForkCarrySnapshot(
-		bytes32[3] memory inheritedCarryRoots,
+		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,
 		uint256[3] memory inheritedCarryTotals,
 		bytes32[3] memory inheritedNullifierRoots
 	) external {
 		escalationGameCarryTree.initializeForkCarrySnapshot(
-			inheritedCarryRoots, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots
+			inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots
 		);
 	}
 
@@ -53,5 +42,12 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
 		return escalationGameCarryTree.withdrawCarriedDeposit(outcome, proof);
+	}
+
+	function claimCarryTreeDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
+		external
+		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
+	{
+		return escalationGameCarryTree.claimDepositForWinning(depositIndex, outcome);
 	}
 }

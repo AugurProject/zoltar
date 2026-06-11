@@ -411,7 +411,7 @@ contract SecurityPool is ISecurityPool {
 		emit RedeemRep(msg.sender, vault, repAmount);
 	}
 
-	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, uint256[] memory parentDepositIndexes) external {
+	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		require(systemState == SystemState.Operational, 'not operational');
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
@@ -419,17 +419,18 @@ contract SecurityPool is ISecurityPool {
 		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
 		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'invalid none');
 
+		EscalationGameCarryTree carryTreeEscalationGame = EscalationGameCarryTree(payable(address(escalationGame)));
 		address beneficiaryVault = address(0x0);
 		uint256 totalAmountToWithdraw = 0;
 		uint256 totalOriginalDepositAmount = 0;
-		for (uint256 index = 0; index < parentDepositIndexes.length; index++) {
+		for (uint256 index = 0; index < proofs.length; index++) {
 			address depositor;
 			uint256 amountToWithdraw;
 			uint256 originalDepositAmount;
 			if (withdrawalOutcome == questionOutcome) {
-				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawImportedForkDeposit(parentDepositIndexes[index], withdrawalOutcome);
+				(depositor, amountToWithdraw, originalDepositAmount) = carryTreeEscalationGame.withdrawCarriedDeposit(withdrawalOutcome, proofs[index]);
 			} else {
-				(depositor, originalDepositAmount) = escalationGame.forfeitImportedForkDeposit(parentDepositIndexes[index], withdrawalOutcome);
+				(depositor, originalDepositAmount) = carryTreeEscalationGame.forfeitCarriedDeposit(withdrawalOutcome, proofs[index]);
 			}
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
@@ -441,58 +442,6 @@ contract SecurityPool is ISecurityPool {
 			totalOriginalDepositAmount += originalDepositAmount;
 		}
 		_applyForkedEscalationSettlement(beneficiaryVault, totalAmountToWithdraw, totalOriginalDepositAmount);
-	}
-
-	function withdrawForkedEscalationDepositsWithProofs(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external {
-		require(address(escalationGame) != address(0x0), 'missing escalation');
-		require(systemState == SystemState.Operational, 'not operational');
-		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
-		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'question not final');
-		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
-		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'invalid none');
-		require(withdrawalOutcome == questionOutcome, 'use forfeit for losing outcome');
-
-		EscalationGameCarryTree carryTreeEscalationGame = EscalationGameCarryTree(payable(address(escalationGame)));
-		address beneficiaryVault = address(0x0);
-		uint256 totalAmountToWithdraw = 0;
-		uint256 totalOriginalDepositAmount = 0;
-		for (uint256 index = 0; index < proofs.length; index++) {
-			(address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) = carryTreeEscalationGame.withdrawCarriedDeposit(withdrawalOutcome, proofs[index]);
-			if (beneficiaryVault == address(0x0)) {
-				beneficiaryVault = depositor;
-			}
-			require(depositor == beneficiaryVault, 'one vault only');
-			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
-			totalLockedRepInEscalationGame -= originalDepositAmount;
-			totalAmountToWithdraw += amountToWithdraw;
-			totalOriginalDepositAmount += originalDepositAmount;
-		}
-		_applyForkedEscalationSettlement(beneficiaryVault, totalAmountToWithdraw, totalOriginalDepositAmount);
-	}
-
-	function forfeitForkedEscalationDepositsWithProofs(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external {
-		require(address(escalationGame) != address(0x0), 'missing escalation');
-		require(systemState == SystemState.Operational, 'not operational');
-		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
-		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'question not final');
-		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
-		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'invalid none');
-		require(withdrawalOutcome != questionOutcome, 'use withdraw for winning outcome');
-
-		EscalationGameCarryTree carryTreeEscalationGame = EscalationGameCarryTree(payable(address(escalationGame)));
-		address beneficiaryVault = address(0x0);
-		uint256 totalOriginalDepositAmount = 0;
-		for (uint256 index = 0; index < proofs.length; index++) {
-			(address depositor, uint256 originalDepositAmount) = carryTreeEscalationGame.forfeitCarriedDeposit(withdrawalOutcome, proofs[index]);
-			if (beneficiaryVault == address(0x0)) {
-				beneficiaryVault = depositor;
-			}
-			require(depositor == beneficiaryVault, 'one vault only');
-			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
-			totalLockedRepInEscalationGame -= originalDepositAmount;
-			totalOriginalDepositAmount += originalDepositAmount;
-		}
-		_applyForkedEscalationSettlement(beneficiaryVault, 0, totalOriginalDepositAmount);
 	}
 
 	////////////////////////////////////////
@@ -565,14 +514,14 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function initializeForkCarrySnapshot(
-		bytes32[3] memory inheritedCarryRoots,
+		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,
 		uint256[3] memory inheritedCarryTotals,
 		bytes32[3] memory inheritedNullifierRoots
 	) external onlyForker {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		EscalationGameCarryTree(payable(address(escalationGame))).initializeForkCarrySnapshot(
-			inheritedCarryRoots,
+			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
 			inheritedCarryTotals,
 			inheritedNullifierRoots
