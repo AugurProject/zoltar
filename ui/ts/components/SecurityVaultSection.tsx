@@ -5,6 +5,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
@@ -21,6 +22,7 @@ import { WarningSurface } from './WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
+import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
@@ -55,8 +57,42 @@ type QueuedVaultOperationView = {
 	operationId: bigint
 }
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
-	const content = (
+	const collateralizationPercent = getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)
+	const collateralizationTarget = selectedPoolSecurityMultiplier === undefined ? undefined : selectedPoolSecurityMultiplier * 100n * 10n ** 18n
+
+	const summaryTitle = <span>Vault Summary</span>
+
+	const embeddedContent = (
+		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
+			<div className='security-pool-browse-vault-row'>
+				<div className='security-pool-browse-vault-row-top security-pool-browse-vault-row-top-compact'>
+					<div className='security-pool-browse-vault-row-title'>
+						<CollateralizationCircle className='security-pool-browse-vault-row-collateralization' collateralizationPercent={collateralizationPercent} size='small' targetCollateralizationPercent={collateralizationTarget} />
+						<div className='security-pool-browse-vault-row-id'>
+							<strong>
+								<AddressValue address={securityVaultDetails.vaultAddress} />
+							</strong>
+						</div>
+					</div>
+					<div className='security-pool-browse-vault-row-kpi'>
+						<span>Security Bond Allowance</span>
+						<strong>
+							<CurrencyValue value={securityBondAllowance} suffix='ETH' />
+						</strong>
+					</div>
+					<div className='security-pool-browse-vault-row-kpi'>
+						<span>REP Collateral</span>
+						<strong>
+							<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
+						</strong>
+					</div>
+				</div>
+			</div>
+		</div>
+	)
+	const gridContent = (
 		<VaultMetricGrid
+			layout='grid'
 			lockedRepInEscalationGame={securityVaultDetails.lockedRepInEscalationGame}
 			repDepositShare={securityVaultDetails.repDepositShare}
 			repPerEthPrice={repPerEthPrice}
@@ -65,18 +101,17 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
 			securityBondAllowance={securityBondAllowance}
 			unpaidEthFees={securityVaultDetails.unpaidEthFees}
-			variant={variant}
 		/>
 	)
 	if (variant === 'embedded')
 		return (
-			<SectionBlock density='compact' headingLevel={4} title='Vault Summary' variant='embedded'>
-				{content}
+			<SectionBlock density='compact' headingLevel={4} title={summaryTitle} variant='embedded'>
+				{embeddedContent}
 			</SectionBlock>
 		)
 	return (
 		<EntityCard badge={<span className={`badge ${selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}`}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</span>} title='Selected Vault' variant='record'>
-			{content}
+			{gridContent}
 		</EntityCard>
 	)
 }

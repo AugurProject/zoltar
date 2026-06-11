@@ -1,6 +1,7 @@
 import { DataGrid } from './DataGrid.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from './TimestampValue.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import type { MarketDetails } from '../types/contracts.js'
@@ -10,6 +11,7 @@ type QuestionProps = {
 	loading?: boolean
 	question: MarketDetails | undefined
 	showTitle?: boolean
+	variant?: 'full' | 'preview'
 }
 
 type QuestionSummaryField =
@@ -70,7 +72,7 @@ function renderQuestionSummaryField(field: QuestionSummaryField) {
 	)
 }
 
-export function Question({ className = '', loading = false, question, showTitle = true }: QuestionProps) {
+export function Question({ className = '', loading = false, question, showTitle = true, variant = 'full' }: QuestionProps) {
 	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
@@ -83,6 +85,61 @@ export function Question({ className = '', loading = false, question, showTitle 
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)
 	const summaryFields = getQuestionSummaryFields(question)
+	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
+		key: outcome,
+		label: outcome,
+		tone: sameCaseInsensitiveText(outcome, 'invalid') ? ('warning' as const) : ('default' as const),
+	}))
+	const scalarFields =
+		question.marketType !== 'scalar'
+			? []
+			: [
+					{
+						label: 'Ticks',
+						value: question.numTicks.toString(),
+					},
+					{
+						label: 'Display Range',
+						value: getDisplayRange(question),
+					},
+				]
+
+	if (variant === 'preview')
+		return (
+			<div className={`question-summary question-summary-preview ${className}`.trim()}>
+				<div className='question-summary-heading'>
+					{showTitle ? <strong>{title}</strong> : null}
+					<p className='detail'>{description}</p>
+				</div>
+				<OutcomeChipRow items={outcomeItems} />
+				<div className='question-preview-timeline' role='list' aria-label='Question timeline'>
+					<div className='question-preview-timeline-item' role='listitem'>
+						<span className='question-preview-timeline-label'>Created</span>
+						<strong className='question-preview-timeline-value'>
+							<TimestampValue timestamp={question.createdAt} />
+						</strong>
+					</div>
+					<div className='question-preview-timeline-item' role='listitem'>
+						<span className='question-preview-timeline-label'>End Time</span>
+						<strong className='question-preview-timeline-value'>
+							<TimestampValue timestamp={question.endTime} />
+						</strong>
+					</div>
+				</div>
+				<div className='question-preview-meta'>
+					<div className='question-preview-meta-item'>
+						<span className='question-preview-meta-label'>Question ID</span>
+						<strong>{question.questionId}</strong>
+					</div>
+					{scalarFields.map(field => (
+						<div className='question-preview-meta-item' key={field.label}>
+							<span className='question-preview-meta-label'>{field.label}</span>
+							<strong>{field.value}</strong>
+						</div>
+					))}
+				</div>
+			</div>
+		)
 
 	return (
 		<div className={`question-summary ${className}`}>

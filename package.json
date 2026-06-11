@@ -71,7 +71,6 @@
 	"knip": {
 		"ignore": [
 			"ui/build/workers.mts",
-			"ui/build/production.mts",
 			"ui/ts/index.dev.ts",
 			"ui/ts/liveReload.ts"
 		]

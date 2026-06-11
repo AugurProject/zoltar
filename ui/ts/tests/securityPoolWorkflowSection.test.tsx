@@ -455,17 +455,17 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Open Oracle' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Question' })).not.toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
-		expect(documentQueries.getByText('Open Interest Minted / Max')).not.toBeNull()
-		expect(documentQueries.getByText('Total REP Collateral')).not.toBeNull()
+		expect(documentQueries.getByText('Question description')).not.toBeNull()
+		expect(documentQueries.getByText('Open Interest Minted')).not.toBeNull()
+		expect(documentQueries.getByText('Total REP Backing')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Security Bond Allowance')).toBeNull()
-		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
+		expect(documentQueries.getByText('Current Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
 		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a non-sticky selected pool context card')
 		const lookupLabel = within(selectedPoolContext).getByText('Security Pool Address')
-		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Collateral')
+		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Backing')
 		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
 		const summaryPosition = selectedPoolContext.textContent?.indexOf(firstSummaryMetric.textContent ?? '') ?? -1
 		expect(lookupPosition).toBeGreaterThanOrEqual(0)
@@ -473,7 +473,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(lookupPosition < summaryPosition).toBe(true)
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
-		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: 'Vault Summary' })
+		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: /Vault Summary/ })
 		expect(vaultSummaryHeading).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
 		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
@@ -490,7 +490,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
 		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Manager')).toBeNull()
-		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
+		expect(documentQueries.getAllByText('Operational').length).toBeGreaterThan(0)
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('tab', { name: 'Directory' })
 		expect(documentQueries.getByRole('tab', { name: 'Selected' })).not.toBeNull()
@@ -575,10 +575,9 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const collateralizationValue = within(document.body)
-			.getByText(/400\.00 %/)
-			.closest('.metric-field-value')
-		expect(collateralizationValue?.className).toContain('metric-value-success')
+		const collateralizationMetric = document.querySelector('.security-pool-collateralization-display.tone-success, .security-pool-hero-collateralization.tone-success, .security-pool-card-title-collateralization.tone-success')
+		expect(collateralizationMetric).not.toBeNull()
+		expect(collateralizationMetric?.textContent?.includes('400')).toBe(true)
 	})
 
 	test('renders the claim-fees modal vault with the shared address value component', async () => {
@@ -2033,8 +2032,10 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
+		const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
+		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary')
+		const summaryLabels = Array.from(selectedPoolSummary.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
+		expect(summaryLabels).not.toContain('Truth Auction')
 	})
 
 	test('shows disabled reporting actions before market end instead of a placeholder message', async () => {

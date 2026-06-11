@@ -150,6 +150,24 @@ describe('SecurityPoolsOverviewSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	function getSecurityPoolCard(headingText: string): HTMLElement {
+		const normalizedHeadingText = headingText.trim().replace(/\s+/g, ' ')
+		const titleHeading = within(document.body)
+			.getAllByRole('heading')
+			.find(node => {
+				const normalizedNodeText = (node.textContent ?? '').replace(/\s+/g, ' ').trim()
+				return normalizedNodeText.includes(normalizedHeadingText) && normalizedNodeText.includes('Collateralization')
+			})
+		if (titleHeading === undefined) {
+			throw new Error(`Expected security pool card heading for "${headingText}"`)
+		}
+		const poolCard = titleHeading.closest('.entity-card')
+		if (!(poolCard instanceof HTMLElement)) {
+			throw new Error(`Expected security pool card for "${headingText}"`)
+		}
+		return poolCard
+	}
+
 	test('does not render a local liquidation transaction notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -189,6 +207,7 @@ describe('SecurityPoolsOverviewSection', () => {
 	})
 
 	test('shows Fork Migration for parent pools with child pools even when the loaded parent outcome is resolved', async () => {
+		const parentPoolTitle = 'Parent pool'
 		const parentPool = createSecurityPool({
 			hasForkActivity: false,
 			marketDetails: createMarketDetails({ title: 'Parent pool' }),
@@ -211,9 +230,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const parentCard = documentQueries.getByRole('heading', { name: 'Parent pool' }).closest('.entity-card')
-		if (!(parentCard instanceof HTMLElement)) throw new Error('Expected parent pool card')
+		const parentCard = getSecurityPoolCard(parentPoolTitle)
 		const parentCardQueries = within(parentCard)
 		expect(parentCardQueries.getByText('Fork Migration')).not.toBeNull()
 		expect(parentCardQueries.queryByText('Finalized as Yes')).toBeNull()
@@ -265,6 +282,8 @@ describe('SecurityPoolsOverviewSection', () => {
 	})
 
 	test('shows Fork Migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
+		const rootPoolTitle = 'Forked root-universe pool'
+
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -282,9 +301,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const poolCard = documentQueries.getByRole('heading', { name: 'Forked root-universe pool' }).closest('.entity-card')
-		if (!(poolCard instanceof HTMLElement)) throw new Error('Expected forked root-universe pool card')
+		const poolCard = getSecurityPoolCard(rootPoolTitle)
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.getByText('Fork Migration')).not.toBeNull()
 		expect(poolCardQueries.queryByText('Operational')).toBeNull()
@@ -475,6 +492,7 @@ describe('SecurityPoolsOverviewSection', () => {
 	})
 
 	test('shows a deferred vault placeholder when browse mode has not loaded vault details yet', async () => {
+		const deferredPoolTitle = 'Deferred vault pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -492,15 +510,14 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const poolCard = documentQueries.getByRole('heading', { name: 'Deferred vault pool' }).closest('.entity-card')
-		if (!(poolCard instanceof HTMLElement)) throw new Error('Expected deferred vault pool card')
+		const poolCard = getSecurityPoolCard(deferredPoolTitle)
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.getByText('Open this pool to load 2 vaults.')).not.toBeNull()
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
 	})
 
 	test('renders browse-mode vault previews when the paged pool data includes loaded vaults', async () => {
+		const previewPoolTitle = 'Pool with preview vaults'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -525,12 +542,10 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const poolCard = documentQueries.getByRole('heading', { name: 'Pool with preview vaults' }).closest('.entity-card')
-		if (!(poolCard instanceof HTMLElement)) throw new Error('Expected pool card')
+		const poolCard = getSecurityPoolCard(previewPoolTitle)
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
-		expect(poolCardQueries.getByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).not.toBeNull()
+		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
 		expect(poolCardQueries.getByRole('button', { name: 'Liquidate Vault' })).not.toBeNull()
 	})
 })

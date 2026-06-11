@@ -7,6 +7,7 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
+import { RankedBarList } from './RankedBarList.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
@@ -75,6 +76,7 @@ export function TradingSection({
 	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
+	const totalShareCount = shareBalances === undefined ? undefined : shareBalances.invalid + shareBalances.no + shareBalances.yes
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
@@ -251,17 +253,62 @@ export function TradingSection({
 			)}
 
 			{selectedPool === undefined ? undefined : (
-				<SectionBlock title='Your Shares'>
-					<div className='workflow-metric-grid'>
-						<MetricField label='Yes'>{renderShareMetricValue(shareBalances?.yes)}</MetricField>
-						<MetricField label='No'>{renderShareMetricValue(shareBalances?.no)}</MetricField>
-						<MetricField label='Invalid'>{renderShareMetricValue(shareBalances?.invalid)}</MetricField>
-						<MetricField label='Total Complete Sets'>{renderShareMetricValue(maxRedeemableCompleteSets)}</MetricField>
+				<SectionBlock title='Your Shares' description='Current wallet holdings in the selected pool.'>
+					<div className='trading-holdings-stage'>
+						<div className='trading-holdings-hero'>
+							<span>Total Complete Sets</span>
+							<strong>{renderShareMetricValue(maxRedeemableCompleteSets)}</strong>
+							<p className='detail'>Wallet composition by outcome.</p>
+						</div>
+						<div className='trading-holdings-layout'>
+							<RankedBarList
+								className='trading-share-distribution'
+								emptyMessage='Wallet share balances are not loaded yet.'
+								items={[
+									{
+										key: 'yes',
+										label: 'Yes',
+										valueText: renderShareMetricValue(shareBalances?.yes),
+										...(shareBalances?.yes === undefined ? {} : { value: shareBalances.yes }),
+									},
+									{
+										key: 'no',
+										label: 'No',
+										valueText: renderShareMetricValue(shareBalances?.no),
+										...(shareBalances?.no === undefined ? {} : { value: shareBalances.no }),
+									},
+									{
+										key: 'invalid',
+										label: 'Invalid',
+										valueText: renderShareMetricValue(shareBalances?.invalid),
+										...(shareBalances?.invalid === undefined ? {} : { value: shareBalances.invalid }),
+									},
+								]}
+							/>
+							<div className='trading-share-callouts'>
+								<div>
+									<span>Yes</span>
+									<strong>{renderShareMetricValue(shareBalances?.yes)}</strong>
+								</div>
+								<div>
+									<span>No</span>
+									<strong>{renderShareMetricValue(shareBalances?.no)}</strong>
+								</div>
+								<div>
+									<span>Invalid</span>
+									<strong>{renderShareMetricValue(shareBalances?.invalid)}</strong>
+								</div>
+								<div className='trading-share-callouts-total'>
+									<span>Total Shares</span>
+									<strong>{renderShareMetricValue(totalShareCount)}</strong>
+								</div>
+							</div>
+						</div>
 					</div>
 				</SectionBlock>
 			)}
 
-			<SectionBlock title='Trading Action Launchers'>
+			<SectionBlock title='Trading Action Launchers' description='Actions stay below the holdings summary so the task flow reads top to bottom.'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />
