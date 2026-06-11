@@ -24,6 +24,7 @@ describe('Escalation Game Test Suite', () => {
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
+	const recursiveResolutionTargetCost = (25n * reportBond) / 10n
 
 	const readIterativeAttritionCost = async (escalationGame: Address, timeSinceStart: bigint) =>
 		await client.readContract({
@@ -159,7 +160,7 @@ describe('Escalation Game Test Suite', () => {
 				}),
 		)
 
-	const advanceForkContinuationPastStart = async (escalationGameAddress: Address) => {
+	const advanceForkContinuationPastStart = async (escalationGameAddress: Address, targetAttritionCost = reportBond + 1n) => {
 		await resumeEscalationFromFork(escalationGameAddress)
 		const forkResumedAt = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -167,7 +168,8 @@ describe('Escalation Game Test Suite', () => {
 			functionName: 'forkResumedAt',
 			args: [],
 		})
-		await mockWindow.setTime(forkResumedAt + 1n)
+		const elapsedAtTargetCost = await readTimeSinceStartFromAttritionCost(escalationGameAddress, targetAttritionCost)
+		await mockWindow.setTime(forkResumedAt + (elapsedAtTargetCost > 0n ? elapsedAtTargetCost : 1n))
 	}
 
 	const depositOnOutcomeViaProofTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
@@ -279,6 +281,9 @@ describe('Escalation Game Test Suite', () => {
 		)
 
 	const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
+
+	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
+		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
 
 	const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
 
@@ -512,36 +517,18 @@ describe('Escalation Game Test Suite', () => {
 		)
 	})
 
-	test('claimDepositForWinning reverts when outcome is not the winning outcome', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const activationTime = await getActivationTime(client, escalationGameAddress)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
-		await assert.rejects(claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.No), /outcome not winning/i)
-	})
-
 	test('fork carry maintains an append-only Merkle Mountain Range root for inherited carryover deposits', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
 		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
 
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 
-		const firstLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
-		})
+		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n)
 		const rootAfterFirstDeposit = await readCarryRoot(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterFirstDeposit, firstLeafHash, 'single appended leaf should be its own Merkle Mountain Range root')
 
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const secondLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n],
-		})
+		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n)
 		const expectedTwoLeafRoot = keccak256(concatHex([firstLeafHash, secondLeafHash]))
 		const rootAfterSecondDeposit = await readCarryRoot(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected Merkle Mountain Range root')
@@ -554,6 +541,8 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
+		const activationTime = await getActivationTime(client, escalationGameAddress)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
 
 		const [firstPage, firstNextNodeId] = await readCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 1n)
@@ -633,23 +622,13 @@ describe('Escalation Game Test Suite', () => {
 		const parentNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const firstLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: parent.escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
-		})
-		const secondLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: parent.escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n],
-		})
+		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n)
+		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n)
 
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
-		await advanceForkContinuationPastStart(child.escalationGameAddress)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
 		const firstProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
@@ -702,8 +681,8 @@ describe('Escalation Game Test Suite', () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [parentInvalidPeaks, parentYesPeaks, zeroPeakArray()], [parentInvalidLeafCount, parentLeafCount, 0n], [parentInvalidCarryTotal, parentCarryTotal, 0n], [parentInvalidNullifierRoot, parentNullifierRoot, zeroHash()])
-		await resumeEscalationFromFork(child.escalationGameAddress)
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
@@ -714,23 +693,13 @@ describe('Escalation Game Test Suite', () => {
 		const childInvalidNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const childNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
 
-		const parentLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: parent.escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n],
-		})
-		const childLocalLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: child.escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, reportBond, 1n << 255n, 4n * reportBond, 1n],
-		})
+		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n)
+		const childLocalLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 1n << 255n, 4n * reportBond, 1n)
 
 		const grandchild = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotViaTestSecurityPool(grandchild.testSecurityPoolAddress, [childInvalidPeaks, childYesPeaks, zeroPeakArray()], [childInvalidLeafCount, childLeafCount, 0n], [childInvalidCarryTotal, childCarryTotal, 0n], [childInvalidNullifierRoot, childNullifierRoot, zeroHash()])
-		await advanceForkContinuationPastStart(grandchild.escalationGameAddress)
+		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
 		const proof = {
@@ -770,8 +739,8 @@ describe('Escalation Game Test Suite', () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [parentInvalidPeaks, parentYesPeaks, zeroPeakArray()], [parentInvalidLeafCount, parentYesLeafCount, 0n], [parentInvalidCarryTotal, parentYesCarryTotal, 0n], [parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()])
-		await resumeEscalationFromFork(child.escalationGameAddress)
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		await claimDepositForWinningViaTestSecurityPool(child.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
 
 		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
@@ -782,16 +751,11 @@ describe('Escalation Game Test Suite', () => {
 		const childYesCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes)
 		const childInvalidNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const childYesNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
-		const parentLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: parent.escalationGameAddress,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n],
-		})
+		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n)
 		const grandchild = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotViaTestSecurityPool(grandchild.testSecurityPoolAddress, [childInvalidPeaks, childYesPeaks, zeroPeakArray()], [childInvalidLeafCount, childYesLeafCount, 0n], [childInvalidCarryTotal, childYesCarryTotal, 0n], [childInvalidNullifierRoot, childYesNullifierRoot, zeroHash()])
-		await advanceForkContinuationPastStart(grandchild.escalationGameAddress)
+		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
 		const settledChildLocalLeafProof = {

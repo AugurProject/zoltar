@@ -5,7 +5,7 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 
-uint256 constant escalationTimeLength = 4233600; // 7 weeks
+uint256 constant ESCALATION_TIME_LENGTH = 4233600; // 7 weeks
 uint256 constant SCALE = 1e6;
 uint256 constant LN2_SCALED = 693147;
 uint256 constant MAX_ATANH_ITERATIONS = 16;
@@ -153,7 +153,7 @@ contract EscalationGame {
 		require(_startBond > 0, 'start bond must be positive');
 		require(_startBond >= 1e18, 'start bond must be at least 1 ether');
 		require(_nonDecisionThreshold >= 1e18, 'threshold must be at least 1 ether');
-		require(elapsedAtFork <= escalationTimeLength, 'Invalid time');
+			require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'Invalid time');
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		startBond = _startBond;
@@ -247,13 +247,13 @@ contract EscalationGame {
 	function computeIterativeAttritionCost(uint256 timeSinceStart) public view returns (uint256) {
 		uint256 startBondLocal = startBond;
 		uint256 nonDecisionThresholdLocal = nonDecisionThreshold;
-		require(timeSinceStart <= escalationTimeLength, 'Invalid time');
+		require(timeSinceStart <= ESCALATION_TIME_LENGTH, 'Invalid time');
 		// Exact edge cases
 		if (timeSinceStart == 0) return startBondLocal;
-		if (timeSinceStart == escalationTimeLength) return nonDecisionThresholdLocal;
+		if (timeSinceStart == ESCALATION_TIME_LENGTH) return nonDecisionThresholdLocal;
 
 		// Exponent = lnRatio_scaled * t / T
-		uint256 exponent = lnRatioScaled * timeSinceStart / escalationTimeLength;
+		uint256 exponent = lnRatioScaled * timeSinceStart / ESCALATION_TIME_LENGTH;
 		uint256 exponentPow2 = exponent / LN2_SCALED;
 		uint256 exponentRemainder = exponent - exponentPow2 * LN2_SCALED;
 
@@ -281,10 +281,10 @@ contract EscalationGame {
 
 	function computeTimeSinceStartFromAttritionCost(uint256 attritionCost) public view returns (uint256) {
 		if (attritionCost <= startBond) return 0;
-		if (attritionCost >= nonDecisionThreshold) return escalationTimeLength;
+		if (attritionCost >= nonDecisionThreshold) return ESCALATION_TIME_LENGTH;
 
 		uint256 lnCostRatioScaled = _computeLnRatioScaled(startBond, attritionCost);
-		return lnCostRatioScaled * escalationTimeLength / lnRatioScaled;
+		return lnCostRatioScaled * ESCALATION_TIME_LENGTH / lnRatioScaled;
 	}
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
@@ -304,12 +304,12 @@ contract EscalationGame {
 		if (forkContinuation) {
 			uint256 forkElapsed = forkElapsedAtStart + (block.timestamp - forkResumedAt);
 			if (forkElapsed == 0) return 0;
-			if (forkElapsed >= escalationTimeLength) return nonDecisionThreshold;
+			if (forkElapsed >= ESCALATION_TIME_LENGTH) return nonDecisionThreshold;
 			return computeIterativeAttritionCost(forkElapsed);
 		}
 		if (activationTime >= block.timestamp) return 0;
 		uint256 elapsedSinceActivation = block.timestamp - activationTime;
-		if (elapsedSinceActivation >= escalationTimeLength) return nonDecisionThreshold;
+		if (elapsedSinceActivation >= ESCALATION_TIME_LENGTH) return nonDecisionThreshold;
 		return computeIterativeAttritionCost(elapsedSinceActivation);
 	}
 
@@ -391,7 +391,6 @@ contract EscalationGame {
 
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
-		require(getQuestionResolution() == outcome, 'outcome not winning');
 		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex);
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
@@ -506,31 +505,6 @@ contract EscalationGame {
 		emit WithdrawDeposit(depositor, outcome, 0, depositIndex);
 	}
 
-	function getUnsettledDepositIndexesByOutcomeAndDepositor(BinaryOutcomes.BinaryOutcome outcome, address depositor, uint256 startIndex, uint256 scanCount) external view returns (uint256[] memory depositIndexes) {
-		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new uint256[](0);
-		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
-		if (startIndex >= outcomeDeposits.length || scanCount == 0) return new uint256[](0);
-		uint256 endIndex = startIndex + scanCount;
-		if (endIndex > outcomeDeposits.length) {
-			endIndex = outcomeDeposits.length;
-		}
-		uint256 writeIndex = 0;
-		depositIndexes = new uint256[](endIndex - startIndex);
-		for (uint256 index = startIndex; index < endIndex; index++) {
-			Deposit storage deposit = outcomeDeposits[index];
-			if (deposit.depositor == depositor && deposit.amount > 0) {
-				depositIndexes[writeIndex] = index;
-				writeIndex += 1;
-			}
-		}
-		if (writeIndex == depositIndexes.length) return depositIndexes;
-		uint256[] memory trimmedDepositIndexes = new uint256[](writeIndex);
-		for (uint256 index = 0; index < writeIndex; index++) {
-			trimmedDepositIndexes[index] = depositIndexes[index];
-		}
-		return trimmedDepositIndexes;
-	}
-
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new Deposit[](0);
 		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
@@ -540,10 +514,6 @@ contract EscalationGame {
 		for (uint256 index = startIndex; index < iterateUntil; index++) {
 			returnDeposits[index - startIndex] = outcomeDeposits[index];
 		}
-	}
-
-	function previewLeafHash(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId) external pure returns (bytes32) {
-		return MerkleMountainRange.hashLeaf(depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId);
 	}
 
 	function _computeLnRatioScaled(uint256 lowValue, uint256 highValue) internal pure returns (uint256) {

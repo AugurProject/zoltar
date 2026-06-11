@@ -33,7 +33,7 @@ import {
 	migrateVaultWithUnresolvedEscalation,
 	startTruthAuction,
 } from '../testsuite/simulator/utils/contracts/securityPoolForker'
-import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond, getUnsettledDepositIndexesByOutcomeAndDepositor } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
@@ -169,6 +169,9 @@ describe('Peripherals Contract Test Suite', () => {
 	}
 
 	const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
+
+	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
+		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
 
 	const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
 
@@ -831,13 +834,13 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
-		const unsettledBefore = await getUnsettledDepositIndexesByOutcomeAndDepositor(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
+		const unsettledBefore = (await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)).filter(deposit => deposit.depositor === client.account.address && deposit.amount > 0n).map(deposit => deposit.depositIndex)
 		strictEqualTypeSafe(unsettledBefore.length, 1, 'the winning deposit should be discoverable before settlement')
 		strictEqualTypeSafe(unsettledBefore[0], 0n, 'the first winning deposit should be returned')
 
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 
-		const unsettledAfter = await getUnsettledDepositIndexesByOutcomeAndDepositor(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
+		const unsettledAfter = (await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)).filter(deposit => deposit.depositor === client.account.address && deposit.amount > 0n).map(deposit => deposit.depositIndex)
 		strictEqualTypeSafe(unsettledAfter.length, 0, 'settled winning deposits should disappear from discovery results')
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /deposit already settled/)
 	})
@@ -971,18 +974,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const childCarryTotalBeforeSettlement = (await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)).currentCarryTotal
 		strictEqualTypeSafe(childCarryTotalBeforeSettlement, 3n * reportBond, 'child carry total should equal the inherited unresolved principal before proof settlement')
 
-		const firstLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: securityPoolAddresses.escalationGame,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
-		})
-		const secondLeafHash = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: securityPoolAddresses.escalationGame,
-			functionName: 'previewLeafHash',
-			args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n],
-		})
+		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n)
+		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n)
 		const nullifierTree = new SparseNullifierTree()
 		const firstProof = await createCarryProof(securityPoolAddresses.escalationGame, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
 		nullifierTree.consume(0n)
