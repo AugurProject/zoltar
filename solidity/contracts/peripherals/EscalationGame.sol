@@ -38,7 +38,6 @@ struct OutcomeState {
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
 	uint256 inheritedUnresolvedTotal;
-	bytes32 inheritedNullifierRoot;
 	// The current unresolved carry state after local and inherited deposits are consumed.
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
@@ -54,7 +53,6 @@ struct OutcomeStateView {
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
 	uint256 inheritedUnresolvedTotal;
-	bytes32 inheritedNullifierRoot;
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
 	uint256 currentLeafCount;
@@ -98,8 +96,6 @@ contract EscalationGame {
 	address public owner;
 	uint256 public nonDecisionTimestamp;
 	bool public forkContinuation;
-	bool public forkContinuationResumed;
-	bool public forkCarrySnapshotInitialized;
 	uint256 public forkElapsedAtStart;
 	uint256 public forkResumedAt;
 	// Outcome-indexed state uses 0 = Invalid, 1 = Yes, 2 = No.
@@ -150,7 +146,6 @@ contract EscalationGame {
 		require(_nonDecisionThreshold >= 1e18, 'threshold must be at least 1 ether');
 		require(elapsedAtFork <= escalationTimeLength, 'Invalid time');
 		forkContinuation = true;
-		forkContinuationResumed = false;
 		forkElapsedAtStart = elapsedAtFork;
 		startBond = _startBond;
 		nonDecisionThreshold = _nonDecisionThreshold;
@@ -161,12 +156,10 @@ contract EscalationGame {
 	function initializeForkCarrySnapshot(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput, uint256[3] memory snapshotLeafCountsInput, uint256[3] memory snapshotCarryTotals, bytes32[3] memory snapshotNullifierRoots) public {
 		require(msg.sender == address(securityPool), 'only security pool can initialize carry snapshot');
 		require(forkContinuation, 'not fork continuation');
-		require(!forkCarrySnapshotInitialized, 'carry snapshot already initialized');
+		require(!forkCarrySnapshotInitialized(), 'carry snapshot already initialized');
 
-		forkCarrySnapshotInitialized = true;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
-			state.inheritedNullifierRoot = snapshotNullifierRoots[outcomeIndex];
 			state.currentNullifierRoot = snapshotNullifierRoots[outcomeIndex];
 			state.snapshotLeafCount = snapshotLeafCountsInput[outcomeIndex];
 			state.currentLeafCount = snapshotLeafCountsInput[outcomeIndex];
@@ -185,14 +178,21 @@ contract EscalationGame {
 	function resumeFromFork() public {
 		require(owner == msg.sender || address(securityPool) == msg.sender, 'only owner can resume');
 		require(forkContinuation, 'not fork continuation');
-		require(!forkContinuationResumed, 'already resumed');
-		forkContinuationResumed = true;
+		require(forkResumedAt == 0, 'already resumed');
 		forkResumedAt = block.timestamp;
 		emit ForkContinuationResumed(block.timestamp);
 	}
 
+	function forkContinuationResumed() public view returns (bool) {
+		return forkResumedAt != 0;
+	}
+
+	function forkCarrySnapshotInitialized() public view returns (bool) {
+		return outcomeState[0].currentNullifierRoot != bytes32(0);
+	}
+
 	function balances(uint256 outcomeIndex) public view returns (uint256) {
-		return _getOutcomeBalance(uint8(outcomeIndex));
+		return outcomeState[outcomeIndex].balance;
 	}
 
 	function deposits(uint8 outcomeIndex, uint256 depositIndex) public view returns (address depositor, uint256 amount, uint256 cumulativeAmount) {
@@ -203,7 +203,6 @@ contract EscalationGame {
 	function getOutcomeState(BinaryOutcomes.BinaryOutcome outcome) external view returns (OutcomeStateView memory stateView) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) {
 			bytes32 emptyNullifierRoot = _getEmptyNullifierRoot();
-			stateView.inheritedNullifierRoot = emptyNullifierRoot;
 			stateView.currentNullifierRoot = emptyNullifierRoot;
 			return stateView;
 		}
@@ -212,7 +211,6 @@ contract EscalationGame {
 		stateView.snapshotLeafCount = state.snapshotLeafCount;
 		stateView.snapshotPeaks = state.snapshotPeaks;
 		stateView.inheritedUnresolvedTotal = state.inheritedUnresolvedTotal;
-		stateView.inheritedNullifierRoot = state.inheritedNullifierRoot;
 		stateView.currentNullifierRoot = state.currentNullifierRoot;
 		stateView.localHeadNodeId = state.localHeadNodeId;
 		stateView.currentLeafCount = state.currentLeafCount;
@@ -238,7 +236,7 @@ contract EscalationGame {
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {
-		return [_getOutcomeBalance(0), _getOutcomeBalance(1), _getOutcomeBalance(2)];
+		return [outcomeState[0].balance, outcomeState[1].balance, outcomeState[2].balance];
 	}
 
 	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
@@ -293,7 +291,7 @@ contract EscalationGame {
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
 		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
 		if (forkContinuation) {
-			if (!forkContinuationResumed) return type(uint256).max;
+			if (forkResumedAt == 0) return type(uint256).max;
 			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCost(getBindingCapital());
 			if (requiredElapsed <= forkElapsedAtStart) return forkResumedAt;
 			return forkResumedAt + (requiredElapsed - forkElapsedAtStart);
@@ -302,8 +300,8 @@ contract EscalationGame {
 	}
 
 	function totalCost() public view returns (uint256) {
-		if (forkContinuation && !forkContinuationResumed && forkElapsedAtStart == 0) return 0;
-		if (forkContinuation && !forkContinuationResumed) return computeIterativeAttritionCost(forkElapsedAtStart);
+		if (forkContinuation && forkResumedAt == 0 && forkElapsedAtStart == 0) return 0;
+		if (forkContinuation && forkResumedAt == 0) return computeIterativeAttritionCost(forkElapsedAtStart);
 		if (forkContinuation) {
 			uint256 forkElapsed = forkElapsedAtStart + (block.timestamp - forkResumedAt);
 			if (forkElapsed == 0) return 0;
@@ -318,37 +316,37 @@ contract EscalationGame {
 
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		uint256 currentTotalCost = totalCost();
-		uint8 invalidOver = _getOutcomeBalance(0) >= currentTotalCost ? 1 : 0;
-		uint8 yesOver = _getOutcomeBalance(1) >= currentTotalCost ? 1 : 0;
-		uint8 noOver = _getOutcomeBalance(2) >= currentTotalCost ? 1 : 0;
+		uint8 invalidOver = outcomeState[0].balance >= currentTotalCost ? 1 : 0;
+		uint8 yesOver = outcomeState[1].balance >= currentTotalCost ? 1 : 0;
+		uint8 noOver = outcomeState[2].balance >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return BinaryOutcomes.BinaryOutcome.None;
-		if (_getOutcomeBalance(0) == 0 && _getOutcomeBalance(1) == 0 && _getOutcomeBalance(2) == 0) return BinaryOutcomes.BinaryOutcome.Invalid;
-		if (_getOutcomeBalance(0) > _getOutcomeBalance(1) && _getOutcomeBalance(0) > _getOutcomeBalance(2)) return BinaryOutcomes.BinaryOutcome.Invalid;
-		if (_getOutcomeBalance(1) > _getOutcomeBalance(0) && _getOutcomeBalance(1) > _getOutcomeBalance(2)) return BinaryOutcomes.BinaryOutcome.Yes;
+		if (outcomeState[0].balance == 0 && outcomeState[1].balance == 0 && outcomeState[2].balance == 0) return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (outcomeState[0].balance > outcomeState[1].balance && outcomeState[0].balance > outcomeState[2].balance) return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (outcomeState[1].balance > outcomeState[0].balance && outcomeState[1].balance > outcomeState[2].balance) return BinaryOutcomes.BinaryOutcome.Yes;
 		return BinaryOutcomes.BinaryOutcome.No;
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
-		uint8 invalidOver = _getOutcomeBalance(0) >= nonDecisionThreshold ? 1 : 0;
-		uint8 yesOver = _getOutcomeBalance(1) >= nonDecisionThreshold ? 1 : 0;
-		uint8 noOver = _getOutcomeBalance(2) >= nonDecisionThreshold ? 1 : 0;
+		uint8 invalidOver = outcomeState[0].balance >= nonDecisionThreshold ? 1 : 0;
+		uint8 yesOver = outcomeState[1].balance >= nonDecisionThreshold ? 1 : 0;
+		uint8 noOver = outcomeState[2].balance >= nonDecisionThreshold ? 1 : 0;
 		return invalidOver + yesOver + noOver >= 2;
 	}
 
 	function getBindingCapital() public view returns (uint256) {
 		if (
-			(_getOutcomeBalance(0) >= _getOutcomeBalance(1) && _getOutcomeBalance(0) <= _getOutcomeBalance(2)) ||
-			(_getOutcomeBalance(0) >= _getOutcomeBalance(2) && _getOutcomeBalance(0) <= _getOutcomeBalance(1))
+			(outcomeState[0].balance >= outcomeState[1].balance && outcomeState[0].balance <= outcomeState[2].balance) ||
+			(outcomeState[0].balance >= outcomeState[2].balance && outcomeState[0].balance <= outcomeState[1].balance)
 		) {
-			return _getOutcomeBalance(0);
+			return outcomeState[0].balance;
 		}
 		if (
-			(_getOutcomeBalance(1) >= _getOutcomeBalance(0) && _getOutcomeBalance(1) <= _getOutcomeBalance(2)) ||
-			(_getOutcomeBalance(1) >= _getOutcomeBalance(2) && _getOutcomeBalance(1) <= _getOutcomeBalance(0))
+			(outcomeState[1].balance >= outcomeState[0].balance && outcomeState[1].balance <= outcomeState[2].balance) ||
+			(outcomeState[1].balance >= outcomeState[2].balance && outcomeState[1].balance <= outcomeState[0].balance)
 		) {
-			return _getOutcomeBalance(1);
+			return outcomeState[1].balance;
 		}
-		return _getOutcomeBalance(2);
+		return outcomeState[2].balance;
 	}
 
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
@@ -356,18 +354,18 @@ contract EscalationGame {
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Outcome must not be None');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
-		require(_getOutcomeBalance(uint8(outcome)) < nonDecisionThreshold, 'Already full');
+		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit');
 		uint256 outcomeIndex = uint256(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		uint256 currentBalance = _getOutcomeBalance(uint8(outcome));
+		uint256 currentBalance = selectedOutcomeState.balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
 		uint256 effectiveDeposit = amount > room ? room : amount;
 		uint256 newBalance = currentBalance + effectiveDeposit;
 
-		uint256 invalidBalance = _getOutcomeBalance(0);
-		uint256 yesBalance = _getOutcomeBalance(1);
-		uint256 noBalance = _getOutcomeBalance(2);
+		uint256 invalidBalance = outcomeState[0].balance;
+		uint256 yesBalance = outcomeState[1].balance;
+		uint256 noBalance = outcomeState[2].balance;
 		uint256 maxBalance = invalidBalance > yesBalance ? (invalidBalance > noBalance ? invalidBalance : noBalance) : (yesBalance > noBalance ? yesBalance : noBalance);
 
 		bool otherHasMax = outcomeIndex == 0 ? (yesBalance == maxBalance || noBalance == maxBalance) :
@@ -427,7 +425,7 @@ contract EscalationGame {
 		uint256 depositStart = deposit.cumulativeAmount - deposit.amount;
 		uint256 bindingCapitalAmount = getBindingCapital();
 		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 winningOutcomeBalance = _getOutcomeBalance(uint8(outcome));
+		uint256 winningOutcomeBalance = outcomeState[uint8(outcome)].balance;
 		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
 		uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
 		uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
@@ -483,7 +481,7 @@ contract EscalationGame {
 		uint256 depositStart = proof.cumulativeAmount - proof.amount;
 		uint256 bindingCapitalAmount = getBindingCapital();
 		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
-		uint256 winningOutcomeBalance = _getOutcomeBalance(outcomeIndex);
+		uint256 winningOutcomeBalance = outcomeState[outcomeIndex].balance;
 		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
 		uint256 burnAmount;
 		if (rewardEligiblePrincipalAmount == 0) {
@@ -674,10 +672,6 @@ contract EscalationGame {
 				++k;
 			}
 		}
-	}
-
-	function _getOutcomeBalance(uint8 outcomeIndex) private view returns (uint256) {
-		return outcomeState[outcomeIndex].balance;
 	}
 
 	function _appendCarriedLeafToMerkleMountainRange(OutcomeState storage state, bytes32 leafHash) private {
