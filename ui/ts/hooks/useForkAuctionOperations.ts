@@ -4,6 +4,7 @@ import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import {
 	createChildUniverseFromSecurityPool,
+	buildForkCarriedEscalationProofs,
 	finalizeSecurityPoolTruthAuction,
 	forkUniverseDirectly,
 	forkZoltarWithOwnEscalation,
@@ -18,6 +19,7 @@ import {
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 	withdrawForkedEscalationDeposits,
+	withdrawForkedEscalationDepositsWithProofs,
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -216,7 +218,18 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 		)
 
 	const settleForkedEscalation = async (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) =>
-		await runForkAuctionAction('settleForkedEscalation', async (walletAddress, details) => await withdrawForkedEscalationDeposits(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, outcome, parentDepositIndexes), 'Failed to settle fork-carried escalation deposits')
+		await runForkAuctionAction(
+			'settleForkedEscalation',
+			async (walletAddress, details) => {
+				try {
+					const proofs = await buildForkCarriedEscalationProofs(createConnectedReadClient(), details.securityPoolAddress, outcome, parentDepositIndexes)
+					return await withdrawForkedEscalationDepositsWithProofs(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, outcome, proofs)
+				} catch {
+					return await withdrawForkedEscalationDeposits(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, outcome, parentDepositIndexes)
+				}
+			},
+			'Failed to settle fork-carried escalation deposits',
+		)
 
 	const forkUniverse = async () =>
 		await runForkAuctionAction(

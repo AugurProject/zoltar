@@ -77,12 +77,28 @@ export const getUnsettledDepositIndexesByOutcomeAndDepositor = async (client: Re
 		args: [outcome, depositor, startIndex, scanCount],
 	})
 
-export const getUnsettledImportedDepositIndexesByOutcomeAndDepositor = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome, depositor: AccountAddress, startIndex: bigint, scanCount: bigint) =>
+export const getCarryRoot = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
 	await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getUnsettledImportedDepositIndexesByOutcomeAndDepositor',
+		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		functionName: 'getCarryRoot',
 		address: escalationGame,
-		args: [outcome, depositor, startIndex, scanCount],
+		args: [outcome],
+	})
+
+export const getCarryLeafCount = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
+	await client.readContract({
+		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		functionName: 'getCarryLeafCount',
+		address: escalationGame,
+		args: [outcome],
+	})
+
+export const getCarryTotal = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
+	await client.readContract({
+		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		functionName: 'getCarryTotal',
+		address: escalationGame,
+		args: [outcome],
 	})
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {

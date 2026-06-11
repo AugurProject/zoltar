@@ -2,9 +2,8 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { EscalationGameCarryTree } from '../EscalationGameCarryTree.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
-import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
+import { EscalationGameCarryTree, CarriedDepositProof } from '../EscalationGameCarryTree.sol';
 
 contract EscalationGameCarryTreeTestSecurityPool {
 	Zoltar public immutable zoltar;
@@ -18,18 +17,9 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		securityPoolForker = configuredSecurityPoolForker;
 	}
 
-	function deployEscalationGameCarryTree() external returns (EscalationGameCarryTree game) {
-		require(address(escalationGameCarryTree) == address(0), 'carry tree already deployed');
-		game = new EscalationGameCarryTree(ISecurityPool(payable(address(this))));
+	function setEscalationGameCarryTree(EscalationGameCarryTree game) external {
+		require(address(escalationGameCarryTree) == address(0), 'carry tree already configured');
 		escalationGameCarryTree = game;
-	}
-
-	function startCarryTree(uint256 startBond, uint256 nonDecisionThreshold) external {
-		escalationGameCarryTree.start(startBond, nonDecisionThreshold);
-	}
-
-	function startCarryTreeFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external {
-		escalationGameCarryTree.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 
 	function depositOnCarryTreeOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256) {
@@ -40,18 +30,28 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		escalationGameCarryTree.importForkedDeposit(depositor, outcome, parentDepositIndex, amount);
 	}
 
-	function branchCarryTreeFromFork(uint256 parentBranchId, uint256 forkedFromNodeId) external returns (uint256 branchId) {
-		return escalationGameCarryTree.branchFromFork(parentBranchId, forkedFromNodeId);
-	}
-
-	function activateCarryTreeBranch(uint256 branchId) external {
-		escalationGameCarryTree.activateBranch(branchId);
-	}
-
 	function withdrawImportedCarryTreeForkDeposit(uint256 parentDepositIndex, BinaryOutcomes.BinaryOutcome outcome)
 		external
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
 		return escalationGameCarryTree.withdrawImportedForkDeposit(parentDepositIndex, outcome);
+	}
+
+	function initializeForkCarrySnapshot(
+		bytes32[3] memory inheritedCarryRoots,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		bytes32[3] memory inheritedNullifierRoots
+	) external {
+		escalationGameCarryTree.initializeForkCarrySnapshot(
+			inheritedCarryRoots, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots
+		);
+	}
+
+	function withdrawCarriedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof)
+		external
+		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
+	{
+		return escalationGameCarryTree.withdrawCarriedDeposit(outcome, proof);
 	}
 }

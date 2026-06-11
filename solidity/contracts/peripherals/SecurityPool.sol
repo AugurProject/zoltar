@@ -10,6 +10,7 @@ import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
+import { EscalationGameCarryTree, CarriedDepositProof } from './EscalationGameCarryTree.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
@@ -439,11 +440,59 @@ contract SecurityPool is ISecurityPool {
 			totalAmountToWithdraw += amountToWithdraw;
 			totalOriginalDepositAmount += originalDepositAmount;
 		}
-		if (totalAmountToWithdraw > totalOriginalDepositAmount) {
-			securityVaults[beneficiaryVault].poolOwnership += repToPoolOwnership(totalAmountToWithdraw - totalOriginalDepositAmount);
-		} else if (totalAmountToWithdraw < totalOriginalDepositAmount) {
-			securityVaults[beneficiaryVault].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
+		_applyForkedEscalationSettlement(beneficiaryVault, totalAmountToWithdraw, totalOriginalDepositAmount);
+	}
+
+	function withdrawForkedEscalationDepositsWithProofs(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external {
+		require(address(escalationGame) != address(0x0), 'missing escalation');
+		require(systemState == SystemState.Operational, 'not operational');
+		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'question not final');
+		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
+		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'invalid none');
+		require(withdrawalOutcome == questionOutcome, 'use forfeit for losing outcome');
+
+		EscalationGameCarryTree carryTreeEscalationGame = EscalationGameCarryTree(payable(address(escalationGame)));
+		address beneficiaryVault = address(0x0);
+		uint256 totalAmountToWithdraw = 0;
+		uint256 totalOriginalDepositAmount = 0;
+		for (uint256 index = 0; index < proofs.length; index++) {
+			(address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) = carryTreeEscalationGame.withdrawCarriedDeposit(withdrawalOutcome, proofs[index]);
+			if (beneficiaryVault == address(0x0)) {
+				beneficiaryVault = depositor;
+			}
+			require(depositor == beneficiaryVault, 'one vault only');
+			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
+			totalLockedRepInEscalationGame -= originalDepositAmount;
+			totalAmountToWithdraw += amountToWithdraw;
+			totalOriginalDepositAmount += originalDepositAmount;
 		}
+		_applyForkedEscalationSettlement(beneficiaryVault, totalAmountToWithdraw, totalOriginalDepositAmount);
+	}
+
+	function forfeitForkedEscalationDepositsWithProofs(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external {
+		require(address(escalationGame) != address(0x0), 'missing escalation');
+		require(systemState == SystemState.Operational, 'not operational');
+		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'question not final');
+		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
+		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'invalid none');
+		require(withdrawalOutcome != questionOutcome, 'use withdraw for winning outcome');
+
+		EscalationGameCarryTree carryTreeEscalationGame = EscalationGameCarryTree(payable(address(escalationGame)));
+		address beneficiaryVault = address(0x0);
+		uint256 totalOriginalDepositAmount = 0;
+		for (uint256 index = 0; index < proofs.length; index++) {
+			(address depositor, uint256 originalDepositAmount) = carryTreeEscalationGame.forfeitCarriedDeposit(withdrawalOutcome, proofs[index]);
+			if (beneficiaryVault == address(0x0)) {
+				beneficiaryVault = depositor;
+			}
+			require(depositor == beneficiaryVault, 'one vault only');
+			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
+			totalLockedRepInEscalationGame -= originalDepositAmount;
+			totalOriginalDepositAmount += originalDepositAmount;
+		}
+		_applyForkedEscalationSettlement(beneficiaryVault, 0, totalOriginalDepositAmount);
 	}
 
 	////////////////////////////////////////
@@ -515,6 +564,21 @@ contract SecurityPool is ISecurityPool {
 		escalationGame = escalationGameFactory.deployEscalationGameFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 
+	function initializeForkCarrySnapshot(
+		bytes32[3] memory inheritedCarryRoots,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		bytes32[3] memory inheritedNullifierRoots
+	) external onlyForker {
+		require(address(escalationGame) != address(0x0), 'missing escalation');
+		EscalationGameCarryTree(payable(address(escalationGame))).initializeForkCarrySnapshot(
+			inheritedCarryRoots,
+			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
+			inheritedNullifierRoots
+		);
+	}
+
 	function resumeForkedEscalationGame() external onlyForker {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		escalationGame.resumeFromFork();
@@ -549,6 +613,15 @@ contract SecurityPool is ISecurityPool {
 		require(totalLockedRepInEscalationGame >= repAmount, 'total locked low');
 		securityVaults[vault].lockedRepInEscalationGame -= repAmount;
 		totalLockedRepInEscalationGame -= repAmount;
+	}
+
+	function _applyForkedEscalationSettlement(address beneficiaryVault, uint256 totalAmountToWithdraw, uint256 totalOriginalDepositAmount) private {
+		if (beneficiaryVault == address(0x0)) return;
+		if (totalAmountToWithdraw > totalOriginalDepositAmount) {
+			securityVaults[beneficiaryVault].poolOwnership += repToPoolOwnership(totalAmountToWithdraw - totalOriginalDepositAmount);
+		} else if (totalAmountToWithdraw < totalOriginalDepositAmount) {
+			securityVaults[beneficiaryVault].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
+		}
 	}
 
 	function _trackVault(address vault) private {

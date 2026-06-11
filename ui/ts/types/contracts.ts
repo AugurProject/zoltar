@@ -353,6 +353,18 @@ export type ImportedEscalationDeposit = {
 	parentDepositIndex: bigint
 }
 
+export type CarriedDepositProof = {
+	depositor: Address
+	amount: bigint
+	parentDepositIndex: bigint
+	cumulativeAmount: bigint
+	sourceNodeId: bigint
+	leafIndex: bigint
+	mmrSiblings: Hex[]
+	mmrPeakIndex: bigint
+	nullifierSiblings: Hex[]
+}
+
 export type EscalationSide = {
 	balance: bigint
 	deposits: EscalationDeposit[]
@@ -370,6 +382,7 @@ type ReportingDetailsBase = {
 	forkThreshold: bigint
 	marketDetails: MarketDetails
 	nonDecisionThreshold: bigint
+	parentSecurityPoolAddress?: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
 	settlementState: ReportingSettlementState

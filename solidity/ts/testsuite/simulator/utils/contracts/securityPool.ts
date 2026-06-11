@@ -1,8 +1,20 @@
 import { peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
 import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
+
+type CarriedDepositProof = {
+	depositor: Address
+	amount: bigint
+	parentDepositIndex: bigint
+	cumulativeAmount: bigint
+	sourceNodeId: bigint
+	leafIndex: bigint
+	mmrSiblings: readonly Hex[]
+	mmrPeakIndex: bigint
+	nullifierSiblings: readonly Hex[]
+}
 
 const getAwaitingForkContinuationAbi = [
 	{
@@ -36,13 +48,13 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	return hash
 }
 
-export const withdrawForkedEscalationDeposits = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, depositIndexes: bigint[]) =>
+export const withdrawForkedEscalationDepositsWithProofs = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, proofs: readonly CarriedDepositProof[]) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'withdrawForkedEscalationDeposits',
+			functionName: 'withdrawForkedEscalationDepositsWithProofs',
 			address: securityPoolAddress,
-			args: [outcome, depositIndexes],
+			args: [outcome, proofs.map(proof => ({ ...proof, mmrSiblings: Array.from(proof.mmrSiblings), nullifierSiblings: Array.from(proof.nullifierSiblings) }))],
 		}),
 	)
 

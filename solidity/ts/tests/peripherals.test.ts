@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert/strict'
-import { decodeEventLog, encodeAbiParameters, keccak256 } from 'viem'
-import type { Abi, Address, Hash } from 'viem'
+import { concatHex, decodeEventLog, encodeAbiParameters, keccak256 } from 'viem'
+import type { Abi, Address, Hash, Hex } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
@@ -33,7 +33,7 @@ import {
 	migrateVaultWithUnresolvedEscalation,
 	startTruthAuction,
 } from '../testsuite/simulator/utils/contracts/securityPoolForker'
-import { getEscalationGameDeposits, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond, getUnsettledDepositIndexesByOutcomeAndDepositor, getUnsettledImportedDepositIndexesByOutcomeAndDepositor } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { getCarryLeafCount, getCarryRoot, getCarryTotal, getEscalationGameDeposits, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond, getUnsettledDepositIndexesByOutcomeAndDepositor } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
@@ -63,9 +63,9 @@ import {
 	sharesToCash,
 	updateVaultFees,
 	withdrawFromEscalationGame,
-	withdrawForkedEscalationDeposits,
+	withdrawForkedEscalationDepositsWithProofs,
 } from '../testsuite/simulator/utils/contracts/securityPool'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
+import { peripherals_EscalationGameCarryTree_EscalationGameCarryTree, peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -90,6 +90,8 @@ const getMigrationProxyAddressAbi = [
 		type: 'function',
 	},
 ] satisfies Abi
+
+const CARRY_TREE_NULLIFIER_DEPTH = 64
 
 describe('Peripherals Contract Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -164,6 +166,83 @@ describe('Peripherals Contract Test Suite', () => {
 	const getVaultRepClaim = async (vaultAddress: Address) => {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
 		return await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+	}
+
+	const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
+
+	const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
+
+	const buildZeroHashes = () => {
+		const zeroHashes: Hex[] = [zeroHash()]
+		for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+			const nextZeroHash = zeroHashes[depth]
+			if (nextZeroHash === undefined) throw new Error(`Missing zero hash at depth ${depth}`)
+			zeroHashes.push(hashParent(nextZeroHash, nextZeroHash))
+		}
+		return zeroHashes
+	}
+
+	class TestSparseNullifierTree {
+		private readonly zeroHashes = buildZeroHashes()
+		private readonly nodes = new Map<string, Hex>()
+		private readonly pathMask = (1n << BigInt(CARRY_TREE_NULLIFIER_DEPTH)) - 1n
+		root: Hex = this.zeroHashes[CARRY_TREE_NULLIFIER_DEPTH] ?? zeroHash()
+
+		private getPath(parentDepositIndex: bigint) {
+			return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & this.pathMask
+		}
+
+		getProof(parentDepositIndex: bigint) {
+			const path = this.getPath(parentDepositIndex)
+			const siblings: Hex[] = []
+			let nodeIndex = path
+			for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+				const siblingIndex = nodeIndex ^ 1n
+				const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
+				if (siblingHash === undefined) throw new Error(`Missing sibling hash at depth ${depth}`)
+				siblings.push(siblingHash)
+				nodeIndex >>= 1n
+			}
+			return siblings
+		}
+
+		consume(parentDepositIndex: bigint) {
+			const path = this.getPath(parentDepositIndex)
+			let nodeIndex = path
+			let nodeHash = `0x${'0'.repeat(63)}1` as Hex
+			this.nodes.set(`0:${nodeIndex}`, nodeHash)
+			for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+				const isRightNode = (nodeIndex & 1n) === 1n
+				const siblingIndex = nodeIndex ^ 1n
+				const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
+				if (siblingHash === undefined) throw new Error(`Missing sibling hash at depth ${depth}`)
+				const parentHash = isRightNode ? hashParent(siblingHash, nodeHash) : hashParent(nodeHash, siblingHash)
+				nodeIndex >>= 1n
+				nodeHash = parentHash
+				this.nodes.set(`${depth + 1}:${nodeIndex}`, nodeHash)
+			}
+			this.root = nodeHash
+		}
+	}
+
+	const createCarryTreeProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, mmrPeakIndex: bigint, mmrSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
+		const node = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getNode',
+			args: [leafIndex + 1n],
+		})
+		return {
+			depositor: node[2],
+			amount: node[4],
+			parentDepositIndex,
+			cumulativeAmount: node[6],
+			sourceNodeId: leafIndex + 1n,
+			leafIndex,
+			mmrSiblings,
+			mmrPeakIndex,
+			nullifierSiblings,
+		}
 	}
 
 	const finalizeQuestionAsYesWithoutFork = async () => {
@@ -839,6 +918,9 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes))
 		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		const parentCarryRootBeforeMigration = await getCarryRoot(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentCarryLeafCountBeforeMigration = await getCarryLeafCount(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentCarryTotalBeforeMigration = await getCarryTotal(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -847,14 +929,76 @@ describe('Peripherals Contract Test Suite', () => {
 		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const childForkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
-		const importedIndexes = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, childEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
+		const childCarryRoot = await getCarryRoot(client, childEscalationGame, QuestionOutcome.Yes)
+		const childCarryLeafCount = await getCarryLeafCount(client, childEscalationGame, QuestionOutcome.Yes)
+		const childCarryTotal = await getCarryTotal(client, childEscalationGame, QuestionOutcome.Yes)
 
 		strictEqualTypeSafe(parentVaultBeforeMigration.lockedRepInEscalationGame, unresolvedDeposit, 'the parent lock should equal the unresolved principal before migration')
 		strictEqualTypeSafe(parentVaultAfterMigration.lockedRepInEscalationGame, 0n, 'atomic unresolved migration should clear the parent lock')
 		strictEqualTypeSafe(childVaultAfterMigration.lockedRepInEscalationGame, unresolvedDeposit, 'the child vault should inherit the unresolved locked principal')
 		strictEqualTypeSafe(childForkData.migratedRep, parentForkData.repAtFork, 'the child branch should receive the vaults total REP claim exactly once')
-		strictEqualTypeSafe(importedIndexes.length, 1, 'the imported unresolved deposit should be discoverable in the child continuation game')
-		strictEqualTypeSafe(importedIndexes[0], 0n, 'the original parent deposit index should be preserved in the child continuation game')
+		strictEqualTypeSafe(childCarryRoot, parentCarryRootBeforeMigration, 'the child continuation game should inherit the parent carry root by snapshot')
+		strictEqualTypeSafe(childCarryLeafCount, parentCarryLeafCountBeforeMigration, 'the child continuation game should inherit the parent carry leaf count by snapshot')
+		strictEqualTypeSafe(childCarryTotal, parentCarryTotalBeforeMigration, 'the child continuation game should inherit the parent unresolved carry total by snapshot')
+	})
+
+	test('withdrawForkedEscalationDepositsWithProofs settles inherited child carry without imported indexes', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const otherQuestionData = {
+			...questionData,
+			title: 'forked proof settlement source question',
+		}
+		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
+		await createQuestion(attackerClient, otherQuestionData, outcomes)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		}
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational before proof settlement')
+
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		const childCarryTotalBeforeSettlement = await getCarryTotal(client, childEscalationGame, QuestionOutcome.Yes)
+		strictEqualTypeSafe(childCarryTotalBeforeSettlement, 3n * reportBond, 'child carry total should equal the inherited unresolved principal before proof settlement')
+
+		const firstLeafHash = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: securityPoolAddresses.escalationGame,
+			functionName: 'previewLeafHash',
+			args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n],
+		})
+		const secondLeafHash = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: securityPoolAddresses.escalationGame,
+			functionName: 'previewLeafHash',
+			args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n],
+		})
+		const nullifierTree = new TestSparseNullifierTree()
+		const firstProof = await createCarryTreeProof(securityPoolAddresses.escalationGame, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
+		nullifierTree.consume(0n)
+		const secondProof = await createCarryTreeProof(securityPoolAddresses.escalationGame, 1n, 1n, 1n, [firstLeafHash], nullifierTree.getProof(1n))
+
+		await withdrawForkedEscalationDepositsWithProofs(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, [firstProof, secondProof])
+
+		const childVaultAfterSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const childCarryTotalAfterSettlement = await getCarryTotal(client, childEscalationGame, QuestionOutcome.Yes)
+		strictEqualTypeSafe(childVaultAfterSettlement.lockedRepInEscalationGame, 0n, 'proof settlement should clear the inherited escalation lock')
+		strictEqualTypeSafe(childCarryTotalAfterSettlement, 0n, 'proof settlement should consume the inherited carry total')
+		await assert.rejects(withdrawForkedEscalationDepositsWithProofs(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, [firstProof]), /invalid nullifier proof|deposit already settled/)
 	})
 
 	test('one unmigrated unresolved lock cannot keep the child continuation branch frozen after the migration window', async () => {
@@ -903,7 +1047,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes), /migration window closed/)
 	})
 
-	test('large imported continuation migration keeps discovery bounded by scan window', async () => {
+	test('large unresolved continuation migration snapshots carry totals without replaying imported deposit indexes', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -931,46 +1075,20 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		const parentCarryRootBeforeMigration = await getCarryRoot(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentCarryLeafCountBeforeMigration = await getCarryLeafCount(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentCarryTotalBeforeMigration = await getCarryTotal(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		const yesEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
-		const imported = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, yesEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 4n)
-		const importedMid = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, yesEscalationGame, QuestionOutcome.Yes, client.account.address, 4n, 4n)
-		const importedTail = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, yesEscalationGame, QuestionOutcome.Yes, client.account.address, 8n, 10n)
-		let expectedImportedCount = 0n
-		let expectedImportedMidCount = 0n
-		let expectedImportedTailCount = 0n
-		if (depositCount > 4n) {
-			expectedImportedCount = 4n
-			expectedImportedMidCount = depositCount - 4n >= 4n ? 4n : depositCount - 4n
-			expectedImportedTailCount = depositCount > 8n ? depositCount - 8n : 0n
-		} else {
-			expectedImportedCount = depositCount
-			expectedImportedMidCount = 0n
-			expectedImportedTailCount = 0n
-		}
-		strictEqualTypeSafe(imported.length, Number(expectedImportedCount), 'scan window should cap result size')
-		strictEqualTypeSafe(importedMid.length, Number(expectedImportedMidCount), 'scan window should cap result size')
-		strictEqualTypeSafe(importedTail.length, Number(expectedImportedTailCount), 'final scan should still return only available unsettled entries')
-
-		const allImported = [...imported, ...importedMid, ...importedTail]
-		strictEqualTypeSafe(allImported.length, Number(depositCount), 'combined bounded scans should return all migrated imported indexes')
-		allImported.forEach((importedDepositIndex, index) => {
-			strictEqualTypeSafe(importedDepositIndex, BigInt(index), 'imports should preserve original parent deposit ordering under bounded scans')
-		})
-
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, yesSecurityPool.securityPool)
-		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		}
-		await mockWindow.advanceTime(1n)
-		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'child continuation should resolve to yes before imported settlement')
-		await withdrawForkedEscalationDeposits(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, allImported)
-		const remaining = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, yesEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 20n)
-		strictEqualTypeSafe(remaining.length, 0, 'settling all migrated imported deposits should clear discovery state')
+		const childCarryRoot = await getCarryRoot(client, yesEscalationGame, QuestionOutcome.Yes)
+		const childCarryLeafCount = await getCarryLeafCount(client, yesEscalationGame, QuestionOutcome.Yes)
+		const childCarryTotal = await getCarryTotal(client, yesEscalationGame, QuestionOutcome.Yes)
+		strictEqualTypeSafe(childCarryRoot, parentCarryRootBeforeMigration, 'snapshot-only migration should preserve the parent carry root')
+		strictEqualTypeSafe(childCarryLeafCount, parentCarryLeafCountBeforeMigration, 'snapshot-only migration should preserve the parent carry leaf count')
+		strictEqualTypeSafe(childCarryTotal, parentCarryTotalBeforeMigration, 'snapshot-only migration should preserve the parent unresolved carry total')
 	})
 
 	test('forked continuation freezes escalation cost until the child pool becomes operational', async () => {
@@ -1054,8 +1172,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
-		const importedYesIndexes = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, childEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
-		strictEqualTypeSafe(importedYesIndexes.length, 1, 'the carried yes deposit should be discoverable in the child continuation game before the second fork')
+		strictEqualTypeSafe(await getCarryTotal(client, childEscalationGame, QuestionOutcome.Yes), recursiveDeposit, 'the child continuation snapshot should carry the unresolved yes-side total before the second fork')
 
 		const secondForkQuestionData = {
 			...questionData,
@@ -1090,12 +1207,11 @@ describe('Peripherals Contract Test Suite', () => {
 		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const grandchildVault = await getSecurityVault(client, grandchildSecurityPool.securityPool, client.account.address)
 		const grandchildEscalationGame = await getSecurityPoolsEscalationGame(client, grandchildSecurityPool.securityPool)
-		const grandchildImportedYesIndexes = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, grandchildEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
+		const grandchildCarryTotal = await getCarryTotal(client, grandchildEscalationGame, QuestionOutcome.Yes)
 
 		strictEqualTypeSafe(childVaultAfterMigration.lockedRepInEscalationGame, 0n, 'the second migration should clear the carried lock from the child continuation vault')
 		strictEqualTypeSafe(grandchildVault.lockedRepInEscalationGame, recursiveDeposit, 'the carried unresolved principal should survive into the grandchild continuation vault')
-		strictEqualTypeSafe(grandchildImportedYesIndexes.length, 1, 'the grandchild continuation game should receive the carried unresolved deposit')
-		strictEqualTypeSafe(grandchildImportedYesIndexes[0], 0n, 'the recursive continuation migration should preserve the carried deposit ordering key')
+		strictEqualTypeSafe(grandchildCarryTotal, recursiveDeposit, 'the recursive continuation migration should preserve the carried unresolved total by snapshot')
 	})
 
 	test('many unresolved continuation deposits survive multiple unrelated forks recursively', async () => {
@@ -1129,8 +1245,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
 		const firstChildEscalationGame = await getSecurityPoolsEscalationGame(client, firstChildPool.securityPool)
-		const firstChildImportedYes = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, firstChildEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 20n)
-		strictEqualTypeSafe(firstChildImportedYes.length, Number(recursiveDepositCount), 'first child should inherit all migrated yes-side deposits')
+		strictEqualTypeSafe(await getCarryTotal(client, firstChildEscalationGame, QuestionOutcome.Yes), recursiveDepositCount * reportBond, 'first child should inherit all unresolved yes-side principal by snapshot')
 
 		const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
 		const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
@@ -1167,8 +1282,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const secondChildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.Yes)
 		const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, securityMultiplier)
 		const secondChildEscalationGame = await getSecurityPoolsEscalationGame(client, secondChildPool.securityPool)
-		const secondChildImportedYes = await getUnsettledImportedDepositIndexesByOutcomeAndDepositor(client, secondChildEscalationGame, QuestionOutcome.Yes, client.account.address, 0n, 20n)
-		strictEqualTypeSafe(secondChildImportedYes.length, Number(recursiveDepositCount), 'second child should inherit all migrated yes-side deposits from the first child')
+		strictEqualTypeSafe(await getCarryTotal(client, secondChildEscalationGame, QuestionOutcome.Yes), recursiveDepositCount * reportBond, 'second child should inherit all unresolved yes-side principal from the first child by snapshot')
 	})
 
 	test('cannot refund an active escalation deposit before zoltar forks', async () => {

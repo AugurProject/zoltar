@@ -1,4 +1,4 @@
-import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { concatHex, decodeEventLog, encodeAbiParameters, keccak256, parseAbiItem, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from './lib/assert.js'
@@ -11,6 +11,7 @@ import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
 	peripherals_EscalationGame_EscalationGame,
+	peripherals_EscalationGameCarryTree_EscalationGameCarryTree,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -20,6 +21,7 @@ import {
 	peripherals_tokens_ShareToken_ShareToken,
 } from './contractArtifact.js'
 import type {
+	CarriedDepositProof,
 	DeploymentStepId,
 	EscalationDeposit,
 	EscalationSide,
@@ -92,6 +94,8 @@ const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const CONTRACT_PAGE_SIZE = 30n
 const OPEN_ORACLE_PRICE_UNITS = 30n
+const CARRY_TREE_NULLIFIER_DEPTH = 64
+const CARRY_TREE_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -113,7 +117,14 @@ type TruthAuctionBidViewStruct = {
 	refunded: boolean
 }
 type ImportedDepositTuple = readonly [Address, bigint, bigint, boolean]
-type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint, bigint, bigint]
+type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint, bigint, bigint, Address]
+type CarryTreeLeafViewStruct = {
+	cumulativeAmount: bigint
+	depositor: Address
+	parentDepositIndex: bigint
+	amount: bigint
+	sourceNodeId: bigint
+}
 type LoadAllSecurityPoolsOptions = {
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
@@ -281,6 +292,260 @@ export async function loadImportedEscalationDeposits(client: Pick<ReadClient, 'r
 	}
 	return importedDeposits
 }
+
+function isCarryTreeLeafView(value: unknown): value is CarryTreeLeafViewStruct {
+	if (typeof value !== 'object' || value === undefined || value === null) return false
+	const candidate = value as Record<string, unknown>
+	return typeof candidate['depositor'] === 'string' && typeof candidate['amount'] === 'bigint' && typeof candidate['parentDepositIndex'] === 'bigint' && typeof candidate['cumulativeAmount'] === 'bigint' && typeof candidate['sourceNodeId'] === 'bigint'
+}
+
+async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
+	let startIndex = 0n
+	const carryLeaves: CarryTreeLeafViewStruct[] = []
+	while (true) {
+		const page = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getCarryLeafPageByOutcome',
+			args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
+		})
+		if (!Array.isArray(page)) throw new Error('Unexpected carry leaf page response')
+		const normalizedPage = page.filter(isCarryTreeLeafView)
+		carryLeaves.push(...normalizedPage)
+		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		startIndex += CONTRACT_PAGE_SIZE
+	}
+	return carryLeaves
+}
+
+async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
+	let startIndex = 0n
+	const parentDepositIndexes: bigint[] = []
+	while (true) {
+		const page = await client.readContract({
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			address: escalationGameAddress,
+			functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
+			args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
+		})
+		if (!Array.isArray(page)) throw new Error('Unexpected consumed carried deposit index page response')
+		const normalizedPage = page.filter((value): value is bigint => typeof value === 'bigint')
+		parentDepositIndexes.push(...normalizedPage)
+		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		startIndex += CONTRACT_PAGE_SIZE
+	}
+	return parentDepositIndexes
+}
+
+async function loadForkCarriedEscalationDepositsFromParentSnapshot(
+	client: Pick<ReadClient, 'readContract'>,
+	childEscalationGameAddress: Address,
+	parentSecurityPoolAddress: Address,
+	outcome: ReportingOutcomeKey,
+	depositor: Address,
+): Promise<ImportedEscalationDeposit[]> {
+	const [parentEscalationGameAddress, parentForkContinuation] = await Promise.all([
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: parentSecurityPoolAddress,
+			functionName: 'escalationGame',
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: parentSecurityPoolAddress,
+			functionName: 'escalationGame',
+			args: [],
+		}).then(async gameAddress => {
+			if (gameAddress === zeroAddress) return false
+			return await client.readContract({
+				abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+				address: gameAddress,
+				functionName: 'forkContinuation',
+				args: [],
+			})
+		}),
+	])
+	if (parentEscalationGameAddress === zeroAddress || parentForkContinuation !== false) return []
+	const [parentSnapshotLeaves, consumedParentDepositIndexes] = await Promise.all([
+		loadCarryLeafPage(client, parentEscalationGameAddress, outcome),
+		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
+	])
+	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(value => value.toString()))
+	return parentSnapshotLeaves
+		.filter(leaf => sameAddress(leaf.depositor, depositor) && !consumedParentDepositIndexSet.has(leaf.parentDepositIndex.toString()))
+		.map(leaf => ({
+			amount: leaf.amount,
+			cumulativeAmount: leaf.cumulativeAmount,
+			depositor: leaf.depositor,
+			parentDepositIndex: leaf.parentDepositIndex,
+		}))
+}
+
+function hashCarryTreeLeaf(leaf: CarryTreeLeafViewStruct, outcome: ReportingOutcomeKey): Hex {
+	return keccak256(
+		encodeAbiParameters(CARRY_TREE_LEAF_ABI, [
+			leaf.depositor,
+			getReportingOutcomeValue(outcome),
+			leaf.amount,
+			leaf.parentDepositIndex,
+			leaf.cumulativeAmount,
+			leaf.sourceNodeId,
+		]),
+	)
+}
+
+function hashCarryTreeParent(left: Hex, right: Hex): Hex {
+	return keccak256(concatHex([left, right]))
+}
+
+function bagCarryTreePeaks(peaks: readonly Hex[]): Hex {
+	if (peaks.length === 0) return ('0x' + '00'.repeat(32)) as Hex
+	let root = peaks[peaks.length - 1]
+	if (root === undefined) throw new Error('Missing carry peak root')
+	for (let index = peaks.length - 1; index > 0; index -= 1) {
+		const previousPeak = peaks[index - 1]
+		if (previousPeak === undefined) throw new Error('Missing carry peak root')
+		root = hashCarryTreeParent(previousPeak, root)
+	}
+	return root
+}
+
+function buildCarryTreePeakHeights(leafCount: bigint) {
+	const peakHeights: number[] = []
+	let remainingLeafCount = leafCount
+	let currentHeight = 0
+	while (remainingLeafCount > 0n) {
+		if ((remainingLeafCount & 1n) === 1n) peakHeights.unshift(currentHeight)
+		remainingLeafCount >>= 1n
+		currentHeight += 1
+	}
+	return peakHeights
+}
+
+function buildCarryTreeMmrProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
+	const leafCount = BigInt(leafHashes.length)
+	const peakHeights = buildCarryTreePeakHeights(leafCount)
+	let offset = 0
+	let targetPeakHeight: number | undefined
+	let targetPeakLeaves: Hex[] | undefined
+	let targetPeakOffset: number | undefined
+	const peakRootsByHeight = new Map<number, Hex>()
+	for (const peakHeight of peakHeights) {
+		const peakSize = 1 << peakHeight
+		const peakLeaves = leafHashes.slice(offset, offset + peakSize)
+		let levelHashes = [...peakLeaves]
+		while (levelHashes.length > 1) {
+			const nextLevelHashes: Hex[] = []
+			for (let index = 0; index < levelHashes.length; index += 2) {
+				const left = levelHashes[index]
+				const right = levelHashes[index + 1]
+				if (left === undefined || right === undefined) throw new Error('Invalid carry MMR level')
+				nextLevelHashes.push(hashCarryTreeParent(left, right))
+			}
+			levelHashes = nextLevelHashes
+		}
+		const peakRoot = levelHashes[0]
+		if (peakRoot === undefined) throw new Error('Missing carry MMR peak root')
+		peakRootsByHeight.set(peakHeight, peakRoot)
+		if (targetLeafIndex >= offset && targetLeafIndex < offset + peakSize) {
+			targetPeakHeight = peakHeight
+			targetPeakLeaves = peakLeaves
+			targetPeakOffset = offset
+		}
+		offset += peakSize
+	}
+	if (targetPeakHeight === undefined || targetPeakLeaves === undefined || targetPeakOffset === undefined) throw new Error('Target carry leaf is not inside the MMR')
+	let relativeLeafIndex = targetLeafIndex - targetPeakOffset
+	let levelHashes = [...targetPeakLeaves]
+	const mmrSiblings: Hex[] = []
+	while (levelHashes.length > 1) {
+		const siblingIndex = relativeLeafIndex ^ 1
+		const siblingHash = levelHashes[siblingIndex]
+		if (siblingHash === undefined) throw new Error('Missing carry MMR sibling')
+		mmrSiblings.push(siblingHash)
+		const nextLevelHashes: Hex[] = []
+		for (let index = 0; index < levelHashes.length; index += 2) {
+			const left = levelHashes[index]
+			const right = levelHashes[index + 1]
+			if (left === undefined || right === undefined) throw new Error('Invalid carry MMR level')
+			nextLevelHashes.push(hashCarryTreeParent(left, right))
+		}
+		levelHashes = nextLevelHashes
+		relativeLeafIndex = Math.floor(relativeLeafIndex / 2)
+	}
+	const orderedPeakHeights = [...peakRootsByHeight.keys()].sort((left, right) => left - right)
+	for (const peakHeight of orderedPeakHeights) {
+		if (peakHeight === targetPeakHeight) continue
+		const peakRoot = peakRootsByHeight.get(peakHeight)
+		if (peakRoot === undefined) throw new Error('Missing carry MMR peak root')
+		mmrSiblings.push(peakRoot)
+	}
+	const orderedPeaks = orderedPeakHeights.map(peakHeight => {
+		const peakRoot = peakRootsByHeight.get(peakHeight)
+		if (peakRoot === undefined) throw new Error('Missing carry MMR peak root')
+		return peakRoot
+	})
+	const root = bagCarryTreePeaks(orderedPeaks)
+	return { mmrPeakIndex: BigInt(targetPeakHeight), mmrSiblings, root }
+}
+
+function buildCarryTreeZeroHashes() {
+	const zeroHashes: Hex[] = []
+	let currentHash = ('0x' + '00'.repeat(32)) as Hex
+	for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+		zeroHashes.push(currentHash)
+		currentHash = hashCarryTreeParent(currentHash, currentHash)
+	}
+	return zeroHashes
+}
+
+class CarryTreeSparseNullifier {
+	private readonly nodes = new Map<string, Hex>()
+	private readonly zeroHashes = buildCarryTreeZeroHashes()
+
+	constructor(consumedParentDepositIndexes: readonly bigint[]) {
+		for (const parentDepositIndex of consumedParentDepositIndexes) this.consume(parentDepositIndex)
+	}
+
+	private getNode(level: number, index: bigint) {
+		return this.nodes.get(`${level}:${index.toString()}`) ?? this.zeroHashes[level]
+	}
+
+	getProof(parentDepositIndex: bigint) {
+		const siblings: Hex[] = []
+		let index = BigInt.asUintN(64, BigInt(keccak256(encodeAbiParameters(parseAbiParameters('uint256 parentDepositIndex'), [parentDepositIndex]))))
+		for (let level = 0; level < CARRY_TREE_NULLIFIER_DEPTH; level += 1) {
+			const siblingIndex = index ^ 1n
+			const siblingHash = this.getNode(level, siblingIndex)
+			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
+			siblings.push(siblingHash)
+			index >>= 1n
+		}
+		return siblings
+	}
+
+	consume(parentDepositIndex: bigint) {
+		let index = BigInt.asUintN(64, BigInt(keccak256(encodeAbiParameters(parseAbiParameters('uint256 parentDepositIndex'), [parentDepositIndex]))))
+		let currentHash = ('0x' + '00'.repeat(31) + '01') as Hex
+		for (let level = 0; level < CARRY_TREE_NULLIFIER_DEPTH; level += 1) {
+			this.nodes.set(`${level}:${index.toString()}`, currentHash)
+			const siblingIndex = index ^ 1n
+			const siblingHash = this.getNode(level, siblingIndex)
+			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
+			currentHash = (index & 1n) === 0n ? hashCarryTreeParent(currentHash, siblingHash) : hashCarryTreeParent(siblingHash, currentHash)
+			index >>= 1n
+		}
+		this.nodes.set(`${CARRY_TREE_NULLIFIER_DEPTH}:0`, currentHash)
+	}
+
+	getRoot() {
+		const root = this.nodes.get(`${CARRY_TREE_NULLIFIER_DEPTH}:0`)
+		const fallbackRoot = this.zeroHashes[this.zeroHashes.length - 1]
+		if (fallbackRoot === undefined) throw new Error('Missing empty nullifier root')
+		return root ?? fallbackRoot
+	}
+}
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
@@ -366,8 +631,14 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],
 		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'parent',
+			address: securityPoolAddress,
+			args: [],
+		},
 	]
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue] = (await readRequiredMulticall(client, reportingPoolReads)) as unknown as ReportingBootstrapReadResult
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress] = (await readRequiredMulticall(client, reportingPoolReads)) as unknown as ReportingBootstrapReadResult
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
@@ -390,6 +661,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			forkThreshold,
 			marketDetails,
 			nonDecisionThreshold: forkThreshold / 2n,
+			parentSecurityPoolAddress,
 			questionOutcome: normalizedQuestionOutcome,
 			securityPoolAddress,
 			settlementState: normalizedQuestionOutcome !== 'none' && systemState === 'operational' ? 'resolved' : 'locked',
@@ -465,18 +737,29 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		]),
 		'escalation game',
 	)
-	const [invalidDeposits, yesDeposits, noDeposits, invalidImportedDeposits, yesImportedDeposits, noImportedDeposits] = await Promise.all([
+	const [invalidDeposits, yesDeposits, noDeposits, invalidImportedDeposits, yesImportedDeposits, noImportedDeposits, invalidParentSnapshotDeposits, yesParentSnapshotDeposits, noParentSnapshotDeposits] = await Promise.all([
 		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
 		loadEscalationDeposits(client, escalationGameAddress, 'yes'),
 		loadEscalationDeposits(client, escalationGameAddress, 'no'),
 		accountAddress === undefined ? Promise.resolve([]) : loadImportedEscalationDeposits(client, escalationGameAddress, 'invalid', accountAddress),
 		accountAddress === undefined ? Promise.resolve([]) : loadImportedEscalationDeposits(client, escalationGameAddress, 'yes', accountAddress),
 		accountAddress === undefined ? Promise.resolve([]) : loadImportedEscalationDeposits(client, escalationGameAddress, 'no', accountAddress),
+		accountAddress === undefined || parentSecurityPoolAddress === zeroAddress ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentSecurityPoolAddress, 'invalid', accountAddress),
+		accountAddress === undefined || parentSecurityPoolAddress === zeroAddress ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentSecurityPoolAddress, 'yes', accountAddress),
+		accountAddress === undefined || parentSecurityPoolAddress === zeroAddress ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentSecurityPoolAddress, 'no', accountAddress),
 	])
+	const mergeImportedDeposits = (childImportedDeposits: ImportedEscalationDeposit[], parentSnapshotDeposits: ImportedEscalationDeposit[]) => {
+		if (parentSnapshotDeposits.length === 0) return childImportedDeposits
+		if (childImportedDeposits.length === 0) return parentSnapshotDeposits
+		const mergedDeposits = new Map<string, ImportedEscalationDeposit>()
+		for (const deposit of childImportedDeposits) mergedDeposits.set(deposit.parentDepositIndex.toString(), deposit)
+		for (const deposit of parentSnapshotDeposits) mergedDeposits.set(deposit.parentDepositIndex.toString(), deposit)
+		return Array.from(mergedDeposits.values()).sort((left, right) => (left.parentDepositIndex < right.parentDepositIndex ? -1 : left.parentDepositIndex > right.parentDepositIndex ? 1 : 0))
+	}
 	const sides: EscalationSide[] = [
-		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, importedUserDeposits: invalidImportedDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
-		{ balance: balances[1] ?? 0n, deposits: yesDeposits, importedUserDeposits: yesImportedDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
-		{ balance: balances[2] ?? 0n, deposits: noDeposits, importedUserDeposits: noImportedDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, importedUserDeposits: mergeImportedDeposits(invalidImportedDeposits, invalidParentSnapshotDeposits), key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[1] ?? 0n, deposits: yesDeposits, importedUserDeposits: mergeImportedDeposits(yesImportedDeposits, yesParentSnapshotDeposits), key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[2] ?? 0n, deposits: noDeposits, importedUserDeposits: mergeImportedDeposits(noImportedDeposits, noParentSnapshotDeposits), key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
 	let settlementState: ReportingSettlementState = 'locked'
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
@@ -495,6 +778,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThreshold,
+		parentSecurityPoolAddress,
 		questionOutcome: normalizedQuestionOutcome,
 		securityPoolAddress,
 		sides,
@@ -2114,6 +2398,93 @@ export async function withdrawEscalationFromSecurityPool(client: WriteClient, se
 		universeId,
 	} satisfies ReportingActionResult
 }
+
+export async function buildForkCarriedEscalationProofs(client: ReadClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
+	const [parentSecurityPoolAddress, childEscalationGameAddress] = await readRequiredMulticall(client, [
+		{
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'parent',
+			args: [],
+		},
+		{
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'escalationGame',
+			args: [],
+		},
+	])
+	if (parentSecurityPoolAddress === zeroAddress) throw new Error('Fork-carried escalation proofs require a child pool.')
+	if (childEscalationGameAddress === zeroAddress) throw new Error('Child escalation game unavailable for fork-carried settlement.')
+	const parentEscalationGameAddress = await client.readContract({
+		address: parentSecurityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		args: [],
+	})
+	if (parentEscalationGameAddress === zeroAddress) throw new Error('Parent escalation game unavailable for fork-carried settlement.')
+	const parentForkContinuation = await client.readContract({
+		address: parentEscalationGameAddress,
+		abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+		functionName: 'forkContinuation',
+		args: [],
+	})
+	if (parentForkContinuation) throw new Error('Recursive fork-carried proof building is not available in the UI yet.')
+	const [parentSnapshotLeaves, parentCarryRoot, parentCarryLeafCount, consumedParentDepositIndexes, childNullifierRoot] = await Promise.all([
+		loadCarryLeafPage(client, parentEscalationGameAddress, outcome),
+		client.readContract({
+			address: parentEscalationGameAddress,
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			functionName: 'getCarryRoot',
+			args: [getReportingOutcomeValue(outcome)],
+		}),
+		client.readContract({
+			address: parentEscalationGameAddress,
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			functionName: 'getCarryLeafCount',
+			args: [getReportingOutcomeValue(outcome)],
+		}),
+		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
+		client.readContract({
+			address: childEscalationGameAddress,
+			abi: peripherals_EscalationGameCarryTree_EscalationGameCarryTree.abi,
+			functionName: 'getNullifierRoot',
+			args: [getReportingOutcomeValue(outcome)],
+		}),
+	])
+	const orderedLeaves = [...parentSnapshotLeaves].sort((left, right) => (left.parentDepositIndex < right.parentDepositIndex ? -1 : left.parentDepositIndex > right.parentDepositIndex ? 1 : 0))
+	if (BigInt(orderedLeaves.length) !== parentCarryLeafCount) throw new Error('Parent carry snapshot is not locally reconstructible.')
+	const leafHashes = orderedLeaves.map(leaf => hashCarryTreeLeaf(leaf, outcome))
+	if (leafHashes.length > 0) {
+		const { root: reconstructedRoot } = buildCarryTreeMmrProof(leafHashes, 0)
+		if (reconstructedRoot !== parentCarryRoot) throw new Error('Parent carry snapshot root is not locally reconstructible.')
+	}
+	const nullifierTree = new CarryTreeSparseNullifier(consumedParentDepositIndexes)
+	if (nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Child proof-consumed carry state is not locally reconstructible.')
+	const proofs: CarriedDepositProof[] = []
+	for (const parentDepositIndex of parentDepositIndexes) {
+		const leafIndex = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentDepositIndex)
+		if (leafIndex === -1) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
+		const targetLeaf = orderedLeaves[leafIndex]
+		if (targetLeaf === undefined) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
+		const { mmrPeakIndex, mmrSiblings } = buildCarryTreeMmrProof(leafHashes, leafIndex)
+		const nullifierSiblings = nullifierTree.getProof(parentDepositIndex)
+		proofs.push({
+			amount: targetLeaf.amount,
+			cumulativeAmount: targetLeaf.cumulativeAmount,
+			depositor: targetLeaf.depositor,
+			leafIndex: BigInt(leafIndex),
+			mmrPeakIndex,
+			mmrSiblings,
+			nullifierSiblings,
+			parentDepositIndex: targetLeaf.parentDepositIndex,
+			sourceNodeId: targetLeaf.sourceNodeId,
+		})
+		nullifierTree.consume(parentDepositIndex)
+	}
+	return proofs
+}
+
 export async function withdrawForkedEscalationDeposits(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	return await executeForkAuctionAction(
@@ -2127,6 +2498,30 @@ export async function withdrawForkedEscalationDeposits(client: WriteClient, secu
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [getReportingOutcomeValue(outcome), toUint8Array(parentDepositIndexes)],
+			})),
+	)
+}
+
+export async function withdrawForkedEscalationDepositsWithProofs(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, proofs: readonly CarriedDepositProof[]) {
+	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+	return await executeForkAuctionAction(
+		client,
+		'settleForkedEscalation',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
+				address: securityPoolAddress,
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'withdrawForkedEscalationDepositsWithProofs',
+				args: [
+					getReportingOutcomeValue(outcome),
+					proofs.map(proof => ({
+						...proof,
+						mmrSiblings: Array.from(proof.mmrSiblings),
+						nullifierSiblings: Array.from(proof.nullifierSiblings),
+					})),
+				],
 			})),
 	)
 }

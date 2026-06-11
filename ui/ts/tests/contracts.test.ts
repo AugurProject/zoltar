@@ -20,6 +20,7 @@ import {
 	migrateSharesFromUniverse,
 	settleOracleReport,
 	withdrawForkedEscalationDeposits,
+	withdrawForkedEscalationDepositsWithProofs,
 } from '../contracts.js'
 import { getForkOutcomeKey } from '../contracts/helpers.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -498,7 +499,7 @@ describe('contracts helpers', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n]
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 0n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
 				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
@@ -553,7 +554,7 @@ describe('contracts helpers', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n]
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 0n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
 				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
@@ -590,7 +591,7 @@ describe('contracts helpers', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 1n]
+				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 1n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -618,7 +619,7 @@ describe('contracts helpers', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 2n, 1n]
+				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 2n, 1n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -721,6 +722,61 @@ describe('contracts helpers', () => {
 		})
 		expect(decodedCall.functionName).toBe('withdrawForkedEscalationDeposits')
 		expect(decodedCall.args).toEqual([1, [3n, 8n]])
+		expect(result).toEqual({
+			action: 'settleForkedEscalation',
+			hash: transactionHash,
+			securityPoolAddress,
+			universeId: 12n,
+		})
+	})
+
+	test('withdrawForkedEscalationDepositsWithProofs helper encodes proof batches correctly', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const mmrSibling = ('0x' + '11'.repeat(32)) as Hex
+		const nullifierSibling = ('0x' + '22'.repeat(32)) as Hex
+		const client = createMockWriteClient(request => {
+			capturedData = request.data
+			capturedTo = request.to
+		})
+
+		const result = await withdrawForkedEscalationDepositsWithProofs(asWriteClient(client), securityPoolAddress, 'yes', [
+			{
+				depositor: vaultAddress,
+				amount: 5n,
+				parentDepositIndex: 3n,
+				cumulativeAmount: 8n,
+				sourceNodeId: 2n,
+				leafIndex: 1n,
+				mmrSiblings: [mmrSibling],
+				mmrPeakIndex: 1n,
+				nullifierSiblings: [nullifierSibling],
+			},
+		])
+
+		expect(capturedTo).toBe(securityPoolAddress)
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		expect(decodedCall.functionName).toBe('withdrawForkedEscalationDepositsWithProofs')
+		expect(decodedCall.args).toEqual([
+			1,
+			[
+				{
+					depositor: vaultAddress,
+					amount: 5n,
+					parentDepositIndex: 3n,
+					cumulativeAmount: 8n,
+					sourceNodeId: 2n,
+					leafIndex: 1n,
+					mmrSiblings: [mmrSibling],
+					mmrPeakIndex: 1n,
+					nullifierSiblings: [nullifierSibling],
+				},
+			],
+		])
 		expect(result).toEqual({
 			action: 'settleForkedEscalation',
 			hash: transactionHash,

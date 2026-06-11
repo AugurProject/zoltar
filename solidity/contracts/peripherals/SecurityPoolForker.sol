@@ -8,6 +8,7 @@ import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAucti
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { EscalationGame } from './EscalationGame.sol';
+import { EscalationGameCarryTree } from './EscalationGameCarryTree.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
@@ -209,12 +210,38 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) private {
 		ForkData storage parentForkData = forkDataByPool[parent];
 		if (!parentForkData.unresolvedEscalationAtFork) return;
-		if (address(child.escalationGame()) != address(0x0)) return;
-		child.initializeForkedEscalationGame(
-			parentForkData.escalationStartBondAtFork,
-			parentForkData.escalationNonDecisionThresholdAtFork,
-			parentForkData.escalationElapsedAtFork
-		);
+		if (address(child.escalationGame()) == address(0x0)) {
+			child.initializeForkedEscalationGame(
+				parentForkData.escalationStartBondAtFork,
+				parentForkData.escalationNonDecisionThresholdAtFork,
+				parentForkData.escalationElapsedAtFork
+			);
+		}
+		EscalationGameCarryTree childEscalationGame = EscalationGameCarryTree(payable(address(child.escalationGame())));
+		if (!childEscalationGame.forkCarrySnapshotInitialized()) {
+			EscalationGameCarryTree parentEscalationGame = EscalationGameCarryTree(payable(address(parent.escalationGame())));
+			bytes32[3] memory inheritedCarryRoots = [
+				parentEscalationGame.getCarryRoot(BinaryOutcomes.BinaryOutcome.Invalid),
+				parentEscalationGame.getCarryRoot(BinaryOutcomes.BinaryOutcome.Yes),
+				parentEscalationGame.getCarryRoot(BinaryOutcomes.BinaryOutcome.No)
+			];
+			uint256[3] memory inheritedCarryLeafCounts = [
+				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.Invalid),
+				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.Yes),
+				parentEscalationGame.getCarryLeafCount(BinaryOutcomes.BinaryOutcome.No)
+			];
+			uint256[3] memory inheritedCarryTotals = [
+				parentEscalationGame.getCarryTotal(BinaryOutcomes.BinaryOutcome.Invalid),
+				parentEscalationGame.getCarryTotal(BinaryOutcomes.BinaryOutcome.Yes),
+				parentEscalationGame.getCarryTotal(BinaryOutcomes.BinaryOutcome.No)
+			];
+			bytes32[3] memory inheritedNullifierRoots = [
+				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.Invalid),
+				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.Yes),
+				parentEscalationGame.getNullifierRoot(BinaryOutcomes.BinaryOutcome.No)
+			];
+			child.initializeForkCarrySnapshot(inheritedCarryRoots, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots);
+		}
 		if (child.systemState() == SystemState.Operational) {
 			child.resumeForkedEscalationGame();
 		}
