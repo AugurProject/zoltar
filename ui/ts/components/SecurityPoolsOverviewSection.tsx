@@ -1,23 +1,31 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LiquidationModal } from './LiquidationModal.js'
+import { MetricField } from './MetricField.js'
+import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { PaginationControls } from './PaginationControls.js'
+import { ProgressMeter } from './ProgressMeter.js'
+import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { Question, getQuestionTitle } from './Question.js'
+import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
-import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
-import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
-import { WorkflowSubsection } from './WorkflowSubsection.js'
+import { UniverseLink } from './UniverseLink.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
 import { SECURITY_POOL_PAGE_SIZE } from '../lib/pagination.js'
+import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
+import { getToneRatioThreshold } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
 export function SecurityPoolsOverviewSection({
@@ -196,6 +204,8 @@ export function SecurityPoolsOverviewSection({
 							{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 								const displayState = poolState.lifecycleState
 								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
+								const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
+								const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
 								const badgeTone = (() => {
 									if (displayState === 'operational') return 'ok'
 									if (displayState === undefined) return 'muted'
@@ -205,7 +215,13 @@ export function SecurityPoolsOverviewSection({
 								return (
 									<EntityCard
 										key={pool.securityPoolAddress}
-										title={getQuestionTitle(pool.marketDetails)}
+										className='security-pool-card'
+										title={
+											<div className='security-pool-card-title-row'>
+												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' />
+												<span className='security-pool-card-title-copy'>{getQuestionTitle(pool.marketDetails)}</span>
+											</div>
+										}
 										variant='record'
 										badge={
 											<span className={`badge ${badgeTone}`}>
@@ -224,39 +240,145 @@ export function SecurityPoolsOverviewSection({
 											)
 										}
 									>
-										<WorkflowSubsection title='Question'>
-											<Question question={pool.marketDetails} />
-										</WorkflowSubsection>
+										<div className='security-pool-card-surface'>
+											<div className='security-pool-strip'>
+												<div className='security-pool-strip-story'>
+													<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
+													<div className='security-pool-strip-stats'>
+														<div>
+															<span>Vaults</span>
+															<strong>{pool.vaultCount.toString()}</strong>
+														</div>
+														<div>
+															<span>Multiplier</span>
+															<strong>{pool.securityMultiplier.toString()}x</strong>
+														</div>
+														<div>
+															<span>Annual Fee</span>
+															<strong>
+																<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
+															</strong>
+														</div>
+													</div>
+												</div>
+												<div className='security-pool-strip-signal'>
+													<div className='security-pool-strip-price'>
+														<span>Open Oracle Price</span>
+														<strong>
+															<OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
+														</strong>
+													</div>
+													<div className='security-pool-card-progress security-pool-strip-meters'>
+														<ProgressMeter
+															className='security-pool-strip-meter'
+															label='Open Interest Minted'
+															maxValue={pool.totalSecurityBondAllowance}
+															secondaryValue={
+																<span className='detail'>
+																	Max <CurrencyValue value={pool.totalSecurityBondAllowance} suffix='ETH' />
+																</span>
+															}
+															tone={getToneRatioThreshold({
+																ratio: pool.totalSecurityBondAllowance === 0n ? undefined : Number(pool.completeSetCollateralAmount) / Number(pool.totalSecurityBondAllowance),
+																successThreshold: 0.6,
+																warningThreshold: 0.85,
+															})}
+															value={pool.completeSetCollateralAmount}
+															valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix='ETH' />}
+														/>
+													</div>
+												</div>
+											</div>
+											<ReadOnlyDetailAccordion title='Pool Details'>
+												<div className='security-pool-detail-rail'>
+													<MetricField label='Pool Address'>
+														<AddressValue address={pool.securityPoolAddress} />
+													</MetricField>
+													<MetricField label='Manager Address'>
+														<AddressValue address={pool.managerAddress} />
+													</MetricField>
+													<MetricField label='Question ID'>{pool.questionId}</MetricField>
+													<MetricField label='Universe'>
+														<UniverseLink universeId={pool.universeId} />
+													</MetricField>
+												</div>
+											</ReadOnlyDetailAccordion>
+											<div className='security-pool-browse-vaults'>
+												<div className='security-pool-browse-vaults-head'>
+													<h4>Vaults</h4>
+													<div className='security-pool-browse-vaults-count'>
+														{pool.vaultCount.toString()} vault{pool.vaultCount === 1n ? '' : 's'}
+													</div>
+												</div>
+												{pool.hasLoadedVaults === false ? (
+													<StateHint
+														presentation={{
+															key: 'action_needed',
+															badgeLabel: 'Deferred',
+															badgeTone: 'muted',
+															detail: `Open this pool to load ${pool.vaultCount.toString()} vault${pool.vaultCount === 1n ? '' : 's'}.`,
+														}}
+													/>
+												) : (
+													<div className='security-pool-browse-vault-list'>
+														{pool.vaults.length === 0 ? (
+															<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
+														) : (
+															[...pool.vaults]
+																.sort((left, right) => {
+																	if (left.securityBondAllowance === right.securityBondAllowance) return 0
 
-										<WorkflowSubsection title='Pool'>
-											<SecurityPoolSummaryMetrics pool={pool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showPoolAddress showUniverse />
-										</WorkflowSubsection>
-
-										<WorkflowSubsection title='Vaults'>
-											{pool.hasLoadedVaults === false ? (
-												<StateHint
-													presentation={{
-														key: 'action_needed',
-														badgeLabel: 'Deferred',
-														badgeTone: 'muted',
-														detail: `Open this pool to load ${pool.vaultCount.toString()} vault${pool.vaultCount === 1n ? '' : 's'}.`,
-													}}
-												/>
-											) : (
-												<SecurityPoolVaultDirectory
-													emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
-													pool={pool}
-													renderActions={vault => (
-														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
-															Liquidate Vault
-														</button>
-													)}
-													repPerEthPrice={repPerEthPrice}
-													repPerEthSource={repPerEthSource}
-													repPerEthSourceUrl={repPerEthSourceUrl}
-												/>
-											)}
-										</WorkflowSubsection>
+																	return left.securityBondAllowance > right.securityBondAllowance ? -1 : 1
+																})
+																.slice(0, 3)
+																.map(vault => {
+																	const vaultCollateralizationPercent = getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)
+																	const vaultCollateralizationTarget = pool.securityMultiplier * 100n * 10n ** 18n
+																	return (
+																		<div className='security-pool-browse-vault-row' key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}>
+																			<div className='security-pool-browse-vault-row-top'>
+																				<div className='security-pool-browse-vault-row-title'>
+																					<CollateralizationCircle collateralizationPercent={vaultCollateralizationPercent} className='security-pool-browse-vault-row-collateralization' size='small' targetCollateralizationPercent={vaultCollateralizationTarget} />
+																					<div className='security-pool-browse-vault-row-id'>
+																						<strong>
+																							<AddressValue address={vault.vaultAddress} />
+																						</strong>
+																					</div>
+																				</div>
+																				<div className='security-pool-browse-vault-row-kpi'>
+																					<span>Security Bond Allowance</span>
+																					<strong>
+																						<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
+																					</strong>
+																				</div>
+																				<div className='security-pool-browse-vault-row-kpi'>
+																					<span>REP Collateral</span>
+																					<strong>
+																						<CurrencyValue value={vault.repDepositShare} suffix='REP' />
+																					</strong>
+																				</div>
+																				<button
+																					className='secondary security-pool-browse-vault-row-liquidate'
+																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
+																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
+																				>
+																					Liquidate Vault
+																				</button>
+																			</div>
+																		</div>
+																	)
+																})
+														)}
+													</div>
+												)}
+												{pool.vaultCount > 3n ? (
+													<p className='detail'>
+														+{(pool.vaultCount - 3n).toString()} more vault
+														{pool.vaultCount - 3n === 1n ? '' : 's'}
+													</p>
+												) : undefined}
+											</div>
+										</div>
 									</EntityCard>
 								)
 							})}

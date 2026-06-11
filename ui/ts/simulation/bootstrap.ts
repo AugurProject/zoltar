@@ -52,7 +52,7 @@ const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
 const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
-const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 30n * 60n
+const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 24n * 60n * 60n
 const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 20_000_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
 const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
@@ -370,6 +370,17 @@ async function loadRequiredSecurityVault(readClient: ReadClient, securityPoolAdd
 	return vaultDetails
 }
 
+async function getSeededSecurityBondAllowanceError({ accountAddress, managerAddress, readClient, securityBondAllowance, securityPoolAddress }: { accountAddress: Address; managerAddress: Address; readClient: ReadClient; securityBondAllowance: bigint; securityPoolAddress: Address }) {
+	const updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
+	const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+	const pendingReport = managerDetails.pendingReportId === 0n ? undefined : await loadOpenOracleReportDetails(readClient, managerDetails.openOracleAddress, managerDetails.pendingReportId).catch(() => undefined)
+	let isDistributed = 'n/a'
+	if (pendingReport !== undefined) {
+		isDistributed = pendingReport.isDistributed ? 'true' : 'false'
+	}
+	return `Expected seeded security bond allowance ${securityBondAllowance.toString()} for ${accountAddress} (allowance=${updatedVault.securityBondAllowance.toString()}, pendingReportId=${managerDetails.pendingReportId.toString()}, pendingOperation=${managerDetails.pendingOperation?.operation ?? 'none'}, pendingTarget=${managerDetails.pendingOperation?.targetVault ?? 'none'}, isPriceValid=${managerDetails.isPriceValid ? 'true' : 'false'}, reportTimestamp=${pendingReport?.reportTimestamp.toString() ?? 'n/a'}, currentReporter=${pendingReport?.currentReporter ?? 'n/a'}, isDistributed=${isDistributed})`
+}
+
 async function createSeededSecurityPool({ createWriteClient, currentTimestamp, deployerAccount, questionTitle }: { createWriteClient: (accountAddress: Address) => WriteClient; currentTimestamp: bigint; deployerAccount: Address; questionTitle: string }) {
 	const deployerWriteClient = createWriteClient(deployerAccount)
 	const marketResult = await createMarket(deployerWriteClient, createSecurityPoolSeedParameters(currentTimestamp, questionTitle))
@@ -431,40 +442,118 @@ async function configureSecurityBondAllowance({
 	const writeClient = createWriteClient(accountAddress)
 	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
 	if (queueResult.stagedExecution?.success === false) throw new Error(queueResult.stagedExecution.errorMessage ?? `Failed to seed security bond allowance for ${accountAddress}`)
+	await ensureSecurityBondAllowanceConfigured({
+		accountAddress,
+		managerAddress,
+		memoryClient,
+		profile,
+		readClient,
+		securityBondAllowance,
+		securityPoolAddress,
+		writeClient,
+	})
+}
+
+async function ensureSecurityBondAllowanceConfigured({
+	accountAddress,
+	managerAddress,
+	memoryClient,
+	profile,
+	readClient,
+	securityBondAllowance,
+	securityPoolAddress,
+	writeClient,
+}: {
+	accountAddress: Address
+	managerAddress: Address
+	memoryClient: TevmLikeClient
+	profile: NetworkProfile
+	readClient: ReadClient
+	securityBondAllowance: bigint
+	securityPoolAddress: Address
+	writeClient: WriteClient
+}) {
 	let updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
-	if (updatedVault.securityBondAllowance !== securityBondAllowance) {
+	for (let attempt = 0; updatedVault.securityBondAllowance !== securityBondAllowance && attempt < 5; attempt += 1) {
 		const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+		if (managerDetails.pendingOperation?.operation !== 'setSecurityBondsAllowance' || managerDetails.pendingOperation.targetVault !== accountAddress || managerDetails.pendingOperation.amount !== securityBondAllowance) {
+			await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
+		}
+
 		if (managerDetails.pendingReportId > 0n) {
 			if (managerDetails.callbackStateHash === undefined || managerDetails.exactToken1Report === undefined || managerDetails.token1 === undefined || managerDetails.token2 === undefined) throw new Error(`Expected a pending oracle report for ${accountAddress}`)
 
-			const amount1 = managerDetails.exactToken1Report
-			const amount2 = (amount1 * 10n ** 18n) / SEEDED_REP_ETH_PRICE
-			await approveErc20(writeClient, managerDetails.token1, managerDetails.openOracleAddress, amount1, 'approveToken1')
-			await ensureSufficientWethBalance(readClient, writeClient, profile, accountAddress, amount2)
-			await approveErc20(writeClient, managerDetails.token2, managerDetails.openOracleAddress, amount2, 'approveToken2')
-			await submitInitialOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId, amount1, amount2, managerDetails.callbackStateHash)
-			await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
-			await settleOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
+			const reportDetails = await loadOpenOracleReportDetails(readClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
+			if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === '0x0000000000000000000000000000000000000000') {
+				const amount1 = managerDetails.exactToken1Report
+				const amount2 = (amount1 * 10n ** 18n) / SEEDED_REP_ETH_PRICE
+				await approveErc20(writeClient, managerDetails.token1, managerDetails.openOracleAddress, amount1, 'approveToken1')
+				await ensureSufficientWethBalance(readClient, writeClient, profile, accountAddress, amount2)
+				await approveErc20(writeClient, managerDetails.token2, managerDetails.openOracleAddress, amount2, 'approveToken2')
+				await submitInitialOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId, amount1, amount2, managerDetails.callbackStateHash)
+			}
+
+			if (!reportDetails.isDistributed) {
+				await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
+				await settleOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
+			}
 		}
 
 		const refreshedManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-		if (refreshedManagerDetails.pendingOperation?.operation === 'setSecurityBondsAllowance' && refreshedManagerDetails.pendingOperation.targetVault === accountAddress && refreshedManagerDetails.isPriceValid) {
-			const hash = await writeClient.writeContract({
-				address: managerAddress,
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-				functionName: 'executeStagedOperation',
-				args: [refreshedManagerDetails.pendingOperation.operationId],
-			})
-			await writeClient.waitForTransactionReceipt({ hash })
-		}
+		await executeReadySecurityBondAllowanceOperation({
+			accountAddress,
+			managerDetails: refreshedManagerDetails,
+			readClient,
+			securityBondAllowance,
+			securityPoolAddress,
+			writeClient,
+		})
 
 		updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
 	}
 	if (updatedVault.securityBondAllowance !== securityBondAllowance) {
-		const finalManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 		throw new Error(
-			`Expected seeded security bond allowance ${securityBondAllowance.toString()} for ${accountAddress} (allowance=${updatedVault.securityBondAllowance.toString()}, pendingReportId=${finalManagerDetails.pendingReportId.toString()}, pendingOperation=${finalManagerDetails.pendingOperation?.operation ?? 'none'}, pendingTarget=${finalManagerDetails.pendingOperation?.targetVault ?? 'none'}, isPriceValid=${finalManagerDetails.isPriceValid ? 'true' : 'false'})`,
+			await getSeededSecurityBondAllowanceError({
+				accountAddress,
+				managerAddress,
+				readClient,
+				securityBondAllowance,
+				securityPoolAddress,
+			}),
 		)
+	}
+}
+
+async function executeReadySecurityBondAllowanceOperation({
+	accountAddress,
+	managerDetails,
+	readClient,
+	securityBondAllowance,
+	securityPoolAddress,
+	writeClient,
+}: {
+	accountAddress: Address
+	managerDetails: Awaited<ReturnType<typeof loadOracleManagerDetails>>
+	readClient: ReadClient
+	securityBondAllowance: bigint
+	securityPoolAddress: Address
+	writeClient: WriteClient
+}) {
+	if (managerDetails.pendingOperation?.operation !== 'setSecurityBondsAllowance') return
+	if (managerDetails.pendingOperation.targetVault !== accountAddress) return
+
+	try {
+		const hash = await writeClient.writeContract({
+			address: managerDetails.managerAddress,
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'executeStagedOperation',
+			args: [managerDetails.pendingOperation.operationId],
+		})
+		await writeClient.waitForTransactionReceipt({ hash })
+	} catch (error) {
+		const updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
+		if (updatedVault.securityBondAllowance === securityBondAllowance) return
+		throw error
 	}
 }
 
@@ -507,6 +596,12 @@ async function settleSeededOracleReport({
 		openOracleAddress: oracleManagerDetails.openOracleAddress,
 		pendingReportId: oracleManagerDetails.pendingReportId,
 	}
+}
+
+async function settleOracleReportIfNeeded({ readClient, writeClient, openOracleAddress, pendingReportId }: { readClient: ReadClient; writeClient: WriteClient; openOracleAddress: Address; pendingReportId: bigint }) {
+	const seededReport = await loadOpenOracleReportDetails(readClient, openOracleAddress, pendingReportId)
+	if (seededReport.isDistributed) return
+	await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
 }
 
 async function seedSecurityPool({
@@ -564,14 +659,40 @@ async function seedSecurityPool({
 		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 	})
 	await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
-	await settleOracleReport(createWriteClient(primaryVaultAccount), seededOracleReport.openOracleAddress, seededOracleReport.pendingReportId)
+	await settleOracleReportIfNeeded({
+		openOracleAddress: seededOracleReport.openOracleAddress,
+		pendingReportId: seededOracleReport.pendingReportId,
+		readClient,
+		writeClient: createWriteClient(primaryVaultAccount),
+	})
 	await reportStep(`Settling seeded oracle report for ${poolSpec.poolLabel}`)
 
 	const seededReport = await loadOpenOracleReportDetails(readClient, seededOracleReport.openOracleAddress, seededOracleReport.pendingReportId)
 	if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${poolSpec.poolLabel}`)
 
+	await ensureSecurityBondAllowanceConfigured({
+		accountAddress: primaryVaultAccount,
+		managerAddress: primaryVault.managerAddress,
+		memoryClient,
+		profile,
+		readClient,
+		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
+		securityPoolAddress: poolResult.securityPoolAddress,
+		writeClient: createWriteClient(primaryVaultAccount),
+	})
+
 	const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
-	if (primaryVaultAfterSettlement.securityBondAllowance !== primaryVaultSpec.securityBondAllowance) throw new Error(`Expected seeded security bond allowance for ${primaryVaultAccount}`)
+	if (primaryVaultAfterSettlement.securityBondAllowance !== primaryVaultSpec.securityBondAllowance) {
+		throw new Error(
+			await getSeededSecurityBondAllowanceError({
+				accountAddress: primaryVaultAccount,
+				managerAddress: primaryVault.managerAddress,
+				readClient,
+				securityBondAllowance: primaryVaultSpec.securityBondAllowance,
+				securityPoolAddress: poolResult.securityPoolAddress,
+			}),
+		)
+	}
 
 	for (const [index, vaultSpec] of additionalVaults.entries()) {
 		await configureSecurityBondAllowance({
@@ -739,14 +860,40 @@ async function seedSecurityPoolX2Scenario({
 	await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
 
 	for (const preparedPool of preparedPools) {
-		await settleOracleReport(createWriteClient(primaryAccount), preparedPool.openOracleAddress, preparedPool.pendingReportId)
+		await settleOracleReportIfNeeded({
+			openOracleAddress: preparedPool.openOracleAddress,
+			pendingReportId: preparedPool.pendingReportId,
+			readClient,
+			writeClient: createWriteClient(primaryAccount),
+		})
 		await reportStep(`Settling seeded oracle report for ${preparedPool.poolLabel}`)
 
 		const seededReport = await loadOpenOracleReportDetails(readClient, preparedPool.openOracleAddress, preparedPool.pendingReportId)
 		if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${preparedPool.poolLabel}`)
 
+		await ensureSecurityBondAllowanceConfigured({
+			accountAddress: primaryAccount,
+			managerAddress: preparedPool.managerAddress,
+			memoryClient,
+			profile,
+			readClient,
+			securityBondAllowance: preparedPool.primaryVault.securityBondAllowance,
+			securityPoolAddress: preparedPool.securityPoolAddress,
+			writeClient: createWriteClient(primaryAccount),
+		})
+
 		const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, preparedPool.securityPoolAddress, primaryAccount, primaryAccount)
-		if (primaryVaultAfterSettlement.securityBondAllowance !== preparedPool.primaryVault.securityBondAllowance) throw new Error(`Expected seeded security bond allowance for ${primaryAccount}`)
+		if (primaryVaultAfterSettlement.securityBondAllowance !== preparedPool.primaryVault.securityBondAllowance) {
+			throw new Error(
+				await getSeededSecurityBondAllowanceError({
+					accountAddress: primaryAccount,
+					managerAddress: preparedPool.managerAddress,
+					readClient,
+					securityBondAllowance: preparedPool.primaryVault.securityBondAllowance,
+					securityPoolAddress: preparedPool.securityPoolAddress,
+				}),
+			)
+		}
 	}
 
 	for (const preparedPool of preparedPools) {

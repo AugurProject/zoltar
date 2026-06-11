@@ -504,6 +504,21 @@ void describe('simulation backend', () => {
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed)).toBe(true)
 	}, 30_000)
 
+	void test('bootstraps seeded security-pool scenarios without reverting', async () => {
+		const seededScenarios: Array<SimulationScenario> = ['security-pool', 'securitypoolx2', 'securitypoolx2-auction']
+		for (const scenario of seededScenarios) {
+			const backend = await createBootstrappedSimulationBackendWithRetry(scenario, 1)
+			try {
+				expect(backend.currentScenario).toBe(scenario)
+				const readClient = backend.createReadClient()
+				const pools = await loadAllSecurityPools(readClient)
+				expect(pools.length).toBeGreaterThan(0)
+			} finally {
+				await backend.dispose()
+			}
+		}
+	}, 180_000)
+
 	void test.skip('bootstraps the security-pool scenario with one undercollateralized seeded vault', async () => {
 		const backend = await createSimulationBackend({ scenario: 'security-pool' })
 		await backend.bootstrap()

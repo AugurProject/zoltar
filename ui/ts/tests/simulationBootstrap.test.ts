@@ -25,9 +25,7 @@ function createBaselineProfile(overrides: Partial<NetworkProfile> = {}): Network
 function createMockedBootstrapDependencies({ accounts, scenario, profile }: { accounts: readonly string[]; scenario: 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction'; profile: NetworkProfile }) {
 	const eth = 10n ** 18n
 	const primaryVaultRepDeposit = 10_000n * eth
-	const primaryVaultSecurityBondAllowance = 2_500n * eth
 	const x2PrimaryVaultRepDeposit = 12_000n * eth
-	const x2PrimaryVaultSecurityBondAllowance = 1_000n * eth
 	const x2SecondaryVaultRepDeposit = primaryVaultRepDeposit
 	const openOracleAddress = getAddress('0x0000000000000000000000000000000000000ab1')
 	const token1Address = profile.genesisRepTokenAddress
@@ -76,7 +74,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			[primaryVault]: scenario === 'security-pool' ? primaryVaultRepDeposit : x2PrimaryVaultRepDeposit,
 		}
 		securityBondAllowances[poolAddress] = {
-			[primaryVault]: scenario === 'security-pool' ? primaryVaultSecurityBondAllowance : x2PrimaryVaultSecurityBondAllowance,
+			[primaryVault]: 0n,
 		}
 		if (secondaryVault !== undefined) {
 			repDeposits[poolAddress][secondaryVault] = x2SecondaryVaultRepDeposit
@@ -112,6 +110,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		},
 		deploymentCodeRequests: [] as string[],
 	}
+	const seededReportDistribution = new Map<string, boolean>()
+	const getReportKey = (openOracleAddress: string, reportId: bigint) => `${openOracleAddress}-${reportId.toString()}`
 
 	const getPoolAddressForMarket = (index: number): Address => poolAddresses[index] ?? primaryPoolAddress
 	const getManagerForPool = (poolAddress: Address) => {
@@ -306,10 +306,11 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				token2: token2Address,
 			} as never
 		}),
-		loadOpenOracleReportDetails: mock(async () => {
+		loadOpenOracleReportDetails: mock(async (_client: never, openOracleAddress: string, reportId: bigint) => {
 			state.callLog.loadOpenOracleReportDetails += 1
+			const reportKey = getReportKey(openOracleAddress, reportId)
 			return {
-				isDistributed: true,
+				isDistributed: seededReportDistribution.get(reportKey) ?? reportId === 0n,
 			} as never
 		}),
 		loadReportingDetails: mock(async () => {
@@ -379,8 +380,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				securityPoolAddress: primaryPoolAddress,
 			} as never
 		}),
-		settleOracleReport: mock(async () => {
+		settleOracleReport: mock(async (_client: never, openOracleAddress: string, reportId: bigint) => {
 			state.callLog.settleOracleReport += 1
+			seededReportDistribution.set(getReportKey(openOracleAddress, reportId), true)
 			return { hash: '0x01' } as never
 		}),
 		startTruthAuctionForSecurityPool: mock(async () => {
@@ -798,6 +800,7 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.loadAllSecurityPools).toBe(1)
 		expect(state.callLog.settleOracleReport).toBe(1)
 		expect(state.callLog.submitInitialOracleReport).toBe(1)
+		expect(state.callLog.writeContract).toBe(1)
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 
@@ -823,10 +826,10 @@ describe('simulation bootstrap', () => {
 
 		expect(state.callLog.createMarket).toBe(2)
 		expect(state.callLog.createSecurityPool).toBe(2)
-		expect(state.callLog.settleOracleReport).toBe(4)
-		expect(state.callLog.submitInitialOracleReport).toBe(4)
-		expect(state.callLog.loadOpenOracleReportDetails).toBe(2)
-		expect(state.callLog.writeContract).toBe(2)
+		expect(state.callLog.settleOracleReport).toBe(1)
+		expect(state.callLog.submitInitialOracleReport).toBe(2)
+		expect(state.callLog.loadOpenOracleReportDetails).toBe(8)
+		expect(state.callLog.writeContract).toBe(4)
 		expect(state.callLog.queueOracleManagerOperation).toBe(4)
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(writeCalls.length).toBeGreaterThan(0)

@@ -159,6 +159,50 @@ export type DataGridProps = {
 	dense?: boolean
 }
 
+export type ProgressMeterProps = {
+	className?: string
+	detail?: ComponentChildren
+	label: ComponentChildren
+	maxValue?: bigint
+	secondaryValue?: ComponentChildren
+	tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
+	value?: bigint
+	valueText: ComponentChildren
+}
+
+export type RankedBarListProps = {
+	className?: string
+	emptyMessage?: ComponentChildren
+	items: Array<{
+		detail?: ComponentChildren
+		key: string
+		label: ComponentChildren
+		tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
+		value?: bigint
+		valueText: ComponentChildren
+	}>
+}
+
+export type OutcomeChipRowProps = {
+	className?: string
+	items: Array<{
+		key: string
+		label: ComponentChildren
+		tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
+	}>
+}
+
+export type CollateralizationCircleProps = {
+	collateralizationPercent: bigint | undefined
+	className?: string
+	label?: string
+	size?: 'small' | 'medium' | 'large'
+	successThreshold?: number
+	targetCollateralizationPercent: bigint | undefined
+	tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
+	warningThreshold?: number
+}
+
 export type ScalarOutcomePickerProps = {
 	action?: ComponentChildren
 	details: {
@@ -192,13 +236,13 @@ export type OutcomeSelectionListProps = {
 
 export type VaultMetricGridProps = {
 	className?: string
+	layout?: 'grid' | 'preview'
 	lockedRepInEscalationGame?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
 	repDepositShare: bigint | undefined
 	selectedPoolSecurityMultiplier: bigint | undefined
 	securityBondAllowance: bigint | undefined
 	unpaidEthFees: bigint | undefined
-	variant?: 'embedded' | 'record'
 } & RepPerEthPriceProps
 
 export type ViewTabOption<TValue extends string> = {

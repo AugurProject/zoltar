@@ -1,7 +1,9 @@
+import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getAddress, zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
@@ -10,7 +12,7 @@ import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
-import { Question } from './Question.js'
+import { getQuestionTitle, Question } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
@@ -28,6 +30,7 @@ import { WarningSurface } from './WarningSurface.js'
 import { tryParseBigIntInput } from '../lib/marketForm.js'
 import { assertNever } from '../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
+import { getPoolCollateralizationPercent } from '../lib/trading.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -144,17 +147,19 @@ export function SecurityPoolWorkflowSection({
 	securityPoolAddress,
 	securityPools,
 	securityVault,
+	initialVaultView,
 	onSelectedPoolViewChange,
 	showHeader = true,
 	trading,
 }: SecurityPoolWorkflowRouteContentProps & {
+	initialVaultView?: SelectedVaultView
 	showHeader?: boolean
 }) {
 	const view = resolveSelectedPoolView(selectedPoolView)
 	const legacyForkWorkflowSelectionStage = resolveForkWorkflowSelectionStage(selectedPoolView)
 	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
-	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
+	const [vaultView, setVaultView] = useState<SelectedVaultView>(initialVaultView ?? 'browse-vaults')
 	const previousSelectedPoolViewRef = useRef<SelectedPoolView | undefined>(undefined)
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
@@ -357,6 +362,8 @@ export function SecurityPoolWorkflowSection({
 	})
 	const selectedPoolParentPool = selectedPoolSummaryPool === undefined || selectedPoolSummaryPool.parent === zeroAddress ? undefined : securityPools.find(pool => sameAddress(pool.securityPoolAddress, selectedPoolSummaryPool.parent))
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
+	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
+	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
@@ -394,6 +401,86 @@ export function SecurityPoolWorkflowSection({
 
 		return undefined
 	})()
+	let selectedPoolSummaryContent: ComponentChildren
+	const selectedPoolCollateralizationPercent = selectedPoolSummaryPool === undefined ? undefined : getPoolCollateralizationPercent(selectedPoolSummaryPool.totalRepDeposit, selectedPoolSummaryPool.totalSecurityBondAllowance, repPerEthPrice)
+	const selectedPoolCollateralizationTarget = selectedPoolSummaryPool === undefined ? undefined : selectedPoolSummaryPool.securityMultiplier * 100n * 10n ** 18n
+
+	if (selectedPoolSummaryPool === undefined) {
+		selectedPoolSummaryContent = undefined
+	} else if (view === 'vaults' || view === 'trading') {
+		selectedPoolSummaryContent = (
+			<div className='selected-pool-context-summary selected-pool-context-summary-hero selected-pool-context-summary-hero-compact'>
+				<div className='selected-pool-context-overview'>
+					<div className='selected-pool-hero-story'>
+						<div className='selected-pool-hero-story-title-row'>
+							<div className='security-pool-card-title-row'>
+								<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={selectedPoolCollateralizationPercent} size='small' targetCollateralizationPercent={selectedPoolCollateralizationTarget} />
+								<span className='security-pool-card-title-copy'>{marketDetails === undefined ? '' : getQuestionTitle(marketDetails)}</span>
+							</div>
+						</div>
+						{marketDetails === undefined ? null : <Question className='selected-pool-hero-question' question={marketDetails} variant='preview' showTitle={false} />}
+					</div>
+					<SecurityPoolSummaryMetrics
+						className='selected-pool-context-grid'
+						currentTimestamp={currentTimestamp}
+						pool={{
+							...selectedPoolSummaryPool,
+							lastOraclePrice: currentPoolOraclePrice ?? selectedPoolSummaryPool.lastOraclePrice,
+							lastOracleSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? selectedPoolSummaryPool.lastOracleSettlementTimestamp,
+						}}
+						repPerEthPrice={repPerEthPrice}
+						repPerEthSource={repPerEthSource}
+						repPerEthSourceUrl={repPerEthSourceUrl}
+						showTotalBacking
+						showCollateralizationGauge={false}
+						variant='hero'
+					>
+						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
+							<MetricField label='Parent Pool'>
+								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
+							</MetricField>
+						)}
+						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
+							<MetricField label='Pending Request'>
+								<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
+									Report #{currentPoolOracleManagerDetails.pendingReportId.toString()}
+								</button>
+							</MetricField>
+						)}
+					</SecurityPoolSummaryMetrics>
+				</div>
+			</div>
+		)
+	} else {
+		selectedPoolSummaryContent = (
+			<div className='selected-pool-context-summary'>
+				<div className='selected-pool-context-overview'>
+					<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
+						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
+							<MetricField label='Parent Pool'>
+								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
+							</MetricField>
+						)}
+						<MetricField label='Open Oracle Price' valueTagName='span'>
+							<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
+						</MetricField>
+						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
+							<MetricField label='Pending Request'>
+								<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
+									Report #{currentPoolOracleManagerDetails.pendingReportId.toString()}
+								</button>
+							</MetricField>
+						)}
+					</SecurityPoolSummaryMetrics>
+				</div>
+				{marketDetails === undefined ? undefined : (
+					<SectionBlock headingLevel={3} title='Question' variant='embedded'>
+						<Question question={marketDetails} />
+					</SectionBlock>
+				)}
+			</div>
+		)
+	}
 	const selectedPoolVaultDefaultKey = `${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}:${normalizeAddress(accountState.address) ?? ''}`
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
@@ -647,39 +734,7 @@ export function SecurityPoolWorkflowSection({
 						/>
 					</div>
 				</div>
-				{selectedPoolSummaryPool === undefined ? undefined : (
-					<div className='selected-pool-context-summary'>
-						<div className='selected-pool-context-overview'>
-							<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
-								{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
-									<MetricField label='Parent Pool'>
-										<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
-									</MetricField>
-								)}
-								<MetricField label='Open Oracle Price' valueTagName='span'>
-									<OpenOraclePriceValue
-										currentTimestamp={currentTimestamp}
-										lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
-										lastSettlementTimestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n}
-										priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
-									/>
-								</MetricField>
-								{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-									<MetricField label='Pending Request'>
-										<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-											Report #{currentPoolOracleManagerDetails.pendingReportId.toString()}
-										</button>
-									</MetricField>
-								)}
-							</SecurityPoolSummaryMetrics>
-						</div>
-						{marketDetails === undefined ? undefined : (
-							<SectionBlock headingLevel={3} title='Question' variant='embedded'>
-								<Question question={marketDetails} />
-							</SectionBlock>
-						)}
-					</div>
-				)}
+				{selectedPoolSummaryContent}
 			</StickyObjectContext>
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
