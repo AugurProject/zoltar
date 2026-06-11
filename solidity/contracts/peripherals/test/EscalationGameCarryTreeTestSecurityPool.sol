@@ -5,11 +5,11 @@ import { Zoltar } from '../../Zoltar.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGame, CarriedDepositProof } from '../EscalationGame.sol';
 
-contract EscalationGameCarryTreeTestSecurityPool {
+contract EscalationGameProofTestSecurityPool {
 	Zoltar public immutable zoltar;
 	uint248 public immutable universeId;
 	address public immutable securityPoolForker;
-	EscalationGame public escalationGameCarryTree;
+	EscalationGame public escalationGame;
 
 	constructor(Zoltar zoltarAddress, uint248 configuredUniverseId, address configuredSecurityPoolForker) {
 		zoltar = zoltarAddress;
@@ -17,13 +17,13 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		securityPoolForker = configuredSecurityPoolForker;
 	}
 
-	function setEscalationGameCarryTree(EscalationGame game) external {
-		require(address(escalationGameCarryTree) == address(0), 'carry tree already configured');
-		escalationGameCarryTree = game;
+	function setEscalationGame(EscalationGame game) external {
+		require(address(escalationGame) == address(0), 'escalation game already configured');
+		escalationGame = game;
 	}
 
-	function depositOnCarryTreeOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256) {
-		return escalationGameCarryTree.depositOnOutcome(depositor, outcome, amount);
+	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256) {
+		return escalationGame.depositOnOutcome(depositor, outcome, amount);
 	}
 
 	function initializeForkCarrySnapshot(
@@ -32,7 +32,7 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		uint256[3] memory inheritedCarryTotals,
 		bytes32[3] memory inheritedNullifierRoots
 	) external {
-		escalationGameCarryTree.initializeForkCarrySnapshot(
+		escalationGame.initializeForkCarrySnapshot(
 			inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots
 		);
 	}
@@ -41,13 +41,13 @@ contract EscalationGameCarryTreeTestSecurityPool {
 		external
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
-		return escalationGameCarryTree.withdrawCarriedDeposit(outcome, proof);
+		return escalationGame.withdrawCarriedDeposit(outcome, proof);
 	}
 
-	function claimCarryTreeDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
+	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
 		external
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
-		return escalationGameCarryTree.claimDepositForWinning(depositIndex, outcome);
+		return escalationGame.claimDepositForWinning(depositIndex, outcome);
 	}
 }

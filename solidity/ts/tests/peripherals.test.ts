@@ -91,7 +91,7 @@ const getMigrationProxyAddressAbi = [
 	},
 ] satisfies Abi
 
-const CARRY_TREE_NULLIFIER_DEPTH = 64
+const NULLIFIER_DEPTH = 64
 
 describe('Peripherals Contract Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -174,7 +174,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 	const buildZeroHashes = () => {
 		const zeroHashes: Hex[] = [zeroHash()]
-		for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
 			const nextZeroHash = zeroHashes[depth]
 			if (nextZeroHash === undefined) throw new Error(`Missing zero hash at depth ${depth}`)
 			zeroHashes.push(hashParent(nextZeroHash, nextZeroHash))
@@ -182,11 +182,11 @@ describe('Peripherals Contract Test Suite', () => {
 		return zeroHashes
 	}
 
-	class TestSparseNullifierTree {
+	class SparseNullifierTree {
 		private readonly zeroHashes = buildZeroHashes()
 		private readonly nodes = new Map<string, Hex>()
-		private readonly pathMask = (1n << BigInt(CARRY_TREE_NULLIFIER_DEPTH)) - 1n
-		root: Hex = this.zeroHashes[CARRY_TREE_NULLIFIER_DEPTH] ?? zeroHash()
+		private readonly pathMask = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
+		root: Hex = this.zeroHashes[NULLIFIER_DEPTH] ?? zeroHash()
 
 		private getPath(parentDepositIndex: bigint) {
 			return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & this.pathMask
@@ -196,7 +196,7 @@ describe('Peripherals Contract Test Suite', () => {
 			const path = this.getPath(parentDepositIndex)
 			const siblings: Hex[] = []
 			let nodeIndex = path
-			for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+			for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
 				const siblingIndex = nodeIndex ^ 1n
 				const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
 				if (siblingHash === undefined) throw new Error(`Missing sibling hash at depth ${depth}`)
@@ -211,7 +211,7 @@ describe('Peripherals Contract Test Suite', () => {
 			let nodeIndex = path
 			let nodeHash = `0x${'0'.repeat(63)}1` as Hex
 			this.nodes.set(`0:${nodeIndex}`, nodeHash)
-			for (let depth = 0; depth < CARRY_TREE_NULLIFIER_DEPTH; depth += 1) {
+			for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
 				const isRightNode = (nodeIndex & 1n) === 1n
 				const siblingIndex = nodeIndex ^ 1n
 				const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
@@ -225,7 +225,7 @@ describe('Peripherals Contract Test Suite', () => {
 		}
 	}
 
-	const createCarryTreeProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
+	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
 		const node = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
@@ -987,10 +987,10 @@ describe('Peripherals Contract Test Suite', () => {
 			functionName: 'previewLeafHash',
 			args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n],
 		})
-		const nullifierTree = new TestSparseNullifierTree()
-		const firstProof = await createCarryTreeProof(securityPoolAddresses.escalationGame, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
+		const nullifierTree = new SparseNullifierTree()
+		const firstProof = await createCarryProof(securityPoolAddresses.escalationGame, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
 		nullifierTree.consume(0n)
-		const secondProof = await createCarryTreeProof(securityPoolAddresses.escalationGame, 1n, 1n, 1n, [firstLeafHash], nullifierTree.getProof(1n))
+		const secondProof = await createCarryProof(securityPoolAddresses.escalationGame, 1n, 1n, 1n, [firstLeafHash], nullifierTree.getProof(1n))
 
 		await withdrawForkedEscalationDeposits(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, [firstProof, secondProof])
 
@@ -1033,7 +1033,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const childCarryTotalBeforeSettlement = await getCarryTotal(client, childEscalationGame, QuestionOutcome.Yes)
 		strictEqualTypeSafe(childCarryTotalBeforeSettlement, reportBond, 'child carry total should equal the inherited unresolved principal before proof forfeiture')
 
-		const proof = await createCarryTreeProof(securityPoolAddresses.escalationGame, 0n, 0n, 0n, [], new TestSparseNullifierTree().getProof(0n))
+		const proof = await createCarryProof(securityPoolAddresses.escalationGame, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
 		await withdrawForkedEscalationDeposits(client, noSecurityPool.securityPool, QuestionOutcome.Yes, [proof])
 
 		const childVaultAfterSettlement = await getSecurityVault(client, noSecurityPool.securityPool, client.account.address)
