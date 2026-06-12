@@ -5,7 +5,6 @@
     "": {
       "dependencies": {
         "@preact/signals": "2.0.1",
-        "@zoltar/shared": "file:./shared",
         "tevm": "1.0.0-next.149",
         "viem": "2.38.3",
       },
@@ -503,8 +502,6 @@
     "@xtuc/ieee754": ["@xtuc/ieee754@1.2.0", "", {}, "sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA=="],
 
     "@xtuc/long": ["@xtuc/long@4.2.2", "", {}, "sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ=="],
-
-    "@zoltar/shared": ["@zoltar/shared@file:shared", { "dependencies": { "viem": "2.38.3" } }],
 
     "@zoltu/file-copier": ["@zoltu/file-copier@3.0.0", "", {}, "sha512-foCy+pdL3sHBL0yrv8KCYcHnidii4kbE1xS52xXevyHFBAhRZKeX9qcCfRLIDDeHSYKB94vDeastE7fo3lwQFw=="],
 
