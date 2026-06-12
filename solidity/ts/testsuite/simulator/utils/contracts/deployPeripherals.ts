@@ -2,6 +2,7 @@ import 'viem/window'
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from 'viem'
 import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
+import { getProtocolConfig } from '../protocolConfig'
 import { WriteClient, writeContractAndWait } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
@@ -96,11 +97,14 @@ const getSecurityPoolFactoryByteCode = ({
 	zoltar: Address
 	zoltarQuestionData: Address
 }): Hex =>
-	encodeDeployData({
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-		args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
-	})
+	(() => {
+		const protocolConfig = getProtocolConfig()
+		return encodeDeployData({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
+			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, protocolConfig.initialEscalationGameDeposit],
+		})
+	})()
 
 const getShareTokenFactoryByteCode = (zoltar: Address): Hex =>
 	encodeDeployData({
@@ -116,11 +120,14 @@ const getEscalationGameFactoryByteCode = (): Hex =>
 	})
 
 const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
-	encodeDeployData({
-		abi: Zoltar_Zoltar.abi,
-		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress],
-	})
+	(() => {
+		const protocolConfig = getProtocolConfig()
+		return encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+		})
+	})()
 
 const getZoltarQuestionDataByteCode = (): Hex =>
 	encodeDeployData({
@@ -181,11 +188,14 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 		]),
 	getRepTokenAddress,
 	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
-		encodeDeployData({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, truthAuction],
-		}),
+		(() => {
+			const protocolConfig = getProtocolConfig()
+			return encodeDeployData({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
+				args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, protocolConfig.initialEscalationGameDeposit, truthAuction],
+			})
+		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
 		encodeDeployData({
 			abi: peripherals_tokens_ShareToken_ShareToken.abi,
@@ -280,10 +290,11 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['openOracle']) await deployBytecode(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode(getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
+		const protocolConfig = getProtocolConfig()
 		const initCode = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [contractAddresses.zoltarQuestionData],
+			args: [contractAddresses.zoltarQuestionData, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
 		})
 		await deployBytecode(initCode)
 	}

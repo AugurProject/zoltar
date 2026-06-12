@@ -170,6 +170,22 @@ export const getVaults = async (client: ReadClient, securityPoolAddress: Address
 		args: [startIndex, count],
 	})
 
+export const getActiveVaultCount = async (client: ReadClient, securityPoolAddress: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'getActiveVaultCount',
+		address: securityPoolAddress,
+		args: [],
+	})
+
+export const getActiveVaults = async (client: ReadClient, securityPoolAddress: Address, startIndex: bigint, count: bigint) =>
+	await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'getActiveVaults',
+		address: securityPoolAddress,
+		args: [startIndex, count],
+	})
+
 export const getSecurityPoolsEscalationGame = async (client: ReadClient, securityPoolAddress: Address) =>
 	await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,

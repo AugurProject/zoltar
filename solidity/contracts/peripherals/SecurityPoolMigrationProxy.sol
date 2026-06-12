@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { IERC20 } from '../IERC20.sol';
 import { ReputationToken } from '../ReputationToken.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 
 // Thin pool-specific adapter around Zoltar. Its only purpose is to give one
 // parent security pool one stable caller identity when interacting with
 // Zoltar's migration ledger, which is keyed by `msg.sender`.
 contract SecurityPoolMigrationProxy {
+	using SafeERC20Ops for IERC20;
+
 	Zoltar public immutable zoltar;
 	ReputationToken public immutable parentRepToken;
 	uint248 public immutable universeId;
@@ -18,7 +22,7 @@ contract SecurityPoolMigrationProxy {
 		parentRepToken = _parentRepToken;
 		universeId = _universeId;
 		owner = _owner;
-		_parentRepToken.approve(address(_zoltar), type(uint256).max);
+		IERC20(address(_parentRepToken)).safeApprove(address(_zoltar), type(uint256).max);
 	}
 
 	modifier onlyOwner {
@@ -43,6 +47,6 @@ contract SecurityPoolMigrationProxy {
 	}
 
 	function sweepChildRep(address receiver, ReputationToken childRepToken, uint256 amount) external onlyOwner {
-		childRepToken.transfer(receiver, amount);
+		IERC20(address(childRepToken)).safeTransfer(receiver, amount);
 	}
 }

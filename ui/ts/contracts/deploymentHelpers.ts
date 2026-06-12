@@ -1,5 +1,6 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from 'viem'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
+import { getProtocolConfig } from '@zoltar/shared/protocolConfig'
 import { bigintToAddress } from './helpers.js'
 import {
 	ScalarOutcomes_ScalarOutcomes,
@@ -93,11 +94,14 @@ export const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 	})
 
 export const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
-	encodeDeployData({
-		abi: Zoltar_Zoltar.abi,
-		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress],
-	})
+	(() => {
+		const protocolConfig = getProtocolConfig()
+		return encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+		})
+	})()
 
 export const getSecurityPoolFactoryByteCode = ({
 	escalationGameFactory,
@@ -118,11 +122,14 @@ export const getSecurityPoolFactoryByteCode = ({
 	zoltar: Address
 	zoltarQuestionData: Address
 }) =>
-	encodeDeployData({
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-		args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
-	})
+	(() => {
+		const protocolConfig = getProtocolConfig()
+		return encodeDeployData({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
+			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, protocolConfig.initialEscalationGameDeposit],
+		})
+	})()
 
 export const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
 	getZoltarInitCode,

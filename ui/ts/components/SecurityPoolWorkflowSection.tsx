@@ -405,6 +405,8 @@ export function SecurityPoolWorkflowSection({
 		resolvedPendingOperationId,
 	})
 	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
+	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
+	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
 	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = (() => {
 		if (securityVault.loadingSecurityVault)
@@ -983,28 +985,34 @@ export function SecurityPoolWorkflowSection({
 									<SectionBlock density='compact' title='Staged Operations'>
 										<ErrorNotice message={poolOracleManagerError} />
 										<SectionBlock density='compact' headingLevel={4} title='Staged Operations List' variant='embedded'>
-											{pendingOperation === undefined ? null : (
-												<WarningSurface as='article' className='warning-entity-card' variant='compact'>
+											{stagedOperations.map(operation => (
+												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' variant='compact'>
 													<div className='entity-card-header'>
 														<div className='entity-card-copy'>
-															<h3>{getPendingOperationLabel(pendingOperation.operation)}</h3>
+															<h3>{getPendingOperationLabel(operation.operation)}</h3>
+															{currentPoolOracleManagerDetails?.pendingOperationSlotId === operation.operationId ? <p className='detail'>Auto-exec slot</p> : <p className='detail'>Manual execution</p>}
 														</div>
 													</div>
 													<div className='entity-card-body workflow-metric-grid'>
-														<MetricField label='Operation Id'>{pendingOperation.operationId.toString()}</MetricField>
+														<MetricField label='Operation Id'>{operation.operationId.toString()}</MetricField>
 														<MetricField label='Initiator'>
-															<AddressValue address={pendingOperation.initiatorVault} />
+															<AddressValue address={operation.initiatorVault} />
 														</MetricField>
 														<MetricField label='Target Vault'>
-															<AddressValue address={pendingOperation.targetVault} />
+															<AddressValue address={operation.targetVault} />
 														</MetricField>
 														<MetricField label='Amount'>
-															<CurrencyValue value={pendingOperation.amount} />
+															<CurrencyValue value={operation.amount} />
 														</MetricField>
 													</div>
 												</WarningSurface>
-											)}
-											{currentPoolOracleManagerDetails === undefined || currentPoolOracleManagerDetails.pendingOperation !== undefined ? null : <StateHint presentation={{ key: 'empty', badgeLabel: 'None queued', badgeTone: 'muted', detail: 'No staged operations are currently queued for this pool.' }} />}
+											))}
+											{activeStagedOperationCount > BigInt(stagedOperations.length) ? (
+												<p className='detail'>
+													Showing {stagedOperations.length.toString()} of {activeStagedOperationCount.toString()} active staged operations, newest first.
+												</p>
+											) : null}
+											{currentPoolOracleManagerDetails === undefined || stagedOperations.length > 0 ? null : <StateHint presentation={{ key: 'empty', badgeLabel: 'None queued', badgeTone: 'muted', detail: 'No staged operations are currently queued for this pool.' }} />}
 										</SectionBlock>
 										{currentPoolOracleManagerDetails === undefined ? undefined : (
 											<label className='field'>

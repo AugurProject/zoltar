@@ -2,13 +2,14 @@
 pragma solidity 0.8.35;
 
 import './Constants.sol';
+import './IERC20.sol';
 import './ReputationToken.sol';
+import './SafeERC20Ops.sol';
 import './ZoltarQuestionData.sol';
 
-uint256 constant FORK_THRESHOLD_DIVISOR = 20; // TODO, revisit, 5% of total supply atm
-uint256 constant FORK_BURN_DIVISOR = 5; // TODO, revisit, 20% of fork threshold
-
 contract Zoltar {
+	using SafeERC20Ops for IERC20;
+
 	struct Universe {
 		uint256 forkTime;
 		uint256 forkQuestionId;
@@ -32,10 +33,16 @@ contract Zoltar {
 	event UniverseForked(address forker, uint248 universeId, uint256 questionId);
 	event DeployChild(address deployer, uint248 universeId, uint256 outcomeIndex, uint248 childUniverseId, ReputationToken childReputationToken);
 
+	uint256 public immutable forkThresholdDivisor;
+	uint256 public immutable forkBurnDivisor;
 	ZoltarQuestionData public zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
+		require(_forkThresholdDivisor > 1, 'fork threshold divisor');
+		require(_forkBurnDivisor > 1, 'fork burn divisor');
 		zoltarQuestionData = _zoltarQuestionData;
+		forkThresholdDivisor = _forkThresholdDivisor;
+		forkBurnDivisor = _forkBurnDivisor;
 		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
 		if (Constants.GENESIS_REPUTATION_TOKEN.code.length != 0) {
 			// The configured genesis token must expose `getTotalTheoreticalSupply()`.
@@ -56,7 +63,7 @@ contract Zoltar {
 	}
 
 	function getForkThreshold(uint248 universeId) public view returns (uint256) {
-		return getUniverseTheoreticalSupply(universeId) / FORK_THRESHOLD_DIVISOR;
+		return getUniverseTheoreticalSupply(universeId) / forkThresholdDivisor;
 	}
 
 	function getUniverseTheoreticalSupply(uint248 universeId) public view returns (uint256) {
@@ -79,7 +86,7 @@ contract Zoltar {
 		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
 		universeTheoreticalSupplies[universeId] -= forkThreshold;
 		childUniverseTheoreticalSupplySnapshots[universeId] = universeTheoreticalSupplies[universeId];
-		migrationRepBalances[msg.sender][universeId].migrationRepBalance = forkThreshold - forkThreshold / FORK_BURN_DIVISOR; // burn 20%
+		migrationRepBalances[msg.sender][universeId].migrationRepBalance = forkThreshold - forkThreshold / forkBurnDivisor;
 		emit UniverseForked(msg.sender, universeId, questionId);
 	}
 
@@ -87,9 +94,9 @@ contract Zoltar {
 		// Genesis is using REPv2 which we cannot actually burn
 		if (address(reputationToken) == Constants.GENESIS_REPUTATION_TOKEN) {
 			if (migrator == address(this)) {
-				reputationToken.transfer(Constants.BURN_ADDRESS, amount);
+				IERC20(address(reputationToken)).safeTransfer(Constants.BURN_ADDRESS, amount);
 			} else {
-				reputationToken.transferFrom(migrator, Constants.BURN_ADDRESS, amount);
+				IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amount);
 			}
 		} else {
 			ReputationToken(address(reputationToken)).burn(migrator, amount);

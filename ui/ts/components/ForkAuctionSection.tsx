@@ -1417,7 +1417,14 @@ export function ForkAuctionSection({
 			return
 		}
 		let cancelled = false
-		void loadAllSecurityPools(fullTruthAuctionReadClient ?? createConnectedReadClient())
+		void loadAllSecurityPools(
+			fullTruthAuctionReadClient ?? createConnectedReadClient(),
+			accountState.address === undefined
+				? {}
+				: {
+						accountAddress: accountState.address,
+					},
+		)
 			.then(allPools => {
 				if (cancelled) return
 				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
@@ -1430,7 +1437,7 @@ export function ForkAuctionSection({
 		return () => {
 			cancelled = true
 		}
-	}, [embedInCard, forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, fullTruthAuctionReadClient, securityPoolAddress, selectedOutcomeMigrationChildPool, selectedStage])
+	}, [accountState.address, embedInCard, forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, fullTruthAuctionReadClient, securityPoolAddress, selectedOutcomeMigrationChildPool, selectedStage])
 	useEffect(() => {
 		if ((selectedStage !== 'auction' && selectedStage !== 'settlement') || selectedAuctionPoolAddress === undefined) {
 			setSelectedAuctionDetails(undefined)

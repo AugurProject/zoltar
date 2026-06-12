@@ -30,6 +30,7 @@ contract SecurityPoolDeployer {
 		uint248 universeId,
 		uint256 questionId,
 		uint256 securityMultiplier,
+		uint256 initialEscalationGameDeposit,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
 		require(msg.sender == factory, 'only factory');
@@ -47,6 +48,7 @@ contract SecurityPoolDeployer {
 			universeId,
 			questionId,
 			securityMultiplier,
+			initialEscalationGameDeposit,
 			truthAuction
 		))));
 	}

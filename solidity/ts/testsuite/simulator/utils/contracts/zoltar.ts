@@ -1,6 +1,7 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { createRepTokenAddressHelper } from '@zoltar/shared/addressDerivation'
 import { createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
+import { getProtocolConfig } from '../protocolConfig'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, type Address, type Hex, toHex } from 'viem'
@@ -10,10 +11,11 @@ import { ensureProxyDeployerDeployed } from '../utilities'
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
 
 function getZoltarInitCode(zoltarQuestionDataAddress: Address): Hex {
+	const protocolConfig = getProtocolConfig()
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress],
+		args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
 	})
 }
 
@@ -62,10 +64,9 @@ const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 }
 
 export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: Hex = `0x${Zoltar_Zoltar.evm.deployedBytecode.object}`
 	const address = getZoltarAddress()
 	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
+	return deployedBytecode !== undefined && deployedBytecode !== '0x'
 }
 
 export const ensureZoltarDeployed = async (client: WriteClient) => {
@@ -136,6 +137,22 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 		functionName: 'getForkThreshold',
 		address: getZoltarAddress(),
 		args: [universeId],
+	})
+
+export const getZoltarForkThresholdDivisor = async (client: ReadClient) =>
+	await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'forkThresholdDivisor',
+		address: getZoltarAddress(),
+		args: [],
+	})
+
+export const getZoltarForkBurnDivisor = async (client: ReadClient) =>
+	await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'forkBurnDivisor',
+		address: getZoltarAddress(),
+		args: [],
 	})
 
 export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) =>

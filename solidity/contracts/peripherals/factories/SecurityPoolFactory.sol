@@ -26,11 +26,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ZoltarQuestionData questionData;
 	ISecurityPoolForker securityPoolForker;
 	SecurityPoolDeployer securityPoolDeployer;
+	uint256 public immutable initialEscalationGameDeposit;
 	SecurityPoolDeployment[] private securityPoolDeployments;
 
 	event DeploySecurityPool(ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, uint256 _initialEscalationGameDeposit) {
+		require(_initialEscalationGameDeposit > 0, 'initial escalation deposit');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -39,6 +41,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		openOracle = _openOracle;
 		escalationGameFactory = _escalationGameFactory;
 		questionData = _questionData;
+		initialEscalationGameDeposit = _initialEscalationGameDeposit;
 		securityPoolDeployer = new SecurityPoolDeployer();
 	}
 
@@ -137,6 +140,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			universeId,
 			questionId,
 			securityMultiplier,
+			initialEscalationGameDeposit,
 			truthAuction
 		);
 

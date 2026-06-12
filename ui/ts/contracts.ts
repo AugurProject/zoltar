@@ -123,6 +123,7 @@ type CarryLeafViewStruct = {
 	sourceNodeId: bigint
 }
 type LoadAllSecurityPoolsOptions = {
+	accountAddress?: Address
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
 }
@@ -138,6 +139,9 @@ type SecurityPoolDeploymentQueryResult = {
 	truthAuction: Address
 	universeId: bigint
 }
+
+const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 50n
+const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 function getOracleQueueOperationFromEventOperation(operation: bigint) {
 	switch (operation) {
 		case 0n:
@@ -803,7 +807,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 async function getSecurityPoolVaultCount(client: ReadClient, securityPoolAddress: Address) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getVaultCount',
+		functionName: 'getActiveVaultCount',
 		address: securityPoolAddress,
 		args: [],
 	})
@@ -811,71 +815,74 @@ async function getSecurityPoolVaultCount(client: ReadClient, securityPoolAddress
 async function getSecurityPoolVaults(client: ReadClient, securityPoolAddress: Address, startIndex: bigint, count: bigint) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getVaults',
+		functionName: 'getActiveVaults',
 		address: securityPoolAddress,
 		args: [startIndex, count],
 	})
 }
+
+function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint, bigint]) {
+	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
+	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n || lockedRepInEscalationGame > 0n
+}
+
 async function loadSecurityPoolVaultSummaries(
 	client: ReadClient,
 	securityPoolAddress: Address,
+	options: {
+		accountAddress?: Address
+		previewLimit?: bigint
+	} = {},
 ): Promise<{
 	hasLoadedVaults: boolean
 	vaultCount: bigint
 	vaults: SecurityPoolVaultSummary[]
 }> {
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
-	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
-	if (vaultAddresses.length === 0) return { hasLoadedVaults: true, vaultCount, vaults: [] }
-	const vaultDataContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
+	const previewLimit = options.previewLimit ?? ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT
+	const previewCount = vaultCount < previewLimit ? vaultCount : previewLimit
+	const previewVaultAddresses = previewCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, previewCount)
+	const summaryVaultAddresses = [...previewVaultAddresses]
+	if (options.accountAddress !== undefined && !summaryVaultAddresses.some(vaultAddress => sameAddress(vaultAddress, options.accountAddress))) {
+		summaryVaultAddresses.push(options.accountAddress)
+	}
+	if (summaryVaultAddresses.length === 0) return { hasLoadedVaults: true, vaultCount, vaults: [] }
+	const vaultDataContracts: ContractFunctionParameters[] = summaryVaultAddresses.map(vaultAddress => ({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
 		address: securityPoolAddress,
 		args: [vaultAddress],
 	}))
-	const vaultDataResults = await readRequiredMulticall(client, vaultDataContracts)
+	const [vaultDataResults, totalRepBalance, poolOwnershipDenominator] = await Promise.all([
+		readRequiredMulticall(client, vaultDataContracts),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'getTotalRepBalance',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'poolOwnershipDenominator',
+			address: securityPoolAddress,
+			args: [],
+		}),
+	])
 	const vaultData = requireSecurityVaultTupleArray(vaultDataResults, 'security vault tuple')
-	const poolOwnershipContracts: {
-		contract: ContractFunctionParameters
-		index: number
-	}[] = []
-	for (const [index, currentVaultData] of vaultData.entries()) {
-		const poolOwnership = currentVaultData[0]
-		if (poolOwnership === undefined || poolOwnership === 0n) continue
-		poolOwnershipContracts.push({
-			index,
-			contract: {
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'poolOwnershipToRep',
-				address: securityPoolAddress,
-				args: [poolOwnership],
-			},
-		})
-	}
-	const repDeposits = new Map<number, bigint>()
-	if (poolOwnershipContracts.length > 0) {
-		const repDepositResults = await readRequiredMulticall(
-			client,
-			poolOwnershipContracts.map(current => current.contract),
-		)
-		for (const [resultIndex, repDepositShare] of repDepositResults.entries()) {
-			const poolOwnershipContract = poolOwnershipContracts[resultIndex]
-			if (poolOwnershipContract === undefined) throw new Error('Unexpected pool ownership contract result')
-			if (typeof repDepositShare !== 'bigint') throw new Error('Unexpected rep deposit result')
-			repDeposits.set(poolOwnershipContract.index, repDepositShare)
-		}
-	}
-	const vaults = vaultAddresses.map((vaultAddress, index) => {
+	const vaults = summaryVaultAddresses.flatMap((vaultAddress, index) => {
 		const currentVaultData = vaultData[index]
 		if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
-		const [, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
-		return {
-			lockedRepInEscalationGame,
-			repDepositShare: repDeposits.get(index) ?? 0n,
-			securityBondAllowance,
-			unpaidEthFees,
-			vaultAddress,
-		} satisfies SecurityPoolVaultSummary
+		if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData)) return []
+		const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
+		return [
+			{
+				lockedRepInEscalationGame,
+				repDepositShare: poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator,
+				securityBondAllowance,
+				unpaidEthFees,
+				vaultAddress,
+			} satisfies SecurityPoolVaultSummary,
+		]
 	})
 	return { hasLoadedVaults: true, vaultCount, vaults }
 }
@@ -937,7 +944,7 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 	} satisfies SecurityVaultActionResult
 }
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'lastPrice',
@@ -974,28 +981,62 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			address: managerAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'getActiveStagedOperationCount',
+			address: managerAddress,
+			args: [],
+		},
 	])
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
 	let pendingOperation: import('./types/contracts.js').StagedOracleOperation | undefined
+	let stagedOperations: import('./types/contracts.js').StagedOracleOperation[] = []
 	let token1: Address | undefined
 	let token2: Address | undefined
-	if (pendingOperationSlotId > 0n) {
-		const stagedOperation = await client.readContract({
+	if (activeStagedOperationCount > 0n) {
+		const previewCount = activeStagedOperationCount < ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT ? activeStagedOperationCount : ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT
+		const [operationIds, activeOperations] = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'getPendingOperationSlot',
+			functionName: 'getActiveStagedOperations',
 			address: managerAddress,
-			args: [],
+			args: [0n, previewCount],
 		})
-		if (stagedOperation.initiatorVault !== zeroAddress)
-			pendingOperation = {
-				amount: stagedOperation.amount,
-				initiatorVault: stagedOperation.initiatorVault,
-				operation: resolveOracleQueueOperation(stagedOperation.operation),
-				operationId: pendingOperationSlotId,
-				targetVault: stagedOperation.targetVault,
+		stagedOperations = operationIds
+			.map((operationId, index) => {
+				const stagedOperation = activeOperations[index]
+				if (stagedOperation === undefined) throw new Error('Missing staged operation details')
+				return {
+					amount: stagedOperation.amount,
+					initiatorVault: stagedOperation.initiatorVault,
+					operation: resolveOracleQueueOperation(stagedOperation.operation),
+					operationId,
+					targetVault: stagedOperation.targetVault,
+				}
+			})
+			.sort(compareStagedOperationIdsDescending)
+		pendingOperation = stagedOperations.find(operation => operation.operationId === pendingOperationSlotId)
+		if (pendingOperation === undefined && pendingOperationSlotId > 0n) {
+			const stagedOperation = await client.readContract({
+				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				functionName: 'getPendingOperationSlot',
+				address: managerAddress,
+				args: [],
+			})
+			if (stagedOperation.initiatorVault !== zeroAddress) {
+				pendingOperation = {
+					amount: stagedOperation.amount,
+					initiatorVault: stagedOperation.initiatorVault,
+					operation: resolveOracleQueueOperation(stagedOperation.operation),
+					operationId: pendingOperationSlotId,
+					targetVault: stagedOperation.targetVault,
+				}
+				if (!stagedOperations.some(operation => operation.operationId === pendingOperationSlotId)) {
+					stagedOperations = [pendingOperation, ...stagedOperations].sort(compareStagedOperationIdsDescending)
+				}
 			}
+		}
 	}
 	if (pendingReportId > 0n) {
 		const [extraData, reportMeta] = await readRequiredMulticall(client, [
@@ -1018,6 +1059,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		token2 = reportMeta[6]
 	}
 	return {
+		activeStagedOperationCount,
 		callbackStateHash,
 		exactToken1Report,
 		isPriceValid: lastSettlementTimestamp > 0n && rawIsPriceValid,
@@ -1030,6 +1072,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingReportId,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
+		stagedOperations,
 		token1,
 		token2,
 	}
@@ -1045,6 +1088,12 @@ function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOpe
 		default:
 			throw new Error(`Unknown oracle operation: ${operation}`)
 	}
+}
+
+function compareStagedOperationIdsDescending(left: { operationId: bigint }, right: { operationId: bigint }) {
+	if (left.operationId > right.operationId) return -1
+	if (left.operationId < right.operationId) return 1
+	return 0
 }
 
 function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
@@ -2036,6 +2085,7 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 	)
 }
 export async function loadAllSecurityPools(client: ReadClient, options: LoadAllSecurityPoolsOptions = {}): Promise<ListedSecurityPool[]> {
+	const accountAddress = options.accountAddress
 	const vaultDetailMode = options.vaultDetailMode ?? 'all'
 	const selectedSecurityPoolAddress = options.selectedSecurityPoolAddress
 	const deploymentCount = await client.readContract({
@@ -2121,7 +2171,12 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 					},
 				]),
 				loadMarketDetails(client, questionId),
-				shouldLoadVaults ? loadSecurityPoolVaultSummaries(client, securityPoolAddress) : Promise.all([getSecurityPoolVaultCount(client, securityPoolAddress)]).then(([vaultCount]) => ({ hasLoadedVaults: vaultCount === 0n, vaultCount, vaults: [] })),
+				shouldLoadVaults
+					? loadSecurityPoolVaultSummaries(client, securityPoolAddress, {
+							...(accountAddress === undefined ? {} : { accountAddress }),
+							previewLimit: ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT,
+						})
+					: Promise.all([getSecurityPoolVaultCount(client, securityPoolAddress)]).then(([vaultCount]) => ({ hasLoadedVaults: vaultCount === 0n, vaultCount, vaults: [] })),
 			])
 			const forkDataTuple: ForkDataTuple = forkData
 			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple

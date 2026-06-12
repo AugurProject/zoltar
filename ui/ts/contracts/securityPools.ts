@@ -9,6 +9,7 @@ import {
 } from '../contractArtifact.js'
 import { isIgnorableLogDecodeError } from '../lib/errors.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
+import { sameAddress } from '../lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js'
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityVaultTupleArray } from './helpers.js'
@@ -17,6 +18,8 @@ import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers
 import { loadMarketDetails } from './zoltar.js'
 
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
+
+const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 3n
 
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
 type SecurityPoolDeploymentQueryResult = {
@@ -77,19 +80,10 @@ async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityP
 	return code !== undefined && code !== '0x'
 }
 
-async function poolOwnershipToRep(client: ReadClient, securityPoolAddress: Address, poolOwnership: bigint) {
-	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'poolOwnershipToRep',
-		address: securityPoolAddress,
-		args: [poolOwnership],
-	})
-}
-
 async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getVaultCount',
+		functionName: 'getActiveVaultCount',
 		address: securityPoolAddress,
 		args: [],
 	})
@@ -98,32 +92,47 @@ async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'
 async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, startIndex: bigint, count: bigint) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getVaults',
+		functionName: 'getActiveVaults',
 		address: securityPoolAddress,
 		args: [startIndex, count],
 	})
 }
 
+function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint, bigint]) {
+	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
+	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n || lockedRepInEscalationGame > 0n
+}
+
 async function loadSecurityPoolVaultSummaries(
 	client: ReadClient,
 	securityPoolAddress: Address,
+	options: {
+		accountAddress?: Address
+		previewLimit?: bigint
+	} = {},
 ): Promise<{
 	hasLoadedVaults: boolean
 	vaultCount: bigint
 	vaults: ListedSecurityPool['vaults']
 }> {
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
-	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
-	if (vaultAddresses.length === 0) {
+	const previewLimit = options.previewLimit ?? ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT
+	const previewCount = vaultCount < previewLimit ? vaultCount : previewLimit
+	const previewVaultAddresses = previewCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, previewCount)
+	const summaryVaultAddresses = [...previewVaultAddresses]
+	if (options.accountAddress !== undefined && !summaryVaultAddresses.some(vaultAddress => sameAddress(vaultAddress, options.accountAddress))) {
+		summaryVaultAddresses.push(options.accountAddress)
+	}
+	if (summaryVaultAddresses.length === 0) {
 		return {
 			hasLoadedVaults: true,
 			vaultCount,
 			vaults: [],
 		}
 	}
-	const vaultData = requireSecurityVaultTupleArray(
-		await Promise.all(
-			vaultAddresses.map(
+	const [vaultData, totalRepBalance, poolOwnershipDenominator] = await Promise.all([
+		Promise.all(
+			summaryVaultAddresses.map(
 				async vaultAddress =>
 					await client.readContract({
 						abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -132,52 +141,37 @@ async function loadSecurityPoolVaultSummaries(
 						args: [vaultAddress],
 					}),
 			),
-		),
-		'security vault tuple',
-	)
-	const poolOwnershipContracts: Array<{
-		index: number
-		poolOwnership: bigint
-	}> = []
-	for (const [index, currentVaultData] of vaultData.entries()) {
-		const [poolOwnership] = currentVaultData
-		if (poolOwnership === 0n) continue
-		poolOwnershipContracts.push({ index, poolOwnership })
-	}
-	const repDeposits = new Map<number, bigint>()
-	if (poolOwnershipContracts.length > 0) {
-		const repDepositResults = await Promise.all(
-			poolOwnershipContracts.map(
-				async ({ poolOwnership }) =>
-					await client.readContract({
-						abi: peripherals_SecurityPool_SecurityPool.abi,
-						functionName: 'poolOwnershipToRep',
-						address: securityPoolAddress,
-						args: [poolOwnership],
-					}),
-			),
-		)
-		for (const [resultIndex, repDepositShare] of repDepositResults.entries()) {
-			const poolOwnershipContract = poolOwnershipContracts[resultIndex]
-			if (poolOwnershipContract === undefined) throw new Error('Unexpected pool ownership contract result')
-			if (typeof repDepositShare !== 'bigint') throw new Error('Unexpected rep deposit result')
-			repDeposits.set(poolOwnershipContract.index, repDepositShare)
-		}
-	}
+		).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'getTotalRepBalance',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'poolOwnershipDenominator',
+			address: securityPoolAddress,
+			args: [],
+		}),
+	])
 	return {
 		hasLoadedVaults: true,
 		vaultCount,
-		vaults: vaultAddresses.map((vaultAddress, index) => {
+		vaults: summaryVaultAddresses.flatMap((vaultAddress, index) => {
 			const currentVaultData = vaultData[index]
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
-			const [, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
-			return {
-				lockedRepInEscalationGame,
-				repDepositShare: repDeposits.get(index) ?? 0n,
-				securityBondAllowance,
-				unpaidEthFees,
-				vaultAddress,
-			}
+			if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData)) return []
+			const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
+			return [
+				{
+					lockedRepInEscalationGame,
+					repDepositShare: poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator,
+					securityBondAllowance,
+					unpaidEthFees,
+					vaultAddress,
+				},
+			]
 		}),
 	}
 }
@@ -212,7 +206,7 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 	return code !== undefined && code !== '0x'
 }
 
-export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number, pageSize: number): Promise<SecurityPoolPage> {
+export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number, pageSize: number, accountAddress?: Address): Promise<SecurityPoolPage> {
 	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Security pool page index must be a non-negative integer')
 	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Security pool page size must be a positive integer')
 	const poolCount = await client.readContract({
@@ -304,7 +298,10 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 					},
 				]),
 				loadMarketDetails(client, questionId),
-				loadSecurityPoolVaultSummaries(client, securityPoolAddress),
+				loadSecurityPoolVaultSummaries(client, securityPoolAddress, {
+					...(accountAddress === undefined ? {} : { accountAddress }),
+					previewLimit: ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT,
+				}),
 			])
 			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkData as ForkDataTuple
 			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
@@ -355,18 +352,19 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
 	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
 
-	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
+	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalRepBalance, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'poolOwnershipDenominator', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalRepBalance', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalSecurityBondAllowance', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
 	])
 
 	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
-	const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
+	const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator
 
 	return {
 		currentRetentionRate,

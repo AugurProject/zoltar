@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { Zoltar, FORK_THRESHOLD_DIVISOR } from '../Zoltar.sol';
+import { IERC20 } from '../IERC20.sol';
 import { ReputationToken } from '../ReputationToken.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { Zoltar } from '../Zoltar.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { SecurityPoolOracleCoordinator } from './SecurityPoolOracleCoordinator.sol';
 import { ISecurityPool, SecurityVault, SystemState, QuestionOutcome, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
@@ -15,12 +17,13 @@ import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
-uint256 constant TODO_INITIAL_ESCALATION_GAME_DEPOSIT = 1 ether; // TODO, how to get this value?
-
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is ISecurityPool {
+	using SafeERC20Ops for IERC20;
+
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
+	uint256 public immutable initialEscalationGameDeposit;
 
 	Zoltar public immutable zoltar;
 	ISecurityPool immutable public parent;
@@ -51,6 +54,13 @@ contract SecurityPool is ISecurityPool {
 	mapping(address => SecurityVault) public securityVaults;
 	address[] private vaults;
 	mapping(address => uint256) private vaultIndexesPlusOne;
+	// Active-vault paging is newest-first so UI previews remain stable after removals
+	// and can intentionally surface the most recently touched active vaults.
+	uint256 private activeVaultCount;
+	address private latestActiveVault;
+	mapping(address => address) private olderActiveVaults;
+	mapping(address => address) private newerActiveVaults;
+	mapping(address => bool) private isActiveVault;
 
 	SystemState public systemState;
 
@@ -88,11 +98,13 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, SecurityPoolOracleCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier, address _truthAuction) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, SecurityPoolOracleCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier, uint256 _initialEscalationGameDeposit, address _truthAuction) {
+		require(_initialEscalationGameDeposit > 0, 'initial escalation deposit');
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
 		securityMultiplier = _securityMultiplier;
+		initialEscalationGameDeposit = _initialEscalationGameDeposit;
 		zoltar = _zoltar;
 		parent = _parent;
 		openOracle = _openOracle;
@@ -108,25 +120,49 @@ contract SecurityPool is ISecurityPool {
 		}
 		shareToken = _shareToken;
 		repToken = zoltar.getRepToken(universeId);
-		repToken.approve(address(zoltar), type(uint256).max);
+		IERC20(address(repToken)).safeApprove(address(zoltar), type(uint256).max);
 	}
 
 	function getVaultCount() external view returns (uint256) {
 		return vaults.length;
 	}
 
-	function initialEscalationGameDeposit() external pure returns (uint256) {
-		return TODO_INITIAL_ESCALATION_GAME_DEPOSIT;
+	function getActiveVaultCount() external view returns (uint256) {
+		return activeVaultCount;
 	}
 
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
-		if (startIndex >= vaults.length || count == 0) return new address[](0);
+		return _sliceVaults(vaults, startIndex, count);
+	}
 
-		uint256 availableCount = vaults.length - startIndex;
+	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
+		return _sliceActiveVaults(startIndex, count);
+	}
+
+	function _sliceVaults(address[] storage sourceVaults, uint256 startIndex, uint256 count) private view returns (address[] memory vaultRange) {
+		if (startIndex >= sourceVaults.length || count == 0) return new address[](0);
+
+		uint256 availableCount = sourceVaults.length - startIndex;
 		uint256 resultCount = count < availableCount ? count : availableCount;
 		vaultRange = new address[](resultCount);
 		for (uint256 index = 0; index < resultCount; index++) {
-			vaultRange[index] = vaults[startIndex + index];
+			vaultRange[index] = sourceVaults[startIndex + index];
+		}
+	}
+
+	function _sliceActiveVaults(uint256 startIndex, uint256 count) private view returns (address[] memory vaultRange) {
+		if (count == 0 || startIndex >= activeVaultCount) return new address[](0);
+
+		uint256 availableCount = activeVaultCount - startIndex;
+		uint256 resultCount = count < availableCount ? count : availableCount;
+		vaultRange = new address[](resultCount);
+		address currentVault = latestActiveVault;
+		for (uint256 skipped = 0; skipped < startIndex && currentVault != address(0x0); skipped++) {
+			currentVault = olderActiveVaults[currentVault];
+		}
+		for (uint256 index = 0; index < resultCount && currentVault != address(0x0); index++) {
+			vaultRange[index] = currentVault;
+			currentVault = olderActiveVaults[currentVault];
 		}
 	}
 
@@ -179,6 +215,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 fees = securityVaults[vault].securityBondAllowance * (feeIndex - securityVaults[vault].feeIndex) / SecurityPoolUtils.PRICE_PRECISION;
 		securityVaults[vault].feeIndex = feeIndex;
 		securityVaults[vault].unpaidEthFees += fees;
+		_syncActiveVault(vault);
 		emit UpdateVaultFees(vault, securityVaults[vault].feeIndex, securityVaults[vault].unpaidEthFees);
 	}
 
@@ -186,6 +223,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
+		_syncActiveVault(vault);
 		(bool sent, ) = payable(vault).call{ value: fees }('');
 		require(sent, 'failed to send Ether');
 		emit RedeemFees(vault, fees);
@@ -211,7 +249,8 @@ contract SecurityPool is ISecurityPool {
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
-		repToken.transfer(vault, withdrawRepAmount);
+		_syncActiveVault(vault);
+		IERC20(address(repToken)).safeTransfer(vault, withdrawRepAmount);
 		emit PerformWithdrawRep(vault, withdrawRepAmount);
 	}
 
@@ -250,11 +289,12 @@ contract SecurityPool is ISecurityPool {
 	function depositRep(uint256 repAmount) external isOperational {
 		require(!isEscalationResolved(), 'question resolved');
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
-		repToken.transferFrom(msg.sender, address(this), repAmount);
+		IERC20(address(repToken)).safeTransferFrom(msg.sender, address(this), repAmount);
 		_trackVault(msg.sender);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
 		poolOwnershipDenominator += poolOwnership;
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'min rep');
+		_syncActiveVault(msg.sender);
 		emit DepositRep(msg.sender, repAmount, securityVaults[msg.sender].poolOwnership);
 	}
 
@@ -326,6 +366,8 @@ contract SecurityPool is ISecurityPool {
 			securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
 			'caller min deposit requirement'
 		);
+		_syncActiveVault(targetVaultAddress);
+		_syncActiveVault(callerVault);
 
 		emit PerformLiquidation(callerVault, targetVaultAddress, debtAmount, debtToMove, repToMove);
 	}
@@ -349,6 +391,7 @@ contract SecurityPool is ISecurityPool {
 		require(getTotalRepBalance() * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice());
 		require(totalSecurityBondAllowance >= completeSetCollateralAmount, 'too many sets');
 		require(securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min bond');
+		_syncActiveVault(callerVault);
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount);
 		updateRetentionRate();
 	}
@@ -406,7 +449,8 @@ contract SecurityPool is ISecurityPool {
 		require(repAmount > 0, 'no redeemable rep');
 		securityVaults[vault].poolOwnership = 0;
 		poolOwnershipDenominator -= ownershipToRedeem;
-		repToken.transfer(vault, repAmount);
+		_syncActiveVault(vault);
+		IERC20(address(repToken)).safeTransfer(vault, repAmount);
 		emit RedeemRep(msg.sender, vault, repAmount);
 	}
 
@@ -437,6 +481,7 @@ contract SecurityPool is ISecurityPool {
 			totalOriginalDepositAmount += originalDepositAmount;
 		}
 		_applyForkedEscalationSettlement(beneficiaryVault, totalAmountToWithdraw, totalOriginalDepositAmount);
+		_syncActiveVault(beneficiaryVault);
 	}
 
 	////////////////////////////////////////
@@ -448,7 +493,7 @@ contract SecurityPool is ISecurityPool {
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'question active');
-			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, zoltar.getForkThreshold(universeId) / 2);
+			escalationGame = escalationGameFactory.deployEscalationGame(initialEscalationGameDeposit, zoltar.getForkThreshold(universeId) / 2);
 		} else {
 			require(!escalationGame.forkContinuation() || escalationGame.forkContinuationResumed(), 'fork continuation not resumed');
 		}
@@ -456,6 +501,7 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[msg.sender].lockedRepInEscalationGame += depositedAmount;
 		totalLockedRepInEscalationGame += depositedAmount;
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'rep too low');
+		_syncActiveVault(msg.sender);
 	}
 
 	function withdrawFromEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256[] memory depositIndexes) external {
@@ -490,13 +536,14 @@ contract SecurityPool is ISecurityPool {
 		} else if (totalAmountToWithdraw < totalOriginalDepositAmount) {
 			securityVaults[beneficiaryVault].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
 		}
+		_syncActiveVault(beneficiaryVault);
 	}
 
 	function activateForkMode() external onlyForker {
 		systemState = SystemState.PoolForked;
 		updateCollateralAmount();
 		currentRetentionRate = 0;
-		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
+		IERC20(address(repToken)).safeTransfer(msg.sender, repToken.balanceOf(address(this)));
 	}
 
 	function initializeForkedEscalationGame(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external onlyForker {
@@ -538,6 +585,7 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].poolOwnership = poolOwnership;
 		securityVaults[vault].securityBondAllowance = securityBondAllowance;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
+		_syncActiveVault(vault);
 	}
 
 	function addEscalationLockForForkMigration(address vault, uint256 repAmount) external onlyForker {
@@ -546,6 +594,7 @@ contract SecurityPool is ISecurityPool {
 		_trackVault(vault);
 		securityVaults[vault].lockedRepInEscalationGame += repAmount;
 		totalLockedRepInEscalationGame += repAmount;
+		_syncActiveVault(vault);
 	}
 
 	function clearEscalationLockForForkMigration(address vault, uint256 repAmount) external onlyForker {
@@ -553,6 +602,7 @@ contract SecurityPool is ISecurityPool {
 		require(totalLockedRepInEscalationGame >= repAmount, 'total locked low');
 		securityVaults[vault].lockedRepInEscalationGame -= repAmount;
 		totalLockedRepInEscalationGame -= repAmount;
+		_syncActiveVault(vault);
 	}
 
 	function _applyForkedEscalationSettlement(address beneficiaryVault, uint256 totalAmountToWithdraw, uint256 totalOriginalDepositAmount) private {
@@ -571,6 +621,54 @@ contract SecurityPool is ISecurityPool {
 		vaultIndexesPlusOne[vault] = vaults.length;
 	}
 
+	function _syncActiveVault(address vault) private {
+		if (vault == address(0x0)) return;
+		bool shouldBeActive =
+			securityVaults[vault].poolOwnership > 0 ||
+			securityVaults[vault].securityBondAllowance > 0 ||
+			securityVaults[vault].unpaidEthFees > 0 ||
+			securityVaults[vault].lockedRepInEscalationGame > 0;
+		if (shouldBeActive) {
+			if (isActiveVault[vault]) {
+				if (latestActiveVault == vault) return;
+				_detachActiveVault(vault);
+				_appendActiveVault(vault);
+				return;
+			}
+			isActiveVault[vault] = true;
+			activeVaultCount++;
+			_appendActiveVault(vault);
+			return;
+		}
+		if (!isActiveVault[vault]) return;
+		_detachActiveVault(vault);
+		delete isActiveVault[vault];
+		activeVaultCount--;
+	}
+
+	function _appendActiveVault(address vault) private {
+		if (latestActiveVault != address(0x0)) {
+			olderActiveVaults[vault] = latestActiveVault;
+			newerActiveVaults[latestActiveVault] = vault;
+		}
+		latestActiveVault = vault;
+	}
+
+	function _detachActiveVault(address vault) private {
+		address olderVault = olderActiveVaults[vault];
+		address newerVault = newerActiveVaults[vault];
+		if (newerVault != address(0x0)) {
+			olderActiveVaults[newerVault] = olderVault;
+		} else {
+			latestActiveVault = olderVault;
+		}
+		if (olderVault != address(0x0)) {
+			newerActiveVaults[olderVault] = newerVault;
+		}
+		delete olderActiveVaults[vault];
+		delete newerActiveVaults[vault];
+	}
+
 	function setOwnershipDenominator(uint256 newDenominator) external onlyForker {
 		poolOwnershipDenominator = newDenominator;
 	}
@@ -586,7 +684,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function drainAllRep() external onlyForker {
-		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
+		IERC20(address(repToken)).safeTransfer(msg.sender, repToken.balanceOf(address(this)));
 	}
 
 	function transferEth(address payable receiver, uint256 amount) external onlyForker {

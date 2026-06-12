@@ -18,9 +18,16 @@ type SecurityPoolVaultDirectoryProps = {
 
 export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, renderBadge, renderTitle, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }: SecurityPoolVaultDirectoryProps) {
 	if (pool === undefined || pool.vaults.length === 0) return <>{emptyState}</>
+	const loadedVaultCount = BigInt(pool.vaults.length)
+	const showingPartialDirectory = loadedVaultCount < pool.vaultCount
 
 	return (
 		<div className='vault-position-list'>
+			{showingPartialDirectory ? (
+				<p className='detail'>
+					Showing {loadedVaultCount.toString()} of {pool.vaultCount.toString()} active vaults, newest activity first. Enter a vault address above to inspect any specific vault.
+				</p>
+			) : null}
 			{pool.vaults.map(vault => {
 				const collateralizationPercent = getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)
 				const collateralizationTarget = pool.securityMultiplier * 100n * 10n ** 18n

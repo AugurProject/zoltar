@@ -525,7 +525,7 @@ describe('SecurityPoolsOverviewSection', () => {
 						createSecurityPool({
 							marketDetails: createMarketDetails({ title: 'Pool with preview vaults' }),
 							securityPoolAddress: '0x0000000000000000000000000000000000000500',
-							vaultCount: 1n,
+							vaultCount: 5n,
 							vaults: [
 								{
 									lockedRepInEscalationGame: 0n,
@@ -547,5 +547,112 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
 		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
 		expect(poolCardQueries.getByRole('button', { name: 'Liquidate Vault' })).not.toBeNull()
+		expect(poolCardQueries.getByText('Showing 1 of 5 active vaults in this preview, newest activity first.')).not.toBeNull()
+		expect(poolCardQueries.getByText('+4 more vaults')).not.toBeNull()
+	})
+
+	test('preserves the loader-provided vault preview order instead of re-ranking by allowance', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							marketDetails: createMarketDetails({ title: 'Ordered vault preview pool' }),
+							securityPoolAddress: '0x0000000000000000000000000000000000000700',
+							vaultCount: 3n,
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000701',
+								},
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 9n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000702',
+								},
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 5n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000703',
+								},
+							],
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const poolCard = getSecurityPoolCard('Ordered vault preview pool')
+		const previewRows = Array.from(poolCard.querySelectorAll('.security-pool-browse-vault-row'))
+		expect(previewRows).toHaveLength(3)
+		const previewAddresses = previewRows.map(row => {
+			if (!(row instanceof HTMLElement)) throw new Error('Expected vault preview row element')
+			const copyButton = within(row).getByRole('button', { name: /Copy address / })
+			return copyButton.getAttribute('aria-label')?.replace('Copy address ', '')
+		})
+		expect(previewAddresses).toEqual(['0x0000000000000000000000000000000000000701', '0x0000000000000000000000000000000000000702', '0x0000000000000000000000000000000000000703'])
+	})
+
+	test('keeps the connected wallet vault visible when it is appended outside the top browse preview', async () => {
+		const viewerVaultAddress = '0x0000000000000000000000000000000000000604'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					accountState: createAccountState({ address: viewerVaultAddress }),
+					securityPools: [
+						createSecurityPool({
+							marketDetails: createMarketDetails({ title: 'Viewer vault preview pool' }),
+							securityPoolAddress: '0x0000000000000000000000000000000000000600',
+							vaultCount: 6n,
+							vaults: [
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 8n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000601',
+								},
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 7n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000602',
+								},
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 6n,
+									unpaidEthFees: 0n,
+									vaultAddress: '0x0000000000000000000000000000000000000603',
+								},
+								{
+									lockedRepInEscalationGame: 0n,
+									repDepositShare: 10n,
+									securityBondAllowance: 1n,
+									unpaidEthFees: 0n,
+									vaultAddress: viewerVaultAddress,
+								},
+							],
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const poolCard = getSecurityPoolCard('Viewer vault preview pool')
+		const poolCardQueries = within(poolCard)
+		expect(poolCardQueries.getAllByRole('button', { name: `Copy address ${viewerVaultAddress}` }).length).toBeGreaterThan(0)
+		expect(poolCardQueries.getByText('Showing 4 of 6 active vaults in this preview, newest activity first.')).not.toBeNull()
+		expect(poolCardQueries.getByText('+2 more vaults')).not.toBeNull()
 	})
 })
