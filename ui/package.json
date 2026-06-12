@@ -24,6 +24,8 @@
 	"scripts": {
 		"preinstall": "bun ./scripts/link-node-modules.mjs",
 		"link:shared-modules": "bun ./scripts/link-node-modules.mjs",
+		"check:shared-dependency": "bun ../scripts/ensure-shared-package-fresh.mjs",
+		"refresh:shared-dependency": "bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
 		"contracts": "cd ../solidity && bun run setup",
 		"generate:shared-js": "cd .. && bun run shared:build",
 		"generate:contract-artifact": "cd .. && bun run generate:ui-contract-artifact",
@@ -32,11 +34,11 @@
 		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
 		"shared": "bun run generate:shared-js",
 		"build:workers": "bun ./build/workers.mts",
-		"build": "bun run shared && tsc && bun run build:workers",
-		"build:prod": "bun run shared && bun ./build/production.mts",
-		"build:tests": "bun run shared && bun ./build/tests.mts",
-		"watch": "bun run shared && tsc --watch",
-		"serve": "bun run shared && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
+		"build": "bun run shared && bun run refresh:shared-dependency && tsc && bun run build:workers",
+		"build:prod": "bun run shared && bun run refresh:shared-dependency && bun ./build/production.mts",
+		"build:tests": "bun run shared && bun run refresh:shared-dependency && bun ./build/tests.mts",
+		"watch": "cd .. && bun run ensure-shared-build && cd ui && bun run check:shared-dependency && tsc --watch",
+		"serve": "cd .. && bun run ensure-shared-build && cd ui && bun run check:shared-dependency && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
 		"vendor": "bun run generate:vendor"
 	}
 }
