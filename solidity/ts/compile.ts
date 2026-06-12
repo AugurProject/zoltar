@@ -59,6 +59,7 @@ const ContractData = funtypes.ReadonlyPartial({
 			object: funtypes.String,
 		}),
 	}),
+	storageLayout: funtypes.Unknown,
 })
 
 const CompileResult = funtypes.ReadonlyObject({
@@ -79,7 +80,7 @@ const mainCompilerSettings = {
 	},
 	outputSelection: {
 		'*': {
-			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.opcodes', 'evm.bytecode.sourceMap', 'evm.deployedBytecode.object', 'evm.deployedBytecode.opcodes', 'evm.deployedBytecode.sourceMap'],
+			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.opcodes', 'evm.bytecode.sourceMap', 'evm.deployedBytecode.object', 'evm.deployedBytecode.opcodes', 'evm.deployedBytecode.sourceMap', 'storageLayout'],
 		},
 	},
 }
@@ -249,7 +250,10 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 				.replace(/\//g, '_')
 				.replace(/\\/g, '_')
 				.replace(/\.sol$/, '')}_${contractName}`,
-			contractData,
+			contractData: {
+				abi: isObjectRecord(contractData) ? contractData['abi'] : undefined,
+				evm: isObjectRecord(contractData) ? contractData['evm'] : undefined,
+			},
 		}))
 	})
 	if (new Set(contracts.map(contract => contract.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
