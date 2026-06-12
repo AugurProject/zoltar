@@ -938,6 +938,7 @@ describe('Open Oracle helpers', () => {
 
 		expect(details.managerAddress).toBe(managerAddress)
 		expect(details.openOracleAddress).toBe(getOpenOracleAddress())
+		expect(details.activeStagedOperationCount).toBe(0n)
 		expect(details.pendingReportId).toBe(0n)
 		expect(details.pendingOperation).toBe(undefined)
 		expect(details.pendingOperationSlotId).toBe(0n)
@@ -976,6 +977,7 @@ describe('Open Oracle helpers', () => {
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 
 		expect(details.pendingOperationSlotId).toBeGreaterThan(0n)
+		expect(details.activeStagedOperationCount).toBe(1n)
 		expect(details.pendingOperation).toBeDefined()
 		expect(details.pendingOperation?.operation).toBe('setSecurityBondsAllowance')
 		expect(details.pendingOperation?.amount).toBe(0n)
@@ -997,14 +999,19 @@ describe('Open Oracle helpers', () => {
 		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const firstOperationId = firstResult.queuedOperation?.operationId
+		const secondOperationId = secondResult.queuedOperation?.operationId
 		if (firstOperationId === undefined) throw new Error('Expected the first queued operation id to be defined')
+		if (secondOperationId === undefined) throw new Error('Expected the second queued operation id to be defined')
 
 		expect(firstResult.queuedOperation?.isPendingSlot).toBe(true)
 		expect(secondResult.queuedOperation).toBeDefined()
 		expect(secondResult.queuedOperation?.isPendingSlot).toBe(false)
 		expect(secondResult.queuedOperation?.operationId).toBeGreaterThan(firstOperationId)
+		expect(details.activeStagedOperationCount).toBe(2n)
 		expect(details.pendingOperationSlotId).toBe(firstOperationId)
 		expect(details.pendingOperation?.operationId).toBe(firstOperationId)
+		expect(details.stagedOperations?.map(operation => operation.operationId)).toEqual([secondOperationId, firstOperationId])
+		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setSecurityBondsAllowance'])
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {

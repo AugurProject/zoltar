@@ -1,5 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { encodeAbiParameters, keccak256, type Address } from 'viem'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -20,7 +21,6 @@ import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact
 
 const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
-const FORK_THRESHOLD_DIVISOR = 20n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -89,7 +89,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 
 		// Ensure initial fork threshold > escalationThreshold (should be twice)
-		const initialForkThreshold = initialTotalSupply / FORK_THRESHOLD_DIVISOR
+		const initialForkThreshold = initialTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		assert.ok(initialForkThreshold > escalationThreshold, 'initial fork threshold must be greater than escalation threshold')
 
 		// Lower the tracked universe theoretical supply to make actual fork threshold less than escalationThreshold
@@ -103,7 +103,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			},
 		})
 
-		const actualForkThreshold = newTotalSupply / FORK_THRESHOLD_DIVISOR
+		const actualForkThreshold = newTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		assert.ok(actualForkThreshold < escalationThreshold, 'actual fork threshold should be lower after override')
 
 		// Advance time to allow the escalation game to finish and outcome to be known
@@ -135,7 +135,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const repToken = getRepTokenAddress(genesisUniverse)
 		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 		const overriddenTotalSupply = initialTotalSupply / 10n
-		const expectedThreshold = overriddenTotalSupply / FORK_THRESHOLD_DIVISOR / 2n
+		const expectedThreshold = overriddenTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor / 2n
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 
 		await mockWindow.addStateOverrides({
@@ -149,6 +149,16 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await mockWindow.setTime(questionEndDate + 1n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
 
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPoolAddresses.securityPool,
+				functionName: 'initialEscalationGameDeposit',
+				args: [],
+			}),
+			DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit,
+			'initial escalation deposit should match deployment config',
+		)
 		assert.strictEqual(await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
 	})
 })

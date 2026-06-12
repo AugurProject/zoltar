@@ -324,14 +324,16 @@ export function SecurityPoolsOverviewSection({
 														{pool.vaults.length === 0 ? (
 															<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
 														) : (
-															[...pool.vaults]
-																.sort((left, right) => {
-																	if (left.securityBondAllowance === right.securityBondAllowance) return 0
-
-																	return left.securityBondAllowance > right.securityBondAllowance ? -1 : 1
-																})
-																.slice(0, 3)
-																.map(vault => {
+															(() => {
+																const previewVaults = [...pool.vaults]
+																const accountAddress = accountState.address
+																if (accountAddress !== undefined) {
+																	const viewerVault = pool.vaults.find(vault => sameAddress(vault.vaultAddress, accountAddress))
+																	if (viewerVault !== undefined && !previewVaults.some(vault => sameAddress(vault.vaultAddress, viewerVault.vaultAddress))) {
+																		previewVaults.push(viewerVault)
+																	}
+																}
+																return previewVaults.map(vault => {
 																	const vaultCollateralizationPercent = getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)
 																	const vaultCollateralizationTarget = pool.securityMultiplier * 100n * 10n ** 18n
 																	return (
@@ -368,13 +370,19 @@ export function SecurityPoolsOverviewSection({
 																		</div>
 																	)
 																})
+															})()
 														)}
+														{pool.vaultCount > BigInt(pool.vaults.length) ? (
+															<p className='detail'>
+																Showing {pool.vaults.length.toString()} of {pool.vaultCount.toString()} active vaults in this preview, newest activity first.
+															</p>
+														) : undefined}
 													</div>
 												)}
-												{pool.vaultCount > 3n ? (
+												{pool.vaultCount > BigInt(pool.vaults.length) ? (
 													<p className='detail'>
-														+{(pool.vaultCount - 3n).toString()} more vault
-														{pool.vaultCount - 3n === 1n ? '' : 's'}
+														+{(pool.vaultCount - BigInt(pool.vaults.length)).toString()} more vault
+														{pool.vaultCount - BigInt(pool.vaults.length) === 1n ? '' : 's'}
 													</p>
 												) : undefined}
 											</div>

@@ -2227,6 +2227,7 @@ describe('SecurityPoolWorkflowSection', () => {
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: zeroAddress,
 					poolOracleManagerDetails: {
+						activeStagedOperationCount: 4n,
 						callbackStateHash: undefined,
 						exactToken1Report: undefined,
 						isPriceValid: true,
@@ -2260,6 +2261,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
+		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
 	})
 

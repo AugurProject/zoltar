@@ -1,15 +1,32 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert/strict'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { addRepToMigrationBalance, deployChild, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
+import { encodeDeployData, hexToBytes } from 'viem'
+import {
+	addRepToMigrationBalance,
+	deployChild,
+	ensureZoltarDeployed,
+	forkUniverse,
+	getMigrationRepBalance,
+	getRepTokenAddress,
+	getTotalTheoreticalSupply,
+	getUniverseData,
+	getZoltarAddress,
+	getZoltarForkBurnDivisor,
+	getZoltarForkThreshold,
+	getZoltarForkThresholdDivisor,
+	isZoltarDeployed,
+	splitMigrationRep,
+} from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
-import { Zoltar_Zoltar } from '../types/contractArtifact'
+import { peripherals_test_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
@@ -36,6 +53,65 @@ describe('Contract Test Suite', () => {
 
 		const genesisUniverseData = await getUniverseData(client, 0n)
 		assert.strictEqual(BigInt(genesisUniverseData.reputationToken), GENESIS_REPUTATION_TOKEN, 'Genesis universe not recognized or not initialized properly')
+	})
+
+	test('exposes configured fork economics', async () => {
+		assert.strictEqual(await getZoltarForkThresholdDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, 'fork threshold divisor mismatch')
+		assert.strictEqual(await getZoltarForkBurnDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor, 'fork burn divisor mismatch')
+	})
+
+	test('constructor rejects invalid fork divisors', async () => {
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const invalidThresholdDeployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, 1n, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+		const invalidBurnDeployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, 1n],
+		})
+
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: invalidThresholdDeployment })),
+			/fork threshold divisor/i,
+		)
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: invalidBurnDeployment })),
+			/fork burn divisor/i,
+		)
+	})
+
+	test('forkUniverse rejects false-returning genesis REP transfers', async () => {
+		const falseReturningGenesisRep = hexToBytes(`0x${peripherals_test_FalseReturningERC20_FalseReturningERC20.evm.deployedBytecode.object}`)
+		if (falseReturningGenesisRep === undefined) throw new Error('false returning token bytecode missing')
+		const questionData = {
+			title: 'false-returning genesis rep fork test',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				code: falseReturningGenesisRep,
+			},
+		})
+
+		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /token returned false/i)
 	})
 
 	test('canForkQuestion', async () => {

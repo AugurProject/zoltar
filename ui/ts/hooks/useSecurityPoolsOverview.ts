@@ -61,7 +61,17 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				securityPoolOverviewError.value = undefined
 			},
 			load: async () => {
-				const loadOptions = nextCheckedAddress === undefined ? { vaultDetailMode: 'selected' as const } : { selectedSecurityPoolAddress: nextCheckedAddress, vaultDetailMode: 'selected' as const }
+				const loadOptions =
+					nextCheckedAddress === undefined
+						? {
+								...(accountAddress === undefined ? {} : { accountAddress }),
+								vaultDetailMode: 'selected' as const,
+							}
+						: {
+								...(accountAddress === undefined ? {} : { accountAddress }),
+								selectedSecurityPoolAddress: nextCheckedAddress,
+								vaultDetailMode: 'selected' as const,
+							}
 				return await loadAllSecurityPools(createConnectedReadClient(), loadOptions)
 			},
 			onSuccess: pools => {
@@ -83,7 +93,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				if (!isCurrent()) return
 				securityPoolOverviewError.value = undefined
 			},
-			load: async () => await loadSecurityPoolPage(createConnectedReadClient(), pageIndex, pageSize),
+			load: async () => await loadSecurityPoolPage(createConnectedReadClient(), pageIndex, pageSize, accountAddress),
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true
 				securityPoolBrowseCount.value = page.poolCount

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { waitFor, within } from '@testing-library/dom'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { type Address, zeroAddress } from 'viem'
+import { getAddress, type Address, zeroAddress } from 'viem'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '../types/contracts.js'
@@ -21,12 +21,17 @@ const YES_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000
 const STALE_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa2'
 
 let recoveredPools: ListedSecurityPool[] = []
+let loadAllSecurityPoolsCallAddresses: (Address | undefined)[] = []
 let loadForkAuctionDetailsCalls = 0
 let childAuctionDetailsFactory = (securityPoolAddress: Address) => createChildAuctionDetails(securityPoolAddress)
+const loadAllSecurityPoolsMock = mock(async (_client: unknown, options?: { accountAddress?: Address }) => {
+	loadAllSecurityPoolsCallAddresses.push(options?.accountAddress)
+	return recoveredPools
+})
 
 mock.module('../contracts.js', () => ({
 	...actualContracts,
-	loadAllSecurityPools: mock(async () => recoveredPools),
+	loadAllSecurityPools: loadAllSecurityPoolsMock,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
 		loadForkAuctionDetailsCalls += 1
 		return childAuctionDetailsFactory(securityPoolAddress)
@@ -232,6 +237,8 @@ describe('ForkAuctionSection child pool recovery', () => {
 
 	beforeEach(() => {
 		recoveredPools = []
+		loadAllSecurityPoolsCallAddresses = []
+		loadAllSecurityPoolsMock.mockClear()
 		loadForkAuctionDetailsCalls = 0
 		childAuctionDetailsFactory = securityPoolAddress => createChildAuctionDetails(securityPoolAddress)
 		cleanupDom = installDomEnvironment().cleanup
@@ -324,6 +331,45 @@ describe('ForkAuctionSection child pool recovery', () => {
 		await waitFor(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(2)
 			expect(within(document.body).queryByRole('button', { name: `Copy address ${secondTruthAuctionAddress}` })).not.toBeNull()
+		})
+	})
+
+	test('reloads recovered child pool previews when the connected wallet changes', async () => {
+		const firstWallet = getAddress('0x0000000000000000000000000000000000000ba1')
+		const secondWallet = getAddress('0x0000000000000000000000000000000000000ba2')
+		recoveredPools = [createChildPool()]
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: firstWallet }),
+					currentStageView: 'auction',
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(loadAllSecurityPoolsCallAddresses).toEqual([firstWallet])
+		})
+
+		await act(() => {
+			render(
+				h(
+					ForkAuctionSection,
+					createProps({
+						accountState: createAccountState({ address: secondWallet }),
+						currentStageView: 'auction',
+						selectedStageView: 'auction',
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(loadAllSecurityPoolsCallAddresses).toEqual([firstWallet, secondWallet])
 		})
 	})
 })

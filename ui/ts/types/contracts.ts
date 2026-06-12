@@ -181,6 +181,7 @@ export type SecurityVaultActionResult = ActionResult & {
 }
 
 export type OracleManagerDetails = {
+	activeStagedOperationCount?: bigint
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
 	isPriceValid: boolean
@@ -193,6 +194,7 @@ export type OracleManagerDetails = {
 	pendingReportId: bigint
 	priceValidUntilTimestamp: bigint | undefined
 	requestPriceEthCost: bigint
+	stagedOperations?: StagedOracleOperation[]
 	token1: Address | undefined
 	token2: Address | undefined
 }

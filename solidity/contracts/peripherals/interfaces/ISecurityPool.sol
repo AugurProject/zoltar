@@ -49,6 +49,8 @@ interface ISecurityPool {
 	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex, uint256 lockedRepInEscalationGame);
 	function getVaultCount() external view returns (uint256);
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
+	function getActiveVaultCount() external view returns (uint256);
+	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
 	function parent() external view returns (ISecurityPool);
 	function systemState() external view returns (SystemState);
 	function shareToken() external view returns (IShareToken);
@@ -66,7 +68,7 @@ interface ISecurityPool {
 	function getAvailableRepBalance() external view returns (uint256);
 	function getTotalRepBalance() external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
-	function initialEscalationGameDeposit() external pure returns (uint256);
+	function initialEscalationGameDeposit() external view returns (uint256);
 
 	function setStartingParams(uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external;
 

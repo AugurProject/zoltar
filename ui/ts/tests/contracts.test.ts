@@ -7,6 +7,7 @@ import {
 	loadAllSecurityPools,
 	loadEscalationDeposits,
 	loadForkAuctionDetails,
+	loadOracleManagerDetails,
 	loadOpenOracleReportSummaries,
 	loadReportingDetails,
 	loadSecurityPoolPage,
@@ -257,7 +258,7 @@ describe('contracts helpers', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount') return 0n
+				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -321,7 +322,7 @@ describe('contracts helpers', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount') return 0n
+				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -333,6 +334,76 @@ describe('contracts helpers', () => {
 
 		expect(parentPool.hasForkActivity).toBe(false)
 		expect(parentPool.universeHasForked).toBe(true)
+	})
+
+	test('loadSecurityPoolPage caps active vault previews and appends the connected wallet vault when needed', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
+		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')] as const
+		const loadedVaultAddresses: Address[] = []
+		let capturedVaultRangeArgs: readonly [bigint, bigint] | undefined
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const firstContract = request.contracts[0]
+				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 100n, 0n, 0n]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: securityPoolAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getActiveVaultCount') return 5n
+				if (request.functionName === 'getActiveVaults') {
+					const args = request.args
+					if (args === undefined) throw new Error('Expected getActiveVaults args')
+					const startIndex = args[0]
+					const count = args[1]
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint vault range args')
+					capturedVaultRangeArgs = [startIndex, count]
+					return previewVaultAddresses
+				}
+				if (request.functionName === 'securityVaults') {
+					const args = request.args
+					if (args === undefined) throw new Error('Expected securityVaults args')
+					const rawVaultAddress = args[0]
+					if (typeof rawVaultAddress !== 'string') throw new Error('Expected vault address argument')
+					const currentVaultAddress = getAddress(rawVaultAddress)
+					loadedVaultAddresses.push(currentVaultAddress)
+					if (currentVaultAddress === viewerVaultAddress) return [1n, 0n, 0n, 0n, 0n]
+					return [2n, 0n, 0n, 0n, 0n]
+				}
+				if (request.functionName === 'getTotalRepBalance') return 100n
+				if (request.functionName === 'poolOwnershipDenominator') return 10n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadSecurityPoolPage(client, 0, 1, viewerVaultAddress)
+		const [pool] = page.pools
+		if (pool === undefined) throw new Error('Expected one paged security pool')
+
+		expect(capturedVaultRangeArgs).toEqual([0n, 3n])
+		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses, viewerVaultAddress])
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
+		expect(pool.vaults.at(-1)?.repDepositShare).toBe(10n)
+		expect(pool.vaultCount).toBe(5n)
 	})
 
 	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {
@@ -388,12 +459,12 @@ describe('contracts helpers', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount') {
+				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') {
 					const address = Reflect.get(request, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					return getAddress(address) === securityPoolAddress ? 1n : 2n
 				}
-				if (request.functionName === 'getVaults') {
+				if (request.functionName === 'getVaults' || request.functionName === 'getActiveVaults') {
 					const address = Reflect.get(request, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					const normalizedAddress = getAddress(address)
@@ -401,6 +472,8 @@ describe('contracts helpers', () => {
 					if (normalizedAddress === alternateSecurityPoolAddress) throw new Error('Unexpected vault load for unselected pool')
 					return [vaultAddress]
 				}
+				if (request.functionName === 'getTotalRepBalance') return 5n
+				if (request.functionName === 'poolOwnershipDenominator') return 1n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -423,6 +496,70 @@ describe('contracts helpers', () => {
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
 		expect(deferredPool.vaultCount).toBe(2n)
+	})
+
+	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const pendingOperationSlotId = 12n
+		const previewOperationIds = Array.from({ length: 25 }, (_, index) => 40n - BigInt(index))
+		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const firstContract = request.contracts[0]
+				if (getContractFunctionName(firstContract) !== 'lastPrice') throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+				return [1n, pendingOperationSlotId, 0n, 5n, true, 10n, 40n]
+			},
+			readContract: async request => {
+				if (request.functionName === 'getActiveStagedOperations') {
+					const args = request.args
+					if (args === undefined) throw new Error('Expected getActiveStagedOperations args')
+					const startIndex = args[0]
+					const count = args[1]
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint staged operation args')
+					capturedActiveOperationArgs = [startIndex, count]
+					return [
+						previewOperationIds,
+						previewOperationIds.map(operationId => ({
+							amount: operationId,
+							initiatorVault: vaultAddress,
+							operation: 1,
+							queuedAt: 0n,
+							snapshotDenominator: 0n,
+							snapshotTargetAllowance: 0n,
+							snapshotTargetOwnership: 0n,
+							snapshotTotalRep: 0n,
+							targetVault: vaultAddress,
+							validForSeconds: 60n,
+						})),
+					]
+				}
+				if (request.functionName === 'getPendingOperationSlot') {
+					return {
+						amount: 999n,
+						initiatorVault: vaultAddress,
+						operation: 0,
+						queuedAt: 0n,
+						snapshotDenominator: 0n,
+						snapshotTargetAllowance: 0n,
+						snapshotTargetOwnership: 0n,
+						snapshotTotalRep: 0n,
+						targetVault: alternateSecurityPoolAddress,
+						validForSeconds: 60n,
+					}
+				}
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const details = await loadOracleManagerDetails(client, managerAddress)
+
+		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
+		expect(details.activeStagedOperationCount).toBe(40n)
+		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
+		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
+		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
+		expect(details.stagedOperations).toHaveLength(26)
 	})
 
 	test('settleOracleReport sends settle with an explicit gas limit', async () => {

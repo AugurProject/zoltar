@@ -56,8 +56,15 @@ contract SecurityPoolOracleCoordinator {
 
 	// This is not a FIFO queue. We keep an append-only operation record and a single
 	// pending slot that settlement can auto-execute once a fresh oracle price arrives.
+	// Active-operation paging is newest-first so UI previews remain stable after manual
+	// execution removes older entries from the set.
 	uint256 public stagedOperationCounter;
 	mapping(uint256 => StagedOperation) public stagedOperations;
+	uint256 private activeStagedOperationCount;
+	uint256 private latestActiveStagedOperationId;
+	mapping(uint256 => uint256) private olderActiveStagedOperationIds;
+	mapping(uint256 => uint256) private newerActiveStagedOperationIds;
+	mapping(uint256 => bool) private isActiveStagedOperation;
 
 	constructor(
 		OpenOracle _openOracle,
@@ -181,18 +188,19 @@ contract SecurityPoolOracleCoordinator {
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
 		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
-		stagedOperations[operationId] = StagedOperation({
-			operation: operation,
-			initiatorVault: msg.sender,
+			stagedOperations[operationId] = StagedOperation({
+				operation: operation,
+				initiatorVault: msg.sender,
 			targetVault: targetVault,
 			amount: amount,
 			queuedAt: block.timestamp,
 			validForSeconds: validForSeconds,
 			snapshotTargetOwnership: snapshotTargetOwnership,
 			snapshotTargetAllowance: snapshotTargetAllowance,
-			snapshotTotalRep: snapshotTotalRep,
-			snapshotDenominator: snapshotDenominator
-		});
+				snapshotTotalRep: snapshotTotalRep,
+				snapshotDenominator: snapshotDenominator
+			});
+			_trackActiveStagedOperation(operationId);
 
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
@@ -229,6 +237,7 @@ contract SecurityPoolOracleCoordinator {
 		require(stagedOperation.initiatorVault != address(0), 'no such operation');
 		require(isPriceValid(), 'price is not valid to execute');
 		require(block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds, 'staged operation expired');
+		_consumeActiveStagedOperation(operationId);
 		stagedOperations[operationId].initiatorVault = address(0);
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			try
@@ -279,5 +288,57 @@ contract SecurityPoolOracleCoordinator {
 
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {
 		return stagedOperations[pendingOperationSlotId];
+	}
+
+	function getActiveStagedOperationCount() public view returns (uint256) {
+		return activeStagedOperationCount;
+	}
+
+	function getActiveStagedOperations(uint256 startIndex, uint256 count) public view returns (uint256[] memory operationIds, StagedOperation[] memory operations) {
+		if (count == 0 || startIndex >= activeStagedOperationCount) {
+			return (new uint256[](0), new StagedOperation[](0));
+		}
+		uint256 availableCount = activeStagedOperationCount - startIndex;
+		uint256 resultCount = count < availableCount ? count : availableCount;
+		operationIds = new uint256[](resultCount);
+		operations = new StagedOperation[](resultCount);
+		uint256 operationId = latestActiveStagedOperationId;
+		for (uint256 skipped = 0; skipped < startIndex && operationId != 0; skipped++) {
+			operationId = olderActiveStagedOperationIds[operationId];
+		}
+		for (uint256 index = 0; index < resultCount && operationId != 0; index++) {
+			operationIds[index] = operationId;
+			operations[index] = stagedOperations[operationId];
+			operationId = olderActiveStagedOperationIds[operationId];
+		}
+	}
+
+	function _trackActiveStagedOperation(uint256 operationId) private {
+		if (isActiveStagedOperation[operationId]) return;
+		isActiveStagedOperation[operationId] = true;
+		activeStagedOperationCount++;
+		if (latestActiveStagedOperationId != 0) {
+			olderActiveStagedOperationIds[operationId] = latestActiveStagedOperationId;
+			newerActiveStagedOperationIds[latestActiveStagedOperationId] = operationId;
+		}
+		latestActiveStagedOperationId = operationId;
+	}
+
+	function _consumeActiveStagedOperation(uint256 operationId) private {
+		if (!isActiveStagedOperation[operationId]) return;
+		uint256 olderOperationId = olderActiveStagedOperationIds[operationId];
+		uint256 newerOperationId = newerActiveStagedOperationIds[operationId];
+		if (newerOperationId != 0) {
+			olderActiveStagedOperationIds[newerOperationId] = olderOperationId;
+		} else {
+			latestActiveStagedOperationId = olderOperationId;
+		}
+		if (olderOperationId != 0) {
+			newerActiveStagedOperationIds[olderOperationId] = newerOperationId;
+		}
+		delete olderActiveStagedOperationIds[operationId];
+		delete newerActiveStagedOperationIds[operationId];
+		delete isActiveStagedOperation[operationId];
+		activeStagedOperationCount--;
 	}
 }

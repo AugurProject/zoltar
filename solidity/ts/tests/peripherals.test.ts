@@ -48,6 +48,8 @@ import {
 	getRepToken,
 	getShareTokenSupply,
 	getAwaitingForkContinuation,
+	getActiveVaultCount,
+	getActiveVaults,
 	getSecurityPoolsEscalationGame,
 	getSecurityVault,
 	getSystemState,
@@ -449,6 +451,46 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.deepStrictEqual(firstPage, [client.account.address, attackerClient.account.address], 'first page should include the first two vaults in insertion order')
 		assert.deepStrictEqual(secondPage, [thirdClient.account.address], 'second page should include the remaining vault')
 		assert.deepStrictEqual(emptyPage, [], 'out of range paging should return an empty array')
+	})
+
+	test('active vault paging excludes zero-balance historical vaults', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), 2n, 'historical vault count should include both vaults')
+		strictEqualTypeSafe(await getActiveVaultCount(client, securityPoolAddresses.securityPool), 2n, 'active vault count should include both funded vaults')
+
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, reportedRepEthPrice)
+
+		const historicalVaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
+		const activeVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
+		const activeVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeVaultCount)
+
+		strictEqualTypeSafe(historicalVaultCount, 2n, 'historical vault count should remain append only')
+		strictEqualTypeSafe(activeVaultCount, 1n, 'active vault count should prune fully exited vaults')
+		assert.deepStrictEqual(activeVaults, [client.account.address], 'active vault paging should only return currently active vaults')
+	})
+
+	test('active vault paging stays newest-first after vault removal and later vault updates', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		await approveAndDepositRep(thirdClient, repDeposit, questionId)
+
+		const newestFirstVaultsBeforeRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
+		assert.deepStrictEqual(newestFirstVaultsBeforeRemoval, [thirdClient.account.address, attackerClient.account.address, client.account.address], 'active vault paging should list the most recently activated vaults first')
+
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, reportedRepEthPrice)
+
+		const newestFirstVaultsAfterRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
+		assert.deepStrictEqual(newestFirstVaultsAfterRemoval, [thirdClient.account.address, client.account.address], 'removing a middle vault should preserve newest-first ordering for the remaining active vaults')
+
+		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+		const newestFirstVaultsAfterTouch = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
+		assert.deepStrictEqual(newestFirstVaultsAfterTouch, [client.account.address, thirdClient.account.address], 'updating an active vault should move it to the front of the newest-first active vault preview')
 	})
 
 	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {

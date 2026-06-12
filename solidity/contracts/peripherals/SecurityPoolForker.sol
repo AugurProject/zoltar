@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { IERC20 } from '../IERC20.sol';
 import { ReputationToken } from '../ReputationToken.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
-import { IShareToken } from './interfaces/IShareToken.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -17,6 +18,7 @@ import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultM
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerStorage.sol';
 
 contract SecurityPoolForker is ISecurityPoolForker, SecurityPoolForkerVaultMigrationBase {
+	using SafeERC20Ops for IERC20;
 	uint256 constant ESCALATION_TIME_LENGTH = 4233600; // 7 weeks
 	address private immutable vaultMigrationDelegate;
 
@@ -163,7 +165,7 @@ contract SecurityPoolForker is ISecurityPoolForker, SecurityPoolForkerVaultMigra
 		uint256 previousMigrationBalance = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		uint256 repBalanceAfter = rep.balanceOf(address(this));
 		uint256 repToLock = repBalanceAfter - repBalanceBefore;
-		if (repToLock > 0) rep.transfer(address(migrationProxy), repToLock);
+		if (repToLock > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToLock);
 		uint256 proxyRepBalance = rep.balanceOf(address(migrationProxy));
 		if (proxyRepBalance > 0) migrationProxy.lockRep(proxyRepBalance);
 		data.repAtFork = previousMigrationBalance + proxyRepBalance;
@@ -300,7 +302,7 @@ contract SecurityPoolForker is ISecurityPoolForker, SecurityPoolForkerVaultMigra
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
 		uint256 repBalanceAfter = rep.balanceOf(address(this));
 		uint256 repToFork = repBalanceAfter - repBalanceBefore;
-		if (repToFork > 0) rep.transfer(address(migrationProxy), repToFork);
+		if (repToFork > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToFork);
 		migrationProxy.forkUniverse(securityPool.questionId());
 		initiateSecurityPoolFork(securityPool);
 	}
