@@ -1,7 +1,26 @@
 import * as path from 'path'
 import * as url from 'url'
 import { promises as fs } from 'fs'
-import { FileType, recursiveDirectoryCopy } from '@zoltu/file-copier'
+type FileType = 'file' | 'directory'
+
+async function recursiveDirectoryCopy(source: string, destination: string, inclusionPredicate: (path: string, fileType: FileType) => boolean | Promise<boolean>, rewriteCallback?: (sourcePath: string, destinationPath: string) => Promise<void>): Promise<void> {
+	await fs.mkdir(destination, { recursive: true })
+	const entries = await fs.readdir(source, { withFileTypes: true })
+	for (const entry of entries) {
+		const sourcePath = path.join(source, entry.name)
+		const destinationPath = path.join(destination, entry.name)
+		if (entry.isDirectory()) {
+			if (await inclusionPredicate(sourcePath, 'directory')) {
+				await recursiveDirectoryCopy(sourcePath, destinationPath, inclusionPredicate, rewriteCallback)
+			}
+		} else if (entry.isFile()) {
+			if (await inclusionPredicate(sourcePath, 'file')) {
+				await fs.copyFile(sourcePath, destinationPath)
+				if (rewriteCallback) await rewriteCallback(sourcePath, destinationPath)
+			}
+		}
+	}
+}
 import { copyProjectArtifacts } from './projectArtifacts.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
