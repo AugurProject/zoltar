@@ -43,7 +43,7 @@ for (const output of result.outputs) {
 	if (!output.path.endsWith('.js.map')) continue
 
 	const rawMap = JSON.parse(await output.text()) as unknown as import('source-map').RawSourceMap
-	const consumer = new SourceMapConsumer(rawMap)
+	const consumer = await new SourceMapConsumer(rawMap)
 	const generator = new SourceMapGenerator(rawMap.file ? { file: rawMap.file } : {})
 
 	for (let i = 0; i < rawMap.sources.length; i++) {

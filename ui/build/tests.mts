@@ -28,6 +28,10 @@ async function buildTests() {
 	for (const testFile of testFiles) {
 		const source = await fs.readFile(testFile, 'utf8')
 		const loader = path.extname(testFile) === '.tsx' ? 'tsx' : 'ts'
+		let transformSource = source
+		if (loader === 'tsx' && !/\bimport\s*\{[^}]*\bh\b[^}]*\}\s*from\s*['"]preact['"]/.test(source)) {
+			transformSource = `import { h } from 'preact'\n${source}`
+		}
 		const code = await new Bun.Transpiler({
 			loader,
 			tsconfig: {
@@ -37,7 +41,7 @@ async function buildTests() {
 					jsxFragmentFactory: 'Fragment',
 				},
 			},
-		}).transform(source)
+		}).transform(transformSource)
 		const outputFile = path.join(TEST_OUTPUT_ROOT_PATH, `${path.relative(TEST_SOURCE_ROOT_PATH, testFile).replace(/\.[^.]+$/, '')}.js`)
 		await fs.mkdir(path.dirname(outputFile), { recursive: true })
 		await fs.writeFile(outputFile, code)
