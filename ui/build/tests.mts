@@ -32,8 +32,9 @@ async function buildTests() {
 			loader,
 			tsconfig: {
 				compilerOptions: {
-					jsx: 'react-jsx',
-					jsxImportSource: 'preact',
+					jsx: 'react',
+					jsxFactory: 'h',
+					jsxFragmentFactory: 'Fragment',
 				},
 			},
 		}).transform(source)
