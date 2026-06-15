@@ -2,7 +2,6 @@ import * as path from 'path'
 import * as url from 'url'
 import { promises as fs } from 'fs'
 import * as process from 'node:process'
-import esbuild from 'esbuild'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
@@ -28,17 +27,32 @@ async function buildTests() {
 	await fs.mkdir(TEST_OUTPUT_ROOT_PATH, { recursive: true })
 	for (const testFile of testFiles) {
 		const source = await fs.readFile(testFile, 'utf8')
-		const transformed = await esbuild.transform(source, {
-			format: 'esm',
-			loader: path.extname(testFile) === '.tsx' ? 'tsx' : 'ts',
-			jsx: 'automatic',
-			jsxImportSource: 'preact',
-			sourcefile: path.relative(UI_ROOT_PATH, testFile),
-			target: 'esnext',
-		})
+		const loader = path.extname(testFile) === '.tsx' ? 'tsx' : 'ts'
+		let transformSource = source
+		if (loader === 'tsx') {
+			const hasH = /\bimport\s*\{[^}]*\bh\b[^}]*\}\s*from\s*['"]preact['"]/.test(source)
+			const hasFragment = /\bimport\s*\{[^}]*\bFragment\b[^}]*\}\s*from\s*['"]preact['"]/.test(source)
+			if (!hasH && !hasFragment) {
+				transformSource = `import { h, Fragment } from 'preact'\n${source}`
+			} else if (!hasH) {
+				transformSource = `import { h } from 'preact'\n${source}`
+			} else if (!hasFragment) {
+				transformSource = `import { Fragment } from 'preact'\n${source}`
+			}
+		}
+		const code = await new Bun.Transpiler({
+			loader,
+			tsconfig: {
+				compilerOptions: {
+					jsx: 'react',
+					jsxFactory: 'h',
+					jsxFragmentFactory: 'Fragment',
+				},
+			},
+		}).transform(transformSource)
 		const outputFile = path.join(TEST_OUTPUT_ROOT_PATH, `${path.relative(TEST_SOURCE_ROOT_PATH, testFile).replace(/\.[^.]+$/, '')}.js`)
 		await fs.mkdir(path.dirname(outputFile), { recursive: true })
-		await fs.writeFile(outputFile, transformed.code)
+		await fs.writeFile(outputFile, code)
 	}
 }
 

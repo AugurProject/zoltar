@@ -2,7 +2,6 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import * as process from 'node:process'
 import * as url from 'node:url'
-import esbuild from 'esbuild'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
@@ -23,17 +22,6 @@ globalThis.process ??= process
 globalThis.global ??= globalThis
 `.trim()
 
-const sharedBuildOptions = {
-	bundle: true,
-	format: 'esm' as const,
-	keepNames: true,
-	minify: false,
-	platform: 'browser' as const,
-	sourcemap: true,
-	sourcesContent: true,
-	target: 'esnext',
-}
-
 async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 	await fs.mkdir(path.dirname(destinationPath), { recursive: true })
 	await fs.copyFile(sourcePath, destinationPath)
@@ -47,25 +35,64 @@ async function writeProductionIndexHtml() {
 }
 
 async function buildProductionApp() {
-	await esbuild.build({
-		...sharedBuildOptions,
-		chunkNames: 'chunks/[name]-[hash]',
-		entryNames: 'app',
-		entryPoints: [path.join(UI_ROOT_PATH, 'ts', 'index.ts')],
+	await Bun.build({
+		entrypoints: [path.join(UI_ROOT_PATH, 'ts', 'index.ts')],
+		naming: {
+			entry: 'app.js',
+			chunk: 'chunks/[name]-[hash].js',
+		},
 		outdir: DIST_ASSETS_PATH,
-		splitting: false,
+		target: 'browser',
+		sourcemap: 'linked',
 	})
 }
 
 async function buildProductionWorker() {
-	await esbuild.build({
-		...sharedBuildOptions,
-		banner: {
-			js: WORKER_BANNER,
-		},
-		entryPoints: [path.join(UI_ROOT_PATH, 'ts', 'simulation', 'tevmWorker.ts')],
-		outfile: path.join(DIST_ASSETS_PATH, 'tevmWorker.worker.js'),
+	const workerEntryPath = path.join(UI_ROOT_PATH, 'ts', 'simulation', 'tevmWorker.ts')
+	const BANNER_LINE_COUNT = WORKER_BANNER.split('\n').length
+
+	const result = await Bun.build({
+		entrypoints: [workerEntryPath],
+		naming: { entry: 'tevmWorker.worker.js' },
+		outdir: DIST_ASSETS_PATH,
+		target: 'browser',
+		sourcemap: 'linked',
 	})
+
+	for (const output of result.outputs) {
+		if (output.path.endsWith('.js')) {
+			const originalCode = await output.text()
+			await Bun.write(output.path, WORKER_BANNER + '\n' + originalCode)
+		}
+	}
+
+	const { SourceMapConsumer, SourceMapGenerator } = await import('source-map')
+	for (const output of result.outputs) {
+		if (!output.path.endsWith('.js.map')) continue
+
+		const rawMap = JSON.parse(await output.text()) as unknown as import('source-map').RawSourceMap
+		const consumer = await new SourceMapConsumer(rawMap)
+		const generator = new SourceMapGenerator(rawMap.file ? { file: rawMap.file } : {})
+
+		for (let i = 0; i < rawMap.sources.length; i++) {
+			const source = rawMap.sources[i]
+			const content = rawMap.sourcesContent?.[i]
+			if (source && content) generator.setSourceContent(source, content)
+		}
+
+		consumer.eachMapping(mapping => {
+			if (!mapping.source) return
+
+			generator.addMapping({
+				source: mapping.source,
+				original: { line: mapping.originalLine, column: mapping.originalColumn },
+				generated: { line: mapping.generatedLine + BANNER_LINE_COUNT, column: mapping.generatedColumn },
+				name: mapping.name ?? undefined,
+			})
+		})
+
+		await fs.writeFile(output.path, generator.toString())
+	}
 }
 
 export async function buildProductionBundle() {
