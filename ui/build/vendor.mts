@@ -2,7 +2,6 @@ import * as path from 'path'
 import * as url from 'url'
 import { promises as fs } from 'fs'
 import { FileType, recursiveDirectoryCopy } from '@zoltu/file-copier'
-import esbuild from 'esbuild'
 import { copyProjectArtifacts } from './projectArtifacts.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
@@ -59,37 +58,46 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 }
 
 async function bundleViem() {
-	await esbuild.build({
-		entryPoints: {
-			index: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'index.js'),
-			'chains/index': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'chains', 'index.js'),
-			'window/index': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'window', 'index.js'),
-			'actions/index': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'actions', 'index.js'),
-			'accounts/index': path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.js'),
-			'utils/index': path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.js'),
-		},
-		format: 'esm',
-		outdir: path.join(VENDOR_OUTPUT_PATH, 'viem'),
-		bundle: true,
-		platform: 'browser',
-		sourcemap: true,
-		target: 'esnext',
-	})
+	const viemOutRoot = path.join(VENDOR_OUTPUT_PATH, 'viem')
+	const viemEntries: Record<string, string> = {
+		'': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'index.js'),
+		chains: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'chains', 'index.js'),
+		window: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'window', 'index.js'),
+		actions: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'actions', 'index.js'),
+		accounts: path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.js'),
+		utils: path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.js'),
+	}
+	await Promise.all(
+		Object.entries(viemEntries).map(([subdir, entryPath]) =>
+			Bun.build({
+				entrypoints: [entryPath],
+				naming: { entry: 'index.js' },
+				outdir: path.join(viemOutRoot, subdir),
+				target: 'browser',
+				sourcemap: 'linked',
+			}),
+		),
+	)
 }
 
 async function bundleTevm() {
-	await esbuild.build({
-		entryPoints: {
-			index: path.join(MODULES_ROOT_PATH, 'tevm', 'index.js'),
-			'common/index': path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js'),
-		},
-		format: 'esm',
-		outdir: path.join(VENDOR_OUTPUT_PATH, 'tevm'),
-		bundle: true,
-		platform: 'browser',
-		sourcemap: true,
-		target: 'esnext',
-	})
+	const tevmOutRoot = path.join(VENDOR_OUTPUT_PATH, 'tevm')
+	await Promise.all([
+		Bun.build({
+			entrypoints: [path.join(MODULES_ROOT_PATH, 'tevm', 'index.js')],
+			naming: { entry: 'index.js' },
+			outdir: tevmOutRoot,
+			target: 'browser',
+			sourcemap: 'linked',
+		}),
+		Bun.build({
+			entrypoints: [path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
+			naming: { entry: 'index.js' },
+			outdir: path.join(tevmOutRoot, 'common'),
+			target: 'browser',
+			sourcemap: 'linked',
+		}),
+	])
 }
 
 const vendor = async () => {
