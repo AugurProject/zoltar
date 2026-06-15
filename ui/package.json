@@ -17,6 +17,7 @@
 		"@preact/signals": "2.0.1",
 		"buffer": "6.0.3",
 		"preact": "10.26.4",
+		"source-map": "0.6.1",
 		"tevm": "1.0.0-next.149",
 		"viem": "2.38.3"
 	},

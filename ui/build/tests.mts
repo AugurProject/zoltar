@@ -29,8 +29,16 @@ async function buildTests() {
 		const source = await fs.readFile(testFile, 'utf8')
 		const loader = path.extname(testFile) === '.tsx' ? 'tsx' : 'ts'
 		let transformSource = source
-		if (loader === 'tsx' && !/\bimport\s*\{[^}]*\bh\b[^}]*\}\s*from\s*['"]preact['"]/.test(source)) {
-			transformSource = `import { h } from 'preact'\n${source}`
+		if (loader === 'tsx') {
+			const hasH = /\bimport\s*\{[^}]*\bh\b[^}]*\}\s*from\s*['"]preact['"]/.test(source)
+			const hasFragment = /\bimport\s*\{[^}]*\bFragment\b[^}]*\}\s*from\s*['"]preact['"]/.test(source)
+			if (!hasH && !hasFragment) {
+				transformSource = `import { h, Fragment } from 'preact'\n${source}`
+			} else if (!hasH) {
+				transformSource = `import { h } from 'preact'\n${source}`
+			} else if (!hasFragment) {
+				transformSource = `import { Fragment } from 'preact'\n${source}`
+			}
 		}
 		const code = await new Bun.Transpiler({
 			loader,
