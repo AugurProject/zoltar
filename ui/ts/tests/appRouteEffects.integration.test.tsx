@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, within } from './testUtils/queries'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { useAppRouteEffects } from '../hooks/useAppRouteEffects.js'

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@testing-library/dom'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
 import { ScalarCreatePreview } from '../components/ScalarCreatePreview.js'

@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { fireEvent, waitFor, within } from '@testing-library/dom'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { describe, expect, mock, test } from 'bun:test'
 import type { Address } from 'viem'
 import { SimulationBanner } from '../components/SimulationBanner.js'

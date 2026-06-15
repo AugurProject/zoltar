@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@testing-library/dom'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
 import { AddressValue } from '../components/AddressValue.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'

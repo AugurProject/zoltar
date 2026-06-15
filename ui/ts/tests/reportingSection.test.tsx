@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, within } from './testUtils/queries'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'

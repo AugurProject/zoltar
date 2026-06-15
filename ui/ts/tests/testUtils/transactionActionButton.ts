@@ -1,5 +1,5 @@
 import { expect } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { within } from './queries'
 
 type ButtonState = {
 	disabled: boolean

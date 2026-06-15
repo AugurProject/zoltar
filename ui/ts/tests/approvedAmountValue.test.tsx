@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { within } from './testUtils/queries'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { ApprovedAmountValue, APPROVAL_MAX_DISPLAY_THRESHOLD, APPROVAL_MAX_LABEL } from '../components/ApprovedAmountValue.js'

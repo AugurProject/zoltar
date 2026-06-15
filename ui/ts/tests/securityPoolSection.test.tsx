@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
 import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolSection } from '../components/SecurityPoolSection.js'

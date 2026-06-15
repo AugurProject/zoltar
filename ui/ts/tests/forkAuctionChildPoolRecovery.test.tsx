@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { waitFor, within } from '@testing-library/dom'
+import { waitFor, within } from './testUtils/queries'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Address, zeroAddress } from 'viem'
