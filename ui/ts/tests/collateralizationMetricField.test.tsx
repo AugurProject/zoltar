@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { within } from './testUtils/queries'
 import { readFileSync } from 'node:fs'
 import { CollateralizationMetricField } from '../components/CollateralizationMetricField.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'

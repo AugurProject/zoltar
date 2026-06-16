@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, within } from './testUtils/queries'
 import { OverviewPanels } from '../components/OverviewPanels.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'

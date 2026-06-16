@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, within } from './testUtils/queries'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from 'viem'

@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { waitFor } from '@testing-library/dom'
+import { waitFor } from './testUtils/queries'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'

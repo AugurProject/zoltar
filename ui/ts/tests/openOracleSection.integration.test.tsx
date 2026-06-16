@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@testing-library/dom'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from 'viem'

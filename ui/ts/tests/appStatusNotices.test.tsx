@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { within } from './testUtils/queries'
 import { h } from 'preact'
 import { AppStatusNotices } from '../components/AppStatusNotices.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'

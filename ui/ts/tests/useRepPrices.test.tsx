@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { waitFor, within } from '@testing-library/dom'
+import { waitFor, within } from './testUtils/queries'
 import type { Address } from 'viem'
 import { createPublicClient, http } from 'viem'
 import type { SimulationController } from '../simulation/controller.js'

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { waitFor, within } from '@testing-library/dom'
+import { waitFor, within } from './testUtils/queries'
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
