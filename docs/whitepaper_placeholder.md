@@ -13,7 +13,7 @@ The stack in this repository has two distinct protocol identities.
 - `Zoltar` is the base oracle substrate.
 - `Augur Placeholder` is the application layer built on top of Zoltar.
 
-For the Zoltar substrate itself, including universes, question encoding, scalar math, and post-fork REP splitting, see [whitepaper_zoltar.md](./whitepaper_zoltar.md) or the visual HTML edition at [whitepaper_zoltar.html](./whitepaper_zoltar.html). This paper focuses on the market, underwriting, and collateral system layered above it.
+For the Zoltar substrate itself, including universes, question encoding, scalar math, and post-fork REP splitting, see the visual HTML edition at [whitepaper_zoltar.html](./whitepaper_zoltar.html). This paper focuses on the market, underwriting, and collateral system layered above it.
 
 Augur Placeholder is responsible for the economic system on top of that substrate:
 
@@ -304,7 +304,7 @@ Before finalization, a user who holds a complete set can burn all three legs and
 
 At the implementation level, `redeemShares` burns the holder’s full balance of the winning token id and pays `sharesToCash(amount)` out of the pool’s current collateral accounting. In the healthy case, this should correspond to a clean `1:1` redemption outcome against the economic meaning of a complete-set claim, subject to the pool’s collateral accounting remaining intact through migration and any required auction repair. The important edge case is fork recovery: if a child pool emerges from migration with incomplete collateral, the truth auction exists to sell REP for ETH so that the child pool can restore the collateral base needed for clean redemption.
 
-Shares can also migrate across forks. `ShareToken.migrate` burns a parent-universe token id and mints corresponding child-universe token ids for one or more target outcomes, provided the target outcomes are valid and non-malformed for the fork question. If multiple target outcomes are selected, the holder’s full burned balance is reproduced into each selected child universe. This colored-coin style duplication behavior depends directly on Zoltar’s universe and fork state, which is described in [whitepaper_zoltar.md](./whitepaper_zoltar.md).
+Shares can also migrate across forks. `ShareToken.migrate` burns a parent-universe token id and mints corresponding child-universe token ids for one or more target outcomes, provided the target outcomes are valid and non-malformed for the fork question. If multiple target outcomes are selected, the holder’s full burned balance is reproduced into each selected child universe. This colored-coin style duplication behavior depends directly on Zoltar’s universe and fork state, which is described in [whitepaper_zoltar.html](./whitepaper_zoltar.html).
 
 ## 6. Escalation Resolution
 
@@ -477,7 +477,7 @@ After a Zoltar fork:
 - parent collateral is partially transferred into child pools in proportion to migrated REP
 - shares migrate independently through `ShareToken.migrate`
 
-This separation is important. Post-fork REP splitting is a Zoltar primitive, described in [whitepaper_zoltar.md](./whitepaper_zoltar.md). Vault migration, collateral transfer, and child-pool initialization are Augur Placeholder primitives built on top of it.
+This separation is important. Post-fork REP splitting is a Zoltar primitive, described in [whitepaper_zoltar.html](./whitepaper_zoltar.html). Vault migration, collateral transfer, and child-pool initialization are Augur Placeholder primitives built on top of it.
 
 ### External-Fork Continuation of Unresolved Escalation
 

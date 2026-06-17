@@ -92,6 +92,7 @@
 				background: var(--code-bg);
 				font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 				font-size: 0.92em;
+				overflow-wrap: anywhere;
 			}
 
 			.site-shell {
@@ -506,10 +507,10 @@
 			}
 
 			.step-list li {
-				display: grid;
-				grid-template-columns: 2rem 1fr;
+				display: flex;
 				gap: 0.75rem;
 				align-items: start;
+				min-width: 0;
 				padding: 0.85rem;
 				border: 1px solid var(--soft-line);
 				border-radius: 0.5rem;
@@ -518,6 +519,7 @@
 			}
 
 			.step-list li::before {
+				flex: 0 0 auto;
 				display: grid;
 				width: 2rem;
 				height: 2rem;
@@ -528,6 +530,11 @@
 				content: counter(steps);
 				font-size: 0.9rem;
 				font-weight: 800;
+			}
+
+			.step-content {
+				min-width: 0;
+				overflow-wrap: anywhere;
 			}
 
 			.footer-note {
@@ -1183,30 +1190,40 @@
 
 					<figure class="diagram" aria-labelledby="packed-diagram-title">
 						<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
-						<svg viewBox="0 0 920 310" role="img" aria-label="A uint256 scalar answer packs the highest bit, first payout numerator, and second payout numerator.">
-							<rect class="svg-teal" x="60" y="68" width="170" height="86" rx="8"></rect>
-							<rect class="svg-gold" x="230" y="68" width="315" height="86" rx="0"></rect>
-							<rect class="svg-blue" x="545" y="68" width="315" height="86" rx="8"></rect>
-							<text class="svg-label" x="145" y="105" text-anchor="middle">Highest bit</text>
-							<text class="svg-small" x="145" y="129" text-anchor="middle">namespace flag</text>
-							<text class="svg-label" x="387" y="105" text-anchor="middle">First payout numerator</text>
-							<text class="svg-small" x="387" y="129" text-anchor="middle">120 bits</text>
-							<text class="svg-label" x="702" y="105" text-anchor="middle">Second payout numerator</text>
-							<text class="svg-small" x="702" y="129" text-anchor="middle">120 bits</text>
-							<path class="svg-line" d="M 145 158 V 204"></path>
-							<path class="svg-line" d="M 145 204 H 442"></path>
-							<path class="svg-line" d="M 145 204 H 702"></path>
-							<rect class="svg-box" x="258" y="214" width="260" height="56" rx="10"></rect>
-							<rect class="svg-box" x="570" y="214" width="260" height="56" rx="10"></rect>
-							<text class="svg-label" x="388" y="248" text-anchor="middle">0 = invalid namespace</text>
-							<text class="svg-label" x="700" y="248" text-anchor="middle">1 = scalar payout</text>
+						<svg viewBox="0 0 920 430" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators.">
+							<defs>
+								<marker id="arrow-packed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<text class="svg-small" x="60" y="42">most significant</text>
+							<text class="svg-small" x="820" y="42" text-anchor="end">least significant</text>
+							<rect class="svg-teal" x="60" y="64" width="112" height="88" rx="10"></rect>
+							<rect class="svg-gold" x="172" y="64" width="344" height="88" rx="0"></rect>
+							<rect class="svg-blue" x="516" y="64" width="344" height="88" rx="10"></rect>
+							<text class="svg-label" x="116" y="100" text-anchor="middle">bit 255</text>
+							<text class="svg-small" x="116" y="124" text-anchor="middle">namespace</text>
+							<text class="svg-label" x="344" y="100" text-anchor="middle">bits 239...120</text>
+							<text class="svg-small" x="344" y="124" text-anchor="middle">first payout numerator</text>
+							<text class="svg-label" x="688" y="100" text-anchor="middle">bits 119...0</text>
+							<text class="svg-small" x="688" y="124" text-anchor="middle">second payout numerator</text>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 116 158 V 206"></path>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 344 158 V 206"></path>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 688 158 V 206"></path>
+							<rect class="svg-box" x="60" y="216" width="800" height="70" rx="12"></rect>
+							<text class="svg-label" x="86" y="246">If namespace bit = 0</text>
+							<text class="svg-small" x="86" y="270">The value is in the invalid namespace. The all-zero uint256 is canonical Invalid.</text>
+							<rect class="svg-box" x="60" y="310" width="800" height="82" rx="12"></rect>
+							<text class="svg-label" x="86" y="340">If namespace bit = 1</text>
+							<text class="svg-small" x="86" y="364">The two payout numerators encode a scalar answer and must satisfy:</text>
+							<text class="svg-label" x="86" y="388">first + second = numTicks</text>
 						</svg>
 						<div class="legend" aria-label="Scalar encoding diagram legend">
 							<span class="legend-item"><span class="legend-swatch teal"></span>Namespace bit</span>
 							<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>
 							<span class="legend-item"><span class="legend-swatch blue"></span>Second payout</span>
 						</div>
-						<p class="diagram-caption">A scalar answer is a compact payout vector plus a namespace bit, with all-zero reserved as canonical <code>Invalid</code>.</p>
+						<p class="diagram-caption">A scalar answer is easier to read as a namespace flag plus two payout fields: <code>0</code> means invalid namespace, while <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
 					</figure>
 
 					<p>
@@ -1305,11 +1322,11 @@
 						<code>parentUniverse</code> to split after that question’s end time.
 					</p>
 					<ol class="step-list">
-						<li><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</li>
-						<li>Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</li>
-						<li>The fork initiator’s REP deposit is partly burned and partly converted into migration balance.</li>
-						<li>Any REP holder can add more REP into migration balance for the forked universe.</li>
-						<li>REP holders call <code>splitMigrationRep</code> to mint child-universe REP across the outcome branches they support.</li>
+						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</span></li>
+						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
+						<li><span class="step-content">The fork initiator’s REP deposit is partly burned and partly converted into migration balance.</span></li>
+						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>
+						<li><span class="step-content">REP holders call <code>splitMigrationRep</code> to mint child-universe REP across the outcome branches they support.</span></li>
 					</ol>
 					<p>
 						At that point, Zoltar has turned one disputed universe into multiple child

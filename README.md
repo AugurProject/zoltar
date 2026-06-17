@@ -12,8 +12,7 @@ The codebase is split into two main parts:
 
 Protocol documentation lives in `docs/`:
 
-- [Zoltar whitepaper](./docs/whitepaper_zoltar.md)
-- [Zoltar visual HTML whitepaper](./docs/whitepaper_zoltar.html)
+- [Zoltar visual whitepaper](./docs/whitepaper_zoltar.html)
 - [Augur Placeholder whitepaper](./docs/whitepaper_placeholder.md)
 
 ## Prerequisites
