@@ -813,7 +813,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 
 		const grandchildRoot = await readCarryRoot(grandchild.escalationGameAddress, QuestionOutcome.Yes)
-		assert.strictEqual(grandchildRoot, parentLeafHash, 'the recursive grandchild snapshot should exclude child-local leaves that were already settled before the fork')
+		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, zeroHash()), 'the recursive grandchild snapshot should keep the settled child-local position cleared in place')
 	})
 
 	test('proof-backed withdrawDeposit reverts before question finalization', async () => {
