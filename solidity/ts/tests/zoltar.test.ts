@@ -31,6 +31,7 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/si
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
+const MAX_UINT256 = 2n ** 256n - 1n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -298,6 +299,12 @@ describe('Contract Test Suite', () => {
 			address: getZoltarAddress(),
 			args: [genesisUniverse, 2n, 2n],
 		})
+		const maxCountPage = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getDeployedChildUniverses',
+			address: getZoltarAddress(),
+			args: [genesisUniverse, 1n, MAX_UINT256],
+		})
 		const emptyPage = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getDeployedChildUniverses',
@@ -316,6 +323,14 @@ describe('Contract Test Suite', () => {
 		assert.deepStrictEqual(secondPage[0], [3n], 'second page should include the remaining child outcome')
 		assert.deepStrictEqual(secondPage[1], [getChildUniverseId(genesisUniverse, 3)], 'second page child id should match the deployed child')
 		assert.strictEqual(secondPage[2][0]?.forkingOutcomeIndex, 3n, 'second page child universe should retain the outcome index')
+
+		assert.deepStrictEqual(maxCountPage[0], [1n, 3n], 'max-count paging should clamp to the remaining child outcomes')
+		assert.deepStrictEqual(maxCountPage[1], [getChildUniverseId(genesisUniverse, 1), getChildUniverseId(genesisUniverse, 3)], 'max-count paging should return matching child ids')
+		assert.deepStrictEqual(
+			maxCountPage[2].map(child => child.parentUniverseId),
+			[genesisUniverse, genesisUniverse],
+			'max-count child universes should point back to genesis',
+		)
 
 		assert.deepStrictEqual(emptyPage[0], [], 'out of range paging should return no outcome indexes')
 		assert.deepStrictEqual(emptyPage[1], [], 'out of range paging should return no child universe ids')

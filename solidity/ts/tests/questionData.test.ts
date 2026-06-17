@@ -12,6 +12,8 @@ import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, 
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 
+const MAX_UINT256 = 2n ** 256n - 1n
+
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Question Data', () => {
@@ -380,15 +382,23 @@ describe('Question Data', () => {
 		}
 		const firstOutcomes = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma'])
 		const secondOutcomes = ['Yes', 'No']
+		const secondQuestion = { ...question, title: 'Paged Question 2' }
 		await createQuestion(client, question, firstOutcomes)
-		await createQuestion(client, { ...question, title: 'Paged Question 2' }, secondOutcomes)
+		await createQuestion(client, secondQuestion, secondOutcomes)
 		const firstQuestionId = getQuestionId(question, firstOutcomes)
+		const secondQuestionId = getQuestionId(secondQuestion, secondOutcomes)
 
 		const rawQuestionPage = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getQuestions',
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [1n, 5n],
+		})
+		const maxCountQuestionPage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestions',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [0n, MAX_UINT256],
 		})
 
 		const rawOutcomePage = await client.readContract({
@@ -397,10 +407,18 @@ describe('Question Data', () => {
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [firstQuestionId, 1n, 5n],
 		})
+		const maxCountOutcomePage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getOutcomeLabels',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [firstQuestionId, 1n, MAX_UINT256],
+		})
 		const questionPage = rawQuestionPage.filter(questionId => questionId !== 0n)
 		const outcomePage = rawOutcomePage.filter(label => label !== '')
 
 		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
 		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
+		assert.deepStrictEqual(maxCountQuestionPage, [firstQuestionId, secondQuestionId], 'question paging should clamp max count to available ids')
+		assert.deepStrictEqual(maxCountOutcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should clamp max count to available labels')
 	})
 })
