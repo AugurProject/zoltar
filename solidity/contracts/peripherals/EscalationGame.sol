@@ -569,9 +569,8 @@ contract EscalationGame {
 	function getProofConsumedCarriedDepositIndexesByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory parentDepositIndexes) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new uint256[](0);
 		uint256[] storage consumedIndexes = outcomeState[uint8(outcome)].proofConsumedDepositIndexes;
-		if (startIndex >= consumedIndexes.length || numberOfEntries == 0) return new uint256[](0);
-		uint256 endIndex = startIndex + numberOfEntries;
-		if (endIndex > consumedIndexes.length) endIndex = consumedIndexes.length;
+		uint256 endIndex = _sliceEnd(startIndex, numberOfEntries, consumedIndexes.length);
+		if (endIndex <= startIndex) return new uint256[](0);
 		parentDepositIndexes = new uint256[](endIndex - startIndex);
 		for (uint256 index = startIndex; index < endIndex; index++) {
 			parentDepositIndexes[index - startIndex] = consumedIndexes[index];
@@ -716,7 +715,7 @@ contract EscalationGame {
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new Deposit[](0);
 		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
-		uint256 iterateUntil = startIndex + numberOfEntries > outcomeDeposits.length ? outcomeDeposits.length : startIndex + numberOfEntries;
+		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, outcomeDeposits.length);
 		if (iterateUntil <= startIndex) return new Deposit[](0);
 		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 index = startIndex; index < iterateUntil; index++) {
@@ -752,6 +751,13 @@ contract EscalationGame {
 			if (state.sourcePrincipal > state.sourcePrincipalClaimed || state.childRep > state.childRepClaimed) return true;
 		}
 		return false;
+	}
+
+	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
+		if (startIndex >= total || count == 0) return startIndex;
+		uint256 availableCount = total - startIndex;
+		if (count >= availableCount) return total;
+		return startIndex + count;
 	}
 
 	function _encodeLocalDepositRef(uint8 outcomeIndex, uint256 depositIndex) private pure returns (uint256) {

@@ -125,7 +125,7 @@ contract Zoltar {
 
 	function getDeployedChildUniverses(uint248 universeId, uint256 startIndex, uint256 count) external view returns (uint256[] memory outcomeIndexes, uint248[] memory childUniverseIds, Universe[] memory childUniverses) {
 		uint256[] storage deployedOutcomeIndexes = deployedChildOutcomeIndexes[universeId];
-		uint256 iterateUntil = startIndex + count > deployedOutcomeIndexes.length ? deployedOutcomeIndexes.length : startIndex + count;
+		uint256 iterateUntil = _sliceEnd(startIndex, count, deployedOutcomeIndexes.length);
 		if (iterateUntil <= startIndex) return (new uint256[](0), new uint248[](0), new Universe[](0));
 		uint256 resultLength = iterateUntil - startIndex;
 		outcomeIndexes = new uint256[](resultLength);
@@ -138,6 +138,13 @@ contract Zoltar {
 			childUniverseIds[resultIndex] = childUniverseId;
 			childUniverses[resultIndex] = universes[childUniverseId];
 		}
+	}
+
+	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
+		if (startIndex >= total || count == 0) return startIndex;
+		uint256 availableCount = total - startIndex;
+		if (count >= availableCount) return total;
+		return startIndex + count;
 	}
 
 	// stores rep in the migration balance for a universe
