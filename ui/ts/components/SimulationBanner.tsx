@@ -115,6 +115,12 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 		savedStateStorageWarning.value = summary.warning
 	}
 
+	const clearSavedStateStorageWarning = () => {
+		const summary = getSavedSimulationStateStorageSummary(savedStateStorage)
+		savedStateRecords.value = summary.records
+		savedStateStorageWarning.value = undefined
+	}
+
 	const getDefaultSavedStateName = () => (currentSource.value.kind === 'saved-state' ? currentSource.value.name : `${getSimulationScenarioLabel(currentScenario.value)} ${new Date().toISOString().slice(0, 16)}`)
 
 	const closeModal = () => {
@@ -563,19 +569,19 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					<button
 						type='button'
 						className='destructive'
-						onClick={() =>
+						onClick={() => {
+							closeModal()
+							savedStateStorageWarning.value = undefined
 							void runNavigationControl(async () => {
 								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
 								if (removedCount === 0) throw new Error('No corrupted saved simulation states were found')
-								savedStateStorageWarning.value = undefined
-								reloadSavedStateRecords()
+								clearSavedStateStorageWarning()
 								if (hasSavedSimulationStateRoute()) {
 									navigateToBuiltInScenario(currentScenario.value)
 									return
 								}
-								closeModal()
 							})
-						}
+						}}
 					>
 						Remove corrupted saves
 					</button>

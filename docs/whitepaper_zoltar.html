@@ -1,0 +1,1361 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Zoltar White Paper</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				--bg: #f7f5ef;
+				--paper: #fffdf8;
+				--ink: #202124;
+				--muted: #62666d;
+				--line: #d8d0c1;
+				--soft-line: #ebe4d6;
+				--gold: #b77a18;
+				--gold-soft: #f4dfb7;
+				--teal: #1d7569;
+				--teal-soft: #d6ece7;
+				--red: #a8443d;
+				--red-soft: #f2d2cb;
+				--blue: #315f99;
+				--blue-soft: #dce7f7;
+				--code-bg: #fbf3e4;
+				--section-bg: #fffaf0;
+				--shadow: 0 24px 70px rgb(47 37 21 / 12%);
+				font-family:
+					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+					sans-serif;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #111315;
+					--paper: #191b1e;
+					--ink: #f2eee6;
+					--muted: #b7b0a6;
+					--line: #454039;
+					--soft-line: #302d29;
+					--gold: #e3a540;
+					--gold-soft: #3a2a12;
+					--teal: #6cc6b8;
+					--teal-soft: #143631;
+					--red: #ef8e82;
+					--red-soft: #3d201d;
+					--blue: #8eb5ee;
+					--blue-soft: #17283f;
+					--code-bg: #282119;
+					--section-bg: #211d18;
+					--shadow: 0 24px 70px rgb(0 0 0 / 34%);
+				}
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html {
+				scroll-behavior: smooth;
+			}
+
+			body {
+				margin: 0;
+				background:
+					linear-gradient(120deg, rgb(183 122 24 / 10%), transparent 34rem),
+					linear-gradient(300deg, rgb(29 117 105 / 10%), transparent 34rem),
+					var(--bg);
+				color: var(--ink);
+				line-height: 1.6;
+			}
+
+			a {
+				color: var(--blue);
+				text-decoration-thickness: 0.08em;
+				text-underline-offset: 0.18em;
+			}
+
+			a:hover {
+				color: #193f72;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				a:hover {
+					color: #bfd5f7;
+				}
+			}
+
+			code {
+				padding: 0.12rem 0.32rem;
+				border: 1px solid var(--soft-line);
+				border-radius: 0.35rem;
+				background: var(--code-bg);
+				font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+				font-size: 0.92em;
+				overflow-wrap: anywhere;
+			}
+
+			.site-shell {
+				display: grid;
+				grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
+				gap: clamp(1.5rem, 4vw, 4rem);
+				width: min(1180px, calc(100% - 2rem));
+				margin: 0 auto;
+				padding: 2rem 0 4rem;
+			}
+
+			.sidebar {
+				position: sticky;
+				top: 1.5rem;
+				align-self: start;
+				max-height: calc(100vh - 3rem);
+				overflow: auto;
+				padding: 1rem;
+				border: 1px solid var(--line);
+				border-radius: 0.5rem;
+				background: rgb(255 253 248 / 84%);
+				box-shadow: 0 10px 40px rgb(47 37 21 / 8%);
+				backdrop-filter: blur(12px);
+			}
+
+			.sidebar strong {
+				display: block;
+				margin-bottom: 0.8rem;
+				font-size: 0.83rem;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--gold);
+			}
+
+			.sidebar a {
+				display: block;
+				padding: 0.38rem 0;
+				color: var(--muted);
+				font-size: 0.92rem;
+				text-decoration: none;
+			}
+
+			.sidebar a:hover {
+				color: var(--ink);
+			}
+
+			main {
+				min-width: 0;
+			}
+
+			.hero {
+				padding: clamp(2rem, 6vw, 5rem);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				background:
+					radial-gradient(circle at 78% 22%, rgb(29 117 105 / 16%), transparent 15rem),
+					linear-gradient(145deg, var(--paper), var(--section-bg));
+				box-shadow: var(--shadow);
+			}
+
+			.kicker {
+				margin: 0 0 0.9rem;
+				color: var(--gold);
+				font-size: 0.82rem;
+				font-weight: 800;
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+			}
+
+			h1,
+			h2,
+			h3 {
+				line-height: 1.15;
+			}
+
+			h1 {
+				max-width: 15ch;
+				margin: 0;
+				font-size: clamp(3rem, 8vw, 6.3rem);
+				letter-spacing: 0;
+			}
+
+			.subtitle {
+				max-width: 66ch;
+				margin: 1.2rem 0 0;
+				color: var(--muted);
+				font-size: clamp(1.05rem, 2vw, 1.3rem);
+			}
+
+			.meta-grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 0.8rem;
+				margin-top: 2rem;
+			}
+
+			.meta-card,
+			.summary-card {
+				border: 1px solid var(--line);
+				border-radius: 0.5rem;
+				background: rgb(255 255 255 / 58%);
+				padding: 1rem;
+			}
+
+			.meta-card span,
+			.summary-card span {
+				display: block;
+				color: var(--muted);
+				font-size: 0.78rem;
+				font-weight: 800;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			.meta-card b,
+			.summary-card b {
+				display: block;
+				margin-top: 0.25rem;
+				font-size: 1rem;
+			}
+
+			.summary-grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 1rem;
+				margin: 1.5rem 0 0;
+			}
+
+			.paper-section {
+				margin-top: 1.25rem;
+				padding: clamp(1.25rem, 4vw, 2.4rem);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				background: var(--paper);
+				box-shadow: 0 18px 50px rgb(47 37 21 / 7%);
+			}
+
+			.paper-section h2 {
+				margin: 0 0 1rem;
+				font-size: clamp(1.8rem, 4vw, 2.55rem);
+			}
+
+			.paper-section h3 {
+				margin-top: 1.8rem;
+				font-size: 1.25rem;
+			}
+
+			.paper-section p {
+				max-width: 78ch;
+			}
+
+			.lede {
+				color: #3f444a;
+				font-size: 1.08rem;
+			}
+
+			.callout {
+				margin: 1.25rem 0;
+				padding: 1rem 1.1rem;
+				border-left: 0.3rem solid var(--teal);
+				border-radius: 0.45rem;
+				background: var(--teal-soft);
+			}
+
+			.callout strong {
+				display: block;
+				margin-bottom: 0.25rem;
+			}
+
+			.contract-list,
+			.clean-list {
+				display: grid;
+				gap: 0.55rem;
+				padding-left: 1.1rem;
+			}
+
+			.contract-list li,
+			.clean-list li {
+				padding-left: 0.2rem;
+			}
+
+			.formula {
+				display: block;
+				width: fit-content;
+				max-width: 100%;
+				margin: 1rem 0;
+				padding: 0.7rem 1rem;
+				overflow-x: auto;
+				border: 1px solid var(--soft-line);
+				border-radius: 0.45rem;
+				background: var(--code-bg);
+				font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+				white-space: nowrap;
+			}
+
+			.table-wrap {
+				overflow-x: auto;
+				margin: 1.2rem 0;
+				border: 1px solid var(--line);
+				border-radius: 0.5rem;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				background: var(--section-bg);
+			}
+
+			th,
+			td {
+				padding: 0.8rem 1rem;
+				border-bottom: 1px solid var(--soft-line);
+				text-align: left;
+				vertical-align: top;
+			}
+
+			th {
+				background: var(--code-bg);
+				font-size: 0.8rem;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+			}
+
+			tr:last-child td {
+				border-bottom: 0;
+			}
+
+			.diagram {
+				margin: 1.4rem 0;
+				padding: 1rem;
+				border: 1px solid var(--line);
+				border-radius: 0.6rem;
+				background: var(--section-bg);
+			}
+
+			.diagram svg {
+				display: block;
+				width: 100%;
+				height: auto;
+			}
+
+			.diagram-title {
+				margin: 0 0 0.75rem;
+				color: var(--muted);
+				font-size: 0.82rem;
+				font-weight: 800;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			.diagram-caption {
+				margin: 0.75rem 0 0;
+				color: var(--muted);
+				font-size: 0.94rem;
+			}
+
+			.legend {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.55rem 1rem;
+				margin-top: 0.8rem;
+				color: var(--muted);
+				font-size: 0.86rem;
+			}
+
+			.legend-item {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.4rem;
+			}
+
+			.legend-swatch {
+				width: 0.9rem;
+				height: 0.9rem;
+				border: 1px solid currentColor;
+				border-radius: 0.2rem;
+			}
+
+			.legend-swatch.teal {
+				background: var(--teal-soft);
+				color: var(--teal);
+			}
+
+			.legend-swatch.gold {
+				background: var(--gold-soft);
+				color: var(--gold);
+			}
+
+			.legend-swatch.red {
+				background: var(--red-soft);
+				color: var(--red);
+			}
+
+			.legend-swatch.blue {
+				background: var(--blue-soft);
+				color: var(--blue);
+			}
+
+			.section-heading {
+				display: flex;
+				gap: 0.7rem;
+				align-items: baseline;
+				justify-content: space-between;
+			}
+
+			.anchor-link {
+				flex: none;
+				color: var(--muted);
+				font-size: 1rem;
+				text-decoration: none;
+			}
+
+			.anchor-link:hover {
+				color: var(--ink);
+			}
+
+			.glossary-grid,
+			.timeline-grid,
+			.implementation-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 0.8rem;
+				margin: 1.2rem 0;
+			}
+
+			.glossary-card,
+			.timeline-card,
+			.implementation-note {
+				padding: 0.9rem 1rem;
+				border: 1px solid var(--soft-line);
+				border-radius: 0.5rem;
+				background: var(--section-bg);
+			}
+
+			.glossary-card b,
+			.timeline-card b,
+			.implementation-note b {
+				display: block;
+				margin-bottom: 0.25rem;
+			}
+
+			.glossary-card p,
+			.timeline-card p,
+			.implementation-note p {
+				margin: 0;
+				color: var(--muted);
+			}
+
+			.implementation-note {
+				border-left: 0.3rem solid var(--blue);
+			}
+
+			.svg-box {
+				fill: #fffdf8;
+				stroke: #7c6c51;
+				stroke-width: 2;
+			}
+
+			.svg-teal {
+				fill: var(--teal-soft);
+				stroke: var(--teal);
+				stroke-width: 2;
+			}
+
+			.svg-gold {
+				fill: var(--gold-soft);
+				stroke: var(--gold);
+				stroke-width: 2;
+			}
+
+			.svg-red {
+				fill: var(--red-soft);
+				stroke: var(--red);
+				stroke-width: 2;
+			}
+
+			.svg-blue {
+				fill: var(--blue-soft);
+				stroke: var(--blue);
+				stroke-width: 2;
+			}
+
+			.svg-line {
+				fill: none;
+				stroke: #615642;
+				stroke-width: 2.2;
+				stroke-linecap: round;
+				stroke-linejoin: round;
+			}
+
+			.svg-label {
+				fill: var(--ink);
+				font-family:
+					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+					sans-serif;
+				font-size: 17px;
+				font-weight: 750;
+			}
+
+			.svg-small {
+				fill: #51565c;
+				font-size: 13px;
+				font-weight: 600;
+			}
+
+			.step-list {
+				display: grid;
+				gap: 0.8rem;
+				counter-reset: steps;
+				list-style: none;
+				padding: 0;
+			}
+
+			.step-list li {
+				display: flex;
+				gap: 0.75rem;
+				align-items: start;
+				min-width: 0;
+				padding: 0.85rem;
+				border: 1px solid var(--soft-line);
+				border-radius: 0.5rem;
+				background: var(--section-bg);
+				counter-increment: steps;
+			}
+
+			.step-list li::before {
+				flex: 0 0 auto;
+				display: grid;
+				width: 2rem;
+				height: 2rem;
+				place-items: center;
+				border-radius: 999px;
+				background: var(--ink);
+				color: #fffdf8;
+				content: counter(steps);
+				font-size: 0.9rem;
+				font-weight: 800;
+			}
+
+			.step-content {
+				min-width: 0;
+				overflow-wrap: anywhere;
+			}
+
+			.footer-note {
+				margin: 1.5rem 0 0;
+				color: var(--muted);
+				font-size: 0.92rem;
+			}
+
+			@media (max-width: 900px) {
+				.site-shell {
+					display: block;
+				}
+
+				.sidebar {
+					position: static;
+					max-height: none;
+					margin-bottom: 1rem;
+				}
+
+				.sidebar nav {
+					display: grid;
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+					column-gap: 1rem;
+				}
+
+				.meta-grid,
+				.summary-grid,
+				.glossary-grid,
+				.timeline-grid,
+				.implementation-grid {
+					grid-template-columns: 1fr;
+				}
+			}
+
+			@media (max-width: 560px) {
+				.site-shell {
+					width: min(100% - 1rem, 1180px);
+					padding-top: 0.5rem;
+				}
+
+				.sidebar nav {
+					grid-template-columns: 1fr;
+				}
+
+				.hero,
+				.paper-section {
+					border-radius: 0.5rem;
+				}
+
+				h1 {
+					font-size: clamp(2.6rem, 15vw, 4rem);
+				}
+			}
+
+			@media print {
+				:root {
+					color-scheme: light;
+					--bg: #fff;
+					--paper: #fff;
+					--ink: #111;
+					--muted: #444;
+					--line: #bbb;
+					--soft-line: #ddd;
+					--section-bg: #fff;
+					--code-bg: #f6f6f6;
+					--shadow: none;
+				}
+
+				body {
+					background: #fff;
+				}
+
+				.site-shell {
+					display: block;
+					width: 100%;
+					padding: 0;
+				}
+
+				.sidebar {
+					display: none;
+				}
+
+				.hero,
+				.paper-section {
+					border: 0;
+					box-shadow: none;
+					page-break-inside: avoid;
+				}
+
+				.paper-section {
+					break-before: page;
+				}
+
+				.diagram,
+				table,
+				.step-list li,
+				.glossary-card,
+				.timeline-card,
+				.implementation-note {
+					break-inside: avoid;
+				}
+
+				a {
+					color: #111;
+					text-decoration: none;
+				}
+
+				.anchor-link {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="site-shell">
+			<aside class="sidebar" aria-label="Document navigation">
+				<strong>Zoltar</strong>
+				<nav>
+					<a href="#abstract">Abstract</a>
+					<a href="#glossary">Glossary</a>
+					<a href="#timeline">Lifecycle Timeline</a>
+					<a href="#overview">System Overview</a>
+					<a href="#universe-model">Universe Model</a>
+					<a href="#economics">Fork Economics</a>
+					<a href="#splitting">REP Splitting</a>
+					<a href="#security">Security Model</a>
+					<a href="#questions">Question Encoding</a>
+					<a href="#market-types">Market Types</a>
+					<a href="#invalid">Invalid vs Malformed</a>
+					<a href="#lifecycle">Fork Lifecycle</a>
+					<a href="#thesis">Design Thesis</a>
+				</nav>
+			</aside>
+
+			<main>
+				<header class="hero">
+					<p class="kicker">Forkable Oracle Substrate</p>
+					<h1>Zoltar White Paper</h1>
+					<p class="subtitle">
+						A visual guide to Zoltar universes, deterministic question encoding, scalar
+						outcomes, and Colored Coins-style REP branching.
+					</p>
+					<div class="meta-grid" aria-label="Document summary">
+						<div class="meta-card">
+							<span>Core primitive</span>
+							<b>Explicit child universes</b>
+						</div>
+						<div class="meta-card">
+							<span>Question types</span>
+							<b>Categorical and scalar</b>
+						</div>
+						<div class="meta-card">
+							<span>Branch action</span>
+							<b>Split post-fork REP claims</b>
+						</div>
+					</div>
+				</header>
+
+				<section class="paper-section" id="abstract">
+					<div class="section-heading">
+						<h2>Abstract</h2>
+						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
+					</div>
+					<p class="lede">
+						Zoltar is a forkable oracle substrate centered on universes, question encoding,
+						and REP branching. It implements the branching model described in
+						<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins.md</a>:
+						unresolved disagreement becomes explicit child universes, and REP holders
+						convert post-fork migration balances into child-universe REP across one or more
+						selected branches.
+					</p>
+					<div class="summary-grid">
+						<div class="summary-card">
+							<span>What forks do</span>
+							<b>Create valid branches instead of choosing one winner onchain.</b>
+						</div>
+						<div class="summary-card">
+							<span>What REP holders do</span>
+							<b>Reproduce migration claims into selected child universes.</b>
+						</div>
+						<div class="summary-card">
+							<span>What Zoltar omits</span>
+							<b>Market collateral, trading, and underwriting mechanics.</b>
+						</div>
+					</div>
+					<p>
+						Zoltar supports both categorical and scalar questions, treats <code>Invalid</code>
+						as a legitimate answer state, and branches protocol state without embedding a
+						higher-level market design directly into the core layer.
+					</p>
+				</section>
+
+				<section class="paper-section" id="glossary">
+					<div class="section-heading">
+						<h2>Glossary</h2>
+						<a class="anchor-link" href="#glossary" aria-label="Link to Glossary">#</a>
+					</div>
+					<div class="glossary-grid">
+						<div class="glossary-card">
+							<b>Universe</b>
+							<p>A branch of oracle state with its own REP token and optional parent universe.</p>
+						</div>
+						<div class="glossary-card">
+							<b>Migration balance</b>
+							<p>REP value held after a fork that can be split into one or more child universes.</p>
+						</div>
+						<div class="glossary-card">
+							<b>Invalid</b>
+							<p>A valid answer state representing an unresolvable or invalid market outcome.</p>
+						</div>
+						<div class="glossary-card">
+							<b>Malformed</b>
+							<p>An outcome index or scalar encoding outside the question’s valid answer space.</p>
+						</div>
+						<div class="glossary-card">
+							<b>Child REP</b>
+							<p>Reputation minted inside a child universe after post-fork migration splitting.</p>
+						</div>
+						<div class="glossary-card">
+							<b>Colored Coins model</b>
+							<p>A branching model where claims are reproduced across selected branches and later value concentration determines which branch matters.</p>
+						</div>
+					</div>
+				</section>
+
+				<section class="paper-section" id="timeline">
+					<div class="section-heading">
+						<h2>Lifecycle Timeline</h2>
+						<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
+					</div>
+					<div class="timeline-grid">
+						<div class="timeline-card">
+							<b>1. Register question</b>
+							<p><code>ZoltarQuestionData</code> stores the question and defines its valid answer space.</p>
+						</div>
+						<div class="timeline-card">
+							<b>2. Disagreement persists</b>
+							<p>After the question ends, unresolved disagreement can force a fork threshold deposit.</p>
+						</div>
+						<div class="timeline-card">
+							<b>3. Parent universe forks</b>
+							<p><code>Zoltar</code> records the fork question and deterministically defines every valid child branch.</p>
+						</div>
+						<div class="timeline-card">
+							<b>4. Child universes deploy lazily</b>
+							<p>Branches exist by deterministic id first; contracts are deployed only when needed.</p>
+						</div>
+						<div class="timeline-card">
+							<b>5. REP holders split</b>
+							<p>Migration balances mint child REP into one or more selected, non-malformed branches.</p>
+						</div>
+						<div class="timeline-card">
+							<b>6. Coordination concentrates value</b>
+							<p>The protocol does not pick a winner. Users and applications decide where durable activity continues.</p>
+						</div>
+					</div>
+				</section>
+
+				<section class="paper-section" id="overview">
+					<div class="section-heading">
+						<h2>1. System Overview</h2>
+						<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
+					</div>
+					<p>
+						Zoltar is the base oracle layer in this repository. It does not implement the
+						full market, collateral, or underwriting system built on top of it elsewhere in
+						the repo. Its role is narrower and more fundamental:
+					</p>
+					<ul class="clean-list">
+						<li>register questions</li>
+						<li>encode valid answer spaces</li>
+						<li>represent forks as child universes</li>
+						<li>mint and burn child-universe REP</li>
+						<li>split post-fork REP claims across disputed branches</li>
+					</ul>
+
+					<h3>Core Contract Map</h3>
+					<ul class="contract-list">
+						<li><a href="../solidity/contracts/Zoltar.sol"><code>Zoltar</code></a>: universe forks and REP splitting</li>
+						<li><a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>: question registry and outcome encoding</li>
+						<li><a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>: child-universe REP minted and burned by Zoltar</li>
+						<li><a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>: scalar formatting and interpolation logic</li>
+					</ul>
+					<div class="implementation-grid">
+						<div class="implementation-note">
+							<b>Implementation entry points</b>
+							<p><a href="../solidity/contracts/Zoltar.sol"><code>Zoltar</code></a> owns universe branching and <code>splitMigrationRep</code>; <a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a> owns question validity.</p>
+						</div>
+						<div class="implementation-note">
+							<b>Boundary to Placeholder</b>
+							<p>The market, vault, collateral, and auction systems live above this layer and are intentionally not encoded into Zoltar.</p>
+						</div>
+					</div>
+
+					<figure class="diagram" aria-labelledby="overview-diagram-title">
+						<p class="diagram-title" id="overview-diagram-title">Core Layer Boundary</p>
+						<svg viewBox="0 0 820 260" role="img" aria-label="Zoltar manages questions, universes, forks, and REP splitting.">
+							<defs>
+								<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<rect class="svg-gold" x="260" y="44" width="300" height="150" rx="12"></rect>
+							<text class="svg-label" x="410" y="90" text-anchor="middle">Zoltar</text>
+							<text class="svg-small" x="410" y="122" text-anchor="middle">questions, universes, forks</text>
+							<text class="svg-small" x="410" y="148" text-anchor="middle">REP minting, burning, splitting</text>
+							<path class="svg-line" marker-end="url(#arrow)" d="M 100 120 H 245"></path>
+							<path class="svg-line" marker-end="url(#arrow)" d="M 575 120 H 720"></path>
+							<text class="svg-small" x="100" y="101" text-anchor="middle">registered questions</text>
+							<text class="svg-small" x="720" y="101" text-anchor="middle">child universes</text>
+						</svg>
+						<p class="diagram-caption">Zoltar is the branch substrate: applications feed it questions and later consume the child-universe structure it defines.</p>
+					</figure>
+				</section>
+
+				<section class="paper-section" id="universe-model">
+					<div class="section-heading">
+						<h2>2. Universe Model</h2>
+						<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
+					</div>
+					<p>
+						<a href="../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a>
+						stores the data for one branch of protocol state:
+					</p>
+					<ul class="clean-list">
+						<li><code>forkTime</code>: when the universe forked</li>
+						<li><code>forkQuestionId</code>: the question that triggered the fork</li>
+						<li><code>forkingOutcomeIndex</code>: the outcome index represented by the universe when it is a child</li>
+						<li><code>reputationToken</code>: the REP token used inside that universe</li>
+						<li><code>parentUniverseId</code>: the parent branch</li>
+					</ul>
+					<p>
+						Universe <code>0</code> is the genesis universe. Its REP token is an external
+						genesis token configured in <code>Constants.GENESIS_REPUTATION_TOKEN</code>.
+						Child universes are identified deterministically as:
+					</p>
+					<span class="formula">childUniverseId = uint248(keccak256(abi.encode(parentUniverseId, outcomeIndex)))</span>
+					<p>
+						This makes each branch reproducible from parent universe and outcome index
+						alone. Child universes are deployed lazily when a forked branch is actually
+						needed.
+					</p>
+					<div class="implementation-grid">
+						<div class="implementation-note">
+							<b>Implementation entry points</b>
+							<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> records the parent fork, and <code>deployChild</code> materializes a deterministic child universe.</p>
+						</div>
+						<div class="implementation-note">
+							<b>Determinism check</b>
+							<p>Child ids are derived from <code>parentUniverseId</code> and <code>outcomeIndex</code>, so callers can predict branch ids before deployment.</p>
+						</div>
+					</div>
+
+					<figure class="diagram" aria-labelledby="universe-diagram-title">
+						<p class="diagram-title" id="universe-diagram-title">Fork Branch Set</p>
+						<svg viewBox="0 0 920 430" role="img" aria-label="A parent universe forks into children for Invalid and each valid outcome.">
+							<defs>
+								<marker id="arrow-universe" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<rect class="svg-box" x="330" y="28" width="260" height="76" rx="12"></rect>
+							<text class="svg-label" x="460" y="61" text-anchor="middle">Parent universe</text>
+							<text class="svg-small" x="460" y="84" text-anchor="middle">fork on disputed question</text>
+							<path class="svg-line" marker-end="url(#arrow-universe)" d="M 460 106 V 160"></path>
+							<rect class="svg-gold" x="324" y="164" width="272" height="82" rx="12"></rect>
+							<text class="svg-label" x="460" y="198" text-anchor="middle">parentUniverseId</text>
+							<text class="svg-small" x="460" y="222" text-anchor="middle">deterministic child ids</text>
+							<path class="svg-line" d="M 460 248 V 286"></path>
+							<path class="svg-line" d="M 170 286 H 750"></path>
+							<path class="svg-line" marker-end="url(#arrow-universe)" d="M 170 286 V 326"></path>
+							<path class="svg-line" marker-end="url(#arrow-universe)" d="M 360 286 V 326"></path>
+							<path class="svg-line" marker-end="url(#arrow-universe)" d="M 560 286 V 326"></path>
+							<path class="svg-line" marker-end="url(#arrow-universe)" d="M 750 286 V 326"></path>
+							<rect class="svg-teal" x="76" y="330" width="188" height="58" rx="10"></rect>
+							<rect class="svg-blue" x="266" y="330" width="188" height="58" rx="10"></rect>
+							<rect class="svg-blue" x="466" y="330" width="188" height="58" rx="10"></rect>
+							<rect class="svg-blue" x="656" y="330" width="188" height="58" rx="10"></rect>
+							<text class="svg-label" x="170" y="365" text-anchor="middle">Invalid</text>
+							<text class="svg-label" x="360" y="365" text-anchor="middle">Outcome 1</text>
+							<text class="svg-label" x="560" y="365" text-anchor="middle">Outcome 2</text>
+							<text class="svg-label" x="750" y="365" text-anchor="middle">Outcome N</text>
+						</svg>
+						<div class="legend" aria-label="Universe diagram legend">
+							<span class="legend-item"><span class="legend-swatch gold"></span>Forking parent</span>
+							<span class="legend-item"><span class="legend-swatch teal"></span>Invalid branch</span>
+							<span class="legend-item"><span class="legend-swatch blue"></span>Valid outcome branches</span>
+						</div>
+						<p class="diagram-caption">A fork creates the full valid branch set; no branch is privileged by the contract.</p>
+					</figure>
+					<div class="callout">
+						<strong>Important distinction</strong>
+						Zoltar defines the branch set. It does not select one canonical child universe
+						or delete the others.
+					</div>
+				</section>
+
+				<section class="paper-section" id="economics">
+					<div class="section-heading">
+						<h2>3. Fork Thresholds and REP Economics</h2>
+						<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
+					</div>
+					<p>The current fork threshold is:</p>
+					<span class="formula">forkThreshold = totalTheoreticalRepSupply / 20</span>
+					<p>
+						Initiating a fork requires supplying REP equal to 5% of the universe’s total
+						theoretical supply. Under the current constants, 20% of that threshold deposit
+						is permanently burned, which is 1% of total theoretical supply, and the
+						remaining 80% becomes the initiator’s migration balance.
+					</p>
+					<span class="formula">burnedRepAmount = forkThreshold / 5</span>
+					<span class="formula">forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 * forkThreshold / 5</span>
+					<div class="implementation-grid">
+						<div class="implementation-note">
+							<b>Implementation entry points</b>
+							<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns the configured share, and creates the initiator migration balance.</p>
+						</div>
+						<div class="implementation-note">
+							<b>Genesis token exception</b>
+							<p>Genesis REP is transferred to <code>BURN_ADDRESS</code>; child REP can be burned directly by <a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>.</p>
+						</div>
+					</div>
+
+					<figure class="diagram" aria-labelledby="deposit-diagram-title">
+						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
+						<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit splits into 20 percent burned and 80 percent migration balance.">
+							<defs>
+								<marker id="arrow-deposit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<text class="svg-label" x="430" y="42" text-anchor="middle">Fork initiator deposits forkThreshold REP</text>
+							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 430 58 V 94"></path>
+							<rect class="svg-gold" x="286" y="98" width="288" height="76" rx="12"></rect>
+							<text class="svg-label" x="430" y="130" text-anchor="middle">Threshold deposit</text>
+							<text class="svg-small" x="430" y="153" text-anchor="middle">5% of theoretical REP supply</text>
+							<path class="svg-line" d="M 430 176 V 222"></path>
+							<path class="svg-line" d="M 250 222 H 610"></path>
+							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 250 222 V 260"></path>
+							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 610 222 V 260"></path>
+							<rect class="svg-red" x="134" y="264" width="232" height="58" rx="10"></rect>
+							<rect class="svg-teal" x="494" y="264" width="232" height="58" rx="10"></rect>
+							<text class="svg-label" x="250" y="299" text-anchor="middle">20% burned</text>
+							<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration</text>
+							<text class="svg-small" x="610" y="313" text-anchor="middle">balance</text>
+						</svg>
+						<div class="legend" aria-label="Deposit diagram legend">
+							<span class="legend-item"><span class="legend-swatch gold"></span>Required fork deposit</span>
+							<span class="legend-item"><span class="legend-swatch red"></span>Burned REP</span>
+							<span class="legend-item"><span class="legend-swatch teal"></span>Migration balance</span>
+						</div>
+						<p class="diagram-caption">The initiator pays to force the branch point into existence, but most of the deposit becomes migratable REP.</p>
+					</figure>
+
+					<p>
+						Genesis REP cannot be burned natively, so the contract transfers it to the
+						configured burn address. Child-universe REP is minted and burned directly by
+						<a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
+						under Zoltar’s control.
+					</p>
+
+					<div class="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th>Parameter</th>
+									<th>Current value</th>
+									<th>Meaning</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td><code>GENESIS_REPUTATION_TOKEN</code></td>
+									<td><code>0x221657776846890989a759BA2973e427DfF5C9bB</code></td>
+									<td>Genesis-universe REP token address</td>
+								</tr>
+								<tr>
+									<td><code>BURN_ADDRESS</code></td>
+									<td><code>0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF</code></td>
+									<td>Burn sink used for genesis REP</td>
+								</tr>
+								<tr>
+									<td><code>FORK_THRESHOLD_DIVISOR</code></td>
+									<td><code>20</code></td>
+									<td>Fork threshold is <code>totalTheoreticalRepSupply / 20</code>, or 5% of supply</td>
+								</tr>
+								<tr>
+									<td><code>FORK_BURN_DIVISOR</code></td>
+									<td><code>5</code></td>
+									<td>Burned amount is <code>forkThreshold / 5</code>, or 20% of threshold</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+
+				<section class="paper-section" id="splitting">
+					<div class="section-heading">
+						<h2>4. Child Universes and REP Splitting</h2>
+						<a class="anchor-link" href="#splitting" aria-label="Link to Child Universes and REP Splitting">#</a>
+					</div>
+					<p>
+						Once a universe forks, child universes can be deployed lazily through
+						<code>deployChild</code>. A user can also add more REP into the migration balance
+						with <code>addRepToMigrationBalance</code>. The core post-fork action is
+						<code>splitMigrationRep</code>, which lets a holder mint child-universe REP for
+						one or more non-malformed outcome indices.
+					</p>
+					<p>
+						For categorical questions, <code>Invalid</code> and any in-range categorical
+						outcome are allowed, while out-of-range values are rejected. For scalar
+						questions, only well-formed scalar encodings are allowed.
+					</p>
+					<div class="implementation-grid">
+						<div class="implementation-note">
+							<b>Implementation entry points</b>
+							<p><a href="../solidity/contracts/Zoltar.sol"><code>addRepToMigrationBalance</code></a> prepares additional REP, and <code>splitMigrationRep</code> mints child REP for selected outcomes.</p>
+						</div>
+						<div class="implementation-note">
+							<b>Validation dependency</b>
+							<p><a href="../solidity/contracts/ZoltarQuestionData.sol"><code>isMalformedAnswerOption</code></a> distinguishes valid branches from rejected malformed answers.</p>
+						</div>
+					</div>
+
+					<figure class="diagram" aria-labelledby="split-diagram-title">
+						<p class="diagram-title" id="split-diagram-title">Migration Balance Reproduction</p>
+						<svg viewBox="0 0 930 520" role="img" aria-label="A migration balance can mint REP into one selected child or be reproduced across multiple selected children.">
+							<defs>
+								<marker id="arrow-split" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<rect class="svg-gold" x="315" y="28" width="300" height="70" rx="12"></rect>
+							<text class="svg-label" x="465" y="59" text-anchor="middle">Post-fork migration balance</text>
+							<text class="svg-small" x="465" y="81" text-anchor="middle">splitMigrationRep(selected outcomes)</text>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 465 100 V 136"></path>
+							<line class="svg-line" x1="465" y1="136" x2="465" y2="168"></line>
+							<line class="svg-line" x1="205" y1="168" x2="725" y2="168"></line>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 205 168 V 210"></path>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 725 168 V 210"></path>
+							<rect class="svg-blue" x="86" y="214" width="238" height="64" rx="10"></rect>
+							<text class="svg-label" x="205" y="239" text-anchor="middle">One selected branch</text>
+							<text class="svg-small" x="205" y="261" text-anchor="middle">mint only there</text>
+							<rect class="svg-teal" x="606" y="214" width="238" height="64" rx="10"></rect>
+							<text class="svg-label" x="725" y="239" text-anchor="middle">Multiple branches</text>
+							<text class="svg-small" x="725" y="261" text-anchor="middle">reproduce same claim</text>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 205 280 V 340"></path>
+							<rect class="svg-box" x="88" y="346" width="234" height="56" rx="10"></rect>
+							<text class="svg-label" x="205" y="380" text-anchor="middle">Selected child REP</text>
+							<path class="svg-line" d="M 725 280 V 330"></path>
+							<line class="svg-line" x1="610" y1="330" x2="840" y2="330"></line>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 610 330 V 372"></path>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 725 330 V 372"></path>
+							<path class="svg-line" marker-end="url(#arrow-split)" d="M 840 330 V 372"></path>
+							<rect class="svg-box" x="520" y="378" width="180" height="56" rx="10"></rect>
+							<rect class="svg-box" x="635" y="444" width="180" height="56" rx="10"></rect>
+							<rect class="svg-box" x="750" y="378" width="180" height="56" rx="10"></rect>
+							<text class="svg-label" x="610" y="412" text-anchor="middle">Invalid REP</text>
+							<text class="svg-label" x="725" y="478" text-anchor="middle">Outcome A REP</text>
+							<text class="svg-label" x="840" y="412" text-anchor="middle">Outcome B REP</text>
+						</svg>
+						<div class="legend" aria-label="REP splitting diagram legend">
+							<span class="legend-item"><span class="legend-swatch gold"></span>Source migration balance</span>
+							<span class="legend-item"><span class="legend-swatch teal"></span>Reproduced selected branches</span>
+							<span class="legend-item"><span class="legend-swatch blue"></span>Single selected branch</span>
+						</div>
+						<p class="diagram-caption">Selecting multiple branches reproduces the same migrated claim into each selected child universe.</p>
+					</figure>
+
+					<div class="callout">
+						<strong>Colored Coins-style property</strong>
+						The same migrated claim can be reproduced into each selected child. Later value
+						concentration determines which branch matters economically.
+					</div>
+				</section>
+
+				<section class="paper-section" id="security">
+					<div class="section-heading">
+						<h2>5. Assumptions and Security Model</h2>
+						<a class="anchor-link" href="#security" aria-label="Link to Assumptions and Security Model">#</a>
+					</div>
+					<p>
+						Zoltar is a Colored Coins-style system, so its security argument depends on user
+						behavior and value concentration rather than on the contract being able to
+						identify one objectively correct branch onchain.
+					</p>
+					<ul class="clean-list">
+						<li>users can choose which child universe to continue using after a fork</li>
+						<li>users prefer to continue in the universe they regard as truthful</li>
+						<li>the protocol itself does not know which universe is truthful and treats all valid branches symmetrically</li>
+						<li>most durable economic activity concentrates in the branch that users expect other users to keep using</li>
+						<li>dishonest or abandoned branches may continue to exist, but are assumed to retain little long-term value compared with the branch that market participants keep coordinating around</li>
+					</ul>
+					<p>
+						A fork only creates branches. If users and future activity concentrate in the
+						branch they regard as truthful, the value of child-universe REP also
+						concentrates there. Rational REP holders are therefore pushed toward the branch
+						they expect the market to keep using, because migrating into a branch they expect
+						others to abandon destroys the long-term value of the REP they receive there.
+					</p>
+				</section>
+
+				<section class="paper-section" id="questions">
+					<div class="section-heading">
+						<h2>6. Questions and Outcome Encoding</h2>
+						<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
+					</div>
+					<p>
+						<a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
+						stores title, description, start and end time, scalar metadata such as
+						<code>numTicks</code>, <code>displayValueMin</code>,
+						<code>displayValueMax</code>, and <code>answerUnit</code>.
+					</p>
+					<p>
+						Question ids are deterministic hashes of the question data. For categorical
+						questions, that hash path also includes the sorted categorical outcome options.
+						For scalar questions, there are no categorical labels to include, so the id is
+						determined from the scalar question fields alone.
+					</p>
+
+					<h3>Categorical Questions</h3>
+					<p>
+						Categorical questions store sorted outcome labels. The implementation requires
+						labels to be non-empty and strictly ordered by hash. The contract stores the
+						labels in <code>outcomeLabels[questionId]</code>. Any number of categorical
+						outcomes can exist at the Zoltar level as long as those conditions hold.
+					</p>
+
+					<h3>Scalar Questions</h3>
+					<p>
+						Scalar questions store no categorical labels. Instead, <code>numTicks</code>,
+						<code>displayValueMin</code>, <code>displayValueMax</code>, and
+						<code>answerUnit</code> define the answer space. At creation time, scalar
+						questions must satisfy <code>numTicks &gt; 0</code> and
+						<code>displayValueMax &gt; displayValueMin</code>.
+					</p>
+					<p>Onchain, each scalar answer is encoded into a single <code>uint256</code> that packs:</p>
+					<ul class="clean-list">
+						<li>the highest bit as an invalid flag</li>
+						<li>a 120-bit first payout numerator</li>
+						<li>a 120-bit second payout numerator</li>
+					</ul>
+					<div class="implementation-grid">
+						<div class="implementation-note">
+							<b>Implementation entry points</b>
+							<p><a href="../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code></a> stores categorical or scalar questions, and <a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> formats scalar displays.</p>
+						</div>
+						<div class="implementation-note">
+							<b>Scalar validity rule</b>
+							<p>The two 120-bit payout numerators must sum to <code>numTicks</code>; otherwise the answer is malformed, not invalid.</p>
+						</div>
+					</div>
+
+					<figure class="diagram" aria-labelledby="packed-diagram-title">
+						<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
+						<svg viewBox="0 0 920 430" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators.">
+							<defs>
+								<marker id="arrow-packed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<text class="svg-small" x="60" y="42">most significant</text>
+							<text class="svg-small" x="820" y="42" text-anchor="end">least significant</text>
+							<rect class="svg-teal" x="60" y="64" width="112" height="88" rx="10"></rect>
+							<rect class="svg-gold" x="172" y="64" width="344" height="88" rx="0"></rect>
+							<rect class="svg-blue" x="516" y="64" width="344" height="88" rx="10"></rect>
+							<text class="svg-label" x="116" y="100" text-anchor="middle">bit 255</text>
+							<text class="svg-small" x="116" y="124" text-anchor="middle">namespace</text>
+							<text class="svg-label" x="344" y="100" text-anchor="middle">bits 239...120</text>
+							<text class="svg-small" x="344" y="124" text-anchor="middle">first payout numerator</text>
+							<text class="svg-label" x="688" y="100" text-anchor="middle">bits 119...0</text>
+							<text class="svg-small" x="688" y="124" text-anchor="middle">second payout numerator</text>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 116 158 V 206"></path>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 344 158 V 206"></path>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 688 158 V 206"></path>
+							<rect class="svg-box" x="60" y="216" width="800" height="70" rx="12"></rect>
+							<text class="svg-label" x="86" y="246">If namespace bit = 0</text>
+							<text class="svg-small" x="86" y="270">The value is in the invalid namespace. The all-zero uint256 is canonical Invalid.</text>
+							<rect class="svg-box" x="60" y="310" width="800" height="82" rx="12"></rect>
+							<text class="svg-label" x="86" y="340">If namespace bit = 1</text>
+							<text class="svg-small" x="86" y="364">The two payout numerators encode a scalar answer and must satisfy:</text>
+							<text class="svg-label" x="86" y="388">first + second = numTicks</text>
+						</svg>
+						<div class="legend" aria-label="Scalar encoding diagram legend">
+							<span class="legend-item"><span class="legend-swatch teal"></span>Namespace bit</span>
+							<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>
+							<span class="legend-item"><span class="legend-swatch blue"></span>Second payout</span>
+						</div>
+						<p class="diagram-caption">A scalar answer is easier to read as a namespace flag plus two payout fields: <code>0</code> means invalid namespace, while <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
+					</figure>
+
+					<p>
+						The all-zero encoding is the canonical <code>Invalid</code> answer for scalar
+						questions. For a valid scalar answer, the two payout numerators must sum exactly
+						to <code>numTicks</code>:
+					</p>
+					<span class="formula">firstPayoutNumerator + secondPayoutNumerator = numTicks</span>
+					<p>
+						At the helper and UI level, a scalar tick index named <code>tickIndex</code> is
+						encoded as:
+					</p>
+					<ul class="clean-list">
+						<li><code>firstPayoutNumerator = numTicks - tickIndex</code></li>
+						<li><code>secondPayoutNumerator = tickIndex</code></li>
+						<li><code>highest bit = 1</code></li>
+					</ul>
+					<span class="formula">(numTicks - tickIndex, tickIndex)</span>
+					<p>
+						<a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
+						interprets <code>secondPayoutNumerator</code> as the position along the scalar
+						range:
+					</p>
+					<span class="formula">displayedValue = displayValueMin + secondPayoutNumerator / numTicks * (displayValueMax - displayValueMin)</span>
+					<p>
+						The contract implementation performs this interpolation with fixed-point integer
+						math and formats the result with 18 decimal places, trimming trailing zeroes for
+						display.
+					</p>
+				</section>
+
+				<section class="paper-section" id="market-types">
+					<div class="section-heading">
+						<h2>7. Market Types Supported by Zoltar</h2>
+						<a class="anchor-link" href="#market-types" aria-label="Link to Market Types Supported by Zoltar">#</a>
+					</div>
+					<p>
+						At the Zoltar layer, market type support comes from how questions and outcomes
+						are encoded in <a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>.
+					</p>
+					<ul class="clean-list">
+						<li>categorical questions, implemented as an ordered array of non-empty outcome labels</li>
+						<li>scalar questions, implemented as a tick-based numeric range with no categorical labels</li>
+					</ul>
+					<p>
+						Zoltar can represent arbitrary categorical questions and scalar questions, while
+						higher-level protocols may choose narrower market shapes on top of it. It defines
+						answer spaces and forkable resolution state, not the collateralized trading
+						mechanics that may later be attached to those questions.
+					</p>
+				</section>
+
+				<section class="paper-section" id="invalid">
+					<div class="section-heading">
+						<h2>8. Invalid vs Malformed</h2>
+						<a class="anchor-link" href="#invalid" aria-label="Link to Invalid vs Malformed">#</a>
+					</div>
+					<p>Zoltar distinguishes <code>Invalid</code> answers from <code>Malformed</code> answers.</p>
+					<div class="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th>Term</th>
+									<th>Meaning</th>
+									<th>Effect</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td><code>Invalid</code></td>
+									<td>A legitimate resolution state.</td>
+									<td>Can be a valid branch and final outcome.</td>
+								</tr>
+								<tr>
+									<td><code>Malformed</code></td>
+									<td>A submitted outcome index or scalar encoding that does not fit the question’s answer space.</td>
+									<td>Rejected during child-universe REP splitting and fork-aware asset branching.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+					<p>
+						This distinction matters because malformed answers are rejected, while
+						<code>Invalid</code> remains a valid branch and a valid final outcome.
+					</p>
+				</section>
+
+				<section class="paper-section" id="lifecycle">
+					<div class="section-heading">
+						<h2>9. Example Fork Lifecycle</h2>
+						<a class="anchor-link" href="#lifecycle" aria-label="Link to Example Fork Lifecycle">#</a>
+					</div>
+					<p>
+						Consider a universe <code>parentUniverse</code> and a question
+						<code>forkQuestion</code>, meaning the question whose unresolved outcome caused
+						<code>parentUniverse</code> to split after that question’s end time.
+					</p>
+					<ol class="step-list">
+						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</span></li>
+						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
+						<li><span class="step-content">The fork initiator’s REP deposit is partly burned and partly converted into migration balance.</span></li>
+						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>
+						<li><span class="step-content">REP holders call <code>splitMigrationRep</code> to mint child-universe REP across the outcome branches they support.</span></li>
+					</ol>
+					<p>
+						At that point, Zoltar has turned one disputed universe into multiple child
+						universes with separate reputation tokens. The higher-level economic meaning of
+						those branches is left to protocols built on top.
+					</p>
+				</section>
+
+				<section class="paper-section" id="thesis">
+					<div class="section-heading">
+						<h2>10. Design Thesis</h2>
+						<a class="anchor-link" href="#thesis" aria-label="Link to Design Thesis">#</a>
+					</div>
+					<p class="lede">
+						Zoltar provides a generalized branching substrate for categorical and scalar
+						questions. Rather than forcing a single answer when disagreement persists, it
+						turns unresolved decisions into explicit child universes and lets REP holders
+						split post-fork claims across one or more selected branches.
+					</p>
+					<p>
+						In that sense it closely follows the Colored Coins model: the protocol branches
+						state first, and later coordination determines which branch carries durable value.
+					</p>
+					<p class="footer-note">
+						This HTML edition adds visual structure and vector diagrams while preserving the
+						source whitepaper’s contract-level substance.
+					</p>
+				</section>
+			</main>
+		</div>
+	</body>
+</html>
