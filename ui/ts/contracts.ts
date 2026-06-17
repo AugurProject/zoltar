@@ -1114,12 +1114,13 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	}
 }
 function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOperation {
-	switch (Number(operation)) {
-		case 0:
+	const operationValue = typeof operation === 'bigint' ? operation : BigInt(operation)
+	switch (operationValue) {
+		case 0n:
 			return 'liquidation'
-		case 1:
+		case 1n:
 			return 'withdrawRep'
-		case 2:
+		case 2n:
 			return 'setSecurityBondsAllowance'
 		default:
 			throw new Error(`Unknown oracle operation: ${operation}`)

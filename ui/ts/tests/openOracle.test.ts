@@ -821,7 +821,9 @@ describe('Open Oracle helpers', () => {
 
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
+		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9,007,199,254,740,991.12345%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.40x')
+		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9007199254740991.01x')
 	})
 
 	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {

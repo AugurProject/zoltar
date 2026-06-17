@@ -1,4 +1,5 @@
 import { parseDecimalInput } from './decimal.js'
+import { getVisualRatio } from './visualMetrics.js'
 
 type ScalarQuestionDetails = {
 	answerUnit: string
@@ -63,11 +64,11 @@ function splitScalarOutcomeIndex(outcomeIndex: bigint) {
 export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
 	if (numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
 	if (tickIndex < 0n || tickIndex > numTicks) throw new Error('Tick index is out of range')
-	return Number((tickIndex * 100n) / numTicks)
+	return Math.floor((getVisualRatio({ value: tickIndex, maxValue: numTicks }) ?? 0) * 100)
 }
 
 export function getScalarSliderFillWidth(tickIndex: bigint, numTicks: bigint) {
-	const fraction = Number(tickIndex) / Number(numTicks)
+	const fraction = getVisualRatio({ value: tickIndex, maxValue: numTicks }) ?? 0
 	return `calc(${fraction * 100}% - ${fraction}rem + 0.5rem)`
 }
 

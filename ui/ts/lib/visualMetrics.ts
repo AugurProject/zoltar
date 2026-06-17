@@ -1,5 +1,7 @@
 import { formatRoundedCurrencyBalance } from './formatters.js'
 
+const VISUAL_RATIO_SCALE = 1_000_000n
+
 export function clampVisualRatio(value: number | undefined) {
 	if (value === undefined || Number.isNaN(value) || !Number.isFinite(value)) return 0
 	if (value < 0) return 0
@@ -9,7 +11,11 @@ export function clampVisualRatio(value: number | undefined) {
 
 export function getVisualRatio({ value, maxValue }: { value: bigint | undefined; maxValue: bigint | undefined }) {
 	if (value === undefined || maxValue === undefined || maxValue <= 0n) return undefined
-	return clampVisualRatio(Number(value) / Number(maxValue))
+	if (value <= 0n) return 0
+	if (value >= maxValue) return 1
+
+	const scaledRatio = (value * VISUAL_RATIO_SCALE) / maxValue
+	return Number(scaledRatio) / Number(VISUAL_RATIO_SCALE)
 }
 
 function formatCollateralizationPercentLabel(value: bigint | undefined, decimals: number = 0) {

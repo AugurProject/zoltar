@@ -1,6 +1,7 @@
 import { useRef } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { getVisualRatio } from '../lib/visualMetrics.js'
 
 type TruthAuctionDisposition = {
 	label: string
@@ -25,7 +26,6 @@ type TruthAuctionDepthChartProps = {
 
 const CHART_WIDTH = 560
 const CHART_HEIGHT = 180
-const DEPTH_RATIO_SCALE = 1_000_000n
 const CHART_PADDING = {
 	bottom: 22,
 	left: 6,
@@ -39,8 +39,7 @@ function formatTruthAuctionPriceLabel(price: bigint) {
 }
 
 function getDepthRatio(value: bigint, maxDepth: bigint) {
-	if (value <= 0n || maxDepth <= 0n) return 0
-	return Number((value * DEPTH_RATIO_SCALE) / maxDepth) / Number(DEPTH_RATIO_SCALE)
+	return getVisualRatio({ value, maxValue: maxDepth }) ?? 0
 }
 
 function getMarkerClassName(point: TruthAuctionDepthPoint, clearingTick: bigint | undefined) {

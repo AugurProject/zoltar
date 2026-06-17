@@ -70,6 +70,16 @@ function formatUtcTimestamp(timestamp: bigint) {
 	return `${date.getUTCFullYear()}-${formatTimestampPart(date.getUTCMonth() + 1)}-${formatTimestampPart(date.getUTCDate())} ${formatTimestampPart(date.getUTCHours())}:${formatTimestampPart(date.getUTCMinutes())}:${formatTimestampPart(date.getUTCSeconds())} UTC`
 }
 
+function getEffectiveRoundedDecimals(absoluteValue: bigint, units: number, decimals: number) {
+	if (absoluteValue === 0n) return decimals
+
+	const base = 10n ** BigInt(units)
+	if (absoluteValue >= base) return decimals
+
+	const leadingFractionalZeroCount = units - absoluteValue.toString().length
+	return Math.max(decimals, leadingFractionalZeroCount + 2)
+}
+
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
 	if (value === undefined) return '—'
 	assertInteger(units, 'Units')
@@ -92,10 +102,7 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 	const absoluteValue = isNegative ? -value : value
 	const prefix = isNegative ? '-' : ''
 
-	// For tiny values between 0 and 1, extend decimal places to show 2 significant figures.
-	// floatValue is used only for order-of-magnitude detection; bigint arithmetic handles rounding.
-	const floatValue = Number(absoluteValue) / 10 ** units
-	const effectiveDecimals = floatValue > 0 && floatValue < 1 ? Math.max(decimals, Math.ceil(-Math.log10(floatValue)) + 1) : decimals
+	const effectiveDecimals = getEffectiveRoundedDecimals(absoluteValue, units, decimals)
 
 	const scale = 10n ** BigInt(effectiveDecimals)
 	const base = 10n ** BigInt(units)

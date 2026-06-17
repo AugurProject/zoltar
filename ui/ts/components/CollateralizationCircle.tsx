@@ -1,8 +1,8 @@
 import type { CollateralizationCircleProps } from '../types/components.js'
-import { formatCollateralizationCompactPercentLabel, getCollateralizationVisualPercent, getToneRatioThreshold } from '../lib/visualMetrics.js'
+import { formatCollateralizationCompactPercentLabel, getCollateralizationVisualPercent, getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 
 export function CollateralizationCircle({ collateralizationPercent, className = '', label = 'Collateralization', size = 'medium', successThreshold = 1, targetCollateralizationPercent, tone, warningThreshold = 0.65 }: CollateralizationCircleProps) {
-	const toneRatio = collateralizationPercent === undefined || targetCollateralizationPercent === undefined || targetCollateralizationPercent <= 0n ? undefined : Number(collateralizationPercent) / Number(targetCollateralizationPercent)
+	const toneRatio = getVisualRatio({ value: collateralizationPercent, maxValue: targetCollateralizationPercent })
 	const resolvedTone =
 		tone ??
 		getToneRatioThreshold({
