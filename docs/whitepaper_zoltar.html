@@ -7,23 +7,25 @@
 		<style>
 			:root {
 				color-scheme: light dark;
-				--bg: #f7f5ef;
-				--paper: #fffdf8;
-				--ink: #202124;
-				--muted: #62666d;
-				--line: #d8d0c1;
-				--soft-line: #ebe4d6;
-				--gold: #b77a18;
-				--gold-soft: #f4dfb7;
-				--teal: #1d7569;
-				--teal-soft: #d6ece7;
+				--bg: #f5f7f6;
+				--paper: #fffefd;
+				--ink: #202427;
+				--muted: #606a70;
+				--line: #d5dedb;
+				--soft-line: #e8eeec;
+				--green: #1c7659;
+				--green-soft: #d9eee7;
+				--gold: #a46f16;
+				--gold-soft: #f2dfb9;
+				--teal: #1c7659;
+				--teal-soft: #d9eee7;
 				--red: #a8443d;
 				--red-soft: #f2d2cb;
-				--blue: #315f99;
-				--blue-soft: #dce7f7;
-				--code-bg: #fbf3e4;
-				--section-bg: #fffaf0;
-				--shadow: 0 24px 70px rgb(47 37 21 / 12%);
+				--blue: #285f9f;
+				--blue-soft: #dce9f8;
+				--code-bg: #f8f3e8;
+				--section-bg: #fbfcfb;
+				--shadow: 0 24px 70px rgb(22 50 45 / 11%);
 				font-family:
 					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
 					sans-serif;
@@ -31,22 +33,24 @@
 
 			@media (prefers-color-scheme: dark) {
 				:root {
-					--bg: #111315;
-					--paper: #191b1e;
-					--ink: #f2eee6;
-					--muted: #b7b0a6;
-					--line: #454039;
-					--soft-line: #302d29;
-					--gold: #e3a540;
-					--gold-soft: #3a2a12;
-					--teal: #6cc6b8;
-					--teal-soft: #143631;
+					--bg: #111516;
+					--paper: #191d1e;
+					--ink: #f1f4f2;
+					--muted: #b0bab7;
+					--line: #3b4744;
+					--soft-line: #2b3331;
+					--green: #72cba9;
+					--green-soft: #14372c;
+					--gold: #e2ac4f;
+					--gold-soft: #3a2d15;
+					--teal: #72cba9;
+					--teal-soft: #14372c;
 					--red: #ef8e82;
 					--red-soft: #3d201d;
-					--blue: #8eb5ee;
+					--blue: #8bb9f0;
 					--blue-soft: #17283f;
-					--code-bg: #282119;
-					--section-bg: #211d18;
+					--code-bg: #27231c;
+					--section-bg: #1d2221;
 					--shadow: 0 24px 70px rgb(0 0 0 / 34%);
 				}
 			}
@@ -62,11 +66,11 @@
 			body {
 				margin: 0;
 				background:
-					linear-gradient(120deg, rgb(183 122 24 / 10%), transparent 34rem),
-					linear-gradient(300deg, rgb(29 117 105 / 10%), transparent 34rem),
+					linear-gradient(120deg, rgb(28 118 89 / 10%), transparent 32rem),
+					linear-gradient(300deg, rgb(40 95 159 / 9%), transparent 34rem),
 					var(--bg);
 				color: var(--ink);
-				line-height: 1.6;
+				line-height: 1.62;
 			}
 
 			a {
@@ -75,18 +79,8 @@
 				text-underline-offset: 0.18em;
 			}
 
-			a:hover {
-				color: #193f72;
-			}
-
-			@media (prefers-color-scheme: dark) {
-				a:hover {
-					color: #bfd5f7;
-				}
-			}
-
 			code {
-				padding: 0.12rem 0.32rem;
+				padding: 0.1rem 0.32rem;
 				border: 1px solid var(--soft-line);
 				border-radius: 0.35rem;
 				background: var(--code-bg);
@@ -113,18 +107,19 @@
 				padding: 1rem;
 				border: 1px solid var(--line);
 				border-radius: 0.5rem;
-				background: rgb(255 253 248 / 84%);
-				box-shadow: 0 10px 40px rgb(47 37 21 / 8%);
+				background: color-mix(in srgb, var(--paper) 88%, transparent);
+				box-shadow: 0 10px 40px rgb(22 50 45 / 8%);
 				backdrop-filter: blur(12px);
 			}
 
 			.sidebar strong {
 				display: block;
 				margin-bottom: 0.8rem;
+				color: var(--green);
 				font-size: 0.83rem;
+				font-weight: 800;
 				letter-spacing: 0.08em;
 				text-transform: uppercase;
-				color: var(--gold);
 			}
 
 			.sidebar a {
@@ -143,19 +138,24 @@
 				min-width: 0;
 			}
 
-			.hero {
-				padding: clamp(2rem, 6vw, 5rem);
+			.hero,
+			.paper-section {
 				border: 1px solid var(--line);
 				border-radius: 0.75rem;
-				background:
-					radial-gradient(circle at 78% 22%, rgb(29 117 105 / 16%), transparent 15rem),
-					linear-gradient(145deg, var(--paper), var(--section-bg));
+				background: var(--paper);
 				box-shadow: var(--shadow);
+			}
+
+			.hero {
+				padding: clamp(2rem, 6vw, 5rem);
+				background:
+					radial-gradient(circle at 82% 18%, rgb(40 95 159 / 13%), transparent 14rem),
+					linear-gradient(145deg, var(--paper), var(--section-bg));
 			}
 
 			.kicker {
 				margin: 0 0 0.9rem;
-				color: var(--gold);
+				color: var(--green);
 				font-size: 0.82rem;
 				font-weight: 800;
 				letter-spacing: 0.12em;
@@ -169,23 +169,23 @@
 			}
 
 			h1 {
-				max-width: 15ch;
+				max-width: 14ch;
 				margin: 0;
-				font-size: clamp(3rem, 8vw, 6.3rem);
+				font-size: clamp(3rem, 8vw, 6.1rem);
 				letter-spacing: 0;
 			}
 
 			.subtitle {
-				max-width: 66ch;
+				max-width: 68ch;
 				margin: 1.2rem 0 0;
 				color: var(--muted);
-				font-size: clamp(1.05rem, 2vw, 1.3rem);
+				font-size: clamp(1.05rem, 2vw, 1.28rem);
 			}
 
 			.meta-grid {
 				display: grid;
 				grid-template-columns: repeat(3, minmax(0, 1fr));
-				gap: 0.8rem;
+				gap: 1rem;
 				margin-top: 2rem;
 			}
 
@@ -193,7 +193,7 @@
 			.summary-card {
 				border: 1px solid var(--line);
 				border-radius: 0.5rem;
-				background: rgb(255 255 255 / 58%);
+				background: color-mix(in srgb, var(--paper) 74%, white);
 				padding: 1rem;
 			}
 
@@ -224,10 +224,7 @@
 			.paper-section {
 				margin-top: 1.25rem;
 				padding: clamp(1.25rem, 4vw, 2.4rem);
-				border: 1px solid var(--line);
-				border-radius: 0.75rem;
-				background: var(--paper);
-				box-shadow: 0 18px 50px rgb(47 37 21 / 7%);
+				box-shadow: 0 18px 50px rgb(22 50 45 / 7%);
 			}
 
 			.paper-section h2 {
@@ -299,6 +296,16 @@
 				width: 100%;
 				border-collapse: collapse;
 				background: var(--section-bg);
+			}
+
+			.invalid-table {
+				min-width: 42rem;
+			}
+
+			.invalid-table th:first-child,
+			.invalid-table td:first-child {
+				width: 10rem;
+				white-space: nowrap;
 			}
 
 			th,
@@ -671,7 +678,7 @@
 
 			<main>
 				<header class="hero">
-					<p class="kicker">Forkable Oracle Substrate</p>
+					<p class="kicker">Branching Oracle Layer</p>
 					<h1>Zoltar White Paper</h1>
 					<p class="subtitle">
 						A visual guide to Zoltar universes, deterministic question encoding, scalar
@@ -687,8 +694,8 @@
 							<b>Categorical and scalar</b>
 						</div>
 						<div class="meta-card">
-							<span>Branch action</span>
-							<b>Split post-fork REP claims</b>
+							<span>Fork output</span>
+							<b>Multiple valid child universes</b>
 						</div>
 					</div>
 				</header>
@@ -699,7 +706,7 @@
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Zoltar is a forkable oracle substrate centered on universes, question encoding,
+						Zoltar is a forkable oracle layer centered on universes, question encoding,
 						and REP branching. It implements the branching model described in
 						<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins.md</a>:
 						unresolved disagreement becomes explicit child universes, and REP holders
@@ -713,7 +720,7 @@
 						</div>
 						<div class="summary-card">
 							<span>What REP holders do</span>
-							<b>Reproduce migration claims into selected child universes.</b>
+							<b>Choose child universes and receive child REP for migrated balances.</b>
 						</div>
 						<div class="summary-card">
 							<span>What Zoltar omits</span>
@@ -744,19 +751,19 @@
 						<div class="glossary-card">
 							<b>Invalid</b>
 							<p>A valid answer state representing an unresolvable or invalid market outcome.</p>
-						</div>
-						<div class="glossary-card">
-							<b>Malformed</b>
-							<p>An outcome index or scalar encoding outside the question’s valid answer space.</p>
-						</div>
-						<div class="glossary-card">
-							<b>Child REP</b>
-							<p>Reputation minted inside a child universe after post-fork migration splitting.</p>
-						</div>
-						<div class="glossary-card">
-							<b>Colored Coins model</b>
-							<p>A branching model where claims are reproduced across selected branches and later value concentration determines which branch matters.</p>
-						</div>
+							</div>
+							<div class="glossary-card">
+								<b>Malformed</b>
+								<p>An answer encoding the question definition does not permit.</p>
+							</div>
+							<div class="glossary-card">
+								<b>Child REP</b>
+								<p>Reputation minted inside a child universe from migration balance.</p>
+							</div>
+							<div class="glossary-card">
+								<b>Colored Coins model</b>
+								<p>A branch-aware claim model for post-fork coordination.</p>
+							</div>
 					</div>
 				</section>
 
@@ -804,12 +811,12 @@
 						the repo. Its role is narrower and more fundamental:
 					</p>
 					<ul class="clean-list">
-						<li>register questions</li>
-						<li>encode valid answer spaces</li>
-						<li>represent forks as child universes</li>
-						<li>mint and burn child-universe REP</li>
-						<li>split post-fork REP claims across disputed branches</li>
-					</ul>
+							<li>register questions</li>
+							<li>encode valid answer spaces</li>
+							<li>represent forks as child universes</li>
+							<li>mint and burn child-universe REP</li>
+							<li>turn migration balances into selected child REP</li>
+						</ul>
 
 					<h3>Core Contract Map</h3>
 					<ul class="contract-list">
@@ -846,7 +853,7 @@
 							<text class="svg-small" x="100" y="101" text-anchor="middle">registered questions</text>
 							<text class="svg-small" x="720" y="101" text-anchor="middle">child universes</text>
 						</svg>
-						<p class="diagram-caption">Zoltar is the branch substrate: applications feed it questions and later consume the child-universe structure it defines.</p>
+						<p class="diagram-caption">Zoltar is the branching oracle layer: applications feed it questions and later consume the child-universe structure it defines.</p>
 					</figure>
 				</section>
 
@@ -1101,13 +1108,13 @@
 							<span class="legend-item"><span class="legend-swatch teal"></span>Reproduced selected branches</span>
 							<span class="legend-item"><span class="legend-swatch blue"></span>Single selected branch</span>
 						</div>
-						<p class="diagram-caption">Selecting multiple branches reproduces the same migrated claim into each selected child universe.</p>
+						<p class="diagram-caption">Selecting multiple branches mints child REP in each selected child universe from the same migration balance.</p>
 					</figure>
 
 					<div class="callout">
 						<strong>Colored Coins-style property</strong>
-						The same migrated claim can be reproduced into each selected child. Later value
-						concentration determines which branch matters economically.
+						The same migration balance can mint child REP in each selected child. Later
+						value concentration determines which branch matters economically.
 					</div>
 				</section>
 
@@ -1190,33 +1197,45 @@
 
 					<figure class="diagram" aria-labelledby="packed-diagram-title">
 						<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
-						<svg viewBox="0 0 920 430" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators.">
+						<svg viewBox="0 0 920 520" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators.">
 							<defs>
 								<marker id="arrow-packed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
 								</marker>
 							</defs>
-							<text class="svg-small" x="60" y="42">most significant</text>
-							<text class="svg-small" x="820" y="42" text-anchor="end">least significant</text>
-							<rect class="svg-teal" x="60" y="64" width="112" height="88" rx="10"></rect>
-							<rect class="svg-gold" x="172" y="64" width="344" height="88" rx="0"></rect>
-							<rect class="svg-blue" x="516" y="64" width="344" height="88" rx="10"></rect>
-							<text class="svg-label" x="116" y="100" text-anchor="middle">bit 255</text>
-							<text class="svg-small" x="116" y="124" text-anchor="middle">namespace</text>
-							<text class="svg-label" x="344" y="100" text-anchor="middle">bits 239...120</text>
-							<text class="svg-small" x="344" y="124" text-anchor="middle">first payout numerator</text>
-							<text class="svg-label" x="688" y="100" text-anchor="middle">bits 119...0</text>
-							<text class="svg-small" x="688" y="124" text-anchor="middle">second payout numerator</text>
-							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 116 158 V 206"></path>
-							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 344 158 V 206"></path>
-							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 688 158 V 206"></path>
-							<rect class="svg-box" x="60" y="216" width="800" height="70" rx="12"></rect>
-							<text class="svg-label" x="86" y="246">If namespace bit = 0</text>
-							<text class="svg-small" x="86" y="270">The value is in the invalid namespace. The all-zero uint256 is canonical Invalid.</text>
-							<rect class="svg-box" x="60" y="310" width="800" height="82" rx="12"></rect>
-							<text class="svg-label" x="86" y="340">If namespace bit = 1</text>
-							<text class="svg-small" x="86" y="364">The two payout numerators encode a scalar answer and must satisfy:</text>
-							<text class="svg-label" x="86" y="388">first + second = numTicks</text>
+							<text class="svg-small" x="70" y="46">most significant</text>
+							<text class="svg-small" x="850" y="46" text-anchor="end">least significant</text>
+							<rect class="svg-box" x="70" y="66" width="780" height="118" rx="14"></rect>
+							<rect class="svg-teal" x="92" y="92" width="92" height="66" rx="10"></rect>
+							<rect class="svg-gold" x="210" y="92" width="280" height="66" rx="10"></rect>
+							<rect class="svg-blue" x="516" y="92" width="312" height="66" rx="10"></rect>
+							<text class="svg-label" x="138" y="119" text-anchor="middle">bit 255</text>
+							<text class="svg-small" x="138" y="142" text-anchor="middle">flag</text>
+							<text class="svg-label" x="350" y="119" text-anchor="middle">bits 239...120</text>
+							<text class="svg-small" x="350" y="142" text-anchor="middle">first payout numerator</text>
+							<text class="svg-label" x="672" y="119" text-anchor="middle">bits 119...0</text>
+							<text class="svg-small" x="672" y="142" text-anchor="middle">second payout numerator</text>
+							<text class="svg-small" x="92" y="202">Unused high-order padding bits are not part</text>
+							<text class="svg-small" x="92" y="224">of this scalar payload.</text>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 138 184 V 246"></path>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 350 184 V 246"></path>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 672 184 V 246"></path>
+							<rect class="svg-teal" x="52" y="256" width="172" height="92" rx="12"></rect>
+							<text class="svg-label" x="138" y="292" text-anchor="middle">Namespace</text>
+							<text class="svg-small" x="138" y="318" text-anchor="middle">0 = Invalid</text>
+							<text class="svg-small" x="138" y="340" text-anchor="middle">1 = scalar value</text>
+							<rect class="svg-gold" x="258" y="256" width="184" height="92" rx="12"></rect>
+							<text class="svg-label" x="350" y="292" text-anchor="middle">Left Payout</text>
+							<text class="svg-small" x="350" y="318" text-anchor="middle">numTicks - tickIndex</text>
+							<rect class="svg-blue" x="580" y="256" width="184" height="92" rx="12"></rect>
+							<text class="svg-label" x="672" y="292" text-anchor="middle">Right Payout</text>
+							<text class="svg-small" x="672" y="318" text-anchor="middle">tickIndex</text>
+							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 442 302 H 570"></path>
+							<text class="svg-small" x="506" y="286" text-anchor="middle">combined rule</text>
+							<rect class="svg-box" x="176" y="390" width="568" height="82" rx="12"></rect>
+								<text class="svg-label" x="460" y="424" text-anchor="middle">Scalar validity check</text>
+								<text class="svg-small" x="460" y="444" text-anchor="middle">first payout numerator</text>
+								<text class="svg-small" x="460" y="464" text-anchor="middle">+ second payout numerator = numTicks</text>
 						</svg>
 						<div class="legend" aria-label="Scalar encoding diagram legend">
 							<span class="legend-item"><span class="legend-swatch teal"></span>Namespace bit</span>
@@ -1283,7 +1302,7 @@
 					</div>
 					<p>Zoltar distinguishes <code>Invalid</code> answers from <code>Malformed</code> answers.</p>
 					<div class="table-wrap">
-						<table>
+						<table class="invalid-table">
 							<thead>
 								<tr>
 									<th>Term</th>
@@ -1341,7 +1360,7 @@
 						<a class="anchor-link" href="#thesis" aria-label="Link to Design Thesis">#</a>
 					</div>
 					<p class="lede">
-						Zoltar provides a generalized branching substrate for categorical and scalar
+						Zoltar provides a generalized branching oracle layer for categorical and scalar
 						questions. Rather than forcing a single answer when disagreement persists, it
 						turns unresolved decisions into explicit child universes and lets REP holders
 						split post-fork claims across one or more selected branches.
@@ -1349,10 +1368,6 @@
 					<p>
 						In that sense it closely follows the Colored Coins model: the protocol branches
 						state first, and later coordination determines which branch carries durable value.
-					</p>
-					<p class="footer-note">
-						This HTML edition adds visual structure and vector diagrams while preserving the
-						source whitepaper’s contract-level substance.
 					</p>
 				</section>
 			</main>

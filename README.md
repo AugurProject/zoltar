@@ -2,7 +2,7 @@
 
 This repository contains two protocol layers:
 
-- `Zoltar`: the forkable oracle substrate
+- `Zoltar`: the forkable oracle base layer
 - `Augur Placeholder`: the prediction-market application layer built on top of Zoltar
 
 The codebase is split into two main parts:
@@ -13,7 +13,7 @@ The codebase is split into two main parts:
 Protocol documentation lives in `docs/`:
 
 - [Zoltar visual whitepaper](./docs/whitepaper_zoltar.html)
-- [Augur Placeholder whitepaper](./docs/whitepaper_placeholder.md)
+- [Augur Placeholder visual whitepaper](./docs/whitepaper_placeholder.html)
 
 ## Prerequisites
 
