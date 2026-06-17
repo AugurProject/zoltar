@@ -152,9 +152,12 @@ contract SecurityPoolOracleCoordinator {
 	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
+		require(amount1 > 0 && amount2 > 0, 'invalid oracle price');
+		uint256 price = (amount1 * PRICE_PRECISION) / amount2;
+		require(price > 0, 'invalid oracle price');
 		pendingReportId = 0;
 		lastSettlementTimestamp = block.timestamp;
-		lastPrice = amount2 == 0 ? 0 : (amount1 * PRICE_PRECISION) / amount2;
+		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
 		if (pendingOperationSlotId != 0) { // TODO we maybe should allow executing couple operations?
 			uint256 operationId = pendingOperationSlotId;
@@ -164,7 +167,7 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function isPriceValid() public view returns (bool) {
-		return lastSettlementTimestamp != 0 && lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
+		return lastPrice > 0 && lastSettlementTimestamp != 0 && lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
 	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount, uint256 validForSeconds) public payable {

@@ -9,10 +9,11 @@ import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils
 import { setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { handleOracleReporting } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
+import { getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -30,6 +31,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const securityMultiplier = 2n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 	const EXTRA_INFO = 'test question!'
+	let securityPool: Address
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -55,6 +57,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await approveAndDepositRep(client, repDeposit, questionId)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
+		securityPool = addresses.securityPool
 	})
 
 	test('requestPrice should refund excess Ether when overpaid', async () => {
@@ -169,6 +172,70 @@ describe('Price Oracle Refund Security Tests', () => {
 				),
 			/no such operation/i,
 		)
+	})
+
+	test('invalid oracle callbacks do not validate price or execute staged allowances', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const unsafeAllowance = repDeposit * 10n
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					value: ethCost,
+				}),
+		)
+
+		const pendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
+
+		const openOracle = getInfraContractAddresses().openOracle
+		await mockWindow.impersonateAccount(openOracle)
+		await mockWindow.setBalance(openOracle, 10n ** 18n)
+		const openOracleClient = createWriteClient(mockWindow, BigInt(openOracle), 0)
+
+		const invalidReports = [
+			{ amount1: 1n, amount2: 0n, description: 'zero denominator' },
+			{ amount1: 0n, amount2: 1n, description: 'zero numerator' },
+			{ amount1: 1n, amount2: 10n ** 18n + 1n, description: 'zero computed price' },
+		]
+		for (const invalidReport of invalidReports) {
+			await assert.rejects(
+				async () =>
+					await writeContractAndWait(
+						openOracleClient,
+						async () =>
+							await openOracleClient.writeContract({
+								abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+								address: priceOracle,
+								functionName: 'openOracleCallback',
+								args: [pendingReportId, invalidReport.amount1, invalidReport.amount2, 0n, zeroAddress, zeroAddress],
+							}),
+					),
+				/invalid oracle price/i,
+				invalidReport.description,
+			)
+		}
+
+		const isPriceValid = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'isPriceValid',
+			args: [],
+		})
+		const vault = await getSecurityVault(client, securityPool, client.account.address)
+
+		assert.strictEqual(isPriceValid, false, 'invalid oracle callbacks must not make the price valid')
+		assert.strictEqual(vault.securityBondAllowance, 0n, 'invalid oracle prices must not execute staged allowance updates')
 	})
 
 	test('active staged operations stay newest-first after pending-slot settlement and manual execution', async () => {
