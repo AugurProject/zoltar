@@ -8,7 +8,7 @@ import { ProgressMeter } from './ProgressMeter.js'
 import { UniverseLink } from './UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getPoolCollateralizationPercent } from '../lib/trading.js'
-import { getToneRatioThreshold } from '../lib/visualMetrics.js'
+import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 
 type SecurityPoolSummaryMetricsProps = {
@@ -117,7 +117,7 @@ export function SecurityPoolSummaryMetrics({
 							</span>
 						}
 						tone={getToneRatioThreshold({
-							ratio: pool.totalSecurityBondAllowance === 0n ? undefined : Number(pool.completeSetCollateralAmount) / Number(pool.totalSecurityBondAllowance),
+							ratio: getVisualRatio({ value: pool.completeSetCollateralAmount, maxValue: pool.totalSecurityBondAllowance }),
 							successThreshold: 0.6,
 							warningThreshold: 0.85,
 						})}

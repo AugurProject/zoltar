@@ -5,7 +5,7 @@ import { PaginationControls } from './PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
-import { QUESTION_PAGE_SIZE } from '../lib/pagination.js'
+import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, QUESTION_PAGE_SIZE } from '../lib/pagination.js'
 import type { MarketDetailsPage } from '../types/contracts.js'
 
 function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: number, questionCount: bigint | undefined) {
@@ -32,7 +32,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 	const currentPageRequestKey = `${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount?.toString() ?? 'unknown'}`
 	const hasCurrentPageData = isCurrentQuestionPage(zoltarQuestionPage, pageIndex, zoltarQuestionCount)
 	const effectiveQuestionCount = zoltarQuestionPage?.questionCount ?? zoltarQuestionCount
-	const questionPageCount = effectiveQuestionCount === undefined || effectiveQuestionCount === 0n ? 0 : Math.ceil(Number(effectiveQuestionCount) / QUESTION_PAGE_SIZE)
+	const questionPageCount = getPaginationPageCount(effectiveQuestionCount, QUESTION_PAGE_SIZE)
 	const visibleQuestions = hasCurrentPageData && zoltarQuestionPage !== undefined ? zoltarQuestionPage.questions : []
 	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
 	useEffect(() => {
@@ -66,7 +66,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 			})
 	}, [activePageRequestKey, lastFailedPageRequestKey, loadingZoltarQuestionCount, onLoadZoltarQuestionPage, pageIndex, zoltarQuestionCount, zoltarQuestionPage])
 	const hasPreviousPage = pageIndex > 0
-	const hasNextPage = pageIndex + 1 < questionPageCount
+	const hasNextPage = getHasNextPaginationPage(pageIndex, questionPageCount)
 	return (
 		<SectionBlock
 			density='compact'
@@ -78,7 +78,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 					loading={loadingZoltarQuestions}
 					onNextPage={() => setPageIndex(current => current + 1)}
 					onPreviousPage={() => setPageIndex(current => Math.max(0, current - 1))}
-					summary={zoltarQuestionPage === undefined ? undefined : `Page ${pageIndex + 1} of ${Math.max(questionPageCount, 1)}`}
+					summary={zoltarQuestionPage === undefined ? undefined : formatPaginationSummary(pageIndex, questionPageCount)}
 				/>
 			}
 		>
