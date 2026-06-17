@@ -152,10 +152,14 @@ contract SecurityPoolOracleCoordinator {
 	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
-		require(amount1 > 0 && amount2 > 0, 'invalid oracle price');
-		uint256 price = (amount1 * PRICE_PRECISION) / amount2;
-		require(price > 0, 'invalid oracle price');
 		pendingReportId = 0;
+		if (amount1 == 0 || amount2 == 0) {
+			return;
+		}
+		uint256 price = (amount1 * PRICE_PRECISION) / amount2;
+		if (price == 0) {
+			return;
+		}
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);

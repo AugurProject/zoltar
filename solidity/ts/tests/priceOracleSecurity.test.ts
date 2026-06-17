@@ -4,15 +4,15 @@ import { type Address, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { TEST_ADDRESSES, DAY } from '../testsuite/simulator/utils/constants'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
-import { setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
+import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testsuite/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { handleOracleReporting } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
-import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
+import { OperationType, getOpenOracleExtraData, getOpenOracleReportMeta, getRequestPriceEthCost, openOracleSettle, openOracleSubmitInitialReport, wrapWeth } from '../testsuite/simulator/utils/contracts/peripherals'
 import { getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
 
@@ -174,7 +174,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 	})
 
-	test('invalid oracle callbacks do not validate price or execute staged allowances', async () => {
+	test('invalid settled oracle reports clear pending report without validating price or executing staged allowances', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
 
@@ -199,32 +199,20 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
 
 		const openOracle = getInfraContractAddresses().openOracle
-		await mockWindow.impersonateAccount(openOracle)
-		await mockWindow.setBalance(openOracle, 10n ** 18n)
-		const openOracleClient = createWriteClient(mockWindow, BigInt(openOracle), 0)
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		const amount1 = reportMeta.exactToken1Report
+		const amount2 = amount1 * 10n ** 18n + 1n
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await approveToken(client, WETH_ADDRESS, openOracle)
+		const wethBalanceBefore = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		await wrapWeth(client, amount2)
+		const wethBalanceAfter = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		assert.strictEqual(wethBalanceAfter - wethBalanceBefore, amount2, 'setup should wrap enough WETH for the invalid report')
 
-		const invalidReports = [
-			{ amount1: 1n, amount2: 0n, description: 'zero denominator' },
-			{ amount1: 0n, amount2: 1n, description: 'zero numerator' },
-			{ amount1: 1n, amount2: 10n ** 18n + 1n, description: 'zero computed price' },
-		]
-		for (const invalidReport of invalidReports) {
-			await assert.rejects(
-				async () =>
-					await writeContractAndWait(
-						openOracleClient,
-						async () =>
-							await openOracleClient.writeContract({
-								abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-								address: priceOracle,
-								functionName: 'openOracleCallback',
-								args: [pendingReportId, invalidReport.amount1, invalidReport.amount2, 0n, zeroAddress, zeroAddress],
-							}),
-					),
-				/invalid oracle price/i,
-				invalidReport.description,
-			)
-		}
+		const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
+		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await openOracleSettle(client, pendingReportId)
 
 		const isPriceValid = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
@@ -232,9 +220,23 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'isPriceValid',
 			args: [],
 		})
+		const pendingReportIdAfterSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		const pendingOperationSlotId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
 		const vault = await getSecurityVault(client, securityPool, client.account.address)
 
-		assert.strictEqual(isPriceValid, false, 'invalid oracle callbacks must not make the price valid')
+		assert.strictEqual(pendingReportIdAfterSettlement, 0n, 'invalid settled reports must clear the pending report so the oracle can be retried')
+		assert.strictEqual(pendingOperationSlotId, 1n, 'invalid settled reports should leave the staged operation pending for a later valid price')
+		assert.strictEqual(isPriceValid, false, 'invalid settled reports must not make the price valid')
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'invalid oracle prices must not execute staged allowance updates')
 	})
 
