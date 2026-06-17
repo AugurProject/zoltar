@@ -1,3 +1,5 @@
+import { act } from 'preact/test-utils'
+
 type TextMatch = string | RegExp
 
 type RoleOptions = {
@@ -274,7 +276,9 @@ export function within(container: Element) {
 }
 
 function dispatchDomEvent(element: EventTarget, event: Event): void {
-	element.dispatchEvent(event)
+	void act(() => {
+		element.dispatchEvent(event)
+	})
 }
 
 function createKeyboardEvent(type: string, options?: KeyboardEventInit): Event {
