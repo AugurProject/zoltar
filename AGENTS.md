@@ -61,6 +61,12 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 
 - **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.
 
+# Generated Artifact Policy
+
+- Generated build outputs and protocol artifacts are intentionally untracked. Keep `/ui/js`, `/shared/js`, `/ui/vendor`, `/solidity/artifacts`, `/ui/ts/contractArtifact.ts`, and `/solidity/ts/types/contractArtifact.ts` out of source review.
+- If a deployment workflow ever requires committing generated artifacts, update this policy in the same PR and add a freshness check that regenerates the artifacts and fails on a dirty tracked diff.
+- Use `bun run check:generated-clean` when validating artifact freshness for CI or release work.
+
 # Code Style Guidelines
 
 - **Quotes**: Use single quotes (`'`) for strings. Double quotes are not allowed unless escaping is required.
