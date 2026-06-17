@@ -11,6 +11,7 @@ import { FormInput } from './FormInput.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { MetricField } from './MetricField.js'
 import { PaginationControls } from './PaginationControls.js'
+import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -252,11 +253,11 @@ function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrationEndsA
 	return undefined
 }
 
-function getTruthAuctionBypassReason({ migratedRep, parentCollateralAmount, repAtFork }: { migratedRep: bigint; parentCollateralAmount: bigint | undefined; repAtFork: bigint | undefined }) {
+function getTruthAuctionBypassReason({ migratedRep, parentCollateralAmount, auctionableRepAtFork }: { migratedRep: bigint; parentCollateralAmount: bigint | undefined; auctionableRepAtFork: bigint | undefined }) {
 	if (parentCollateralAmount === 0n) return 'No parent collateral remains to auction, so this step immediately bypasses bidding and finalizes the child pool.'
-	if (repAtFork === undefined) return undefined
-	if (repAtFork === 0n) return 'No REP was present at fork, so no truth auction is needed for this child universe.'
-	if (migratedRep >= repAtFork) return 'This child universe already has all REP migrated from the parent pool, so no truth auction is needed.'
+	if (auctionableRepAtFork === undefined) return undefined
+	if (auctionableRepAtFork === 0n) return 'No REP was present at fork, so no truth auction is needed for this child universe.'
+	if (migratedRep >= auctionableRepAtFork) return 'This child universe already has all REP migrated from the parent pool, so no truth auction is needed.'
 	return undefined
 }
 
@@ -756,10 +757,10 @@ export function ForkAuctionSection({
 	const [settlementActionQueue, setSettlementActionQueue] = useState<SettlementAction[]>([])
 	const [settlementBidResultRefreshToken, setSettlementBidResultRefreshToken] = useState(0)
 	const [settlementBidResultByKey, setSettlementBidResultByKey] = useState<Record<string, LocalSettlementBidStatus>>({})
-	const effectiveLockedRepInEscalationGame = (() => {
+	const effectiveEscrowedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
-		if (connectedWalletVaultSummary.lockedRepInEscalationGame > optimisticMigratedEscalationRep) {
-			return connectedWalletVaultSummary.lockedRepInEscalationGame - optimisticMigratedEscalationRep
+		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticMigratedEscalationRep) {
+			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticMigratedEscalationRep
 		}
 		return 0n
 	})()
@@ -797,7 +798,7 @@ export function ForkAuctionSection({
 				{renderWorkflowMetricGrid([
 					{ label: 'REP Collateral', value: <CurrencyValue value={connectedWalletVaultSummary.repDepositShare} suffix='REP' /> },
 					{ label: 'Security Bond Allowance', value: <CurrencyValue value={connectedWalletVaultSummary.securityBondAllowance} suffix='ETH' /> },
-					{ label: 'Locked REP', value: <CurrencyValue value={effectiveLockedRepInEscalationGame ?? 0n} suffix='REP' /> },
+					{ label: 'Escrowed REP', value: <CurrencyValue value={effectiveEscrowedRepInEscalationGame ?? 0n} suffix='REP' /> },
 				])}
 				<div className='form-grid fork-workflow-outcome-selector'>
 					<label className='field'>
@@ -814,9 +815,9 @@ export function ForkAuctionSection({
 		)
 	})()
 	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.repDepositShare > 0n || connectedWalletVaultSummary.securityBondAllowance > 0n)
-	const hasWalletEscalationMigrationBalance = effectiveLockedRepInEscalationGame !== undefined && effectiveLockedRepInEscalationGame > 0n
+	const hasWalletEscalationMigrationBalance = effectiveEscrowedRepInEscalationGame !== undefined && effectiveEscrowedRepInEscalationGame > 0n
 	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? 'No REP collateral or security bond allowance remains to migrate for the connected wallet.' : undefined
-	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? 'No locked REP remains to migrate for the connected wallet.' : undefined
+	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? 'No escrowed REP remains to migrate for the connected wallet.' : undefined
 	const totalUnresolvedMigrationDepositCount = unresolvedMigrationSides.reduce((count, side) => count + side.userDeposits.length, 0)
 	const hasUnresolvedMigrationDeposits = totalUnresolvedMigrationDepositCount > 0
 	const importedForkSettlementSides = activeReportingDetails?.sides.filter(side => side.importedUserDeposits.length > 0) ?? []
@@ -1062,7 +1063,7 @@ export function ForkAuctionSection({
 	const truthAuctionBypassReason = getTruthAuctionBypassReason({
 		migratedRep: selectedAuctionContext?.migratedRep ?? selectedAuctionChildPool?.migratedRep ?? 0n,
 		parentCollateralAmount: forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount,
-		repAtFork: forkAuctionDetails?.repAtFork,
+		auctionableRepAtFork: forkAuctionDetails?.auctionableRepAtFork,
 	})
 	const bidPriceValidationMessage = (() => {
 		if (forkAuctionForm.submitBidPrice.trim() === '') return 'Enter a bid price greater than zero.'
@@ -1541,10 +1542,10 @@ export function ForkAuctionSection({
 		setHasCompletedVaultMigration(true)
 		setIsVaultMigrationPending(false)
 		setPendingEscalationMigrationSelection(undefined)
-		if (connectedWalletVaultSummary?.lockedRepInEscalationGame !== undefined) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + connectedWalletVaultSummary.lockedRepInEscalationGame)
+		if (connectedWalletVaultSummary?.escalationEscrowedRep !== undefined) {
+			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + connectedWalletVaultSummary.escalationEscrowedRep)
 		}
-	}, [connectedWalletVaultSummary?.lockedRepInEscalationGame, forkAuctionResult, securityPoolAddress])
+	}, [connectedWalletVaultSummary?.escalationEscrowedRep, forkAuctionResult, securityPoolAddress])
 	useEffect(() => {
 		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateEscalationDeposits' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
 		if (pendingEscalationMigrationSelection === undefined) return
@@ -1594,7 +1595,7 @@ export function ForkAuctionSection({
 	}, [importedForkSettlementSides])
 	useEffect(() => {
 		setOptimisticMigratedEscalationRep(0n)
-	}, [connectedWalletVaultSummary?.lockedRepInEscalationGame])
+	}, [connectedWalletVaultSummary?.escalationEscrowedRep])
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return
 		if (accountState.address === undefined || securityPoolAddress === undefined) setIsStartTruthAuctionInProgressState(false)
@@ -1743,7 +1744,7 @@ export function ForkAuctionSection({
 		if (forkAuctionDetails?.migrationEndsAt !== undefined) return forkAuctionDetails.migrationEndsAt - FORK_MIGRATION_DURATION
 		return undefined
 	})()
-	const migrationRepAtForkDisplay = forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' />
+	const migrationRepAtForkDisplay = forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionableRepAtFork} suffix='REP' />
 	const migrationRepDisplay = renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE)
 	const migrationCollateralDisplay = renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, 'ETH', UNKNOWN_VALUE)
 	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? 'Not started' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
@@ -1859,6 +1860,21 @@ export function ForkAuctionSection({
 					<MetricField label='Fork Type'>{resolvedForkTypeLabel}</MetricField>
 				</div>
 			</div>
+			{forkAuctionDetails?.ownForkRepBuckets === undefined ? undefined : (
+				<ReadOnlyDetailAccordion title='Advanced Diagnostics'>
+					<div className='fork-workflow-summary-metrics'>
+						<MetricField label='Pool REP At Fork'>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtFork} suffix='REP' />
+						</MetricField>
+						<MetricField label='Unallocated Escrow Child REP'>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.unallocatedEscrowChildRep} suffix='REP' />
+						</MetricField>
+						<MetricField label='Escrow Source REP At Fork'>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtFork} suffix='REP' />
+						</MetricField>
+					</div>
+				</ReadOnlyDetailAccordion>
+			)}
 		</SectionBlock>
 	)
 	const truthAuctionMarketViewSection = (() => {
@@ -2271,7 +2287,7 @@ export function ForkAuctionSection({
 									</SectionBlock>
 								) : (
 									<SectionBlock density='compact' headingLevel={4} title='Migrate Resolved Escalation Deposits' variant='embedded'>
-										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No locked REP is currently visible for migratable escalation deposits on the connected wallet.</p> : undefined}
+										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No escrowed REP is currently visible for migratable escalation deposits on the connected wallet.</p> : undefined}
 										{loadingReportingDetails ? <p className='detail'>Loading escalation deposits for the selected wallet…</p> : undefined}
 										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>Escalation deposit details are unavailable for this pool right now.</p>}
 										{showSelectedEscalationMigrationDeposits && !hasSelectedEscalationMigrationDeposits ? <p className='detail'>No {selectedOutcomeLabel} escalation deposits are currently available to migrate for this wallet.</p> : undefined}

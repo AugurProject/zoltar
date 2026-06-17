@@ -66,7 +66,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 8n,
 		viewerVaultExists: true,
-		viewerVaultLockedRepInEscalationGame: 2n,
+		viewerVaultEscrowedRep: 2n,
 		viewerVaultRepDepositShare: 10n,
 		...overrides,
 	}
@@ -229,7 +229,7 @@ describe('useReportingOperations', () => {
 			parentWithdrawalEnabled: false,
 			viewerVaultAvailableEscalationRep: 8n * REP,
 			viewerVaultExists: true,
-			viewerVaultLockedRepInEscalationGame: 0n,
+			viewerVaultEscrowedRep: 0n,
 			viewerVaultRepDepositShare: 8n * REP,
 		}
 		const loadReportingDetails = mock(async () => latestDetails)

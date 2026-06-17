@@ -27,9 +27,9 @@ import { getOpenOracleReportStatus } from '../lib/openOracle.js'
 import type { EscalationSide, ReadClient, WriteClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
-const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
@@ -72,6 +72,12 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 	const readContract = createReadContractStub(async request => {
 		if (request.functionName === 'universeId') return 12n
 		if (request.functionName === 'shareToken') return shareTokenAddress
+		if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
+		if (request.functionName === 'getVaultCount') return 0n
+		if (request.functionName === 'escalationGame') return escalationGameAddress
+		if (request.functionName === 'getDepositsByOutcomeLength') return 0n
+		if (request.functionName === 'hasUnexportedLocalDepositRefs') return false
+		if (request.functionName === 'hasUnexportedForkedEscrow') return false
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
 	})
 
@@ -140,7 +146,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 3n]
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n], 3n, [0n, 0n, 0n]]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -148,6 +154,7 @@ describe('contracts helpers', () => {
 			},
 			readContract: async request => {
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -157,6 +164,7 @@ describe('contracts helpers', () => {
 		expect(details.parentSecurityPoolAddress).toBe(zeroAddress)
 		expect(details.forkOutcome).toBe('none')
 		expect(details.hasForkActivity).toBe(false)
+		expect(details.ownForkRepBuckets).toBeUndefined()
 	})
 
 	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {
@@ -169,7 +177,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, false, 1], 4n]
+					return [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n], 4n, [0n, 0n, 0n]]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [forkTime]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -180,6 +188,7 @@ describe('contracts helpers', () => {
 			},
 			readContract: async request => {
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -188,6 +197,37 @@ describe('contracts helpers', () => {
 
 		expect(details.truthAuctionStartedAt).toBe(1n)
 		expect(details.migrationEndsAt).toBe(forkTime + 4_838_400n)
+	})
+
+	test('loadForkAuctionDetails surfaces own-fork migration diagnostics only for own-fork pools', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(5n),
+			multicall: async request => {
+				const firstContract = request.contracts[0]
+				if (getContractFunctionName(firstContract) === 'questionId') {
+					return [questionId, securityPoolAddress, 1n, 0n, zeroAddress, 0n, [30n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, true, false, 1n], 4n]
+				}
+				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getOwnForkMigrationStatus') return [true, 30n, 12n, 9n, 18n]
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const details = await loadForkAuctionDetails(client, securityPoolAddress)
+
+		expect(details.auctionableRepAtFork).toBe(30n)
+		expect(details.ownForkRepBuckets).toEqual({
+			vaultRepAtFork: 12n,
+			unallocatedEscrowChildRep: 9n,
+			escrowSourceRepAtFork: 18n,
+		})
 	})
 
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
@@ -388,6 +428,7 @@ describe('contracts helpers', () => {
 					if (currentVaultAddress === viewerVaultAddress) return [1n, 0n, 0n, 0n, 0n]
 					return [2n, 0n, 0n, 0n, 0n]
 				}
+				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalRepBalance') return 100n
 				if (request.functionName === 'poolOwnershipDenominator') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -472,6 +513,7 @@ describe('contracts helpers', () => {
 					if (normalizedAddress === alternateSecurityPoolAddress) throw new Error('Unexpected vault load for unselected pool')
 					return [vaultAddress]
 				}
+				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalRepBalance') return 5n
 				if (request.functionName === 'poolOwnershipDenominator') return 1n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -585,6 +627,59 @@ describe('contracts helpers', () => {
 		expect(decodedCall.args).toEqual([7n])
 	})
 
+	test('loadReportingDetails reports already-unlocked pool REP without subtracting escrow again', async () => {
+		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const unlockedPoolClaim = 70n
+		const escrowedRep = 30n
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x1234' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'startBond') return 7n
+				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'activationTime') return 12n
+				if (request.functionName === 'totalCost') return 22n
+				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'getOutcomeState') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
+					if (args[0] === 0) return { balance: 1n }
+					if (args[0] === 1) return { balance: 14n }
+					if (args[0] === 2) return { balance: 3n }
+					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
+				}
+				if (request.functionName === 'getEscalationGameEndDate') return 150n
+				if (request.functionName === 'getQuestionOutcome') return 3
+				if (request.functionName === 'getForkTime') return 0n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'escrowedRepByVault') return escrowedRep
+				if (request.functionName === 'securityVaults') return [100n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'poolOwnershipToRep') return unlockedPoolClaim
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getDepositsByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		expect(details.viewerVaultRepDepositShare).toBe(unlockedPoolClaim)
+		expect(details.viewerVaultEscrowedRep).toBe(escrowedRep)
+		expect(details.viewerVaultAvailableEscalationRep).toBe(unlockedPoolClaim)
+	})
+
 	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ef')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
@@ -618,6 +713,8 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'escrowedRepByVault') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
@@ -677,6 +774,8 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'escrowedRepByVault') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
@@ -801,7 +900,7 @@ describe('contracts helpers', () => {
 			capturedTo = request.to
 		})
 
-		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, 9n, 'no')
+		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, vaultAddress, 9n, 'no')
 
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
@@ -810,7 +909,7 @@ describe('contracts helpers', () => {
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
-		expect(decodedCall.args).toEqual([securityPoolAddress, 2])
+		expect(decodedCall.args).toEqual([securityPoolAddress, vaultAddress, 2])
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
 			hash: transactionHash,

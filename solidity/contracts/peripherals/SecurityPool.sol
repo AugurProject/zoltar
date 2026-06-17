@@ -43,7 +43,6 @@ contract SecurityPool is ISecurityPool {
 	uint256 public poolOwnershipDenominator;
 	uint256 public securityMultiplier;
 	uint256 public shareTokenSupply;
-	uint256 public totalLockedRepInEscalationGame;
 
 	uint256 public totalFeesOwedToVaults;
 	uint256 public lastUpdatedFeeAccumulator;
@@ -235,17 +234,18 @@ contract SecurityPool is ISecurityPool {
 
 	function performWithdrawRep(address vault, uint256 repAmount) external isOperational onlyValidOracle {
 		require(!isEscalationResolved(), 'question resolved');
+		if (address(escalationGame) != address(0x0)) {
+			require(escalationGame.escrowedRepByVault(vault) == 0, 'settle locks first');
+		}
 		uint256 ownershipToWithdraw = repToPoolOwnership(repAmount);
 		uint256 withdrawOwnership = ownershipToWithdraw + repToPoolOwnership(SecurityPoolUtils.MIN_REP_DEPOSIT) > securityVaults[vault].poolOwnership ? securityVaults[vault].poolOwnership : ownershipToWithdraw;
 		uint256 withdrawRepAmount = poolOwnershipToRep(withdrawOwnership);
 		uint256 totalRepBalance = getTotalRepBalance();
-		uint256 availableRepBalance = getAvailableRepBalance();
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
-		require(oldRep >= securityVaults[vault].lockedRepInEscalationGame + withdrawRepAmount, 'uses locked rep');
+		require(oldRep >= withdrawRepAmount, 'withdraw too high');
 		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'local bond broken');
 		require((totalRepBalance - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'global bond broken');
-		require(availableRepBalance >= withdrawRepAmount, 'uses locked rep');
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
@@ -260,16 +260,21 @@ contract SecurityPool is ISecurityPool {
 		return repAmount * poolOwnershipDenominator / totalRepBalance;
 	}
 
+	function repToPoolOwnershipRoundUp(uint256 repAmount) public view returns (uint256) {
+		uint256 totalRepBalance = getTotalRepBalance();
+		if (poolOwnershipDenominator == 0 || totalRepBalance == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
+		uint256 numerator = repAmount * poolOwnershipDenominator;
+		if (numerator == 0) return 0;
+		return (numerator - 1) / totalRepBalance + 1;
+	}
+
 	function poolOwnershipToRep(uint256 poolOwnership) public view returns (uint256) {
 		if (poolOwnershipDenominator == 0) return 0;
 		return poolOwnership * getTotalRepBalance() / poolOwnershipDenominator;
 	}
 
 	function getAvailableRepBalance() public view returns (uint256) {
-		// REP committed to an active escalation game still belongs to the originating vault and
-		// continues to back that vaults bond exposure. It is excluded here only because it is
-		// not currently withdrawable by arbitrary vaults.
-		return repToken.balanceOf(address(this)) - totalLockedRepInEscalationGame;
+		return repToken.balanceOf(address(this));
 	}
 
 	function getTotalRepBalance() public view returns (uint256) {
@@ -326,8 +331,6 @@ contract SecurityPool is ISecurityPool {
 			vaultsRepDeposit = (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator;
 		}
 
-		// Liquidation values a vault against its full collateral claim, which is exactly what
-		// the total-balance ownership snapshot above represents.
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
 		require(snapshotTargetAllowance * securityMultiplier * repEthPrice > vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION, 'not liquidatable');
 
@@ -385,8 +388,6 @@ contract SecurityPool is ISecurityPool {
 		totalSecurityBondAllowance -= oldAllowance;
 		securityVaults[callerVault].securityBondAllowance = amount;
 
-		// Ownership conversions are based on total REP balance, so this local collateral check
-		// automatically includes REP currently committed to escalation.
 		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) * SecurityPoolUtils.PRICE_PRECISION > amount * priceOracleManagerAndOperatorQueuer.lastPrice());
 		require(getTotalRepBalance() * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice());
 		require(totalSecurityBondAllowance >= completeSetCollateralAmount, 'too many sets');
@@ -441,7 +442,8 @@ contract SecurityPool is ISecurityPool {
 	function redeemRep(address vault) external {
 		require(systemState == SystemState.Operational, 'not operational');
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None, 'question not final');
-		require(securityVaults[vault].lockedRepInEscalationGame == 0, 'settle locks first');
+		uint256 escrowedRep = address(escalationGame) == address(0x0) ? 0 : escalationGame.escrowedRepByVault(vault);
+		require(escrowedRep == 0, 'settle locks first');
 		updateVaultFees(vault);
 		uint256 vaultOwnership = securityVaults[vault].poolOwnership;
 		uint256 ownershipToRedeem = vaultOwnership;
@@ -464,23 +466,14 @@ contract SecurityPool is ISecurityPool {
 
 		EscalationGame escalationGameContract = EscalationGame(payable(address(escalationGame)));
 		address beneficiaryVault = address(0x0);
-		uint256 totalAmountToWithdraw = 0;
-		uint256 totalOriginalDepositAmount = 0;
 		for (uint256 index = 0; index < proofs.length; index++) {
 			address depositor;
-			uint256 amountToWithdraw;
-			uint256 originalDepositAmount;
-			(depositor, amountToWithdraw, originalDepositAmount) = escalationGameContract.withdrawDeposit(proofs[index], withdrawalOutcome);
+			(depositor, , ) = escalationGameContract.withdrawDeposit(proofs[index], withdrawalOutcome);
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
 			}
 			require(depositor == beneficiaryVault, 'one vault only');
-			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
-			totalLockedRepInEscalationGame -= originalDepositAmount;
-			totalAmountToWithdraw += amountToWithdraw;
-			totalOriginalDepositAmount += originalDepositAmount;
 		}
-		_applyForkedEscalationSettlement(beneficiaryVault, totalAmountToWithdraw, totalOriginalDepositAmount);
 		_syncActiveVault(beneficiaryVault);
 	}
 
@@ -497,10 +490,29 @@ contract SecurityPool is ISecurityPool {
 		} else {
 			require(!escalationGame.forkContinuation() || escalationGame.forkContinuationResumed(), 'fork continuation not resumed');
 		}
-		uint256 depositedAmount = escalationGame.depositOnOutcome(msg.sender, outcome, maxAmount);
-		securityVaults[msg.sender].lockedRepInEscalationGame += depositedAmount;
-		totalLockedRepInEscalationGame += depositedAmount;
-		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'rep too low');
+
+		(uint256 depositedAmount, uint256 resultingCumulativeAmount) = escalationGame.previewDepositOnOutcome(outcome, maxAmount);
+		require(depositedAmount > 0, 'no deposit');
+		uint256 ownershipToEscrow = repToPoolOwnershipRoundUp(depositedAmount);
+		uint256 currentRep = poolOwnershipToRep(securityVaults[msg.sender].poolOwnership);
+		require(currentRep >= depositedAmount, 'rep too low');
+		require(ownershipToEscrow > 0, 'escrow ownership too low');
+
+		uint256 updatedPoolOwnership = securityVaults[msg.sender].poolOwnership - ownershipToEscrow;
+		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		uint256 postTransferRepBalance = getTotalRepBalance() - depositedAmount;
+		uint256 postTransferPoolOwnershipDenominator = poolOwnershipDenominator - ownershipToEscrow;
+		uint256 remainingRep = updatedPoolOwnership == 0
+			? 0
+			: updatedPoolOwnership * postTransferRepBalance / postTransferPoolOwnershipDenominator;
+		require(remainingRep * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[msg.sender].securityBondAllowance * repEthPrice, 'local bond broken');
+		require(postTransferRepBalance * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowance * repEthPrice, 'global bond broken');
+		require(remainingRep >= SecurityPoolUtils.MIN_REP_DEPOSIT || updatedPoolOwnership == 0, 'min rep');
+
+		securityVaults[msg.sender].poolOwnership = updatedPoolOwnership;
+		poolOwnershipDenominator = postTransferPoolOwnershipDenominator;
+		IERC20(address(repToken)).safeTransfer(address(escalationGame), depositedAmount);
+		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAmount, resultingCumulativeAmount);
 		_syncActiveVault(msg.sender);
 	}
 
@@ -515,26 +527,13 @@ contract SecurityPool is ISecurityPool {
 		}
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'question not final');
 		address beneficiaryVault = address(0x0);
-		uint256 totalAmountToWithdraw = 0;
-		uint256 totalOriginalDepositAmount = 0;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			address depositor;
-			uint256 amountToWithdraw;
-			uint256 originalDepositAmount;
-			(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index], outcome);
+			(depositor, , ) = escalationGame.withdrawDeposit(depositIndexes[index], outcome);
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
 			}
 			require(depositor == beneficiaryVault, 'one vault only');
-			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
-			totalLockedRepInEscalationGame -= originalDepositAmount;
-			totalAmountToWithdraw += amountToWithdraw;
-			totalOriginalDepositAmount += originalDepositAmount;
-		}
-		if (totalAmountToWithdraw > totalOriginalDepositAmount) {
-			securityVaults[beneficiaryVault].poolOwnership += repToPoolOwnership(totalAmountToWithdraw - totalOriginalDepositAmount);
-		} else if (totalAmountToWithdraw < totalOriginalDepositAmount) {
-			securityVaults[beneficiaryVault].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
 		}
 		_syncActiveVault(beneficiaryVault);
 	}
@@ -566,6 +565,23 @@ contract SecurityPool is ISecurityPool {
 		);
 	}
 
+	function initializeForkCarrySnapshotWithResolutionBalances(
+		bytes32[64][3] memory inheritedCarryPeaks,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		uint256[3] memory inheritedResolutionBalances,
+		bytes32[3] memory inheritedNullifierRoots
+	) external onlyForker {
+		require(address(escalationGame) != address(0x0), 'missing escalation');
+		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshotWithResolutionBalances(
+			inheritedCarryPeaks,
+			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
+			inheritedResolutionBalances,
+			inheritedNullifierRoots
+		);
+	}
+
 	function resumeForkedEscalationGame() external onlyForker {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		escalationGame.resumeFromFork();
@@ -588,32 +604,6 @@ contract SecurityPool is ISecurityPool {
 		_syncActiveVault(vault);
 	}
 
-	function addEscalationLockForForkMigration(address vault, uint256 repAmount) external onlyForker {
-		require(vault != address(0x0), 'invalid vault');
-		require(repAmount > 0, 'rep > 0');
-		_trackVault(vault);
-		securityVaults[vault].lockedRepInEscalationGame += repAmount;
-		totalLockedRepInEscalationGame += repAmount;
-		_syncActiveVault(vault);
-	}
-
-	function clearEscalationLockForForkMigration(address vault, uint256 repAmount) external onlyForker {
-		require(securityVaults[vault].lockedRepInEscalationGame >= repAmount, 'locked rep low');
-		require(totalLockedRepInEscalationGame >= repAmount, 'total locked low');
-		securityVaults[vault].lockedRepInEscalationGame -= repAmount;
-		totalLockedRepInEscalationGame -= repAmount;
-		_syncActiveVault(vault);
-	}
-
-	function _applyForkedEscalationSettlement(address beneficiaryVault, uint256 totalAmountToWithdraw, uint256 totalOriginalDepositAmount) private {
-		if (beneficiaryVault == address(0x0)) return;
-		if (totalAmountToWithdraw > totalOriginalDepositAmount) {
-			securityVaults[beneficiaryVault].poolOwnership += repToPoolOwnership(totalAmountToWithdraw - totalOriginalDepositAmount);
-		} else if (totalAmountToWithdraw < totalOriginalDepositAmount) {
-			securityVaults[beneficiaryVault].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
-		}
-	}
-
 	function _trackVault(address vault) private {
 		require(vault != address(0x0), 'invalid vault');
 		if (vaultIndexesPlusOne[vault] != 0) return;
@@ -627,7 +617,7 @@ contract SecurityPool is ISecurityPool {
 			securityVaults[vault].poolOwnership > 0 ||
 			securityVaults[vault].securityBondAllowance > 0 ||
 			securityVaults[vault].unpaidEthFees > 0 ||
-			securityVaults[vault].lockedRepInEscalationGame > 0;
+			(address(escalationGame) != address(0x0) && escalationGame.escrowedRepByVault(vault) > 0);
 		if (shouldBeActive) {
 			if (isActiveVault[vault]) {
 				if (latestActiveVault == vault) return;
@@ -685,6 +675,10 @@ contract SecurityPool is ISecurityPool {
 
 	function drainAllRep() external onlyForker {
 		IERC20(address(repToken)).safeTransfer(msg.sender, repToken.balanceOf(address(this)));
+	}
+
+	function transferRep(address receiver, uint256 amount) external onlyForker {
+		IERC20(address(repToken)).safeTransfer(receiver, amount);
 	}
 
 	function transferEth(address payable receiver, uint256 amount) external onlyForker {

@@ -161,7 +161,7 @@ export type SecurityPoolCreationResult = {
 
 export type SecurityVaultDetails = {
 	currentRetentionRate: bigint
-	lockedRepInEscalationGame: bigint
+	escalationEscrowedRep: bigint
 	managerAddress: Address
 	poolOwnershipDenominator: bigint
 	repDepositShare: bigint
@@ -307,11 +307,17 @@ export type SecurityPoolPage = {
 }
 
 export type SecurityPoolVaultSummary = {
-	lockedRepInEscalationGame: bigint
+	escalationEscrowedRep: bigint
 	repDepositShare: bigint
 	securityBondAllowance: bigint
 	unpaidEthFees: bigint
 	vaultAddress: Address
+}
+
+export type OwnForkRepBuckets = {
+	vaultRepAtFork: bigint
+	unallocatedEscrowChildRep: bigint
+	escrowSourceRepAtFork: bigint
 }
 
 export type SecurityPoolOverviewActionResult = ActionResult & {
@@ -394,7 +400,7 @@ type ReportingDetailsBase = {
 	parentWithdrawalEnabled: boolean
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
-	viewerVaultLockedRepInEscalationGame: bigint | undefined
+	viewerVaultEscrowedRep: bigint | undefined
 	viewerVaultRepDepositShare: bigint | undefined
 }
 
@@ -496,7 +502,8 @@ export type ForkAuctionDetails = {
 	migrationEndsAt: bigint | undefined
 	parentSecurityPoolAddress: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
-	repAtFork: bigint
+	ownForkRepBuckets?: OwnForkRepBuckets | undefined
+	auctionableRepAtFork: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
 	truthAuction: TruthAuctionMetrics | undefined

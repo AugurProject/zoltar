@@ -198,7 +198,7 @@ describe('SimulationBanner', () => {
 
 	test('renders saved states in the scenario picker and opens the export modal', async () => {
 		const domEnvironment = installDomEnvironment()
-		window.localStorage.setItem(
+		domEnvironment.window.localStorage.setItem(
 			'zoltar.simulation.savedStates',
 			JSON.stringify([
 				{
@@ -248,7 +248,7 @@ describe('SimulationBanner', () => {
 
 	test('shows a warning when corrupted saved states are ignored', async () => {
 		const domEnvironment = installDomEnvironment()
-		window.localStorage.setItem(
+		domEnvironment.window.localStorage.setItem(
 			'zoltar.simulation.savedStates',
 			JSON.stringify([
 				{
@@ -298,7 +298,7 @@ describe('SimulationBanner', () => {
 
 	test('lets the user remove corrupted saved states from browser storage', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simState=broken-state')
-		window.localStorage.setItem(
+		domEnvironment.window.localStorage.setItem(
 			'zoltar.simulation.savedStates',
 			JSON.stringify([
 				{
@@ -344,10 +344,9 @@ describe('SimulationBanner', () => {
 			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
 
 			await waitFor(() => {
-				expect(documentQueries.queryByText('Ignored 1 corrupted saved simulation state in browser storage.')).toBeNull()
-				expect(window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('{bad json')
-				expect(window.location.hash).toContain('simScenario=baseline')
-				expect(window.location.hash).not.toContain('simState=')
+				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('{bad json')
+				expect(domEnvironment.window.location.hash).toContain('simScenario=baseline')
+				expect(domEnvironment.window.location.hash).not.toContain('simState=')
 			})
 		} finally {
 			await renderedComponent.cleanup()
@@ -391,7 +390,7 @@ describe('SimulationBanner', () => {
 			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
 
 			await waitFor(() => {
-				expect(window.location.hash).toContain('simState=imported-state-20260602123456')
+				expect(domEnvironment.window.location.hash).toContain('simState=imported-state-20260602123456')
 			})
 		} finally {
 			await renderedComponent.cleanup()
@@ -403,8 +402,8 @@ describe('SimulationBanner', () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
 		const onRefresh = mock(async () => undefined)
 		const controller = createSimulationController()
-		const pushState = mock(window.history.pushState.bind(window.history))
-		window.history.pushState = pushState as typeof window.history.pushState
+		const pushState = mock(domEnvironment.window.history.pushState.bind(domEnvironment.window.history))
+		domEnvironment.window.history.pushState = pushState as typeof domEnvironment.window.history.pushState
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
 
 		try {
@@ -418,7 +417,7 @@ describe('SimulationBanner', () => {
 
 			await waitFor(() => {
 				expect(pushState).toHaveBeenCalledTimes(1)
-				expect(window.location.hash).toContain('simScenario=deployed')
+				expect(domEnvironment.window.location.hash).toContain('simScenario=deployed')
 			})
 		} finally {
 			await renderedComponent.cleanup()

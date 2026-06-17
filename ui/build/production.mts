@@ -7,6 +7,7 @@ const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const DIST_ROOT_PATH = path.join(UI_ROOT_PATH, 'dist')
 const DIST_ASSETS_PATH = path.join(DIST_ROOT_PATH, 'assets')
+const MODULES_ROOT_PATH = path.join(UI_ROOT_PATH, 'node_modules')
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
 	env: {},
@@ -21,6 +22,34 @@ const process = globalThis.process ?? {
 globalThis.process ??= process
 globalThis.global ??= globalThis
 `.trim()
+
+function createBrowserVendorAliasPlugin() {
+	const aliasEntries: Array<[RegExp, string]> = [
+		[/^pino$/, path.join(MODULES_ROOT_PATH, 'pino', 'browser.js')],
+		[/^viem$/, path.join(MODULES_ROOT_PATH, 'viem', 'index.ts')],
+		[/^viem\/chains$/, path.join(MODULES_ROOT_PATH, 'viem', 'chains', 'index.ts')],
+		[/^viem\/window$/, path.join(MODULES_ROOT_PATH, 'viem', 'window', 'index.ts')],
+		[/^viem\/actions$/, path.join(MODULES_ROOT_PATH, 'viem', 'actions', 'index.ts')],
+		[/^viem\/accounts$/, path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.ts')],
+		[/^viem\/utils$/, path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.ts')],
+		[/^tevm$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
+		[/^tevm\/common$/, path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
+		[/^@tevm\/memory-client$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
+		[/^@tevm\/common$/, path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
+	]
+	type BrowserVendorBuild = {
+		onResolve(options: { filter: RegExp }, callback: (args: { path: string }) => { path: string }): void
+	}
+
+	return {
+		name: 'browser-vendor-alias',
+		setup(build: BrowserVendorBuild) {
+			for (const [filter, resolvedPath] of aliasEntries) {
+				build.onResolve({ filter }, () => ({ path: resolvedPath }))
+			}
+		},
+	}
+}
 
 async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 	await fs.mkdir(path.dirname(destinationPath), { recursive: true })
@@ -42,6 +71,7 @@ async function buildProductionApp() {
 			chunk: 'chunks/[name]-[hash].js',
 		},
 		outdir: DIST_ASSETS_PATH,
+		plugins: [createBrowserVendorAliasPlugin()],
 		target: 'browser',
 		sourcemap: 'linked',
 	})
@@ -55,6 +85,7 @@ async function buildProductionWorker() {
 		entrypoints: [workerEntryPath],
 		naming: { entry: 'tevmWorker.worker.js' },
 		outdir: DIST_ASSETS_PATH,
+		plugins: [createBrowserVendorAliasPlugin()],
 		target: 'browser',
 		sourcemap: 'linked',
 	})

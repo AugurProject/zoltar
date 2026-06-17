@@ -19,7 +19,7 @@ type RepTokenAddressConfig = {
 }
 
 type SecurityPoolAddressConfig = {
-	getEscalationGameInitCode: (securityPool: Address) => Hex
+	getEscalationGameInitCode: (securityPool: Address, repToken: Address) => Hex
 	getInfraContracts: () => SecurityPoolCoreAddresses
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
@@ -123,7 +123,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 			salt: numberToBytes(0, { size: 32 }),
 		})
 		const escalationGame = getCreate2Address({
-			bytecode: config.getEscalationGameInitCode(securityPool),
+			bytecode: config.getEscalationGameInitCode(securityPool, repToken),
 			from: infraContracts.escalationGameFactory,
 			salt: numberToBytes(0, { size: 32 }),
 		})

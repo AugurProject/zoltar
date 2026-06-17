@@ -43,7 +43,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 						<VaultMetricGrid
 							className='workflow-vault-grid'
 							layout='preview'
-							lockedRepInEscalationGame={vault.lockedRepInEscalationGame}
+							escalationEscrowedRep={vault.escalationEscrowedRep}
 							repDepositShare={vault.repDepositShare}
 							repPerEthPrice={repPerEthPrice}
 							repPerEthSource={repPerEthSource}

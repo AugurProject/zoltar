@@ -6,7 +6,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/us
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy, peripherals_test_FalseReturningERC20_FalseReturningERC20, peripherals_test_SafeERC20OpsHarness_SafeERC20OpsHarness } from '../types/contractArtifact'
+import { peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy, test_peripherals_FalseReturningERC20_FalseReturningERC20, test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -26,16 +26,16 @@ describe('Safe ERC20 Operations', () => {
 	const deployFalseReturningToken = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: peripherals_test_FalseReturningERC20_FalseReturningERC20.abi,
-				bytecode: `0x${peripherals_test_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
+				abi: test_peripherals_FalseReturningERC20_FalseReturningERC20.abi,
+				bytecode: `0x${test_peripherals_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
 			}),
 		)
 
 	const deployHarness = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: peripherals_test_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
-				bytecode: `0x${peripherals_test_SafeERC20OpsHarness_SafeERC20OpsHarness.evm.bytecode.object}`,
+				abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+				bytecode: `0x${test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.evm.bytecode.object}`,
 			}),
 		)
 
@@ -54,7 +54,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_test_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeApproveToken',
 					args: [falseToken, receiver, 1n],
@@ -65,7 +65,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_test_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeTransferToken',
 					args: [falseToken, receiver, 1n],
@@ -76,7 +76,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_test_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeTransferFromToken',
 					args: [falseToken, receiver, receiver, 1n],

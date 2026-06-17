@@ -1,5 +1,6 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, parseAbiItem, type Address, type TransactionReceipt } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, parseAbiItem, zeroAddress, type Address, type TransactionReceipt } from 'viem'
 import {
+	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -98,9 +99,31 @@ async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, s
 	})
 }
 
-function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint, bigint]) {
-	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
-	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n || lockedRepInEscalationGame > 0n
+async function loadEscrowedRepByVaults(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddresses: Address[]) {
+	if (vaultAddresses.length === 0) return []
+	const escalationGameAddress = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
+		args: [],
+	})
+	if (sameAddress(escalationGameAddress, zeroAddress)) return vaultAddresses.map(() => 0n)
+	return await Promise.all(
+		vaultAddresses.map(
+			async vaultAddress =>
+				await client.readContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					functionName: 'escrowedRepByVault',
+					address: escalationGameAddress,
+					args: [vaultAddress],
+				}),
+		),
+	)
+}
+
+function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]) {
+	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData
+	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n
 }
 
 async function loadSecurityPoolVaultSummaries(
@@ -130,7 +153,7 @@ async function loadSecurityPoolVaultSummaries(
 			vaults: [],
 		}
 	}
-	const [vaultData, totalRepBalance, poolOwnershipDenominator] = await Promise.all([
+	const [vaultData, totalRepBalance, poolOwnershipDenominator, escrowedRepByVault] = await Promise.all([
 		Promise.all(
 			summaryVaultAddresses.map(
 				async vaultAddress =>
@@ -154,6 +177,7 @@ async function loadSecurityPoolVaultSummaries(
 			address: securityPoolAddress,
 			args: [],
 		}),
+		loadEscrowedRepByVaults(client, securityPoolAddress, summaryVaultAddresses),
 	])
 	return {
 		hasLoadedVaults: true,
@@ -161,11 +185,13 @@ async function loadSecurityPoolVaultSummaries(
 		vaults: summaryVaultAddresses.flatMap((vaultAddress, index) => {
 			const currentVaultData = vaultData[index]
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
-			if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData)) return []
-			const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
+			const currentEscrowedRep = escrowedRepByVault[index]
+			if (currentEscrowedRep === undefined) throw new Error('Unexpected escrowed REP response')
+			if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscrowedRep === 0n) return []
+			const [poolOwnership, securityBondAllowance, unpaidEthFees] = currentVaultData
 			return [
 				{
-					lockedRepInEscalationGame,
+					escalationEscrowedRep: currentEscrowedRep,
 					repDepositShare: poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator,
 					securityBondAllowance,
 					unpaidEthFees,
@@ -352,7 +378,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
 	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
 
-	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalRepBalance, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
+	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalRepBalance, totalSecurityBondAllowance, universeId, vaultData, escrowedRepByVault] = await Promise.all([
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'poolOwnershipDenominator', address: securityPoolAddress, args: [] }),
@@ -361,14 +387,15 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalSecurityBondAllowance', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
+		loadEscrowedRepByVaults(client, securityPoolAddress, [vaultAddress]).then(values => values[0] ?? 0n),
 	])
 
-	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
+	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData
 	const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator
 
 	return {
 		currentRetentionRate,
-		lockedRepInEscalationGame,
+		escalationEscrowedRep: escrowedRepByVault,
 		managerAddress,
 		poolOwnershipDenominator,
 		repDepositShare,

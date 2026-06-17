@@ -26,7 +26,7 @@ import {
 } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
-import { peripherals_test_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
+import { test_peripherals_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
@@ -89,7 +89,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('forkUniverse rejects false-returning genesis REP transfers', async () => {
-		const falseReturningGenesisRep = hexToBytes(`0x${peripherals_test_FalseReturningERC20_FalseReturningERC20.evm.deployedBytecode.object}`)
+		const falseReturningGenesisRep = hexToBytes(`0x${test_peripherals_FalseReturningERC20_FalseReturningERC20.evm.deployedBytecode.object}`)
 		if (falseReturningGenesisRep === undefined) throw new Error('false returning token bytecode missing')
 		const questionData = {
 			title: 'false-returning genesis rep fork test',

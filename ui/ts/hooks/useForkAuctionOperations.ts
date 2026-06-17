@@ -150,7 +150,7 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 	const migrateUnresolvedEscalation = async (selectedChildOutcome: ReportingOutcomeKey) =>
 		await runForkAuctionAction(
 			'migrateUnresolvedEscalation',
-			async (walletAddress, details) => await migrateVaultWithUnresolvedEscalation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, selectedChildOutcome),
+			async (walletAddress, details) => await migrateVaultWithUnresolvedEscalation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome),
 			'Failed to migrate unresolved escalation deposits',
 		)
 

@@ -237,7 +237,7 @@ export type OutcomeSelectionListProps = {
 export type VaultMetricGridProps = {
 	className?: string
 	layout?: 'grid' | 'preview'
-	lockedRepInEscalationGame?: bigint | undefined
+	escalationEscrowedRep?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
 	repDepositShare: bigint | undefined
 	selectedPoolSecurityMultiplier: bigint | undefined

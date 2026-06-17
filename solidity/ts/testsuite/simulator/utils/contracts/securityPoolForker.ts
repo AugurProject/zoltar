@@ -1,4 +1,4 @@
-import { peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
@@ -57,13 +57,13 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
-export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, childOutcome: bigint | QuestionOutcome) =>
+export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address, childOutcome: bigint | QuestionOutcome) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, Number(childOutcome)],
+			args: [securityPoolAddress, vault, Number(childOutcome)],
 		}),
 	)
 
@@ -142,9 +142,9 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
 	})
-	const [repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, escalationElapsedAtFork, escalationStartBondAtFork, escalationNonDecisionThresholdAtFork, ownFork, unresolvedEscalationAtFork, outcomeIndex] = data
+	const [auctionableRepAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, escalationElapsedAtFork, escalationStartBondAtFork, escalationNonDecisionThresholdAtFork, ownFork, unresolvedEscalationAtFork, outcomeIndex] = data
 	return {
-		repAtFork,
+		auctionableRepAtFork,
 		truthAuction,
 		truthAuctionStarted,
 		migratedRep,
@@ -158,11 +158,49 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 	}
 }
 
-export const migrateFromEscalationGame = async (client: WriteClient, parentSecurityPool: Address, vault: Address, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
+export const getOwnForkRepBuckets = async (client: ReadClient, securityPoolAddress: Address) => {
+	const [vaultRepAtFork, unallocatedEscrowChildRep, escrowSourceRepAtFork] = await client.readContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'getOwnForkRepBuckets',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	})
+	return {
+		vaultRepAtFork,
+		unallocatedEscrowChildRep,
+		escrowSourceRepAtFork,
+	}
+}
+
+async function getEscalationGameForkedEscrowByVaultAndOutcome(client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) {
+	const escalationGame = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
+	})
+	return await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'getForkedEscrowByVaultAndOutcome',
+		address: escalationGame,
+		args: [vault, Number(outcome)],
+	})
+}
+
+export const getForkedEscrowPrincipalByOutcomeAndVault = async (client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) => {
+	const [sourcePrincipal] = await getEscalationGameForkedEscrowByVaultAndOutcome(client, securityPoolAddress, outcome, vault)
+	return sourcePrincipal
+}
+
+export const getForkedEscrowChildRepByOutcomeAndVault = async (client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) => {
+	const [, , childRep] = await getEscalationGameForkedEscrowByVaultAndOutcome(client, securityPoolAddress, outcome, vault)
+	return childRep
+}
+
+export const claimForkedEscalationDeposits = async (client: WriteClient, parentSecurityPool: Address, vault: Address, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'migrateFromEscalationGame',
+			functionName: 'claimForkedEscalationDeposits',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes],
 		}),

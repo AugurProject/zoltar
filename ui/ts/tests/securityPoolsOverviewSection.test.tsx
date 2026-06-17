@@ -528,7 +528,7 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaultCount: 5n,
 							vaults: [
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 5n,
 									unpaidEthFees: 0n,
@@ -562,21 +562,21 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaultCount: 3n,
 							vaults: [
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 1n,
 									unpaidEthFees: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000701',
 								},
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 9n,
 									unpaidEthFees: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000702',
 								},
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 5n,
 									unpaidEthFees: 0n,
@@ -614,28 +614,28 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaultCount: 6n,
 							vaults: [
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 8n,
 									unpaidEthFees: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000601',
 								},
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 7n,
 									unpaidEthFees: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000602',
 								},
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 6n,
 									unpaidEthFees: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000603',
 								},
 								{
-									lockedRepInEscalationGame: 0n,
+									escalationEscrowedRep: 0n,
 									repDepositShare: 10n,
 									securityBondAllowance: 1n,
 									unpaidEthFees: 0n,

@@ -5,7 +5,7 @@ import type { VaultMetricGridProps } from '../types/components.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 
-export function VaultMetricGrid({ className = '', layout = 'grid', lockedRepInEscalationGame, priceValidUntilTimestamp, repDepositShare, repPerEthPrice, selectedPoolSecurityMultiplier, securityBondAllowance }: VaultMetricGridProps) {
+export function VaultMetricGrid({ className = '', layout = 'grid', escalationEscrowedRep, priceValidUntilTimestamp, repDepositShare, repPerEthPrice, selectedPoolSecurityMultiplier, securityBondAllowance }: VaultMetricGridProps) {
 	const collateralizationPercent = getVaultCollateralizationPercent(repDepositShare, securityBondAllowance, repPerEthPrice)
 	const targetCollateralizationPercent = selectedPoolSecurityMultiplier === undefined ? undefined : selectedPoolSecurityMultiplier * 100n * 10n ** 18n
 
@@ -29,9 +29,9 @@ export function VaultMetricGrid({ className = '', layout = 'grid', lockedRepInEs
 					</div>
 				</div>
 				<div className='vault-preview-meta'>
-					{lockedRepInEscalationGame === undefined ? null : (
-						<MetricField label='Locked REP'>
-							<CurrencyValue value={lockedRepInEscalationGame} suffix='REP' />
+					{escalationEscrowedRep === undefined ? null : (
+						<MetricField label='Escrowed REP'>
+							<CurrencyValue value={escalationEscrowedRep} suffix='REP' />
 						</MetricField>
 					)}
 					{priceValidUntilTimestamp === undefined ? null : (
@@ -63,9 +63,9 @@ export function VaultMetricGrid({ className = '', layout = 'grid', lockedRepInEs
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
-				{lockedRepInEscalationGame === undefined ? undefined : (
-					<MetricField label='Locked REP'>
-						<CurrencyValue value={lockedRepInEscalationGame} suffix='REP' />
+				{escalationEscrowedRep === undefined ? undefined : (
+					<MetricField label='Escrowed REP'>
+						<CurrencyValue value={escalationEscrowedRep} suffix='REP' />
 					</MetricField>
 				)}
 				{priceValidUntilTimestamp === undefined ? undefined : (

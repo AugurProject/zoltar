@@ -93,7 +93,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	const gridContent = (
 		<VaultMetricGrid
 			layout='grid'
-			lockedRepInEscalationGame={securityVaultDetails.lockedRepInEscalationGame}
+			escalationEscrowedRep={securityVaultDetails.escalationEscrowedRep}
 			repDepositShare={securityVaultDetails.repDepositShare}
 			repPerEthPrice={repPerEthPrice}
 			repPerEthSource={repPerEthSource}
@@ -317,7 +317,6 @@ export function SecurityVaultSection({
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
 	const withdrawableRepAmount = getSecurityVaultWithdrawableRepAmount({
-		lockedRepInEscalationGame: currentSelectedVaultDetails?.lockedRepInEscalationGame,
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		securityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
@@ -386,7 +385,7 @@ export function SecurityVaultSection({
 	const redeemRepGuardMessage = getVaultRedeemRepGuardMessage({
 		accountAddress: accountState.address,
 		isMainnet,
-		lockedRepInEscalationGame: currentSelectedVaultDetails?.lockedRepInEscalationGame,
+		escalationEscrowedRep: currentSelectedVaultDetails?.escalationEscrowedRep,
 		redeemableRepAmount,
 		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
@@ -620,8 +619,8 @@ export function SecurityVaultSection({
 								})()}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
-								<MetricField label='Locked REP'>
-									<CurrencyValue value={currentSelectedVaultDetails.lockedRepInEscalationGame} suffix='REP' />
+								<MetricField label='Escrowed REP'>
+									<CurrencyValue value={currentSelectedVaultDetails.escalationEscrowedRep} suffix='REP' />
 								</MetricField>
 							) : (
 								<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
@@ -655,8 +654,8 @@ export function SecurityVaultSection({
 											{
 												key: 'locked',
 												label: 'No REP remains locked in the escalation game',
-												resolved: currentSelectedVaultDetails.lockedRepInEscalationGame === 0n,
-												...(currentSelectedVaultDetails.lockedRepInEscalationGame > 0n ? { detail: 'Withdraw escalation deposits before redeeming REP.' } : {}),
+												resolved: currentSelectedVaultDetails.escalationEscrowedRep === 0n,
+												...(currentSelectedVaultDetails.escalationEscrowedRep > 0n ? { detail: 'Withdraw escalation deposits before redeeming REP.' } : {}),
 											},
 											{ key: 'redeemable', label: 'The vault has redeemable REP', resolved: redeemableRepAmount !== undefined && redeemableRepAmount > 0n },
 										]
@@ -880,8 +879,8 @@ export function SecurityVaultSection({
 						{(() => {
 							if (effectiveRepExitMode === 'redeem')
 								return (
-									<MetricField className='entity-metric' label='Locked REP'>
-										<CurrencyValue value={currentSelectedVaultDetails?.lockedRepInEscalationGame} suffix='REP' />
+									<MetricField className='entity-metric' label='Escrowed REP'>
+										<CurrencyValue value={currentSelectedVaultDetails?.escalationEscrowedRep} suffix='REP' />
 									</MetricField>
 								)
 							if (oraclePriceValidUntilTimestamp === undefined) return undefined
@@ -924,7 +923,7 @@ export function SecurityVaultSection({
 						availability={{ disabled: !repExitEnabled || repExitGuardMessage !== undefined, reason: repExitEnabled ? repExitGuardMessage : undefined }}
 					/>
 				</div>
-				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.lockedRepInEscalationGame !== undefined && currentSelectedVaultDetails.lockedRepInEscalationGame > 0n ? <p className='detail'>Withdraw escalation deposits before redeeming REP.</p> : undefined}
+				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.escalationEscrowedRep !== undefined && currentSelectedVaultDetails.escalationEscrowedRep > 0n ? <p className='detail'>Withdraw escalation deposits before redeeming REP.</p> : undefined}
 			</SectionBlock>
 
 			<ErrorNotice message={securityVaultError} />

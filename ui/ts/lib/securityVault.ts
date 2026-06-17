@@ -54,14 +54,12 @@ function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice
 }
 
 export function getSecurityVaultWithdrawableRepAmount({
-	lockedRepInEscalationGame,
 	repDepositShare,
 	repPerEthPrice,
 	securityBondAllowance,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
-	lockedRepInEscalationGame: bigint | undefined
 	repDepositShare: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	securityBondAllowance: bigint | undefined
@@ -69,10 +67,9 @@ export function getSecurityVaultWithdrawableRepAmount({
 	totalSecurityBondAllowance?: bigint | undefined
 }) {
 	if (repDepositShare === undefined) return undefined
-	const unlockedRep = repDepositShare > (lockedRepInEscalationGame ?? 0n) ? repDepositShare - (lockedRepInEscalationGame ?? 0n) : 0n
 	const requiredVaultRep = getAllowanceBackedRepFloor(securityBondAllowance, repPerEthPrice)
 	const maxLocalWithdrawal = repDepositShare > requiredVaultRep ? repDepositShare - requiredVaultRep : 0n
-	let maxWithdrawableRep = unlockedRep < maxLocalWithdrawal ? unlockedRep : maxLocalWithdrawal
+	let maxWithdrawableRep = maxLocalWithdrawal
 	if (totalRepDeposit !== undefined && totalRepDeposit > 0n) {
 		const requiredPoolRep = getAllowanceBackedRepFloor(totalSecurityBondAllowance, repPerEthPrice)
 		const maxGlobalWithdrawal = totalRepDeposit > requiredPoolRep ? totalRepDeposit - requiredPoolRep : 0n
