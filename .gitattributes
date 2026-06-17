@@ -1,0 +1,17 @@
+# Generated outputs should stay untracked. These attributes keep accidental
+# tracked diffs out of normal review views.
+/shared/js/** linguist-generated=true
+/solidity/artifacts/** linguist-generated=true
+/solidity/ts/types/contractArtifact.ts linguist-generated=true
+/solidity/types/contractArtifact.ts linguist-generated=true
+/ui/js/** linguist-generated=true
+/ui/ts/abis.ts linguist-generated=true
+/ui/ts/contractArtifact.ts linguist-generated=true
+/ui/ts/deploymentArtifacts.ts linguist-generated=true
+/ui/ts/deploymentsArtifacts.ts linguist-generated=true
+
+# Bundled UI dependencies are build outputs, not source.
+/ui/vendor/** linguist-vendored=true
+
+# Third-party Solidity sources are intentionally vendored for compilation.
+/solidity/contracts/peripherals/openOracle/openzeppelin/** linguist-vendored=true
