@@ -25,7 +25,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		currentRetentionRate: 10n,
-		lockedRepInEscalationGame: 3n * 10n ** 18n,
+		escalationEscrowedRep: 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
 		poolOwnershipDenominator: 1n,
 		repDepositShare: 12n * 10n ** 18n,
@@ -134,7 +134,7 @@ describe('SecurityVaultSection', () => {
 		const selectedVaultQueries = within(selectedVaultCard)
 		expect(selectedVaultQueries.getByText('REP Collateral')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
-		expect(selectedVaultQueries.getByText('Locked REP')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Escrowed REP')).not.toBeNull()
 	})
 
 	test('hides stale vault details when the current pool selection no longer matches the loaded vault', async () => {
@@ -265,7 +265,7 @@ describe('SecurityVaultSection', () => {
 					oracleManagerDetails: createOracleManagerDetails(),
 					poolState: createEndedPoolState(),
 					securityVaultDetails: createSecurityVaultDetails({
-						lockedRepInEscalationGame: 0n,
+						escalationEscrowedRep: 0n,
 					}),
 					securityVaultForm: {
 						depositAmount: '1',

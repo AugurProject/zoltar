@@ -1,20 +1,8 @@
-import { peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
-import type { Address, Hex } from 'viem'
+import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
+import type { Address } from 'viem'
 import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
-
-type CarriedDepositProof = {
-	depositor: Address
-	amount: bigint
-	parentDepositIndex: bigint
-	cumulativeAmount: bigint
-	sourceNodeId: bigint
-	leafIndex: bigint
-	merkleMountainRangeSiblings: readonly Hex[]
-	merkleMountainRangePeakIndex: bigint
-	nullifierSiblings: readonly Hex[]
-}
 
 const getAwaitingForkContinuationAbi = [
 	{
@@ -47,23 +35,6 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	)
 	return hash
 }
-
-export const withdrawForkedEscalationDeposits = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome, proofs: readonly CarriedDepositProof[]) =>
-	await writeContractAndWait(client, () =>
-		client.writeContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'withdrawForkedEscalationDeposits',
-			address: securityPoolAddress,
-			args: [
-				outcome,
-				proofs.map(proof => ({
-					...proof,
-					merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
-					nullifierSiblings: Array.from(proof.nullifierSiblings),
-				})),
-			],
-		}),
-	)
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: Address, amount: bigint) =>
 	await writeContractAndWait(client, () =>
@@ -145,13 +116,28 @@ export const getCurrentRetentionRate = async (client: ReadClient, securityPoolAd
 	})
 
 export const getSecurityVault = async (client: ReadClient, securityPoolAddress: Address, securityVault: Address) => {
-	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame] = await client.readContract({
+	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex] = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
 		address: securityPoolAddress,
 		args: [securityVault],
 	})
-	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame }
+	const escalationGameAddress = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
+		args: [],
+	})
+	const repInEscalationGame =
+		escalationGameAddress === '0x0000000000000000000000000000000000000000'
+			? 0n
+			: await client.readContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					functionName: 'escrowedRepByVault',
+					address: escalationGameAddress,
+					args: [securityVault],
+				})
+	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, repInEscalationGame }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address) =>

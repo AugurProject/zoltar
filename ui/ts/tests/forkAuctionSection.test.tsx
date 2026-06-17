@@ -113,7 +113,7 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 0n,
 		viewerVaultExists: false,
-		viewerVaultLockedRepInEscalationGame: 0n,
+		viewerVaultEscrowedRep: 0n,
 		viewerVaultRepDepositShare: 0n,
 		activationTime: 1n,
 		totalCost: 1n,
@@ -135,7 +135,7 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 		migrationEndsAt: 100n,
 		parentSecurityPoolAddress: zeroAddress,
 		questionOutcome: 'yes',
-		repAtFork: 0n,
+		auctionableRepAtFork: 0n,
 		securityPoolAddress: PARENT_POOL_ADDRESS,
 		systemState: 'forkTruthAuction',
 		truthAuction: undefined,
@@ -438,6 +438,63 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('Open')).not.toBeNull()
 	})
 
+	test('shows advanced own-fork diagnostics only when own-fork migration data is available', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						forkOwnSecurityPool: true,
+						ownForkRepBuckets: {
+							vaultRepAtFork: 12n,
+							unallocatedEscrowChildRep: 9n,
+							escrowSourceRepAtFork: 18n,
+						},
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let documentQueries = within(document.body)
+		expect(documentQueries.getByText('Advanced Diagnostics')).not.toBeNull()
+		expect(documentQueries.getByText('Pool REP At Fork')).not.toBeNull()
+		expect(documentQueries.getByText('Unallocated Escrow Child REP')).not.toBeNull()
+		expect(documentQueries.getByText('Escrow Source REP At Fork')).not.toBeNull()
+
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+
+		const rerenderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						forkOwnSecurityPool: false,
+						ownForkRepBuckets: undefined,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = rerenderedComponent.cleanup
+
+		documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Advanced Diagnostics')).toBeNull()
+		expect(documentQueries.queryByText('Pool REP At Fork')).toBeNull()
+		expect(documentQueries.queryByText('Unallocated Escrow Child REP')).toBeNull()
+		expect(documentQueries.queryByText('Escrow Source REP At Fork')).toBeNull()
+	})
+
 	test('disables unresolved escalation migration after the migration window closes', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ab')
 		const unresolvedDeposit = createReportingDeposit({
@@ -468,7 +525,7 @@ describe('ForkAuctionSection', () => {
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						viewerVaultExists: true,
-						viewerVaultLockedRepInEscalationGame: 12n,
+						viewerVaultEscrowedRep: 12n,
 						viewerVaultRepDepositShare: 12n,
 					}),
 					reportingForm: createReportingForm({
@@ -513,7 +570,7 @@ describe('ForkAuctionSection', () => {
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						viewerVaultExists: true,
-						viewerVaultLockedRepInEscalationGame: 12n,
+						viewerVaultEscrowedRep: 12n,
 						viewerVaultRepDepositShare: 12n,
 					}),
 					reportingForm: createReportingForm({
@@ -556,7 +613,7 @@ describe('ForkAuctionSection', () => {
 					previewPool: createChildPool({
 						vaults: [
 							{
-								lockedRepInEscalationGame: 0n,
+								escalationEscrowedRep: 0n,
 								repDepositShare: 20n,
 								securityBondAllowance: 3n,
 								unpaidEthFees: 0n,

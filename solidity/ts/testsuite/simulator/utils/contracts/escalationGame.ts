@@ -1,9 +1,14 @@
-import { encodeDeployData, getCreate2Address, numberToBytes } from 'viem'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
+import { encodeDeployData } from 'viem'
+import { ReputationToken_ReputationToken, peripherals_EscalationGame_EscalationGame } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
-import { getInfraContractAddresses } from './deployPeripherals'
 import { CONTRACT_PAGE_SIZE } from './pagination'
+import { getRepTokenAddress } from './zoltar'
+
+function requireContractAddress(value: `0x${string}` | null | undefined, context: string): `0x${string}` {
+	if (value === undefined || value === null) throw new Error(`${context} missing`)
+	return value
+}
 
 function parseQuestionOutcome(value: unknown): QuestionOutcome {
 	switch (value) {
@@ -78,23 +83,24 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 	})
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
+	const deploymentHash = await writeClient.sendTransaction({
+		data: encodeDeployData({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+			args: [writeClient.account.address, getRepTokenAddress(0n)],
+		}),
+	})
+	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })
+	const escalationGameAddress = requireContractAddress(deploymentReceipt.contractAddress, 'Escalation game deployment address')
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
-			abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-			functionName: 'deployEscalationGame',
-			address: getInfraContractAddresses().escalationGameFactory,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'start',
+			address: escalationGameAddress,
 			args: [startBond, nonDecisionThreshold],
 		}),
 	)
-	return getCreate2Address({
-		bytecode: encodeDeployData({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address],
-		}),
-		from: getInfraContractAddresses().escalationGameFactory,
-		salt: numberToBytes(0, { size: 32 }),
-	})
+	return escalationGameAddress
 }
 
 export const getBalances = async (client: ReadClient, escalationGame: AccountAddress) => {
@@ -138,12 +144,26 @@ export const getEscalationGameTotalCost = async (client: ReadClient, escalationG
 	})
 
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {
+	const [acceptedAmount, resultingCumulativeAmount] = await writeClient.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'previewDepositOnOutcome',
+		address: escalationGame,
+		args: [outcome, amount],
+	})
+	await writeContractAndWait(writeClient, () =>
+		writeClient.writeContract({
+			abi: ReputationToken_ReputationToken.abi,
+			functionName: 'transfer',
+			address: getRepTokenAddress(0n),
+			args: [escalationGame, acceptedAmount],
+		}),
+	)
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'depositOnOutcome',
+			functionName: 'recordDepositFromSecurityPool',
 			address: escalationGame,
-			args: [depositor, outcome, amount],
+			args: [depositor, outcome, acceptedAmount, resultingCumulativeAmount],
 		}),
 	)
 }

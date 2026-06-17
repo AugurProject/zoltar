@@ -418,7 +418,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.loadSecurityVaultDetails += 1
 			return {
 				currentRetentionRate: 0n,
-				lockedRepInEscalationGame: 0n,
+				escalationEscrowedRep: 0n,
 				managerAddress: getManagerForPool(securityPoolAddress),
 				poolOwnershipDenominator: 0n,
 				repDepositShare: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,

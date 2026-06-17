@@ -38,7 +38,8 @@ export function simulateLiquidation({ callerVaultSummary, liquidationAmount, rep
 	const callerAllowance = callerVaultSummary?.securityBondAllowance ?? 0n
 	const targetRepDeposit = targetVaultSummary.repDepositShare
 	const targetAllowance = targetVaultSummary.securityBondAllowance
-	const debtToMove = liquidationAmount < targetAllowance ? liquidationAmount : targetAllowance
+	const maxDebtToMove = targetAllowance
+	const debtToMove = liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove
 	const repToMove = targetAllowance === 0n ? 0n : (debtToMove * targetRepDeposit) / targetAllowance
 	const targetAfterRepDeposit = targetRepDeposit - repToMove
 	const targetAfterAllowance = targetAllowance - debtToMove

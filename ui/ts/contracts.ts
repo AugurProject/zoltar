@@ -569,7 +569,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		return {
 			viewerVaultAvailableEscalationRep: undefined,
 			viewerVaultExists: false,
-			viewerVaultLockedRepInEscalationGame: undefined,
+			viewerVaultEscrowedRep: undefined,
 			viewerVaultRepDepositShare: undefined,
 		}
 	const viewerVaultTuple = await client.readContract({
@@ -579,8 +579,8 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		args: [accountAddress],
 	})
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
-	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex, viewerLockedRepInEscalationGame] = viewerVaultTuples[0] ?? []
-	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint' || typeof viewerLockedRepInEscalationGame !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
+	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex] = viewerVaultTuples[0] ?? []
+	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
 	const viewerVaultRepDepositShare =
 		viewerPoolOwnership === 0n
 			? 0n
@@ -590,12 +590,26 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 					address: securityPoolAddress,
 					args: [viewerPoolOwnership],
 				})
-	const viewerVaultExists = viewerPoolOwnership !== 0n || viewerSecurityBondAllowance !== 0n || viewerUnpaidEthFees !== 0n || viewerFeeIndex !== 0n || viewerLockedRepInEscalationGame !== 0n
-	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare > viewerLockedRepInEscalationGame ? viewerVaultRepDepositShare - viewerLockedRepInEscalationGame : 0n
+	const escalationGameAddress = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
+		args: [],
+	})
+	const viewerVaultEscrowedRep = sameAddress(escalationGameAddress, zeroAddress)
+		? 0n
+		: await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'escrowedRepByVault',
+				address: escalationGameAddress,
+				args: [accountAddress],
+			})
+	const viewerVaultExists = viewerPoolOwnership !== 0n || viewerSecurityBondAllowance !== 0n || viewerUnpaidEthFees !== 0n || viewerFeeIndex !== 0n || viewerVaultEscrowedRep !== 0n
+	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare > viewerVaultEscrowedRep ? viewerVaultRepDepositShare - viewerVaultEscrowedRep : 0n
 	return {
 		viewerVaultAvailableEscalationRep,
 		viewerVaultExists,
-		viewerVaultLockedRepInEscalationGame: viewerLockedRepInEscalationGame,
+		viewerVaultEscrowedRep,
 		viewerVaultRepDepositShare,
 	}
 }
@@ -821,9 +835,9 @@ async function getSecurityPoolVaults(client: ReadClient, securityPoolAddress: Ad
 	})
 }
 
-function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint, bigint]) {
-	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
-	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n || lockedRepInEscalationGame > 0n
+function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]) {
+	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData
+	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n
 }
 
 async function loadSecurityPoolVaultSummaries(
@@ -869,14 +883,35 @@ async function loadSecurityPoolVaultSummaries(
 		}),
 	])
 	const vaultData = requireSecurityVaultTupleArray(vaultDataResults, 'security vault tuple')
+	const escalationGameAddress = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
+		args: [],
+	})
+	const escrowedRepByVault = sameAddress(escalationGameAddress, zeroAddress)
+		? summaryVaultAddresses.map(() => 0n)
+		: await Promise.all(
+				summaryVaultAddresses.map(
+					async vaultAddress =>
+						await client.readContract({
+							abi: peripherals_EscalationGame_EscalationGame.abi,
+							functionName: 'escrowedRepByVault',
+							address: escalationGameAddress,
+							args: [vaultAddress],
+						}),
+				),
+			)
 	const vaults = summaryVaultAddresses.flatMap((vaultAddress, index) => {
 		const currentVaultData = vaultData[index]
 		if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
-		if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData)) return []
-		const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
+		const currentEscrowedRep = escrowedRepByVault[index]
+		if (currentEscrowedRep === undefined) throw new Error('Unexpected escrowed REP response')
+		if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscrowedRep === 0n) return []
+		const [poolOwnership, securityBondAllowance, unpaidEthFees] = currentVaultData
 		return [
 			{
-				lockedRepInEscalationGame,
+				escalationEscrowedRep: currentEscrowedRep,
 				repDepositShare: poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator,
 				securityBondAllowance,
 				unpaidEthFees,
@@ -1544,7 +1579,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 }
 
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
-	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], block] = await Promise.all([
+	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], ownForkMigrationStatusTuple, block] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1595,12 +1630,19 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 				args: [securityPoolAddress],
 			},
 		]),
+		client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getOwnForkMigrationStatus',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
 		client.getBlock(),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
 	const forkDataTuple: ForkDataTuple = forkData
-	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple
+	const [auctionableRepAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple
+	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, unallocatedEscrowChildRep, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
 	const hasForkActivity = deriveHasForkActivity({
@@ -1714,7 +1756,16 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		migrationEndsAt,
 		parentSecurityPoolAddress,
 		questionOutcome: getReportingOutcomeKey(questionOutcome),
-		repAtFork,
+		...(ownForkMigrationOwnFork
+			? {
+					ownForkRepBuckets: {
+						vaultRepAtFork,
+						unallocatedEscrowChildRep,
+						escrowSourceRepAtFork,
+					},
+				}
+			: {}),
+		auctionableRepAtFork: ownForkMigrationOwnFork ? ownForkMigrationAuctionableRepAtFork : auctionableRepAtFork,
 		securityPoolAddress,
 		systemState,
 		truthAuction,
@@ -1857,6 +1908,7 @@ async function executeForkAuctionAction(client: WriteClient, action: ForkAuction
 		universeId,
 	} satisfies ForkAuctionActionResult
 }
+
 export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1975,34 +2027,26 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 	)
 }
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
-	return await executeForkAuctionAction(
-		client,
-		'migrateEscalationDeposits',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'migrateFromEscalationGame',
-				args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), toUint8Array(depositIndexes)],
-			})),
-	)
+	const outcomeIndex = getReportingOutcomeValue(outcome)
+	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => {
+		return await writeContractAndWait(client, () => ({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'claimForkedEscalationDeposits',
+			args: [securityPoolAddress, vaultAddress, outcomeIndex, toUint8Array(depositIndexes)],
+		}))
+	})
 }
-export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
-	return await executeForkAuctionAction(
-		client,
-		'migrateUnresolvedEscalation',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
-			})),
-	)
+export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+	const outcomeIndex = getReportingOutcomeValue(outcome)
+	return await executeForkAuctionAction(client, 'migrateUnresolvedEscalation', securityPoolAddress, universeId, async () => {
+		return await writeContractAndWait(client, () => ({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateVaultWithUnresolvedEscalation',
+			args: [securityPoolAddress, vaultAddress, outcomeIndex],
+		}))
+	})
 }
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(

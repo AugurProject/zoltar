@@ -94,7 +94,8 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const repPerEthPrice = useSignal(formatCurrencyInputBalance(controller.repPerEthPrice))
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const savedStateError = useSignal<string | undefined>(undefined)
-	const initialSavedStateSummary: SavedSimulationStateStorageSummary = getSavedSimulationStateStorageSummary()
+	const savedStateStorage = window.localStorage
+	const initialSavedStateSummary: SavedSimulationStateStorageSummary = getSavedSimulationStateStorageSummary(savedStateStorage)
 	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(initialSavedStateSummary.records)
 	const savedStateStorageWarning = useSignal<string | undefined>(initialSavedStateSummary.warning)
 	const saveName = useSignal('')
@@ -109,7 +110,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
 
 	const reloadSavedStateRecords = () => {
-		const summary = getSavedSimulationStateStorageSummary()
+		const summary = getSavedSimulationStateStorageSummary(savedStateStorage)
 		savedStateRecords.value = summary.records
 		savedStateStorageWarning.value = summary.warning
 	}
@@ -172,7 +173,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	}
 
 	const persistAndNavigateToSavedState = async (serialized: string) => {
-		const record = persistSavedSimulationState(serialized)
+		const record = persistSavedSimulationState(serialized, savedStateStorage)
 		reloadSavedStateRecords()
 		navigateToSavedSimulationState(record.id)
 	}
@@ -544,7 +545,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						onClick={() =>
 							void runNavigationControl(async () => {
 								if (currentSource.value.kind !== 'saved-state') return
-								if (!deleteSavedSimulationState(currentSource.value.stateId)) throw new Error(`Saved simulation state "${currentSource.value.name}" no longer exists`)
+								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(`Saved simulation state "${currentSource.value.name}" no longer exists`)
 								reloadSavedStateRecords()
 								navigateToBuiltInScenario(currentSource.value.baseScenario)
 							})
@@ -564,8 +565,9 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						className='destructive'
 						onClick={() =>
 							void runNavigationControl(async () => {
-								const removedCount = removeCorruptedSavedSimulationStates()
+								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
 								if (removedCount === 0) throw new Error('No corrupted saved simulation states were found')
+								savedStateStorageWarning.value = undefined
 								reloadSavedStateRecords()
 								if (hasSavedSimulationStateRoute()) {
 									navigateToBuiltInScenario(currentScenario.value)

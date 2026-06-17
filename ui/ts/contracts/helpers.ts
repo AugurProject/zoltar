@@ -3,7 +3,7 @@ import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, Sec
 
 type IntegerLike = bigint | number
 
-type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
+type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, IntegerLike, bigint, boolean]
 type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, IntegerLike, Address, boolean, IntegerLike, IntegerLike, IntegerLike, IntegerLike]
@@ -82,7 +82,7 @@ export function requireEscalationGameTuple(value: unknown, context: string): Esc
 }
 
 function isSecurityVaultTuple(value: unknown): value is SecurityVaultTuple {
-	return Array.isArray(value) && value.length === 5 && value.every(item => typeof item === 'bigint')
+	return Array.isArray(value) && (value.length === 4 || value.length === 5) && value.every(item => typeof item === 'bigint')
 }
 
 export function requireSecurityVaultTupleArray(value: unknown, context: string): SecurityVaultTuple[] {

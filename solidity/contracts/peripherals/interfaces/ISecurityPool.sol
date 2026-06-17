@@ -10,13 +10,13 @@ import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.
 import { EscalationGame } from '../EscalationGame.sol';
 import { CarriedDepositProof } from '../EscalationGame.sol';
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
+import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 struct SecurityVault {
 	uint256 poolOwnership;
 	uint256 securityBondAllowance;
 	uint256 unpaidEthFees;
 	uint256 feeIndex;
-	uint256 lockedRepInEscalationGame;
 }
 
 enum SystemState {
@@ -42,11 +42,10 @@ interface ISecurityPool {
 	function completeSetCollateralAmount() external view returns (uint256);
 	function poolOwnershipDenominator() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
-	function totalLockedRepInEscalationGame() external view returns (uint256);
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
-	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex, uint256 lockedRepInEscalationGame);
+	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex);
 	function getVaultCount() external view returns (uint256);
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
 	function getActiveVaultCount() external view returns (uint256);
@@ -95,8 +94,6 @@ interface ISecurityPool {
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
 	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 vaultFeeIndex) external;
-	function addEscalationLockForForkMigration(address vault, uint256 repAmount) external;
-	function clearEscalationLockForForkMigration(address vault, uint256 repAmount) external;
 	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
 	function setTotalShares(uint256 newTotalShares) external;
@@ -104,6 +101,7 @@ interface ISecurityPool {
 	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
 	function drainAllRep() external;
+	function transferRep(address receiver, uint256 amount) external;
 	function transferEth(address payable receiver, uint256 amount) external;
 
 	function securityPoolForker() external view returns (address);

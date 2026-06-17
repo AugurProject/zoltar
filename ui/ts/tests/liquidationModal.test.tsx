@@ -58,7 +58,7 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
-		lockedRepInEscalationGame: 0n,
+		escalationEscrowedRep: 0n,
 		repDepositShare: 5n * 10n ** 18n,
 		securityBondAllowance: 2n * 10n ** 18n,
 		unpaidEthFees: 0n,

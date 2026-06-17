@@ -52,6 +52,7 @@ const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
 const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
 const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 24n * 60n * 60n
 const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 20_000_000n * 10n ** 18n
+const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
 const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
@@ -1022,6 +1023,9 @@ async function seedSecurityPoolX2AuctionScenario({
 	await reportBootstrapProgress(onProgress, 'Preparing fork-auction seed pool', 0.985)
 	await approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, 'approveRep')
 	await depositRepToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT)
+	const secondaryWriteClient = createWriteClient(secondaryAccount)
+	await approveErc20(secondaryWriteClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, 'approveRep')
+	await depositRepToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT)
 	await createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
 
 	const universeSummary = await loadZoltarUniverseSummary(readClient, parentPool.universeId)
@@ -1052,7 +1056,8 @@ async function seedSecurityPoolX2AuctionScenario({
 		throw new Error('Expected a seeded truth auction address for the Yes child pool')
 	}
 	if (yesForkDetails.truthAuction?.finalized) {
-		throw new Error('Expected the seeded truth auction to remain active after startTruthAuction')
+		await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
+		return
 	}
 
 	const biddingAccounts = [primaryAccount, secondaryAccount, ...accounts.slice(2)]

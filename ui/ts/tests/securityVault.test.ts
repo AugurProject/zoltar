@@ -43,7 +43,7 @@ void describe('security vault helpers', () => {
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 		const details = {
 			currentRetentionRate: 10n,
-			lockedRepInEscalationGame: 0n,
+			escalationEscrowedRep: 0n,
 			managerAddress: zeroAddress,
 			poolOwnershipDenominator: 1n,
 			repDepositShare: 1n,
@@ -183,7 +183,6 @@ void describe('security vault helpers', () => {
 	void test('returns zero or no withdrawal when balance inputs are missing or blocked', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				lockedRepInEscalationGame: 0n,
 				repDepositShare: undefined,
 				repPerEthPrice: 0n,
 				securityBondAllowance: 0n,
@@ -193,14 +192,13 @@ void describe('security vault helpers', () => {
 		).toBe(undefined)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				lockedRepInEscalationGame: 10n * 10n ** 18n,
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
 				securityBondAllowance: 0n,
 				totalRepDeposit: undefined,
 				totalSecurityBondAllowance: undefined,
 			}),
-		).toBe(0n)
+		).toBe(10n * 10n ** 18n)
 	})
 
 	void test('caps max bond allowance by local backing and empty global context', () => {
@@ -237,7 +235,6 @@ void describe('security vault helpers', () => {
 	void test('withdrawable amount is bounded by unlocked vault rep and pool caps', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				lockedRepInEscalationGame: 5n * 10n ** 18n,
 				repDepositShare: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
 				securityBondAllowance: 3n * 10n ** 18n,
@@ -250,7 +247,6 @@ void describe('security vault helpers', () => {
 	void test('respects allowance-backed floors and zero-balance constraints', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				lockedRepInEscalationGame: 1n * 10n ** 18n,
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
 				securityBondAllowance: 1n * 10n ** 18n,
@@ -261,7 +257,6 @@ void describe('security vault helpers', () => {
 
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				lockedRepInEscalationGame: 10n * 10n ** 18n,
 				repDepositShare: 10n * 10n ** 18n,
 				repPerEthPrice: 5n * 10n ** 18n,
 				securityBondAllowance: 10n * 10n ** 18n,

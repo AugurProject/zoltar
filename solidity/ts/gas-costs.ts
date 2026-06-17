@@ -6,7 +6,7 @@ import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contrac
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testsuite/simulator/utils/contracts/deployPeripherals'
 import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, migrateShares, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, wrapWeth } from './testsuite/simulator/utils/contracts/peripherals'
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from './testsuite/simulator/utils/contracts/securityPoolForker'
+import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testsuite/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRep, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testsuite/simulator/utils/contracts/securityPool'
 import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from './testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from './testsuite/simulator/utils/contracts/zoltarQuestionData'
@@ -184,11 +184,11 @@ const prepareYesChildForAuction = async () => {
 	await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 	await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
 	await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
-	await confirmTx(alice, migrateFromEscalationGame(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
+	await confirmTx(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
 	const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 	const yesPool = getSecurityPoolAddresses(context.addresses.securityPool, yesUniverse, context.questionId, securityMultiplier)
 	const forkData = await getSecurityPoolForkerForkData(alice, context.addresses.securityPool)
-	const ethRaiseCap = openInterestAmount - (openInterestAmount * forkData.migratedRep) / forkData.repAtFork
+	const ethRaiseCap = openInterestAmount - (openInterestAmount * forkData.migratedRep) / forkData.auctionableRepAtFork
 	await anvil.advanceTime(8n * 7n * DAY + DAY)
 	return { context, yesPool, ethRaiseCap }
 }
@@ -572,7 +572,7 @@ const scenarios: Scenario[] = [
 			await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
 			await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
-			return await waitForGas(alice, migrateFromEscalationGame(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
+			return await waitForGas(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
 		},
 	},
 	{

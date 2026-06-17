@@ -185,7 +185,7 @@ contract SecurityPoolOracleCoordinator {
 			// oracle report settles.
 			// Liquidation should value the vault's full collateral claim. That means using the
 			// pool's total REP balance here rather than only the currently withdrawable balance.
-		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
+		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(targetVault);
 		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
 			stagedOperations[operationId] = StagedOperation({

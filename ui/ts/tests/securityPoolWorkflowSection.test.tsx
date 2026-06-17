@@ -124,7 +124,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		currentRetentionRate: 10n,
-		lockedRepInEscalationGame: 0n,
+		escalationEscrowedRep: 0n,
 		managerAddress: zeroAddress,
 		poolOwnershipDenominator: 1n,
 		repDepositShare: 5n * 10n ** 18n,
@@ -161,7 +161,7 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 
 function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
-		lockedRepInEscalationGame: 1n * 10n ** 18n,
+		escalationEscrowedRep: 1n * 10n ** 18n,
 		repDepositShare: 5n * 10n ** 18n,
 		securityBondAllowance: 2n * 10n ** 18n,
 		unpaidEthFees: 1n * 10n ** 18n,
@@ -228,7 +228,7 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 		migrationEndsAt: undefined,
 		parentSecurityPoolAddress: zeroAddress,
 		questionOutcome: 'none',
-		repAtFork: 0n,
+		auctionableRepAtFork: 0n,
 		securityPoolAddress: zeroAddress,
 		systemState: 'operational',
 		truthAuction: undefined,
@@ -503,7 +503,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		})
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
-		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Escrowed REP').length).toBeGreaterThan(0)
 	})
 
 	test('shows a parent-pool metric for child pools in the selected summary', async () => {
@@ -744,7 +744,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							lockedRepInEscalationGame: 0n,
+							escalationEscrowedRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
@@ -1324,7 +1324,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							parentWithdrawalEnabled: false,
 							viewerVaultAvailableEscalationRep: 12_000n,
 							viewerVaultExists: true,
-							viewerVaultLockedRepInEscalationGame: 0n,
+							viewerVaultEscrowedRep: 0n,
 							viewerVaultRepDepositShare: 12_000n,
 						},
 					}),
@@ -1593,7 +1593,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							parentWithdrawalEnabled: false,
 							viewerVaultAvailableEscalationRep: 12_000n,
 							viewerVaultExists: true,
-							viewerVaultLockedRepInEscalationGame: 0n,
+							viewerVaultEscrowedRep: 0n,
 							viewerVaultRepDepositShare: 12_000n,
 						},
 					}),
@@ -2115,7 +2115,7 @@ describe('SecurityPoolWorkflowSection', () => {
 								parentWithdrawalEnabled: false,
 								viewerVaultAvailableEscalationRep: 10n,
 								viewerVaultExists: true,
-								viewerVaultLockedRepInEscalationGame: 0n,
+								viewerVaultEscrowedRep: 0n,
 								viewerVaultRepDepositShare: 10n,
 							},
 						}),
@@ -2498,7 +2498,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							universeId: 1n,
 							viewerVaultAvailableEscalationRep: 12_000n,
 							viewerVaultExists: true,
-							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultEscrowedRep: 2n,
 							viewerVaultRepDepositShare: 12_000n,
 							settlementState: 'locked',
 							parentWithdrawalEnabled: false,
@@ -2565,7 +2565,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							universeId: 1n,
 							viewerVaultAvailableEscalationRep: 12_000n,
 							viewerVaultExists: true,
-							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultEscrowedRep: 2n,
 							viewerVaultRepDepositShare: 12_000n,
 							settlementState: 'locked',
 							parentWithdrawalEnabled: false,
@@ -2760,7 +2760,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							universeId: 1n,
 							viewerVaultAvailableEscalationRep: 12_000n,
 							viewerVaultExists: true,
-							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultEscrowedRep: 2n,
 							viewerVaultRepDepositShare: 12_000n,
 							settlementState: 'locked',
 							parentWithdrawalEnabled: false,
@@ -2829,7 +2829,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							universeId: 1n,
 							viewerVaultAvailableEscalationRep: 12_000n,
 							viewerVaultExists: true,
-							viewerVaultLockedRepInEscalationGame: 2n,
+							viewerVaultEscrowedRep: 2n,
 							viewerVaultRepDepositShare: 12_000n,
 							settlementState: 'locked',
 							parentWithdrawalEnabled: false,
@@ -3011,7 +3011,7 @@ describe('SecurityPoolWorkflowSection', () => {
 								universeId: 1n,
 								viewerVaultAvailableEscalationRep: 12_000n,
 								viewerVaultExists: true,
-								viewerVaultLockedRepInEscalationGame: 2n,
+								viewerVaultEscrowedRep: 2n,
 								viewerVaultRepDepositShare: 12_000n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
@@ -3083,7 +3083,7 @@ describe('SecurityPoolWorkflowSection', () => {
 								universeId: 1n,
 								viewerVaultAvailableEscalationRep: 12_000n,
 								viewerVaultExists: true,
-								viewerVaultLockedRepInEscalationGame: 2n,
+								viewerVaultEscrowedRep: 2n,
 								viewerVaultRepDepositShare: 12_000n,
 								settlementState: 'resolved',
 								parentWithdrawalEnabled: true,
@@ -3149,7 +3149,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					universeId: 1n,
 					viewerVaultAvailableEscalationRep: 12_000n,
 					viewerVaultExists: true,
-					viewerVaultLockedRepInEscalationGame: 2n,
+					viewerVaultEscrowedRep: 2n,
 					viewerVaultRepDepositShare: 12_000n,
 					settlementState: 'resolved',
 					parentWithdrawalEnabled: true,
@@ -3582,7 +3582,7 @@ describe('SecurityPoolWorkflowSection', () => {
 								universeId: 1n,
 								viewerVaultAvailableEscalationRep: 0n,
 								viewerVaultExists: true,
-								viewerVaultLockedRepInEscalationGame: 0n,
+								viewerVaultEscrowedRep: 0n,
 								viewerVaultRepDepositShare: 0n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,

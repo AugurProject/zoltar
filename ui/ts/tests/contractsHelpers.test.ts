@@ -74,9 +74,11 @@ describe('contracts helpers', () => {
 		expect(requireUniverseTupleArray(validUniverseSummary, 'universe summary')).toEqual(validUniverseSummary)
 		expect(() => requireUniverseTupleArray([[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000b2'), 4n, 5n] as never], 'universe summary')).toThrow('Unexpected universe summary response')
 
-		const validVaultTuple: Array<[bigint, bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n, 5n]]
+		const validVaultTuple: Array<[bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n]]
 		expect(requireSecurityVaultTupleArray(validVaultTuple, 'vault response')).toEqual(validVaultTuple)
-		expect(() => requireSecurityVaultTupleArray([[1n, 2n, 3n, 4n] as never], 'vault response')).toThrow('Unexpected vault response')
+		const legacyVaultTuple: Array<[bigint, bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n, 5n]]
+		expect(requireSecurityVaultTupleArray(legacyVaultTuple, 'vault response')).toEqual(legacyVaultTuple)
+		expect(() => requireSecurityVaultTupleArray([[1n, 2n, 3n] as never], 'vault response')).toThrow('Unexpected vault response')
 
 		const validMetaTuple: [bigint, bigint, bigint, bigint, `0x${string}`, bigint, `0x${string}`, boolean, bigint, bigint, bigint, bigint] = [1n, 2n, 3n, 4n, getAddress('0x00000000000000000000000000000000000000b2'), 1n, getAddress('0x00000000000000000000000000000000000000c3'), true, 4n, 5n, 6n, 7n]
 		const oneValidMetaTuple = [validMetaTuple]

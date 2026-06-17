@@ -76,12 +76,17 @@ function normalizeStorageLayout(contractOutput: Record<string, unknown>) {
 	})
 }
 
-test('SecurityPoolForker and vault migration delegate share the same storage layout', () => {
+test('SecurityPoolForker retains unified own-fork fields in fork session storage', () => {
 	const contractsJsonPath = path.join(import.meta.dir, '..', '..', 'artifacts', 'Contracts.json')
 	const artifacts = getRecord(JSON.parse(readFileSync(contractsJsonPath, 'utf8')), 'Contracts.json must contain an object root')
 
 	const forkerLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPoolForker.sol', 'SecurityPoolForker'))
-	const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol', 'SecurityPoolForkerVaultMigrationDelegate'))
-
-	assert.deepStrictEqual(delegateLayout, forkerLayout)
+	const forkDataByPoolEntry = forkerLayout.find(entry => entry.label === 'forkDataByPool')
+	if (forkDataByPoolEntry === undefined) throw new Error('Storage layout missing forkDataByPool field')
+	const forkDataByPoolValueType = getRecord(forkDataByPoolEntry.type.value, 'Storage layout missing forkDataByPool value type')
+	const forkDataMembers = getArray(forkDataByPoolValueType.members, 'Storage layout missing forkDataByPool value members')
+	const forkDataLabels = new Set(forkDataMembers.map(member => getString(getRecord(member, 'Invalid forkDataByPool member').label, 'Missing member label for forkDataByPool struct type')))
+	assert(forkDataLabels.has('vaultRepAtFork'))
+	assert(forkDataLabels.has('escalationChildRepAtFork'))
+	assert(forkDataLabels.has('escalationSourceRepAtFork'))
 })

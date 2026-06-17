@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import '../interfaces/IERC1155Receiver.sol';
+import '../../peripherals/interfaces/IERC1155Receiver.sol';
 
 contract ERC1155ReceiverMock is IERC1155Receiver {
 	bytes4 private constant ERC1155_RECEIVED_SELECTOR = 0xf23a6e61;

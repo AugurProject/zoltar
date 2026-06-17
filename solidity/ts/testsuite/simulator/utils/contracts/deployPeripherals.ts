@@ -171,11 +171,11 @@ export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracle
 })
 
 export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
-	getEscalationGameInitCode: securityPool =>
+	getEscalationGameInitCode: (securityPool, repToken) =>
 		encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [securityPool],
+			args: [securityPool, repToken],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
@@ -275,20 +275,21 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const contractAddresses = getInfraContractAddresses()
 
-	const deployBytecode = async (bytecode: Hex) => {
+	const deployBytecode = async (label: string, bytecode: Hex) => {
 		const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode })
-		await client.waitForTransactionReceipt({ hash })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		if (receipt.status === 'reverted') throw new Error(`infra deploy reverted while creating ${label}: ${hash}`)
 	}
 
 	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
-	if (!existence['multicall3']) await deployBytecode(MULTICALL3_BYTECODE)
-	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
-	if (!existence['scalarOutcomes']) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
-	if (!existence['securityPoolUtils']) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-	if (!existence['openOracle']) await deployBytecode(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
-	if (!existence['zoltarQuestionData']) await deployBytecode(getZoltarQuestionDataByteCode())
+	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
+	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode('uniformPriceDualCapBatchAuctionFactory', `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
+	if (!existence['scalarOutcomes']) await deployBytecode('scalarOutcomes', `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
+	if (!existence['securityPoolUtils']) await deployBytecode('securityPoolUtils', `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
+	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
 		const protocolConfig = getProtocolConfig()
 		const initCode = encodeDeployData({
@@ -296,14 +297,15 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
 			args: [contractAddresses.zoltarQuestionData, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
 		})
-		await deployBytecode(initCode)
+		await deployBytecode('zoltar', initCode)
 	}
-	if (!existence['shareTokenFactory']) await deployBytecode(getShareTokenFactoryByteCode(getZoltarAddress()))
-	if (!existence['priceOracleManagerAndOperatorQueuerFactory']) await deployBytecode(getPriceOracleManagerAndOperatorQueuerFactoryByteCode())
-	if (!existence['securityPoolForker']) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
-	if (!existence['escalationGameFactory']) await deployBytecode(getEscalationGameFactoryByteCode())
+	if (!existence['shareTokenFactory']) await deployBytecode('shareTokenFactory', getShareTokenFactoryByteCode(getZoltarAddress()))
+	if (!existence['priceOracleManagerAndOperatorQueuerFactory']) await deployBytecode('priceOracleManagerAndOperatorQueuerFactory', getPriceOracleManagerAndOperatorQueuerFactoryByteCode())
+	if (!existence['securityPoolForker']) await deployBytecode('securityPoolForker', getSecurityPoolForkerByteCode(contractAddresses.zoltar))
+	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode())
 	if (!existence['securityPoolFactory'])
 		await deployBytecode(
+			'securityPoolFactory',
 			getSecurityPoolFactoryByteCode({
 				escalationGameFactory: contractAddresses.escalationGameFactory,
 				openOracle: contractAddresses.openOracle,

@@ -18,6 +18,8 @@ import { getNonDecisionThreshold } from '../testsuite/simulator/utils/contracts/
 import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import { getERC20Balance } from '../testsuite/simulator/utils/utilities'
+import { GENESIS_REPUTATION_TOKEN } from '../testsuite/simulator/utils/constants'
 
 const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
@@ -111,6 +113,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		// Withdraw via SecurityPool's withdrawFromEscalationGame
 		const repBefore = await getUserRepClaim(client, securityPoolAddresses.securityPool)
+		const walletRepBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -122,12 +125,10 @@ describe('Escalation Game Fork Threshold Test', () => {
 				}),
 		)
 		const repAfter = await getUserRepClaim(client, securityPoolAddresses.securityPool)
+		const walletRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		// Expected amount: depositAmount scaled by the ratio of thresholds.
-		// The vault claim helper tracks total collateral claim even while REP is locked in
-		// escalation, so withdrawal changes the claim only by the payout delta.
-		const expected = (depositAmount * actualForkThreshold) / escalationThreshold
-		assert.strictEqual(repAfter - repBefore, expected - depositAmount, 'scaled amount mismatch')
+		assert.strictEqual(repAfter, repBefore, 'settlement should not re-mint vault claim under escrow custody')
+		assert.strictEqual(walletRepAfter - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
 	})
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {

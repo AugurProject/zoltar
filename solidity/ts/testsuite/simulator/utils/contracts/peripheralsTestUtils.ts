@@ -35,8 +35,10 @@ export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddres
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
 	assert.ok(repAmount >= 2n * forkThreshold, 'not enough rep in vault to fork')
+	const minRepDeposit = 10n * 10n ** 18n
+	const secondEscalationDeposit = repAmount - 2n * forkThreshold < minRepDeposit ? repAmount - forkThreshold : forkThreshold
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkThreshold)
-	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, forkThreshold)
+	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, secondEscalationDeposit)
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)
 }
 
@@ -80,4 +82,4 @@ export const manipulatePriceOracle = async (client: WriteClient, mockWindow: Anv
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
-export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, stakedRep: bigint, securityMultiplier: bigint) => securityBondAllowance * lastPrice * securityMultiplier > stakedRep * PRICE_PRECISION
+export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, repClaim: bigint, securityMultiplier: bigint) => securityBondAllowance * lastPrice * securityMultiplier > repClaim * PRICE_PRECISION

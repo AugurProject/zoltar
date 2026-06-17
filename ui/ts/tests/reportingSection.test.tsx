@@ -106,7 +106,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
-		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultEscrowedRep: 1n * REP,
 		viewerVaultRepDepositShare: 11n * REP,
 		...overrides,
 	}
@@ -150,7 +150,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
-		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultEscrowedRep: 1n * REP,
 		viewerVaultRepDepositShare: 11n * REP,
 	}
 
@@ -185,7 +185,7 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		parentWithdrawalEnabled: false,
 		viewerVaultAvailableEscalationRep: 10n * REP,
 		viewerVaultExists: true,
-		viewerVaultLockedRepInEscalationGame: 0n,
+		viewerVaultEscrowedRep: 0n,
 		viewerVaultRepDepositShare: 10n * REP,
 		...overrides,
 	}

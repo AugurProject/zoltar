@@ -8,7 +8,7 @@ import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/depl
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { peripherals_test_ERC1155ReceiverMock_ERC1155NonReceiver, peripherals_test_ERC1155ReceiverMock_ERC1155ReceiverMock, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
+import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -37,16 +37,16 @@ describe('ERC1155 Compliance Test Suite', () => {
 	const deployReceiver = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: peripherals_test_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
-				bytecode: `0x${peripherals_test_ERC1155ReceiverMock_ERC1155ReceiverMock.evm.bytecode.object}`,
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.evm.bytecode.object}`,
 			}),
 		)
 
 	const deployNonReceiver = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: peripherals_test_ERC1155ReceiverMock_ERC1155NonReceiver.abi,
-				bytecode: `0x${peripherals_test_ERC1155ReceiverMock_ERC1155NonReceiver.evm.bytecode.object}`,
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver.abi,
+				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver.evm.bytecode.object}`,
 			}),
 		)
 
@@ -158,7 +158,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_test_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'singleReceiveCount',
 				args: [],
@@ -168,7 +168,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_test_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'lastData',
 				args: [],
@@ -181,7 +181,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_test_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'batchReceiveCount',
 				args: [],

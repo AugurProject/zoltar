@@ -2,8 +2,9 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { BinaryOutcomes } from '../BinaryOutcomes.sol';
-import { EscalationGame, CarriedDepositProof } from '../EscalationGame.sol';
+import { ReputationToken } from '../../ReputationToken.sol';
+import { BinaryOutcomes } from '../../peripherals/BinaryOutcomes.sol';
+import { CarriedDepositProof, EscalationGame } from '../../peripherals/EscalationGame.sol';
 
 contract EscalationGameProofTestSecurityPool {
 	Zoltar public immutable zoltar;
@@ -22,8 +23,16 @@ contract EscalationGameProofTestSecurityPool {
 		escalationGame = game;
 	}
 
-	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256) {
-		return escalationGame.depositOnOutcome(depositor, outcome, amount);
+	function repToken() external view returns (ReputationToken) {
+		return zoltar.getRepToken(universeId);
+	}
+
+	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256, uint256) {
+		(uint256 acceptedAmount, uint256 resultingCumulativeAmount) = escalationGame.previewDepositOnOutcome(outcome, amount);
+		ReputationToken rep = zoltar.getRepToken(universeId);
+		rep.transferFrom(msg.sender, address(escalationGame), acceptedAmount);
+		uint256 parentDepositIndex = escalationGame.recordDepositFromSecurityPool(depositor, outcome, acceptedAmount, resultingCumulativeAmount);
+		return (acceptedAmount, parentDepositIndex);
 	}
 
 	function initializeForkCarrySnapshot(
@@ -32,6 +41,12 @@ contract EscalationGameProofTestSecurityPool {
 		uint256[3] memory inheritedCarryTotals,
 		bytes32[3] memory inheritedNullifierRoots
 	) external {
+		uint256 totalInheritedPrincipal =
+			inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
+		if (totalInheritedPrincipal > 0) {
+			ReputationToken rep = zoltar.getRepToken(universeId);
+			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
+		}
 		escalationGame.initializeForkCarrySnapshot(
 			inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots
 		);
@@ -42,6 +57,10 @@ contract EscalationGameProofTestSecurityPool {
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
 		return escalationGame.withdrawDeposit(proof, outcome);
+	}
+
+	function recordForkedEscrow(address depositor, uint256 amount) external {
+		escalationGame.recordForkedEscrow(depositor, amount);
 	}
 
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
