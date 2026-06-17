@@ -190,33 +190,29 @@ contract EscalationGame {
 	}
 
 	function start(uint256 _startBond, uint256 _nonDecisionThreshold) external {
-		require(owner == msg.sender, 'os');
-		require(activationTime == 0, 'as');
-		require(_nonDecisionThreshold > _startBond, 'te');
-		require(_startBond > 0, 'sb');
-		require(_startBond >= 1e18, 's1');
-		require(_nonDecisionThreshold >= 1e18, 't1');
+		_initializeStartParams(_startBond, _nonDecisionThreshold);
 		activationTime = block.timestamp + activationDelay;
-		nonDecisionThreshold = _nonDecisionThreshold;
-		startBond = _startBond;
-		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
 		emit GameStarted(activationTime, startBond, nonDecisionThreshold);
 	}
 
 	function startFromFork(uint256 _startBond, uint256 _nonDecisionThreshold, uint256 elapsedAtFork) external {
+		_initializeStartParams(_startBond, _nonDecisionThreshold);
+		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'it');
+		forkContinuation = true;
+		forkElapsedAtStart = elapsedAtFork;
+		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+	}
+
+	function _initializeStartParams(uint256 _startBond, uint256 _nonDecisionThreshold) private {
 		require(owner == msg.sender, 'os');
 		require(activationTime == 0, 'as');
 		require(_nonDecisionThreshold > _startBond, 'te');
 		require(_startBond > 0, 'sb');
 		require(_startBond >= 1e18, 's1');
 		require(_nonDecisionThreshold >= 1e18, 't1');
-		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'it');
-		forkContinuation = true;
-		forkElapsedAtStart = elapsedAtFork;
 		startBond = _startBond;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
-		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 
 	function initializeForkCarrySnapshot(
@@ -432,43 +428,82 @@ contract EscalationGame {
 	}
 
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome) {
+		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
 		uint256 currentTotalCost = totalCost();
-		uint8 invalidOver = outcomeState[0].balance >= currentTotalCost ? 1 : 0;
-		uint8 yesOver = outcomeState[1].balance >= currentTotalCost ? 1 : 0;
-		uint8 noOver = outcomeState[2].balance >= currentTotalCost ? 1 : 0;
-		if (invalidOver + yesOver + noOver >= 2) return BinaryOutcomes.BinaryOutcome.None;
-		if (outcomeState[0].balance == 0 && outcomeState[1].balance == 0 && outcomeState[2].balance == 0)
+		if (_countBalancesAtLeast(invalidBalance, yesBalance, noBalance, currentTotalCost) >= 2)
+			return BinaryOutcomes.BinaryOutcome.None;
+		if (_allOutcomeBalancesEmpty(invalidBalance, yesBalance, noBalance))
 			return BinaryOutcomes.BinaryOutcome.Invalid;
-		if (outcomeState[0].balance > outcomeState[1].balance && outcomeState[0].balance > outcomeState[2].balance)
-			return BinaryOutcomes.BinaryOutcome.Invalid;
-		if (outcomeState[1].balance > outcomeState[0].balance && outcomeState[1].balance > outcomeState[2].balance)
-			return BinaryOutcomes.BinaryOutcome.Yes;
-		return BinaryOutcomes.BinaryOutcome.No;
+		return _strictLeadingOutcome(invalidBalance, yesBalance, noBalance);
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
-		uint8 invalidOver = outcomeState[0].balance >= nonDecisionThreshold ? 1 : 0;
-		uint8 yesOver = outcomeState[1].balance >= nonDecisionThreshold ? 1 : 0;
-		uint8 noOver = outcomeState[2].balance >= nonDecisionThreshold ? 1 : 0;
-		return invalidOver + yesOver + noOver >= 2;
+		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
+		return _countBalancesAtLeast(invalidBalance, yesBalance, noBalance, nonDecisionThreshold) >= 2;
 	}
 
 	function getBindingCapital() public view returns (uint256) {
+		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
+		return _medianBalance(invalidBalance, yesBalance, noBalance);
+	}
+
+	function _getOutcomeBalances()
+		private
+		view
+		returns (uint256 invalidBalance, uint256 yesBalance, uint256 noBalance)
+	{
+		invalidBalance = outcomeState[0].balance;
+		yesBalance = outcomeState[1].balance;
+		noBalance = outcomeState[2].balance;
+	}
+
+	function _countBalancesAtLeast(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance,
+		uint256 threshold
+	) private pure returns (uint8 count) {
+		if (invalidBalance >= threshold) count += 1;
+		if (yesBalance >= threshold) count += 1;
+		if (noBalance >= threshold) count += 1;
+	}
+
+	function _allOutcomeBalancesEmpty(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance
+	) private pure returns (bool) {
+		return invalidBalance == 0 && yesBalance == 0 && noBalance == 0;
+	}
+
+	function _strictLeadingOutcome(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance
+	) private pure returns (BinaryOutcomes.BinaryOutcome) {
+		if (invalidBalance > yesBalance && invalidBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (yesBalance > invalidBalance && yesBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Yes;
+		return BinaryOutcomes.BinaryOutcome.No;
+	}
+
+	function _medianBalance(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance
+	) private pure returns (uint256) {
 		if (
-			(outcomeState[0].balance >= outcomeState[1].balance &&
-				outcomeState[0].balance <= outcomeState[2].balance) ||
-			(outcomeState[0].balance >= outcomeState[2].balance && outcomeState[0].balance <= outcomeState[1].balance)
+			(invalidBalance >= yesBalance && invalidBalance <= noBalance) ||
+			(invalidBalance >= noBalance && invalidBalance <= yesBalance)
 		) {
-			return outcomeState[0].balance;
+			return invalidBalance;
 		}
 		if (
-			(outcomeState[1].balance >= outcomeState[0].balance &&
-				outcomeState[1].balance <= outcomeState[2].balance) ||
-			(outcomeState[1].balance >= outcomeState[2].balance && outcomeState[1].balance <= outcomeState[0].balance)
+			(yesBalance >= invalidBalance && yesBalance <= noBalance) ||
+			(yesBalance >= noBalance && yesBalance <= invalidBalance)
 		) {
-			return outcomeState[1].balance;
+			return yesBalance;
 		}
-		return outcomeState[2].balance;
+		return noBalance;
 	}
 
 	function previewDepositOnOutcome(

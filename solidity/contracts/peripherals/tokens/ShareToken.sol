@@ -141,8 +141,8 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function getTokenIds(
 		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome[] memory _outcomes
-	) public pure returns (uint256[] memory _tokenIds) {
+		BinaryOutcomes.BinaryOutcome[] calldata _outcomes
+	) external pure returns (uint256[] memory _tokenIds) {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
@@ -152,7 +152,7 @@ contract ShareToken is ERC1155, IShareToken {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 
-	function migrate(uint256 fromId, uint256[] memory targetOutcomeIndexes) external {
+	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external {
 		uint248 universeId = getUniverseId(fromId);
 		require(universeHasForked(universeId), 'Universe has not forked');
 		require(targetOutcomeIndexes.length > 0, 'No target outcomes');

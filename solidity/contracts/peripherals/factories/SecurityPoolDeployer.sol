@@ -19,7 +19,6 @@ contract SecurityPoolDeployer {
 
 	function deploy(
 		address securityPoolForker,
-		ISecurityPoolFactory securityPoolFactory,
 		ZoltarQuestionData questionData,
 		EscalationGameFactory escalationGameFactory,
 		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
@@ -33,14 +32,14 @@ contract SecurityPoolDeployer {
 		uint256 initialEscalationGameDeposit,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
-		require(msg.sender == factory, 'only factory');
+		require(msg.sender == factory);
 
 		securityPool = ISecurityPool(
 			payable(
 				address(
 					new SecurityPool{ salt: bytes32(uint256(0)) }(
 						securityPoolForker,
-						securityPoolFactory,
+						ISecurityPoolFactory(factory),
 						questionData,
 						escalationGameFactory,
 						priceOracleManagerAndOperatorQueuer,

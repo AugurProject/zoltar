@@ -97,6 +97,16 @@ export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddr
 		}),
 	)
 
+export const settleAuctionBids = async (client: WriteClient, securityPoolAddress: Address, vault: Address, claimTickIndices: readonly { tick: bigint; bidIndex: bigint }[], refundTickIndices: readonly { tick: bigint; bidIndex: bigint }[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'settleAuctionBids',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, vault, claimTickIndices, refundTickIndices],
+		}),
+	)
+
 export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, securityPoolAddress: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({

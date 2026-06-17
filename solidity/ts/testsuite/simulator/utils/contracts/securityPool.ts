@@ -265,10 +265,10 @@ export const getRepToken = async (client: ReadClient, securityPoolAddress: Addre
 		args: [],
 	})
 
-export const getAvailableRepBalance = async (client: ReadClient, securityPoolAddress: Address) =>
+export const getTotalRepBalance = async (client: ReadClient, securityPoolAddress: Address) =>
 	await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getAvailableRepBalance',
+		functionName: 'getTotalRepBalance',
 		address: securityPoolAddress,
 		args: [],
 	})

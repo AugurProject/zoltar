@@ -19,7 +19,7 @@ library TokenId {
 
 	function getTokenIds(
 		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome[] memory _outcomes
+		BinaryOutcomes.BinaryOutcome[] calldata _outcomes
 	) internal pure returns (uint256[] memory _tokenIds) {
 		_tokenIds = new uint256[](_outcomes.length);
 		for (uint256 _i = 0; _i < _outcomes.length; _i++) {

@@ -68,7 +68,6 @@ interface ISecurityPool {
 
 	function repToPoolOwnership(uint256 repAmount) external view returns (uint256);
 	function poolOwnershipToRep(uint256 poolOwnership) external view returns (uint256);
-	function getAvailableRepBalance() external view returns (uint256);
 	function getTotalRepBalance() external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
 	function initialEscalationGameDeposit() external view returns (uint256);
@@ -83,7 +82,7 @@ interface ISecurityPool {
 	function performWithdrawRep(address vault, uint256 repAmount) external;
 	function depositRep(uint256 repAmount) external;
 	function redeemRep(address vault) external;
-	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external;
+	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,

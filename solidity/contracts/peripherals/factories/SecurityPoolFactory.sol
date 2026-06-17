@@ -17,15 +17,15 @@ import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
-	ShareTokenFactory shareTokenFactory;
-	UniformPriceDualCapBatchAuctionFactory uniformPriceDualCapBatchAuctionFactory;
-	PriceOracleManagerAndOperatorQueuerFactory priceOracleManagerAndOperatorQueuerFactory;
-	Zoltar zoltar;
-	OpenOracle openOracle;
-	EscalationGameFactory escalationGameFactory;
-	ZoltarQuestionData questionData;
-	ISecurityPoolForker securityPoolForker;
-	SecurityPoolDeployer securityPoolDeployer;
+	ShareTokenFactory immutable shareTokenFactory;
+	UniformPriceDualCapBatchAuctionFactory immutable uniformPriceDualCapBatchAuctionFactory;
+	PriceOracleManagerAndOperatorQueuerFactory immutable priceOracleManagerAndOperatorQueuerFactory;
+	Zoltar immutable zoltar;
+	OpenOracle immutable openOracle;
+	EscalationGameFactory immutable escalationGameFactory;
+	ZoltarQuestionData immutable questionData;
+	ISecurityPoolForker immutable securityPoolForker;
+	SecurityPoolDeployer immutable securityPoolDeployer;
 	uint256 public immutable initialEscalationGameDeposit;
 	SecurityPoolDeployment[] private securityPoolDeployments;
 
@@ -112,7 +112,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			completeSetCollateralAmount,
 			address(truthAuction)
 		);
-		securityPoolDeployments.push(
+		_recordSecurityPoolDeployment(
 			SecurityPoolDeployment(
 				securityPool,
 				truthAuction,
@@ -125,19 +125,6 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				currentRetentionRate,
 				completeSetCollateralAmount
 			)
-		);
-
-		emit DeploySecurityPool(
-			securityPool,
-			truthAuction,
-			priceOracleManagerAndOperatorQueuer,
-			shareToken,
-			parent,
-			universeId,
-			questionId,
-			securityMultiplier,
-			currentRetentionRate,
-			completeSetCollateralAmount
 		);
 	}
 
@@ -155,8 +142,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(outcomes.length == 2, 'need 2 outcomes');
 		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'first != Yes');
 		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'second != No');
+		require(zoltar.getForkTime(universeId) == 0, 'universe forked');
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
+		require(address(reputationToken) != address(0x0), 'universe missing');
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
 		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
@@ -177,7 +166,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		);
 
 		shareToken.authorize(securityPool);
-		securityPoolDeployments.push(
+		_recordSecurityPoolDeployment(
 			SecurityPoolDeployment(
 				securityPool,
 				UniformPriceDualCapBatchAuction(address(0)),
@@ -191,18 +180,21 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				0
 			)
 		);
+	}
 
+	function _recordSecurityPoolDeployment(SecurityPoolDeployment memory deployment) private {
+		securityPoolDeployments.push(deployment);
 		emit DeploySecurityPool(
-			securityPool,
-			UniformPriceDualCapBatchAuction(address(0)),
-			priceOracleManagerAndOperatorQueuer,
-			shareToken,
-			ISecurityPool(payable(address(0))),
-			universeId,
-			questionId,
-			securityMultiplier,
-			currentRetentionRate,
-			0
+			deployment.securityPool,
+			deployment.truthAuction,
+			deployment.priceOracleManagerAndOperatorQueuer,
+			deployment.shareToken,
+			deployment.parent,
+			deployment.universeId,
+			deployment.questionId,
+			deployment.securityMultiplier,
+			deployment.currentRetentionRate,
+			deployment.completeSetCollateralAmount
 		);
 	}
 
@@ -219,7 +211,6 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	) private returns (ISecurityPool securityPool) {
 		securityPool = securityPoolDeployer.deploy(
 			address(securityPoolForker),
-			this,
 			questionData,
 			escalationGameFactory,
 			priceOracleManagerAndOperatorQueuer,

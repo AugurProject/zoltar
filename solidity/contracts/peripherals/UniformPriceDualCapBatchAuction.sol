@@ -113,6 +113,8 @@ contract UniformPriceDualCapBatchAuction {
 	function finalize() external {
 		require(!finalized, 'already finalized');
 		require(msg.sender == owner, 'Only owner can finalize');
+		require(auctionStarted != 0, 'not started');
+		require(block.timestamp >= auctionStarted + AUCTION_TIME, 'auction active');
 
 		(bool hitCap, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
 		finalized = true;
@@ -158,7 +160,7 @@ contract UniformPriceDualCapBatchAuction {
 
 	function withdrawBids(
 		address withdrawFor,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
 	) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
 		// The owner is expected to be the coordinating forker contract for truth auctions,
@@ -228,8 +230,25 @@ contract UniformPriceDualCapBatchAuction {
 		}
 	}
 
-	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external {
+	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
+		_refundLosingBids(msg.sender, tickIndices);
+	}
+
+	function refundLosingBidsFor(
+		address bidder,
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
+	) external {
+		require(msg.sender == owner, 'Only owner can call');
+		_refundLosingBids(bidder, tickIndices);
+	}
+
+	function _refundLosingBids(
+		address bidder,
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
+	) private {
 		require(!finalized, 'already finalized');
+		require(auctionStarted != 0, 'not started');
+		require(bidder != address(0x0), 'invalid bidder');
 
 		(bool hitCap, int256 foundTick, , ) = computeClearing();
 		require(hitCap, 'no clearing yet');
@@ -243,7 +262,7 @@ contract UniformPriceDualCapBatchAuction {
 			require(tick < foundTick, 'cannot withdraw binding bid');
 
 			Bid storage bid = bidsAtTick[tick][index];
-			require(bid.bidder == msg.sender, 'not bidder');
+			require(bid.bidder == bidder, 'not bidder');
 			require(bid.ethAmount > 0 && !bid.claimed, 'already withdrawn');
 
 			uint256 originalEth = bid.ethAmount;
@@ -258,10 +277,10 @@ contract UniformPriceDualCapBatchAuction {
 		}
 
 		// Send ETH back to user
-		(bool sent, ) = payable(msg.sender).call{ value: totalEthToRefund }('');
+		(bool sent, ) = payable(bidder).call{ value: totalEthToRefund }('');
 		require(sent, 'transfer failed');
 
-		emit RefundLosingBids(msg.sender, tickIndices, totalEthToRefund);
+		emit RefundLosingBids(bidder, tickIndices, totalEthToRefund);
 	}
 
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {

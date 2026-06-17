@@ -35,6 +35,7 @@ import {
 	migrateRepToZoltar,
 	migrateVault,
 	migrateVaultWithUnresolvedEscalation,
+	settleAuctionBids,
 	startTruthAuction,
 } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
@@ -47,10 +48,10 @@ import {
 	depositToEscalationGame,
 	getCompleteSetCollateralAmount,
 	getCurrentRetentionRate,
-	getAvailableRepBalance,
 	getPoolOwnershipDenominator,
 	getRepToken,
 	getShareTokenSupply,
+	getTotalRepBalance,
 	getAwaitingForkContinuation,
 	getActiveVaultCount,
 	getActiveVaults,
@@ -226,7 +227,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 	}
 
-	const setupFinalizedTruthAuctionWithMixedBids = async () => {
+	const setupTruthAuctionWithMixedBids = async (finalizeAuction: boolean) => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -263,8 +264,10 @@ describe('Peripherals Contract Test Suite', () => {
 		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
 		const winningTick = await participateAuction(winningBidder, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 
-		await mockWindow.advanceTime(7n * DAY + DAY)
-		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		if (finalizeAuction) {
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		}
 
 		return {
 			yesSecurityPool,
@@ -277,6 +280,8 @@ describe('Peripherals Contract Test Suite', () => {
 			winningTick,
 		}
 	}
+
+	const setupFinalizedTruthAuctionWithMixedBids = async () => await setupTruthAuctionWithMixedBids(true)
 
 	const initializePeripheralsBaseline = async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -621,12 +626,12 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-		const availableRepBeforeWithdrawal = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const availableRepBeforeWithdrawal = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepBeforeWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
 		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 
-		const availableRepAfterWithdrawal = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const availableRepAfterWithdrawal = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepAfterWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		const aliceVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const attackerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
@@ -701,7 +706,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await approveAndDepositRep(secondVault, repDeposit, questionId)
 
-		const totalRepBeforeEscrow = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const totalRepBeforeEscrow = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const ownershipToEscrow = (escrowAmount * poolOwnershipDenominator + totalRepBeforeEscrow - 1n) / totalRepBeforeEscrow
@@ -1938,7 +1943,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const snapshotTargetOwnership = vaultBefore.repDepositShare
 		const snapshotTargetAllowance = vaultBefore.securityBondAllowance
-		const snapshotTotalRep = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const snapshotTotalRep = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const snapshotDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
 
 		const snapshotExpectedRepDeposit = (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator
@@ -2042,7 +2047,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const secondVault = await getSecurityVault(client, securityPoolAddresses.securityPool, secondVaultClient.account.address)
 		const firstVaultTotalClaim = await getVaultRepClaim(client.account.address)
 		const secondVaultTotalClaim = await getVaultRepClaim(secondVaultClient.account.address)
-		const availableRepBalance = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const availableRepBalance = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 
 		strictEqualTypeSafe(firstVaultTotalClaim, repDeposit - lockedDeposit, 'locking REP should remove the committed principal from the vault claim')
 		strictEqualTypeSafe(secondVaultTotalClaim, repDeposit, 'locking REP should not reduce another vaults total collateral claim')
@@ -2186,21 +2191,50 @@ describe('Peripherals Contract Test Suite', () => {
 		const secondWinningShares = ensureDefined(secondHolderShares[1], 'second holder winning shares missing')
 		const initialCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 		const initialShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
-		const firstWinningCashValue = await sharesToCash(client, securityPoolAddresses.securityPool, firstWinningShares)
+		const initialFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		assert.ok(initialCollateral > 0n, 'collateral should be positive before finalization')
 		strictEqualTypeSafe(initialShareSupply, firstWinningShares + secondWinningShares, 'share supply should equal the minted winning-share balances')
 
 		await finalizeQuestionAsYesWithoutFork()
+		const firstHolderBalanceBeforeRedemption = await getETHBalance(client, firstHolder.account.address)
 		await redeemShares(firstHolder, securityPoolAddresses.securityPool)
 
-		approximatelyEqual(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), initialCollateral - firstWinningCashValue, 10n, 'collateral should shrink after first winning redemption')
+		const collateralAfterFirstRedemption = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const feesAfterFirstRedemption = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
+		const feeDelta = feesAfterFirstRedemption - initialFeesOwed
+
+		assert.ok(feeDelta > 0n, 'first redemption should accrue open-interest fees')
+		strictEqualTypeSafe(collateralAfterFirstRedemption + firstHolderPayout + feeDelta, initialCollateral, 'collateral should shrink by fees and first winning redemption')
 		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), initialShareSupply - firstWinningShares, 'share supply should shrink after first winning redemption')
-		approximatelyEqual(await sharesToCash(client, securityPoolAddresses.securityPool, secondWinningShares), initialCollateral - firstWinningCashValue, 10n, 'remaining winning shares should not be double counted')
+		approximatelyEqual(await sharesToCash(client, securityPoolAddresses.securityPool, secondWinningShares), collateralAfterFirstRedemption, 10n, 'remaining winning shares should not be double counted')
 
 		await redeemShares(secondHolder, securityPoolAddresses.securityPool)
 
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'collateral should be empty after all winning shares are redeemed')
 		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'share supply should be empty after all winning shares are redeemed')
+	})
+
+	test('redeemShares accrues open-interest fees before paying winning shares', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const openInterestAmount = 10n * 10n ** 18n
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		const balanceBefore = await getETHBalance(client, openInterestHolder.account.address)
+
+		await finalizeQuestionAsYesWithoutFork()
+		await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
+
+		const balanceAfter = await getETHBalance(client, openInterestHolder.account.address)
+		const feesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		const payout = balanceAfter - balanceBefore
+
+		assert.ok(feesOwed > 0n, 'redeemShares should accrue fees before paying winning shares')
+		assert.ok(payout < openInterestAmount, 'winner payout should be net of accrued fees')
+		approximatelyEqual(payout + feesOwed, openInterestAmount, 1000n, 'payout plus fees should conserve open interest')
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'all collateral should be consumed after sole winning redemption')
 	})
 
 	test('sharesToCash returns zero for stale non-winning shares after all winning shares are redeemed', async () => {
@@ -3747,6 +3781,22 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'zero-REP finalized claim should not create a new vault')
 	})
 
+	test('settleAuctionBids can refund a losing bid before truth auction finalization', async () => {
+		const { yesSecurityPool, losingBidder, losingEth, losingTick } = await setupTruthAuctionWithMixedBids(false)
+		const thirdParty = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+		const thirdPartyBalanceBeforeSettlement = await getETHBalance(client, thirdParty.account.address)
+		const losingBidderBalanceBeforeSettlement = await getETHBalance(client, losingBidder.account.address)
+
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'setup should leave the child pool in an active truth auction')
+		await settleAuctionBids(thirdParty, yesSecurityPool.securityPool, losingBidder.account.address, [], [{ tick: losingTick, bidIndex: 0n }])
+
+		const thirdPartyBalanceAfterSettlement = await getETHBalance(client, thirdParty.account.address)
+		const losingBidderBalanceAfterSettlement = await getETHBalance(client, losingBidder.account.address)
+
+		strictEqualTypeSafe(losingBidderBalanceAfterSettlement - losingBidderBalanceBeforeSettlement, losingEth, 'pre-finalization settlement should refund losing-bid ETH to the bidder')
+		strictEqualTypeSafe(thirdPartyBalanceAfterSettlement, thirdPartyBalanceBeforeSettlement, 'pre-finalization settlement should not redirect refunded ETH to the caller')
+	})
+
 	test('claimAuctionProceeds preserves winner accounting when a finalized losing refund is settled first', async () => {
 		const { yesSecurityPool, expectedEthToBuy, losingBidder, losingTick, winningBidder, winningTick } = await setupFinalizedTruthAuctionWithMixedBids()
 		const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
@@ -4047,6 +4097,27 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Attempt to deploy security pool with non-existent question should fail
 		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier, MAX_RETENTION_RATE))
+	})
+
+	test('cannot deploy origin security pool in an already-forked universe', async () => {
+		const forkSourceQuestionData = {
+			...questionData,
+			title: `factory fork source ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(client, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
+
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE), /universe forked/)
+	})
+
+	test('cannot deploy origin security pool in a missing universe', async () => {
+		const missingUniverseId = 999999n
+
+		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier, MAX_RETENTION_RATE), /universe missing/)
 	})
 
 	test('can fork security pool using separate initiate and migrate calls with multiple migrations', async () => {
