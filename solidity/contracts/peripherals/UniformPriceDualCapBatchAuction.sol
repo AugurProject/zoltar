@@ -435,9 +435,9 @@ contract UniformPriceDualCapBatchAuction {
 
 	function _sliceEnd(uint256 offset, uint256 limit, uint256 total) internal pure returns (uint256) {
 		if (limit == 0 || offset >= total) return offset;
-		uint256 end = offset + limit;
-		if (end < offset || end > total) return total;
-		return end;
+		uint256 availableCount = total - offset;
+		if (limit >= availableCount) return total;
+		return offset + limit;
 	}
 
 	function _compute(

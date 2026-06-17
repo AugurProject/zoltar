@@ -18,6 +18,7 @@ import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 const ESCALATION_TIME_LENGTH = 4233600n
 const NULLIFIER_DEPTH = 64
+const MAX_UINT256 = 2n ** 256n - 1n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -90,7 +91,7 @@ describe('Escalation Game Test Suite', () => {
 					abi: ReputationToken_ReputationToken.abi,
 					address: getRepTokenAddress(0n),
 					functionName: 'approve',
-					args: [testSecurityPoolAddress, 2n ** 256n - 1n],
+					args: [testSecurityPoolAddress, MAX_UINT256],
 				}),
 		)
 		const escalationGameDeploymentHash = await client.sendTransaction({
@@ -218,6 +219,14 @@ describe('Escalation Game Test Suite', () => {
 			address: escalationGameAddress,
 			functionName: 'getCarryLeafPageByOutcome',
 			args: [outcome, startNodeId, maxEntries],
+		})
+
+	const readProofConsumedCarriedDepositIndexes = async (escalationGameAddress: Address, outcome: QuestionOutcome, startIndex: bigint, numberOfEntries: bigint) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
+			args: [outcome, startIndex, numberOfEntries],
 		})
 
 	type PeakArray = Awaited<ReturnType<typeof readCarryPeaks>>
@@ -513,11 +522,20 @@ describe('Escalation Game Test Suite', () => {
 
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
 		const depositPage = deposits.slice(1, 6)
+		const maxCountDepositPage = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGame,
+			functionName: 'getDepositsByOutcome',
+			args: [QuestionOutcome.Yes, 1n, MAX_UINT256],
+		})
 
 		assert.strictEqual(depositPage.length, 1, 'deposit paging should return only the remaining entries')
 		assert.strictEqual(depositPage[0]?.amount, reportBond * 2n, 'paged deposit should retain its amount')
 		assert.strictEqual(depositPage[0]?.depositor, client.account.address, 'paged deposit should retain its depositor')
 		assert.strictEqual(depositPage[0]?.depositIndex, 1n, 'paged deposit should retain its index')
+		assert.strictEqual(maxCountDepositPage.length, 1, 'max-count deposit paging should return only the remaining entries')
+		assert.strictEqual(maxCountDepositPage[0]?.amount, reportBond * 2n, 'max-count paged deposit should retain its amount')
+		assert.strictEqual(maxCountDepositPage[0]?.depositor, client.account.address, 'max-count paged deposit should retain its depositor')
 	})
 
 	test('claimDepositForWinning reverts when outcome is None', async () => {
@@ -676,6 +694,8 @@ describe('Escalation Game Test Suite', () => {
 
 		const remainingCarryTotal = await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(remainingCarryTotal, 0n)
+		const consumedIndexes = await readProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 0n, MAX_UINT256)
+		assert.deepStrictEqual(consumedIndexes, [0n, 1n], 'max-count proof-consumed paging should return all consumed inherited indexes')
 	})
 
 	test('fork carry proof settlement rejects reusing the same carried proof twice', async () => {
@@ -813,7 +833,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 
 		const grandchildRoot = await readCarryRoot(grandchild.escalationGameAddress, QuestionOutcome.Yes)
-		assert.strictEqual(grandchildRoot, parentLeafHash, 'the recursive grandchild snapshot should exclude child-local leaves that were already settled before the fork')
+		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, zeroHash()), 'the recursive grandchild snapshot should keep the settled child-local position cleared in place')
 	})
 
 	test('proof-backed withdrawDeposit reverts before question finalization', async () => {

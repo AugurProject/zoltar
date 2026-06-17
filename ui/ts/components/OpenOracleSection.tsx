@@ -41,6 +41,7 @@ import {
 } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
+import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount } from '../lib/pagination.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportPresentation } from '../lib/userCopy.js'
@@ -832,9 +833,9 @@ export function OpenOracleSection({
 	const loadingBrowse = browseLoad.isLoading.value
 	const normalizedBrowseSearchText = browseSearchText.trim().toLowerCase()
 	const browseReportCount = browsePage?.reportCount ?? 0n
-	const browsePageCount = browsePage === undefined || browseReportCount === 0n ? 0 : Math.ceil(Number(browseReportCount) / BROWSE_PAGE_SIZE)
+	const browsePageCount = browsePage === undefined ? undefined : getPaginationPageCount(browseReportCount, BROWSE_PAGE_SIZE)
 	const browseHasPreviousPage = browsePageIndex > 0
-	const browseHasNextPage = browsePage !== undefined && browsePageIndex + 1 < browsePageCount
+	const browseHasNextPage = getHasNextPaginationPage(browsePageIndex, browsePageCount)
 	const filteredBrowseReports =
 		browsePage?.reports.filter(report => {
 			const status = getOpenOracleReportStatus(report)
@@ -865,7 +866,7 @@ export function OpenOracleSection({
 								loading={loadingBrowse}
 								onNextPage={() => setBrowsePageIndex(current => current + 1)}
 								onPreviousPage={() => setBrowsePageIndex(current => Math.max(0, current - 1))}
-								summary={browsePage === undefined ? undefined : `Page ${browsePageIndex + 1} of ${Math.max(browsePageCount, 1)}`}
+								summary={browsePage === undefined ? undefined : formatPaginationSummary(browsePageIndex, browsePageCount)}
 							/>
 						}
 						density='compact'

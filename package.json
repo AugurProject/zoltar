@@ -33,6 +33,7 @@
 		"generate:ui-vendor": "bun run ui:vendor",
 		"generate:contracts": "bun run compile-contracts",
 		"generate:ui": "bun run generate:shared-js && bun run generate:ui-vendor",
+		"check:generated-clean": "bun run generate && git diff --exit-code -- shared/js solidity/artifacts solidity/ts/types/contractArtifact.ts solidity/types/contractArtifact.ts ui/js ui/ts/abis.ts ui/ts/contractArtifact.ts ui/ts/deploymentArtifacts.ts ui/ts/deploymentsArtifacts.ts ui/vendor",
 		"setup": "bun install --frozen-lockfile && cd ui && bun install --frozen-lockfile && cd .. && bun run setup-contracts && bun run shared:build && bun run ui:vendor && cd ui && bun run build && bun run build:tests",
 		"setup-contracts": "cd solidity && bun run setup",
 		"compile-contracts": "cd solidity && bun run compile-contracts",

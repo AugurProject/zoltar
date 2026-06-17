@@ -19,13 +19,13 @@ import { StateHint } from './StateHint.js'
 import { UniverseLink } from './UniverseLink.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
-import { SECURITY_POOL_PAGE_SIZE } from '../lib/pagination.js'
+import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '../lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
-import { getToneRatioThreshold } from '../lib/visualMetrics.js'
+import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
 export function SecurityPoolsOverviewSection({
@@ -67,20 +67,8 @@ export function SecurityPoolsOverviewSection({
 	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
 	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
 	const effectivePoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
-	let poolPageCount: number | undefined
-	if (effectivePoolCount === undefined) {
-		poolPageCount = undefined
-	} else if (effectivePoolCount === 0n) {
-		poolPageCount = 0
-	} else {
-		poolPageCount = Math.ceil(Number(effectivePoolCount) / SECURITY_POOL_PAGE_SIZE)
-	}
-	let resolvedPageIndex = pageIndex
-	if (poolPageCount === 0) {
-		resolvedPageIndex = 0
-	} else if (poolPageCount !== undefined) {
-		resolvedPageIndex = Math.min(pageIndex, poolPageCount - 1)
-	}
+	const poolPageCount = getPaginationPageCount(effectivePoolCount, SECURITY_POOL_PAGE_SIZE)
+	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, poolPageCount)
 	const currentPageRequestKey = `${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
 	const hasCurrentPageData = securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
@@ -112,7 +100,7 @@ export function SecurityPoolsOverviewSection({
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const hasPreviousPage = resolvedPageIndex > 0
-	const hasNextPage = poolPageCount === undefined ? false : resolvedPageIndex + 1 < poolPageCount
+	const hasNextPage = getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
 	useEffect(() => {
 		if (resolvedPageIndex === pageIndex) return
 		setPageIndex(resolvedPageIndex)
@@ -155,7 +143,7 @@ export function SecurityPoolsOverviewSection({
 						onPreviousPage={() => {
 							setPageIndex(current => Math.max(0, current - 1))
 						}}
-						summary={securityPoolPage === undefined || poolPageCount === undefined ? undefined : `Page ${resolvedPageIndex + 1} of ${Math.max(poolPageCount, 1)}`}
+						summary={securityPoolPage === undefined ? undefined : formatPaginationSummary(resolvedPageIndex, poolPageCount)}
 					/>
 				}
 			>
@@ -279,7 +267,7 @@ export function SecurityPoolsOverviewSection({
 																</span>
 															}
 															tone={getToneRatioThreshold({
-																ratio: pool.totalSecurityBondAllowance === 0n ? undefined : Number(pool.completeSetCollateralAmount) / Number(pool.totalSecurityBondAllowance),
+																ratio: getVisualRatio({ value: pool.completeSetCollateralAmount, maxValue: pool.totalSecurityBondAllowance }),
 																successThreshold: 0.6,
 																warningThreshold: 0.85,
 															})}

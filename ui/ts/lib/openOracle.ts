@@ -262,13 +262,33 @@ export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDet
 		message: undefined,
 	}
 }
+
+function formatGroupedInteger(value: bigint) {
+	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+function formatScaledBigInt(value: bigint, scale: bigint, minimumFractionDigits = 0, groupInteger = false) {
+	const isNegative = value < 0n
+	const absoluteValue = isNegative ? -value : value
+	const integerPart = absoluteValue / scale
+	const fractionPart = absoluteValue % scale
+	const scaleDigits = scale.toString().length - 1
+	let fractionText = fractionPart.toString().padStart(scaleDigits, '0').replace(/0+$/, '')
+	while (fractionText.length < minimumFractionDigits) {
+		fractionText += '0'
+	}
+
+	const integerText = groupInteger ? formatGroupedInteger(integerPart) : integerPart.toString()
+	return `${isNegative ? '-' : ''}${integerText}${fractionText === '' ? '' : `.${fractionText}`}`
+}
+
 export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined) {
 	if (feePercentage === undefined) return '—'
-	return `${(Number(feePercentage) / 100000).toLocaleString(undefined, { maximumFractionDigits: 6 })}%`
+	return `${formatScaledBigInt(feePercentage, 100_000n, 0, true)}%`
 }
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
 	if (multiplier === undefined) return '—'
-	return `${(Number(multiplier) / 100).toFixed(2)}x`
+	return `${formatScaledBigInt(multiplier, 100n, 2)}x`
 }
 export function addOpenOracleBountyBuffer(requiredBounty: bigint) {
 	if (requiredBounty <= 0n) return requiredBounty

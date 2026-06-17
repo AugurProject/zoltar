@@ -33,6 +33,7 @@ import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluate
 import { getCurrentSelectedPoolForkAuctionDetails, shouldReloadSelectedPoolDetails } from '../lib/securityPoolWorkflow.js'
 import { getCurrentForkWorkflowSelectionStage, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
 import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
+import { getVisualRatio } from '../lib/visualMetrics.js'
 import type { ImportedEscalationDeposit, ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 const UNKNOWN_VALUE = '—'
@@ -271,9 +272,7 @@ function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuction, t
 }
 
 function clampPercentage(value: bigint, maxValue: bigint) {
-	if (value <= 0n || maxValue <= 0n) return 0
-	const boundedValue = value > maxValue ? maxValue : value
-	return Number((boundedValue * 10000n) / maxValue) / 100
+	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
 }
 
 function getTruthAuctionWinningThresholdPrice(truthAuction: TruthAuctionMetrics | undefined) {

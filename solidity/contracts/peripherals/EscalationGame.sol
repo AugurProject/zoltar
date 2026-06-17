@@ -37,8 +37,8 @@ struct CarryLeafView {
 struct OutcomeState {
 	// Snapshot fields are the inherited proof baseline for this outcome.
 	// currentNullifierRoot tracks which inherited proof indexes have been consumed in this instance.
-	// localHeadNodeId/localUnresolvedTotal track append-only local carry added after the inherited snapshot.
-	// Descendant carry export is rebuilt lazily from the snapshot plus unresolved local nodes.
+	// currentLeafCount/currentPeaks are the descendant export snapshot, updated incrementally as local carry changes.
+	// localHeadNodeId/localUnresolvedTotal track local carry added after the inherited snapshot.
 	// Total principal currently assigned to this outcome by local deposits placed directly in this escalation game.
 	uint256 balance;
 	// Local deposits placed directly in this escalation game, preserved in arrival order for payout ordering.
@@ -47,10 +47,14 @@ struct OutcomeState {
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
 	uint256 inheritedUnresolvedTotal;
+	uint256 currentLeafCount;
+	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	// The current unresolved carry state after local and inherited deposits are consumed.
 	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
 	uint256 localUnresolvedTotal;
+	uint256[] localNodeIds;
+	mapping(uint256 => mapping(uint256 => bytes32)) currentCarryNodeHashes;
 	// Authoritative settled-set for inherited and local carried parentDepositIndexes in this instance.
 	mapping(uint256 => bool) consumedParentDepositIndexes;
 	// Enumerable mirror of consumed proof indexes used for recursive offchain proof reconstruction.
@@ -81,6 +85,7 @@ struct Node {
 	uint256 parentDepositIndex;
 	// Prefix-position data needed for payout-order proofs.
 	uint256 cumulativeAmount;
+	uint256 carryLeafIndex;
 }
 
 struct CarriedDepositProof {
@@ -261,6 +266,7 @@ contract EscalationGame {
 		uint256 totalResolutionBalance;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
+			require(snapshotLeafCountsInput[outcomeIndex] < (uint256(1) << MERKLE_MOUNTAIN_RANGE_MAX_PEAKS), 'mmr');
 			bytes32 normalizedNullifierRoot =
 				snapshotNullifierRoots[outcomeIndex] == bytes32(0)
 					? EMPTY_NULLIFIER_ROOT
@@ -268,10 +274,13 @@ contract EscalationGame {
 			normalizedNullifierRoots[outcomeIndex] = normalizedNullifierRoot;
 			state.currentNullifierRoot = normalizedNullifierRoot;
 			state.snapshotLeafCount = snapshotLeafCountsInput[outcomeIndex];
+			state.currentLeafCount = snapshotLeafCountsInput[outcomeIndex];
 			for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
 				bytes32 peak = snapshotPeaksInput[outcomeIndex][peakIndex];
 				state.snapshotPeaks[peakIndex] = peak;
+				state.currentPeaks[peakIndex] = peak;
 			}
+			_storeCurrentCarryPeaks(state, snapshotLeafCountsInput[outcomeIndex]);
 			state.balance = snapshotResolutionBalances[outcomeIndex];
 			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
 			totalCarry += snapshotCarryTotals[outcomeIndex];
@@ -314,7 +323,7 @@ contract EscalationGame {
 			uint256 currentLeafCount,
 			bytes32 currentCarryRoot,
 			uint256 currentCarryTotal
-		) = _getMaterializedCarrySnapshot(outcomeIndex);
+		) = _getCurrentCarrySnapshot(outcomeIndex);
 		stateView.balance = state.balance;
 		stateView.snapshotLeafCount = state.snapshotLeafCount;
 		stateView.snapshotPeaks = state.snapshotPeaks;
@@ -339,8 +348,9 @@ contract EscalationGame {
 		)
 	{
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			(carryPeaks[outcomeIndex], carryLeafCounts[outcomeIndex]) = _materializeCurrentCarrySnapshot(outcomeIndex);
 			OutcomeState storage state = outcomeState[outcomeIndex];
+			carryPeaks[outcomeIndex] = state.currentPeaks;
+			carryLeafCounts[outcomeIndex] = state.currentLeafCount;
 			carryTotals[outcomeIndex] = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
 			nullifierRoots[outcomeIndex] = _getCurrentNullifierRoot(outcomeIndex);
 		}
@@ -469,7 +479,7 @@ contract EscalationGame {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'to');
 		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'af');
-		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit');
+		require(amount >= startBond, 'md');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
@@ -492,7 +502,7 @@ contract EscalationGame {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'to');
 		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'af');
-		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit');
+		require(amount >= startBond, 'md');
 		uint256 outcomeIndex = uint256(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		uint256 currentBalance = selectedOutcomeState.balance;
@@ -503,8 +513,8 @@ contract EscalationGame {
 			currentBalance,
 			room
 		);
-		require(effectiveDeposit == amount, 'deposit stale');
-		require(newBalance == expectedCumulativeAmount, 'preview stale');
+		require(effectiveDeposit == amount, 'ds');
+		require(newBalance == expectedCumulativeAmount, 'ps');
 
 		selectedOutcomeState.balance += effectiveDeposit;
 		escrowedRepByVault[depositor] += effectiveDeposit;
@@ -530,8 +540,11 @@ contract EscalationGame {
 		node.amount = effectiveDeposit;
 		node.parentDepositIndex = stableParentDepositIndex;
 		node.cumulativeAmount = deposit.cumulativeAmount;
+		node.carryLeafIndex = selectedOutcomeState.currentLeafCount;
+		selectedOutcomeState.localNodeIds.push(nodeId);
 		selectedOutcomeState.localHeadNodeId = nodeId;
 		selectedOutcomeState.localUnresolvedTotal += effectiveDeposit;
+		_appendLocalCarryLeafToCurrentSnapshot(selectedOutcomeState, nodeId);
 		emit LocalDepositAppended(
 			nodeId,
 			outcome,
@@ -713,9 +726,8 @@ contract EscalationGame {
 	) external view returns (uint256[] memory parentDepositIndexes) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new uint256[](0);
 		uint256[] storage consumedIndexes = outcomeState[uint8(outcome)].proofConsumedDepositIndexes;
-		if (startIndex >= consumedIndexes.length || numberOfEntries == 0) return new uint256[](0);
-		uint256 endIndex = startIndex + numberOfEntries;
-		if (endIndex > consumedIndexes.length) endIndex = consumedIndexes.length;
+		uint256 endIndex = _sliceEnd(startIndex, numberOfEntries, consumedIndexes.length);
+		if (endIndex <= startIndex) return new uint256[](0);
 		parentDepositIndexes = new uint256[](endIndex - startIndex);
 		for (uint256 index = startIndex; index < endIndex; index++) {
 			parentDepositIndexes[index - startIndex] = consumedIndexes[index];
@@ -902,10 +914,7 @@ contract EscalationGame {
 	) external view returns (Deposit[] memory returnDeposits) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new Deposit[](0);
 		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
-		uint256 iterateUntil =
-			startIndex + numberOfEntries > outcomeDeposits.length
-				? outcomeDeposits.length
-				: startIndex + numberOfEntries;
+		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, outcomeDeposits.length);
 		if (iterateUntil <= startIndex) return new Deposit[](0);
 		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 index = startIndex; index < iterateUntil; index++) {
@@ -945,6 +954,13 @@ contract EscalationGame {
 				return true;
 		}
 		return false;
+	}
+
+	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
+		if (startIndex >= total || count == 0) return startIndex;
+		uint256 availableCount = total - startIndex;
+		if (count >= availableCount) return total;
+		return startIndex + count;
 	}
 
 	function _encodeLocalDepositRef(uint8 outcomeIndex, uint256 depositIndex) private pure returns (uint256) {
@@ -1046,25 +1062,87 @@ contract EscalationGame {
 		}
 	}
 
-	function _appendCarriedLeafToMerkleMountainRange(
-		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory currentPeaks,
-		uint256 currentLeafCount,
-		bytes32 leafHash
-	) private pure returns (bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory updatedPeaks, uint256 updatedLeafCount) {
-		updatedPeaks = currentPeaks;
-		uint256 leafCount = currentLeafCount;
-		uint256 peakIndex = 0;
-		bytes32 carryHash = leafHash;
+	function _storeCurrentCarryPeaks(OutcomeState storage state, uint256 leafCount) private {
+		uint256 peakStartIndex;
+		for (uint256 reverseHeight = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; reverseHeight > 0; ) {
+			unchecked {
+				--reverseHeight;
+			}
+			uint256 peakHeight = reverseHeight;
+			if (((leafCount >> peakHeight) & 1) != 1) continue;
+			state.currentCarryNodeHashes[peakHeight][peakStartIndex] = state.currentPeaks[peakHeight];
+			peakStartIndex += uint256(1) << peakHeight;
+		}
+	}
 
-		while (((leafCount >> peakIndex) & 1) == 1) {
-			carryHash = MerkleMountainRange.hashParent(updatedPeaks[peakIndex], carryHash);
-			delete updatedPeaks[peakIndex];
-			peakIndex += 1;
+	function _appendLocalCarryLeafToCurrentSnapshot(OutcomeState storage state, uint256 nodeId) private {
+		Node storage node = nodes[nodeId];
+		bytes32 carryHash = MerkleMountainRange.hashLeaf(
+			node.depositor,
+			node.outcome,
+			node.amount,
+			node.parentDepositIndex,
+			node.cumulativeAmount,
+			nodeId
+		);
+		uint256 leafCount = state.currentLeafCount;
+		uint256 peakHeight = 0;
+		uint256 carryStartIndex = leafCount;
+		state.currentCarryNodeHashes[0][carryStartIndex] = carryHash;
+
+		while (((leafCount >> peakHeight) & 1) == 1) {
+			uint256 siblingStartIndex = carryStartIndex - (uint256(1) << peakHeight);
+			carryHash = MerkleMountainRange.hashParent(state.currentPeaks[peakHeight], carryHash);
+			delete state.currentPeaks[peakHeight];
+			peakHeight += 1;
+			carryStartIndex = siblingStartIndex;
+			state.currentCarryNodeHashes[peakHeight][carryStartIndex] = carryHash;
 		}
 
-		require(peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'mmr');
-		updatedPeaks[peakIndex] = carryHash;
-		updatedLeafCount = leafCount + 1;
+		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'mmr');
+		state.currentPeaks[peakHeight] = carryHash;
+		state.currentLeafCount = leafCount + 1;
+	}
+
+	function _clearLocalCarryLeafFromCurrentSnapshot(OutcomeState storage state, uint256 leafIndex) private {
+		(uint256 peakHeight, uint256 peakStartIndex) = _getCurrentCarryPeakForLeaf(state.currentLeafCount, leafIndex);
+		bytes32 nodeHash = bytes32(0);
+		uint256 nodeStartIndex = leafIndex;
+		state.currentCarryNodeHashes[0][nodeStartIndex] = nodeHash;
+
+		for (uint256 height = 0; height < peakHeight; height++) {
+			uint256 subtreeLeafCount = uint256(1) << height;
+			bool isRightNode = (((nodeStartIndex - peakStartIndex) >> height) & 1) == 1;
+			uint256 siblingStartIndex =
+				isRightNode ? nodeStartIndex - subtreeLeafCount : nodeStartIndex + subtreeLeafCount;
+			bytes32 siblingHash = state.currentCarryNodeHashes[height][siblingStartIndex];
+			if (isRightNode) {
+				nodeHash = MerkleMountainRange.hashParent(siblingHash, nodeHash);
+				nodeStartIndex = siblingStartIndex;
+			} else {
+				nodeHash = MerkleMountainRange.hashParent(nodeHash, siblingHash);
+			}
+			state.currentCarryNodeHashes[height + 1][nodeStartIndex] = nodeHash;
+		}
+
+		state.currentPeaks[peakHeight] = nodeHash;
+	}
+
+	function _getCurrentCarryPeakForLeaf(
+		uint256 leafCount,
+		uint256 leafIndex
+	) private pure returns (uint256 peakHeight, uint256 peakStartIndex) {
+		for (uint256 reverseHeight = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; reverseHeight > 0; ) {
+			unchecked {
+				--reverseHeight;
+			}
+			uint256 currentPeakHeight = reverseHeight;
+			if (((leafCount >> currentPeakHeight) & 1) != 1) continue;
+			uint256 nextPeakStartIndex = peakStartIndex + (uint256(1) << currentPeakHeight);
+			if (leafIndex < nextPeakStartIndex) return (currentPeakHeight, peakStartIndex);
+			peakStartIndex = nextPeakStartIndex;
+		}
+		revert();
 	}
 
 	function _bagCarryPeaks(
@@ -1268,6 +1346,8 @@ contract EscalationGame {
 		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotal -= amount;
+		uint256 nodeId = state.localNodeIds[depositIndex];
+		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
 		_consumeUnresolvedRepForVault(depositor, amount);
 	}
 
@@ -1305,7 +1385,7 @@ contract EscalationGame {
 		return outcomeState[outcomeIndex].consumedParentDepositIndexes[parentDepositIndex];
 	}
 
-	function _getMaterializedCarrySnapshot(
+	function _getCurrentCarrySnapshot(
 		uint8 outcomeIndex
 	)
 		private
@@ -1317,9 +1397,10 @@ contract EscalationGame {
 			uint256 currentCarryTotal
 		)
 	{
-		(currentPeaks, currentLeafCount) = _materializeCurrentCarrySnapshot(outcomeIndex);
-		currentCarryRoot = _bagCarryPeaks(currentPeaks, currentLeafCount);
 		OutcomeState storage state = outcomeState[outcomeIndex];
+		currentPeaks = state.currentPeaks;
+		currentLeafCount = state.currentLeafCount;
+		currentCarryRoot = _bagCarryPeaks(currentPeaks, currentLeafCount);
 		currentCarryTotal = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
 	}
 
@@ -1362,60 +1443,5 @@ contract EscalationGame {
 		require(deposit.amount > 0, 'deposit already settled');
 		selectedOutcomeState.deposits[depositIndex].amount = 0;
 		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amount, deposit.depositor);
-	}
-
-	function _materializeCurrentCarrySnapshot(
-		uint8 outcomeIndex
-	) private view returns (bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory currentPeaks, uint256 currentLeafCount) {
-		OutcomeState storage state = outcomeState[outcomeIndex];
-		currentLeafCount = state.snapshotLeafCount;
-		for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
-			currentPeaks[peakIndex] = state.snapshotPeaks[peakIndex];
-		}
-
-		uint256[] memory unresolvedNodeIds = _getUnresolvedLocalNodeIds(state);
-		uint256 unresolvedLeafCount = unresolvedNodeIds.length;
-		for (uint256 unresolvedIndex = 0; unresolvedIndex < unresolvedLeafCount; unresolvedIndex++) {
-			uint256 unresolvedNodeId = unresolvedNodeIds[unresolvedIndex];
-			Node storage unresolvedNode = nodes[unresolvedNodeId];
-			(currentPeaks, currentLeafCount) = _appendCarriedLeafToMerkleMountainRange(
-				currentPeaks,
-				currentLeafCount,
-				MerkleMountainRange.hashLeaf(
-					unresolvedNode.depositor,
-					unresolvedNode.outcome,
-					unresolvedNode.amount,
-					unresolvedNode.parentDepositIndex,
-					unresolvedNode.cumulativeAmount,
-					unresolvedNodeId
-				)
-			);
-		}
-	}
-
-	function _getUnresolvedLocalNodeIds(
-		OutcomeState storage state
-	) private view returns (uint256[] memory unresolvedNodeIds) {
-		uint256 nodeId = state.localHeadNodeId;
-		uint256 unresolvedLeafCount = 0;
-		while (nodeId != 0) {
-			Node storage currentNode = nodes[nodeId];
-			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
-				unresolvedLeafCount += 1;
-			}
-			nodeId = currentNode.parentNodeId;
-		}
-
-		unresolvedNodeIds = new uint256[](unresolvedLeafCount);
-		nodeId = state.localHeadNodeId;
-		uint256 writeIndex = unresolvedLeafCount;
-		while (nodeId != 0) {
-			Node storage currentNode = nodes[nodeId];
-			if (!state.consumedParentDepositIndexes[currentNode.parentDepositIndex]) {
-				writeIndex -= 1;
-				unresolvedNodeIds[writeIndex] = nodeId;
-			}
-			nodeId = currentNode.parentNodeId;
-		}
 	}
 }
