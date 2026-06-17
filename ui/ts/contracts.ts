@@ -606,7 +606,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 				args: [accountAddress],
 			})
 	const viewerVaultExists = viewerPoolOwnership !== 0n || viewerSecurityBondAllowance !== 0n || viewerUnpaidEthFees !== 0n || viewerFeeIndex !== 0n || viewerVaultEscrowedRep !== 0n
-	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare > viewerVaultEscrowedRep ? viewerVaultRepDepositShare - viewerVaultEscrowedRep : 0n
+	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare
 	return {
 		viewerVaultAvailableEscalationRep,
 		viewerVaultExists,

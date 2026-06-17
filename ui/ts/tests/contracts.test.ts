@@ -627,6 +627,59 @@ describe('contracts helpers', () => {
 		expect(decodedCall.args).toEqual([7n])
 	})
 
+	test('loadReportingDetails reports already-unlocked pool REP without subtracting escrow again', async () => {
+		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const unlockedPoolClaim = 70n
+		const escrowedRep = 30n
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x1234' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'startBond') return 7n
+				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'activationTime') return 12n
+				if (request.functionName === 'totalCost') return 22n
+				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'getOutcomeState') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
+					if (args[0] === 0) return { balance: 1n }
+					if (args[0] === 1) return { balance: 14n }
+					if (args[0] === 2) return { balance: 3n }
+					throw new Error(`Unexpected outcome state index: ${args[0].toString()}`)
+				}
+				if (request.functionName === 'getEscalationGameEndDate') return 150n
+				if (request.functionName === 'getQuestionOutcome') return 3
+				if (request.functionName === 'getForkTime') return 0n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'escrowedRepByVault') return escrowedRep
+				if (request.functionName === 'securityVaults') return [100n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'poolOwnershipToRep') return unlockedPoolClaim
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getDepositsByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		expect(details.viewerVaultRepDepositShare).toBe(unlockedPoolClaim)
+		expect(details.viewerVaultEscrowedRep).toBe(escrowedRep)
+		expect(details.viewerVaultAvailableEscalationRep).toBe(unlockedPoolClaim)
+	})
+
 	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ef')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
