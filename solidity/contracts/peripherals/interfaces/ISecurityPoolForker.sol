@@ -6,28 +6,51 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuction.sol';
 
 interface ISecurityPoolForker {
-	function getOwnForkRepBuckets(ISecurityPool securityPool) external view returns (
-		uint256 vaultRepAtFork,
-		uint256 unallocatedEscrowChildRep,
-		uint256 escrowSourceRepAtFork
-	);
-	function getOwnForkMigrationStatus(ISecurityPool securityPool) external view returns (
-		bool ownFork,
-		uint256 auctionableRepAtFork,
-		uint256 vaultRepAtFork,
-		uint256 unallocatedEscrowChildRep,
-		uint256 escrowSourceRepAtFork
-	);
+	function getOwnForkRepBuckets(
+		ISecurityPool securityPool
+	) external view returns (uint256 vaultRepAtFork, uint256 unallocatedEscrowChildRep, uint256 escrowSourceRepAtFork);
+	function getOwnForkMigrationStatus(
+		ISecurityPool securityPool
+	)
+		external
+		view
+		returns (
+			bool ownFork,
+			uint256 auctionableRepAtFork,
+			uint256 vaultRepAtFork,
+			uint256 unallocatedEscrowChildRep,
+			uint256 escrowSourceRepAtFork
+		);
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) external;
 	function createChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) external;
 	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) external;
-	function migrateVaultWithUnresolvedEscalation(ISecurityPool securityPool, address vault, uint8 childOutcomeIndex) external returns (bool moreToMigrate);
-	function claimForkedEscalationDeposits(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] memory depositIndexes) external;
+	function migrateVaultWithUnresolvedEscalation(
+		ISecurityPool securityPool,
+		address vault,
+		uint8 childOutcomeIndex
+	) external returns (bool moreToMigrate);
+	function claimForkedEscalationDeposits(
+		ISecurityPool securityPool,
+		address vault,
+		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		uint256[] memory depositIndexes
+	) external;
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;
-	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external;
-	function settleAuctionBids(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices, IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices) external;
-	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome);
+	function claimAuctionProceeds(
+		ISecurityPool securityPool,
+		address vault,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+	) external;
+	function settleAuctionBids(
+		ISecurityPool securityPool,
+		address vault,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices
+	) external;
+	function getQuestionOutcome(
+		ISecurityPool securityPool
+	) external view returns (BinaryOutcomes.BinaryOutcome outcome);
 }

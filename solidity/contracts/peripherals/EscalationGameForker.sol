@@ -15,10 +15,18 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerVaultMigrationBase(_zoltar) {}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
-		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(parent, child);
+		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(
+			parent,
+			child
+		);
 	}
 
-	function claimForkedEscalationDeposits(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] memory depositIndexes) public {
+	function claimForkedEscalationDeposits(
+		ISecurityPool parent,
+		address vault,
+		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		uint256[] memory depositIndexes
+	) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		require(address(escalationGame) != address(0x0), 'e4');
 		require(escalationGame.nonDecisionTimestamp() > 0, 'ed');
@@ -30,12 +38,22 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			migrationProxy = migrationProxyByPool[parent];
 			require(address(migrationProxy) != address(0x0), 'mp');
 			require(child.systemState() == SystemState.ForkMigration, 'cap');
-			require(block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'mwc');
+			require(
+				block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+				'mwc'
+			);
 		}
 		uint256 repMigratedFromEscalationGame;
 		uint256 childRepToSweep;
 		if (ownFork) {
-			repMigratedFromEscalationGame = _claimWinningDepositsFromGame(escalationGame, vault, outcomeIndex, depositIndexes, true, false);
+			repMigratedFromEscalationGame = _claimWinningDepositsFromGame(
+				escalationGame,
+				vault,
+				outcomeIndex,
+				depositIndexes,
+				true,
+				false
+			);
 			childRepToSweep = _previewOwnForkEscalationRep(parent, repMigratedFromEscalationGame);
 			childRepToSweep = _capOwnForkEscalationChildRep(parent, uint8(outcomeIndex), childRepToSweep);
 			if (childRepToSweep == 0) return;
@@ -44,8 +62,21 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			emit ClaimForkedEscalationDepositsToWallet(parent, vault, outcomeIndex, depositIndexes, childRepToSweep);
 			return;
 		}
-		repMigratedFromEscalationGame = _claimWinningDepositsFromGame(escalationGame, vault, outcomeIndex, depositIndexes, false, true);
-		emit ClaimForkedEscalationDepositsToWallet(parent, vault, outcomeIndex, depositIndexes, repMigratedFromEscalationGame);
+		repMigratedFromEscalationGame = _claimWinningDepositsFromGame(
+			escalationGame,
+			vault,
+			outcomeIndex,
+			depositIndexes,
+			false,
+			true
+		);
+		emit ClaimForkedEscalationDepositsToWallet(
+			parent,
+			vault,
+			outcomeIndex,
+			depositIndexes,
+			repMigratedFromEscalationGame
+		);
 	}
 
 	function _claimEscalationDeposit(
@@ -56,7 +87,10 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		bool payWallet
 	) private returns (address depositor, uint256 amountToWithdraw) {
 		if (ownFork && !payWallet) {
-			(depositor, amountToWithdraw, ) = escalationGame.claimDepositForWinningWithoutTransfer(depositIndex, outcomeIndex);
+			(depositor, amountToWithdraw, ) = escalationGame.claimDepositForWinningWithoutTransfer(
+				depositIndex,
+				outcomeIndex
+			);
 			return (depositor, amountToWithdraw);
 		}
 		(depositor, amountToWithdraw, ) = escalationGame.claimDepositForWinning(depositIndex, outcomeIndex);
@@ -72,13 +106,23 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		bool payWallet
 	) private returns (uint256 totalRepMigrated) {
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amountToWithdraw) = _claimEscalationDeposit(escalationGame, depositIndexes[index], outcomeIndex, ownFork, payWallet);
+			(address depositor, uint256 amountToWithdraw) = _claimEscalationDeposit(
+				escalationGame,
+				depositIndexes[index],
+				outcomeIndex,
+				ownFork,
+				payWallet
+			);
 			require(depositor == vault, 'e5');
 			totalRepMigrated += amountToWithdraw;
 		}
 	}
 
-	function migrateVaultWithUnresolvedEscalation(ISecurityPool parent, address vault, uint8 childOutcomeIndex) public returns (bool moreToMigrate) {
+	function migrateVaultWithUnresolvedEscalation(
+		ISecurityPool parent,
+		address vault,
+		uint8 childOutcomeIndex
+	) public returns (bool moreToMigrate) {
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
 		require(parentForkData.unresolvedEscalationAtFork, 'ee');
 		EscalationGame parentEscalationGame = parent.escalationGame();
@@ -89,25 +133,36 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			if (address(ownForkChild) != address(0x0)) {
 				require(ownForkChild.systemState() == SystemState.ForkMigration, 'cap');
 			} else {
-				require(block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'mwc');
+				require(
+					block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+					'mwc'
+				);
 				ownForkChild = _getOrDeployChildPool(parent, childOutcomeIndex);
 			}
 			uint256[3] memory ownForkSourcePrincipalByOutcome;
 			uint256[3] memory ownForkCurrentRepByOutcome;
 			if (parentEscalationGame.forkContinuation()) {
-				(uint256[3] memory forkedSourcePrincipalByOutcome, uint256[3] memory forkedChildRepByOutcome) = parentEscalationGame.exportForkedEscrowByOutcomeWithoutTransfer(vault);
+				(
+					uint256[3] memory forkedSourcePrincipalByOutcome,
+					uint256[3] memory forkedChildRepByOutcome
+				) = parentEscalationGame.exportForkedEscrowByOutcomeWithoutTransfer(vault);
 				_addOutcomeAmounts(ownForkSourcePrincipalByOutcome, forkedSourcePrincipalByOutcome);
 				_addOutcomeAmounts(ownForkCurrentRepByOutcome, forkedChildRepByOutcome);
 			}
 			if (_sumOutcomeAmounts(ownForkCurrentRepByOutcome) == 0) {
-				ownForkSourcePrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedDepositAmountsWithoutTransfer(vault);
+				ownForkSourcePrincipalByOutcome = parentEscalationGame
+					.exportVaultUnresolvedDepositAmountsWithoutTransfer(vault);
 				ownForkCurrentRepByOutcome = ownForkSourcePrincipalByOutcome;
 			}
 			uint256 ownForkCurrentRepToTransfer = _sumOutcomeAmounts(ownForkCurrentRepByOutcome);
 			if (ownForkCurrentRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 			require(ownForkCurrentRepToTransfer > 0, 'ef');
 			uint256 ownForkChildRepToTransfer = _previewOwnForkEscalationRep(parent, ownForkCurrentRepToTransfer);
-			ownForkChildRepToTransfer = _capOwnForkEscalationChildRep(parent, childOutcomeIndex, ownForkChildRepToTransfer);
+			ownForkChildRepToTransfer = _capOwnForkEscalationChildRep(
+				parent,
+				childOutcomeIndex,
+				ownForkChildRepToTransfer
+			);
 			if (ownForkChildRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 			EscalationGame ownForkChildEscalationGame = ownForkChild.escalationGame();
 			SecurityPoolMigrationProxy ownForkMigrationProxy = migrationProxyByPool[parent];
@@ -119,11 +174,32 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			// Own-fork unresolved migration uses an aggregate fork conversion rate. Any dust
 			// from floor rounding remains unallocated as protocol residual.
 			_splitMigrationRepToChild(parent, childOutcomeIndex, ownForkChildRepToTransfer, true, true);
-			ownForkMigrationProxy.sweepChildRep(address(ownForkChildEscalationGame), ownForkChild.repToken(), ownForkChildRepToTransfer);
+			ownForkMigrationProxy.sweepChildRep(
+				address(ownForkChildEscalationGame),
+				ownForkChild.repToken(),
+				ownForkChildRepToTransfer
+			);
 			_migrateVaultUnlockedState(parent, ownForkChild, vault);
-			_recordForkedEscrowByOriginalOutcome(ownForkChildEscalationGame, vault, ownForkSourcePrincipalByOutcome, ownForkCurrentRepByOutcome, ownForkCurrentRepToTransfer, ownForkChildRepToTransfer);
-			(uint256 ownForkChildPoolOwnership, uint256 ownForkChildSecurityBondAllowance, , uint256 ownForkChildFeeIndex) = ownForkChild.securityVaults(vault);
-			ownForkChild.configureVault(vault, ownForkChildPoolOwnership, ownForkChildSecurityBondAllowance, ownForkChildFeeIndex);
+			_recordForkedEscrowByOriginalOutcome(
+				ownForkChildEscalationGame,
+				vault,
+				ownForkSourcePrincipalByOutcome,
+				ownForkCurrentRepByOutcome,
+				ownForkCurrentRepToTransfer,
+				ownForkChildRepToTransfer
+			);
+			(
+				uint256 ownForkChildPoolOwnership,
+				uint256 ownForkChildSecurityBondAllowance,
+				,
+				uint256 ownForkChildFeeIndex
+			) = ownForkChild.securityVaults(vault);
+			ownForkChild.configureVault(
+				vault,
+				ownForkChildPoolOwnership,
+				ownForkChildSecurityBondAllowance,
+				ownForkChildFeeIndex
+			);
 			return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 		}
 
@@ -137,12 +213,18 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		uint256[3] memory sourcePrincipalByOutcome;
 		uint256[3] memory currentRepByOutcome;
 		if (parentEscalationGame.forkContinuation()) {
-			(uint256[3] memory forkedSourcePrincipalByOutcome, uint256[3] memory forkedChildRepByOutcome) = parentEscalationGame.exportForkedEscrowByOutcome(vault, address(migrationProxy));
+			(
+				uint256[3] memory forkedSourcePrincipalByOutcome,
+				uint256[3] memory forkedChildRepByOutcome
+			) = parentEscalationGame.exportForkedEscrowByOutcome(vault, address(migrationProxy));
 			_addOutcomeAmounts(sourcePrincipalByOutcome, forkedSourcePrincipalByOutcome);
 			_addOutcomeAmounts(currentRepByOutcome, forkedChildRepByOutcome);
 		}
 		if (_sumOutcomeAmounts(currentRepByOutcome) == 0) {
-			sourcePrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedDepositAmounts(vault, address(migrationProxy));
+			sourcePrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedDepositAmounts(
+				vault,
+				address(migrationProxy)
+			);
 			currentRepByOutcome = sourcePrincipalByOutcome;
 		}
 		uint256 childRepToTransfer = _sumOutcomeAmounts(currentRepByOutcome);
@@ -155,14 +237,31 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		_splitMigrationRepToChild(parent, childOutcomeIndex, childRepToTransfer, false, false);
 		migrationProxy.sweepChildRep(address(childEscalationGame), child.repToken(), childRepToTransfer);
 		_migrateVaultUnlockedState(parent, child, vault);
-		_recordForkedEscrowByOriginalOutcome(childEscalationGame, vault, sourcePrincipalByOutcome, currentRepByOutcome, childRepToTransfer, childRepToTransfer);
-		(uint256 childCurrentPoolOwnership, uint256 childCurrentSecurityBondAllowance, , uint256 childCurrentFeeIndex) = child.securityVaults(vault);
+		_recordForkedEscrowByOriginalOutcome(
+			childEscalationGame,
+			vault,
+			sourcePrincipalByOutcome,
+			currentRepByOutcome,
+			childRepToTransfer,
+			childRepToTransfer
+		);
+		(
+			uint256 childCurrentPoolOwnership,
+			uint256 childCurrentSecurityBondAllowance,
+			,
+			uint256 childCurrentFeeIndex
+		) = child.securityVaults(vault);
 		child.configureVault(vault, childCurrentPoolOwnership, childCurrentSecurityBondAllowance, childCurrentFeeIndex);
 		return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 	}
 
-	function _hasMoreUnresolvedMigration(EscalationGame parentEscalationGame, address vault) private view returns (bool) {
-		return parentEscalationGame.hasUnexportedLocalDepositRefs(vault) || parentEscalationGame.hasUnexportedForkedEscrow(vault);
+	function _hasMoreUnresolvedMigration(
+		EscalationGame parentEscalationGame,
+		address vault
+	) private view returns (bool) {
+		return
+			parentEscalationGame.hasUnexportedLocalDepositRefs(vault) ||
+			parentEscalationGame.hasUnexportedForkedEscrow(vault);
 	}
 
 	function _recordForkedEscrowByOriginalOutcome(
@@ -180,11 +279,17 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			uint256 outcomeCurrentRep = currentRepByOutcome[outcomeIndex];
 			if (outcomeSourcePrincipal == 0 && outcomeCurrentRep == 0) continue;
 			allocatedCurrentRep += outcomeCurrentRep;
-			uint256 outcomeChildRep = allocatedCurrentRep == totalCurrentRep ?
-				totalChildRep - allocatedChildRep :
-				outcomeCurrentRep * totalChildRep / totalCurrentRep;
+			uint256 outcomeChildRep =
+				allocatedCurrentRep == totalCurrentRep
+					? totalChildRep - allocatedChildRep
+					: (outcomeCurrentRep * totalChildRep) / totalCurrentRep;
 			allocatedChildRep += outcomeChildRep;
-			childEscalationGame.recordForkedEscrowForOutcome(vault, BinaryOutcomes.BinaryOutcome(outcomeIndex), outcomeSourcePrincipal, outcomeChildRep);
+			childEscalationGame.recordForkedEscrowForOutcome(
+				vault,
+				BinaryOutcomes.BinaryOutcome(outcomeIndex),
+				outcomeSourcePrincipal,
+				outcomeChildRep
+			);
 		}
 	}
 

@@ -26,22 +26,39 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	event InitiateSecurityPoolFork(uint256 auctionableRepAtFork);
 	event TruthAuctionStarted(uint256 completeSetCollateralAmount, uint256 repMigrated, uint256 auctionableRepAtFork);
 	event TruthAuctionFinalized();
-	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 poolOwnershipAmount, uint256 poolOwnershipDenominator);
-	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator, uint256 completeSetCollateralAmount);
-
-	function forkData(ISecurityPool securityPool) public view returns (
-		uint256 auctionableRepAtFork,
-		UniformPriceDualCapBatchAuction truthAuction,
-		uint256 truthAuctionStarted,
+	event ClaimAuctionProceeds(
+		address vault,
+		uint256 amount,
+		uint256 poolOwnershipAmount,
+		uint256 poolOwnershipDenominator
+	);
+	event FinalizeAuction(
+		uint256 repAvailable,
 		uint256 migratedRep,
-		uint256 auctionedSecurityBondAllowance,
-		uint256 escalationElapsedAtFork,
-		uint256 escalationStartBondAtFork,
-		uint256 escalationNonDecisionThresholdAtFork,
-		bool ownFork,
-		bool unresolvedEscalationAtFork,
-		uint8 outcomeIndex
-	) {
+		uint256 repPurchased,
+		uint256 poolOwnershipDenominator,
+		uint256 completeSetCollateralAmount
+	);
+
+	function forkData(
+		ISecurityPool securityPool
+	)
+		public
+		view
+		returns (
+			uint256 auctionableRepAtFork,
+			UniformPriceDualCapBatchAuction truthAuction,
+			uint256 truthAuctionStarted,
+			uint256 migratedRep,
+			uint256 auctionedSecurityBondAllowance,
+			uint256 escalationElapsedAtFork,
+			uint256 escalationStartBondAtFork,
+			uint256 escalationNonDecisionThresholdAtFork,
+			bool ownFork,
+			bool unresolvedEscalationAtFork,
+			uint8 outcomeIndex
+		)
+	{
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
 			data.auctionableRepAtFork,
@@ -62,34 +79,42 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		return forkDataByPool[securityPool].migratedRep;
 	}
 
-	function getOwnForkRepBuckets(ISecurityPool securityPool) public view returns (
-		uint256 vaultRepAtFork,
-		uint256 unallocatedEscrowChildRep,
-		uint256 escrowSourceRepAtFork
-	) {
+	function getOwnForkRepBuckets(
+		ISecurityPool securityPool
+	) public view returns (uint256 vaultRepAtFork, uint256 unallocatedEscrowChildRep, uint256 escrowSourceRepAtFork) {
 		SecurityPoolForkerForkData storage repBuckets = forkDataByPool[securityPool];
 		uint256 escrowChildRepUsed;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			escrowChildRepUsed += ownForkChildRepAllocationByPoolAndOutcome[securityPool][outcomeIndex].escrowChildRepUsed;
+			escrowChildRepUsed += ownForkChildRepAllocationByPoolAndOutcome[securityPool][outcomeIndex]
+				.escrowChildRepUsed;
 		}
 		return (
 			repBuckets.vaultRepAtFork,
-			repBuckets.escalationChildRepAtFork > escrowChildRepUsed ? repBuckets.escalationChildRepAtFork - escrowChildRepUsed : 0,
+			repBuckets.escalationChildRepAtFork > escrowChildRepUsed
+				? repBuckets.escalationChildRepAtFork - escrowChildRepUsed
+				: 0,
 			repBuckets.escalationSourceRepAtFork
 		);
 	}
 
-	function getOwnForkMigrationStatus(ISecurityPool securityPool) public view returns (
-		bool ownFork,
-		uint256 auctionableRepAtFork,
-		uint256 vaultRepAtFork,
-		uint256 unallocatedEscrowChildRep,
-		uint256 escrowSourceRepAtFork
-	) {
+	function getOwnForkMigrationStatus(
+		ISecurityPool securityPool
+	)
+		public
+		view
+		returns (
+			bool ownFork,
+			uint256 auctionableRepAtFork,
+			uint256 vaultRepAtFork,
+			uint256 unallocatedEscrowChildRep,
+			uint256 escrowSourceRepAtFork
+		)
+	{
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		uint256 escrowChildRepUsed;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			escrowChildRepUsed += ownForkChildRepAllocationByPoolAndOutcome[securityPool][outcomeIndex].escrowChildRepUsed;
+			escrowChildRepUsed += ownForkChildRepAllocationByPoolAndOutcome[securityPool][outcomeIndex]
+				.escrowChildRepUsed;
 		}
 		return (
 			data.ownFork,
@@ -110,7 +135,10 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		return escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None;
 	}
 
-	function _getEscalationElapsedAtFork(EscalationGame escalationGame, uint256 forkTime) private view returns (uint256 elapsedAtFork) {
+	function _getEscalationElapsedAtFork(
+		EscalationGame escalationGame,
+		uint256 forkTime
+	) private view returns (uint256 elapsedAtFork) {
 		if (escalationGame.forkContinuation()) {
 			elapsedAtFork = escalationGame.forkElapsedAtStart();
 			if (escalationGame.forkContinuationResumed()) {
@@ -129,7 +157,11 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		}
 	}
 
-	function _snapshotEscalationAtFork(SecurityPoolForkerForkData storage data, EscalationGame escalationGame, uint256 forkTime) private {
+	function _snapshotEscalationAtFork(
+		SecurityPoolForkerForkData storage data,
+		EscalationGame escalationGame,
+		uint256 forkTime
+	) private {
 		if (!_forkOccurredBeforeEscalationSettled(escalationGame)) return;
 		data.unresolvedEscalationAtFork = true;
 		data.escalationStartBondAtFork = escalationGame.startBond();
@@ -141,13 +173,20 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		data = forkDataByPool[securityPool];
 	}
 
-	function _prepareForkState(ISecurityPool securityPool, EscalationGame escalationGame) private returns (SecurityPoolForkerForkData storage data) {
+	function _prepareForkState(
+		ISecurityPool securityPool,
+		EscalationGame escalationGame
+	) private returns (SecurityPoolForkerForkData storage data) {
 		uint248 universe = securityPool.universeId();
 		uint256 forkTime = zoltar.getForkTime(universe);
 		require(forkTime > 0, 'e7');
 		require(securityPool.systemState() != SystemState.PoolForked, 'e8');
 		require(securityPool.systemState() == SystemState.Operational, 'e9');
-		require(address(escalationGame) == address(0x0) || escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'ea');
+		require(
+			address(escalationGame) == address(0x0) ||
+				escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None,
+			'ea'
+		);
 		data = forkDataByPool[securityPool];
 		_snapshotEscalationAtFork(data, escalationGame, forkTime);
 	}
@@ -158,20 +197,29 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 
 	function getMigrationProxyAddress(ISecurityPool securityPool) public view returns (address) {
 		bytes32 salt = _getMigrationProxySalt(securityPool);
-		bytes32 initCodeHash = keccak256(abi.encodePacked(
-			type(SecurityPoolMigrationProxy).creationCode,
-			abi.encode(zoltar, securityPool.repToken(), securityPool.universeId(), address(this))
-		));
+		bytes32 initCodeHash = keccak256(
+			abi.encodePacked(
+				type(SecurityPoolMigrationProxy).creationCode,
+				abi.encode(zoltar, securityPool.repToken(), securityPool.universeId(), address(this))
+			)
+		);
 		return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash)))));
 	}
 
 	// Lazily deploy one proxy per parent pool so that all Zoltar migration calls for
 	// that pool use a unique `msg.sender`. CREATE2 keeps the proxy address stable
 	// and predictable from the pool address before deployment.
-	function _getOrDeployMigrationProxy(ISecurityPool securityPool) private returns (SecurityPoolMigrationProxy migrationProxy) {
+	function _getOrDeployMigrationProxy(
+		ISecurityPool securityPool
+	) private returns (SecurityPoolMigrationProxy migrationProxy) {
 		migrationProxy = migrationProxyByPool[securityPool];
 		if (address(migrationProxy) != address(0x0)) return migrationProxy;
-		migrationProxy = new SecurityPoolMigrationProxy{ salt: _getMigrationProxySalt(securityPool) }(zoltar, securityPool.repToken(), securityPool.universeId(), address(this));
+		migrationProxy = new SecurityPoolMigrationProxy{ salt: _getMigrationProxySalt(securityPool) }(
+			zoltar,
+			securityPool.repToken(),
+			securityPool.universeId(),
+			address(this)
+		);
 		migrationProxyByPool[securityPool] = migrationProxy;
 	}
 
@@ -261,7 +309,10 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 				if (address(child) != address(0x0)) {
 					require(child.systemState() == SystemState.ForkMigration, 'child branch already priced');
 				}
-				require(block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'migration window closed');
+				require(
+					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+					'migration window closed'
+				);
 				_splitMigrationRepToChild(securityPool, normalizedOutcomeIndex, migrationAmount, data.ownFork, false);
 				pendingChildRepByPoolAndOutcome[securityPool][normalizedOutcomeIndex] += migrationAmount;
 				_sweepChildRepToPool(securityPool, normalizedOutcomeIndex);
@@ -283,7 +334,12 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		_delegateVaultMigration();
 	}
 
-	function claimForkedEscalationDeposits(ISecurityPool, address vault, BinaryOutcomes.BinaryOutcome, uint256[] memory) public {
+	function claimForkedEscalationDeposits(
+		ISecurityPool,
+		address vault,
+		BinaryOutcomes.BinaryOutcome,
+		uint256[] memory
+	) public {
 		require(msg.sender == vault, 'ov');
 		_delegateEscalationGameForker();
 	}
@@ -293,7 +349,11 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		_delegateVaultMigration();
 	}
 
-	function migrateVaultWithUnresolvedEscalation(ISecurityPool, address vault, uint8) public returns (bool moreToMigrate) {
+	function migrateVaultWithUnresolvedEscalation(
+		ISecurityPool,
+		address vault,
+		uint8
+	) public returns (bool moreToMigrate) {
 		require(msg.sender == vault, 'ov');
 		bytes memory returnData = _delegateEscalationGameForker();
 		return abi.decode(returnData, (bool));
@@ -318,14 +378,22 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		_startTruthAuctionOrFinalize(securityPool, data, parentData, parentCollateral);
 	}
 
-	function _loadTruthAuctionState(ISecurityPool securityPool) private returns (
-		SecurityPoolForkerForkData storage data,
-		SecurityPoolForkerForkData storage parentData,
-		ISecurityPool parent,
-		uint256 parentCollateral
-	) {
+	function _loadTruthAuctionState(
+		ISecurityPool securityPool
+	)
+		private
+		returns (
+			SecurityPoolForkerForkData storage data,
+			SecurityPoolForkerForkData storage parentData,
+			ISecurityPool parent,
+			uint256 parentCollateral
+		)
+	{
 		require(securityPool.systemState() == SystemState.ForkMigration, 'f2');
-		require(block.timestamp > zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'f3');
+		require(
+			block.timestamp > zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+			'f3'
+		);
 		data = _getForkData(securityPool);
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
@@ -333,7 +401,8 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		parent.updateCollateralAmount();
 		securityPool.setTotalShares(parent.shareTokenSupply());
 		parentData = _getForkData(parent);
-		parentCollateral = parentData.ownFork ? parentData.ownForkCollateralAtFork : parent.completeSetCollateralAmount();
+		parentCollateral =
+			parentData.ownFork ? parentData.ownForkCollateralAtFork : parent.completeSetCollateralAmount();
 	}
 
 	function _startTruthAuctionOrFinalize(
@@ -374,7 +443,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	) private view returns (uint256 ethToBuy) {
 		uint256 poolAuctionableRepAtFork = _getPoolAuctionableRepAtFork(parentData);
 		if (poolAuctionableRepAtFork == 0 || data.migratedRep >= poolAuctionableRepAtFork) return 0;
-		ethToBuy = parentCollateral - parentCollateral * data.migratedRep / poolAuctionableRepAtFork;
+		ethToBuy = parentCollateral - (parentCollateral * data.migratedRep) / poolAuctionableRepAtFork;
 	}
 
 	function _getTruthAuctionCap(
@@ -387,7 +456,9 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		return poolAuctionableRepAtFork - migratedRepHaircut;
 	}
 
-	function _getPoolAuctionableRepAtFork(SecurityPoolForkerForkData storage parentData) private view returns (uint256) {
+	function _getPoolAuctionableRepAtFork(
+		SecurityPoolForkerForkData storage parentData
+	) private view returns (uint256) {
 		return parentData.ownFork ? parentData.vaultRepAtFork : parentData.auctionableRepAtFork;
 	}
 
@@ -404,13 +475,20 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		securityPool.updateRetentionRate();
 	}
 
-	function _consumeTruthAuctionRep(ISecurityPool securityPool, SecurityPoolForkerForkData storage data) private returns (uint256 repPurchased) {
+	function _consumeTruthAuctionRep(
+		ISecurityPool securityPool,
+		SecurityPoolForkerForkData storage data
+	) private returns (uint256 repPurchased) {
 		data.truthAuction.finalize();
 		repPurchased = data.truthAuction.totalRepPurchased();
 		securityPool.setSystemState(SystemState.Operational);
 	}
 
-	function _captureUnclaimedCollateralForAuction(ISecurityPool securityPool, ISecurityPool parent, SecurityPoolForkerForkData storage data) private {
+	function _captureUnclaimedCollateralForAuction(
+		ISecurityPool securityPool,
+		ISecurityPool parent,
+		SecurityPoolForkerForkData storage data
+	) private {
 		uint256 balance = address(securityPool).balance;
 		uint256 feesOwed = securityPool.totalFeesOwedToVaults();
 		uint256 collateralAmount = balance >= feesOwed ? balance - feesOwed : 0;
@@ -432,7 +510,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 				// unsold REP that remains redeemable by migrated parent vaults. Auction buyers
 				// will mint into the reserved gap via `claimAuctionProceeds`.
 				uint256 currentOwnershipDenominator = securityPool.poolOwnershipDenominator();
-				securityPool.setOwnershipDenominator(currentOwnershipDenominator * repAvailable / unsoldRep);
+				securityPool.setOwnershipDenominator((currentOwnershipDenominator * repAvailable) / unsoldRep);
 			} else {
 				// All rep purchased; avoid division by zero by using repAvailable directly
 				securityPool.setOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
@@ -476,7 +554,10 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	function finalizeTruthAuction(ISecurityPool securityPool) public {
-		require(block.timestamp > _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME, 'f5');
+		require(
+			block.timestamp > _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME,
+			'f5'
+		);
 		_finalizeTruthAuction(securityPool);
 	}
 
@@ -500,10 +581,19 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 		require(forkTime > 0, 'e7');
 		_snapshotEscalationAtFork(data, escalationGame, forkTime);
-		uint256 auctionableRepAtFork = zoltar.getMigrationRepBalance(address(migrationProxy), securityPool.universeId());
+		uint256 auctionableRepAtFork = zoltar.getMigrationRepBalance(
+			address(migrationProxy),
+			securityPool.universeId()
+		);
 		uint256 totalRepBeforeBurn = poolRepToFork + escalationRepToFork;
-		uint256 vaultRepAtFork = totalRepBeforeBurn == 0 ? 0 : poolRepToFork * auctionableRepAtFork / totalRepBeforeBurn;
-		_initializeOwnForkRepBuckets(securityPool, vaultRepAtFork, auctionableRepAtFork - vaultRepAtFork, escalationRepToFork);
+		uint256 vaultRepAtFork =
+			totalRepBeforeBurn == 0 ? 0 : (poolRepToFork * auctionableRepAtFork) / totalRepBeforeBurn;
+		_initializeOwnForkRepBuckets(
+			securityPool,
+			vaultRepAtFork,
+			auctionableRepAtFork - vaultRepAtFork,
+			escalationRepToFork
+		);
 		data.auctionableRepAtFork = auctionableRepAtFork;
 		data.ownForkCollateralAtFork = securityPool.completeSetCollateralAmount();
 		data.ownForkMigratedRepCollateralized = 0;
@@ -516,7 +606,11 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	// corresponding share of auctioned allowance. Finalized losing bids may still
 	// settle here as ETH-only refunds, in which case no vault accounting changes.
 	// Anyone can call this so that settlement is not blocked on the bidder.
-	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) public {
+	function claimAuctionProceeds(
+		ISecurityPool securityPool,
+		address vault,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+	) public {
 		_claimAuctionProceeds(securityPool, vault, tickIndices);
 	}
 
@@ -531,7 +625,10 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	) public {
 		require(claimTickIndices.length > 0 || refundTickIndices.length > 0, 'f7');
 		if (forkDataByPool[securityPool].truthAuction.finalized()) {
-			IUniformPriceDualCapBatchAuction.TickIndex[] memory allTickIndices = new IUniformPriceDualCapBatchAuction.TickIndex[](claimTickIndices.length + refundTickIndices.length);
+			IUniformPriceDualCapBatchAuction.TickIndex[]
+				memory allTickIndices = new IUniformPriceDualCapBatchAuction.TickIndex[](
+					claimTickIndices.length + refundTickIndices.length
+				);
 			for (uint256 i = 0; i < claimTickIndices.length; i += 1) {
 				allTickIndices[i] = claimTickIndices[i];
 			}
@@ -545,18 +642,28 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		claimableRefundsForSettlement(securityPool, refundTickIndices);
 	}
 
-	function _claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) private {
+	function _claimAuctionProceeds(
+		ISecurityPool securityPool,
+		address vault,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+	) private {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		require(data.truthAuction.finalized(), 'f9');
 		(uint256 amount, ) = data.truthAuction.withdrawBids(vault, tickIndices);
 		if (amount == 0) return;
 		uint256 poolOwnershipAmount = repToPoolOwnership(securityPool, amount);
-		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool.securityVaults(vault);
+		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
+			.securityVaults(vault);
 		uint256 newSecurityBondAllowance = _calculateAuctionedSecurityBondAllowance(data, amount);
 		data.claimedAuctionRepPurchased += amount;
 		data.claimedAuctionedSecurityBondAllowance += newSecurityBondAllowance;
 		uint256 nextFeeIndex = currentSecurityBondAllowance > 0 ? currentFeeIndex : securityPool.feeIndex();
-		securityPool.configureVault(vault, poolOwnership + poolOwnershipAmount, currentSecurityBondAllowance + newSecurityBondAllowance, nextFeeIndex);
+		securityPool.configureVault(
+			vault,
+			poolOwnership + poolOwnershipAmount,
+			currentSecurityBondAllowance + newSecurityBondAllowance,
+			nextFeeIndex
+		);
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
 	}
 
@@ -568,15 +675,20 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		if (data.claimedAuctionRepPurchased + amount == totalRepPurchased) {
 			newSecurityBondAllowance = data.auctionedSecurityBondAllowance - data.claimedAuctionedSecurityBondAllowance;
 		} else {
-			newSecurityBondAllowance = data.auctionedSecurityBondAllowance * amount / totalRepPurchased;
+			newSecurityBondAllowance = (data.auctionedSecurityBondAllowance * amount) / totalRepPurchased;
 		}
 	}
 
-	function claimableRefundsForSettlement(ISecurityPool securityPool, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) private {
+	function claimableRefundsForSettlement(
+		ISecurityPool securityPool,
+		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+	) private {
 		forkDataByPool[securityPool].truthAuction.refundLosingBids(tickIndices);
 	}
 
-	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome) {
+	function getQuestionOutcome(
+		ISecurityPool securityPool
+	) external view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		SystemState systemState = securityPool.systemState();
 		if (systemState == SystemState.PoolForked) return BinaryOutcomes.BinaryOutcome.None;
 		ISecurityPool parent = securityPool.parent();
@@ -590,7 +702,8 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 			uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 			if (address(escalationGame) != address(0x0)) {
 				uint256 escalationEndDate = escalationGame.getEscalationGameEndDate();
-				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime)) return escalationGame.getQuestionResolution();
+				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime))
+					return escalationGame.getQuestionResolution();
 			}
 		}
 		return BinaryOutcomes.BinaryOutcome.None;

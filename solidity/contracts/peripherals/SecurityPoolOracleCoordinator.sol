@@ -16,18 +16,18 @@ enum OperationType {
 	SetSecurityBondsAllowance
 }
 
-	struct StagedOperation {
-		OperationType operation;
-		address initiatorVault;
-		address targetVault;
-		uint256 amount;
-		uint256 queuedAt;
-		uint256 validForSeconds;
-		uint256 snapshotTargetOwnership;
-		uint256 snapshotTargetAllowance;
-		uint256 snapshotTotalRep;
-		uint256 snapshotDenominator;
-	}
+struct StagedOperation {
+	OperationType operation;
+	address initiatorVault;
+	address targetVault;
+	uint256 amount;
+	uint256 queuedAt;
+	uint256 validForSeconds;
+	uint256 snapshotTargetOwnership;
+	uint256 snapshotTargetAllowance;
+	uint256 snapshotTotalRep;
+	uint256 snapshotDenominator;
+}
 
 contract SecurityPoolOracleCoordinator {
 	uint256 public pendingReportId;
@@ -51,7 +51,14 @@ contract SecurityPoolOracleCoordinator {
 	address public immutable protocolFeeRecipient;
 
 	event PriceReported(uint256 reportId, uint256 price);
-	event StagedOperationQueued(uint256 operationId, OperationType operation, address initiatorVault, address targetVault, uint256 amount, bool isPendingSlot);
+	event StagedOperationQueued(
+		uint256 operationId,
+		OperationType operation,
+		address initiatorVault,
+		address targetVault,
+		uint256 amount,
+		bool isPendingSlot
+	);
 	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
 	// This is not a FIFO queue. We keep an append-only operation record and a single
@@ -99,7 +106,7 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
-		require (address(securityPool) == address(0x0), 'already set!');
+		require(address(securityPool) == address(0x0), 'already set!');
 		securityPool = _securityPool;
 	}
 
@@ -140,7 +147,7 @@ contract SecurityPoolOracleCoordinator {
 			protocolFeeRecipient: protocolFeeRecipient
 		});
 
-		pendingReportId = openOracle.createReportInstance{value: ethCost}(reportparams);
+		pendingReportId = openOracle.createReportInstance{ value: ethCost }(reportparams);
 
 		// Refund any excess Ether sent by the caller
 		uint256 excess = msg.value - ethCost;
@@ -149,7 +156,14 @@ contract SecurityPoolOracleCoordinator {
 			require(sent, 'failed to refund excess');
 		}
 	}
-	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
+	function openOracleCallback(
+		uint256 reportId,
+		uint256 amount1,
+		uint256 amount2,
+		uint256,
+		address,
+		address
+	) external {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
 		pendingReportId = 0;
@@ -163,7 +177,8 @@ contract SecurityPoolOracleCoordinator {
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
-		if (pendingOperationSlotId != 0) { // TODO we maybe should allow executing couple operations?
+		if (pendingOperationSlotId != 0) {
+			// TODO we maybe should allow executing couple operations?
 			uint256 operationId = pendingOperationSlotId;
 			pendingOperationSlotId = 0;
 			executeStagedOperation(operationId);
@@ -171,10 +186,18 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function isPriceValid() public view returns (bool) {
-		return lastPrice > 0 && lastSettlementTimestamp != 0 && lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
+		return
+			lastPrice > 0 &&
+			lastSettlementTimestamp != 0 &&
+			lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
-	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount, uint256 validForSeconds) public payable {
+	function requestPriceIfNeededAndStageOperation(
+		OperationType operation,
+		address targetVault,
+		uint256 amount,
+		uint256 validForSeconds
+	) public payable {
 		if (operation != OperationType.SetSecurityBondsAllowance) {
 			require(amount > 0, 'need to do non zero operation');
 		}
@@ -185,29 +208,31 @@ contract SecurityPoolOracleCoordinator {
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-			// Capture the target vault state at queue time on purpose.
-			// Liquidations are intentionally valued against the vault state that existed when the
-			// caller requested the oracle-backed operation, so the target cannot escape by
-			// depositing REP or reducing allowance after the request is staged but before the
-			// oracle report settles.
-			// Liquidation should value the vault's full collateral claim. That means using the
-			// pool's total REP balance here rather than only the currently withdrawable balance.
-		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(targetVault);
+		// Capture the target vault state at queue time on purpose.
+		// Liquidations are intentionally valued against the vault state that existed when the
+		// caller requested the oracle-backed operation, so the target cannot escape by
+		// depositing REP or reducing allowance after the request is staged but before the
+		// oracle report settles.
+		// Liquidation should value the vault's full collateral claim. That means using the
+		// pool's total REP balance here rather than only the currently withdrawable balance.
+		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
+			targetVault
+		);
 		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
-			stagedOperations[operationId] = StagedOperation({
-				operation: operation,
-				initiatorVault: msg.sender,
+		stagedOperations[operationId] = StagedOperation({
+			operation: operation,
+			initiatorVault: msg.sender,
 			targetVault: targetVault,
 			amount: amount,
 			queuedAt: block.timestamp,
 			validForSeconds: validForSeconds,
 			snapshotTargetOwnership: snapshotTargetOwnership,
 			snapshotTargetAllowance: snapshotTargetAllowance,
-				snapshotTotalRep: snapshotTotalRep,
-				snapshotDenominator: snapshotDenominator
-			});
-			_trackActiveStagedOperation(operationId);
+			snapshotTotalRep: snapshotTotalRep,
+			snapshotDenominator: snapshotDenominator
+		});
+		_trackActiveStagedOperation(operationId);
 
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
@@ -222,7 +247,7 @@ contract SecurityPoolOracleCoordinator {
 			require(msg.value >= ethCost, 'not enough eth to request price');
 			retained += ethCost;
 			// Forward exactly ethCost to requestPrice to create the report
-			this.requestPrice{value: ethCost}();
+			this.requestPrice{ value: ethCost }();
 		} else {
 			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
 			// This is intentional: only one staged operation is marked as the auto-execute
@@ -243,7 +268,10 @@ contract SecurityPoolOracleCoordinator {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		require(stagedOperation.initiatorVault != address(0), 'no such operation');
 		require(isPriceValid(), 'price is not valid to execute');
-		require(block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds, 'staged operation expired');
+		require(
+			block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds,
+			'staged operation expired'
+		);
 		_consumeActiveStagedOperation(operationId);
 		stagedOperations[operationId].initiatorVault = address(0);
 		if (stagedOperation.operation == OperationType.Liquidation) {
@@ -267,9 +295,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
-			try
-				securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount)
-			{
+			try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -279,9 +305,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else {
-			try
-				securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount)
-			{
+			try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -301,7 +325,10 @@ contract SecurityPoolOracleCoordinator {
 		return activeStagedOperationCount;
 	}
 
-	function getActiveStagedOperations(uint256 startIndex, uint256 count) public view returns (uint256[] memory operationIds, StagedOperation[] memory operations) {
+	function getActiveStagedOperations(
+		uint256 startIndex,
+		uint256 count
+	) public view returns (uint256[] memory operationIds, StagedOperation[] memory operations) {
 		if (count == 0 || startIndex >= activeStagedOperationCount) {
 			return (new uint256[](0), new StagedOperation[](0));
 		}

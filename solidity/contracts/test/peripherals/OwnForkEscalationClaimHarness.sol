@@ -20,7 +20,10 @@ contract OwnForkEscalationClaimHarness {
 		});
 	}
 
-	function previewOwnForkEscalationClaim(address parent, uint256 sourceRepAmount) external returns (uint256 childRepAmount) {
+	function previewOwnForkEscalationClaim(
+		address parent,
+		uint256 sourceRepAmount
+	) external returns (uint256 childRepAmount) {
 		RepBuckets storage repBuckets = repBucketsByParent[parent];
 		uint256 unallocatedEscrowSourceRep = repBuckets.unallocatedEscrowSourceRep;
 		uint256 unallocatedEscrowChildRep = repBuckets.unallocatedEscrowChildRep;
@@ -28,7 +31,9 @@ contract OwnForkEscalationClaimHarness {
 		if (sourceRepAmount == unallocatedEscrowSourceRep) {
 			childRepAmount = unallocatedEscrowChildRep;
 		} else {
-			childRepAmount = (sourceRepAmount * unallocatedEscrowChildRep + unallocatedEscrowSourceRep - 1) / unallocatedEscrowSourceRep;
+			childRepAmount =
+				(sourceRepAmount * unallocatedEscrowChildRep + unallocatedEscrowSourceRep - 1) /
+				unallocatedEscrowSourceRep;
 		}
 		repBuckets.unallocatedEscrowSourceRep = unallocatedEscrowSourceRep - sourceRepAmount;
 		repBuckets.unallocatedEscrowChildRep = unallocatedEscrowChildRep - childRepAmount;
@@ -42,7 +47,8 @@ contract OwnForkEscalationClaimHarness {
 		require(auctionableRepAtFork > 0, 'missing own fork rep');
 		require(childRepAmount > 0, 'invalid child rep');
 		require(childOwnershipDenominator > 0, 'invalid child denominator');
-		ownershipToCredit = (childRepAmount * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
+		ownershipToCredit =
+			(childRepAmount * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
 	}
 
 	function previewOwnForkEscalationOwnershipSequence(
@@ -57,7 +63,8 @@ contract OwnForkEscalationClaimHarness {
 		uint256 ownershipClaimed = 0;
 		for (uint256 index = 0; index < childRepAmounts.length; index++) {
 			childRepClaimed += childRepAmounts[index];
-			uint256 nextOwnershipClaimed = (childRepClaimed * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
+			uint256 nextOwnershipClaimed =
+				(childRepClaimed * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
 			uint256 ownershipToCredit = nextOwnershipClaimed - ownershipClaimed;
 			ownershipCredits[index] = ownershipToCredit;
 			ownershipClaimed = nextOwnershipClaimed;
@@ -76,7 +83,8 @@ contract OwnForkEscalationClaimHarness {
 		uint256 collateralTransferred = 0;
 		for (uint256 index = 0; index < childRepAmounts.length; index++) {
 			childRepTransferred += childRepAmounts[index];
-			uint256 nextCollateralTransferred = (parentCollateralAtFork * childRepTransferred + auctionableRepAtFork - 1) / auctionableRepAtFork;
+			uint256 nextCollateralTransferred =
+				(parentCollateralAtFork * childRepTransferred + auctionableRepAtFork - 1) / auctionableRepAtFork;
 			collateralTransfers[index] = nextCollateralTransferred - collateralTransferred;
 			collateralTransferred = nextCollateralTransferred;
 		}
@@ -96,11 +104,14 @@ contract OwnForkEscalationClaimHarness {
 		}
 		childAmounts = new uint256[](vaultCount);
 		for (uint256 index = 0; index < vaultCount; index++) {
-			childAmounts[index] = sourceAmounts[index] * childRepAtFork / totalSourceRep;
+			childAmounts[index] = (sourceAmounts[index] * childRepAtFork) / totalSourceRep;
 		}
 	}
 
-	function previewOwnForkUnresolvedEscalationNoop(uint256[] calldata exportedAmounts, uint256 childRepAmount) external pure returns (uint256[] memory returnedAmounts) {
+	function previewOwnForkUnresolvedEscalationNoop(
+		uint256[] calldata exportedAmounts,
+		uint256 childRepAmount
+	) external pure returns (uint256[] memory returnedAmounts) {
 		returnedAmounts = new uint256[](exportedAmounts.length);
 		for (uint256 index = 0; index < exportedAmounts.length; index++) {
 			returnedAmounts[index] = exportedAmounts[index];

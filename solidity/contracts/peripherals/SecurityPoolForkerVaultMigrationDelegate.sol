@@ -12,7 +12,10 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 	constructor(Zoltar _zoltar) SecurityPoolForkerVaultMigrationBase(_zoltar) {}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
-		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(parent, child);
+		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(
+			parent,
+			child
+		);
 	}
 
 	function createChildUniverse(ISecurityPool parent, uint8 outcomeIndex) public {

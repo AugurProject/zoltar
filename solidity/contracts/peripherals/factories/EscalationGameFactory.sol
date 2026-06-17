@@ -11,7 +11,11 @@ contract EscalationGameFactory {
 		return gameImplementation;
 	}
 
-	function deployEscalationGameFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external returns (EscalationGame) {
+	function deployEscalationGameFromFork(
+		uint256 startBond,
+		uint256 nonDecisionThreshold,
+		uint256 elapsedAtFork
+	) external returns (EscalationGame) {
 		EscalationGame gameImplementation = _deployEscalationGame();
 		gameImplementation.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 		return gameImplementation;

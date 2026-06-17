@@ -2,8 +2,8 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { OpenOracle } from "../openOracle/OpenOracle.sol";
-import { UniformPriceDualCapBatchAuction } from "../UniformPriceDualCapBatchAuction.sol";
+import { OpenOracle } from '../openOracle/OpenOracle.sol';
+import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuction.sol';
 import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
@@ -33,7 +33,6 @@ enum QuestionOutcome {
 }
 
 interface ISecurityPool {
-
 	// -------- View Functions --------
 	function questionId() external view returns (uint256);
 	function universeId() external view returns (uint248);
@@ -45,7 +44,12 @@ interface ISecurityPool {
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
-	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex);
+	function securityVaults(
+		address vault
+	)
+		external
+		view
+		returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex);
 	function getVaultCount() external view returns (uint256);
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
 	function getActiveVaultCount() external view returns (uint256);
@@ -80,21 +84,49 @@ interface ISecurityPool {
 	function depositRep(uint256 repAmount) external;
 	function redeemRep(address vault) external;
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external;
-	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, uint256 snapshotTotalRep, uint256 snapshotDenominator) external;
+	function performLiquidation(
+		address callerVault,
+		address targetVaultAddress,
+		uint256 debtAmount,
+		uint256 snapshotTargetOwnership,
+		uint256 snapshotTargetAllowance,
+		uint256 snapshotTotalRep,
+		uint256 snapshotDenominator
+	) external;
 	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) external;
 
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amount) external;
 
 	function escalationGame() external view returns (EscalationGame);
-	function initializeForkedEscalationGame(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external;
-	function initializeForkCarrySnapshot(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) external;
-	function initializeForkCarrySnapshotWithResolutionBalances(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, uint256[3] memory inheritedResolutionBalances, bytes32[3] memory inheritedNullifierRoots) external;
+	function initializeForkedEscalationGame(
+		uint256 startBond,
+		uint256 nonDecisionThreshold,
+		uint256 elapsedAtFork
+	) external;
+	function initializeForkCarrySnapshot(
+		bytes32[64][3] memory inheritedCarryPeaks,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		bytes32[3] memory inheritedNullifierRoots
+	) external;
+	function initializeForkCarrySnapshotWithResolutionBalances(
+		bytes32[64][3] memory inheritedCarryPeaks,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		uint256[3] memory inheritedResolutionBalances,
+		bytes32[3] memory inheritedNullifierRoots
+	) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
-	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 vaultFeeIndex) external;
+	function configureVault(
+		address vault,
+		uint256 poolOwnership,
+		uint256 securityBondAllowance,
+		uint256 vaultFeeIndex
+	) external;
 	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
 	function setTotalShares(uint256 newTotalShares) external;
@@ -124,8 +156,24 @@ interface ISecurityPoolFactory {
 		uint256 completeSetCollateralAmount;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
-	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate) external returns (ISecurityPool securityPool);
+	function deployChildSecurityPool(
+		ISecurityPool parent,
+		IShareToken shareToken,
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier,
+		uint256 currentRetentionRate,
+		uint256 completeSetCollateralAmount
+	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
+	function deployOriginSecurityPool(
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier,
+		uint256 currentRetentionRate
+	) external returns (ISecurityPool securityPool);
 	function securityPoolDeploymentCount() external view returns (uint256);
-	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments);
+	function securityPoolDeploymentsRange(
+		uint256 startIndex,
+		uint256 count
+	) external view returns (SecurityPoolDeployment[] memory deployments);
 }

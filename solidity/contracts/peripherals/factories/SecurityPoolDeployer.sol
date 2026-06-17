@@ -35,21 +35,27 @@ contract SecurityPoolDeployer {
 	) external returns (ISecurityPool securityPool) {
 		require(msg.sender == factory, 'only factory');
 
-		securityPool = ISecurityPool(payable(address(new SecurityPool{ salt: bytes32(uint256(0)) }(
-			securityPoolForker,
-			securityPoolFactory,
-			questionData,
-			escalationGameFactory,
-			priceOracleManagerAndOperatorQueuer,
-			shareToken,
-			openOracle,
-			parent,
-			zoltar,
-			universeId,
-			questionId,
-			securityMultiplier,
-			initialEscalationGameDeposit,
-			truthAuction
-		))));
+		securityPool = ISecurityPool(
+			payable(
+				address(
+					new SecurityPool{ salt: bytes32(uint256(0)) }(
+						securityPoolForker,
+						securityPoolFactory,
+						questionData,
+						escalationGameFactory,
+						priceOracleManagerAndOperatorQueuer,
+						shareToken,
+						openOracle,
+						parent,
+						zoltar,
+						universeId,
+						questionId,
+						securityMultiplier,
+						initialEscalationGameDeposit,
+						truthAuction
+					)
+				)
+			)
+		);
 	}
 }
