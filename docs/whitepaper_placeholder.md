@@ -13,7 +13,7 @@ The stack in this repository has two distinct protocol identities.
 - `Zoltar` is the base oracle substrate.
 - `Augur Placeholder` is the application layer built on top of Zoltar.
 
-For the Zoltar substrate itself, including universes, question encoding, scalar math, and post-fork REP splitting, see [whitepaper_zoltar.md](./whitepaper_zoltar.md). This paper focuses on the market, underwriting, and collateral system layered above it.
+For the Zoltar substrate itself, including universes, question encoding, scalar math, and post-fork REP splitting, see [whitepaper_zoltar.md](./whitepaper_zoltar.md) or the visual HTML edition at [whitepaper_zoltar.html](./whitepaper_zoltar.html). This paper focuses on the market, underwriting, and collateral system layered above it.
 
 Augur Placeholder is responsible for the economic system on top of that substrate:
 

@@ -1,5 +1,7 @@
 # Zoltar White Paper
 
+HTML edition with vector diagrams: [whitepaper_zoltar.html](./whitepaper_zoltar.html)
+
 ## Abstract
 
 Zoltar is a forkable oracle substrate centered on universes, question encoding, and REP branching. It is best understood as an implementation of the branching model described in [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md): unresolved disagreement is represented as explicit child universes, and REP holders convert post-fork migration balances into child-universe REP across one or more selected branches. Zoltar supports both categorical and scalar questions, treats `Invalid` as a legitimate answer state, and branches protocol state without embedding a higher-level market design directly into the core layer.
