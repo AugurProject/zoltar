@@ -1,4 +1,4 @@
-import { peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
@@ -172,21 +172,29 @@ export const getOwnForkRepBuckets = async (client: ReadClient, securityPoolAddre
 	}
 }
 
-export const getForkedEscrowPrincipalByOutcomeAndVault = async (client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) =>
-	await client.readContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'getForkedEscrowPrincipalByOutcomeAndVault',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, Number(outcome), vault],
+async function getEscalationGameForkedEscrowByVaultAndOutcome(client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) {
+	const escalationGame = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
 	})
+	return await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'getForkedEscrowByVaultAndOutcome',
+		address: escalationGame,
+		args: [vault, Number(outcome)],
+	})
+}
 
-export const getForkedEscrowChildRepByOutcomeAndVault = async (client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) =>
-	await client.readContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'getForkedEscrowChildRepByOutcomeAndVault',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, Number(outcome), vault],
-	})
+export const getForkedEscrowPrincipalByOutcomeAndVault = async (client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) => {
+	const [sourcePrincipal] = await getEscalationGameForkedEscrowByVaultAndOutcome(client, securityPoolAddress, outcome, vault)
+	return sourcePrincipal
+}
+
+export const getForkedEscrowChildRepByOutcomeAndVault = async (client: ReadClient, securityPoolAddress: Address, outcome: QuestionOutcome, vault: Address) => {
+	const [, , childRep] = await getEscalationGameForkedEscrowByVaultAndOutcome(client, securityPoolAddress, outcome, vault)
+	return childRep
+}
 
 export const claimForkedEscalationDeposits = async (client: WriteClient, parentSecurityPool: Address, vault: Address, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
 	await writeContractAndWait(client, () =>

@@ -565,6 +565,23 @@ contract SecurityPool is ISecurityPool {
 		);
 	}
 
+	function initializeForkCarrySnapshotWithResolutionBalances(
+		bytes32[64][3] memory inheritedCarryPeaks,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		uint256[3] memory inheritedResolutionBalances,
+		bytes32[3] memory inheritedNullifierRoots
+	) external onlyForker {
+		require(address(escalationGame) != address(0x0), 'missing escalation');
+		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshotWithResolutionBalances(
+			inheritedCarryPeaks,
+			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
+			inheritedResolutionBalances,
+			inheritedNullifierRoots
+		);
+	}
+
 	function resumeForkedEscalationGame() external onlyForker {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		escalationGame.resumeFromFork();

@@ -91,6 +91,7 @@ const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const CONTRACT_PAGE_SIZE = 30n
+const UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT = 128
 const OPEN_ORACLE_PRICE_UNITS = 30n
 const NULLIFIER_DEPTH = 64
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
@@ -2040,13 +2041,43 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	const outcomeIndex = getReportingOutcomeValue(outcome)
 	return await executeForkAuctionAction(client, 'migrateUnresolvedEscalation', securityPoolAddress, universeId, async () => {
-		return await writeContractAndWait(client, () => ({
-			address: getInfraContractAddresses().securityPoolForker,
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'migrateVaultWithUnresolvedEscalation',
-			args: [securityPoolAddress, vaultAddress, outcomeIndex],
-		}))
+		let lastHash: Hash | undefined
+		for (let batchIndex = 0; batchIndex < UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT; batchIndex += 1) {
+			lastHash = await writeContractAndWait(client, () => ({
+				address: getInfraContractAddresses().securityPoolForker,
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'migrateVaultWithUnresolvedEscalation',
+				args: [securityPoolAddress, vaultAddress, outcomeIndex],
+			}))
+			if (!(await hasPendingUnresolvedEscalationMigration(client, securityPoolAddress, vaultAddress))) return lastHash
+		}
+		throw new Error('Unresolved escalation migration still has pending batches after the transaction limit')
 	})
+}
+
+async function hasPendingUnresolvedEscalationMigration(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddress: Address) {
+	const escalationGame = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		args: [],
+	})
+	if (sameAddress(escalationGame, zeroAddress)) return false
+	const [hasUnexportedLocalDepositRefs, hasUnexportedForkedEscrow] = await Promise.all([
+		client.readContract({
+			address: escalationGame,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'hasUnexportedLocalDepositRefs',
+			args: [vaultAddress],
+		}),
+		client.readContract({
+			address: escalationGame,
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'hasUnexportedForkedEscrow',
+			args: [vaultAddress],
+		}),
+	])
+	return hasUnexportedLocalDepositRefs || hasUnexportedForkedEscrow
 }
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(

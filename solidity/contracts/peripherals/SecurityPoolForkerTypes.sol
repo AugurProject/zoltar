@@ -30,10 +30,3 @@ struct OwnForkChildRepAllocation {
 	uint256 vaultChildRepUsed;
 	uint256 escrowChildRepUsed;
 }
-
-struct ForkedEscrowState {
-	uint256 principal;
-	uint256 principalClaimed;
-	uint256 childRep;
-	uint256 childRepClaimed;
-}

@@ -5,7 +5,7 @@ import type { Abi, Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { addressString, rpow } from '../testsuite/simulator/utils/bigint'
@@ -92,6 +92,20 @@ const getMigrationProxyAddressAbi = [
 			},
 		],
 		stateMutability: 'view',
+		type: 'function',
+	},
+] satisfies Abi
+
+const migrateVaultWithUnresolvedEscalationReturnAbi = [
+	{
+		inputs: [
+			{ internalType: 'contract ISecurityPool', name: 'securityPool', type: 'address' },
+			{ internalType: 'address', name: 'vault', type: 'address' },
+			{ internalType: 'uint8', name: 'childOutcomeIndex', type: 'uint8' },
+		],
+		name: 'migrateVaultWithUnresolvedEscalation',
+		outputs: [{ internalType: 'bool', name: 'moreToMigrate', type: 'bool' }],
+		stateMutability: 'nonpayable',
 		type: 'function',
 	},
 ] satisfies Abi
@@ -1110,6 +1124,77 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(childOutcomeState.currentCarryTotal, unresolvedDeposit, 'the child continuation game should track the migrated unresolved principal')
 	})
 
+	test('migrateVaultWithUnresolvedEscalation reports bounded unresolved batches until migration is complete', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const depositCount = 65
+		const totalUnresolvedDeposit = BigInt(depositCount) * reportBond
+		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultRepBeforeTopUp = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repDepositShare)
+		if (vaultRepBeforeTopUp < totalUnresolvedDeposit) {
+			await approveAndDepositRep(client, totalUnresolvedDeposit - vaultRepBeforeTopUp, questionId)
+		}
+		for (let index = 0; index < depositCount; index += 1) {
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		}
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const otherQuestionData = {
+			...questionData,
+			title: 'bounded unresolved migration source question',
+		}
+		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
+		await createQuestion(attackerClient, otherQuestionData, outcomes)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const firstPreview = await client.simulateContract({
+			abi: migrateVaultWithUnresolvedEscalationReturnAbi,
+			address: getInfraContractAddresses().securityPoolForker,
+			functionName: 'migrateVaultWithUnresolvedEscalation',
+			args: [securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes],
+			account: client.account,
+		})
+		strictEqualTypeSafe(firstPreview.result, true, 'first bounded migration should report a remaining follow-up batch')
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: parentEscalationGame,
+				functionName: 'hasUnexportedLocalDepositRefs',
+				args: [client.account.address],
+			}),
+			true,
+			'first migration should leave the final unresolved ref pending',
+		)
+
+		const secondPreview = await client.simulateContract({
+			abi: migrateVaultWithUnresolvedEscalationReturnAbi,
+			address: getInfraContractAddresses().securityPoolForker,
+			functionName: 'migrateVaultWithUnresolvedEscalation',
+			args: [securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes],
+			account: client.account,
+		})
+		strictEqualTypeSafe(secondPreview.result, false, 'second bounded migration should report completion')
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+
+		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'follow-up migration should clear all parent unresolved escrow')
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: parentEscalationGame,
+				functionName: 'hasUnexportedLocalDepositRefs',
+				args: [client.account.address],
+			}),
+			false,
+			'follow-up migration should exhaust the export cursor',
+		)
+	})
+
 	test('migrateVaultWithUnresolvedEscalation rejects after the child branch is already priced', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -1201,11 +1286,12 @@ describe('Peripherals Contract Test Suite', () => {
 		const parentDepositsAfterMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const parentNoDepositsAfterMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 		const childPoolExists = await contractExists(client, yesSecurityPool.securityPool)
+		const childVaultAfterMigration = childPoolExists ? await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address) : undefined
 
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'zero child allocation should clear the parent unresolved REP lock as dust')
 		strictEqualTypeSafe(parentDepositsAfterMigration.filter(deposit => deposit.amount > 0n).length, 0, 'zero child allocation should consume the parent unresolved deposits')
 		strictEqualTypeSafe(parentNoDepositsAfterMigration.filter(deposit => deposit.amount > 0n).length, 0, 'zero child allocation should consume all unresolved parent deposits for the vault')
-		strictEqualTypeSafe(childPoolExists, false, 'zero child allocation should not deploy the child pool')
+		strictEqualTypeSafe(childVaultAfterMigration?.repInEscalationGame ?? 0n, 0n, 'zero child allocation should not create child escrow')
 	})
 
 	test('migrateVaultWithUnresolvedEscalation in non-own fork carries escrow through the continuation snapshot without replaying local deposits', async () => {
@@ -1236,11 +1322,13 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const yesEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		const yesOutcomeState = await getEscalationGameOutcomeState(client, yesEscalationGame, QuestionOutcome.Yes)
 		const yesDepositsAfterMigration = await getEscalationGameDeposits(client, yesEscalationGame, QuestionOutcome.Yes)
 		const childEscrowPrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
 		const childEscrowChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
 
 		strictEqualTypeSafe(yesDepositsAfterMigration.length, 0, 'non-own unresolved migration should not replay parent local deposits in the child game')
+		strictEqualTypeSafe(yesOutcomeState.balance, unresolvedDeposit, 'non-own continuation should keep inherited resolution balances 1:1 with source REP')
 		strictEqualTypeSafe(childEscrowPrincipal, unresolvedDeposit, 'non-own continuation should retain the original unresolved principal for proof settlement')
 		strictEqualTypeSafe(childEscrowChildRep, unresolvedDeposit, 'non-own continuation should back the carried escrow 1:1 in child REP')
 	})
@@ -1260,30 +1348,6 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await assert.rejects(claimForkedEscalationDeposits(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]))
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
-	})
-
-	test('security pool forker forked escrow helpers can only be called by escalation game', async () => {
-		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await assert.rejects(
-			writeContractAndWait(relayerClient, () =>
-				relayerClient.writeContract({
-					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-					address: getInfraContractAddresses().securityPoolForker,
-					functionName: 'recordForkedEscrow',
-					args: [securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, 1n, 1n],
-				}),
-			),
-		)
-		await assert.rejects(
-			writeContractAndWait(relayerClient, () =>
-				relayerClient.writeContract({
-					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-					address: getInfraContractAddresses().securityPoolForker,
-					functionName: 'consumeForkedEscrow',
-					args: [securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, 1n],
-				}),
-			),
-		)
 	})
 
 	test('migrateVaultWithUnresolvedEscalation scales child escrow when the child branch has less REP than the parent principal', async () => {
@@ -1320,13 +1384,22 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const childPoolExists = await contractExists(client, yesSecurityPool.securityPool)
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		const invalidOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Invalid)
+		const yesOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)
+		const noOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.No)
 		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-		const childEscrowPrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
-		const childEscrowChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
+		const childYesEscrowPrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
+		const childNoEscrowPrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.No, client.account.address)
+		const childYesEscrowChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
+		const childNoEscrowChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.No, client.account.address)
+		const childEscrowPrincipal = childYesEscrowPrincipal + childNoEscrowPrincipal
+		const childEscrowChildRep = childYesEscrowChildRep + childNoEscrowChildRep
 
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'an underfunded child branch should still clear the parent unresolved REP lock after the migration succeeds')
 		strictEqualTypeSafe(childPoolExists, true, 'an underfunded child branch should deploy the child pool')
 		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, childEscrowChildRep, 'the child vault escrow should match the child REP actually transferred into the continuation game')
+		strictEqualTypeSafe(invalidOutcomeState.balance + yesOutcomeState.balance + noOutcomeState.balance, childEscrowChildRep, 'own-fork continuation resolution balances should be scaled into child REP units')
 		assert.ok(childEscrowPrincipal > childEscrowChildRep, 'the child continuation game should retain more parent principal than child REP backing')
 		strictEqualTypeSafe(childEscrowChildRep, 1n, 'the child continuation game should retain only the scaled child REP backing')
 	})
@@ -2208,6 +2281,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const ownForkParentCollateralAtFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -2257,28 +2332,27 @@ describe('Peripherals Contract Test Suite', () => {
 		}
 
 		// auction yes
-		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
-		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		const auctionedEthInYes = completeSetAmount - (completeSetAmount * migratedRepInYes) / repAtFork
+		const poolRepAtFork = ownForkRepBuckets.vaultRepAtFork
+		const auctionedEthInYes = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRepInYes) / poolRepAtFork
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		const yesAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		let yesAuctionTick: bigint | undefined
 		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 			approximatelyEqual(await getEthRaiseCap(client, yesSecurityPool.truthAuction), auctionedEthInYes, 10n, 'Need to buy half of open interest on yes')
-			yesAuctionTick = await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, repBalanceInGenesisPool / 4n, auctionedEthInYes)
+			yesAuctionTick = await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, poolRepAtFork / 4n, auctionedEthInYes)
 		} else {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes child should either enter the truth auction or finalize immediately')
 			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
 		}
 
 		// auction no
-		const auctionedEthInNo = completeSetAmount - (completeSetAmount * migratedRepInNo) / repAtFork
+		const auctionedEthInNo = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRepInNo) / poolRepAtFork
 		await startTruthAuction(client, noSecurityPool.securityPool)
 		const noAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		let noAuctionTick: bigint | undefined
 		if ((await getSystemState(client, noSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 			approximatelyEqual(await getEthRaiseCap(client, noSecurityPool.truthAuction), auctionedEthInNo, 10n, 'Need to buy half of open interest on no')
-			noAuctionTick = await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, (repBalanceInGenesisPool * 3n) / 4n, auctionedEthInNo)
+			noAuctionTick = await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, (poolRepAtFork * 3n) / 4n, auctionedEthInNo)
 		} else {
 			strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.Operational, 'no child should either enter the truth auction or finalize immediately')
 			strictEqualTypeSafe(await getTotalRepPurchased(client, noSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
@@ -2289,8 +2363,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const invalidAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
 		let invalidAuctionTick: bigint | undefined
 		if ((await getSystemState(client, invalidSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-			approximatelyEqual(await getEthRaiseCap(client, invalidSecurityPool.truthAuction), completeSetAmount, 10n, 'Need to buy all of open interest on invalid')
-			invalidAuctionTick = await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, repBalanceInGenesisPool - burnAmount - repBalanceInGenesisPool / 1_000_000n, completeSetAmount)
+			approximatelyEqual(await getEthRaiseCap(client, invalidSecurityPool.truthAuction), ownForkParentCollateralAtFork, 10n, 'Need to buy all of open interest on invalid')
+			invalidAuctionTick = await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, poolRepAtFork - burnAmount - poolRepAtFork / 1_000_000n, ownForkParentCollateralAtFork)
 		} else {
 			strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.Operational, 'invalid child should either enter the truth auction or finalize immediately')
 			strictEqualTypeSafe(await getTotalRepPurchased(client, invalidSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
@@ -2395,7 +2469,7 @@ describe('Peripherals Contract Test Suite', () => {
 			const invalidAuctionParticipantVault = await getSecurityVault(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
 			const invalidAuctionParticipantRep = await poolOwnershipToRep(client, invalidSecurityPool.securityPool, invalidAuctionParticipantVault.repDepositShare)
 			const invalidClearingPrice = tickToPrice(invalidAuctionTick)
-			const expectedInvalidRep = (completeSetAmount * 1_000_000_000_000_000_000n) / invalidClearingPrice
+			const expectedInvalidRep = (ownForkParentCollateralAtFork * 1_000_000_000_000_000_000n) / invalidClearingPrice
 			approximatelyEqual(invalidAuctionParticipantRep, expectedInvalidRep, 1_000n, 'invalid auction participant should get expected REP')
 		}
 
@@ -2795,6 +2869,62 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(parentEthBeforeMigration - parentEthAfterMigration, childEthAfterMigration - childEthBeforeMigration, 'own-fork unlocked migration should move matching collateral into the child')
 	})
 
+	test('own-fork unlocked vault migration values child ownership against the vault REP bucket', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+
+		const parentVaultBeforeFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const parentDenominatorBeforeFork = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+		assert.ok(ownForkRepBuckets.vaultRepAtFork > 0n, 'test setup should leave unlocked vault REP at fork')
+		assert.ok(ownForkRepBuckets.unallocatedEscrowChildRep > 0n, 'test setup should include separate escalation REP at fork')
+		const expectedChildRepClaim = (parentVaultBeforeFork.repDepositShare * ownForkRepBuckets.vaultRepAtFork) / parentDenominatorBeforeFork
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const childRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, childVault.repDepositShare)
+		strictEqualTypeSafe(childRepClaim, expectedChildRepClaim, 'child vault ownership should redeem the full migrated vault REP bucket')
+	})
+
+	test('own-fork unlocked migration transfers all pool collateral when all vault REP migrates', async () => {
+		const collateralAmount = 2n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, collateralAmount)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, collateralAmount)
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+		assert.ok(ownForkRepBuckets.vaultRepAtFork > 0n, 'test setup should leave unlocked vault REP at fork')
+		assert.ok(ownForkRepBuckets.unallocatedEscrowChildRep > 0n, 'test setup should include separate escalation REP at fork')
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const parentCollateralBeforeMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const childEthBeforeMigration = await getETHBalance(client, yesSecurityPool.securityPool)
+
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const parentCollateralAfterMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const childEthAfterMigration = await getETHBalance(client, yesSecurityPool.securityPool)
+		assert.ok(parentCollateralBeforeMigration > 0n, 'test setup should leave collateral available before migration')
+		strictEqualTypeSafe(parentCollateralAfterMigration, 0n, 'all remaining pool collateral should leave the parent when all vault REP migrates')
+		strictEqualTypeSafe(childEthAfterMigration - childEthBeforeMigration, parentCollateralBeforeMigration, 'the child should receive the full remaining migrated pool collateral')
+	})
+
 	test('claimForkedEscalationDeposits rejects unresolved deposits after an unrelated external fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -2973,6 +3103,42 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool), denominatorBeforeStart, 'skipping the auction should preserve the existing child ownership denominator when no REP is sold')
 	})
 
+	test('own-fork truth auction uses only vault REP as the pool auction basis', async () => {
+		const securityPoolAllowance = 1n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		let vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		const requiredVaultRep = 4n * forkThreshold
+		if (vaultRep < requiredVaultRep) {
+			await approveAndDepositRep(client, requiredVaultRep - vaultRep, questionId)
+			vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		}
+		assert.ok(vaultRep >= requiredVaultRep, 'test setup needs unlocked REP plus escalation REP')
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+
+		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+		assert.ok(parentForkData.auctionableRepAtFork > ownForkRepBuckets.vaultRepAtFork, 'own fork should include escalation REP outside the pool auction basis')
+		assert.ok(ownForkRepBuckets.vaultRepAtFork > 0n, 'test setup should leave vault REP available to migrate')
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(await getMigratedRep(client, yesSecurityPool.securityPool), ownForkRepBuckets.vaultRepAtFork, 'all vault REP should be migrated into the child pool')
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'all migrated vault REP should skip the pool truth auction even when escalation REP forked separately')
+		strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'the pool auction should not sell escalation-game REP')
+	})
+
 	test('startTruthAuction skips auction startup when no collateral remains to buy', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -3019,6 +3185,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const ownForkParentCollateralAtFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [1n])
@@ -3035,16 +3203,15 @@ describe('Peripherals Contract Test Suite', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 
-		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
 		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
-		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const poolRepAtFork = ownForkRepBuckets.vaultRepAtFork
+		const expectedEthToBuy = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRep) / poolRepAtFork
 		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-			const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork, expectedEthToBuy)
+			const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, poolRepAtFork, expectedEthToBuy)
+			assert.ok(tickToPrice(auctionTick) > 0n, 'auction participation should produce a valid clearing price when a truth auction is needed')
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-			assert.ok(auctionTick >= 0n, 'auction participation should produce a valid tick when a truth auction is needed')
 		} else {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should either run a truth auction or finalize immediately')
 			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'immediate-finalization path should not sell any child REP')
@@ -3078,6 +3245,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const ownForkParentCollateralAtFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -3090,13 +3259,12 @@ describe('Peripherals Contract Test Suite', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 
-		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
 		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
-		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const poolRepAtFork = ownForkRepBuckets.vaultRepAtFork
+		const expectedEthToBuy = ownForkParentCollateralAtFork - (ownForkParentCollateralAtFork * migratedRep) / poolRepAtFork
 		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork, expectedEthToBuy)
+			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, poolRepAtFork, expectedEthToBuy)
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 		} else {
@@ -4092,7 +4260,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
-		const migratedEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
+		const migratedEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.No, client.account.address)
 		assert.ok(migratedEscrow > 0n, 'remaining unresolved own-fork escrow should still migrate after an earlier own-fork claim')
 	})
 
@@ -4139,10 +4307,18 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
 		const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, securityMultiplier)
+		const invalidEscalationGame = await getSecurityPoolsEscalationGame(client, invalidSecurityPool.securityPool)
+		const invalidOutcomeState = await getEscalationGameOutcomeState(client, invalidEscalationGame, QuestionOutcome.Invalid)
+		const yesOutcomeState = await getEscalationGameOutcomeState(client, invalidEscalationGame, QuestionOutcome.Yes)
+		const noOutcomeState = await getEscalationGameOutcomeState(client, invalidEscalationGame, QuestionOutcome.No)
 		const childEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, invalidSecurityPool.securityPool, QuestionOutcome.Invalid, client.account.address)
-		const childEscrowByOriginalDepositOutcome = await getForkedEscrowChildRepByOutcomeAndVault(client, invalidSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
-		assert.ok(childEscrow > 0n, 'invalid child migration should record forked escrow')
-		strictEqualTypeSafe(childEscrowByOriginalDepositOutcome, childEscrow, 'forked escrow should be vault-scoped so proof settlement can consume it by original deposit outcome')
+		const childYesEscrowByOriginalDepositOutcome = await getForkedEscrowChildRepByOutcomeAndVault(client, invalidSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
+		const childNoEscrowByOriginalDepositOutcome = await getForkedEscrowChildRepByOutcomeAndVault(client, invalidSecurityPool.securityPool, QuestionOutcome.No, client.account.address)
+		const childEscrowByOriginalDepositOutcome = childYesEscrowByOriginalDepositOutcome + childNoEscrowByOriginalDepositOutcome
+		strictEqualTypeSafe(childEscrow, 0n, 'invalid child migration should not record forked escrow against the child branch outcome')
+		assert.ok(childEscrowByOriginalDepositOutcome > 0n, 'invalid child migration should record forked escrow against the original deposit outcome')
+		strictEqualTypeSafe(invalidOutcomeState.balance, 0n, 'migrating to the invalid child should not credit resolution balance to the child fork outcome')
+		strictEqualTypeSafe(yesOutcomeState.balance + noOutcomeState.balance, childEscrowByOriginalDepositOutcome, 'migrating unresolved deposits should credit resolution balances to original deposit outcomes')
 	})
 
 	test('own-fork escalation claim zero child allocation does not revert', async () => {

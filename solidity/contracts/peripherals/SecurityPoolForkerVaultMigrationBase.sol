@@ -12,8 +12,7 @@ import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
 import {
 	SecurityPoolForkerForkData,
-	OwnForkChildRepAllocation,
-	ForkedEscrowState
+	OwnForkChildRepAllocation
 } from './SecurityPoolForkerTypes.sol';
 
 abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStorage {
@@ -31,13 +30,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 
 	constructor(Zoltar _zoltar) {
 		zoltar = _zoltar;
-	}
-
-	function _forkedEscrowState(
-		ISecurityPool securityPool,
-		address vault
-	) internal view returns (ForkedEscrowState storage state) {
-		state = forkedEscrowStateByPoolAndVault[securityPool][vault];
 	}
 
 	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
@@ -73,8 +65,8 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 			if (forkDataByPool[parent].ownFork && forkDataByPool[parent].vaultRepAtFork > 0) {
 				uint256 parentDenominator = parent.poolOwnershipDenominator();
 				uint256 childDenominator = parentDenominator == 0 ?
-					forkDataByPool[parent].auctionableRepAtFork * SecurityPoolUtils.PRICE_PRECISION :
-					parentDenominator * forkDataByPool[parent].auctionableRepAtFork / forkDataByPool[parent].vaultRepAtFork;
+					forkDataByPool[parent].vaultRepAtFork * SecurityPoolUtils.PRICE_PRECISION :
+					parentDenominator;
 				child.setOwnershipDenominator(childDenominator);
 			} else if (forkDataByPool[parent].ownFork) {
 				child.setOwnershipDenominator(forkDataByPool[parent].auctionableRepAtFork * SecurityPoolUtils.PRICE_PRECISION);
@@ -140,69 +132,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		return sourceRepAmount * repBuckets.escalationChildRepAtFork / escalationSourceRepAtFork;
 	}
 
-	function getForkedEscrowPrincipalByOutcomeAndVault(ISecurityPool securityPool, uint8 outcomeIndex, address vault) external view returns (uint256) {
-		outcomeIndex;
-		return _forkedEscrowState(securityPool, vault).principal;
-	}
-
-	function getForkedEscrowChildRepByOutcomeAndVault(ISecurityPool securityPool, uint8 outcomeIndex, address vault) external view returns (uint256) {
-		outcomeIndex;
-		return _forkedEscrowState(securityPool, vault).childRep;
-	}
-
-	function recordForkedEscrow(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome outcome, uint256 principalAmount, uint256 childRepAmount) external {
-		require(msg.sender == address(securityPool.escalationGame()), 'oeg');
-		_recordForkedEscrow(securityPool, vault, outcome, principalAmount, childRepAmount);
-	}
-
-	function _recordForkedEscrow(
-		ISecurityPool securityPool,
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 principalAmount,
-		uint256 childRepAmount
-	) internal {
-		require(vault != address(0x0), 'bd');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bo');
-		if (principalAmount == 0 && childRepAmount == 0) return;
-		ForkedEscrowState storage state = _forkedEscrowState(securityPool, vault);
-		state.principal += principalAmount;
-		state.childRep += childRepAmount;
-	}
-
-	function consumeForkedEscrow(
-		ISecurityPool securityPool,
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 principalAmount
-	) external returns (uint256 forkedEscrowPrincipal, uint256 forkedEscrowChildRep, uint256 childRepToRelease) {
-		require(msg.sender == address(securityPool.escalationGame()), 'oeg');
-		return _consumeForkedEscrow(securityPool, vault, outcome, principalAmount);
-	}
-
-	function _consumeForkedEscrow(
-		ISecurityPool securityPool,
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 principalAmount
-	) internal returns (uint256 forkedEscrowPrincipal, uint256 forkedEscrowChildRep, uint256 childRepToRelease) {
-		require(vault != address(0x0), 'bd');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bo');
-		if (principalAmount == 0) return (0, 0, 0);
-		ForkedEscrowState storage state = _forkedEscrowState(securityPool, vault);
-		forkedEscrowPrincipal = state.principal;
-		if (forkedEscrowPrincipal == 0) return (0, 0, 0);
-		forkedEscrowChildRep = state.childRep;
-		uint256 forkedEscrowPrincipalClaimed = state.principalClaimed;
-		uint256 forkedEscrowChildRepClaimed = state.childRepClaimed;
-		uint256 nextForkedEscrowPrincipalClaimed = forkedEscrowPrincipalClaimed + principalAmount;
-		require(nextForkedEscrowPrincipalClaimed <= forkedEscrowPrincipal, 'fee');
-		uint256 nextForkedEscrowChildRepClaimed = Math.ceilDiv(nextForkedEscrowPrincipalClaimed * forkedEscrowChildRep, forkedEscrowPrincipal);
-		childRepToRelease = nextForkedEscrowChildRepClaimed - forkedEscrowChildRepClaimed;
-		state.principalClaimed = nextForkedEscrowPrincipalClaimed;
-		state.childRepClaimed = nextForkedEscrowChildRepClaimed;
-	}
-
 	function _migrateVaultUnlockedState(ISecurityPool parent, ISecurityPool child, address vault) internal returns (uint256 migratedRep) {
 		bool shouldTransferCollateral = !forkDataByPool[parent].ownFork;
 		return _migrateVaultUnlockedState(parent, child, vault, shouldTransferCollateral);
@@ -212,12 +141,12 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		if (childRepAmount == 0) return;
 		parent.updateCollateralAmount();
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		uint256 auctionableRepAtFork = parentForkData.auctionableRepAtFork;
+		uint256 vaultRepAtFork = parentForkData.vaultRepAtFork;
 		uint256 parentCollateralAtFork = parentForkData.ownForkCollateralAtFork;
-		if (auctionableRepAtFork == 0 || parentCollateralAtFork == 0) return;
+		if (vaultRepAtFork == 0 || parentCollateralAtFork == 0) return;
 		uint256 nextRepTransferred = parentForkData.ownForkMigratedRepCollateralized + childRepAmount;
-		require(nextRepTransferred <= auctionableRepAtFork, 'own fork collateral transfer exceeds fork REP');
-		uint256 nextCollateralTransferred = Math.ceilDiv(parentCollateralAtFork * nextRepTransferred, auctionableRepAtFork);
+		require(nextRepTransferred <= vaultRepAtFork, 'own fork collateral transfer exceeds fork REP');
+		uint256 nextCollateralTransferred = Math.ceilDiv(parentCollateralAtFork * nextRepTransferred, vaultRepAtFork);
 		uint256 ethToTransfer = nextCollateralTransferred - parentForkData.ownForkCollateralTransferred;
 		parentForkData.ownForkMigratedRepCollateralized = nextRepTransferred;
 		parentForkData.ownForkCollateralTransferred = nextCollateralTransferred;

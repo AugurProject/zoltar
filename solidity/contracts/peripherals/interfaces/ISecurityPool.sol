@@ -89,6 +89,7 @@ interface ISecurityPool {
 	function escalationGame() external view returns (EscalationGame);
 	function initializeForkedEscalationGame(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork) external;
 	function initializeForkCarrySnapshot(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) external;
+	function initializeForkCarrySnapshotWithResolutionBalances(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, uint256[3] memory inheritedResolutionBalances, bytes32[3] memory inheritedNullifierRoots) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;

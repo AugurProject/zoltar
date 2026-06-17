@@ -76,6 +76,8 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 		if (request.functionName === 'getVaultCount') return 0n
 		if (request.functionName === 'escalationGame') return escalationGameAddress
 		if (request.functionName === 'getDepositsByOutcomeLength') return 0n
+		if (request.functionName === 'hasUnexportedLocalDepositRefs') return false
+		if (request.functionName === 'hasUnexportedForkedEscrow') return false
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
 	})
 
