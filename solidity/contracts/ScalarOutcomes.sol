@@ -4,7 +4,13 @@ pragma solidity 0.8.35;
 library ScalarOutcomes {
 	uint256 internal constant DECIMALS = 18;
 
-	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) internal pure returns (string memory) {
+	function getScalarOutcomeName(
+		uint120[2] memory payoutNumerators,
+		string memory unit,
+		uint256 numTicks,
+		int256 minValue,
+		int256 maxValue
+	) internal pure returns (string memory) {
 		require(numTicks > 0, 'numTicks=0');
 		require(maxValue > minValue, 'invalid range');
 		uint256 payout = uint256(payoutNumerators[1]);

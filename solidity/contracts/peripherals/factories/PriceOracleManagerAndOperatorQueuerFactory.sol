@@ -50,22 +50,27 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		protocolFeeRecipient = _protocolFeeRecipient;
 	}
 
-	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, bytes32 salt) external returns (SecurityPoolOracleCoordinator) {
-		return new SecurityPoolOracleCoordinator{ salt: keccak256(abi.encode(msg.sender, salt)) }(
-			_openOracle,
-			_reputationToken,
-			weth,
-			gasConsumedOpenOracleReportPrice,
-			gasConsumedSettlement,
-			exactToken1Report,
-			settlementTime,
-			disputeDelay,
-			protocolFee,
-			feePercentage,
-			multiplier,
-			timeType,
-			trackDisputes,
-			protocolFeeRecipient
-		);
+	function deployPriceOracleManagerAndOperatorQueuer(
+		OpenOracle _openOracle,
+		ReputationToken _reputationToken,
+		bytes32 salt
+	) external returns (SecurityPoolOracleCoordinator) {
+		return
+			new SecurityPoolOracleCoordinator{ salt: keccak256(abi.encode(msg.sender, salt)) }(
+				_openOracle,
+				_reputationToken,
+				weth,
+				gasConsumedOpenOracleReportPrice,
+				gasConsumedSettlement,
+				exactToken1Report,
+				settlementTime,
+				disputeDelay,
+				protocolFee,
+				feePercentage,
+				multiplier,
+				timeType,
+				trackDisputes,
+				protocolFeeRecipient
+			);
 	}
 }

@@ -61,16 +61,12 @@ interface IUniformPriceDualCapBatchAuction {
 	function computeClearing()
 		external
 		view
-		returns (
-			bool hitCap,
-			int256 clearingTickOut,
-			uint256 accumulatedEth,
-			uint256 ethAtClearingTick
-		);
+		returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick);
 
-	function withdrawBids(address withdrawFor, TickIndex[] calldata tickIndices)
-		external
-		returns (uint256 totalFilledRep, uint256 totalEthRefund);
+	function withdrawBids(
+		address withdrawFor,
+		TickIndex[] calldata tickIndices
+	) external returns (uint256 totalFilledRep, uint256 totalEthRefund);
 
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 

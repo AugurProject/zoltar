@@ -10,11 +10,10 @@ import '../BinaryOutcomes.sol';
 import './ERC1155.sol';
 
 /**
-* @title Share Token
-* @notice ERC1155 contract to hold all share token balances
-*/
+ * @title Share Token
+ * @notice ERC1155 contract to hold all share token balances
+ */
 contract ShareToken is ERC1155, IShareToken {
-
 	string public name;
 	string public symbol;
 	Zoltar public immutable zoltar;
@@ -47,7 +46,7 @@ contract ShareToken is ERC1155, IShareToken {
 		bytes memory buffer = new bytes(digits);
 		while (value != 0) {
 			digits--;
-			buffer[digits] = bytes1(uint8(48 + value % 10));
+			buffer[digits] = bytes1(uint8(48 + (value % 10)));
 			value /= 10;
 		}
 		return string(buffer);
@@ -67,7 +66,10 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function getChildId(uint256 originalId, uint248 newUniverse) internal pure returns (uint256 newId) {
 		assembly {
-			newId := or(and(originalId, 0xFF), shl(8, and(newUniverse, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)))
+			newId := or(
+				and(originalId, 0xFF),
+				shl(8, and(newUniverse, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))
+			)
 		}
 	}
 
@@ -107,12 +109,19 @@ contract ShareToken is ERC1155, IShareToken {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
-	function totalSupplyForOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) public view returns (uint256) {
+	function totalSupplyForOutcome(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome _outcome
+	) public view returns (uint256) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return totalSupply(_tokenId);
 	}
 
-	function balanceOfOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome, address _account) public view returns (uint256) {
+	function balanceOfOutcome(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome _outcome,
+		address _account
+	) public view returns (uint256) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return balanceOf(_account, _tokenId);
 	}
@@ -123,15 +132,23 @@ contract ShareToken is ERC1155, IShareToken {
 		balances[2] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.No));
 	}
 
-	function getTokenId(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) public pure returns (uint256 _tokenId) {
+	function getTokenId(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome _outcome
+	) public pure returns (uint256 _tokenId) {
 		return TokenId.getTokenId(_universeId, _outcome);
 	}
 
-	function getTokenIds(uint248 _universeId, BinaryOutcomes.BinaryOutcome[] memory _outcomes) public pure returns (uint256[] memory _tokenIds) {
+	function getTokenIds(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome[] memory _outcomes
+	) public pure returns (uint256[] memory _tokenIds) {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
-	function unpackTokenId(uint256 _tokenId) public pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
+	function unpackTokenId(
+		uint256 _tokenId
+	) public pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 

@@ -27,11 +27,23 @@ contract EscalationGameProofTestSecurityPool {
 		return zoltar.getRepToken(universeId);
 	}
 
-	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256, uint256) {
-		(uint256 acceptedAmount, uint256 resultingCumulativeAmount) = escalationGame.previewDepositOnOutcome(outcome, amount);
+	function depositOnOutcome(
+		address depositor,
+		BinaryOutcomes.BinaryOutcome outcome,
+		uint256 amount
+	) external returns (uint256, uint256) {
+		(uint256 acceptedAmount, uint256 resultingCumulativeAmount) = escalationGame.previewDepositOnOutcome(
+			outcome,
+			amount
+		);
 		ReputationToken rep = zoltar.getRepToken(universeId);
 		rep.transferFrom(msg.sender, address(escalationGame), acceptedAmount);
-		uint256 parentDepositIndex = escalationGame.recordDepositFromSecurityPool(depositor, outcome, acceptedAmount, resultingCumulativeAmount);
+		uint256 parentDepositIndex = escalationGame.recordDepositFromSecurityPool(
+			depositor,
+			outcome,
+			acceptedAmount,
+			resultingCumulativeAmount
+		);
 		return (acceptedAmount, parentDepositIndex);
 	}
 
@@ -41,14 +53,16 @@ contract EscalationGameProofTestSecurityPool {
 		uint256[3] memory inheritedCarryTotals,
 		bytes32[3] memory inheritedNullifierRoots
 	) external {
-		uint256 totalInheritedPrincipal =
-			inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
+		uint256 totalInheritedPrincipal = inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
 		if (totalInheritedPrincipal > 0) {
 			ReputationToken rep = zoltar.getRepToken(universeId);
 			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
 		}
 		escalationGame.initializeForkCarrySnapshot(
-			inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots
+			inheritedCarryPeaks,
+			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
+			inheritedNullifierRoots
 		);
 	}
 
@@ -74,47 +88,54 @@ contract EscalationGameProofTestSecurityPool {
 		);
 	}
 
-	function withdrawDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof)
-		external
-		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
-	{
+	function withdrawDeposit(
+		BinaryOutcomes.BinaryOutcome outcome,
+		CarriedDepositProof calldata proof
+	) external returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		return escalationGame.withdrawDeposit(proof, outcome);
 	}
 
-	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipal, uint256 childRepAmount) external {
+	function recordForkedEscrowForOutcome(
+		address depositor,
+		BinaryOutcomes.BinaryOutcome outcome,
+		uint256 sourcePrincipal,
+		uint256 childRepAmount
+	) external {
 		escalationGame.recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipal, childRepAmount);
 	}
 
-	function exportVaultUnresolvedDeposits(address vault, address repReceiver) external returns (uint256 principalToTransfer) {
+	function exportVaultUnresolvedDeposits(
+		address vault,
+		address repReceiver
+	) external returns (uint256 principalToTransfer) {
 		uint256[3] memory principalByOutcome = escalationGame.exportVaultUnresolvedDepositAmounts(vault, repReceiver);
 		return principalByOutcome[0] + principalByOutcome[1] + principalByOutcome[2];
 	}
 
-	function exportForkedEscrowByOutcome(address vault, address repReceiver)
-		external
-		returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome)
-	{
+	function exportForkedEscrowByOutcome(
+		address vault,
+		address repReceiver
+	) external returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome) {
 		return escalationGame.exportForkedEscrowByOutcome(vault, repReceiver);
 	}
 
-	function exportForkedEscrowByOutcomeWithoutTransfer(address vault)
-		external
-		returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome)
-	{
+	function exportForkedEscrowByOutcomeWithoutTransfer(
+		address vault
+	) external returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome) {
 		return escalationGame.exportForkedEscrowByOutcomeWithoutTransfer(vault);
 	}
 
-	function exportUnresolvedDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof)
-		external
-		returns (address depositor, uint256 amount, uint256 parentDepositIndex)
-	{
+	function exportUnresolvedDeposit(
+		BinaryOutcomes.BinaryOutcome outcome,
+		CarriedDepositProof calldata proof
+	) external returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		return escalationGame.exportUnresolvedDeposit(proof, outcome);
 	}
 
-	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
-		external
-		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
-	{
+	function claimDepositForWinning(
+		uint256 depositIndex,
+		BinaryOutcomes.BinaryOutcome outcome
+	) external returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		return escalationGame.claimDepositForWinning(depositIndex, outcome);
 	}
 }

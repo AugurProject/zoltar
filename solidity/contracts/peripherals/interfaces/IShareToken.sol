@@ -9,11 +9,26 @@ interface IShareToken {
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external;
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance);
-	function totalSupplyForOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) external view returns (uint256);
-	function balanceOfOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome, address _account) external view returns (uint256);
+	function totalSupplyForOutcome(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome _outcome
+	) external view returns (uint256);
+	function balanceOfOutcome(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome _outcome,
+		address _account
+	) external view returns (uint256);
 	function balanceOfShares(uint248 _universeId, address _account) external view returns (uint256[3] memory balances);
-	function getTokenId(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) external pure returns (uint256 _tokenId);
-	function getTokenIds(uint248 _universeId, BinaryOutcomes.BinaryOutcome[] memory _outcomes) external pure returns (uint256[] memory _tokenIds);
-	function unpackTokenId(uint256 _tokenId) external pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome);
+	function getTokenId(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome _outcome
+	) external pure returns (uint256 _tokenId);
+	function getTokenIds(
+		uint248 _universeId,
+		BinaryOutcomes.BinaryOutcome[] memory _outcomes
+	) external pure returns (uint256[] memory _tokenIds);
+	function unpackTokenId(
+		uint256 _tokenId
+	) external pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome);
 	function migrate(uint256 fromId, uint256[] memory targetOutcomeIndexes) external;
 }

@@ -25,7 +25,7 @@ contract SecurityPoolMigrationProxy {
 		IERC20(address(_parentRepToken)).safeApprove(address(_zoltar), type(uint256).max);
 	}
 
-	modifier onlyOwner {
+	modifier onlyOwner() {
 		require(msg.sender == owner, 'only owner');
 		_;
 	}

@@ -9,7 +9,7 @@ contract ReputationToken is ERC20 {
 	event Mint(address account, uint256 value);
 	event Burn(address account, uint256 value);
 
-	modifier isZoltar {
+	modifier isZoltar() {
 		require(msg.sender == zoltar, 'Not zoltar');
 		_;
 	}
@@ -33,7 +33,7 @@ contract ReputationToken is ERC20 {
 		emit Burn(account, value);
 	}
 
-    function getTotalTheoreticalSupply() external view returns (uint256) {
+	function getTotalTheoreticalSupply() external view returns (uint256) {
 		return totalTheoreticalSupply;
 	}
 }

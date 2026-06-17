@@ -21,12 +21,10 @@ pragma solidity 0.8.35;
 
 import './IERC165.sol';
 
-
 /// @title ERC-1155 Multi Token Standard
 /// @dev See https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1155.md
 /// Note: The ERC-165 identifier for this interface is 0xd9b67a26.
 interface IERC1155 is IERC165 {
-
 	/// @dev Either TransferSingle or TransferBatch MUST emit when tokens are transferred,
 	///      including zero value transfers as well as minting or burning.
 	/// Operator will always be msg.sender.
@@ -36,13 +34,7 @@ interface IERC1155 is IERC165 {
 	/// be used by clients and exchanges to be added to the "circulating supply" for a given token ID.
 	/// To define a token ID with no initial balance, the contract SHOULD emit the TransferSingle event
 	/// from `0x0` to `0x0`, with the token creator as `_operator`.
-	event TransferSingle(
-		address indexed operator,
-		address indexed from,
-		address indexed to,
-		uint256 id,
-		uint256 value
-	);
+	event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value);
 
 	/// @dev Either TransferSingle or TransferBatch MUST emit when tokens are transferred,
 	///      including zero value transfers as well as minting or burning.
@@ -62,19 +54,12 @@ interface IERC1155 is IERC165 {
 	);
 
 	/// @dev MUST emit when an approval is updated.
-	event ApprovalForAll(
-		address indexed owner,
-		address indexed operator,
-		bool approved
-	);
+	event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
 	/// @dev MUST emit when the URI is updated for a token ID.
 	/// URIs are defined in RFC 3986.
 	/// The URI MUST point a JSON file that conforms to the "ERC-1155 Metadata JSON Schema".
-	event URI(
-		string value,
-		uint256 indexed id
-	);
+	event URI(string value, uint256 indexed id);
 
 	/// @notice Transfers value amount of an _id from the _from address to the _to address specified.
 	/// @dev MUST emit TransferSingle event on success.
@@ -86,14 +71,7 @@ interface IERC1155 is IERC165 {
 	/// @param to      Target address
 	/// @param id      ID of the token type
 	/// @param value   Transfer amount
-	function safeTransferFrom(
-		address from,
-		address to,
-		uint256 id,
-		uint256 value,
-		bytes calldata data
-	)
-		external;
+	function safeTransferFrom(address from, address to, uint256 id, uint256 value, bytes calldata data) external;
 
 	/// @notice Send multiple types of Tokens from a 3rd party in one transfer (with safety call).
 	/// @dev MUST emit TransferBatch event on success.
@@ -112,8 +90,7 @@ interface IERC1155 is IERC165 {
 		uint256[] calldata ids,
 		uint256[] calldata values,
 		bytes calldata data
-	)
-		external;
+	) external;
 
 	/// @notice Enable or disable approval for a third party ("operator") to manage all of the caller's tokens.
 	/// @dev MUST emit the ApprovalForAll event on success.
@@ -145,8 +122,5 @@ interface IERC1155 is IERC165 {
 	function balanceOfBatch(
 		address[] calldata owners,
 		uint256[] calldata ids
-	)
-		external
-		view
-		returns (uint256[] memory balances_);
+	) external view returns (uint256[] memory balances_);
 }
