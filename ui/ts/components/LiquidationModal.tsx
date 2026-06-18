@@ -64,7 +64,7 @@ type QueuedLiquidationOperationView = {
 }
 function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	if (currentPoolOracleManagerDetails === undefined) return 'refreshing'
-	return currentPoolOracleManagerDetails.isPriceValid ? 'execute' : 'queue'
+	return currentPoolOracleManagerDetails.isPriceUsable === true ? 'execute' : 'queue'
 }
 function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
@@ -302,7 +302,7 @@ export function LiquidationModal({
 					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 
 					return (() => {
-						if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
+						if (currentPoolOracleManagerDetails.isPriceUsable === true) return 'executed'
 
 						return 'missing'
 					})()

@@ -1885,7 +1885,7 @@ describe('Peripherals Contract Test Suite', () => {
 	test('Can Liquidate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolAllowance = repDeposit / 4n
+		const securityPoolAllowance = 75n * 10n ** 18n
 		strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const initialPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -1895,14 +1895,15 @@ describe('Peripherals Contract Test Suite', () => {
 		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
-		const openInterestAmount = 100n * 10n ** 18n
+		const openInterestAmount = 50n * 10n ** 18n
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		await mockWindow.advanceTime(100000n)
 
 		strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 		const forcedPrice = PRICE_PRECISION * 10n
-		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		const liquidationAmount = 25n * 10n ** 18n
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
 
 		await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
@@ -1911,19 +1912,19 @@ describe('Peripherals Contract Test Suite', () => {
 
 		strictEqualTypeSafe(canLiquidate(currentPrice, securityPoolAllowance, repDeposit, 2n), true, 'Should be able to liquidate now')
 
-		// liquidator should have all the assets now
 		const originalVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-		strictEqualTypeSafe(originalVault.securityBondAllowance, 0n, 'original vault should not have any security bonds')
-		strictEqualTypeSafe(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
-		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, "liquidator doesn't have all the security pool allowances")
-		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit + repDeposit * 10n, 'liquidator should have all the rep in the pool')
+		const expectedRepMoved = (liquidationAmount * repDeposit) / securityPoolAllowance
+		strictEqualTypeSafe(originalVault.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'original vault should keep only the non-liquidated security bonds')
+		strictEqualTypeSafe(originalVault.repDepositShare / PRICE_PRECISION, repDeposit - expectedRepMoved, 'original vault should keep the non-liquidated REP')
+		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, liquidationAmount, "liquidator doesn't have the liquidated security pool allowance")
+		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit * 10n + expectedRepMoved, 'liquidator should receive the liquidated REP')
 	})
 
 	test('liquidation should use snapshot to prevent blocking via additional rep deposit', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolAllowance = repDeposit / 4n
+		const securityPoolAllowance = 75n * 10n ** 18n
 		// Set the target's security bond allowance
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		assert.ok((await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)) > 0n, 'Price was not set!')
@@ -1935,7 +1936,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
 
 		// Create open interest
-		const openInterestAmount = 100n * 10n ** 18n
+		const openInterestAmount = 50n * 10n ** 18n
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		await mockWindow.advanceTime(100000n)
 
@@ -1950,7 +1951,8 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Queue liquidation (liquidator requests price to trigger liquidation)
 		const forcedPrice = PRICE_PRECISION * 10n
-		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		const liquidationAmount = 25n * 10n ** 18n
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
 
 		// Record liquidator's ownership before attack
 		const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -1973,11 +1975,10 @@ describe('Peripherals Contract Test Suite', () => {
 		const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 		const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
-		// Target's allowance should be zero after liquidation (since we moved the full allowance)
-		strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'target security bond allowance should be zero after liquidation')
+		strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'target security bond allowance should decrease by the liquidated amount')
 
 		// Compute expected changes based on snapshot
-		const debtToMove = securityPoolAllowance
+		const debtToMove = liquidationAmount
 		const effectiveDebtToMove = debtToMove < snapshotTargetAllowance ? debtToMove : snapshotTargetAllowance
 		const repToMove = (effectiveDebtToMove * snapshotExpectedRepDeposit) / snapshotTargetAllowance
 		const ownershipToMove = (repToMove * denominatorAfter) / totalRepAfter
@@ -1996,7 +1997,7 @@ describe('Peripherals Contract Test Suite', () => {
 	})
 
 	test('liquidation only moves REP that is not committed to escalation', async () => {
-		const securityPoolAllowance = 400n * 10n ** 18n
+		const securityPoolAllowance = 200n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
 		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -2008,7 +2009,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
-		const lockedDeposit = 300n * 10n ** 18n
+		const lockedDeposit = 700n * 10n ** 18n
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 
 		const targetVaultAfterLock = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)

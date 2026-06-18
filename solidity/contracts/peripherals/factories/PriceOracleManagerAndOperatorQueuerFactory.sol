@@ -21,6 +21,10 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 	bool public immutable timeType;
 	bool public immutable trackDisputes;
 	address public immutable protocolFeeRecipient;
+	uint256 public immutable priceRoundBudgetMultiplierBps;
+	uint256 public immutable escalationHaltMultiplierBps;
+	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
+	uint256 public immutable minLiquidationPriceDistanceBps;
 
 	constructor(
 		IWeth9 _weth,
@@ -34,7 +38,11 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		uint16 _multiplier,
 		bool _timeType,
 		bool _trackDisputes,
-		address _protocolFeeRecipient
+		address _protocolFeeRecipient,
+		uint256 _priceRoundBudgetMultiplierBps,
+		uint256 _escalationHaltMultiplierBps,
+		uint256 _maxSettlementBaseFeeMultiplierBps,
+		uint256 _minLiquidationPriceDistanceBps
 	) {
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
@@ -48,6 +56,10 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		timeType = _timeType;
 		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
+		priceRoundBudgetMultiplierBps = _priceRoundBudgetMultiplierBps;
+		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
+		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
+		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
 	}
 
 	function deployPriceOracleManagerAndOperatorQueuer(
@@ -70,7 +82,11 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 				multiplier,
 				timeType,
 				trackDisputes,
-				protocolFeeRecipient
+				protocolFeeRecipient,
+				priceRoundBudgetMultiplierBps,
+				escalationHaltMultiplierBps,
+				maxSettlementBaseFeeMultiplierBps,
+				minLiquidationPriceDistanceBps
 			);
 	}
 }

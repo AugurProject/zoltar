@@ -5,9 +5,10 @@ import { sameAddress } from './address.js'
 
 export const MIN_SECURITY_VAULT_REP_DEPOSIT = 10n * 10n ** 18n
 export const MIN_SECURITY_BOND_ALLOWANCE = 1n * 10n ** 18n
-export const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 60n * 60n
-export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 30n
+export const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 5n * 60n
+export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
+export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 
 export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {

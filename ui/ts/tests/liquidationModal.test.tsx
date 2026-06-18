@@ -37,10 +37,11 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 }
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
+	const details = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
+		isPriceUsable: true,
 		lastPrice: 1n,
 		lastSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
@@ -54,6 +55,8 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		token2: zeroAddress,
 		...overrides,
 	}
+	if (!details.isPriceValid) details.isPriceUsable = false
+	return details
 }
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
@@ -139,7 +142,7 @@ describe('LiquidationModal', () => {
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
 				liquidationTargetVault={defaultTargetVaultAddress}
-				liquidationTimeoutMinutes='30'
+				liquidationTimeoutMinutes='5'
 				loadingPoolOracleManager={false}
 				onLoadPoolOracleManager={() => undefined}
 				onLiquidationAmountChange={() => undefined}
@@ -164,6 +167,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 			}),
 			poolState: createEndedPoolState(),
 			selectedPool: createSelectedPool({
@@ -190,7 +194,7 @@ describe('LiquidationModal', () => {
 		expectTransactionButtonDisabled(document.body, 'Queue Liquidation')
 	})
 
-	test('defaults queued liquidation timeout copy to 30 minutes', async () => {
+	test('defaults queued liquidation timeout copy to 5 minutes', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
@@ -198,7 +202,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('This queued staged operation will expire 30m after the oracle settlement window completes.')).toBe(true)
+		expect(document.body.textContent?.includes('This queued staged operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
 	test('requires a queued liquidation timeout of at least 1 minute', async () => {
@@ -270,7 +274,7 @@ describe('LiquidationModal', () => {
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					liquidationTargetVault={zeroAddress}
 					onLoadPoolOracleManager={() => undefined}
@@ -392,6 +396,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
@@ -436,6 +441,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
@@ -475,6 +481,7 @@ describe('LiquidationModal', () => {
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
+						isPriceUsable: true,
 						lastPrice: 1n * 10n ** 18n,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
@@ -486,7 +493,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
@@ -569,6 +576,7 @@ describe('LiquidationModal', () => {
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
+						isPriceUsable: true,
 						lastPrice: 1n * 10n ** 18n,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
@@ -580,7 +588,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
@@ -654,6 +662,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			selectedPool: createSelectedPool({
@@ -675,7 +684,7 @@ describe('LiquidationModal', () => {
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+			<ChainTimestampContext.Provider value={1n + 5n * 60n + 60n}>
 				<LiquidationModal
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => undefined}
@@ -687,7 +696,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
@@ -718,6 +727,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '2',
@@ -752,6 +762,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '1',
@@ -805,6 +816,7 @@ describe('LiquidationModal', () => {
 			accountAddress: vaultAddress,
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '1',
@@ -840,6 +852,7 @@ describe('LiquidationModal', () => {
 			accountAddress: callerVaultAddress,
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '2',
@@ -875,6 +888,7 @@ describe('LiquidationModal', () => {
 					closeLiquidationModal={() => undefined}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
+						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 					})}
 					isMainnet
@@ -884,7 +898,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={setLiquidationAmount}
@@ -974,6 +988,7 @@ describe('LiquidationModal', () => {
 			accountAddress: callerVaultAddress,
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 3n * 10n ** 18n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
@@ -1003,6 +1018,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
@@ -1022,6 +1038,7 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
+				isPriceUsable: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({

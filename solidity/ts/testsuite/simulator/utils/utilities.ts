@@ -11,7 +11,7 @@ import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../
 export { sortStringArrayByKeccak } from './sortStringArrayByKeccak'
 const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
-const DEFAULT_APPROVAL_AMOUNT = 1000000000000000000000000000000n
+const DEFAULT_APPROVAL_AMOUNT = (1n << 256n) - 1n
 const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
 
 function hexToBytes(value: string) {

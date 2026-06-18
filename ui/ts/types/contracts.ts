@@ -185,6 +185,7 @@ export type OracleManagerDetails = {
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
 	isPriceValid: boolean
+	isPriceUsable?: boolean
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	managerAddress: Address
@@ -192,6 +193,10 @@ export type OracleManagerDetails = {
 	pendingOperation: StagedOracleOperation | undefined
 	pendingOperationSlotId: bigint
 	pendingReportId: bigint
+	priceRoundConsumedNotional?: bigint
+	priceRoundId?: bigint
+	priceRoundMaxNotional?: bigint
+	priceRoundRemainingNotional?: bigint
 	priceValidUntilTimestamp: bigint | undefined
 	requestPriceEthCost: bigint
 	stagedOperations?: StagedOracleOperation[]

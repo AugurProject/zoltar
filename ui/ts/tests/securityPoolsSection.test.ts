@@ -217,10 +217,11 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 }
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
+	const details = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
+		isPriceUsable: true,
 		lastPrice: 1n,
 		lastSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
@@ -234,6 +235,8 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		token2: zeroAddress,
 		...overrides,
 	}
+	if (!details.isPriceValid) details.isPriceUsable = false
+	return details
 }
 
 function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
@@ -249,7 +252,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '30',
+		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
@@ -308,7 +311,7 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '30',
+		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
 		loadingSecurityPools: false,
@@ -674,6 +677,7 @@ void describe('SecurityPoolsSection', () => {
 						liquidationTargetVault: zeroAddress,
 						poolOracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
+							isPriceUsable: true,
 							managerAddress: zeroAddress,
 						}),
 						securityPoolOverviewResult: {
@@ -741,6 +745,7 @@ void describe('SecurityPoolsSection', () => {
 						liquidationTargetVault: zeroAddress,
 						poolOracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
+							isPriceUsable: true,
 							managerAddress: zeroAddress,
 						}),
 						securityPoolOverviewResult: {

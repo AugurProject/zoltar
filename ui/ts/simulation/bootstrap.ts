@@ -45,12 +45,12 @@ const SEEDED_REP_ETH_PRICE = 3n * 10n ** 18n
 const REP_TOKEN_MINT_AMOUNT = 100_000_000n * 10n ** 18n
 const SECURITY_MULTIPLIER = 2n
 const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
-const SECURITY_BOND_ALLOWANCE = SECURITY_POOL_REP_DEPOSIT / 4n
+const SECURITY_BOND_ALLOWANCE = 100n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
-const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
+const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 100n * 10n ** 18n
 const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
 const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
-const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 24n * 60n * 60n
+const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
 const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 20_000_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
@@ -554,7 +554,7 @@ async function ensureSecurityBondAllowanceConfigured({
 			}
 
 			if (!reportDetails.isDistributed) {
-				await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
+				await advanceSimulationTime(memoryClient, reportDetails.settlementTime + 1n)
 				await settleOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
 			}
 		}
@@ -658,10 +658,25 @@ async function settleSeededOracleReport({
 	}
 }
 
-async function settleOracleReportIfNeeded({ readClient, writeClient, openOracleAddress, pendingReportId }: { readClient: ReadClient; writeClient: WriteClient; openOracleAddress: Address; pendingReportId: bigint }) {
+async function settleOracleReportIfNeeded({ memoryClient, readClient, writeClient, openOracleAddress, pendingReportId }: { memoryClient: TevmLikeClient; readClient: ReadClient; writeClient: WriteClient; openOracleAddress: Address; pendingReportId: bigint }) {
 	const seededReport = await loadOpenOracleReportDetails(readClient, openOracleAddress, pendingReportId)
 	if (seededReport.isDistributed) return
+	const reportTimestamp = getSimulationReportTiming(seededReport.reportTimestamp)
+	const settlementTime = getSimulationReportTiming(seededReport.settlementTime)
+	if (reportTimestamp !== undefined && settlementTime !== undefined) {
+		const settlementReadyTimestamp = reportTimestamp + settlementTime + 1n
+		const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
+		if (currentTimestamp < settlementReadyTimestamp) {
+			await advanceSimulationTime(memoryClient, settlementReadyTimestamp - currentTimestamp)
+		}
+	}
 	await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
+}
+
+function getSimulationReportTiming(value: unknown) {
+	if (typeof value === 'bigint') return value
+	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
+	return undefined
 }
 
 async function seedSecurityPool({
@@ -718,8 +733,8 @@ async function seedSecurityPool({
 		readClient,
 		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 	})
-	await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
 	await settleOracleReportIfNeeded({
+		memoryClient,
 		openOracleAddress: seededOracleReport.openOracleAddress,
 		pendingReportId: seededOracleReport.pendingReportId,
 		readClient,
@@ -917,10 +932,9 @@ async function seedSecurityPoolX2Scenario({
 		})
 	}
 
-	await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
-
 	for (const preparedPool of preparedPools) {
 		await settleOracleReportIfNeeded({
+			memoryClient,
 			openOracleAddress: preparedPool.openOracleAddress,
 			pendingReportId: preparedPool.pendingReportId,
 			readClient,
