@@ -482,7 +482,13 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		SecurityPoolForkerForkData storage data
 	) private returns (uint256 repPurchased) {
 		if (data.truthAuction.auctionStarted() != 0) {
+			uint256 balanceBeforeFinalize = address(this).balance;
 			data.truthAuction.finalize();
+			uint256 ethReceived = address(this).balance - balanceBeforeFinalize;
+			if (ethReceived > 0) {
+				(bool sent, ) = payable(address(securityPool)).call{ value: ethReceived }('');
+				require(sent, 'truth auction ETH transfer failed');
+			}
 			repPurchased = data.truthAuction.totalRepPurchased();
 		}
 		securityPool.setSystemState(SystemState.Operational);

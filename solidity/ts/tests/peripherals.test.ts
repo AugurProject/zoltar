@@ -3642,8 +3642,13 @@ describe('Peripherals Contract Test Suite', () => {
 		const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repToBuy, expectedEthToBuy)
 
 		// Finalize auction
+		const childEthBalanceBeforeFinalize = await getETHBalance(client, yesSecurityPool.securityPool)
+		const forkerEthBalanceBeforeFinalize = await getETHBalance(client, getInfraContractAddresses().securityPoolForker)
 		await mockWindow.advanceTime(7n * DAY + DAY)
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), childEthBalanceBeforeFinalize + expectedEthToBuy, 'child pool should receive truth-auction ETH on finalization')
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), childEthBalanceBeforeFinalize + expectedEthToBuy, 'child pool collateral accounting should include truth-auction ETH')
+		strictEqualTypeSafe(await getETHBalance(client, getInfraContractAddresses().securityPoolForker), forkerEthBalanceBeforeFinalize, 'forker should not retain truth-auction ETH')
 
 		// Verify participant got REP allocation
 
