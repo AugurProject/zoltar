@@ -1,9 +1,10 @@
 import { applyLibraries, getInfraContractAddresses } from './deployPeripherals'
-import { bytes32String } from '../bigint'
-import { Address, encodeDeployData, getCreate2Address } from 'viem'
+import { addressString, bytes32String } from '../bigint'
+import { Address, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256 } from 'viem'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../../../types/contractArtifact'
+import { TEST_ADDRESSES } from '../constants'
 
-export const getUniformPriceDualCapBatchAuctionAddress = (owner: Address) =>
+export const getUniformPriceDualCapBatchAuctionAddress = (owner: Address, deployer: Address = addressString(TEST_ADDRESSES[0])) =>
 	getCreate2Address({
 		bytecode: encodeDeployData({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
@@ -11,5 +12,5 @@ export const getUniformPriceDualCapBatchAuctionAddress = (owner: Address) =>
 			args: [owner],
 		}),
 		from: getInfraContractAddresses().uniformPriceDualCapBatchAuctionFactory,
-		salt: bytes32String(0n),
+		salt: keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [deployer, bytes32String(0n)])),
 	})

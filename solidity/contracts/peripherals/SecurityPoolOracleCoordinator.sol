@@ -208,11 +208,10 @@ contract SecurityPoolOracleCoordinator {
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-		// Capture the target vault state at queue time on purpose.
-		// Liquidations are intentionally valued against the vault state that existed when the
-		// caller requested the oracle-backed operation, so the target cannot escape by
-		// depositing REP or reducing allowance after the request is staged but before the
-		// oracle report settles.
+		// Capture the target vault state at queue time. Liquidation may still execute if
+		// the target deposits more REP after staging, but allowance changes or ownership
+		// decreases make the snapshot stale. Stale operations are consumed and must be
+		// restaged against current state.
 		// Liquidation should value the vault's full collateral claim. That means using the
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
@@ -268,13 +267,23 @@ contract SecurityPoolOracleCoordinator {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		require(stagedOperation.initiatorVault != address(0), 'no such operation');
 		require(isPriceValid(), 'price is not valid to execute');
-		require(
-			block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds,
-			'staged operation expired'
-		);
-		_consumeActiveStagedOperation(operationId);
-		stagedOperations[operationId].initiatorVault = address(0);
+		if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
+			_consumeStagedOperation(operationId);
+			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'staged operation expired');
+			return;
+		}
 		if (stagedOperation.operation == OperationType.Liquidation) {
+			(uint256 currentTargetOwnership, uint256 currentTargetAllowance, , ) = securityPool.securityVaults(
+				stagedOperation.targetVault
+			);
+			if (
+				currentTargetOwnership < stagedOperation.snapshotTargetOwnership ||
+				currentTargetAllowance != stagedOperation.snapshotTargetAllowance
+			) {
+				_consumeStagedOperation(operationId);
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'stale liquidation');
+				return;
+			}
 			try
 				securityPool.performLiquidation(
 					stagedOperation.initiatorVault,
@@ -286,15 +295,20 @@ contract SecurityPoolOracleCoordinator {
 					stagedOperation.snapshotDenominator
 				)
 			{
+				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
+				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
 			} catch Panic(uint256) {
+				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
 			} catch (bytes memory) {
+				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
+			_consumeStagedOperation(operationId);
 			try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
@@ -305,6 +319,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else {
+			_consumeStagedOperation(operationId);
 			try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
@@ -315,6 +330,11 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}
+	}
+
+	function _consumeStagedOperation(uint256 operationId) private {
+		_consumeActiveStagedOperation(operationId);
+		stagedOperations[operationId].initiatorVault = address(0);
 	}
 
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {

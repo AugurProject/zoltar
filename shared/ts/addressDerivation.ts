@@ -60,6 +60,10 @@ function getShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
 	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
 }
 
+function getCallerScopedSalt(caller: Address, salt: Hex) {
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [caller, salt]))
+}
+
 function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: securityPoolFactory,
@@ -89,7 +93,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
 		const infraContracts = config.getInfraContracts()
 		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, securityMultiplier)
-		const securityPoolSaltWithMsgSender = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [infraContracts.securityPoolFactory, securityPoolSalt]))
+		const securityPoolSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, securityPoolSalt)
 
 		const repToken = config.getRepTokenAddress(universeId)
 		const priceOracleManagerAndOperatorQueuer = getCreate2Address({
@@ -108,7 +112,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 				: getCreate2Address({
 						bytecode: config.getTruthAuctionInitCode(infraContracts.securityPoolForker),
 						from: infraContracts.uniformPriceDualCapBatchAuctionFactory,
-						salt: securityPoolSalt,
+						salt: securityPoolSaltWithMsgSender,
 					})
 		const securityPool = getCreate2Address({
 			bytecode: config.getSecurityPoolInitCode({

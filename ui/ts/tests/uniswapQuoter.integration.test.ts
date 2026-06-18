@@ -6,7 +6,7 @@
  * in uniswapQuoter.test.ts which mock all contract calls.
  */
 
-import { describe, expect, test } from 'bun:test'
+import { describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, zeroAddress } from 'viem'
 import { mainnet } from 'viem/chains'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEth, quoteRepForEthV3, quoteEthForRep, quoteTokenForEth } from '../lib/uniswapQuoter.js'
@@ -20,6 +20,7 @@ const client = createPublicClient({
 
 const ONE_ETH = 10n ** 18n
 const ONE_REP = 10n ** 18n
+const describe = process.env['RUN_MAINNET_INTEGRATION_TESTS'] === '1' ? baseDescribe : baseDescribe.skip
 
 void describe('Uniswap V4 Quoter — integration', () => {
 	// Sanity check: ETH/USDC 0.05% pool is established and should always return a price

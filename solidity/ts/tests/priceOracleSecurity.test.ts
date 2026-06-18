@@ -491,20 +491,23 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
-		await assert.rejects(
+		await writeContractAndWait(
+			client,
 			async () =>
-				await writeContractAndWait(
-					client,
-					async () =>
-						await client.writeContract({
-							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-							address: priceOracle,
-							functionName: 'executeStagedOperation',
-							args: [2n],
-						}),
-				),
-			/expired/i,
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [2n],
+				}),
 		)
+		const expiredOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [2n],
+		})
+		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired liquidation should be consumed after execution attempt')
 	})
 
 	test('staged self operations expire after their caller-selected validity window', async () => {
@@ -547,19 +550,22 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
-		await assert.rejects(
+		await writeContractAndWait(
+			client,
 			async () =>
-				await writeContractAndWait(
-					client,
-					async () =>
-						await client.writeContract({
-							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-							address: priceOracle,
-							functionName: 'executeStagedOperation',
-							args: [2n],
-						}),
-				),
-			/staged operation expired/,
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [2n],
+				}),
 		)
+		const expiredOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [2n],
+		})
+		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired self operation should be consumed after execution attempt')
 	})
 })
