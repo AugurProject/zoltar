@@ -13,6 +13,7 @@ type RpcTransactionReceiptData = {
 
 type RpcTransactionRequest = {
 	readonly to?: string
+	readonly data?: string
 }
 
 interface CoverageProfile {
@@ -192,6 +193,21 @@ const findCompatibleProfilesForBytecode = (profileByBytecode: CoverageProfileMap
 
 	if (bestCandidate === undefined) return undefined
 	return bestCandidate.profiles
+}
+
+const findProfilesForCreationBytecode = (profileByBytecode: CoverageProfileMap, normalizedCreationCode: string): CoverageProfile[] | undefined => {
+	const exactProfiles = profileByBytecode.get(normalizedCreationCode)
+	if (exactProfiles !== undefined) return exactProfiles
+
+	let bestProfiles: CoverageProfile[] | undefined
+	let bestBytecodeLength = 0
+	for (const [artifactBytecode, profiles] of profileByBytecode.entries()) {
+		if (artifactBytecode.length <= bestBytecodeLength) continue
+		if (!normalizedCreationCode.startsWith(artifactBytecode)) continue
+		bestProfiles = profiles
+		bestBytecodeLength = artifactBytecode.length
+	}
+	return bestProfiles
 }
 
 const traceStepAddress = (step: Record<string, unknown>): string | undefined => {
@@ -480,6 +496,11 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 	const addresses = Array.from(new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses, ...traceAddresses]))
 
 	const profilesByAddress = await collectProfilesForAddresses(addresses, options.request, profileByBytecode, addressProfileCache)
+	const creationCode = options.transaction.data === undefined ? undefined : normalizeBytecode(options.transaction.data)
+	const creationProfiles = creationCode === undefined ? undefined : findProfilesForCreationBytecode(profileByBytecode, creationCode)
+	for (const contractAddress of receiptContractAddresses) {
+		if (creationProfiles !== undefined && creationProfiles.length > 0) profilesByAddress.set(contractAddress, creationProfiles)
+	}
 	const fallbackProfiles = new Set<CoverageProfile>()
 	for (const profileSet of profilesByAddress.values()) for (const profile of profileSet) fallbackProfiles.add(profile)
 
@@ -489,8 +510,7 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 
 		const codeAddressProfileSet = codeAddress === undefined ? undefined : profilesByAddress.get(codeAddress)
 		const stepAddressProfileSet = stepAddress === undefined ? undefined : profilesByAddress.get(stepAddress)
-		const activeProfiles =
-			codeAddressProfileSet ?? stepAddressProfileSet ?? (fallbackProfiles.size > 0 ? [...fallbackProfiles] : undefined)
+		const activeProfiles = codeAddressProfileSet ?? stepAddressProfileSet ?? (fallbackProfiles.size > 0 ? [...fallbackProfiles] : undefined)
 		if (activeProfiles === undefined) continue
 
 		for (const profile of activeProfiles) {

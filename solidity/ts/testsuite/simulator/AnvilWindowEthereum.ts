@@ -42,6 +42,7 @@ type RpcTransaction = {
 type RpcTransactionRequest = {
 	readonly from?: string
 	readonly to?: string
+	readonly data?: string
 	readonly gasPrice?: string
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
@@ -232,6 +233,28 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
 			const receiptResult = await waitForReceiptStatus(json.result)
 			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
+			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
+			const receipt =
+				parsedReceipt === undefined
+					? undefined
+					: {
+							...(typeof parsedReceipt.to === 'string' ? { to: parsedReceipt.to } : {}),
+							...(typeof parsedReceipt.contractAddress === 'string' ? { contractAddress: parsedReceipt.contractAddress } : {}),
+						}
+			const requestOptions = {
+				request,
+				transactionHash: json.result,
+				transaction: {
+					...(transaction !== undefined && typeof transaction.to === 'string' ? { to: transaction.to } : {}),
+					...(transaction !== undefined && typeof transaction.data === 'string' ? { data: transaction.data } : {}),
+				},
+				...(receipt !== undefined ? { receipt } : {}),
+			}
+			if (receiptResult?.status !== undefined) {
+				await collectBytecodeCoverageForTransaction({
+					...requestOptions,
+				})
+			}
 			if (receiptResult?.status === '0x0') {
 				try {
 					await request({ method: 'eth_call', params: [params[0], 'latest'] })
@@ -239,28 +262,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					throw error
 				}
 				throw new Error('Transaction reverted')
-			}
-
-			if (receiptResult?.status !== '0x0') {
-				const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
-				const receipt =
-					parsedReceipt === undefined
-						? undefined
-						: {
-								...(typeof parsedReceipt.to === 'string' ? { to: parsedReceipt.to } : {}),
-								...(typeof parsedReceipt.contractAddress === 'string' ? { contractAddress: parsedReceipt.contractAddress } : {}),
-							}
-				const requestOptions = {
-					request,
-					transactionHash: json.result,
-					transaction: {
-						...(transaction !== undefined && typeof transaction.to === 'string' ? { to: transaction.to } : {}),
-					},
-					...(receipt !== undefined ? { receipt } : {}),
-				}
-				await collectBytecodeCoverageForTransaction({
-					...requestOptions,
-				})
 			}
 		}
 		if (nextBlockTimestamp !== undefined) currentTimestamp = nextBlockTimestamp
