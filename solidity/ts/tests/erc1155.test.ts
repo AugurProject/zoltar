@@ -316,13 +316,14 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 	})
 
-	test('read-only ERC1155 and share-token helpers execute as transactions for bytecode coverage', async () => {
+	test('coverage instrumentation traces read-only ERC1155 and share-token helpers through transactions', async () => {
 		const shareTokenAddress = await deployShareToken()
 		await mintCompleteSets(shareTokenAddress, client.account.address, 1n)
 		const invalidTokenId = await readTokenId(shareTokenAddress, 0)
 		const yesTokenId = await readTokenId(shareTokenAddress, 1)
 		const noTokenId = await readTokenId(shareTokenAddress, 2)
 
+		// Solidity bytecode coverage is transaction-trace based; readContract calls are not mapped.
 		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'supportsInterface', args: ['0xd9b67a26'] }))
 		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOf', args: [client.account.address, yesTokenId] }))
 		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'totalSupply', args: [yesTokenId] }))

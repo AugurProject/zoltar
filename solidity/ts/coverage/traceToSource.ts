@@ -22,8 +22,9 @@ interface CoverageProfile {
 }
 
 type CoverageProfileMap = Map<string, CoverageProfile[]>
-type BytecodeProfileCandidate = {
-	readonly profiles: CoverageProfile[]
+type CoverageProfileMaps = {
+	readonly creation: CoverageProfileMap
+	readonly deployed: CoverageProfileMap
 }
 
 type ResolvedTraceStep = {
@@ -122,9 +123,19 @@ const isBytecodeProfile = (bytecode: string | undefined, sourceMap: string | und
 	return { sourceFileNames, pcToSource }
 }
 
-const collectProfilesByBytecode = async (artifactsPath: string): Promise<CoverageProfileMap> => {
+const addProfileToMap = (profileByBytecode: CoverageProfileMap, bytecode: string | undefined, profile: CoverageProfile): void => {
+	const key = normalizeBytecode(bytecode ?? '')
+	const existing = profileByBytecode.get(key) ?? []
+	existing.push(profile)
+	profileByBytecode.set(key, existing)
+}
+
+const collectProfilesByBytecode = async (artifactsPath: string): Promise<CoverageProfileMaps> => {
 	const { contracts, sourceFiles } = await readArtifactsMetadata(artifactsPath)
-	const profileByBytecode: CoverageProfileMap = new Map()
+	const profileMaps: CoverageProfileMaps = {
+		creation: new Map(),
+		deployed: new Map(),
+	}
 
 	for (const sourceFileContracts of Object.values(contracts)) {
 		for (const contract of Object.values(sourceFileContracts)) {
@@ -132,24 +143,14 @@ const collectProfilesByBytecode = async (artifactsPath: string): Promise<Coverag
 			if (evm === undefined) continue
 
 			const creationProfile = isBytecodeProfile(evm.bytecode?.object, evm.bytecode?.sourceMap, sourceFiles)
-			if (creationProfile !== undefined) {
-				const key = normalizeBytecode(evm.bytecode?.object ?? '')
-				const existing = profileByBytecode.get(key) ?? []
-				existing.push(creationProfile)
-				profileByBytecode.set(key, existing)
-			}
+			if (creationProfile !== undefined) addProfileToMap(profileMaps.creation, evm.bytecode?.object, creationProfile)
 
 			const deployedProfile = isBytecodeProfile(evm.deployedBytecode?.object, evm.deployedBytecode?.sourceMap, sourceFiles)
-			if (deployedProfile !== undefined) {
-				const key = normalizeBytecode(evm.deployedBytecode?.object ?? '')
-				const existing = profileByBytecode.get(key) ?? []
-				existing.push(deployedProfile)
-				profileByBytecode.set(key, existing)
-			}
+			if (deployedProfile !== undefined) addProfileToMap(profileMaps.deployed, evm.deployedBytecode?.object, deployedProfile)
 		}
 	}
 
-	return profileByBytecode
+	return profileMaps
 }
 
 const countDifferentCharacters = (first: string, second: string): number => {
@@ -179,20 +180,27 @@ const findCompatibleProfilesForBytecode = (profileByBytecode: CoverageProfileMap
 	const exactProfiles = profileByBytecode.get(normalizedCode)
 	if (exactProfiles !== undefined) return exactProfiles
 
-	let bestCandidate: BytecodeProfileCandidate | undefined
+	let bestProfiles: CoverageProfile[] | undefined
 	let bestDifferenceCount = Number.POSITIVE_INFINITY
+	let ambiguousBestMatch = false
 
 	for (const [artifactBytecode, profiles] of profileByBytecode.entries()) {
 		if (artifactBytecode.length !== normalizedCode.length) continue
 		const differenceLimit = getCompatibleBytecodeDifferenceLimitForPair(artifactBytecode, normalizedCode)
 		const differenceCount = countDifferentCharacters(artifactBytecode, normalizedCode)
-		if (differenceCount > differenceLimit || differenceCount >= bestDifferenceCount) continue
+		if (differenceCount > differenceLimit) continue
+		if (differenceCount === bestDifferenceCount) {
+			ambiguousBestMatch = true
+			continue
+		}
+		if (differenceCount > bestDifferenceCount) continue
 		bestDifferenceCount = differenceCount
-		bestCandidate = { profiles }
+		bestProfiles = profiles
+		ambiguousBestMatch = false
 	}
 
-	if (bestCandidate === undefined) return undefined
-	return bestCandidate.profiles
+	if (bestProfiles === undefined || ambiguousBestMatch) return undefined
+	return bestProfiles
 }
 
 const findProfilesForCreationBytecode = (profileByBytecode: CoverageProfileMap, normalizedCreationCode: string): CoverageProfile[] | undefined => {
@@ -406,23 +414,25 @@ const initializeCoverageLinesForProfileSegment = async (profile: CoverageProfile
 	}
 }
 
-const initializeCoverageLines = async (profileByBytecode: CoverageProfileMap, rootPath: string): Promise<void> => {
+const initializeCoverageLines = async (profileMaps: CoverageProfileMaps, rootPath: string): Promise<void> => {
 	const initializedProfiles = new Set<CoverageProfile>()
-	for (const profiles of profileByBytecode.values()) {
-		for (const profile of profiles) {
-			if (initializedProfiles.has(profile)) continue
-			initializedProfiles.add(profile)
-			const initializedSegments = new Set<ParsedSourceMapSegment>()
-			for (const segment of profile.pcToSource.values()) {
-				if (segment === undefined || initializedSegments.has(segment)) continue
-				initializedSegments.add(segment)
-				await initializeCoverageLinesForProfileSegment(profile, segment, rootPath, fileContents, lineCoverage)
+	for (const profileByBytecode of [profileMaps.creation, profileMaps.deployed]) {
+		for (const profiles of profileByBytecode.values()) {
+			for (const profile of profiles) {
+				if (initializedProfiles.has(profile)) continue
+				initializedProfiles.add(profile)
+				const initializedSegments = new Set<ParsedSourceMapSegment>()
+				for (const segment of profile.pcToSource.values()) {
+					if (segment === undefined || initializedSegments.has(segment)) continue
+					initializedSegments.add(segment)
+					await initializeCoverageLinesForProfileSegment(profile, segment, rootPath, fileContents, lineCoverage)
+				}
 			}
 		}
 	}
 }
 
-let profileByBytecodePromise: Promise<CoverageProfileMap> | undefined
+let profileMapsPromise: Promise<CoverageProfileMaps> | undefined
 const lineCoverage: Map<string, Map<number, number>> = new Map()
 const fileContents: Map<string, string> = new Map()
 const addressProfileCache: Map<string, CoverageProfile[] | undefined> = new Map()
@@ -477,12 +487,12 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 	if (!isSolidityBytecodeCoverageEnabled()) return
 
 	const config = getSolidityBytecodeCoverageConfig()
-	if (profileByBytecodePromise === undefined) profileByBytecodePromise = collectProfilesByBytecode(config.artifactsPath)
-	const profileByBytecode = await profileByBytecodePromise
-	if (profileByBytecode.size === 0) return
+	if (profileMapsPromise === undefined) profileMapsPromise = collectProfilesByBytecode(config.artifactsPath)
+	const profileMaps = await profileMapsPromise
+	if (profileMaps.creation.size === 0 && profileMaps.deployed.size === 0) return
 	if (!coverageLinesInitialized) {
 		coverageLinesInitialized = true
-		await initializeCoverageLines(profileByBytecode, config.rootPath)
+		await initializeCoverageLines(profileMaps, config.rootPath)
 	}
 
 	const structLogs = await requestTrace(options.request, options.transactionHash)
@@ -495,9 +505,9 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 	const traceAddresses = resolvedSteps.flatMap(step => [step.stepAddress, step.codeAddress].filter(address => address !== undefined))
 	const addresses = Array.from(new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses, ...traceAddresses]))
 
-	const profilesByAddress = await collectProfilesForAddresses(addresses, options.request, profileByBytecode, addressProfileCache)
+	const profilesByAddress = await collectProfilesForAddresses(addresses, options.request, profileMaps.deployed, addressProfileCache)
 	const creationCode = options.transaction.data === undefined ? undefined : normalizeBytecode(options.transaction.data)
-	const creationProfiles = creationCode === undefined ? undefined : findProfilesForCreationBytecode(profileByBytecode, creationCode)
+	const creationProfiles = creationCode === undefined ? undefined : findProfilesForCreationBytecode(profileMaps.creation, creationCode)
 	for (const contractAddress of receiptContractAddresses) {
 		if (creationProfiles !== undefined && creationProfiles.length > 0) profilesByAddress.set(contractAddress, creationProfiles)
 	}
