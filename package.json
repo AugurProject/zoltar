@@ -55,6 +55,7 @@
 		"ui:vendor": "cd ui && bun ./build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun test --parallel=4 --timeout 300000",
+		"test:auction-fuzz": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun test --timeout 300000 ./solidity/ts/fuzz/auctionTickMath.fuzz.ts",
 		"coverage:ui": "bun run ensure-shared-build && bun run check:shared-dependencies && bun test --isolate --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/ui ui/ts/tests",
 		"coverage:contracts:ts": "bun run ensure-contract-artifacts && bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/contracts-ts solidity/ts/tests",
 		"coverage:contracts:bytecode": "bun run ensure-contract-artifacts && SOLIDITY_BYTECODE_COVERAGE=1 bun test solidity/ts/tests",
