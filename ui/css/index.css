@@ -1355,13 +1355,15 @@ button.currency-value.copyable:hover:not(:disabled) {
 	background: var(--success-soft);
 }
 
-.badge.pending {
+.badge.pending,
+.badge.warning {
 	color: var(--warning);
 	border-color: var(--warning-border);
 	background: var(--warning-soft);
 }
 
-.badge.blocked {
+.badge.blocked,
+.badge.danger {
 	color: var(--danger);
 	border-color: var(--danger-border);
 	background: var(--danger-soft);
