@@ -14,10 +14,14 @@ type ViewTabGroup<TValue extends string> = {
 function buildGroupedOptions<TValue extends string>(groups: ViewTabsProps<TValue>['groups'], indexedOptions: IndexedViewTabOption<TValue>[]): ViewTabGroup<TValue>[] | undefined {
 	if (groups === undefined) return undefined
 	const optionsByValue = new Map(indexedOptions.map(option => [option.option.value, option]))
+	const renderedValues = new Set<TValue>()
 	return groups.map(group => {
 		const groupedOptions = group.values.flatMap(groupValue => {
+			if (renderedValues.has(groupValue)) return []
 			const option = optionsByValue.get(groupValue)
-			return option === undefined ? [] : [option]
+			if (option === undefined) return []
+			renderedValues.add(groupValue)
+			return [option]
 		})
 		if (group.className === undefined) return { ariaLabel: group.ariaLabel, options: groupedOptions }
 		return { ariaLabel: group.ariaLabel, className: group.className, options: groupedOptions }

@@ -270,6 +270,7 @@ export type ViewTabOption<TValue extends string> = {
 export type ViewTabsProps<TValue extends string> = {
 	ariaLabel: string
 	className?: string
+	/** When provided, only grouped values are rendered. Duplicate values render at their first grouped position. */
 	groups?: Array<{
 		ariaLabel: string
 		className?: string

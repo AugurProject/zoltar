@@ -165,4 +165,26 @@ describe('ViewTabs', () => {
 		expect(selectedValue).toBe('reports')
 		expect(document.activeElement).toBe(reportsTab)
 	})
+
+	test('renders duplicate grouped values only once', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ViewTabs
+				ariaLabel='Duplicate Grouped Tabs'
+				value='overview'
+				onChange={() => undefined}
+				groups={[
+					{ ariaLabel: 'Primary tabs', values: ['overview', 'reports'] },
+					{ ariaLabel: 'Repeated tabs', values: ['reports'] },
+				]}
+				options={[
+					{ label: 'Overview', value: 'overview' },
+					{ label: 'Reports', value: 'reports' },
+				]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const reportsTabs = within(document.body).getAllByRole('tab', { name: 'Reports' })
+		expect(reportsTabs).toHaveLength(1)
+	})
 })
