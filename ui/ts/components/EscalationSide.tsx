@@ -1,4 +1,5 @@
 import { CurrencyValue } from './CurrencyValue.js'
+import { Badge } from './Badge.js'
 import type { EscalationDeposit } from '../types/contracts.js'
 
 type EscalationSideDisplay = {
@@ -48,8 +49,8 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 						<span className='panel-label'>{side.label}</span>
 						{isLeading || isSelected ? (
 							<div className='escalation-side-badges'>
-								{isSelected ? <span className='badge escalation-side-selected-badge'>Selected</span> : undefined}
-								{isLeading ? <span className='badge ok'>Leading</span> : undefined}
+								{isSelected ? <Badge className='escalation-side-selected-badge'>Selected</Badge> : undefined}
+								{isLeading ? <Badge tone='ok'>Leading</Badge> : undefined}
 							</div>
 						) : undefined}
 					</div>

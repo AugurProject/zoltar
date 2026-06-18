@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getAddress, zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
+import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -10,6 +11,7 @@ import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { getQuestionTitle, Question } from './Question.js'
@@ -107,7 +109,7 @@ function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAl
 function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {
 	if (systemState === 'operational') return 'ok'
 	if (systemState === undefined) return 'muted'
-	return 'warn'
+	return 'warning'
 }
 export function SecurityPoolWorkflowSection({
 	accountState,
@@ -473,7 +475,7 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolSummaryContent = (
 			<div className='selected-pool-context-summary'>
 				<div className='selected-pool-context-overview'>
-					<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
+					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
 							<MetricField label='Parent Pool'>
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
@@ -697,56 +699,13 @@ export function SecurityPoolWorkflowSection({
 		if (poolPriceOracleResult.stagedExecution?.success === true && poolPriceOracleResult.stagedExecution.operation === 'withdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, reporting.onLoadReporting, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails, view])
-	const selectSelectedPoolView = (nextView: SelectedPoolView) => {
-		onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)
-	}
-	const moveSelectedPoolView = (currentView: SelectedPoolView, direction: 'next' | 'previous' | 'first' | 'last') => {
-		if (selectedPoolWorkflowGuardMessage !== undefined) return undefined
-		const enabledViews = SELECTED_POOL_VIEWS
-		if (enabledViews.length === 0) return undefined
-		if (direction === 'first') return enabledViews[0]
-		if (direction === 'last') return enabledViews[enabledViews.length - 1]
-		const currentIndex = enabledViews.indexOf(currentView)
-		if (currentIndex === -1) return enabledViews[0]
-		const nextIndex = direction === 'next' ? (currentIndex + 1) % enabledViews.length : (currentIndex - 1 + enabledViews.length) % enabledViews.length
-		return enabledViews[nextIndex]
-	}
-	const handleSelectedPoolViewKeyDown = (currentView: SelectedPoolView, event: KeyboardEvent) => {
-		const navigationKey = (() => {
-			if (event.key === 'ArrowDown' || event.key === 'ArrowRight') return 'next'
-			if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') return 'previous'
-			if (event.key === 'Home') return 'first'
-			if (event.key === 'End') return 'last'
-			return undefined
-		})()
-		if (navigationKey === undefined) return
-		const nextView = moveSelectedPoolView(currentView, navigationKey)
-		if (nextView === undefined) return
-		event.preventDefault()
-		selectSelectedPoolView(nextView)
-		const nextTab = document.getElementById(`selected-pool-view-${nextView}`)
-		if (nextTab instanceof HTMLElement) nextTab.focus()
-	}
-	const renderSelectedPoolViewTab = (selectedPoolUiView: SelectedPoolView) => {
-		return (
-			<button
-				aria-label={getSelectedPoolViewLabel(selectedPoolUiView)}
-				key={selectedPoolUiView}
-				aria-selected={view === selectedPoolUiView}
-				className={`view-tab ${view === selectedPoolUiView ? 'active' : ''}`.trim()}
-				disabled={selectedPoolWorkflowGuardMessage !== undefined}
-				id={`selected-pool-view-${selectedPoolUiView}`}
-				onClick={() => selectSelectedPoolView(selectedPoolUiView)}
-				onKeyDown={event => handleSelectedPoolViewKeyDown(selectedPoolUiView, event)}
-				role='tab'
-				tabIndex={view === selectedPoolUiView ? 0 : -1}
-				title={selectedPoolWorkflowGuardMessage}
-				type='button'
-			>
-				{getSelectedPoolViewLabel(selectedPoolUiView)}
-			</button>
-		)
-	}
+	const selectedPoolViewOptions = SELECTED_POOL_VIEWS.map(selectedPoolUiView => ({
+		disabled: selectedPoolWorkflowGuardMessage !== undefined,
+		id: `selected-pool-view-${selectedPoolUiView}`,
+		label: getSelectedPoolViewLabel(selectedPoolUiView),
+		...(selectedPoolWorkflowGuardMessage === undefined ? {} : { reason: selectedPoolWorkflowGuardMessage }),
+		value: selectedPoolUiView,
+	}))
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
 			<StickyObjectContext
@@ -754,13 +713,13 @@ export function SecurityPoolWorkflowSection({
 					? {}
 					: {
 							badge: (
-								<span className={`badge ${getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}`}>
+								<Badge tone={getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}>
 									{getSecurityPoolStatusBadgeLabel({
 										hasForkActivity: selectedPoolSummaryPool.hasForkActivity,
 										questionOutcome: selectedPoolSummaryPool.questionOutcome,
 										lifecycleState: selectedPoolStateModel.lifecycleState,
 									})}
-								</span>
+								</Badge>
 							),
 						})}
 				sticky={false}
@@ -797,14 +756,19 @@ export function SecurityPoolWorkflowSection({
 			<section className='selected-pool-workspace'>
 				<div className='selected-pool-workspace-grid'>
 					<div className='selected-pool-workflow-rail'>
-						<div aria-label='Selected pool views' className='selected-pool-workflow-nav view-tabs' data-orientation='vertical' data-size='compact' role='tablist'>
-							<div className='selected-pool-workflow-group' role='group' aria-label='Primary pool workflows'>
-								{SELECTED_POOL_PRIMARY_VIEWS.map(renderSelectedPoolViewTab)}
-							</div>
-							<div className='selected-pool-workflow-group selected-pool-workflow-group-secondary' role='group' aria-label='Additional pool workflows'>
-								{SELECTED_POOL_SECONDARY_VIEWS.map(renderSelectedPoolViewTab)}
-							</div>
-						</div>
+						<ViewTabs
+							ariaLabel='Selected pool views'
+							className='selected-pool-workflow-nav'
+							groups={[
+								{ ariaLabel: 'Primary pool workflows', className: 'selected-pool-workflow-group', values: SELECTED_POOL_PRIMARY_VIEWS },
+								{ ariaLabel: 'Additional pool workflows', className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
+							]}
+							orientation='vertical'
+							size='compact'
+							value={view}
+							onChange={nextView => onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)}
+							options={selectedPoolViewOptions}
+						/>
 					</div>
 
 					<div className='selected-pool-workflow-content'>
@@ -887,7 +851,7 @@ export function SecurityPoolWorkflowSection({
 															</div>
 														)
 													}}
-													renderBadge={vault => (selectedVaultAddress !== '' && sameCaseInsensitiveText(selectedVaultAddress, vault.vaultAddress) ? <span className='badge ok'>Selected</span> : undefined)}
+													renderBadge={vault => (selectedVaultAddress !== '' && sameCaseInsensitiveText(selectedVaultAddress, vault.vaultAddress) ? <Badge tone='ok'>Selected</Badge> : undefined)}
 													repPerEthPrice={repPerEthPrice}
 													repPerEthSource={repPerEthSource}
 													repPerEthSourceUrl={repPerEthSourceUrl}
@@ -993,7 +957,7 @@ export function SecurityPoolWorkflowSection({
 															{currentPoolOracleManagerDetails?.pendingOperationSlotId === operation.operationId ? <p className='detail'>Auto-exec slot</p> : <p className='detail'>Manual execution</p>}
 														</div>
 													</div>
-													<div className='entity-card-body workflow-metric-grid'>
+													<MetricGrid className='entity-card-body'>
 														<MetricField label='Operation Id'>{operation.operationId.toString()}</MetricField>
 														<MetricField label='Initiator'>
 															<AddressValue address={operation.initiatorVault} />
@@ -1004,7 +968,7 @@ export function SecurityPoolWorkflowSection({
 														<MetricField label='Amount'>
 															<CurrencyValue value={operation.amount} />
 														</MetricField>
-													</div>
+													</MetricGrid>
 												</WarningSurface>
 											))}
 											{activeStagedOperationCount > BigInt(stagedOperations.length) ? (
@@ -1051,7 +1015,7 @@ export function SecurityPoolWorkflowSection({
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
 									<SectionBlock density='compact' title='Open Oracle'>
-										<div className='workflow-metric-grid'>
+										<MetricGrid>
 											<MetricField label='Open Oracle Price' valueTagName='span'>
 												<OpenOraclePriceValue
 													currentTimestamp={currentTimestamp}
@@ -1072,7 +1036,7 @@ export function SecurityPoolWorkflowSection({
 													</button>
 												</MetricField>
 											)}
-										</div>
+										</MetricGrid>
 										<ErrorNotice message={poolOracleManagerError} />
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>

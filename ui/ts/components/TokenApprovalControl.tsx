@@ -4,6 +4,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
@@ -112,14 +113,14 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	})
 	return (
 		<div className='form-grid'>
-			<div className='workflow-metric-grid'>
+			<MetricGrid>
 				<MetricField label={`Required ${tokenSymbol}`}>
 					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 				<MetricField label={`Approved ${tokenSymbol}`}>
 					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
-			</div>
+			</MetricGrid>
 
 			<label className='field approval-amount-field'>
 				<span className='approval-amount-label'>{`${tokenSymbol} Approval Amount`}</span>

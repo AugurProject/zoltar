@@ -5,6 +5,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
 import { RankedBarList } from './RankedBarList.js'
@@ -320,14 +321,14 @@ export function TradingSection({
 
 			<OperationModal description='Review available capacity and confirm the complete-set mint amount before submitting.' isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title='Mint Complete Sets'>
 				{selectedPool === undefined ? undefined : (
-					<div className='workflow-metric-grid'>
+					<MetricGrid>
 						<MetricField label='Bond Allowance In Use'>
 							<CurrencyValue value={selectedPool.totalSecurityBondAllowance} suffix='ETH' />
 						</MetricField>
 						<MetricField label='REP Backing'>
 							<CurrencyValue value={selectedPool.totalRepDeposit} suffix='REP' />
 						</MetricField>
-					</div>
+					</MetricGrid>
 				)}
 				<label className='field'>
 					<span>Mint Complete Sets Amount</span>

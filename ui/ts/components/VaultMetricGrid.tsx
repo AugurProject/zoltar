@@ -5,6 +5,17 @@ import type { VaultMetricGridProps } from '../types/components.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 
+function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
+	return (
+		<div className={className}>
+			<span>{label}</span>
+			<strong>
+				<CurrencyValue value={value} suffix={suffix} />
+			</strong>
+		</div>
+	)
+}
+
 export function VaultMetricGrid({ className = '', layout = 'grid', escalationEscrowedRep, priceValidUntilTimestamp, repDepositShare, repPerEthPrice, selectedPoolSecurityMultiplier, securityBondAllowance }: VaultMetricGridProps) {
 	const collateralizationPercent = getVaultCollateralizationPercent(repDepositShare, securityBondAllowance, repPerEthPrice)
 	const targetCollateralizationPercent = selectedPoolSecurityMultiplier === undefined ? undefined : selectedPoolSecurityMultiplier * 100n * 10n ** 18n
@@ -13,20 +24,10 @@ export function VaultMetricGrid({ className = '', layout = 'grid', escalationEsc
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
 				<div className='vault-preview-strip-head'>
-					<div className='vault-preview-allowance'>
-						<span>Security Bond Allowance</span>
-						<strong>
-							<CurrencyValue value={securityBondAllowance} suffix='ETH' />
-						</strong>
-					</div>
+					<VaultPrimaryMetric className='vault-preview-allowance' label='Security Bond Allowance' value={securityBondAllowance} suffix='ETH' />
 				</div>
 				<div className='vault-preview-side-metrics'>
-					<div>
-						<span>REP Collateral</span>
-						<strong>
-							<CurrencyValue value={repDepositShare} suffix='REP' />
-						</strong>
-					</div>
+					<VaultPrimaryMetric label='REP Collateral' value={repDepositShare} suffix='REP' />
 				</div>
 				<div className='vault-preview-meta'>
 					{escalationEscrowedRep === undefined ? null : (
@@ -47,19 +48,9 @@ export function VaultMetricGrid({ className = '', layout = 'grid', escalationEsc
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
 			<div className='vault-detail-hero'>
 				<CollateralizationCircle className='vault-detail-collateralization' collateralizationPercent={collateralizationPercent} size='medium' targetCollateralizationPercent={targetCollateralizationPercent} />
-				<div className='vault-detail-hero-primary'>
-					<span>Security Bond Allowance</span>
-					<strong>
-						<CurrencyValue value={securityBondAllowance} suffix='ETH' />
-					</strong>
-				</div>
+				<VaultPrimaryMetric className='vault-detail-hero-primary' label='Security Bond Allowance' value={securityBondAllowance} suffix='ETH' />
 				<div className='vault-detail-hero-secondary'>
-					<div>
-						<span>REP Collateral</span>
-						<strong>
-							<CurrencyValue value={repDepositShare} suffix='REP' />
-						</strong>
-					</div>
+					<VaultPrimaryMetric label='REP Collateral' value={repDepositShare} suffix='REP' />
 				</div>
 			</div>
 			<div className='vault-detail-meta'>

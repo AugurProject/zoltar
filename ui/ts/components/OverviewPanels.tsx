@@ -1,5 +1,6 @@
 import { RouteHeader } from './RouteHeader.js'
 import { AddressValue } from './AddressValue.js'
+import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
@@ -51,7 +52,7 @@ export function OverviewPanels({
 			<article className='overview-panel overview-wallet-panel'>
 				<RouteHeader
 					actions={accountState.address === undefined ? <TransactionActionButton idleLabel='Connect wallet' pendingLabel='Connecting...' onClick={onConnect} pending={isConnectingWallet} /> : undefined}
-					badge={universeHasForked ? <span className='badge warn'>Forked</span> : undefined}
+					badge={universeHasForked ? <Badge tone='warning'>Forked</Badge> : undefined}
 					description={operationsHeaderDescription}
 					eyebrow='Operations'
 					title='Augur PLACEHOLDER'

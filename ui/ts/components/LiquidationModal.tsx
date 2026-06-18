@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from 'viem'
 import { AddressInfo } from './AddressInfo.js'
 import { AddressValue } from './AddressValue.js'
+import { Badge } from './Badge.js'
 import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -107,16 +109,16 @@ function renderQueuedLiquidationStatusCard({
 		return (
 			<TransactionStatusCard
 				title='Liquidation Queued'
-				badge={<span className='badge warn'>Queued</span>}
+				badge={<Badge tone='warning'>Queued</Badge>}
 				metrics={
-					<div className='workflow-metric-grid'>
+					<MetricGrid>
 						<MetricField label='Staged Operation'>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
 						{queuedLiquidationOperation.amount === undefined ? null : (
 							<MetricField label='Amount'>
 								<CurrencyValue value={queuedLiquidationOperation.amount} />
 							</MetricField>
 						)}
-					</div>
+					</MetricGrid>
 				}
 				detail={queuedLiquidationStatus === 'manual-queued' ? 'Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.' : undefined}
 				actions={
@@ -131,15 +133,15 @@ function renderQueuedLiquidationStatusCard({
 		return (
 			<TransactionStatusCard
 				title='Liquidation Failed'
-				badge={<span className='badge blocked'>Failed</span>}
+				badge={<Badge tone='blocked'>Failed</Badge>}
 				detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'}
 				secondaryDetail='Fix the underlying state and submit a new staged operation.'
 			/>
 		)
-	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
+	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title='Liquidation Executed' badge={<Badge tone='ok'>Executed</Badge>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
 	if (queuedLiquidationStatus === 'missing')
-		return <TransactionStatusCard title='Liquidation Submitted' badge={<span className='badge warn'>Check State</span>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
-	return <TransactionStatusCard title='Refreshing Liquidation State' badge={<span className='badge muted'>Refreshing</span>} detail='Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.' />
+		return <TransactionStatusCard title='Liquidation Submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
+	return <TransactionStatusCard title='Refreshing Liquidation State' badge={<Badge tone='muted'>Refreshing</Badge>} detail='Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.' />
 }
 export function LiquidationModal({
 	accountAddress,
@@ -410,7 +412,7 @@ export function LiquidationModal({
 								<h4>Caller Vault After Liquidation</h4>
 							</div>
 						</div>
-						<div className='workflow-metric-grid'>
+						<MetricGrid>
 							<MetricField label='REP Collateral'>
 								<CurrencyValue value={liquidationSimulation.callerAfter.repDepositShare} suffix='REP' />
 							</MetricField>
@@ -429,7 +431,7 @@ export function LiquidationModal({
 							<MetricField label='Rep Moved'>
 								<CurrencyValue value={liquidationSimulation.repToMove} suffix='REP' />
 							</MetricField>
-						</div>
+						</MetricGrid>
 					</section>
 				)}
 				<div className='actions liquidation-modal-actions'>

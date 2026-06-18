@@ -1,7 +1,13 @@
 import type { SectionBlockProps } from '../types/components.js'
 
+function getSectionBlockHeadingTag(headingLevel: SectionBlockProps['headingLevel']) {
+	if (headingLevel === 2) return 'h2'
+	if (headingLevel === 4) return 'h4'
+	return 'h3'
+}
+
 export function SectionBlock({ actions, badge, children, className = '', description, density = 'balanced', headingLevel = 3, title, tone = 'default', variant = 'default' }: SectionBlockProps) {
-	const HeadingTag = headingLevel === 4 ? 'h4' : 'h3'
+	const HeadingTag = getSectionBlockHeadingTag(headingLevel)
 	const classes = ['section-block', `tone-${tone}`, `density-${density}`, variant, className].filter(Boolean).join(' ')
 
 	return (

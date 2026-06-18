@@ -166,14 +166,14 @@ export function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 
 	if (report.disputeOccurred) return 'Disputed'
 	return 'Pending'
 }
-export function getOpenOracleReportStatusTone(status: OpenOracleReportStatus): 'blocked' | 'muted' | 'error' | 'ok' {
+export function getOpenOracleReportStatusTone(status: OpenOracleReportStatus): 'blocked' | 'danger' | 'muted' | 'ok' {
 	switch (status) {
 		case 'Awaiting Initial Report':
 			return 'blocked'
 		case 'Pending':
 			return 'muted'
 		case 'Disputed':
-			return 'error'
+			return 'danger'
 		case 'Settled':
 			return 'ok'
 		default:

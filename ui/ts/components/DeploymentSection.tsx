@@ -1,10 +1,11 @@
-import type { DeploymentSectionProps } from '../types/components.js'
+import type { BadgeTone, DeploymentSectionProps } from '../types/components.js'
+import { Badge } from './Badge.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
 
 type StepStatus = {
-	badgeClass: string
+	badgeTone: BadgeTone
 	label: string | undefined
 	detail: string
 	buttonLabel: string
@@ -13,7 +14,7 @@ type StepStatus = {
 function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isMainnet: boolean): StepStatus {
 	if (stepDeployed)
 		return {
-			badgeClass: 'ok',
+			badgeTone: 'ok',
 			detail: 'Code found at expected address.',
 			label: 'Deployed',
 			buttonLabel: 'Deployed',
@@ -21,7 +22,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 	if (isBusy)
 		return {
-			badgeClass: 'pending',
+			badgeTone: 'pending',
 			detail: 'Deployment in progress.',
 			label: 'Deploying...',
 			buttonLabel: 'Deploying...',
@@ -30,20 +31,20 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (prerequisiteLabel === undefined) {
 		if (accountAddress === undefined)
 			return {
-				badgeClass: 'pending',
+				badgeTone: 'pending',
 				detail: 'Connect wallet to continue.',
 				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
 		if (!isMainnet)
 			return {
-				badgeClass: 'pending',
+				badgeTone: 'pending',
 				detail: 'Switch to Ethereum mainnet.',
 				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
 		return {
-			badgeClass: 'pending',
+			badgeTone: 'pending',
 			detail: 'Can deploy now.',
 			label: 'Not Deployed',
 			buttonLabel: 'Deploy',
@@ -51,7 +52,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	}
 
 	return {
-		badgeClass: 'blocked',
+		badgeTone: 'blocked',
 		detail: `Waiting for ${prerequisiteLabel}.`,
 		label: 'Waiting',
 		buttonLabel: 'Deploy',
@@ -79,7 +80,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 						<div className='contract-row' key={step.id}>
 							<div className='contract-copy'>
 								<div className='contract-topline'>
-									{stepStatus.label === undefined ? undefined : <span className={`badge ${stepStatus.badgeClass}`}>{stepStatus.label}</span>}
+									{stepStatus.label === undefined ? undefined : <Badge tone={stepStatus.badgeTone}>{stepStatus.label}</Badge>}
 									<h3>{step.label}</h3>
 								</div>
 								<p className='address'>{step.address}</p>

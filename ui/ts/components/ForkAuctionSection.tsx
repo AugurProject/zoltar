@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { type Address, zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
+import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { PaginationControls } from './PaginationControls.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
@@ -194,13 +196,13 @@ function getForkWorkflowSeparatorClassName({ currentStage, stage }: { currentSta
 }
 function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 	return (
-		<div className='workflow-metric-grid'>
+		<MetricGrid>
 			{metrics.map(metric => (
 				<MetricField key={metric.label} label={metric.label}>
 					{metric.value}
 				</MetricField>
 			))}
-		</div>
+		</MetricGrid>
 	)
 }
 
@@ -1130,7 +1132,7 @@ export function ForkAuctionSection({
 		effectiveTruthAuctionStartedAt,
 		migrationEndsAt: forkAuctionDetails?.migrationEndsAt,
 	})
-	const migrationStatusBadge = <span className={`badge ${migrationStateBadge.tone}`}>{migrationStateBadge.label}</span>
+	const migrationStatusBadge = <Badge tone={migrationStateBadge.tone}>{migrationStateBadge.label}</Badge>
 	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
 	const onStartTruthAuctionSubmit = () => {
 		setIsStartTruthAuctionInProgressState(true)
@@ -1756,7 +1758,7 @@ export function ForkAuctionSection({
 
 		return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />
 	})()
-	const truthAuctionStateBadgeElement = <span className={`badge ${truthAuctionStateBadge.tone}`}>{truthAuctionStateBadge.label}</span>
+	const truthAuctionStateBadgeElement = <Badge tone={truthAuctionStateBadge.tone}>{truthAuctionStateBadge.label}</Badge>
 	const auctionStatusMetrics: DisplayMetric[] = [
 		{ label: 'Truth Auction Address', value: renderAddress(auctionTruthAuctionAddress) },
 		{ label: 'Started', value: startedDisplay },

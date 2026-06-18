@@ -6,7 +6,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
-import { ChildUniversesSection } from './ChildUniversesSection.js'
+import { ChildUniversesSection, ChildUniverseStatusBadge } from './ChildUniversesSection.js'
 import { Question } from './Question.js'
 import { MetricField } from './MetricField.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
@@ -115,7 +115,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								pending: zoltarChildUniversePendingOutcomeIndex === child.outcomeIndex,
 								pendingLabel: 'Opening...',
 							})}
-							renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+							renderBadge={child => <ChildUniverseStatusBadge child={child} />}
 							renderBody={child => <ChildUniverseDetails child={child} />}
 						/>
 					)}
