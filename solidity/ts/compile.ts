@@ -54,9 +54,13 @@ const ContractData = funtypes.ReadonlyPartial({
 	evm: funtypes.ReadonlyPartial({
 		bytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
+			opcodes: funtypes.String,
+			sourceMap: funtypes.String,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
+			opcodes: funtypes.String,
+			sourceMap: funtypes.String,
 		}),
 	}),
 	storageLayout: funtypes.Unknown,
@@ -319,16 +323,14 @@ function compileSourceMap(label: string, compiler: SolcCompiler, sources: Map<st
 	const result = CompileResult.parse(JSON.parse(output))
 	const diagnostics = Array.isArray(result.errors) ? result.errors : []
 	const errors: string[] = []
-	const warnings: string[] = []
 
 	for (const diagnostic of diagnostics) {
 		if (!isCompileError(diagnostic)) continue
 		if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
-		if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
+		if (diagnostic.severity === 'warning') errors.push(diagnostic.formattedMessage)
 	}
 
 	if (errors.length > 0) throw new CompilationError(errors.map(error => `${label}: ${error}`))
-	if (warnings.length > 0) warnings.forEach(warning => console.warn(`${label}: ${warning}`))
 
 	return result
 }

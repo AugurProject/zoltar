@@ -16,11 +16,20 @@ type RpcTransactionRequest = {
 }
 
 interface CoverageProfile {
-	readonly sourceFileNames: readonly string[]
+	readonly sourceFileNames: ReadonlyArray<string | undefined>
 	readonly pcToSource: ReadonlyMap<number, ParsedSourceMapSegment | undefined>
 }
 
 type CoverageProfileMap = Map<string, CoverageProfile[]>
+type BytecodeProfileCandidate = {
+	readonly profiles: CoverageProfile[]
+}
+
+type ResolvedTraceStep = {
+	readonly rawStep: Record<string, unknown>
+	readonly stepAddress?: string
+	readonly codeAddress?: string
+}
 
 type ContractArtifactEvmBytecode = {
 	readonly object: string
@@ -86,16 +95,24 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 	return contracts
 }
 
-const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts: ContractArtifacts; sourceFiles: readonly string[] }> => {
+const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts: ContractArtifacts; sourceFiles: ReadonlyArray<string | undefined> }> => {
 	const rawJson = JSON.parse(await fs.readFile(artifactsPath, 'utf8'))
 	if (!isRecord(rawJson)) return { contracts: {}, sourceFiles: [] }
 	const raw: ContractsJson = rawJson
 	const contracts = parseContractsJson(raw)
-	const sourceFiles = isRecord(raw.sources) ? Object.keys(raw.sources) : []
+	const sourceFiles: Array<string | undefined> = []
+	if (isRecord(raw.sources)) {
+		for (const [sourcePath, sourceValue] of Object.entries(raw.sources)) {
+			if (!isRecord(sourceValue)) continue
+			const id = sourceValue['id']
+			if (typeof id !== 'number') continue
+			sourceFiles[id] = sourcePath
+		}
+	}
 	return { contracts, sourceFiles }
 }
 
-const isBytecodeProfile = (bytecode: string | undefined, sourceMap: string | undefined, sourceFileNames: readonly string[]): CoverageProfile | undefined => {
+const isBytecodeProfile = (bytecode: string | undefined, sourceMap: string | undefined, sourceFileNames: ReadonlyArray<string | undefined>): CoverageProfile | undefined => {
 	if (bytecode === undefined || sourceMap === undefined) return undefined
 	const bytecodeHex = normalizeBytecode(bytecode)
 	if (bytecodeHex.length === 0) return undefined
@@ -134,6 +151,49 @@ const collectProfilesByBytecode = async (artifactsPath: string): Promise<Coverag
 	return profileByBytecode
 }
 
+const countDifferentCharacters = (first: string, second: string): number => {
+	const length = Math.min(first.length, second.length)
+	let differences = Math.abs(first.length - second.length)
+	for (let index = 0; index < length; index++) if (first[index] !== second[index]) differences++
+	return differences
+}
+
+const getCompatibleBytecodeDifferenceLimit = (bytecodeLength: number): number => Math.max(160, Math.ceil(bytecodeLength * 0.02))
+const getMetadataCompatibleBytecodeDifferenceLimit = (bytecodeLength: number): number => Math.max(160, Math.ceil(bytecodeLength * 0.2))
+
+const getSolidityMetadataSuffix = (bytecode: string): string | undefined => {
+	const markerIndex = bytecode.lastIndexOf('a2646970667358')
+	if (markerIndex === -1) return undefined
+	return bytecode.slice(markerIndex)
+}
+
+const getCompatibleBytecodeDifferenceLimitForPair = (artifactBytecode: string, normalizedCode: string): number => {
+	const artifactMetadata = getSolidityMetadataSuffix(artifactBytecode)
+	const deployedMetadata = getSolidityMetadataSuffix(normalizedCode)
+	if (artifactMetadata !== undefined && artifactMetadata === deployedMetadata) return getMetadataCompatibleBytecodeDifferenceLimit(normalizedCode.length)
+	return getCompatibleBytecodeDifferenceLimit(normalizedCode.length)
+}
+
+const findCompatibleProfilesForBytecode = (profileByBytecode: CoverageProfileMap, normalizedCode: string): CoverageProfile[] | undefined => {
+	const exactProfiles = profileByBytecode.get(normalizedCode)
+	if (exactProfiles !== undefined) return exactProfiles
+
+	let bestCandidate: BytecodeProfileCandidate | undefined
+	let bestDifferenceCount = Number.POSITIVE_INFINITY
+
+	for (const [artifactBytecode, profiles] of profileByBytecode.entries()) {
+		if (artifactBytecode.length !== normalizedCode.length) continue
+		const differenceLimit = getCompatibleBytecodeDifferenceLimitForPair(artifactBytecode, normalizedCode)
+		const differenceCount = countDifferentCharacters(artifactBytecode, normalizedCode)
+		if (differenceCount > differenceLimit || differenceCount >= bestDifferenceCount) continue
+		bestDifferenceCount = differenceCount
+		bestCandidate = { profiles }
+	}
+
+	if (bestCandidate === undefined) return undefined
+	return bestCandidate.profiles
+}
+
 const traceStepAddress = (step: Record<string, unknown>): string | undefined => {
 	const explicitContractAddress = step['contractAddress']
 	if (typeof explicitContractAddress === 'string') return normalizeAddress(explicitContractAddress)
@@ -149,6 +209,15 @@ const parsePcValue = (value: unknown): number | undefined => {
 	const parsedPc = value.startsWith('0x') ? Number.parseInt(value, 16) : Number.parseInt(value, 10)
 	return Number.isNaN(parsedPc) ? undefined : parsedPc
 }
+
+const parseDepthValue = (value: unknown): number | undefined => {
+	if (typeof value === 'number') return value
+	if (typeof value !== 'string') return undefined
+	const parsedDepth = value.startsWith('0x') ? Number.parseInt(value, 16) : Number.parseInt(value, 10)
+	return Number.isNaN(parsedDepth) ? undefined : parsedDepth
+}
+
+const parseOpValue = (value: unknown): string | undefined => (typeof value === 'string' ? value.toUpperCase() : undefined)
 
 const toAddressList = (value: unknown): readonly string[] => {
 	if (typeof value !== 'string') return []
@@ -192,6 +261,59 @@ const parseTraceSteps = (traceResponse: unknown): unknown[] => {
 	return Array.isArray(structLogs) ? structLogs : []
 }
 
+const parseStackAddress = (value: unknown): string | undefined => {
+	if (typeof value !== 'string') return undefined
+	const normalized = value.startsWith('0x') ? value.slice(2) : value
+	const addressHex = normalized.padStart(40, '0').slice(-40)
+	return normalizeAddress(addressHex)
+}
+
+const parseCallTargetAddress = (step: Record<string, unknown>): string | undefined => {
+	const op = parseOpValue(step['op'])
+	if (op !== 'CALL' && op !== 'CALLCODE' && op !== 'DELEGATECALL' && op !== 'STATICCALL') return undefined
+	const stack = step['stack']
+	if (!Array.isArray(stack) || stack.length < 2) return undefined
+	return parseStackAddress(stack[stack.length - 2])
+}
+
+const resolveTraceSteps = (rawSteps: readonly unknown[]): ResolvedTraceStep[] => {
+	const codeAddressByDepth = new Map<number, string>()
+	const pendingCodeAddressByDepth = new Map<number, string>()
+	const resolvedSteps: ResolvedTraceStep[] = []
+
+	for (const rawStep of rawSteps) {
+		if (!isRecord(rawStep)) continue
+
+		const depth = parseDepthValue(rawStep['depth']) ?? 0
+		for (const mappedDepth of [...codeAddressByDepth.keys()]) {
+			if (mappedDepth > depth) codeAddressByDepth.delete(mappedDepth)
+		}
+		for (const mappedDepth of [...pendingCodeAddressByDepth.keys()]) {
+			if (mappedDepth > depth) pendingCodeAddressByDepth.delete(mappedDepth)
+		}
+
+		const pendingCodeAddress = pendingCodeAddressByDepth.get(depth)
+		if (pendingCodeAddress !== undefined) {
+			codeAddressByDepth.set(depth, pendingCodeAddress)
+			pendingCodeAddressByDepth.delete(depth)
+		}
+
+		const stepAddress = traceStepAddress(rawStep)
+		if (stepAddress !== undefined && !codeAddressByDepth.has(depth)) codeAddressByDepth.set(depth, stepAddress)
+		const codeAddress = codeAddressByDepth.get(depth) ?? stepAddress
+		resolvedSteps.push({
+			rawStep,
+			...(stepAddress === undefined ? {} : { stepAddress }),
+			...(codeAddress === undefined ? {} : { codeAddress }),
+		})
+
+		const callTargetAddress = parseCallTargetAddress(rawStep)
+		if (callTargetAddress !== undefined) pendingCodeAddressByDepth.set(depth + 1, callTargetAddress)
+	}
+
+	return resolvedSteps
+}
+
 const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CoverageProfile[] | undefined>): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
 	for (const address of addresses) {
@@ -207,7 +329,7 @@ const collectProfilesForAddresses = async (addresses: readonly string[], request
 			continue
 		}
 		const normalizedCode = normalizeBytecode(onChainCode)
-		const matchedProfiles = profileByBytecode.get(normalizedCode)
+		const matchedProfiles = findCompatibleProfilesForBytecode(profileByBytecode, normalizedCode)
 		addressProfileCache.set(address, matchedProfiles)
 		if (matchedProfiles !== undefined && matchedProfiles.length > 0) result.set(address, matchedProfiles)
 	}
@@ -241,11 +363,55 @@ const recordLineHitsForProfileSegment = async (profile: CoverageProfile, segment
 	}
 }
 
+const initializeCoverageLinesForProfileSegment = async (profile: CoverageProfile, segment: ParsedSourceMapSegment, rootPath: string, fileContents: Map<string, string>, lineCoverage: Map<string, Map<number, number>>): Promise<void> => {
+	const sourcePath = profile.sourceFileNames[segment.sourceIndex]
+	if (sourcePath === undefined) return
+
+	const sourceFile = await readSourceFileBySourcePath(rootPath, sourcePath)
+	if (sourceFile === undefined) return
+
+	let source = fileContents.get(sourceFile.absoluteSourcePath)
+	if (source === undefined) {
+		source = sourceFile.sourceCode
+		fileContents.set(sourceFile.absoluteSourcePath, source)
+	}
+
+	const { startLine, endLine } = lineRangeFromSourceOffset(source, segment.sourceOffset, segment.sourceLength)
+	if (startLine <= 0 || endLine <= 0) return
+
+	let fileCoverage = lineCoverage.get(sourceFile.absoluteSourcePath)
+	if (fileCoverage === undefined) {
+		fileCoverage = new Map()
+		lineCoverage.set(sourceFile.absoluteSourcePath, fileCoverage)
+	}
+
+	for (let line = startLine; line <= endLine; line++) {
+		if (!fileCoverage.has(line)) fileCoverage.set(line, 0)
+	}
+}
+
+const initializeCoverageLines = async (profileByBytecode: CoverageProfileMap, rootPath: string): Promise<void> => {
+	const initializedProfiles = new Set<CoverageProfile>()
+	for (const profiles of profileByBytecode.values()) {
+		for (const profile of profiles) {
+			if (initializedProfiles.has(profile)) continue
+			initializedProfiles.add(profile)
+			const initializedSegments = new Set<ParsedSourceMapSegment>()
+			for (const segment of profile.pcToSource.values()) {
+				if (segment === undefined || initializedSegments.has(segment)) continue
+				initializedSegments.add(segment)
+				await initializeCoverageLinesForProfileSegment(profile, segment, rootPath, fileContents, lineCoverage)
+			}
+		}
+	}
+}
+
 let profileByBytecodePromise: Promise<CoverageProfileMap> | undefined
 const lineCoverage: Map<string, Map<number, number>> = new Map()
 const fileContents: Map<string, string> = new Map()
 const addressProfileCache: Map<string, CoverageProfile[] | undefined> = new Map()
 let isWritingCoverage = false
+let coverageLinesInitialized = false
 if (isSolidityBytecodeCoverageEnabled()) {
 	process.once('beforeExit', () => {
 		void writeCoverage()
@@ -278,13 +444,17 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 	try {
 		const trace = await request({
 			method: 'debug_traceTransaction',
-			params: [transactionHash, { disableStack: true, disableMemory: true, disableStorage: true }],
+			params: [transactionHash, { disableStack: false, disableMemory: true, disableStorage: true }],
 		})
 		return parseTraceSteps(trace)
 	} catch (error) {
 		if (!isIgnorableTraceRequestError(error)) throw error
 		return []
 	}
+}
+
+export const resetSolidityBytecodeCoverageAddressCache = (): void => {
+	addressProfileCache.clear()
 }
 
 export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
@@ -294,6 +464,10 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 	if (profileByBytecodePromise === undefined) profileByBytecodePromise = collectProfilesByBytecode(config.artifactsPath)
 	const profileByBytecode = await profileByBytecodePromise
 	if (profileByBytecode.size === 0) return
+	if (!coverageLinesInitialized) {
+		coverageLinesInitialized = true
+		await initializeCoverageLines(profileByBytecode, config.rootPath)
+	}
 
 	const structLogs = await requestTrace(options.request, options.transactionHash)
 	if (structLogs.length === 0) return
@@ -301,21 +475,22 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 	const txToAddresses = toAddressList(options.transaction.to)
 	const receiptToAddresses = toAddressList(options.receipt?.to)
 	const receiptContractAddresses = toAddressList(options.receipt?.contractAddress)
-	const addresses = Array.from(new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses]))
+	const resolvedSteps = resolveTraceSteps(structLogs)
+	const traceAddresses = resolvedSteps.flatMap(step => [step.stepAddress, step.codeAddress].filter(address => address !== undefined))
+	const addresses = Array.from(new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses, ...traceAddresses]))
 
 	const profilesByAddress = await collectProfilesForAddresses(addresses, options.request, profileByBytecode, addressProfileCache)
 	const fallbackProfiles = new Set<CoverageProfile>()
 	for (const profileSet of profilesByAddress.values()) for (const profile of profileSet) fallbackProfiles.add(profile)
 
-	for (const rawStep of structLogs) {
-		if (!isRecord(rawStep)) continue
-
+	for (const { rawStep, stepAddress, codeAddress } of resolvedSteps) {
 		const pc = parsePcValue(rawStep['pc'])
 		if (pc === undefined) continue
 
-		const address = traceStepAddress(rawStep)
-		const profileSet = address === undefined ? undefined : profilesByAddress.get(address)
-		const activeProfiles = profileSet ?? (fallbackProfiles.size > 0 ? [...fallbackProfiles] : undefined)
+		const codeAddressProfileSet = codeAddress === undefined ? undefined : profilesByAddress.get(codeAddress)
+		const stepAddressProfileSet = stepAddress === undefined ? undefined : profilesByAddress.get(stepAddress)
+		const activeProfiles =
+			codeAddressProfileSet ?? stepAddressProfileSet ?? (fallbackProfiles.size > 0 ? [...fallbackProfiles] : undefined)
 		if (activeProfiles === undefined) continue
 
 		for (const profile of activeProfiles) {
