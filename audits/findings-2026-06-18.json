@@ -1,0 +1,58 @@
+[
+	{
+		"id": "H-01",
+		"severity": "High",
+		"status": "fixed",
+		"fixedInCommit": "8d2a2aa0103138bd706e2664af6dfb90c9e73e4b",
+		"retestCommit": "c420a3ac83851dfdf873acc40ddb00fefca0e905",
+		"title": "Truth-auction proceeds are paid to the forker and never credited to the child pool",
+		"impactedContracts": [
+			"UniformPriceDualCapBatchAuction",
+			"SecurityPoolForker"
+		],
+		"impactedFunctions": [
+			"UniformPriceDualCapBatchAuction.finalize",
+			"SecurityPoolForker._consumeTruthAuctionRep",
+			"SecurityPoolForker._captureUnclaimedCollateralForAuction",
+			"SecurityPoolForker.receive"
+		],
+		"impact": "Fixed on latest origin/main. On the vulnerable commit, winning bidders' ETH could be stranded in SecurityPoolForker while child pools finalized without the auction collateral needed for share redemptions.",
+		"recommendation": "Implemented: SecurityPoolForker forwards finalized auction proceeds into the child SecurityPool before computing child collateral.",
+		"confidence": "high",
+		"artifacts": {
+			"report": "audits/solidity-audit-2026-06-18.md",
+			"reproductionHarness": "audits/reproduction-harnesses-2026-06-18.md",
+			"traceabilityMatrix": "audits/traceability-matrix-2026-06-18.md",
+			"coverageChecklist": "audits/coverage-checklist-2026-06-18.md",
+			"executablePoC": "solidity/ts/tests/auditFindings.test.ts"
+		}
+	},
+	{
+		"id": "M-01",
+		"severity": "Medium",
+		"status": "open",
+		"retestCommit": "c420a3ac83851dfdf873acc40ddb00fefca0e905",
+		"title": "Staged liquidation can be invalidated and consumed after target state changes",
+		"impactedContracts": [
+			"SecurityPoolOracleCoordinator",
+			"SecurityPool"
+		],
+		"impactedFunctions": [
+			"SecurityPoolOracleCoordinator.requestPriceIfNeededAndStageOperation",
+			"SecurityPoolOracleCoordinator.executeStagedOperation",
+			"SecurityPool.performLiquidation",
+			"SecurityPool.performSetSecurityBondsAllowance",
+			"SecurityPool.performWithdrawRep"
+		],
+		"impact": "A target vault can use operation ordering to make a staged liquidation fail after it is consumed, or stale allowance data can desynchronize aggregate allowance accounting.",
+		"recommendation": "Bind or reserve target state for queued liquidations, and avoid consuming target-controlled stale failures as terminal executions.",
+		"confidence": "medium-high",
+		"artifacts": {
+			"report": "audits/solidity-audit-2026-06-18.md",
+			"reproductionHarness": "audits/reproduction-harnesses-2026-06-18.md",
+			"traceabilityMatrix": "audits/traceability-matrix-2026-06-18.md",
+			"coverageChecklist": "audits/coverage-checklist-2026-06-18.md",
+			"executablePoC": "solidity/ts/tests/auditFindings.test.ts"
+		}
+	}
+]

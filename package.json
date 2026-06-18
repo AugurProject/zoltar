@@ -17,6 +17,7 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
+		"@zoltar/shared": "file:shared",
 		"tevm": "1.0.0-next.149",
 		"viem": "2.38.3"
 	},
