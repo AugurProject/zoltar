@@ -1,0 +1,77 @@
+{
+	"target": {
+		"repositoryPath": "/workspace/.t3/worktrees/zoltar/t3code-c5f51db1",
+		"branch": "t3code/c5f51db1",
+		"commit": "a49e15922ed91b317b969a08c67391c5296c0518",
+		"finalHeadAfterMainMerge": "c420a3ac",
+		"date": "2026-06-18"
+	},
+	"findings": [
+		{
+			"id": "C-01",
+			"severity": "Critical",
+			"status": "remediated_on_latest_main",
+			"reviewedCommitStatus": "valid",
+			"remediatedAtFinalHead": "c420a3ac",
+			"title": "Truth auction proceeds are sent to SecurityPoolForker and never credited to the child pool",
+			"impactedContracts": [
+				"UniformPriceDualCapBatchAuction",
+				"SecurityPoolForker"
+			],
+			"impactedFunctions": [
+				"UniformPriceDualCapBatchAuction.finalize",
+				"SecurityPoolForker._consumeTruthAuctionRep",
+				"SecurityPoolForker._captureUnclaimedCollateralForAuction",
+				"SecurityPoolForker.receive"
+			],
+			"sourceLocations": [
+				"solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol:113",
+				"solidity/contracts/peripherals/SecurityPoolForker.sol:467",
+				"solidity/contracts/peripherals/SecurityPoolForker.sol:717",
+				"solidity/contracts/peripherals/factories/SecurityPoolFactory.sol:100"
+			],
+			"impact": "Truth auction ETH can be permanently stranded in SecurityPoolForker while child pools finalize with understated collateral.",
+			"recommendation": "Route auction proceeds directly to the child pool or transfer the forker balance delta to the child pool during finalization before setting pool financials.",
+			"pocArtifact": "audits/2026-06-18-poc-tests.md#c-01-truth-auction-eth-is-stranded-in-securitypoolforker",
+			"executedPocArtifact": "audits/2026-06-18-executed-poc-results.md",
+			"invariantArtifact": "audits/2026-06-18-invariant-checklist.md#c-01-truth-auction-eth-conservation",
+			"fuzzInvariantArtifact": "audits/2026-06-18-fuzz-invariant-results.md",
+			"remediationArtifact": "audits/2026-06-18-remediation-verification.md#c-01-status-on-latest-main",
+			"qaArtifact": "audits/2026-06-18-qa-results.md"
+		},
+		{
+			"id": "C-02",
+			"severity": "Critical",
+			"status": "open",
+			"reviewedCommitStatus": "valid",
+			"title": "Own-fork path strands parent REP above the Zoltar fork threshold in the migration proxy",
+			"impactedContracts": [
+				"SecurityPoolForker",
+				"SecurityPool",
+				"SecurityPoolMigrationProxy",
+				"Zoltar"
+			],
+			"impactedFunctions": [
+				"SecurityPoolForker.forkZoltarWithOwnEscalationGame",
+				"SecurityPool.activateForkMode",
+				"SecurityPoolMigrationProxy.forkUniverse",
+				"SecurityPoolMigrationProxy.lockRep",
+				"Zoltar.forkUniverse"
+			],
+			"sourceLocations": [
+				"solidity/contracts/peripherals/SecurityPool.sol:642",
+				"solidity/contracts/peripherals/SecurityPoolForker.sol:568",
+				"solidity/contracts/Zoltar.sol:80",
+				"solidity/contracts/peripherals/SecurityPoolMigrationProxy.sol:33"
+			],
+			"impact": "Parent REP above the fork threshold can remain permanently stuck in the migration proxy and omitted from child REP allocation.",
+			"recommendation": "Transfer only the REP needed for the fork or immediately lock leftover proxy REP into Zoltar's migration balance and include it in child allocation accounting.",
+			"pocArtifact": "audits/2026-06-18-poc-tests.md#c-02-own-fork-excess-parent-rep-is-stranded-in-securitypoolmigrationproxy",
+			"executedPocArtifact": "audits/2026-06-18-executed-poc-results.md",
+			"invariantArtifact": "audits/2026-06-18-invariant-checklist.md#c-02-own-fork-rep-conservation",
+			"fuzzInvariantArtifact": "audits/2026-06-18-fuzz-invariant-results.md",
+			"remediationArtifact": "audits/2026-06-18-remediation-verification.md#c-02-status-on-latest-main",
+			"qaArtifact": "audits/2026-06-18-qa-results.md"
+		}
+	]
+}
