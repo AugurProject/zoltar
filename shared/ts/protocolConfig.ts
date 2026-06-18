@@ -18,7 +18,18 @@ export const DEFAULT_PROTOCOL_CONFIG: ProtocolConfig = {
 	initialEscalationGameDeposit: DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT,
 }
 
+export const MAINNET_PROTOCOL_CONFIG: ProtocolConfig = {
+	forkBurnDivisor: 5n,
+	forkThresholdDivisor: 20n,
+	initialEscalationGameDeposit: 10n ** 18n,
+}
+
 const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
+const PROTOCOL_CONFIG_ENV_KEYS = {
+	forkBurnDivisor: 'ZOLTAR_FORK_BURN_DIVISOR',
+	forkThresholdDivisor: 'ZOLTAR_FORK_THRESHOLD_DIVISOR',
+	initialEscalationGameDeposit: 'ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT',
+} as const
 
 function parseConfigBigInt(value: bigint | number | string | undefined, field: keyof ProtocolConfig): bigint | undefined {
 	if (value === undefined) return undefined
@@ -44,9 +55,9 @@ function readProcessEnv(name: string): string | undefined {
 }
 
 function getEnvironmentProtocolConfigOverrides(): ProtocolConfigInput {
-	const forkBurnDivisor = readProcessEnv('ZOLTAR_FORK_BURN_DIVISOR')
-	const forkThresholdDivisor = readProcessEnv('ZOLTAR_FORK_THRESHOLD_DIVISOR')
-	const initialEscalationGameDeposit = readProcessEnv('ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT')
+	const forkBurnDivisor = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.forkBurnDivisor)
+	const forkThresholdDivisor = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.forkThresholdDivisor)
+	const initialEscalationGameDeposit = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.initialEscalationGameDeposit)
 	return {
 		...(forkBurnDivisor === undefined ? {} : { forkBurnDivisor }),
 		...(forkThresholdDivisor === undefined ? {} : { forkThresholdDivisor }),
@@ -97,4 +108,31 @@ export function getProtocolConfig(overrides: ProtocolConfigInput = {}): Protocol
 		...getGlobalProtocolConfigOverrides(),
 		...overrides,
 	})
+}
+
+function collectProtocolConfigOverrideSources(overrides: ProtocolConfigInput) {
+	const environmentOverrides = getEnvironmentProtocolConfigOverrides()
+	const globalOverrides = getGlobalProtocolConfigOverrides()
+	return [
+		{ config: environmentOverrides, source: 'environment' },
+		{ config: globalOverrides, source: 'global' },
+		{ config: overrides, source: 'explicit' },
+	] as const
+}
+
+export function assertMainnetProtocolConfigFrozen(overrides: ProtocolConfigInput = {}): ProtocolConfig {
+	for (const { config, source } of collectProtocolConfigOverrideSources(overrides)) {
+		for (const field of Object.keys(MAINNET_PROTOCOL_CONFIG) as Array<keyof ProtocolConfig>) {
+			const overrideValue = parseConfigBigInt(config[field], field)
+			if (overrideValue === undefined) continue
+			if (overrideValue === MAINNET_PROTOCOL_CONFIG[field]) continue
+			const detail = source === 'environment' ? ` via ${PROTOCOL_CONFIG_ENV_KEYS[field]}` : ''
+			throw new Error(`Mainnet protocol config ${field} is frozen at ${MAINNET_PROTOCOL_CONFIG[field].toString()} but ${source}${detail} provided ${overrideValue.toString()}`)
+		}
+	}
+	return MAINNET_PROTOCOL_CONFIG
+}
+
+export function getMainnetProtocolConfig(overrides: ProtocolConfigInput = {}): ProtocolConfig {
+	return assertMainnetProtocolConfigFrozen(overrides)
 }

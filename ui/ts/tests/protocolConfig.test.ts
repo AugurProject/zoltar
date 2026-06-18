@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { DEFAULT_PROTOCOL_CONFIG, getProtocolConfig, validateProtocolConfig } from '@zoltar/shared/protocolConfig'
+import { DEFAULT_PROTOCOL_CONFIG, MAINNET_PROTOCOL_CONFIG, getMainnetProtocolConfig, getProtocolConfig, validateProtocolConfig } from '@zoltar/shared/protocolConfig'
 
 const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
 const FORK_BURN_ENV = 'ZOLTAR_FORK_BURN_DIVISOR'
@@ -70,5 +70,32 @@ describe('protocolConfig', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 1n })).toThrow('forkBurnDivisor must be greater than 1')
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDeposit: 0n })).toThrow('initialEscalationGameDeposit must be greater than 0')
+	})
+
+	test('getMainnetProtocolConfig returns the frozen mainnet config', () => {
+		expect(getMainnetProtocolConfig()).toEqual(MAINNET_PROTOCOL_CONFIG)
+	})
+
+	test('default protocol config matches the frozen mainnet config used for deterministic deployments', () => {
+		expect(DEFAULT_PROTOCOL_CONFIG).toEqual(MAINNET_PROTOCOL_CONFIG)
+	})
+
+	test('getMainnetProtocolConfig rejects environment override drift', () => {
+		setProcessEnv(FORK_THRESHOLD_ENV, '21')
+
+		expect(() => getMainnetProtocolConfig()).toThrow('Mainnet protocol config forkThresholdDivisor is frozen at 20 but environment via ZOLTAR_FORK_THRESHOLD_DIVISOR provided 21')
+	})
+
+	test('getMainnetProtocolConfig allows override values that match the frozen config', () => {
+		setProcessEnv(FORK_BURN_ENV, MAINNET_PROTOCOL_CONFIG.forkBurnDivisor.toString())
+		Reflect.set(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY, {
+			forkThresholdDivisor: MAINNET_PROTOCOL_CONFIG.forkThresholdDivisor.toString(),
+		})
+
+		expect(
+			getMainnetProtocolConfig({
+				initialEscalationGameDeposit: MAINNET_PROTOCOL_CONFIG.initialEscalationGameDeposit.toString(),
+			}),
+		).toEqual(MAINNET_PROTOCOL_CONFIG)
 	})
 })

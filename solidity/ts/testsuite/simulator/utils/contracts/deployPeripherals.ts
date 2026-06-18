@@ -2,7 +2,7 @@ import 'viem/window'
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from 'viem'
 import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
-import { getProtocolConfig } from '../protocolConfig'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
@@ -98,11 +98,10 @@ const getSecurityPoolFactoryByteCode = ({
 	zoltarQuestionData: Address
 }): Hex =>
 	(() => {
-		const protocolConfig = getProtocolConfig()
 		return encodeDeployData({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, protocolConfig.initialEscalationGameDeposit],
+			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit],
 		})
 	})()
 
@@ -121,11 +120,10 @@ const getEscalationGameFactoryByteCode = (): Hex =>
 
 const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 	(() => {
-		const protocolConfig = getProtocolConfig()
 		return encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 	})()
 
@@ -189,11 +187,10 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getRepTokenAddress,
 	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
-			const protocolConfig = getProtocolConfig()
 			return encodeDeployData({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-				args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, protocolConfig.initialEscalationGameDeposit, truthAuction],
+				args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
@@ -291,11 +288,10 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
-		const protocolConfig = getProtocolConfig()
 		const initCode = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [contractAddresses.zoltarQuestionData, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+			args: [contractAddresses.zoltarQuestionData, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 		await deployBytecode('zoltar', initCode)
 	}

@@ -69,20 +69,33 @@ const manifestsMatch = async () => {
 	}
 }
 
-const refreshSharedPackageInstall = () => {
+const copyCurrentSharedPackageInstall = async () => {
+	if (path.resolve(installedSharedPackagePath) === path.resolve(sharedPackagePath)) return
+	await fs.rm(installedSharedPackagePath, { force: true, recursive: true })
+	const files = await getPublishedSharedFiles()
+	for (const sourcePath of files) {
+		const relativePath = path.relative(sharedPackagePath, sourcePath)
+		const destinationPath = path.join(installedSharedPackagePath, relativePath)
+		await fs.mkdir(path.dirname(destinationPath), { recursive: true })
+		await fs.copyFile(sourcePath, destinationPath)
+	}
+}
+
+const refreshSharedPackageInstall = async () => {
 	console.warn(`Refreshing stale @zoltar/shared install in ${process.cwd()}`)
 	const result = spawnSync('bun', ['install', '--frozen-lockfile'], {
 		cwd: process.cwd(),
 		stdio: 'inherit',
 	})
 	if (result.status !== 0) process.exit(result.status ?? 1)
+	await copyCurrentSharedPackageInstall()
 }
 
 if (!(await manifestsMatch())) {
 	if (mode === 'check') {
 		throw new Error(`Installed @zoltar/shared package in ${process.cwd()} does not match ${sharedPackagePath}. Run 'bun install --frozen-lockfile' in ${process.cwd()} to refresh it.`)
 	}
-	refreshSharedPackageInstall()
+	await refreshSharedPackageInstall()
 	if (!(await manifestsMatch())) {
 		throw new Error(`Installed @zoltar/shared package in ${process.cwd()} still does not match ${sharedPackagePath} after reinstall`)
 	}
