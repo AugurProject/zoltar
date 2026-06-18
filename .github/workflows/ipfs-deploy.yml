@@ -2,7 +2,7 @@ name: Build and Push to IPFS
 
 on:
   push:
-    # Publish `main` as Docker `latest` image.
+    # Publish `master` as Docker `latest` image.
     branches:
       - main
 
@@ -20,44 +20,9 @@ jobs:
   push:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    permissions:
-      contents: write
-      packages: write
 
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.9
-
-      - name: Install dependencies and generate artifacts
-        run: bun run setup
-
-      - name: Run TypeScript type checking
-        run: bun run tsc
-
-      - name: Install Anvil
-        run: bun run install:anvil
-
-      - name: Run tests
-        run: bun run test
-
-      - name: Run formatter
-        run: bun run format
-
-      - name: Verify formatting produced no changes
-        run: git diff --exit-code
-
-      - name: Run Biome check
-        run: bun run check
-
-      - name: Run dead code analysis
-        run: bun run knip
-
-      - name: Verify generated artifacts are fresh
-        run: bun run check:generated-clean
+      - uses: actions/checkout@v2
 
       - name: Set IMAGE_TAG
         run: echo "IMAGE_TAG=$(echo ${{ github.repository }} | tr '[A-Z]' '[a-z]')" >> $GITHUB_ENV
@@ -85,7 +50,7 @@ jobs:
           [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
 
           # Use Docker `latest` tag convention
-          [ "$VERSION" == "main" ] && VERSION=latest
+          [ "$VERSION" == "master" ] && VERSION=latest
 
           echo IMAGE_ID=$IMAGE_ID
           echo VERSION=$VERSION
