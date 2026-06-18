@@ -70,6 +70,8 @@ interface IUniformPriceDualCapBatchAuction {
 
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 
+	function refundLosingBidsFor(address bidder, TickIndex[] calldata tickIndices) external;
+
 	function tickToPrice(int256 tick) external pure returns (uint256 price);
 	function activeTickCount() external view returns (uint256);
 	function getTickSummary(int256 tick) external view returns (TickSummary memory);

@@ -22,7 +22,7 @@ interface ISecurityPoolForker {
 			uint256 escrowSourceRepAtFork
 		);
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
-	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) external;
+	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external;
 	function createChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) external;
 	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) external;
 	function migrateVaultWithUnresolvedEscalation(
@@ -34,7 +34,7 @@ interface ISecurityPoolForker {
 		ISecurityPool securityPool,
 		address vault,
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
-		uint256[] memory depositIndexes
+		uint256[] calldata depositIndexes
 	) external;
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
@@ -42,13 +42,13 @@ interface ISecurityPoolForker {
 	function claimAuctionProceeds(
 		ISecurityPool securityPool,
 		address vault,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
 	) external;
 	function settleAuctionBids(
 		ISecurityPool securityPool,
 		address vault,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata claimTickIndices,
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata refundTickIndices
 	) external;
 	function getQuestionOutcome(
 		ISecurityPool securityPool

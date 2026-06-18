@@ -39,10 +39,10 @@ contract SecurityPool is ISecurityPool {
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
-	ZoltarQuestionData public questionData;
-	address public securityPoolForker;
+	ZoltarQuestionData public immutable questionData;
+	address public immutable securityPoolForker;
 	address public immutable truthAuction;
-	ISecurityPoolFactory public securityPoolFactory;
+	ISecurityPoolFactory public immutable securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
 	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
@@ -126,7 +126,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 _initialEscalationGameDeposit,
 		address _truthAuction
 	) {
-		require(_initialEscalationGameDeposit > 0, 'initial escalation deposit');
+		require(_initialEscalationGameDeposit > 0);
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -261,6 +261,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemFees(address vault) external {
+		updateVaultFees(vault);
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
@@ -325,10 +326,6 @@ contract SecurityPool is ISecurityPool {
 	function poolOwnershipToRep(uint256 poolOwnership) public view returns (uint256) {
 		if (poolOwnershipDenominator == 0) return 0;
 		return (poolOwnership * getTotalRepBalance()) / poolOwnershipDenominator;
-	}
-
-	function getAvailableRepBalance() public view returns (uint256) {
-		return repToken.balanceOf(address(this));
 	}
 
 	function getTotalRepBalance() public view returns (uint256) {
@@ -509,6 +506,7 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'not operational');
 		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'question not final');
+		updateCollateralAmount();
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
 		uint256 ethValue = sharesToCash(amount);
@@ -539,7 +537,7 @@ contract SecurityPool is ISecurityPool {
 		emit RedeemRep(msg.sender, vault, repAmount);
 	}
 
-	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] memory proofs) external {
+	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		require(systemState == SystemState.Operational, 'not operational');
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
@@ -618,7 +616,7 @@ contract SecurityPool is ISecurityPool {
 
 	function withdrawFromEscalationGame(
 		BinaryOutcomes.BinaryOutcome outcome,
-		uint256[] memory depositIndexes
+		uint256[] calldata depositIndexes
 	) external {
 		require(address(escalationGame) != address(0x0), 'missing escalation');
 		require(systemState == SystemState.Operational, 'not operational');

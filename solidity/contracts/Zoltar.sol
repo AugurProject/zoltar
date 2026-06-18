@@ -40,7 +40,7 @@ contract Zoltar {
 
 	uint256 public immutable forkThresholdDivisor;
 	uint256 public immutable forkBurnDivisor;
-	ZoltarQuestionData public zoltarQuestionData;
+	ZoltarQuestionData public immutable zoltarQuestionData;
 
 	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'fork threshold divisor');

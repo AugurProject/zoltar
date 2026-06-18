@@ -25,10 +25,10 @@ interface IShareToken {
 	) external pure returns (uint256 _tokenId);
 	function getTokenIds(
 		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome[] memory _outcomes
+		BinaryOutcomes.BinaryOutcome[] calldata _outcomes
 	) external pure returns (uint256[] memory _tokenIds);
 	function unpackTokenId(
 		uint256 _tokenId
 	) external pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome);
-	function migrate(uint256 fromId, uint256[] memory targetOutcomeIndexes) external;
+	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external;
 }

@@ -83,16 +83,9 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool securityPool
 	) public view returns (uint256 vaultRepAtFork, uint256 unallocatedEscrowChildRep, uint256 escrowSourceRepAtFork) {
 		SecurityPoolForkerForkData storage repBuckets = forkDataByPool[securityPool];
-		uint256 escrowChildRepUsed;
-		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			escrowChildRepUsed += ownForkChildRepAllocationByPoolAndOutcome[securityPool][outcomeIndex]
-				.escrowChildRepUsed;
-		}
 		return (
 			repBuckets.vaultRepAtFork,
-			repBuckets.escalationChildRepAtFork > escrowChildRepUsed
-				? repBuckets.escalationChildRepAtFork - escrowChildRepUsed
-				: 0,
+			_unallocatedEscrowChildRep(securityPool, repBuckets),
 			repBuckets.escalationSourceRepAtFork
 		);
 	}
@@ -111,18 +104,27 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		)
 	{
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
+		return (
+			data.ownFork,
+			data.auctionableRepAtFork,
+			data.vaultRepAtFork,
+			_unallocatedEscrowChildRep(securityPool, data),
+			data.escalationSourceRepAtFork
+		);
+	}
+
+	function _unallocatedEscrowChildRep(
+		ISecurityPool securityPool,
+		SecurityPoolForkerForkData storage data
+	) private view returns (uint256) {
 		uint256 escrowChildRepUsed;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			escrowChildRepUsed += ownForkChildRepAllocationByPoolAndOutcome[securityPool][outcomeIndex]
 				.escrowChildRepUsed;
 		}
-		return (
-			data.ownFork,
-			data.auctionableRepAtFork,
-			data.vaultRepAtFork,
-			data.escalationChildRepAtFork > escrowChildRepUsed ? data.escalationChildRepAtFork - escrowChildRepUsed : 0,
-			data.escalationSourceRepAtFork
-		);
+		uint256 escalationChildRepAtFork = data.escalationChildRepAtFork;
+		if (escalationChildRepAtFork <= escrowChildRepUsed) return 0;
+		return escalationChildRepAtFork - escrowChildRepUsed;
 	}
 
 	constructor(Zoltar _zoltar) SecurityPoolForkerVaultMigrationBase(_zoltar) {
@@ -294,7 +296,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
-	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
+	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external {
 		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[securityPool];
 		require(address(migrationProxy) != address(0x0), 'e3');
 		require(securityPool.systemState() == SystemState.PoolForked, 'parent pool not forked');
@@ -338,8 +340,8 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool,
 		address vault,
 		BinaryOutcomes.BinaryOutcome,
-		uint256[] memory
-	) public {
+		uint256[] calldata
+	) external {
 		require(msg.sender == vault, 'ov');
 		_delegateEscalationGameForker();
 	}
@@ -479,8 +481,10 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool securityPool,
 		SecurityPoolForkerForkData storage data
 	) private returns (uint256 repPurchased) {
-		data.truthAuction.finalize();
-		repPurchased = data.truthAuction.totalRepPurchased();
+		if (data.truthAuction.auctionStarted() != 0) {
+			data.truthAuction.finalize();
+			repPurchased = data.truthAuction.totalRepPurchased();
+		}
 		securityPool.setSystemState(SystemState.Operational);
 	}
 
@@ -609,8 +613,8 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	function claimAuctionProceeds(
 		ISecurityPool securityPool,
 		address vault,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
-	) public {
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
+	) external {
 		_claimAuctionProceeds(securityPool, vault, tickIndices);
 	}
 
@@ -620,9 +624,9 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	function settleAuctionBids(
 		ISecurityPool securityPool,
 		address vault,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory claimTickIndices,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory refundTickIndices
-	) public {
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata claimTickIndices,
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata refundTickIndices
+	) external {
 		require(claimTickIndices.length > 0 || refundTickIndices.length > 0, 'f7');
 		if (forkDataByPool[securityPool].truthAuction.finalized()) {
 			IUniformPriceDualCapBatchAuction.TickIndex[]
@@ -639,7 +643,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 			return;
 		}
 		require(claimTickIndices.length == 0, 'f8');
-		claimableRefundsForSettlement(securityPool, refundTickIndices);
+		_refundLosingAuctionBidsForSettlement(securityPool, vault, refundTickIndices);
 	}
 
 	function _claimAuctionProceeds(
@@ -679,11 +683,12 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		}
 	}
 
-	function claimableRefundsForSettlement(
+	function _refundLosingAuctionBidsForSettlement(
 		ISecurityPool securityPool,
-		IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices
+		address vault,
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
 	) private {
-		forkDataByPool[securityPool].truthAuction.refundLosingBids(tickIndices);
+		forkDataByPool[securityPool].truthAuction.refundLosingBidsFor(vault, tickIndices);
 	}
 
 	function getQuestionOutcome(

@@ -310,6 +310,8 @@ describe('Auction', () => {
 		await deployUniformPriceDualCapBatchAuction(client, ownerClient.account.address)
 		const localAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(ownerClient.account.address)
 		const bidAmount = 1n * ATTOETH_PER_ETH
+		await startAuction(ownerClient, localAuctionAddress, height * bidAmount + bidAmount, 1n)
+		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 
 		await mockWindow.addStateOverrides({
 			[localAuctionAddress]: {
@@ -346,6 +348,16 @@ describe('Auction', () => {
 	// ============ Test Suites ============
 
 	describe('Lifecycle & Finalization', () => {
+		test('finalize rejects before the auction starts or ends', async () => {
+			await assert.rejects(async () => await finalize(client, auctionAddress), /not started/)
+
+			const raiseCap = DEFAULT_ETH_RAISE_CAP * ATTOETH_PER_ETH
+			await setupStandardAuction(client, auctionAddress)
+			await submitBid(client, auctionAddress, tickForPrice(PRICE_PRECISION), raiseCap)
+
+			await assert.rejects(async () => await finalize(client, auctionAddress), /auction active/)
+		})
+
 		test('can start auction and make a single bid that finalizes', async () => {
 			const raiseCap = DEFAULT_ETH_RAISE_CAP * ATTOETH_PER_ETH
 			await setupStandardAuction(client, auctionAddress)
@@ -555,6 +567,7 @@ describe('Auction', () => {
 			const clearingAfterRefund = await computeClearing(client, auctionAddress)
 			const expectedEthRaised = clearingAfterRefund.accumulatedEth
 
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 			strictEqualTypeSafe(await getEthRaised(client, auctionAddress), expectedEthRaised, 'raised amount mismatch')
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
@@ -694,6 +707,7 @@ describe('Auction', () => {
 
 			await submitBid(alice, auctionAddress, tickForPrice(price), 1n * 10n ** 18n)
 
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
 			const clearing = await computeClearing(client, auctionAddress)
@@ -723,6 +737,7 @@ describe('Auction', () => {
 			strictEqualTypeSafe(clearingPre.hitCap, false, 'hitCap should be false (underfunded)')
 
 			// Finalize the auction
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
 			// Verify total REP purchased equals maxRepBeingSold (all rep sold)
@@ -758,6 +773,7 @@ describe('Auction', () => {
 			const aliceEth = (maxRepBeingSold * tickToPrice(thresholdTick)) / PRICE_PRECISION
 
 			await submitBid(alice, auctionAddress, thresholdTick, aliceEth)
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
 			const totalRep = await getTotalRepPurchased(client, auctionAddress)
@@ -1383,11 +1399,13 @@ describe('Auction', () => {
 			if (expected.hitCap) {
 				strictEqualTypeSafe(clearing.foundTick, expected.foundTick, `${c.name}: foundTick mismatch`)
 				strictEqualTypeSafe(clearing.accumulatedEth, expected.accumulatedEth, `${c.name}: accumulatedEth mismatch`)
+				await mockWindow.advanceTime(AUCTION_TIME + 1n)
 				await finalize(client, auctionAddress)
 				await assertFairPayoutForUser(client, auctionAddress, client.account.address, fairPayoutBids, clearing.foundTick)
 			} else {
 				assert.strictEqual(clearing.hitCap, false, `${c.name}: expected no clearing price`)
 				// Finalize anyway to clear the contract balance
+				await mockWindow.advanceTime(AUCTION_TIME + 1n)
 				await finalize(client, auctionAddress)
 			}
 
