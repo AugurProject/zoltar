@@ -32,7 +32,7 @@ contract SecurityPoolDeployer {
 		uint256 initialEscalationGameDeposit,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
-		require(msg.sender == factory);
+		if (msg.sender != factory) revert();
 
 		securityPool = ISecurityPool(
 			payable(

@@ -126,7 +126,6 @@ contract SecurityPool is ISecurityPool {
 		uint256 _initialEscalationGameDeposit,
 		address _truthAuction
 	) {
-		require(_initialEscalationGameDeposit > 0);
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
