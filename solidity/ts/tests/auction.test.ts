@@ -58,7 +58,7 @@ const AUCTION_MAX_REP_BEING_SOLD_SLOT = 5n
 const AUCTION_ETH_RAISE_CAP_SLOT = 6n
 const BID_STRUCT_SLOT_COUNT = 4n
 const NODE_STRUCT_SLOT_COUNT = 8n
-const MAX_DISTINCT_TICK_COUNT = 1_048_577n
+const MAX_DISTINCT_TICK_COUNT = MAX_TICK - MIN_TICK + 1n
 const FINALIZE_GAS_LIMIT = 20_000_000n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -282,12 +282,12 @@ describe('Auction', () => {
 		return height
 	}
 
-	const buildSyntheticWorstCaseFinalizeStateDiff = (height: bigint, bidAmount: bigint) => {
+	const buildSyntheticWorstCaseFinalizeStateDiff = (height: bigint, bidAmount: bigint, maxRepBeingSold: bigint = 1n, ethRaiseCap: bigint = height * bidAmount + bidAmount) => {
 		const stateDiff: Record<string, bigint> = {
 			[formatStorageSlot(AUCTION_ROOT_SLOT)]: 1n,
 			[formatStorageSlot(AUCTION_NEXT_ID_SLOT)]: height + 1n,
-			[formatStorageSlot(AUCTION_MAX_REP_BEING_SOLD_SLOT)]: 1n,
-			[formatStorageSlot(AUCTION_ETH_RAISE_CAP_SLOT)]: height * bidAmount + bidAmount,
+			[formatStorageSlot(AUCTION_MAX_REP_BEING_SOLD_SLOT)]: maxRepBeingSold,
+			[formatStorageSlot(AUCTION_ETH_RAISE_CAP_SLOT)]: ethRaiseCap,
 		}
 
 		for (let nodeId = 1n; nodeId <= height; nodeId++) {
@@ -317,6 +317,32 @@ describe('Auction', () => {
 			[localAuctionAddress]: {
 				balance: height * bidAmount,
 				stateDiff: buildSyntheticWorstCaseFinalizeStateDiff(height, bidAmount),
+			},
+		})
+
+		return await ownerClient.estimateContractGas({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'finalize',
+			address: localAuctionAddress,
+			args: [],
+		})
+	}
+
+	const estimateUnderfundedFinalizeGasForSyntheticWorstCaseDepth = async (height: bigint, clientIndex: number) => {
+		const ownerClient = createTestClient(clientIndex)
+		await deployUniformPriceDualCapBatchAuction(client, ownerClient.account.address)
+		const localAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(ownerClient.account.address)
+		const bidAmount = 1n * ATTOETH_PER_ETH
+		const totalEth = height * bidAmount
+		const maxRepBeingSold = totalEth + 1n
+		const ethRaiseCap = totalEth + bidAmount
+		await startAuction(ownerClient, localAuctionAddress, ethRaiseCap, maxRepBeingSold)
+		await mockWindow.advanceTime(AUCTION_TIME + 1n)
+
+		await mockWindow.addStateOverrides({
+			[localAuctionAddress]: {
+				balance: totalEth,
+				stateDiff: buildSyntheticWorstCaseFinalizeStateDiff(height, bidAmount, maxRepBeingSold, ethRaiseCap),
 			},
 		})
 
@@ -653,13 +679,24 @@ describe('Auction', () => {
 			assert.ok(gasWithThirtyTwoDistinctTicks < gasWithThirtyTwoSameTickBids * 2n, `distinct price levels should stay close to same-tick finalize gas after subtree pruning: same tick=${gasWithThirtyTwoSameTickBids.toString()}, distinct ticks=${gasWithThirtyTwoDistinctTicks.toString()}`)
 		})
 
-		test('finalize stays under 20 million gas on a synthetic max-depth clearing path for the full tick cap', async () => {
-			const maxAvlHeightWithinTickCap = getMaxAvlHeightWithinNodeCap(MAX_DISTINCT_TICK_COUNT)
-			strictEqualTypeSafe(maxAvlHeightWithinTickCap, 28n, 'unexpected AVL height bound for the tick cap')
+		test('finalize stays under 20 million gas on a synthetic max-depth clearing path for the full tick domain', async () => {
+			const maxAvlHeightWithinTickDomain = getMaxAvlHeightWithinNodeCap(MAX_DISTINCT_TICK_COUNT)
+			strictEqualTypeSafe(maxAvlHeightWithinTickDomain, 28n, 'unexpected AVL height bound for the tick domain')
 
-			const finalizeGas = await estimateFinalizeGasForSyntheticWorstCaseDepth(maxAvlHeightWithinTickCap, 1)
+			const finalizeGas = await estimateFinalizeGasForSyntheticWorstCaseDepth(maxAvlHeightWithinTickDomain, 1)
+			console.info(`auction max-depth funded finalize gas: ${finalizeGas.toString()} (height=${maxAvlHeightWithinTickDomain.toString()}, limit=${FINALIZE_GAS_LIMIT.toString()})`)
 
-			assert.ok(finalizeGas < FINALIZE_GAS_LIMIT, `finalize gas should stay below ${FINALIZE_GAS_LIMIT.toString()} for the synthetic max-depth clearing path: gas=${finalizeGas.toString()}, height=${maxAvlHeightWithinTickCap.toString()}`)
+			assert.ok(finalizeGas < FINALIZE_GAS_LIMIT, `finalize gas should stay below ${FINALIZE_GAS_LIMIT.toString()} for the synthetic max-depth clearing path: gas=${finalizeGas.toString()}, height=${maxAvlHeightWithinTickDomain.toString()}`)
+		})
+
+		test('underfunded finalize stays under 20 million gas on a synthetic max-depth tick domain', async () => {
+			const maxAvlHeightWithinTickDomain = getMaxAvlHeightWithinNodeCap(MAX_DISTINCT_TICK_COUNT)
+			strictEqualTypeSafe(maxAvlHeightWithinTickDomain, 28n, 'unexpected AVL height bound for the tick domain')
+
+			const finalizeGas = await estimateUnderfundedFinalizeGasForSyntheticWorstCaseDepth(maxAvlHeightWithinTickDomain, 1)
+			console.info(`auction max-depth underfunded finalize gas: ${finalizeGas.toString()} (height=${maxAvlHeightWithinTickDomain.toString()}, limit=${FINALIZE_GAS_LIMIT.toString()})`)
+
+			assert.ok(finalizeGas < FINALIZE_GAS_LIMIT, `underfunded finalize gas should stay below ${FINALIZE_GAS_LIMIT.toString()} for the synthetic max-depth tree: gas=${finalizeGas.toString()}, height=${maxAvlHeightWithinTickDomain.toString()}`)
 		})
 
 		test('winner unaffected after bidder refunds multiple losing bids', async () => {
@@ -809,6 +846,18 @@ describe('Auction', () => {
 			await assert.rejects(async () => await submitBid(client, auctionAddress, 0n, 0n), 'invalid')
 
 			await submitBid(client, auctionAddress, 0n, 1n)
+		})
+
+		test('submitBid accepts both finite tick-domain edges', async () => {
+			const ethRaiseCap = 100n * 10n ** 18n
+			const maxRepBeingSold = 10n * 10n ** 18n
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			await submitBid(client, auctionAddress, MIN_TICK, 1n * 10n ** 18n)
+			await submitBid(client, auctionAddress, MAX_TICK, 1n * 10n ** 18n)
+
+			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, MIN_TICK), 1n, 'minimum tick bid count')
+			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, MAX_TICK), 1n, 'maximum tick bid count')
 		})
 
 		test('submitBid invalid states: before auction start and after finalize', async () => {
