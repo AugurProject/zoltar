@@ -1,0 +1,71 @@
+{
+	"auditedCommit": "ad4f9d66f45a48875ecd31c83f95b61d0947fa0b",
+	"branch": "t3code/77d59343",
+	"date": "2026-06-18",
+	"scope": "tests and test commands",
+	"findings": [
+		{
+			"id": "TST-001",
+			"severity": "High",
+			"title": "Default bun run test does not run the existing Solidity fuzz harness",
+			"locations": ["package.json:57", "package.json:58", "solidity/ts/fuzz/auctionTickMath.fuzz.ts:35"],
+			"recommendation": "Rename the fuzz file to match Bun test discovery or include the explicit fuzz path in the root test script."
+		},
+		{
+			"id": "TST-002",
+			"severity": "Medium",
+			"title": "Several revert tests use assert.rejects strings as if they matched revert reasons",
+			"locations": ["solidity/ts/tests/auction.test.ts:833", "solidity/ts/tests/auction.test.ts:846", "solidity/ts/tests/auction.test.ts:1304", "solidity/ts/tests/peripherals.test.ts:668"],
+			"recommendation": "Use regex or validation-object matchers for expected errors, and add post-state invariants where revert data is unavailable."
+		},
+		{
+			"id": "TST-003",
+			"severity": "Medium",
+			"title": "Default tests depend on live mainnet RPC and mutable Uniswap liquidity",
+			"locations": ["ui/ts/tests/uniswapQuoter.integration.test.ts:4", "ui/ts/tests/uniswapQuoter.integration.test.ts:14", "ui/ts/tests/uniswapQuoter.integration.test.ts:42"],
+			"recommendation": "Move live-mainnet tests behind an opt-in integration command and keep the default suite deterministic."
+		},
+		{
+			"id": "TST-004",
+			"severity": "Medium",
+			"title": "No enforced invariant/property-test gate for protocol-wide accounting",
+			"locations": ["audit_instructions.md:451", "package.json:57", "package.json:58"],
+			"recommendation": "Add required stateful invariant tests for REP, ETH, auction, migration, escalation, and no-double-claim accounting."
+		},
+		{
+			"id": "TST-005",
+			"severity": "Medium",
+			"title": "Seeded security-pool simulation invariants are skipped",
+			"locations": ["ui/ts/tests/activeEnvironment.test.ts:519", "ui/ts/tests/activeEnvironment.test.ts:534", "ui/ts/simulation/scenarios.ts:38"],
+			"recommendation": "Unskip or replace the exact seeded pool/vault invariant test."
+		},
+		{
+			"id": "TST-006",
+			"severity": "Medium",
+			"title": "Factory and deployment wiring is mostly covered by smoke tests, not adversarial/direct tests",
+			"locations": ["solidity/contracts/peripherals/factories/EscalationGameFactory.sol:24", "solidity/contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol:53", "solidity/contracts/peripherals/factories/SecurityPoolDeployer.sol:37", "solidity/contracts/peripherals/factories/SecurityPoolFactory.sol:85"],
+			"recommendation": "Add direct tests for salts, predicted addresses, constructor argument consistency, unauthorized callers, duplicate deployment behavior, and deployment metadata pagination."
+		},
+		{
+			"id": "TST-007",
+			"severity": "Low",
+			"title": "Some security-sensitive rejection tests accept any revert with no post-state invariant",
+			"locations": ["solidity/ts/tests/escalationGame.test.ts:499", "solidity/ts/tests/peripherals.test.ts:1254", "solidity/ts/tests/peripherals.test.ts:4071", "solidity/ts/tests/peripherals.test.ts:4705"],
+			"recommendation": "Assert specific revert selectors/messages or protected-state invariants."
+		},
+		{
+			"id": "TST-008",
+			"severity": "Low",
+			"title": "A documented exit-path TODO remains in the Solidity tests",
+			"locations": ["solidity/ts/tests/peripherals.test.ts:3594"],
+			"recommendation": "Add the combined shares-plus-REP exit workflow test or remove the TODO with references to equivalent coverage."
+		},
+		{
+			"id": "TST-009",
+			"severity": "Informational",
+			"title": "Several production modules have little direct test coverage",
+			"locations": ["solidity/contracts/peripherals/WETH9.sol:20", "solidity/contracts/peripherals/MerkleMountainRange.sol:7", "solidity/contracts/peripherals/BinaryOutcomes.sol:4", "solidity/contracts/peripherals/EscalationGameForker.sol:24", "solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol:21"],
+			"recommendation": "Add focused direct tests or explicitly document intentional indirect coverage for low-level utility and wrapper modules."
+		}
+	]
+}
