@@ -3,7 +3,11 @@ pragma solidity 0.8.35;
 
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 
-// TODO: figure out if this can run up issues with gas and figure out how to avoid them
+// Gas bound: finalize() descends AVL aggregate paths and never scans bids. The
+// tick range admits at most 1,048,577 distinct price levels, so an AVL tree over
+// every possible tick has height <= 28. The auction intentionally does not add a
+// bid or tick cap because valid price levels must remain open during bidding; see
+// the synthetic max-depth gas tests.
 contract UniformPriceDualCapBatchAuction {
 	struct Node {
 		int256 tick; // ETH/REP price (tick)
@@ -32,7 +36,7 @@ contract UniformPriceDualCapBatchAuction {
 	int256 constant MAX_TICK = 524288;
 	uint256 constant AUCTION_TIME = 1 weeks;
 	uint256 constant PRICE_PRECISION = 1e18;
-	uint256 constant MAX_NUMBER_BINDING_BIDS = 100_000;
+	uint256 constant MIN_BID_SIZE_DIVISOR = 100_000;
 
 	mapping(uint256 => Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
@@ -47,7 +51,7 @@ contract UniformPriceDualCapBatchAuction {
 	bool public finalized;
 	int256 public clearingTick;
 	uint256 public ethFilledAtClearing;
-	uint256 public ethRaised; // TODO, if ethRaised is less than ethRaiseCap (underfunded), we should give all the rep we have to bidders
+	uint256 public ethRaised;
 	uint256 public totalRepPurchased;
 
 	uint256 public auctionStarted;
@@ -97,7 +101,7 @@ contract UniformPriceDualCapBatchAuction {
 		maxRepBeingSold = _maxRepBeingSold;
 		ethRaiseCap = _ethRaiseCap;
 		auctionStarted = block.timestamp;
-		minBidSize = _ethRaiseCap / MAX_NUMBER_BINDING_BIDS;
+		minBidSize = _ethRaiseCap / MIN_BID_SIZE_DIVISOR;
 		if (minBidSize < 1) minBidSize = 1;
 
 		emit AuctionStarted(_ethRaiseCap, _maxRepBeingSold, minBidSize);
