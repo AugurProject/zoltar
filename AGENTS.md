@@ -69,6 +69,7 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 
 # Code Style Guidelines
 
+- **Immutable imported contracts**: Do not modify `solidity/contracts/peripherals/openOracle/OpenOracle.sol`, `solidity/contracts/peripherals/WETH9.sol`, or `solidity/contracts/peripherals/Multicall3.sol`. These contracts are treated as externally sourced/compatibility contracts; address warnings or integration issues in tooling, wrappers, tests, or documented exceptions instead.
 - **Quotes**: Use single quotes (`'`) for strings. Double quotes are not allowed unless escaping is required.
 - **Semicolons**: Do not use semicolons at the end of statements.
 - **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).

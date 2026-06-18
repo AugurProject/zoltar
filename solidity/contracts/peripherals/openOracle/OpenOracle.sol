@@ -203,7 +203,6 @@ contract OpenOracle is ReentrancyGuard {
 			if (!success) revert EthTransferFailed();
 			return amount;
 		}
-		return 0;
 	}
 
 	/**

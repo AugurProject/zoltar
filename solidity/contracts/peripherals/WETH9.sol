@@ -24,8 +24,7 @@ contract WETH9 {
 	function withdraw(uint wad) external {
 		require(balanceOf[msg.sender] >= wad);
 		balanceOf[msg.sender] -= wad;
-		(bool success, ) = payable(msg.sender).call{ value: wad }('');
-		require(success);
+		payable(msg.sender).transfer(wad);
 		emit Withdrawal(msg.sender, wad);
 	}
 
