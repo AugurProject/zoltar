@@ -1,6 +1,6 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from 'viem'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
-import { getProtocolConfig } from '@zoltar/shared/protocolConfig'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { bigintToAddress } from './helpers.js'
 import {
 	ScalarOutcomes_ScalarOutcomes,
@@ -95,11 +95,10 @@ export const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 
 export const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 	(() => {
-		const protocolConfig = getProtocolConfig()
 		return encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 	})()
 
@@ -123,11 +122,10 @@ export const getSecurityPoolFactoryByteCode = ({
 	zoltarQuestionData: Address
 }) =>
 	(() => {
-		const protocolConfig = getProtocolConfig()
 		return encodeDeployData({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, protocolConfig.initialEscalationGameDeposit],
+			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit],
 		})
 	})()
 

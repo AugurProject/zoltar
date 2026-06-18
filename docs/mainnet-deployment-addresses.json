@@ -1,0 +1,79 @@
+{
+	"protocolConfig": {
+		"forkBurnDivisor": "5",
+		"forkThresholdDivisor": "20",
+		"initialEscalationGameDeposit": "1000000000000000000"
+	},
+	"deploymentSteps": [
+		{
+			"id": "proxyDeployer",
+			"label": "Proxy Deployer",
+			"address": "0x7A0D94F55792C434d74a40883C6ed8545E406D12"
+		},
+		{
+			"id": "deploymentStatusOracle",
+			"label": "Deployment Status Oracle",
+			"address": "0x138aa911c7E0d63DD3C81e4675EC8A08883728b3"
+		},
+		{
+			"id": "multicall3",
+			"label": "Multicall3",
+			"address": "0x77609e84c39893D5fB99049FE0F461aEB4F4Ec79"
+		},
+		{
+			"id": "uniformPriceDualCapBatchAuctionFactory",
+			"label": "UniformPriceDualCapBatchAuctionFactory",
+			"address": "0x47A117D404C31b5CFF82883D40c0610404D26a60"
+		},
+		{
+			"id": "scalarOutcomes",
+			"label": "ScalarOutcomes",
+			"address": "0x5890b011CF7E36d4Fee28Bac8B5be6f61C392a4C"
+		},
+		{
+			"id": "securityPoolUtils",
+			"label": "SecurityPoolUtils",
+			"address": "0x9E90338b17E1Fea80Cd356607EbB6eC46653fB24"
+		},
+		{
+			"id": "openOracle",
+			"label": "OpenOracle",
+			"address": "0x51DED022c087758c187ce636aa5f6adE6B919abB"
+		},
+		{
+			"id": "zoltarQuestionData",
+			"label": "ZoltarQuestionData",
+			"address": "0xeadF91d12F549786891350B3D535638713651207"
+		},
+		{
+			"id": "zoltar",
+			"label": "Zoltar",
+			"address": "0xd282Ae3cC11423c740afD608e715CD4e22831A29"
+		},
+		{
+			"id": "shareTokenFactory",
+			"label": "ShareTokenFactory",
+			"address": "0x253d011F3A0f46096A4756a439543E9Dab36AA23"
+		},
+		{
+			"id": "priceOracleManagerAndOperatorQueuerFactory",
+			"label": "Price Oracle Manager Factory",
+			"address": "0x38d22Ec4282621eeeBE4EBFf04E08b893dC020FF"
+		},
+		{
+			"id": "securityPoolForker",
+			"label": "Security Pool Forker",
+			"address": "0x290BF23Dd1912AdEDBdfd7419b85605C66e3d24B"
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "Escalation Game Factory",
+			"address": "0x94A7FB6E5a8EDC6559B748aD4FEAd0Bc68f4fCfD"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "Security Pool Factory",
+			"address": "0x0070464ef3Fb90B5D3e128e47D5ffB20e12f24E6"
+		}
+	]
+}
