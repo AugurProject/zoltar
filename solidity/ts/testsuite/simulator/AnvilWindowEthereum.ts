@@ -1,7 +1,7 @@
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
-import { collectBytecodeCoverageForTransaction } from '../../coverage/traceToSource'
+import { collectBytecodeCoverageForTransaction, resetSolidityBytecodeCoverageAddressCache } from '../../coverage/traceToSource'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -42,6 +42,7 @@ type RpcTransaction = {
 type RpcTransactionRequest = {
 	readonly from?: string
 	readonly to?: string
+	readonly data?: string
 	readonly gasPrice?: string
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
@@ -201,6 +202,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
 
 		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
+		if (args.method === 'anvil_reset') resetSolidityBytecodeCoverageAddressCache()
 
 		const waitForReceiptStatus = async (hash: string) => {
 			let transactionBlockNumber: bigint | undefined
@@ -231,6 +233,28 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
 			const receiptResult = await waitForReceiptStatus(json.result)
 			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
+			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
+			const receipt =
+				parsedReceipt === undefined
+					? undefined
+					: {
+							...(typeof parsedReceipt.to === 'string' ? { to: parsedReceipt.to } : {}),
+							...(typeof parsedReceipt.contractAddress === 'string' ? { contractAddress: parsedReceipt.contractAddress } : {}),
+						}
+			const requestOptions = {
+				request,
+				transactionHash: json.result,
+				transaction: {
+					...(transaction !== undefined && typeof transaction.to === 'string' ? { to: transaction.to } : {}),
+					...(transaction !== undefined && typeof transaction.data === 'string' ? { data: transaction.data } : {}),
+				},
+				...(receipt !== undefined ? { receipt } : {}),
+			}
+			if (receiptResult?.status !== undefined) {
+				await collectBytecodeCoverageForTransaction({
+					...requestOptions,
+				})
+			}
 			if (receiptResult?.status === '0x0') {
 				try {
 					await request({ method: 'eth_call', params: [params[0], 'latest'] })
@@ -238,28 +262,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					throw error
 				}
 				throw new Error('Transaction reverted')
-			}
-
-			if (receiptResult?.status !== '0x0') {
-				const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
-				const receipt =
-					parsedReceipt === undefined
-						? undefined
-						: {
-								...(typeof parsedReceipt.to === 'string' ? { to: parsedReceipt.to } : {}),
-								...(typeof parsedReceipt.contractAddress === 'string' ? { contractAddress: parsedReceipt.contractAddress } : {}),
-							}
-				const requestOptions = {
-					request,
-					transactionHash: json.result,
-					transaction: {
-						...(transaction !== undefined && typeof transaction.to === 'string' ? { to: transaction.to } : {}),
-					},
-					...(receipt !== undefined ? { receipt } : {}),
-				}
-				await collectBytecodeCoverageForTransaction({
-					...requestOptions,
-				})
 			}
 		}
 		if (nextBlockTimestamp !== undefined) currentTimestamp = nextBlockTimestamp

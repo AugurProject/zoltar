@@ -18,6 +18,24 @@ const OPEN_ORACLE_IMPORT_PREFIX = '@openzeppelin/contracts/'
 const OPEN_ORACLE_EXACT_PRAGMA = 'pragma solidity 0.8.28;'
 const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity >=0.8.28 <0.9.0;'
 const OPEN_ORACLE_SOLC_VERSION = 'v0.8.28+commit.7893614a'
+const allowedImmutableContractWarnings = [
+	{
+		sourcePath: 'contracts/peripherals/Multicall3.sol',
+		message: 'Since the VM version paris, "difficulty" was replaced by "prevrandao"',
+	},
+	{
+		sourcePath: 'contracts/peripherals/WETH9.sol',
+		message: "'transfer' is deprecated and scheduled for removal",
+	},
+	{
+		sourcePath: 'contracts/peripherals/openOracle/OpenOracle.sol',
+		message: 'Unnamed return variable can remain unassigned',
+	},
+	{
+		sourcePath: OPEN_ORACLE_UPSTREAM_PATH,
+		message: 'Unnamed return variable can remain unassigned',
+	},
+]
 
 const CompileError = funtypes.ReadonlyObject({
 	severity: funtypes.String,
@@ -54,9 +72,13 @@ const ContractData = funtypes.ReadonlyPartial({
 	evm: funtypes.ReadonlyPartial({
 		bytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
+			opcodes: funtypes.String,
+			sourceMap: funtypes.String,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
+			opcodes: funtypes.String,
+			sourceMap: funtypes.String,
 		}),
 	}),
 	storageLayout: funtypes.Unknown,
@@ -137,6 +159,10 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 
 function isCompileError(value: unknown): value is { severity: string; formattedMessage: string } {
 	return isObjectRecord(value) && typeof value['severity'] === 'string' && typeof value['formattedMessage'] === 'string'
+}
+
+function isAllowedImmutableContractWarning(formattedMessage: string): boolean {
+	return allowedImmutableContractWarnings.some(({ sourcePath, message }) => formattedMessage.includes(sourcePath) && formattedMessage.includes(message))
 }
 
 function isFuntypesValidationError(error: unknown): error is Error {
@@ -319,16 +345,14 @@ function compileSourceMap(label: string, compiler: SolcCompiler, sources: Map<st
 	const result = CompileResult.parse(JSON.parse(output))
 	const diagnostics = Array.isArray(result.errors) ? result.errors : []
 	const errors: string[] = []
-	const warnings: string[] = []
 
 	for (const diagnostic of diagnostics) {
 		if (!isCompileError(diagnostic)) continue
 		if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
-		if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
+		if (diagnostic.severity === 'warning' && !isAllowedImmutableContractWarning(diagnostic.formattedMessage)) errors.push(diagnostic.formattedMessage)
 	}
 
 	if (errors.length > 0) throw new CompilationError(errors.map(error => `${label}: ${error}`))
-	if (warnings.length > 0) warnings.forEach(warning => console.warn(`${label}: ${warning}`))
 
 	return result
 }

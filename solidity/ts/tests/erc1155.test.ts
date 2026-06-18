@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert/strict'
-import { encodeDeployData, type Address, type Hex } from 'viem'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -16,6 +16,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
+	let operatorClient: WriteClient
 
 	const deployContract = async (deploymentData: Hex) => {
 		const hash = await client.sendTransaction({ data: deploymentData })
@@ -70,6 +71,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 			args: [0n, outcome],
 		})
 
+	const transactWithShareToken = async (shareTokenAddress: Address, data: Hex) => await writeContractAndWait(client, async () => await client.sendTransaction({ to: shareTokenAddress, data }))
+
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -82,6 +85,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 	})
 
 	test('share token supports ERC165 and ERC1155 interface identifiers', async () => {
@@ -188,6 +192,168 @@ describe('ERC1155 Compliance Test Suite', () => {
 			}),
 			1n,
 			'batch receiver hook should run when minting complete sets to a contract',
+		)
+	})
+
+	test('operator approval allows third-party single and batch transfers', async () => {
+		const shareTokenAddress = await deployShareToken()
+		const receiverAddress = await deployReceiver()
+		await mintCompleteSets(shareTokenAddress, client.account.address, 3n)
+		const invalidTokenId = await readTokenId(shareTokenAddress, 0)
+		const yesTokenId = await readTokenId(shareTokenAddress, 1)
+		const noTokenId = await readTokenId(shareTokenAddress, 2)
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'setApprovalForAll',
+					args: [operatorClient.account.address, true],
+				}),
+		)
+
+		await writeContractAndWait(
+			operatorClient,
+			async () =>
+				await operatorClient.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'safeTransferFrom',
+					args: [client.account.address, receiverAddress, yesTokenId, 1n],
+				}),
+		)
+
+		await writeContractAndWait(
+			operatorClient,
+			async () =>
+				await operatorClient.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'safeBatchTransferFrom',
+					args: [client.account.address, receiverAddress, [invalidTokenId, noTokenId], [1n, 2n], '0xbeef'],
+				}),
+		)
+
+		assert.strictEqual(
+			await client.readContract({
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				address: receiverAddress,
+				functionName: 'singleReceiveCount',
+				args: [],
+			}),
+			1n,
+			'single transfer receiver hook should run',
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				address: receiverAddress,
+				functionName: 'batchReceiveCount',
+				args: [],
+			}),
+			1n,
+			'batch transfer receiver hook should run',
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				address: receiverAddress,
+				functionName: 'lastData',
+				args: [],
+			}),
+			'0xbeef',
+			'batch receiver should observe the transfer payload',
+		)
+	})
+
+	test('complete-set and token-id burns reduce ERC1155 supply', async () => {
+		const shareTokenAddress = await deployShareToken()
+		await mintCompleteSets(shareTokenAddress, client.account.address, 5n)
+		const yesTokenId = await readTokenId(shareTokenAddress, 1)
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'burnCompleteSets',
+					args: [0n, client.account.address, 2n],
+				}),
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'totalSupply',
+				args: [yesTokenId],
+			}),
+			3n,
+			'batch burn should reduce the token supply',
+		)
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'burnTokenId',
+					args: [yesTokenId, client.account.address],
+				}),
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'totalSupply',
+				args: [yesTokenId],
+			}),
+			0n,
+			'single-token burn should clear the remaining supply',
+		)
+	})
+
+	test('coverage instrumentation traces read-only ERC1155 and share-token helpers through transactions', async () => {
+		const shareTokenAddress = await deployShareToken()
+		await mintCompleteSets(shareTokenAddress, client.account.address, 1n)
+		const invalidTokenId = await readTokenId(shareTokenAddress, 0)
+		const yesTokenId = await readTokenId(shareTokenAddress, 1)
+		const noTokenId = await readTokenId(shareTokenAddress, 2)
+
+		// Solidity bytecode coverage is transaction-trace based; readContract calls are not mapped.
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'supportsInterface', args: ['0xd9b67a26'] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOf', args: [client.account.address, yesTokenId] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'totalSupply', args: [yesTokenId] }))
+		await transactWithShareToken(
+			shareTokenAddress,
+			encodeFunctionData({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				functionName: 'balanceOfBatch',
+				args: [
+					[client.account.address, client.account.address, client.account.address],
+					[invalidTokenId, yesTokenId, noTokenId],
+				],
+			}),
+		)
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'isApprovedForAll', args: [client.account.address, operatorClient.account.address] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'getTokenIds', args: [0n, [0, 1, 2]] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'unpackTokenId', args: [yesTokenId] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'totalSupplyForOutcome', args: [0n, 1] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfOutcome', args: [0n, 1, client.account.address] }))
+		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [0n, client.account.address] }))
+
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'balanceOf',
+				args: [client.account.address, yesTokenId],
+			}),
+			1n,
+			'read-only transaction execution should not change token balances',
 		)
 	})
 })
