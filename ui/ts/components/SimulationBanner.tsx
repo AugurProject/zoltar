@@ -10,6 +10,8 @@ import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATIO
 import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
+import { Badge } from './Badge.js'
+import type { BadgeTone } from '../types/components.js'
 
 const SIMULATION_TIME_PRESETS = [
 	{ label: '+1 hour', seconds: 60n * 60n },
@@ -61,21 +63,21 @@ function hasSavedSimulationStateRoute() {
 	return stateId !== null && stateId.trim() !== ''
 }
 
-function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }) {
+function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
 	if (parameters.bootstrapError !== undefined) {
 		return {
-			badgeClassName: 'error',
+			badgeTone: 'blocked',
 			label: 'Error',
 		}
 	}
 	if (parameters.isBootstrapped) {
 		return {
-			badgeClassName: 'ok',
+			badgeTone: 'ok',
 			label: 'Ready',
 		}
 	}
 	return {
-		badgeClassName: 'pending',
+		badgeTone: 'pending',
 		label: 'Bootstrapping',
 	}
 }
@@ -218,7 +220,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<span className={`badge ${scenarioStatus.badgeClassName}`}>{scenarioStatus.label}</span>
+							<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
 							<h3>Scenario</h3>
 						</div>
 						<p className='detail'>{scenarioDetail}</p>
@@ -269,7 +271,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<span className='badge ok'>Active</span>
+							<Badge tone='ok'>Active</Badge>
 							<h3>QA account</h3>
 						</div>
 					</div>

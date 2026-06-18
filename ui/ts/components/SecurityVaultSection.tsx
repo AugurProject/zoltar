@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
+import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -8,6 +9,7 @@ import { FormInput } from './FormInput.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
 import { RequirementsChecklist } from './RequirementsChecklist.js'
@@ -110,7 +112,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			</SectionBlock>
 		)
 	return (
-		<EntityCard badge={<span className={`badge ${selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}`}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</span>} title='Selected Vault' variant='record'>
+		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</Badge>} title='Selected Vault' variant='record'>
 			{gridContent}
 		</EntityCard>
 	)
@@ -182,14 +184,14 @@ function VaultQueuedOperationStatusCard({
 						<h4>{queuedTitle}</h4>
 					</div>
 				</div>
-				<div className='workflow-metric-grid'>
+				<MetricGrid>
 					<MetricField label='Staged Operation'>{queuedVaultOperation === undefined ? 'Refreshing...' : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
 					{queuedVaultOperation?.amount === undefined ? null : (
 						<MetricField label='Amount'>
 							<CurrencyValue value={queuedVaultOperation.amount} suffix='REP' />
 						</MetricField>
 					)}
-				</div>
+				</MetricGrid>
 				{status === 'manual-queued' ? <p className='detail'>{manualQueuedDescription}</p> : null}
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
@@ -207,7 +209,7 @@ function VaultQueuedOperationStatusCard({
 					<div>
 						<h4>{failedTitle}</h4>
 					</div>
-					<span className='badge blocked'>Failed</span>
+					<Badge tone='blocked'>Failed</Badge>
 				</div>
 				<p className='detail'>{errorMessage ?? 'The security pool rejected the action.'}</p>
 				<p className='detail'>Fix the underlying state and submit a new staged operation.</p>
@@ -220,7 +222,7 @@ function VaultQueuedOperationStatusCard({
 					<div>
 						<h4>{executedTitle}</h4>
 					</div>
-					<span className='badge ok'>Executed</span>
+					<Badge tone='ok'>Executed</Badge>
 				</div>
 				<p className='detail'>{successDescription}</p>
 			</section>
@@ -242,7 +244,7 @@ function VaultQueuedOperationStatusCard({
 				<div>
 					<h4>{refreshingTitle}</h4>
 				</div>
-				<span className='badge muted'>Refreshing</span>
+				<Badge tone='muted'>Refreshing</Badge>
 			</div>
 			<p className='detail'>{refreshingDescription}</p>
 		</section>
@@ -532,11 +534,11 @@ export function SecurityVaultSection({
 								</button>
 							</div>
 						</label>
-						<div className='workflow-metric-grid'>
+						<MetricGrid>
 							<MetricField label='Wallet REP'>
 								<CurrencyValue value={securityVaultRepBalance} suffix='REP' />
 							</MetricField>
-						</div>
+						</MetricGrid>
 						<TokenApprovalControl
 							actionLabel='depositing REP'
 							allowanceError={securityVaultRepApproval.error}
@@ -605,7 +607,7 @@ export function SecurityVaultSection({
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 							variant='embedded'
 						/>
-						<div className='workflow-metric-grid'>
+						<MetricGrid>
 							<MetricField label={effectiveRepExitMode === 'redeem' ? 'Redeemable REP' : 'Withdrawable REP'}>
 								{(() => {
 									if (effectiveRepExitMode === 'redeem') {
@@ -625,7 +627,7 @@ export function SecurityVaultSection({
 							) : (
 								<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
 							)}
-						</div>
+						</MetricGrid>
 						{effectiveRepExitMode === 'redeem' ? null : (
 							<label className='field'>
 								<span>REP Withdraw Amount</span>
@@ -703,12 +705,12 @@ export function SecurityVaultSection({
 							status={securityVaultResult?.action === 'queueSetSecurityBondAllowance' ? queuedVaultOperationStatus : undefined}
 							successDescription='A valid oracle price was already available, so the new bond allowance executed immediately and no staged operation was created.'
 						/>
-						<div className='workflow-metric-grid'>
+						<MetricGrid>
 							<MetricField label='Current Bond Allowance'>
 								<CurrencyValue value={currentSelectedVaultDetails.securityBondAllowance} suffix='ETH' />
 							</MetricField>
 							<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
-						</div>
+						</MetricGrid>
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
 							<div className='field-inline'>
@@ -745,10 +747,10 @@ export function SecurityVaultSection({
 			</OperationModal>
 
 			<OperationModal isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title='Claim Fees' description='Confirm the claimable fee balance before submitting the fee redemption for this vault.'>
-				<div className='workflow-metric-grid'>
+				<MetricGrid>
 					<MetricField label='Claimable Fees'>{currentSelectedVaultDetails === undefined ? '—' : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix='ETH' />}</MetricField>
 					<MetricField label='Vault'>{selectedVaultAddress === undefined ? 'None selected' : <AddressValue address={selectedVaultAddress} />}</MetricField>
-				</div>
+				</MetricGrid>
 				<RequirementsChecklist
 					items={[
 						{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },

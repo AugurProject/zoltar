@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { Badge } from './Badge.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
-import type { GlobalTransactionPresentation } from '../types/components.js'
+import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
 
 type GlobalTransactionTrayProps = {
 	transaction: GlobalTransactionPresentation | undefined
@@ -12,12 +13,12 @@ function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
 	return transaction?.dismissKey ?? transaction?.hash
 }
 
-function getTransactionBadge(tone: GlobalTransactionPresentation['tone']) {
-	if (tone === 'awaiting-wallet') return { className: 'pending', label: 'Awaiting Wallet' }
-	if (tone === 'pending') return { className: 'pending', label: 'Pending' }
-	if (tone === 'success') return { className: 'ok', label: 'Confirmed' }
-	if (tone === 'error') return { className: 'warn', label: 'Failed' }
-	return { className: 'warn', label: 'Attention' }
+function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { label: string; tone: BadgeTone } {
+	if (tone === 'awaiting-wallet') return { tone: 'pending', label: 'Awaiting Wallet' }
+	if (tone === 'pending') return { tone: 'pending', label: 'Pending' }
+	if (tone === 'success') return { tone: 'ok', label: 'Confirmed' }
+	if (tone === 'error') return { tone: 'danger', label: 'Failed' }
+	return { tone: 'warning', label: 'Attention' }
 }
 
 export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProps) {
@@ -54,7 +55,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 			<div className='global-transaction-notice' role='status' aria-live='polite'>
 				<div className='global-transaction-notice-copy'>
 					<div className='global-transaction-notice-header'>
-						<span className={`badge ${badge.className}`}>{badge.label}</span>
+						<Badge tone={badge.tone}>{badge.label}</Badge>
 						<strong>{transaction.title}</strong>
 					</div>
 					{!showDetail ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}

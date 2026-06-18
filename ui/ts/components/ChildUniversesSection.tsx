@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { Badge } from './Badge.js'
 import { EntityCard } from './EntityCard.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
@@ -25,6 +26,10 @@ type ChildUniversesSectionProps = {
 	renderBody: (child: ZoltarChildUniverseSummary) => ComponentChildren
 	renderBadge?: (child: ZoltarChildUniverseSummary) => ComponentChildren
 	renderTitle?: (child: ZoltarChildUniverseSummary) => ComponentChildren
+}
+
+export function ChildUniverseStatusBadge({ child }: { child: ZoltarChildUniverseSummary }) {
+	return <Badge tone={child.exists ? 'ok' : 'pending'}>{child.exists ? 'Exists' : 'Not deployed'}</Badge>
 }
 
 export function ChildUniversesSection({ action, childUniverses, emptyMessage, headerSubtitle, headerTitle, renderBody, renderBadge, renderTitle }: ChildUniversesSectionProps) {
