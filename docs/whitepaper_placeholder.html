@@ -565,7 +565,7 @@
 							<text class="svg-label" x="615" y="73" text-anchor="middle">Escalation</text>
 							<text class="svg-small" x="615" y="96" text-anchor="middle">local dispute game</text>
 							<path class="svg-line" marker-end="url(#arrow)" d="M 615 114 V 166"></path>
-							<path class="svg-line" marker-end="url(#arrow)" d="M 615 114 C 690 145 736 183 752 226"></path>
+							<path class="svg-line" marker-end="url(#arrow)" d="M 615 114 C 690 145 736 190 752 248"></path>
 							<rect class="svg-green" x="505" y="166" width="220" height="70" rx="10"></rect>
 							<text class="svg-label" x="615" y="196" text-anchor="middle">Local Finalization</text>
 							<text class="svg-small" x="615" y="219" text-anchor="middle">unique winner before fork</text>
@@ -718,7 +718,7 @@
 							<text class="svg-label" x="225" y="105" text-anchor="middle">Zoltar</text>
 							<text class="svg-small" x="225" y="132" text-anchor="middle">universes, questions, forks</text>
 							<text class="svg-small" x="225" y="156" text-anchor="middle">REP branching</text>
-							<path class="svg-line" marker-end="url(#arrow-stack)" d="M 370 125 H 490"></path>
+							<path class="svg-line" marker-end="url(#arrow-stack)" d="M 355 125 H 505"></path>
 							<rect class="svg-green" x="505" y="42" width="260" height="166" rx="12"></rect>
 							<text class="svg-label" x="635" y="86" text-anchor="middle">Augur Placeholder</text>
 							<text class="svg-small" x="635" y="114" text-anchor="middle">security pools and shares</text>
@@ -855,26 +855,29 @@
 							<rect class="svg-blue" x="734" y="58" width="170" height="72" rx="10"></rect>
 							<text class="svg-label" x="819" y="90" text-anchor="middle">ShareToken</text>
 							<text class="svg-small" x="819" y="113" text-anchor="middle">Invalid + Yes + No</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 224 94 H 374"></path>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 224 94 H 384"></path>
 							<text class="svg-small" x="299" y="79" text-anchor="middle">ETH collateral</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 584 94 H 724"></path>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 584 94 H 734"></path>
 							<text class="svg-small" x="654" y="79" text-anchor="middle">mint shares</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 734 126 C 610 200 350 200 224 126"></path>
-							<text class="svg-small" x="484" y="198" text-anchor="middle">redeem full set before finalization</text>
-							<text class="svg-small" x="484" y="220" text-anchor="middle">or winning shares after finalization</text>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 734 126 C 610 182 350 182 224 126"></path>
+							<text class="svg-small" x="484" y="205" text-anchor="middle">redeem full set before finalization</text>
+							<text class="svg-small" x="484" y="227" text-anchor="middle">or winning shares after finalization</text>
 							<rect class="svg-gold" x="54" y="272" width="170" height="72" rx="10"></rect>
 							<text class="svg-label" x="139" y="304" text-anchor="middle">Vault</text>
 							<text class="svg-small" x="139" y="327" text-anchor="middle">deposits REP</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 224 308 H 374"></path>
+							<rect class="svg-green" x="384" y="276" width="200" height="76" rx="10"></rect>
+							<text class="svg-label" x="484" y="308" text-anchor="middle">Pool Accounting</text>
+							<text class="svg-small" x="484" y="333" text-anchor="middle">REP and ETH ledger</text>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 224 306 H 384"></path>
 							<text class="svg-small" x="299" y="293" text-anchor="middle">REP backing</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 384 320 H 234"></path>
-							<text class="svg-small" x="309" y="348" text-anchor="middle">fees owed</text>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 384 332 H 224"></path>
+							<text class="svg-small" x="309" y="362" text-anchor="middle">fees owed</text>
 							<rect class="svg-red" x="734" y="272" width="170" height="72" rx="10"></rect>
 							<text class="svg-label" x="819" y="304" text-anchor="middle">Truth Auction</text>
 							<text class="svg-small" x="819" y="327" text-anchor="middle">child repair</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 734 308 H 594"></path>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 734 308 H 584"></path>
 							<text class="svg-small" x="664" y="293" text-anchor="middle">ETH repair</text>
-							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 584 332 H 724"></path>
+							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 584 332 H 734"></path>
 							<text class="svg-small" x="654" y="360" text-anchor="middle">child REP sold</text>
 						</svg>
 						<p class="diagram-caption">The pool is the accounting hub: ETH backs complete sets, REP backs underwriting, fees accrue to vaults, and child REP can be monetized to repair child collateral after a fork.</p>
@@ -924,7 +927,7 @@
 							<text class="svg-label" x="203" y="88" text-anchor="middle">Complete-Set Collateral</text>
 							<text class="svg-small" x="203" y="112" text-anchor="middle">starts higher, decays over time</text>
 							<path class="svg-line" marker-end="url(#arrow-fees)" d="M 338 93 H 510"></path>
-							<text class="svg-small" x="424" y="76" text-anchor="middle">retained portion shrinks</text>
+							<text class="svg-small" x="424" y="76" text-anchor="middle">retention shrinks</text>
 							<rect class="svg-green" x="510" y="54" width="270" height="78" rx="10"></rect>
 							<text class="svg-label" x="645" y="88" text-anchor="middle">Vault Fees Owed</text>
 							<text class="svg-small" x="645" y="112" text-anchor="middle">grows as collateral decays</text>
@@ -990,15 +993,17 @@
 							<rect class="svg-green" x="310" y="44" width="240" height="70" rx="10"></rect>
 							<text class="svg-label" x="430" y="74" text-anchor="middle">Receives Full Set</text>
 							<text class="svg-small" x="430" y="97" text-anchor="middle">Invalid + Yes + No</text>
-							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 430 114 V 166"></path>
+							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 390 114 C 350 132 320 144 310 166"></path>
+							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 470 114 C 520 132 560 144 580 166"></path>
 							<rect class="svg-gold" x="205" y="166" width="210" height="72" rx="10"></rect>
 							<text class="svg-label" x="310" y="197" text-anchor="middle">Before Finalization</text>
-							<text class="svg-small" x="310" y="220" text-anchor="middle">burn full set, recover collateral</text>
+							<text class="svg-small" x="310" y="214" text-anchor="middle">burn full set</text>
+							<text class="svg-small" x="310" y="230" text-anchor="middle">recover collateral</text>
 							<rect class="svg-blue" x="475" y="166" width="210" height="72" rx="10"></rect>
 							<text class="svg-label" x="580" y="197" text-anchor="middle">After Finalization</text>
 							<text class="svg-small" x="580" y="220" text-anchor="middle">winning leg redeems payout</text>
-							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 310 238 V 292 H 430"></path>
-							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 580 238 V 292 H 430"></path>
+							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 310 238 V 252 H 500 V 266"></path>
+							<path class="svg-line" marker-end="url(#arrow-shares)" d="M 580 238 V 266"></path>
 							<rect class="svg-green" x="430" y="266" width="220" height="56" rx="10"></rect>
 							<text class="svg-label" x="540" y="300" text-anchor="middle">Collateral Settlement</text>
 						</svg>
@@ -1104,7 +1109,8 @@
 							<path class="svg-line" marker-end="url(#arrow-timeline)" d="M 785 126 H 832"></path>
 							<circle class="svg-blue" cx="850" cy="126" r="18"></circle>
 							<text class="svg-label" x="850" y="200" text-anchor="middle">Outcome</text>
-							<text class="svg-small" x="850" y="224" text-anchor="middle">local finality or fork</text>
+							<text class="svg-small" x="850" y="224" text-anchor="middle">local finality</text>
+							<text class="svg-small" x="850" y="244" text-anchor="middle">or fork</text>
 						</svg>
 						<p class="diagram-caption">The clock is lazy: the first report starts the escalation game, then cost stays at zero until the three-day activation delay has passed.</p>
 					</figure>
@@ -1125,8 +1131,8 @@
 							<path class="svg-line" marker-end="url(#arrow-esc)" d="M 268 105 H 355"></path>
 							<rect class="svg-blue" x="355" y="46" width="230" height="118" rx="10"></rect>
 							<text class="svg-label" x="470" y="82" text-anchor="middle">Running totalCost()</text>
-							<text class="svg-small" x="470" y="110" text-anchor="middle">two sides at or above threshold</text>
-							<text class="svg-small" x="470" y="132" text-anchor="middle">means unresolved now</text>
+							<text class="svg-small" x="470" y="108" text-anchor="middle">two sides at or above</text>
+							<text class="svg-small" x="470" y="130" text-anchor="middle">threshold means unresolved</text>
 							<path class="svg-line" marker-end="url(#arrow-esc)" d="M 585 105 H 672"></path>
 							<rect class="svg-green" x="672" y="46" width="150" height="118" rx="10"></rect>
 							<text class="svg-label" x="747" y="96" text-anchor="middle">Local</text>
@@ -1170,7 +1176,8 @@
 							<rect class="svg-gold" x="350" y="75" width="150" height="60" rx="8"></rect>
 							<rect class="svg-box" x="500" y="75" width="250" height="60" rx="8"></rect>
 							<text class="svg-label" x="220" y="110" text-anchor="middle">Binding capital</text>
-							<text class="svg-label" x="425" y="110" text-anchor="middle">Safety boundary</text>
+							<text class="svg-label" x="425" y="100" text-anchor="middle">Safety</text>
+							<text class="svg-label" x="425" y="120" text-anchor="middle">boundary</text>
 							<text class="svg-label" x="625" y="110" text-anchor="middle">Excess</text>
 							<text class="svg-small" x="220" y="154" text-anchor="middle">principal plus pro-rata reward</text>
 							<text class="svg-small" x="425" y="154" text-anchor="middle">same reward pool</text>
@@ -1292,29 +1299,30 @@
 							<text class="svg-label" x="135" y="102" text-anchor="middle">Operational</text>
 							<text class="svg-small" x="135" y="126" text-anchor="middle">parent pool</text>
 							<path class="svg-line" marker-end="url(#arrow-state)" d="M 220 109 H 300"></path>
-							<text class="svg-micro" x="260" y="94" text-anchor="middle">activateForkMode</text>
+							<text class="svg-micro" x="260" y="92" text-anchor="middle">fork mode</text>
 							<rect class="svg-red" x="300" y="70" width="170" height="78" rx="10"></rect>
 							<text class="svg-label" x="385" y="102" text-anchor="middle">PoolForked</text>
 							<text class="svg-small" x="385" y="126" text-anchor="middle">parent halted</text>
 							<path class="svg-line" marker-end="url(#arrow-state)" d="M 470 109 H 550"></path>
-							<text class="svg-micro" x="510" y="94" text-anchor="middle">createChildUniverse</text>
+							<text class="svg-micro" x="510" y="92" text-anchor="middle">create child</text>
 							<rect class="svg-blue" x="550" y="70" width="170" height="78" rx="10"></rect>
 							<text class="svg-label" x="635" y="102" text-anchor="middle">ForkMigration</text>
 							<text class="svg-small" x="635" y="126" text-anchor="middle">child pool</text>
 							<path class="svg-line" marker-end="url(#arrow-state)" d="M 635 148 V 218"></path>
-							<text class="svg-micro" x="722" y="187" text-anchor="middle">startTruthAuction</text>
+							<text class="svg-micro" x="742" y="187" text-anchor="middle">start auction</text>
 							<rect class="svg-gold" x="550" y="218" width="170" height="78" rx="10"></rect>
-							<text class="svg-label" x="635" y="250" text-anchor="middle">ForkTruthAuction</text>
-							<text class="svg-small" x="635" y="274" text-anchor="middle">repair phase</text>
+							<text class="svg-label" x="635" y="244" text-anchor="middle">Fork Truth</text>
+							<text class="svg-label" x="635" y="264" text-anchor="middle">Auction</text>
+							<text class="svg-small" x="635" y="285" text-anchor="middle">repair phase</text>
 							<path class="svg-line" marker-end="url(#arrow-state)" d="M 720 257 H 800"></path>
-							<text class="svg-micro" x="760" y="242" text-anchor="middle">finalizeTruthAuction</text>
+							<text class="svg-micro" x="760" y="240" text-anchor="middle">finalize</text>
 							<rect class="svg-green" x="800" y="218" width="120" height="78" rx="10"></rect>
 							<text class="svg-label" x="860" y="250" text-anchor="middle">Operational</text>
 							<text class="svg-small" x="860" y="274" text-anchor="middle">child</text>
-							<path class="svg-line" marker-end="url(#arrow-state)" d="M 720 109 C 790 120 840 154 860 208"></path>
-							<text class="svg-micro" x="825" y="145" text-anchor="middle">no auction needed</text>
-							<text class="svg-small" x="474" y="188" text-anchor="middle">migrateVault, migrateRepToZoltar,</text>
-							<text class="svg-small" x="474" y="210" text-anchor="middle">migrateVaultWithUnresolvedEscalation</text>
+							<path class="svg-line" marker-end="url(#arrow-state)" d="M 720 109 C 790 120 840 154 860 218"></path>
+							<text class="svg-micro" x="825" y="92" text-anchor="middle">no auction needed</text>
+							<text class="svg-small" x="386" y="184" text-anchor="middle">migration calls</text>
+							<text class="svg-micro" x="386" y="204" text-anchor="middle">vaults, REP, unresolved escalation</text>
 						</svg>
 						<p class="diagram-caption">The parent stops mutating once forked; child pools do migration, optional auction repair, and then return to operational mode.</p>
 					</figure>
@@ -1349,9 +1357,9 @@
 							<rect class="svg-box" x="330" y="218" width="210" height="70" rx="10"></rect>
 							<text class="svg-label" x="435" y="248" text-anchor="middle">Share Migration</text>
 							<text class="svg-small" x="435" y="271" text-anchor="middle">ERC-1155 token ids</text>
-							<path class="svg-line" marker-end="url(#arrow-mig)" d="M 540 89 H 635"></path>
+							<path class="svg-line" marker-end="url(#arrow-mig)" d="M 540 89 H 590 V 136 H 635"></path>
 							<path class="svg-line" marker-end="url(#arrow-mig)" d="M 540 171 H 635"></path>
-							<path class="svg-line" marker-end="url(#arrow-mig)" d="M 540 253 H 635"></path>
+							<path class="svg-line" marker-end="url(#arrow-mig)" d="M 540 253 H 590 V 174 H 635"></path>
 							<rect class="svg-green" x="635" y="112" width="180" height="86" rx="10"></rect>
 							<text class="svg-label" x="725" y="146" text-anchor="middle">Child Pool</text>
 							<text class="svg-small" x="725" y="170" text-anchor="middle">selected universe</text>
@@ -1416,7 +1424,8 @@
 							<rect class="svg-blue" x="72" y="296" width="220" height="92" rx="10"></rect>
 							<text class="svg-label" x="182" y="328" text-anchor="middle">Invalid Child</text>
 							<text class="svg-small" x="182" y="352" text-anchor="middle">paused continuation game</text>
-							<text class="svg-micro" x="182" y="373" text-anchor="middle">original deposit outcomes preserved</text>
+							<text class="svg-micro" x="182" y="371" text-anchor="middle">original deposit</text>
+							<text class="svg-micro" x="182" y="386" text-anchor="middle">outcomes preserved</text>
 							<rect class="svg-green" x="380" y="296" width="220" height="92" rx="10"></rect>
 							<text class="svg-label" x="490" y="328" text-anchor="middle">Yes Child</text>
 							<text class="svg-small" x="490" y="352" text-anchor="middle">paused continuation game</text>
@@ -1426,10 +1435,11 @@
 							<text class="svg-small" x="798" y="352" text-anchor="middle">paused continuation game</text>
 							<text class="svg-micro" x="798" y="373" text-anchor="middle">same inherited carry baseline</text>
 							<path class="svg-line" marker-end="url(#arrow-recursive)" d="M 490 388 V 426"></path>
-							<rect class="svg-gold" x="350" y="426" width="280" height="70" rx="10"></rect>
-							<text class="svg-label" x="490" y="454" text-anchor="middle">Continuation Can Fork Again</text>
-							<text class="svg-small" x="490" y="471" text-anchor="middle">new snapshot combines</text>
-							<text class="svg-small" x="490" y="491" text-anchor="middle">inherited carry + local carry</text>
+							<rect class="svg-gold" x="350" y="426" width="280" height="82" rx="10"></rect>
+							<text class="svg-label" x="490" y="450" text-anchor="middle">Continuation</text>
+							<text class="svg-label" x="490" y="470" text-anchor="middle">Can Fork Again</text>
+							<text class="svg-small" x="490" y="489" text-anchor="middle">new snapshot combines</text>
+							<text class="svg-small" x="490" y="506" text-anchor="middle">inherited carry + local carry</text>
 						</svg>
 						<p class="diagram-caption">Each child continuation game inherits the unresolved carry baseline. If a child game later reaches non-decision, the carry can be exported again into the next fork generation.</p>
 					</figure>
@@ -1451,13 +1461,14 @@
 							<rect class="svg-red" x="354" y="130" width="220" height="82" rx="10"></rect>
 							<text class="svg-label" x="464" y="163" text-anchor="middle">Forked Escrow</text>
 							<text class="svg-small" x="464" y="188" text-anchor="middle">child REP backing</text>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 264 111 H 344"></path>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 264 111 C 300 111 326 150 354 150"></path>
 							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 264 231 C 310 226 334 204 354 184"></path>
 							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 574 171 H 654"></path>
 							<rect class="svg-green" x="654" y="112" width="220" height="118" rx="10"></rect>
 							<text class="svg-label" x="764" y="151" text-anchor="middle">Next Snapshot</text>
 							<text class="svg-small" x="764" y="176" text-anchor="middle">materialized carry tree</text>
-							<text class="svg-small" x="764" y="199" text-anchor="middle">nullifiers preserve spent proofs</text>
+							<text class="svg-small" x="764" y="198" text-anchor="middle">nullifiers preserve</text>
+							<text class="svg-small" x="764" y="216" text-anchor="middle">spent proofs</text>
 							</svg>
 							<p class="diagram-caption">The continuation game carries a proof baseline, tracks new local deposits, and records escrow backing by original outcome.</p>
 						</figure>
@@ -1532,13 +1543,13 @@
 							<text class="svg-label" x="390" y="335" text-anchor="middle">Truth Auction</text>
 							<text class="svg-small" x="390" y="358" text-anchor="middle">if collateral is short</text>
 							<path class="svg-line" marker-end="url(#arrow-system)" d="M 390 380 V 428 H 610"></path>
-							<path class="svg-line" marker-end="url(#arrow-system)" d="M 735 380 V 428"></path>
+							<path class="svg-line" marker-end="url(#arrow-system)" d="M 735 380 V 404"></path>
 							<rect class="svg-green" x="610" y="404" width="250" height="72" rx="10"></rect>
 							<text class="svg-label" x="735" y="433" text-anchor="middle">Operational Child</text>
 							<text class="svg-small" x="735" y="456" text-anchor="middle">settle or resume continuation</text>
-							<path class="svg-line" marker-end="url(#arrow-system)" d="M 860 440 C 908 390 908 196 860 132"></path>
-							<text class="svg-micro" x="897" y="286" text-anchor="middle">recursive</text>
-							<text class="svg-micro" x="897" y="302" text-anchor="middle">continuation</text>
+							<path class="svg-line" marker-end="url(#arrow-system)" d="M 860 440 C 908 390 908 196 860 91"></path>
+							<text class="svg-micro" x="892" y="276" text-anchor="end">recursive</text>
+							<text class="svg-micro" x="892" y="292" text-anchor="end">continuation</text>
 						</svg>
 						<p class="diagram-caption">The main path is simple, but the continuation loop matters: a child escalation game can become the parent of the next fork generation.</p>
 					</figure>
@@ -1602,7 +1613,7 @@
 							<text class="svg-small" x="171" y="193" text-anchor="middle">2.5 ETH short</text>
 							<text class="svg-small" x="171" y="218" text-anchor="middle">redemptions impaired</text>
 							<path class="svg-line" marker-end="url(#arrow-balance)" d="M 296 166 H 382"></path>
-							<text class="svg-small" x="339" y="148" text-anchor="middle">sell child REP</text>
+							<text class="svg-small" x="336" y="142" text-anchor="middle">sell REP</text>
 							<rect class="svg-green" x="382" y="48" width="250" height="180" rx="10"></rect>
 							<text class="svg-label" x="507" y="83" text-anchor="middle">Successful Repair</text>
 							<text class="svg-small" x="507" y="115" text-anchor="middle">50 ETH collateral</text>
@@ -1641,7 +1652,8 @@
 							<path class="svg-line" marker-end="url(#arrow-auction)" d="M 260 89 H 340"></path>
 							<rect class="svg-blue" x="340" y="50" width="200" height="78" rx="10"></rect>
 							<text class="svg-label" x="440" y="83" text-anchor="middle">Auction Caps</text>
-							<text class="svg-small" x="440" y="106" text-anchor="middle">ETH target and REP inventory</text>
+							<text class="svg-small" x="440" y="102" text-anchor="middle">ETH target</text>
+							<text class="svg-small" x="440" y="119" text-anchor="middle">and REP inventory</text>
 							<path class="svg-line" marker-end="url(#arrow-auction)" d="M 540 89 H 620"></path>
 							<rect class="svg-green" x="620" y="50" width="180" height="78" rx="10"></rect>
 							<text class="svg-label" x="710" y="83" text-anchor="middle">Bid Ladder</text>
