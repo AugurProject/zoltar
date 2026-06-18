@@ -1198,48 +1198,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 	overflow-x: auto;
 }
 
-.tab-link {
-	flex: 0 0 auto;
-	display: inline-flex;
-	align-items: center;
-	justify-content: flex-start;
-	border-radius: 0;
-	padding: 0.58rem 0.82rem;
-	background: transparent;
-	color: var(--muted);
-	text-decoration: none;
-	text-align: left;
-	white-space: nowrap;
-	border: 1px solid transparent;
-	font-size: var(--font-tab);
-	line-height: 1;
-	font-weight: 600;
-	letter-spacing: 0.09em;
-	text-transform: uppercase;
-	transition:
-		background 140ms ease,
-		color 140ms ease,
-		border-color 140ms ease;
-}
-
-.tab-link:hover {
-	border-color: var(--interactive-border);
-	background: var(--interactive-bg);
-}
-
-.tab-link.active {
-	background: var(--interactive-bg-hover);
-	color: var(--text);
-	border-color: var(--interactive-border);
-	box-shadow: 0 1px 0 0 rgba(56, 213, 255, 0.4);
-}
-
-.tab-link.disabled {
-	opacity: 0.42;
-	cursor: not-allowed;
-	pointer-events: none;
-}
-
 .subtab-nav {
 	display: flex;
 	flex-wrap: wrap;
@@ -1247,48 +1205,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 	margin-top: 1rem;
 	padding: 0 0 0.75rem;
 	border-bottom: 1px solid var(--border-default);
-}
-
-.subtab-link {
-	flex: 0 0 auto;
-	display: inline-flex;
-	align-items: center;
-	justify-content: flex-start;
-	border: 1px solid var(--control-border);
-	border-radius: 0;
-	padding: 0.62rem 0.9rem;
-	background: var(--surface-sunken);
-	color: var(--muted);
-	font: inherit;
-	font-size: var(--font-subtab);
-	line-height: 1;
-	font-weight: 600;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-}
-
-.subtab-link:hover {
-	background: var(--interactive-bg);
-	border-color: var(--interactive-border);
-	color: var(--text);
-}
-
-.subtab-link:disabled {
-	opacity: 0.45;
-	cursor: not-allowed;
-}
-
-.subtab-link.active:disabled {
-	opacity: 1;
-	background: var(--interactive-bg-hover);
-	border-color: var(--interactive-border);
-	color: var(--text);
-}
-
-.subtab-link.active {
-	background: var(--interactive-bg-hover);
-	border-color: var(--interactive-border);
-	color: var(--text);
 }
 
 .contract-panel-header {
@@ -1486,11 +1402,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border: 0;
 	background: transparent;
 	box-shadow: none;
-}
-
-.market-subtab-nav .subtab-link {
-	flex: 1 1 10rem;
-	justify-content: center;
 }
 
 .workflow-stack {
@@ -3730,8 +3641,7 @@ strong.metric-value-danger {
 
 .field input:focus,
 .field select:focus,
-.field textarea:focus,
-.tab-link:focus-visible {
+.field textarea:focus {
 	outline: none;
 	border-color: var(--accent);
 	box-shadow: 0 0 0 3px rgba(56, 213, 255, 0.12);

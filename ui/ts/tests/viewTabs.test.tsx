@@ -130,4 +130,39 @@ describe('ViewTabs', () => {
 		expect(overviewLink.tagName).toBe('A')
 		expect(overviewLink.getAttribute('href')).toBe('#/overview')
 	})
+
+	test('uses rendered grouped options for keyboard navigation', async () => {
+		let selectedValue = 'overview'
+		const renderedComponent = await renderIntoDocument(
+			<ViewTabs
+				ariaLabel='Grouped Tabs'
+				value={selectedValue}
+				onChange={value => {
+					selectedValue = value
+				}}
+				groups={[
+					{ ariaLabel: 'Primary tabs', values: ['overview'] },
+					{ ariaLabel: 'Secondary tabs', values: ['reports'] },
+				]}
+				options={[
+					{ label: 'Overview', value: 'overview' },
+					{ label: 'Hidden', value: 'hidden' },
+					{ label: 'Reports', value: 'reports' },
+				]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const overviewTab = within(document.body).getByRole('tab', { name: 'Overview' })
+		const reportsTab = within(document.body).getByRole('tab', { name: 'Reports' })
+		expect(within(document.body).queryByRole('tab', { name: 'Hidden' })).toBeNull()
+
+		overviewTab.focus()
+		await act(() => {
+			fireEvent.keyDown(overviewTab, { key: 'ArrowRight' })
+		})
+
+		expect(selectedValue).toBe('reports')
+		expect(document.activeElement).toBe(reportsTab)
+	})
 })

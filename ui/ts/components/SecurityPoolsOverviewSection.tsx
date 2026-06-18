@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
+import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -212,13 +213,13 @@ export function SecurityPoolsOverviewSection({
 										}
 										variant='record'
 										badge={
-											<span className={`badge ${badgeTone}`}>
+											<Badge tone={badgeTone}>
 												{getSecurityPoolStatusBadgeLabel({
 													hasForkActivity: hasKnownForkActivity,
 													questionOutcome: pool.questionOutcome,
 													lifecycleState: displayState,
 												})}
-											</span>
+											</Badge>
 										}
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (

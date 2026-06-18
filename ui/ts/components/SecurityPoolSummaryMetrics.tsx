@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
@@ -9,12 +10,14 @@ import { UniverseLink } from './UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getPoolCollateralizationPercent } from '../lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
+import type { MetricGridVariant } from '../types/components.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 
 type SecurityPoolSummaryMetricsProps = {
 	children?: ComponentChildren
 	className?: string
 	currentTimestamp?: bigint | undefined
+	metricVariant?: MetricGridVariant
 	pool: ListedSecurityPool
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: 'mock' | 'v3' | 'v4' | undefined
@@ -28,8 +31,9 @@ type SecurityPoolSummaryMetricsProps = {
 
 export function SecurityPoolSummaryMetrics({
 	children,
-	className = 'workflow-metric-grid',
+	className = '',
 	currentTimestamp,
+	metricVariant = 'default',
 	pool,
 	repPerEthPrice,
 	repPerEthSource: _repPerEthSource,
@@ -45,7 +49,7 @@ export function SecurityPoolSummaryMetrics({
 
 	if (variant === 'embedded')
 		return (
-			<div className={className}>
+			<MetricGrid className={className} variant={metricVariant}>
 				{showPoolAddress ? (
 					<MetricField label='Pool Address'>
 						<AddressValue address={pool.securityPoolAddress} />
@@ -70,7 +74,7 @@ export function SecurityPoolSummaryMetrics({
 					<CurrencyValue value={pool.completeSetCollateralAmount} suffix='ETH' /> / <CurrencyValue value={pool.totalSecurityBondAllowance} suffix='ETH' />
 				</MetricField>
 				{children}
-			</div>
+			</MetricGrid>
 		)
 
 	return (

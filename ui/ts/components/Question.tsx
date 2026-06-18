@@ -1,5 +1,5 @@
-import { DataGrid } from './DataGrid.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from './TimestampValue.js'
@@ -151,7 +151,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 			) : (
 				<p className='detail'>{description}</p>
 			)}
-			<DataGrid className='question-summary-grid'>{summaryFields.map(renderQuestionSummaryField)}</DataGrid>
+			<MetricGrid variant='question'>{summaryFields.map(renderQuestionSummaryField)}</MetricGrid>
 		</div>
 	)
 }

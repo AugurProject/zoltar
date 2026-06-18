@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { Address } from 'viem'
-import { ChildUniversesSection } from './ChildUniversesSection.js'
+import { ChildUniversesSection, ChildUniverseStatusBadge } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -66,13 +66,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
 	return (
 		<WorkflowSubsection badge={<span className='detail'>Scalar forks can deploy one outcome universe at a time.</span>} title='Child Universes'>
-			<ChildUniversesSection
-				childUniverses={childUniverses}
-				emptyMessage='No deployed child universes yet.'
-				headerTitle='Existing Child Universes'
-				renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
-				renderBody={child => <ChildUniverseDetails child={child} />}
-			/>
+			<ChildUniversesSection childUniverses={childUniverses} emptyMessage='No deployed child universes yet.' headerTitle='Existing Child Universes' renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
 			<ScalarOutcomePicker
 				action={
 					<TransactionActionButton
@@ -128,13 +122,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				title='Create Child Universe'
 			>
 				{selectedScalarChild === undefined ? undefined : (
-					<ChildUniversesSection
-						childUniverses={[selectedScalarChild]}
-						emptyMessage='No child universe selected.'
-						headerTitle='Selected Child Universe'
-						renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
-						renderBody={child => <ChildUniverseDetails child={child} />}
-					/>
+					<ChildUniversesSection childUniverses={[selectedScalarChild]} emptyMessage='No child universe selected.' headerTitle='Selected Child Universe' renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
 				)}
 			</ChildUniverseDeploymentModal>
 			<ErrorNotice message={scalarDeployError} />

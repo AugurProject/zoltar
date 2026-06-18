@@ -51,6 +51,8 @@ export type ActionAvailability = {
 
 export type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
 
+export type BadgeTone = 'blocked' | 'danger' | 'muted' | 'ok' | 'pending' | 'warning'
+
 export type NoticeItem = {
 	detail: ComponentChildren
 	id: string
@@ -138,7 +140,7 @@ export type SectionBlockProps = {
 	className?: string
 	description?: ComponentChildren
 	density?: 'balanced' | 'compact'
-	headingLevel?: 3 | 4
+	headingLevel?: 2 | 3 | 4
 	title?: ComponentChildren
 	tone?: 'critical' | 'default' | 'muted'
 	variant?: 'default' | 'embedded'
@@ -157,6 +159,16 @@ export type DataGridProps = {
 	className?: string
 	columns?: 2 | 3 | 4 | 'auto'
 	dense?: boolean
+}
+
+export type MetricGridVariant = 'context' | 'default' | 'question' | 'summary' | 'vault'
+
+export type MetricGridProps = {
+	children: ComponentChildren
+	className?: string
+	columns?: 2 | 3 | 4 | 'auto'
+	dense?: boolean
+	variant?: MetricGridVariant
 }
 
 export type ProgressMeterProps = {
@@ -258,6 +270,11 @@ export type ViewTabOption<TValue extends string> = {
 export type ViewTabsProps<TValue extends string> = {
 	ariaLabel: string
 	className?: string
+	groups?: Array<{
+		ariaLabel: string
+		className?: string
+		values: readonly TValue[]
+	}>
 	onChange: (value: TValue) => void
 	orientation?: 'horizontal' | 'vertical'
 	options: ViewTabOption<TValue>[]

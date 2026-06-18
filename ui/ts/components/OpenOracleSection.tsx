@@ -3,8 +3,8 @@ import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { AddressValue } from './AddressValue.js'
+import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
-import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -12,6 +12,7 @@ import { FormInput } from './FormInput.js'
 import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
 import { PaginationControls } from './PaginationControls.js'
@@ -89,7 +90,7 @@ function renderReportSection(
 ) {
 	return (
 		<SectionBlock headingLevel={4} title={title} variant='embedded'>
-			<DataGrid className='question-summary-grid'>{fields.map(field => renderReportField(field.label, field.value))}</DataGrid>
+			<MetricGrid variant='question'>{fields.map(field => renderReportField(field.label, field.value))}</MetricGrid>
 		</SectionBlock>
 	)
 }
@@ -111,7 +112,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 			key={report.reportId.toString()}
 			className='compact'
 			title={`Report #${report.reportId.toString()}`}
-			badge={<span className={`badge ${statusTone}`}>{status}</span>}
+			badge={<Badge tone={statusTone}>{status}</Badge>}
 			actions={
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
@@ -120,7 +121,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 				</div>
 			}
 		>
-			<DataGrid className='question-summary-grid'>
+			<MetricGrid variant='question'>
 				{renderReportField(
 					'Token Pair',
 					<>
@@ -133,7 +134,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 				{renderReportField('Current Amount2', <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
 				{renderReportField('Report Timestamp', <TimestampValue timestamp={report.reportTimestamp} zeroText='Awaiting initial report' />)}
 				{renderReportField('Settlement Timestamp', <TimestampValue timestamp={report.settlementTimestamp} zeroText='Not settled' />)}
-			</DataGrid>
+			</MetricGrid>
 		</EntityCard>
 	)
 }
@@ -538,15 +539,15 @@ function renderReportDetailsCard(
 					))}
 				</div>
 			</SectionBlock>
-			<SectionBlock badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
+			<SectionBlock badge={<Badge tone={statusTone}>{status}</Badge>} title='Selected Report'>
 				{reportControls}
-				<DataGrid className='question-summary-grid'>
+				<MetricGrid variant='question'>
 					{renderReportField('Report ID', openOracleReportDetails.reportId.toString())}
 					{renderReportField('Oracle Address', <AddressValue address={openOracleReportDetails.openOracleAddress} />)}
 					{renderReportField('Current Reporter', openOracleReportDetails.currentReporter === zeroAddress ? 'None (awaiting initial report)' : <AddressValue address={openOracleReportDetails.currentReporter} />)}
 					{renderReportField('Current Price', <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />)}
 					{renderReportField('Settlement Timestamp', <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />)}
-				</DataGrid>
+				</MetricGrid>
 			</SectionBlock>
 			<div className='report-detail-stack'>
 				<ReadOnlyDetailAccordion defaultOpen title='Identity'>

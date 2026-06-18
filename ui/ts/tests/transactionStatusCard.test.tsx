@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { Badge } from '../components/Badge.js'
+import { MetricGrid } from '../components/MetricGrid.js'
 import { TransactionStatusCard } from '../components/TransactionStatusCard.js'
 
 describe('TransactionStatusCard', () => {
@@ -23,7 +25,7 @@ describe('TransactionStatusCard', () => {
 	})
 
 	test('renders title, badge, and detail', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionStatusCard title='Liquidation Submitted' badge={<span className='badge warn'>Check State</span>} detail='Refresh staged operations.' />)
+		const renderedComponent = await renderIntoDocument(<TransactionStatusCard title='Liquidation Submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='Refresh staged operations.' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -36,12 +38,12 @@ describe('TransactionStatusCard', () => {
 		const renderedComponent = await renderIntoDocument(
 			<TransactionStatusCard
 				title='REP Withdrawal Queued'
-				badge={<span className='badge warn'>Queued</span>}
+				badge={<Badge tone='warning'>Queued</Badge>}
 				metrics={
-					<div className='workflow-metric-grid'>
+					<MetricGrid>
 						<div>Staged Operation</div>
 						<div>#7</div>
-					</div>
+					</MetricGrid>
 				}
 			/>,
 		)
@@ -56,7 +58,7 @@ describe('TransactionStatusCard', () => {
 		const renderedComponent = await renderIntoDocument(
 			<TransactionStatusCard
 				title='Bond Allowance Queued'
-				badge={<span className='badge warn'>Queued</span>}
+				badge={<Badge tone='warning'>Queued</Badge>}
 				actions={
 					<button className='secondary' type='button'>
 						View In Staged Operations
