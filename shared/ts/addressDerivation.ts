@@ -67,6 +67,13 @@ function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
 	})
 }
 
+function getSecurityPoolDeploymentWorkerAddress(securityPoolFactory: Address) {
+	return getCreateAddress({
+		from: getSecurityPoolDeployerAddress(securityPoolFactory),
+		nonce: 1n,
+	})
+}
+
 export function createRepTokenAddressHelper(config: RepTokenAddressConfig) {
 	const getRepTokenAddress = (universeId: bigint) => {
 		const zoltarAddress = config.getZoltarAddress()
@@ -119,7 +126,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 				zoltar: infraContracts.zoltar,
 				zoltarQuestionData: infraContracts.zoltarQuestionData,
 			}),
-			from: getSecurityPoolDeployerAddress(infraContracts.securityPoolFactory),
+			from: getSecurityPoolDeploymentWorkerAddress(infraContracts.securityPoolFactory),
 			salt: numberToBytes(0, { size: 32 }),
 		})
 		const escalationGame = getCreate2Address({

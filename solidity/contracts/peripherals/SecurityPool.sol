@@ -126,7 +126,6 @@ contract SecurityPool is ISecurityPool {
 		uint256 _initialEscalationGameDeposit,
 		address _truthAuction
 	) {
-		require(_initialEscalationGameDeposit > 0);
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -207,7 +206,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _completeSetCollateralAmount) external {
-		require(msg.sender == address(securityPoolFactory), 'only callable by securityPoolFactory');
+		require(msg.sender == address(securityPoolFactory), 'only factory');
 		lastUpdatedFeeAccumulator = block.timestamp;
 		currentRetentionRate = _currentRetentionRate;
 		completeSetCollateralAmount = _completeSetCollateralAmount;
@@ -266,8 +265,7 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
 		_syncActiveVault(vault);
-		(bool sent, ) = payable(vault).call{ value: fees }('');
-		require(sent, 'failed to send Ether');
+		_sendEth(payable(vault), fees);
 		emit RedeemFees(vault, fees);
 	}
 
@@ -498,8 +496,7 @@ contract SecurityPool is ISecurityPool {
 		shareTokenSupply -= completeSetAmount;
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
-		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
-		require(sent, 'failed to send Ether');
+		_sendEth(payable(msg.sender), ethValue);
 	}
 
 	function redeemShares() external {
@@ -512,8 +509,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 ethValue = sharesToCash(amount);
 		shareTokenSupply -= amount;
 		completeSetCollateralAmount -= ethValue;
-		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
-		require(sent, 'failed to send Ether');
+		_sendEth(payable(msg.sender), ethValue);
 		emit RedeemShares(msg.sender, amount, ethValue);
 	}
 
@@ -800,8 +796,12 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function transferEth(address payable receiver, uint256 amount) external onlyForker {
+		_sendEth(receiver, amount);
+	}
+
+	function _sendEth(address payable receiver, uint256 amount) private {
 		(bool sent, ) = receiver.call{ value: amount }('');
-		require(sent, 'failed to send ETH');
+		require(sent, 'send ETH failed');
 	}
 
 	function authorizeChildPool(ISecurityPool pool) external onlyForker {
