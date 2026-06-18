@@ -284,6 +284,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'stale liquidation');
 				return;
 			}
+			_consumeStagedOperation(operationId);
 			try
 				securityPool.performLiquidation(
 					stagedOperation.initiatorVault,
@@ -295,16 +296,12 @@ contract SecurityPoolOracleCoordinator {
 					stagedOperation.snapshotDenominator
 				)
 			{
-				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
-				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
 			} catch Panic(uint256) {
-				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
 			} catch (bytes memory) {
-				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {

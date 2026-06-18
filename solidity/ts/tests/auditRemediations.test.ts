@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert/strict'
-import { encodeAbiParameters, keccak256, zeroAddress } from 'viem'
+import { decodeEventLog, encodeAbiParameters, keccak256, zeroAddress } from 'viem'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -15,6 +15,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/us
 import { getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../types/contractArtifact'
+import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -117,7 +118,7 @@ describe('audit remediation regressions', () => {
 
 		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
 		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
-		await writeContractAndWait(liquidator, () =>
+		const staleExecutionHash = await writeContractAndWait(liquidator, () =>
 			liquidator.writeContract({
 				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 				address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
@@ -135,11 +136,31 @@ describe('audit remediation regressions', () => {
 			functionName: 'stagedOperations',
 			args: [liquidationOperationId],
 		})
+		const staleExecutionReceipt = await liquidator.waitForTransactionReceipt({ hash: staleExecutionHash })
+		const executionLog = staleExecutionReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ExecutedStagedOperation')
+		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation event')
 
 		assert.equal(targetVault.securityBondAllowance, 0n)
 		assert.equal(liquidatorVault.securityBondAllowance, 0n)
 		assert.equal(totalAllowance, 0n)
 		assert.equal(stagedOperation[1], zeroAddress)
+		assert.equal(executionLog.args.operationId, liquidationOperationId)
+		assert.equal(executionLog.args.operation, OperationType.Liquidation)
+		assert.equal(executionLog.args.success, false)
+		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
 	})
 
 	test('own-fork locks excess parent REP into the migration balance', async () => {
