@@ -11,10 +11,12 @@ import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 
 contract SecurityPoolDeployer {
-	address immutable factory;
+	ISecurityPoolFactory immutable factory;
+	SecurityPoolDeploymentWorker immutable worker;
 
 	constructor() {
-		factory = msg.sender;
+		factory = ISecurityPoolFactory(msg.sender);
+		worker = new SecurityPoolDeploymentWorker();
 	}
 
 	function deploy(
@@ -32,29 +34,75 @@ contract SecurityPoolDeployer {
 		uint256 initialEscalationGameDeposit,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
-		if (msg.sender != factory) revert();
+		require(msg.sender == address(factory), 'only factory');
 
-		securityPool = ISecurityPool(
-			payable(
-				address(
-					new SecurityPool{ salt: bytes32(uint256(0)) }(
-						securityPoolForker,
-						ISecurityPoolFactory(factory),
-						questionData,
-						escalationGameFactory,
-						priceOracleManagerAndOperatorQueuer,
-						shareToken,
-						openOracle,
-						parent,
-						zoltar,
-						universeId,
-						questionId,
-						securityMultiplier,
-						initialEscalationGameDeposit,
-						truthAuction
+		return
+			worker.deploy(
+				securityPoolForker,
+				factory,
+				questionData,
+				escalationGameFactory,
+				priceOracleManagerAndOperatorQueuer,
+				shareToken,
+				openOracle,
+				parent,
+				zoltar,
+				universeId,
+				questionId,
+				securityMultiplier,
+				initialEscalationGameDeposit,
+				truthAuction
+			);
+	}
+}
+
+contract SecurityPoolDeploymentWorker {
+	address immutable deployer;
+
+	constructor() {
+		deployer = msg.sender;
+	}
+
+	function deploy(
+		address securityPoolForker,
+		ISecurityPoolFactory securityPoolFactory,
+		ZoltarQuestionData questionData,
+		EscalationGameFactory escalationGameFactory,
+		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
+		IShareToken shareToken,
+		OpenOracle openOracle,
+		ISecurityPool parent,
+		Zoltar zoltar,
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier,
+		uint256 initialEscalationGameDeposit,
+		address truthAuction
+	) external returns (ISecurityPool securityPool) {
+		require(msg.sender == deployer, 'only deployer');
+
+		return
+			ISecurityPool(
+				payable(
+					address(
+						new SecurityPool{ salt: bytes32(0) }(
+							securityPoolForker,
+							securityPoolFactory,
+							questionData,
+							escalationGameFactory,
+							priceOracleManagerAndOperatorQueuer,
+							shareToken,
+							openOracle,
+							parent,
+							zoltar,
+							universeId,
+							questionId,
+							securityMultiplier,
+							initialEscalationGameDeposit,
+							truthAuction
+						)
 					)
 				)
-			)
-		);
+			);
 	}
 }
