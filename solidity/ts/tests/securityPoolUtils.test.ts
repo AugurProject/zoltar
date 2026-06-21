@@ -1,6 +1,5 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import type { Address } from 'viem'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -26,7 +25,6 @@ const expectedRetentionRate = (completeSetCollateralAmount: bigint, securityBond
 
 describe('SecurityPoolUtils', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
-	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let securityPoolUtilsAddress: Address
 
@@ -39,7 +37,7 @@ describe('SecurityPoolUtils', () => {
 		})
 
 	beforeEach(async () => {
-		mockWindow = getAnvilWindowEthereum()
+		const mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		const hash = await client.sendTransaction({
@@ -52,6 +50,7 @@ describe('SecurityPoolUtils', () => {
 
 	test('retention rate starts at max when security bond allowance is zero', async () => {
 		strictEqualTypeSafe(await calculateRetentionRate(1n * 10n ** 18n, 0n), MAX_RETENTION_RATE, 'zero allowance should use the max retention rate')
+		strictEqualTypeSafe(await calculateRetentionRate(0n, 1n * 10n ** 18n), MAX_RETENTION_RATE, 'zero utilization should use the max retention rate')
 	})
 
 	test('retention rate uses fixed-point precision below one percent utilization', async () => {

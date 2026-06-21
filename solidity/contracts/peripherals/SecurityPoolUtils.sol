@@ -10,7 +10,7 @@ library SecurityPoolUtils {
 
 	uint256 constant MAX_RETENTION_RATE = 999_999_996_848_000_000; // ≈90% yearly (10% fees)
 	uint256 constant MIN_RETENTION_RATE = 999_999_977_880_000_000; // ≈50% yearly (50% fees)
-	uint256 constant RETENTION_RATE_DIP = 800_000_000_000_000_000; // 80% utilization
+	uint256 constant RETENTION_RATE_DIP = (80 * PRICE_PRECISION) / 100; // 80% utilization
 
 	// smallest vaults
 	uint256 constant MIN_SECURITY_BOND_DEBT = 1 ether; // 1 eth
