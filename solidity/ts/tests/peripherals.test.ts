@@ -2723,6 +2723,9 @@ describe('Peripherals Contract Test Suite', () => {
 	})
 
 	test('child pool complete-set minting waits for settled fork accounting', async () => {
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		await approveAndDepositRep(passiveRepHolder, 2n * forkThreshold, questionId)
 		const parentAllowance = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, parentAllowance)
 		const parentMintAmount = 5n * 10n ** 18n
@@ -2740,7 +2743,17 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
-		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'fully migrated child pool should finalize accounting without a truth auction')
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'partially migrated child pool should price unsettled accounting through a truth auction')
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		strictEqualTypeSafe(expectedEthToBuy > 0n, true, 'partial migration should leave ETH for the truth auction to buy')
+		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after truth-auction accounting settles')
 		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.None, 'unrelated fork should leave the child pool question unresolved')
 		strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), parentAllowance, 'child pool should inherit parent security-bond capacity before minting new sets')
 
