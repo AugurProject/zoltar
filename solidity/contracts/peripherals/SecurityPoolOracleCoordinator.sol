@@ -179,7 +179,7 @@ contract SecurityPoolOracleCoordinator {
 		emit PriceReported(reportId, lastPrice);
 		if (pendingOperationSlotId != 0) {
 			// Settlement auto-executes only the reserved pending slot. Additional active
-			// staged operations remain available for explicit execution while this price is valid.
+			// staged operations remain explicit executions, subject to their validity windows.
 			uint256 operationId = pendingOperationSlotId;
 			pendingOperationSlotId = 0;
 			executeStagedOperation(operationId);
