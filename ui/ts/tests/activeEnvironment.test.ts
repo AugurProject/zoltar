@@ -531,7 +531,7 @@ void describe('simulation backend', () => {
 		}
 	}, 180_000)
 
-	void test.skip('bootstraps the security-pool scenario with one undercollateralized seeded vault', async () => {
+	void test('bootstraps the security-pool scenario with one undercollateralized seeded vault', async () => {
 		const backend = await createSimulationBackend({ scenario: 'security-pool' })
 		await backend.bootstrap()
 		const primaryAccount = backend.accounts[0]

@@ -665,7 +665,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await finalizeQuestionAsYesWithoutFork()
 
 		const walletRepBeforeRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), 'redeemRep should stay blocked until escalation deposits are settled')
+		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /settle locks first/)
 
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		const vaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -3588,7 +3588,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in fork migration before the truth-auction window ends')
 		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork child currently reports a finalized outcome before the pool is operational')
-		await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), 'redeemRep should remain blocked until the child pool is operational')
+		await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /not operational/)
 	})
 
 	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after question ends

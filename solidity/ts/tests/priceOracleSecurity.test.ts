@@ -1,6 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert/strict'
-import { type Address, zeroAddress } from 'viem'
+import { decodeEventLog, type Address, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -15,8 +15,27 @@ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zol
 import { OperationType, getOpenOracleExtraData, getOpenOracleReportMeta, getRequestPriceEthCost, openOracleSettle, openOracleSubmitInitialReport, wrapWeth } from '../testsuite/simulator/utils/contracts/peripherals'
 import { getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
+import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
+
+type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
+
+const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'ExecutedStagedOperation')
 
 describe('Price Oracle Refund Security Tests', () => {
 	const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 30n * 60n
@@ -491,20 +510,30 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
-		await assert.rejects(
+		const expiredExecutionHash = await writeContractAndWait(
+			client,
 			async () =>
-				await writeContractAndWait(
-					client,
-					async () =>
-						await client.writeContract({
-							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-							address: priceOracle,
-							functionName: 'executeStagedOperation',
-							args: [2n],
-						}),
-				),
-			/expired/i,
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [2n],
+				}),
 		)
+		const expiredOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [2n],
+		})
+		const expiredExecutionReceipt = await client.waitForTransactionReceipt({ hash: expiredExecutionHash })
+		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing expired liquidation execution event')
+		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired liquidation should be consumed after execution attempt')
+		assert.strictEqual(executionLog.args.operationId, 2n)
+		assert.strictEqual(executionLog.args.operation, OperationType.Liquidation)
+		assert.strictEqual(executionLog.args.success, false)
+		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
 	})
 
 	test('staged self operations expire after their caller-selected validity window', async () => {
@@ -547,19 +576,29 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
-		await assert.rejects(
+		const expiredExecutionHash = await writeContractAndWait(
+			client,
 			async () =>
-				await writeContractAndWait(
-					client,
-					async () =>
-						await client.writeContract({
-							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-							address: priceOracle,
-							functionName: 'executeStagedOperation',
-							args: [2n],
-						}),
-				),
-			/staged operation expired/,
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [2n],
+				}),
 		)
+		const expiredOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [2n],
+		})
+		const expiredExecutionReceipt = await client.waitForTransactionReceipt({ hash: expiredExecutionHash })
+		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing expired self-operation execution event')
+		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired self operation should be consumed after execution attempt')
+		assert.strictEqual(executionLog.args.operationId, 2n)
+		assert.strictEqual(executionLog.args.operation, OperationType.SetSecurityBondsAllowance)
+		assert.strictEqual(executionLog.args.success, false)
+		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
 	})
 })

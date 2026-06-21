@@ -588,6 +588,8 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		uint256 repToFork = repBalanceAfter - repBalanceBefore;
 		if (repToFork > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToFork);
 		migrationProxy.forkUniverse(securityPool.questionId());
+		uint256 leftoverProxyRep = rep.balanceOf(address(migrationProxy));
+		if (leftoverProxyRep > 0) migrationProxy.lockRep(leftoverProxyRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 		require(forkTime > 0, 'e7');
 		_snapshotEscalationAtFork(data, escalationGame, forkTime);
