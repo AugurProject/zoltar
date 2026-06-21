@@ -1,9 +1,11 @@
 import { applyLibraries, getInfraContractAddresses } from './deployPeripherals'
-import { bytes32String } from '../bigint'
+import { addressString, bytes32String } from '../bigint'
+import { getCallerScopedSalt } from '@zoltar/shared/addressDerivation'
 import { Address, encodeDeployData, getCreate2Address } from 'viem'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../../../types/contractArtifact'
+import { TEST_ADDRESSES } from '../constants'
 
-export const getUniformPriceDualCapBatchAuctionAddress = (owner: Address) =>
+export const getUniformPriceDualCapBatchAuctionAddress = (owner: Address, deployer: Address = addressString(TEST_ADDRESSES[0])) =>
 	getCreate2Address({
 		bytecode: encodeDeployData({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
@@ -11,5 +13,5 @@ export const getUniformPriceDualCapBatchAuctionAddress = (owner: Address) =>
 			args: [owner],
 		}),
 		from: getInfraContractAddresses().uniformPriceDualCapBatchAuctionFactory,
-		salt: bytes32String(0n),
+		salt: getCallerScopedSalt(deployer, bytes32String(0n)),
 	})

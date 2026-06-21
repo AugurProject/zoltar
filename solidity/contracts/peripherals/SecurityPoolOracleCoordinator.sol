@@ -228,10 +228,6 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function isPriceValid() public view returns (bool) {
-		return isPriceFresh();
-	}
-
-	function isPriceFresh() public view returns (bool) {
 		return
 			lastPrice > 0 &&
 			lastSettlementTimestamp != 0 &&
@@ -241,10 +237,6 @@ contract SecurityPoolOracleCoordinator {
 	function getPriceRoundRemainingNotional() public view returns (uint256) {
 		if (priceRoundMaxNotional <= priceRoundConsumedNotional) return 0;
 		return priceRoundMaxNotional - priceRoundConsumedNotional;
-	}
-
-	function isPriceUsable() public view returns (bool) {
-		return isPriceFresh() && getPriceRoundRemainingNotional() > 0;
 	}
 
 	function requestPriceIfNeededAndStageOperation(
@@ -264,11 +256,10 @@ contract SecurityPoolOracleCoordinator {
 		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-		// Capture the target vault state at queue time on purpose.
-		// Liquidations are intentionally valued against the vault state that existed when the
-		// caller requested the oracle-backed operation, so the target cannot escape by
-		// depositing REP or reducing allowance after the request is staged but before the
-		// oracle report settles.
+		// Capture the target vault state at queue time. Liquidation may still execute if
+		// the target deposits more REP after staging, but allowance changes or ownership
+		// decreases make the snapshot stale. Stale operations are consumed and must be
+		// restaged against current state.
 		// Liquidation should value the vault's full collateral claim. That means using the
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
@@ -293,7 +284,7 @@ contract SecurityPoolOracleCoordinator {
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
 		if (
-			isPriceFresh() && _getOperationNotional(stagedOperations[operationId]) <= getPriceRoundRemainingNotional()
+			isPriceValid() && _getOperationNotional(stagedOperations[operationId]) <= getPriceRoundRemainingNotional()
 		) {
 			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
 			executeStagedOperation(operationId);
@@ -330,31 +321,41 @@ contract SecurityPoolOracleCoordinator {
 	function executeStagedOperation(uint256 operationId) public {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		require(stagedOperation.initiatorVault != address(0), 'no such operation');
-		require(isPriceFresh(), 'price is not valid to execute');
-		require(
-			block.timestamp <= stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds,
-			'staged operation expired'
-		);
-		_consumeActiveStagedOperation(operationId);
-		stagedOperations[operationId].initiatorVault = address(0);
+		require(isPriceValid(), 'price is not valid to execute');
+		if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
+			_consumeStagedOperation(operationId);
+			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'staged operation expired');
+			return;
+		}
 		uint256 operationNotional = _getOperationNotional(stagedOperation);
 		if (operationNotional > getPriceRoundRemainingNotional()) {
+			_consumeStagedOperation(operationId);
 			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle budget exceeded');
 			return;
 		}
-		if (
-			stagedOperation.operation == OperationType.Liquidation &&
-			!_isLiquidationBeyondMinPriceDistance(stagedOperation)
-		) {
-			emit ExecutedStagedOperation(
-				operationId,
-				stagedOperation.operation,
-				false,
-				'liquidation too close to threshold'
-			);
-			return;
-		}
 		if (stagedOperation.operation == OperationType.Liquidation) {
+			(uint256 currentTargetOwnership, uint256 currentTargetAllowance, , ) = securityPool.securityVaults(
+				stagedOperation.targetVault
+			);
+			if (
+				currentTargetOwnership < stagedOperation.snapshotTargetOwnership ||
+				currentTargetAllowance != stagedOperation.snapshotTargetAllowance
+			) {
+				_consumeStagedOperation(operationId);
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'stale liquidation');
+				return;
+			}
+			if (!_isLiquidationBeyondMinPriceDistance(stagedOperation)) {
+				_consumeStagedOperation(operationId);
+				emit ExecutedStagedOperation(
+					operationId,
+					stagedOperation.operation,
+					false,
+					'liquidation too close to threshold'
+				);
+				return;
+			}
+			_consumeStagedOperation(operationId);
 			try
 				securityPool.performLiquidation(
 					stagedOperation.initiatorVault,
@@ -376,6 +377,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
+			_consumeStagedOperation(operationId);
 			try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
 				_consumePriceRoundNotional(operationNotional);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
@@ -387,6 +389,7 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else {
+			_consumeStagedOperation(operationId);
 			try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
 				_consumePriceRoundNotional(operationNotional);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
@@ -463,6 +466,11 @@ contract SecurityPoolOracleCoordinator {
 		uint256 thresholdPrice = (vaultRep * PRICE_PRECISION) / (snapshotTargetAllowance * securityMultiplier);
 		if (currentPrice <= thresholdPrice) return false;
 		return ((currentPrice - thresholdPrice) * ORACLE_BUDGET_BPS) / currentPrice >= minLiquidationPriceDistanceBps;
+	}
+
+	function _consumeStagedOperation(uint256 operationId) private {
+		_consumeActiveStagedOperation(operationId);
+		stagedOperations[operationId].initiatorVault = address(0);
 	}
 
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {
