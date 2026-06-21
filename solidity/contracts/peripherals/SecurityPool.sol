@@ -90,8 +90,8 @@ contract SecurityPool is ISecurityPool {
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
 		// Outcome child pools can re-enter `SystemState.Operational` after migration and
-		// truth-auction processing complete. Finalized claim paths intentionally avoid
-		// this modifier so late unrelated forks do not block share or REP redemption.
+		// truth-auction processing complete. Finalized claim paths keep their own state
+		// and finality guards so late unrelated forks do not block share or REP redemption.
 		require(zoltar.getForkTime(universeId) == 0, 'zoltar forked');
 		require(systemState == SystemState.Operational, 'not operational');
 		_;
