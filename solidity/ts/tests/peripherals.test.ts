@@ -2256,7 +2256,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await sharesToCash(client, securityPoolAddresses.securityPool, winningShares), 0n, 'once winning supply is exhausted, leftover losing shares should no longer map to any cash value')
 	})
 
-	test('redeemShares stays available after an unrelated late fork once the question has finalized', async () => {
+	test('redeemShares and redeemRep stay available after an unrelated late fork once the question has finalized', async () => {
 		const securityPoolAllowance = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
@@ -2286,8 +2286,18 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(attackerClient, genesisUniverse, lateForkQuestionId)
 
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'late unrelated fork should not erase finalized market outcome')
+		const walletRepBeforeClaims = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should still complete after the unrelated fork')
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultAfterRedeem = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const walletRepAfterRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		strictEqualTypeSafe(vaultAfterRedeem.repDepositShare, 0n, 'rep redemption should still empty the vault after the unrelated fork')
+		strictEqualTypeSafe(vaultAfterRedeem.repInEscalationGame, 0n, 'rep redemption should leave no escrowed REP after the unrelated fork')
+		strictEqualTypeSafe(walletRepAfterRedeem - walletRepBeforeClaims, repDeposit, 'settlement plus rep redemption should return the full vault REP after the unrelated fork')
 	})
 
 	test('two security pools with disagreement', async () => {
@@ -3590,8 +3600,6 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork child currently reports a finalized outcome before the pool is operational')
 		await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /not operational/)
 	})
-
-	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after question ends
 
 	test('simple truth auction: participant buys rep and can claim proceeds', async () => {
 		// Setup: create open interest, trigger fork, migrate
