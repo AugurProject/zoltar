@@ -24,6 +24,11 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	address private immutable escalationGameForkerDelegate;
 
 	event InitiateSecurityPoolFork(uint256 auctionableRepAtFork);
+	event InitiateSecurityPoolForkCallerReward(
+		ISecurityPool indexed securityPool,
+		address indexed caller,
+		uint256 reward
+	);
 	event TruthAuctionStarted(uint256 completeSetCollateralAmount, uint256 repMigrated, uint256 auctionableRepAtFork);
 	event TruthAuctionFinalized();
 	event ClaimAuctionProceeds(
@@ -293,7 +298,21 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		data.auctionableRepAtFork = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		require(data.auctionableRepAtFork >= previousMigrationBalance, 'migration balance regressed');
 		emit InitiateSecurityPoolFork(data.auctionableRepAtFork);
-		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
+		_payForkInitiatorReward(securityPool, msg.sender);
+	}
+
+	function _payForkInitiatorReward(ISecurityPool securityPool, address caller) private {
+		uint256 reward = block.basefee * 2;
+		if (reward == 0) return;
+		uint256 collateral = securityPool.completeSetCollateralAmount();
+		if (collateral < reward) return;
+
+		securityPool.setPoolFinancials(collateral - reward, securityPool.totalSecurityBondAllowance());
+		try securityPool.transferEth(payable(caller), reward) {
+			emit InitiateSecurityPoolForkCallerReward(securityPool, caller, reward);
+		} catch {
+			securityPool.setPoolFinancials(collateral, securityPool.totalSecurityBondAllowance());
+		}
 	}
 
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external {

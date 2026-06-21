@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert/strict'
-import { decodeEventLog, encodeAbiParameters, keccak256 } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeFunctionData, keccak256 } from 'viem'
 import type { Abi, Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
@@ -1880,6 +1880,65 @@ describe('Peripherals Contract Test Suite', () => {
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
 		strictEqualTypeSafe(forkData.auctionableRepAtFork, forkDataBeforeStrayRep.auctionableRepAtFork, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
+	})
+
+	test('initiateSecurityPoolFork pays the caller reward from complete-set collateral', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const openInterestAmount = 5n * 10n ** 18n
+		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+		const forkSourceClient = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'fork caller reward source question',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(forkSourceClient, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(forkSourceClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(forkSourceClient, genesisUniverse, forkSourceQuestionId)
+		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+		const forkCaller = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const forkBaseFee = 1000n
+		const expectedReward = forkBaseFee * 2n
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${forkBaseFee.toString(16)}`] })
+		const callerBalanceBeforeFork = await getETHBalance(client, forkCaller.account.address)
+		const collateralBeforeFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const feesBeforeFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		let forkGasCost = 0n
+
+		try {
+			const forkHash = (await mockWindow.request({
+				method: 'eth_sendTransaction',
+				params: [
+					{
+						from: forkCaller.account.address,
+						to: getInfraContractAddresses().securityPoolForker,
+						data: encodeFunctionData({
+							abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+							functionName: 'initiateSecurityPoolFork',
+							args: [securityPoolAddresses.securityPool],
+						}),
+						maxFeePerGas: `0x${forkBaseFee.toString(16)}`,
+						maxPriorityFeePerGas: '0x0',
+						type: '0x2',
+						__preserveFeeCap: true,
+					},
+				],
+			})) as Hash
+			const forkReceipt = await forkCaller.waitForTransactionReceipt({ hash: forkHash })
+			strictEqualTypeSafe(forkReceipt.status, 'success', 'fork transaction should succeed with the test fee cap')
+			forkGasCost = forkReceipt.gasUsed * forkReceipt.effectiveGasPrice
+		} finally {
+			await mockWindow.setNextBlockBaseFeePerGasToZero()
+		}
+
+		strictEqualTypeSafe((await getETHBalance(client, forkCaller.account.address)) - callerBalanceBeforeFork + forkGasCost, expectedReward, 'fork initiator should receive the basefee reward')
+		strictEqualTypeSafe(collateralBeforeFork - (await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)), expectedReward, 'fork reward should be paid from complete-set collateral')
+		strictEqualTypeSafe(await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool), feesBeforeFork, 'fork reward should not spend accrued vault fees')
 	})
 
 	test('Can Liquidate', async () => {

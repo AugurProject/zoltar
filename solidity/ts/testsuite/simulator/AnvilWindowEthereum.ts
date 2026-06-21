@@ -47,6 +47,7 @@ type RpcTransactionRequest = {
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
 	readonly type?: string
+	readonly __preserveFeeCap?: boolean
 }
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
@@ -76,6 +77,14 @@ function isRpcTransactionRequest(value: unknown): value is RpcTransactionRequest
 export function normalizeAnvilTransactionParams(params: unknown[]) {
 	const [firstParam, ...remainingParams] = params
 	if (!isRpcTransactionRequest(firstParam)) return params
+
+	if (firstParam.__preserveFeeCap === true) {
+		const normalizedTransactionRequest: Record<string, unknown> = {
+			...firstParam,
+		}
+		delete normalizedTransactionRequest['__preserveFeeCap']
+		return [normalizedTransactionRequest, ...remainingParams]
+	}
 
 	const normalizedTransactionRequest: Record<string, unknown> = {
 		...firstParam,
