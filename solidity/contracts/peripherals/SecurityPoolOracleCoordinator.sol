@@ -178,7 +178,8 @@ contract SecurityPoolOracleCoordinator {
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
 		if (pendingOperationSlotId != 0) {
-			// TODO we maybe should allow executing couple operations?
+			// Settlement auto-executes only the reserved pending slot. Additional active
+			// staged operations remain available for explicit execution while this price is valid.
 			uint256 operationId = pendingOperationSlotId;
 			pendingOperationSlotId = 0;
 			executeStagedOperation(operationId);
