@@ -119,3 +119,7 @@ export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undef
 	if (!sameAddress(managerAddress, oracleManagerDetails.managerAddress)) return false
 	return oracleManagerDetails.isPriceValid
 }
+
+export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'priceRoundRemainingNotional'> | undefined) {
+	return oracleManagerDetails?.isPriceValid === true && oracleManagerDetails.priceRoundRemainingNotional !== undefined && oracleManagerDetails.priceRoundRemainingNotional > 0n
+}

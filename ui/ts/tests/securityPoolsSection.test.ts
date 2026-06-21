@@ -221,7 +221,6 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
-		isPriceUsable: true,
 		lastPrice: 1n,
 		lastSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
@@ -229,13 +228,13 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingReportId: 0n,
+		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		requestPriceEthCost: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
 	}
-	if (!details.isPriceValid) details.isPriceUsable = false
 	return details
 }
 
@@ -677,7 +676,6 @@ void describe('SecurityPoolsSection', () => {
 						liquidationTargetVault: zeroAddress,
 						poolOracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
-							isPriceUsable: true,
 							managerAddress: zeroAddress,
 						}),
 						securityPoolOverviewResult: {
@@ -745,7 +743,6 @@ void describe('SecurityPoolsSection', () => {
 						liquidationTargetVault: zeroAddress,
 						poolOracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
-							isPriceUsable: true,
 							managerAddress: zeroAddress,
 						}),
 						securityPoolOverviewResult: {

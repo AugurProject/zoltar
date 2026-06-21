@@ -327,12 +327,6 @@ contract SecurityPoolOracleCoordinator {
 			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'staged operation expired');
 			return;
 		}
-		uint256 operationNotional = _getOperationNotional(stagedOperation);
-		if (operationNotional > getPriceRoundRemainingNotional()) {
-			_consumeStagedOperation(operationId);
-			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle budget exceeded');
-			return;
-		}
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			(uint256 currentTargetOwnership, uint256 currentTargetAllowance, , ) = securityPool.securityVaults(
 				stagedOperation.targetVault
@@ -345,6 +339,14 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'stale liquidation');
 				return;
 			}
+		}
+		uint256 operationNotional = _getOperationNotional(stagedOperation);
+		if (operationNotional > getPriceRoundRemainingNotional()) {
+			_consumeStagedOperation(operationId);
+			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle budget exceeded');
+			return;
+		}
+		if (stagedOperation.operation == OperationType.Liquidation) {
 			if (!_isLiquidationBeyondMinPriceDistance(stagedOperation)) {
 				_consumeStagedOperation(operationId);
 				emit ExecutedStagedOperation(

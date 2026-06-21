@@ -23,7 +23,7 @@ import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquida
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
-import { getStagedOperationTimeoutSeconds } from '../lib/securityVault.js'
+import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
@@ -64,7 +64,7 @@ type QueuedLiquidationOperationView = {
 }
 function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	if (currentPoolOracleManagerDetails === undefined) return 'refreshing'
-	return currentPoolOracleManagerDetails.isPriceUsable === true ? 'execute' : 'queue'
+	return isOracleManagerPriceUsable(currentPoolOracleManagerDetails) ? 'execute' : 'queue'
 }
 function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
@@ -302,7 +302,7 @@ export function LiquidationModal({
 					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 
 					return (() => {
-						if (currentPoolOracleManagerDetails.isPriceUsable === true) return 'executed'
+						if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails)) return 'executed'
 
 						return 'missing'
 					})()

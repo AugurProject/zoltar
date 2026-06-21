@@ -185,7 +185,6 @@ export type OracleManagerDetails = {
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
 	isPriceValid: boolean
-	isPriceUsable?: boolean
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	managerAddress: Address

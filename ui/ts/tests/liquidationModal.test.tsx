@@ -41,7 +41,6 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
-		isPriceUsable: true,
 		lastPrice: 1n,
 		lastSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
@@ -49,13 +48,13 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingReportId: 0n,
+		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		requestPriceEthCost: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
 	}
-	if (!details.isPriceValid) details.isPriceUsable = false
 	return details
 }
 
@@ -167,7 +166,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 			}),
 			poolState: createEndedPoolState(),
 			selectedPool: createSelectedPool({
@@ -396,7 +394,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
@@ -441,7 +438,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				pendingOperation: undefined,
 				pendingOperationSlotId: 0n,
 			}),
@@ -481,7 +477,6 @@ describe('LiquidationModal', () => {
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 1n * 10n ** 18n,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
@@ -576,7 +571,6 @@ describe('LiquidationModal', () => {
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 1n * 10n ** 18n,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
@@ -662,7 +656,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			selectedPool: createSelectedPool({
@@ -727,7 +720,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '2',
@@ -762,7 +754,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '1',
@@ -816,7 +807,6 @@ describe('LiquidationModal', () => {
 			accountAddress: vaultAddress,
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '1',
@@ -852,7 +842,6 @@ describe('LiquidationModal', () => {
 			accountAddress: callerVaultAddress,
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationAmount: '2',
@@ -888,7 +877,6 @@ describe('LiquidationModal', () => {
 					closeLiquidationModal={() => undefined}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 					})}
 					isMainnet
@@ -988,7 +976,6 @@ describe('LiquidationModal', () => {
 			accountAddress: callerVaultAddress,
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 3n * 10n ** 18n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
@@ -1018,7 +1005,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
@@ -1038,7 +1024,6 @@ describe('LiquidationModal', () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
-				isPriceUsable: true,
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({

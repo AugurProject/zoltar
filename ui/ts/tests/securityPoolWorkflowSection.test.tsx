@@ -144,7 +144,6 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
-		isPriceUsable: true,
 		lastPrice: 1n,
 		lastSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
@@ -152,13 +151,13 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingReportId: 0n,
+		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		requestPriceEthCost: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
 	}
-	if (!details.isPriceValid) details.isPriceUsable = false
 	return details
 }
 
@@ -737,7 +736,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					checkedSecurityPoolAddress: selectedPoolAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [
@@ -1043,7 +1041,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState(),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 					}),
@@ -1090,7 +1087,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState(),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 					}),
@@ -1146,7 +1142,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					liquidationTargetVault: zeroAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						managerAddress: zeroAddress,
 						pendingOperation: undefined,
 					}),
@@ -1180,7 +1175,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					liquidationTargetVault: zeroAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						managerAddress: zeroAddress,
 						pendingOperation: undefined,
 					}),
@@ -1222,7 +1216,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					},
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 					}),
@@ -1430,7 +1423,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					},
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						managerAddress: zeroAddress,
 						pendingOperation: undefined,
 					}),
@@ -1481,7 +1473,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					},
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						managerAddress: zeroAddress,
 						pendingOperation: undefined,
 					}),
@@ -1654,7 +1645,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					},
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						managerAddress: zeroAddress,
 					}),
 					securityPoolAddress: selectedPoolAddress,
@@ -1773,7 +1763,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState(),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 					}),
 					securityPoolAddress: selectedPoolAddress,
@@ -1824,7 +1813,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState(),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 					}),
 					securityPoolAddress: selectedPoolAddress,
@@ -1882,7 +1870,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 					}),
 					securityPoolAddress: selectedPoolAddress,
@@ -1935,7 +1922,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 						requestPriceEthCost: 10n * 10n ** 18n,
 					}),
@@ -1988,7 +1974,6 @@ describe('SecurityPoolWorkflowSection', () => {
 					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 3n * 10n ** 18n,
 						requestPriceEthCost: 10n * 10n ** 18n,
 					}),
@@ -2208,7 +2193,6 @@ describe('SecurityPoolWorkflowSection', () => {
 						callbackStateHash: undefined,
 						exactToken1Report: undefined,
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 2n * 10n ** 18n,
 						lastSettlementTimestamp: 100n,
 						managerAddress: zeroAddress,
@@ -2249,7 +2233,6 @@ describe('SecurityPoolWorkflowSection', () => {
 						callbackStateHash: undefined,
 						exactToken1Report: undefined,
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 2n * 10n ** 18n,
 						lastSettlementTimestamp: 100n,
 						managerAddress: zeroAddress,
@@ -2324,7 +2307,6 @@ describe('SecurityPoolWorkflowSection', () => {
 						callbackStateHash: undefined,
 						exactToken1Report: undefined,
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 2n * 10n ** 18n,
 						lastSettlementTimestamp: 100n,
 						managerAddress: zeroAddress,
@@ -2368,7 +2350,6 @@ describe('SecurityPoolWorkflowSection', () => {
 						callbackStateHash: undefined,
 						exactToken1Report: undefined,
 						isPriceValid: true,
-						isPriceUsable: true,
 						lastPrice: 2n * 10n ** 18n,
 						lastSettlementTimestamp: 100n,
 						managerAddress: zeroAddress,
