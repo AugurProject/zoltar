@@ -25,7 +25,7 @@ const maxRetentionRate = 999_999_996_848_000_000n
 const repDeposit = 1000n * 10n ** 18n
 const outcomes = ['Yes', 'No']
 
-describe('audit remediation regressions', () => {
+describe('security regression coverage', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
 	let questionId: bigint
