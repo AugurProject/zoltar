@@ -2109,6 +2109,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
 
 		const firstHolderShares = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const secondHolderShares = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
 		const redeemAmount = ensureDefined(firstHolderShares[0], 'first holder complete-set shares missing') / 2n
 		const initialCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 		const initialShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
@@ -2123,6 +2124,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - balanceBeforeRedeem
 		const feeDelta = feesAfterRedeem - initialFeesOwed
 		const firstHolderSharesAfterRedeem = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const secondHolderSharesAfterRedeem = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
 		const shareSupplyAfterRedeem = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
 
 		assert.ok(firstHolderPayout > 0n, 'redeeming complete sets should pay ETH to the holder')
@@ -2131,6 +2133,9 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(firstHolderSharesAfterRedeem[0], firstHolderShares[0] - redeemAmount, 'redeeming should burn the holders invalid-side share')
 		strictEqualTypeSafe(firstHolderSharesAfterRedeem[1], firstHolderShares[1] - redeemAmount, 'redeeming should burn the holders yes-side share')
 		strictEqualTypeSafe(firstHolderSharesAfterRedeem[2], firstHolderShares[2] - redeemAmount, 'redeeming should burn the holders no-side share')
+		strictEqualTypeSafe(secondHolderSharesAfterRedeem[0], secondHolderShares[0], 'redeeming should not burn another holders invalid-side share')
+		strictEqualTypeSafe(secondHolderSharesAfterRedeem[1], secondHolderShares[1], 'redeeming should not burn another holders yes-side share')
+		strictEqualTypeSafe(secondHolderSharesAfterRedeem[2], secondHolderShares[2], 'redeeming should not burn another holders no-side share')
 		strictEqualTypeSafe(await sharesToCash(client, securityPoolAddresses.securityPool, shareSupplyAfterRedeem), collateralAfterRedeem, 'remaining complete sets should keep the fee-adjusted exchange rate')
 	})
 
