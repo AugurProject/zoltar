@@ -2096,6 +2096,44 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')
 	})
 
+	test('redeemCompleteSet exits at the fee-adjusted share exchange rate', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const firstHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		await createCompleteSet(firstHolder, securityPoolAddresses.securityPool, 4n * 10n ** 18n)
+		await createCompleteSet(secondHolder, securityPoolAddresses.securityPool, 6n * 10n ** 18n)
+
+		await mockWindow.advanceTime(30n * DAY)
+		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+		const firstHolderShares = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const redeemAmount = ensureDefined(firstHolderShares[0], 'first holder complete-set shares missing') / 2n
+		const initialCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const initialShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+		const initialFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		assert.ok(initialFeesOwed > 0n, 'test setup should accrue open-interest fees before redemption')
+
+		const balanceBeforeRedeem = await getETHBalance(client, firstHolder.account.address)
+		await redeemCompleteSet(firstHolder, securityPoolAddresses.securityPool, redeemAmount)
+
+		const collateralAfterRedeem = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const feesAfterRedeem = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - balanceBeforeRedeem
+		const feeDelta = feesAfterRedeem - initialFeesOwed
+		const firstHolderSharesAfterRedeem = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const shareSupplyAfterRedeem = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+
+		assert.ok(firstHolderPayout > 0n, 'redeeming complete sets should pay ETH to the holder')
+		strictEqualTypeSafe(collateralAfterRedeem + firstHolderPayout + feeDelta, initialCollateral, 'complete-set redemption should conserve collateral after fee accrual')
+		strictEqualTypeSafe(shareSupplyAfterRedeem, initialShareSupply - redeemAmount, 'complete-set redemption should reduce share supply by the burned set amount')
+		strictEqualTypeSafe(firstHolderSharesAfterRedeem[0], firstHolderShares[0] - redeemAmount, 'redeeming should burn the holders invalid-side share')
+		strictEqualTypeSafe(firstHolderSharesAfterRedeem[1], firstHolderShares[1] - redeemAmount, 'redeeming should burn the holders yes-side share')
+		strictEqualTypeSafe(firstHolderSharesAfterRedeem[2], firstHolderShares[2] - redeemAmount, 'redeeming should burn the holders no-side share')
+		strictEqualTypeSafe(await sharesToCash(client, securityPoolAddresses.securityPool, shareSupplyAfterRedeem), collateralAfterRedeem, 'remaining complete sets should keep the fee-adjusted exchange rate')
+	})
+
 	test('can set security bonds allowance, mint complete sets and fork happily', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)

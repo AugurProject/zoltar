@@ -488,7 +488,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemCompleteSet(uint256 completeSetAmount) external isOperational {
-		// TODO, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
+		// Complete-set exits use the current collateral-per-share rate after fee
+		// accrual, preserving the exchange rate for remaining complete sets.
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
 		uint256 ethValue = sharesToCash(completeSetAmount);
