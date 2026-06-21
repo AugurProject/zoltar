@@ -60,7 +60,7 @@ function getShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
 	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
 }
 
-function getCallerScopedSalt(caller: Address, salt: Hex) {
+export function getCallerScopedSalt(caller: Address, salt: Hex) {
 	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [caller, salt]))
 }
 

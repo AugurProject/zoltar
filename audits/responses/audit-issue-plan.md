@@ -50,6 +50,9 @@ After reviewing this remediation PR, the following adjustments were made:
 | Expired staged operations could remain in active-operation paging. | `executeStagedOperation` now consumes expired operations and emits `staged operation expired` instead of reverting before cleanup. |
 | Coordinator comments contradicted the stale-snapshot behavior. | Updated comments to state that liquidation still permits extra target REP deposits, while allowance changes or ownership decreases make the operation stale. |
 | Response docs overstated broad coverage remediations. | Reclassified broad property/factory/module coverage recommendations as accepted follow-up work, with only the implemented targeted regressions marked as addressed. |
+| Liquidation execution could be made more defensive. | Liquidation operations are now consumed before the external `performLiquidation` call, matching checks-effects-interactions and the other staged operation paths. |
+| Staged-operation failure events were not pinned consistently. | Stale liquidation and expired staged-operation tests now assert the `ExecutedStagedOperation` failure event details. |
+| Caller-scoped salt logic was duplicated in simulator helpers. | Exported `getCallerScopedSalt` from the shared address derivation helper and reused it in simulator auction address prediction. |
 
 ## Remaining Follow-Up
 
