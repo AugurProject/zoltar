@@ -88,12 +88,10 @@ contract SecurityPool is ISecurityPool {
 	event RedeemRep(address caller, address vault, uint256 repAmount);
 
 	modifier isOperational() {
-		// TODO, system can be operational if the fork has happened after this question has finalized
-		// Once a universe forks, the parent pool must freeze all operational flows permanently.
-		// The continuation path lives in the outcome child pools, which can re-enter
-		// `SystemState.Operational` after migration / truth-auction processing completes.
-		// Post-fork claims use the dedicated migration and redemption functions instead of
-		// continuing to mutate the parent pool's accounting.
+		// Once a universe forks, the parent pool freezes operational flows permanently.
+		// Outcome child pools can re-enter `SystemState.Operational` after migration and
+		// truth-auction processing complete. Finalized claim paths intentionally avoid
+		// this modifier so late unrelated forks do not block share or REP redemption.
 		require(zoltar.getForkTime(universeId) == 0, 'zoltar forked');
 		require(systemState == SystemState.Operational, 'not operational');
 		_;
