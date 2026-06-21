@@ -1932,6 +1932,24 @@ describe('Peripherals Contract Test Suite', () => {
 			const forkReceipt = await forkCaller.waitForTransactionReceipt({ hash: forkHash })
 			strictEqualTypeSafe(forkReceipt.status, 'success', 'fork transaction should succeed with the test fee cap')
 			forkGasCost = forkReceipt.gasUsed * forkReceipt.effectiveGasPrice
+			const callerRewardLog = forkReceipt.logs
+				.map(log => {
+					try {
+						return decodeEventLog({
+							abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+							data: log.data,
+							topics: log.topics,
+						})
+					} catch (error) {
+						if (!isIgnorableLogDecodeError(error)) throw error
+						return undefined
+					}
+				})
+				.find(log => log?.eventName === 'InitiateSecurityPoolForkCallerReward')
+			assert.ok(callerRewardLog, 'fork reward should emit a caller reward event')
+			strictEqualTypeSafe(BigInt(callerRewardLog.args.securityPool), BigInt(securityPoolAddresses.securityPool), 'fork reward event should identify the security pool')
+			strictEqualTypeSafe(BigInt(callerRewardLog.args.caller), BigInt(forkCaller.account.address), 'fork reward event should identify the caller')
+			strictEqualTypeSafe(callerRewardLog.args.reward, expectedReward, 'fork reward event should report the paid amount')
 		} finally {
 			await mockWindow.setNextBlockBaseFeePerGasToZero()
 		}

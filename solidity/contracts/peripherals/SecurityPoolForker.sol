@@ -306,12 +306,13 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		if (reward == 0) return;
 		uint256 collateral = securityPool.completeSetCollateralAmount();
 		if (collateral < reward) return;
+		uint256 totalSecurityBondAllowance = securityPool.totalSecurityBondAllowance();
 
-		securityPool.setPoolFinancials(collateral - reward, securityPool.totalSecurityBondAllowance());
+		securityPool.setPoolFinancials(collateral - reward, totalSecurityBondAllowance);
 		try securityPool.transferEth(payable(caller), reward) {
 			emit InitiateSecurityPoolForkCallerReward(securityPool, caller, reward);
 		} catch {
-			securityPool.setPoolFinancials(collateral, securityPool.totalSecurityBondAllowance());
+			securityPool.setPoolFinancials(collateral, totalSecurityBondAllowance);
 		}
 	}
 
