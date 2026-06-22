@@ -7,7 +7,7 @@ import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 
 const DEFAULT_HTTP = 'https://ethereum.dark.florist'
 
-export const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, cacheTime: number = 10_000) => {
+const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, cacheTime: number = 10_000) => {
 	if (ethereum === undefined) return createPublicClient({ transport: http(DEFAULT_HTTP, { batch: { wait: 100 } }), cacheTime })
 	return createWalletClient({ transport: custom(ethereum), cacheTime, chain: mainnet }).extend(publicActions)
 }

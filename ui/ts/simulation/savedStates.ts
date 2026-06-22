@@ -5,9 +5,9 @@ const SAVED_SIMULATION_STATES_STORAGE_KEY = 'zoltar.simulation.savedStates'
 const SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY = 'zoltar.simulation.savedStates.corruptedBackup'
 const MAX_CORRUPTED_SAVED_STATE_BACKUPS = 5
 
-export const SAVED_SIMULATION_STATE_VERSION = 1 as const
+const SAVED_SIMULATION_STATE_VERSION = 1 as const
 
-export type SimulationSnapshotV1 = {
+type SimulationSnapshotV1 = {
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	queryDelayMilliseconds: number

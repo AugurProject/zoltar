@@ -2780,6 +2780,56 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(childVaultAfterRedeem.repDepositShare, 0n, 'operational child pool should allow redeemed ownership to clear')
 	})
 
+	test('child pool complete-set minting waits for settled fork accounting', async () => {
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		await approveAndDepositRep(passiveRepHolder, 2n * forkThreshold, questionId)
+		const parentAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, parentAllowance)
+		const parentMintAmount = 5n * 10n ** 18n
+		await createCompleteSet(client, securityPoolAddresses.securityPool, parentMintAmount)
+
+		await triggerExternalForkForSecurityPool(undefined, 'complete-set child mint fork source')
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should wait in migration state before accounting is settled')
+		await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /not operational/)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'partially migrated child pool should price unsettled accounting through a truth auction')
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		strictEqualTypeSafe(expectedEthToBuy > 0n, true, 'partial migration should leave ETH for the truth auction to buy')
+		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after truth-auction accounting settles')
+		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.None, 'unrelated fork should leave the child pool question unresolved')
+		strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), parentAllowance, 'child pool should inherit parent security-bond capacity before minting new sets')
+
+		const childMintAmount = 1n * 10n ** 18n
+		await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+		const childCollateralBeforeMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		const childShareSupplyBeforeMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+
+		await createCompleteSet(client, yesSecurityPool.securityPool, childMintAmount)
+
+		const childCollateralAfterMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		assert.ok(childCollateralAfterMint > childCollateralBeforeMint, 'child complete-set mint should increase collateral after fork accounting is settled')
+		assert.ok(childCollateralAfterMint <= childCollateralBeforeMint + childMintAmount, 'child complete-set mint should accrue fees before adding new collateral')
+		const updatedCollateralBeforeMint = childCollateralAfterMint - childMintAmount
+		const expectedMintedShares = updatedCollateralBeforeMint === 0n ? childMintAmount * PRICE_PRECISION : (childMintAmount * childShareSupplyBeforeMint) / updatedCollateralBeforeMint
+		strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), childShareSupplyBeforeMint + expectedMintedShares, 'child complete-set mint should add shares at the settled exchange rate')
+	})
+
 	test('can migrate escalation deposits before migrateVault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)

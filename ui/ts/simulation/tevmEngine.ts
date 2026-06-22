@@ -1,4 +1,4 @@
-import { createMemoryClient } from 'tevm'
+import { createMemoryClient, type CallParams, type DumpStateResult } from 'tevm'
 import { createCommon } from 'tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from 'viem'
 import { getAddress } from 'viem'
@@ -13,7 +13,7 @@ import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelop
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
 type MemoryClientLike = ReturnType<typeof createMemoryClient>
-type DumpedTevmState = Awaited<ReturnType<MemoryClientLike['tevmDumpState']>>['state']
+type DumpedTevmState = DumpStateResult['state']
 type DumpedTevmAccountState = DumpedTevmState[string]
 type TemporarySimulationAccountCopy = {
 	address: Address
@@ -23,7 +23,7 @@ type RequestArguments = {
 	method: string
 	params?: unknown
 }
-type TevmTransactionRequest = Parameters<MemoryClientLike['tevmCall']>[0]
+type TevmTransactionRequest = CallParams
 type TevmBlock = Awaited<ReturnType<MemoryClientLike['getBlock']>>
 type SerializedTransaction = Parameters<typeof recoverTransactionAddress>[0]['serializedTransaction']
 type SimulationSendTransactionRequest = {
@@ -37,8 +37,14 @@ type SimulationSendTransactionRequest = {
 	to?: Address | null | undefined
 	value?: bigint | undefined
 }
+type TevmErrorLike = {
+	message: string
+}
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
+function formatTevmErrors(errors: readonly TevmErrorLike[]) {
+	return errors.map(error => error.message).join(', ')
+}
 function normalizeRpcBigInt(value: unknown) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number') return BigInt(value)
@@ -107,7 +113,7 @@ function createTevmTransactionRequest({
 	nonce?: bigint | undefined
 	to?: Address | null | undefined
 	value?: bigint | undefined
-}) {
+}): TevmTransactionRequest {
 	return {
 		addToMempool: true,
 		data,
@@ -119,7 +125,7 @@ function createTevmTransactionRequest({
 		...(nonce === undefined ? {} : { nonce }),
 		...(to === undefined || to === null ? {} : { to }),
 		...(value === undefined ? {} : { value }),
-	} as TevmTransactionRequest
+	}
 }
 function clampDelayMilliseconds(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return 0
@@ -235,13 +241,13 @@ function getSimulationSource(initialization: SimulationInitialization): Simulati
 async function requireSuccessfulLoadState(memoryClient: MemoryClientLike, state: DumpedTevmState) {
 	const result = await memoryClient.tevmLoadState({ state })
 	if (result.errors === undefined || result.errors.length === 0) return
-	throw new Error(result.errors.map(error => error.message).join(', '))
+	throw new Error(formatTevmErrors(result.errors))
 }
 
 async function requireSuccessfulDumpState(memoryClient: MemoryClientLike): Promise<DumpedTevmState> {
 	const result = await memoryClient.tevmDumpState()
 	if (result.errors === undefined || result.errors.length === 0) return result.state
-	throw new Error(result.errors.map(error => error.message).join(', '))
+	throw new Error(formatTevmErrors(result.errors))
 }
 
 function getDumpedAccountState(state: DumpedTevmState, address: Address) {
@@ -270,7 +276,7 @@ async function applyDumpedAccountState(memoryClient: MemoryClientLike, address: 
 		...(accountState.storage === undefined ? {} : { state: normalizeDumpedStorage(accountState.storage) }),
 	})
 	if (setAccountResult.errors !== undefined && setAccountResult.errors.length > 0) {
-		throw new Error(setAccountResult.errors.map(error => error.message).join(', '))
+		throw new Error(formatTevmErrors(setAccountResult.errors))
 	}
 }
 
