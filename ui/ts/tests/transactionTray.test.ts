@@ -73,6 +73,27 @@ describe('transactionTray', () => {
 		expect(submitted.active?.rows?.some(row => row.label === 'Contract' && row.value === '0x00000000000000000000000000000000000000b2')).toBe(true)
 	})
 
+	test('uses non-wallet prepared copy for raw broadcasts', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'deploy',
+			source: 'deployment',
+			submittedDetail: 'Deployment transaction submitted.',
+			submittedTitle: 'Deploying Contract',
+		})
+		const prepared = markTransactionPrepared(requested, {
+			account: undefined,
+			args: undefined,
+			chainName: 'Ethereum',
+			data: '0x1234',
+			functionName: 'Broadcast deterministic proxy deployer transaction',
+			requiresWalletConfirmation: false,
+			value: undefined,
+		})
+
+		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
+		expect(prepared.active?.rows?.some(row => row.label === 'Calldata' && row.value === '0x1234')).toBe(true)
+	})
+
 	test('turns a requested transaction into a dismissible failure when submission fails', () => {
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
 			action: 'createMarket',

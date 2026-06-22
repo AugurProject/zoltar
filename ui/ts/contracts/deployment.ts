@@ -24,6 +24,19 @@ const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 
+function markDeploymentTransactionPrepared(client: WriteClient, { data, functionName, requiresWalletConfirmation, to, value }: { data?: Hex; functionName: string; requiresWalletConfirmation?: boolean; to?: Address; value?: bigint }) {
+	client.onTransactionPrepared?.({
+		account: client.account,
+		args: undefined,
+		chainName: client.chain?.name,
+		data,
+		functionName,
+		requiresWalletConfirmation,
+		to,
+		value,
+	})
+}
+
 function getDeploymentStatusOracleStepAddresses() {
 	const addresses = getInfraContractAddresses()
 	return [
@@ -81,6 +94,11 @@ const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddress
 })
 
 async function deployViaProxy(client: WriteClient, bytecode: Hex) {
+	markDeploymentTransactionPrepared(client, {
+		data: bytecode,
+		functionName: 'Deploy contract through deterministic proxy',
+		to: PROXY_DEPLOYER_ADDRESS,
+	})
 	const hash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_ADDRESS,
 		data: bytecode,
@@ -100,12 +118,22 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 		return ZERO_HASH
 	}
 
+	markDeploymentTransactionPrepared(client, {
+		functionName: 'Fund deterministic proxy deployer signer',
+		to: PROXY_DEPLOYER_SIGNER,
+		value: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT,
+	})
 	const fundHash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_SIGNER,
 		value: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT,
 	})
 	await client.waitForTransactionReceipt({ hash: fundHash })
 
+	markDeploymentTransactionPrepared(client, {
+		data: PROXY_DEPLOYER_RAW_TRANSACTION,
+		functionName: 'Broadcast deterministic proxy deployer transaction',
+		requiresWalletConfirmation: false,
+	})
 	const deployHash = await client.sendRawTransaction({
 		serializedTransaction: PROXY_DEPLOYER_RAW_TRANSACTION,
 	})

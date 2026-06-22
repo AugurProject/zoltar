@@ -61,6 +61,7 @@ type LoadedOracleReportResult = {
 
 type RefreshOpenOracleInitialReportOptions = {
 	preserveExisting?: boolean
+	replacePriceInput?: string | undefined
 }
 
 type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
@@ -294,7 +295,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		}
 	}
 
-	const refreshOpenOracleInitialReportQuote = async (details: OpenOracleReportDetails | undefined, { preserveExisting = false }: RefreshOpenOracleInitialReportOptions = {}) => {
+	const refreshOpenOracleInitialReportQuote = async (details: OpenOracleReportDetails | undefined, { preserveExisting = false, replacePriceInput }: RefreshOpenOracleInitialReportOptions = {}) => {
 		const currentDetails = details
 		const isCurrent = nextOpenOracleInitialReportPriceLoad()
 		if (currentDetails === undefined) {
@@ -330,11 +331,12 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				openOracleInitialReportQuoteFailureKind.value = priceFailure?.failureKind
 				openOracleInitialReportQuoteFailureReason.value = priceFailure?.reason
 
-				if (openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString())
+				const shouldUpdateFormQuote = openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString() || (replacePriceInput !== undefined && openOracleForm.value.price.trim() === replacePriceInput)
+				if (shouldUpdateFormQuote)
 					openOracleForm.value = {
 						...openOracleForm.value,
 						amount1: currentDetails.exactToken1Report.toString(),
-						amount2: initialPrice?.token2Amount?.toString() ?? openOracleForm.value.amount2,
+						amount2: initialPrice?.token2Amount?.toString() ?? '0',
 						price: initialPrice === undefined ? '' : formatOpenOraclePriceInput(initialPrice.price),
 					}
 			},
@@ -664,7 +666,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				}
 
 				if (isUsingAutoInitialReportQuote() && isOpenOracleInitialReportQuoteStale()) {
-					await refreshOpenOracleInitialReportQuote(reportDetails, { preserveExisting: true })
+					const staleAutoPriceInput = openOracleInitialReportDefaultPrice.value
+					await refreshOpenOracleInitialReportQuote(reportDetails, { preserveExisting: true, replacePriceInput: staleAutoPriceInput })
 				}
 				await refreshOpenOracleInitialReportTokenAccess(reportDetails, { preserveExisting: true })
 				const submission = getInitialReportSubmission(reportDetails)

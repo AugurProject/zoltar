@@ -82,6 +82,36 @@ describe('TokenApprovalControl', () => {
 		expect(approveButton.title).toBe('Connect a wallet before approving.')
 	})
 
+	test('does not duplicate allowance errors as both disabled reason and error notice', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='submitting the initial report'
+				allowanceError='Unable to read current WETH allowance.'
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving WETH...'
+				requiredAmount={10n * 10n ** 18n}
+				resetKey='weth-approval-error'
+				safetyId='open-oracle.approveToken1'
+				tokenSymbol='WETH'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const approveButton = documentQueries.getByRole('button', { name: 'Approve 10 WETH' }) as HTMLButtonElement
+		const expectedMessage = 'Unable to verify WETH approval before submitting the initial report. Reason: Unable to read current WETH allowance. Retry loading the approval status before continuing.'
+
+		expect(approveButton.disabled).toBe(true)
+		expect(approveButton.title).toBe(expectedMessage)
+		expect(document.body.querySelector('.disabled-reason')).toBeNull()
+		expect(documentQueries.getByText(expectedMessage)).toBeDefined()
+	})
+
 	test('shows loading state while approval is pending', async () => {
 		let approveCalls = 0
 		const renderedComponent = await renderIntoDocument(

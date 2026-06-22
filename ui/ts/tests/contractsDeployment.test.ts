@@ -7,7 +7,7 @@ import type { ReadClient, WriteClient } from '../types/contracts.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 
 type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
-type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'patchSimulationGenesisRepToken'>>
+type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'patchSimulationGenesisRepToken'>>
 
 function asWriteClient(client: MockWriteClient): WriteClient {
 	return client as unknown as WriteClient
@@ -75,9 +75,15 @@ describe('contract deployment internals', () => {
 
 		let capturedProxyDeployData: `0x${string}` | undefined
 		let capturedFactoryData: `0x${string}` | undefined
+		const preparedFunctions: string[] = []
 		const txHash = `0x${'7'.repeat(64)}` as Hash
 		const client = asWriteClient({
 			getCode: async () => '0x1234',
+			onTransactionPrepared: preview => {
+				preparedFunctions.push(preview.functionName)
+				expect(preview.data).toBeDefined()
+				expect(preview.to).toBeDefined()
+			},
 			sendTransaction: async request => {
 				if (capturedProxyDeployData === undefined) {
 					capturedProxyDeployData = request.data
@@ -96,6 +102,7 @@ describe('contract deployment internals', () => {
 		expect(capturedFactoryData).toBeDefined()
 		expect(oracleHash).toBe(txHash)
 		expect(factoryHash).toBe(txHash)
+		expect(preparedFunctions).toEqual(['Deploy contract through deterministic proxy', 'Deploy contract through deterministic proxy'])
 	})
 
 	test('proxy deployer step returns zero hash when signer-based deploy is already installed', async () => {
@@ -159,11 +166,15 @@ describe('contract deployment internals', () => {
 		const proxyStep = steps.find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
 		const seen: string[] = []
+		const preparedFunctions: string[] = []
 		const fundHash = `0x${'c'.repeat(64)}` as Hash
 		const deployHash = `0x${'d'.repeat(64)}` as Hash
 
 		const client = asWriteClient({
 			getCode: async () => undefined,
+			onTransactionPrepared: preview => {
+				preparedFunctions.push(preview.functionName)
+			},
 			sendTransaction: async request => {
 				seen.push(request.to ?? 'none')
 				return request.value === undefined ? deployHash : fundHash
@@ -180,6 +191,7 @@ describe('contract deployment internals', () => {
 		expect(hash).toBe(deployHash)
 		expect(seen[0]).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
 		expect(seen[1]).toBe('0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222')
+		expect(preparedFunctions).toEqual(['Fund deterministic proxy deployer signer', 'Broadcast deterministic proxy deployer transaction'])
 	})
 
 	test('zoltar deployment step patches the Genesis REP token in simulation mode', async () => {

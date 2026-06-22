@@ -76,15 +76,23 @@ function formatPreviewArgument(value: unknown): string {
 	return String(value)
 }
 
+function formatPreviewData(data: string) {
+	const byteLength = Math.max(0, (data.length - 2) / 2)
+	if (data.length <= 74) return data
+	return `${data.slice(0, 66)}... (${byteLength.toString()} bytes)`
+}
+
 function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
 	const senderAddress = getPreviewAccountAddress(preview.account)
 	return [
 		...(intent.rows ?? []),
 		...(senderAddress === undefined ? [] : [{ label: 'Sender', value: senderAddress }]),
 		...(preview.chainName === undefined ? [] : [{ label: 'Chain', value: preview.chainName }]),
-		{ label: 'Contract', value: preview.contractAddress },
+		...(preview.contractAddress === undefined ? [] : [{ label: 'Contract', value: preview.contractAddress }]),
+		...(preview.to === undefined ? [] : [{ label: 'To', value: preview.to }]),
 		{ label: 'Function', value: preview.functionName },
 		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: 'ETH Value', value: `${formatCurrencyBalance(preview.value)} ETH` }]),
+		...(preview.data === undefined ? [] : [{ label: 'Calldata', value: formatPreviewData(preview.data) }]),
 		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: 'Arguments', value: preview.args.map(formatPreviewArgument).join(', ') }]),
 	]
 }
@@ -119,7 +127,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 
 export function createPreparedWalletPresentation(intent: TransactionIntent, preview: TransactionRequestPreview, dismissKey: string): GlobalTransactionPresentation {
 	return buildHashlessPresentation({
-		detail: 'Review the prepared transaction, then confirm it in your wallet.',
+		detail: preview.requiresWalletConfirmation === false ? 'Review the prepared transaction before it is submitted.' : 'Review the prepared transaction, then confirm it in your wallet.',
 		dismissKey,
 		rows: getPreparedTransactionRows(intent, preview),
 		title: intent.submittedTitle,

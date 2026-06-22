@@ -225,6 +225,22 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText('Parent Universe')).toBeNull()
 	})
 
+	test('labels provider-mode reads as the wallet provider instead of the fallback RPC host', async () => {
+		const documentQueries = await renderOverviewPanels({
+			readBackendStatus: {
+				blockNumber: 100n,
+				blockTimestamp: undefined,
+				rpcSource: 'default',
+				rpcUrl: 'https://ethereum.dark.florist',
+				transportMode: 'provider',
+			},
+		})
+
+		const readSource = documentQueries.getByText('provider: wallet provider @ 100')
+		expect(readSource.getAttribute('title')).toBe('Reads are using the connected wallet provider. Configured fallback RPC: https://ethereum.dark.florist')
+		expect(document.body.textContent?.includes('ethereum.dark.florist')).toBe(false)
+	})
+
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
 		setClientWidthResolver(element => {
 			if (!element.classList.contains('currency-value')) return 0

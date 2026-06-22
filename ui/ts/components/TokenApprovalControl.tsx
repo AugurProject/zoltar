@@ -135,7 +135,16 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			</label>
 
 			<div className='actions'>
-				<TransactionActionButton safetyId={safetyId} idleLabel={buttonLabel} pendingLabel={pendingLabel} onClick={() => onApprove(nextApprovalAmount)} pending={pending} tone='secondary' availability={{ disabled: !canApprove, reason: visibleStatusMessage ?? allowanceMessage ?? guardMessage }} />
+				<TransactionActionButton
+					safetyId={safetyId}
+					idleLabel={buttonLabel}
+					pendingLabel={pendingLabel}
+					onClick={() => onApprove(nextApprovalAmount)}
+					pending={pending}
+					tone='secondary'
+					availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
+					showDisabledReason={allowanceMessage === undefined}
+				/>
 			</div>
 
 			{allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}

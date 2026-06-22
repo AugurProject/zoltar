@@ -46,7 +46,9 @@ export function OverviewPanels({
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
+	const isProviderReadBackend = effectiveReadBackendStatus.transportMode === 'provider'
 	const readBackendHost = (() => {
+		if (isProviderReadBackend) return 'wallet provider'
 		if (effectiveReadBackendStatus.rpcUrl === 'browser-simulation') return 'browser simulation'
 		try {
 			return new URL(effectiveReadBackendStatus.rpcUrl).host
@@ -55,7 +57,8 @@ export function OverviewPanels({
 			return effectiveReadBackendStatus.rpcUrl
 		}
 	})()
-	const readBackendLabel = `${effectiveReadBackendStatus.transportMode} / ${effectiveReadBackendStatus.rpcSource}`
+	const readBackendLabel = isProviderReadBackend ? 'provider' : `${effectiveReadBackendStatus.transportMode} / ${effectiveReadBackendStatus.rpcSource}`
+	const readBackendTitle = isProviderReadBackend ? `Reads are using the connected wallet provider. Configured fallback RPC: ${effectiveReadBackendStatus.rpcUrl}` : effectiveReadBackendStatus.rpcUrl
 	const operationsHeaderDescription = (() => {
 		if (!universeHasForked) return undefined
 		if (universeForkTime === undefined) return 'Zoltar has forked.'
@@ -126,7 +129,7 @@ export function OverviewPanels({
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>
 					<MetricField label='Read RPC'>
-						<span title={effectiveReadBackendStatus.rpcUrl}>
+						<span title={readBackendTitle}>
 							{readBackendLabel}: {readBackendHost}
 							{effectiveReadBackendStatus.blockNumber === undefined ? '' : ` @ ${effectiveReadBackendStatus.blockNumber.toString()}`}
 						</span>

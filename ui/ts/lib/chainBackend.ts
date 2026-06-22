@@ -22,8 +22,11 @@ export type TransactionRequestPreview = {
 	account: Account | Address | undefined
 	args: readonly unknown[] | undefined
 	chainName: string | undefined
-	contractAddress: Address
+	contractAddress?: Address | undefined
+	data?: Hex | undefined
 	functionName: string
+	requiresWalletConfirmation?: boolean | undefined
+	to?: Address | undefined
 	value: bigint | undefined
 }
 
