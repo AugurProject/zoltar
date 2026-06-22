@@ -135,7 +135,9 @@ describe('security regression coverage', () => {
 		await approveAndDepositRep(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
-		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n)
+		for (let index = 0; index < 4; index++) {
+			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidator.account.address, BigInt(index + 1))
+		}
 		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetAllowance)
 		const liquidationOperationId = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,

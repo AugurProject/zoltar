@@ -32,6 +32,7 @@ struct StagedOperation {
 }
 
 contract SecurityPoolOracleCoordinator {
+	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
 	uint256 public pendingReportId;
 	uint256 public pendingOperationSlotId;
 	uint256 public lastSettlementTimestamp;
@@ -73,9 +74,9 @@ contract SecurityPoolOracleCoordinator {
 	);
 	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
-	// This is not a FIFO queue. We keep an append-only operation record and a single
-	// pending slot that settlement can auto-execute once a fresh oracle price arrives.
-	// Active-operation paging is newest-first so UI previews remain stable after manual
+	// This is not a FIFO queue. We keep append-only operation records plus a bounded
+	// pending settlement list that auto-executes once a fresh oracle price arrives.
+	// Active-operation paging is newest-first so UI previews remain stable after
 	// execution removes older entries from the set.
 	uint256 public stagedOperationCounter;
 	mapping(uint256 => StagedOperation) public stagedOperations;
@@ -84,6 +85,7 @@ contract SecurityPoolOracleCoordinator {
 	mapping(uint256 => uint256) private olderActiveStagedOperationIds;
 	mapping(uint256 => uint256) private newerActiveStagedOperationIds;
 	mapping(uint256 => bool) private isActiveStagedOperation;
+	uint256[] private pendingSettlementOperationIds;
 
 	constructor(
 		OpenOracle _openOracle,
@@ -140,9 +142,17 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {
-		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice) + 101;
+		uint256 ethCost =
+			block.basefee * 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice) + 101;
 		return ethCost;
 	}
+
+	function getSettlementCallbackGasLimit() public view returns (uint32) {
+		uint256 callbackGasLimit = uint256(gasConsumedSettlement) * MAX_PENDING_SETTLEMENT_OPERATIONS;
+		require(callbackGasLimit <= type(uint32).max, 'settlement gas too high');
+		return uint32(callbackGasLimit);
+	}
+
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
 		uint256 ethCost = getRequestPriceEthCost();
@@ -163,7 +173,7 @@ contract SecurityPoolOracleCoordinator {
 			disputeDelay: disputeDelay,
 			protocolFee: protocolFee,
 			token2Address: address(weth), // address of token2 in the oracle report instance
-			callbackGasLimit: gasConsumedSettlement, // gas the settlement callback must use
+			callbackGasLimit: getSettlementCallbackGasLimit(), // gas the settlement callback must use
 			feePercentage: feePercentage,
 			multiplier: multiplier,
 			timeType: timeType,
@@ -234,19 +244,15 @@ contract SecurityPoolOracleCoordinator {
 			price /
 			ORACLE_BUDGET_BPS;
 		emit PriceReported(reportId, lastPrice);
-		if (pendingOperationSlotId != 0) {
-			// TODO we maybe should allow executing couple operations?
-			uint256 operationId = pendingOperationSlotId;
+		if (pendingSettlementOperationIds.length != 0) {
+			uint256[] memory operationIds = pendingSettlementOperationIds;
+			delete pendingSettlementOperationIds;
 			pendingOperationSlotId = 0;
-			StagedOperation memory stagedOperation = stagedOperations[operationId];
-			if (stagedOperation.initiatorVault == address(0)) return;
-			if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
-				_consumeActiveStagedOperation(operationId);
-				stagedOperations[operationId].initiatorVault = address(0);
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'staged operation expired');
-				return;
+			for (uint256 index = 0; index < operationIds.length; index++) {
+				if (stagedOperations[operationIds[index]].initiatorVault != address(0)) {
+					executeStagedOperation(operationIds[index]);
+				}
 			}
-			executeStagedOperation(operationId);
 		}
 	}
 
@@ -312,25 +318,24 @@ contract SecurityPoolOracleCoordinator {
 			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
 			executeStagedOperation(operationId);
 			// no cost when price is valid
-		} else if (pendingReportId == 0 && pendingOperationSlotId == 0) {
-			pendingOperationSlotId = operationId;
-			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, true);
-			uint256 ethCost = getRequestPriceEthCost();
-			require(msg.value >= ethCost, 'not enough eth to request price');
-			retained += ethCost;
-			// Forward exactly ethCost to requestPrice to create the report
-			this.requestPrice{ value: ethCost }();
-		} else if (pendingReportId == 0) {
-			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
-		} else if (pendingOperationSlotId == 0) {
-			pendingOperationSlotId = operationId;
-			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, true);
 		} else {
-			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
-			// This is intentional: only one staged operation is marked as the auto-execute
-			// pending slot for the next fresh oracle report. Additional operations are still
-			// recorded and can be executed manually via executeStagedOperation once the price
-			// becomes valid again.
+			bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds.length == 0;
+			bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
+			emit StagedOperationQueued(
+				operationId,
+				operation,
+				msg.sender,
+				targetVault,
+				amount,
+				isPendingSettlementOperationId
+			);
+			if (shouldRequestPrice && isPendingSettlementOperationId) {
+				uint256 ethCost = getRequestPriceEthCost();
+				require(msg.value >= ethCost, 'not enough eth to request price');
+				retained += ethCost;
+				// Forward exactly ethCost to requestPrice to create the report
+				this.requestPrice{ value: ethCost }();
+			}
 		}
 
 		// Refund the excess of msg.value that was not retained
@@ -494,6 +499,7 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function _consumeStagedOperation(uint256 operationId) private {
+		_consumePendingSettlementOperation(operationId);
 		_consumeActiveStagedOperation(operationId);
 		stagedOperations[operationId].initiatorVault = address(0);
 	}
@@ -504,6 +510,14 @@ contract SecurityPoolOracleCoordinator {
 
 	function getActiveStagedOperationCount() public view returns (uint256) {
 		return activeStagedOperationCount;
+	}
+
+	function getPendingSettlementOperationCount() public view returns (uint256) {
+		return pendingSettlementOperationIds.length;
+	}
+
+	function getPendingSettlementOperationIds() public view returns (uint256[] memory) {
+		return pendingSettlementOperationIds;
 	}
 
 	function getActiveStagedOperations(
@@ -537,6 +551,28 @@ contract SecurityPoolOracleCoordinator {
 			newerActiveStagedOperationIds[latestActiveStagedOperationId] = operationId;
 		}
 		latestActiveStagedOperationId = operationId;
+	}
+
+	function _trackPendingSettlementOperation(uint256 operationId) private returns (bool) {
+		if (pendingSettlementOperationIds.length >= MAX_PENDING_SETTLEMENT_OPERATIONS) return false;
+		pendingSettlementOperationIds.push(operationId);
+		if (pendingOperationSlotId == 0) {
+			pendingOperationSlotId = operationId;
+		}
+		return true;
+	}
+
+	function _consumePendingSettlementOperation(uint256 operationId) private {
+		uint256 operationCount = pendingSettlementOperationIds.length;
+		for (uint256 index = 0; index < operationCount; index++) {
+			if (pendingSettlementOperationIds[index] != operationId) continue;
+			for (uint256 shiftIndex = index + 1; shiftIndex < operationCount; shiftIndex++) {
+				pendingSettlementOperationIds[shiftIndex - 1] = pendingSettlementOperationIds[shiftIndex];
+			}
+			pendingSettlementOperationIds.pop();
+			pendingOperationSlotId = pendingSettlementOperationIds.length == 0 ? 0 : pendingSettlementOperationIds[0];
+			return;
+		}
 	}
 
 	function _consumeActiveStagedOperation(uint256 operationId) private {

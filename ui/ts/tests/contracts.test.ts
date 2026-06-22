@@ -550,7 +550,7 @@ describe('contracts helpers', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) !== 'lastPrice') throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-				return [1n, pendingOperationSlotId, 0n, 5n, true, 10n, 40n, 1n, 3000n, 0n, 3000n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 0n, 5n, true, 10n, 40n, 1n, 3000n, 0n, 3000n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'getActiveStagedOperations') {
@@ -599,6 +599,7 @@ describe('contracts helpers', () => {
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
+		expect(details.pendingSettlementOperationIds).toEqual([pendingOperationSlotId, 13n])
 		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
 		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
 		expect(details.stagedOperations).toHaveLength(26)

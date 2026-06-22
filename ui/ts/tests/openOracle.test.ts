@@ -986,7 +986,7 @@ describe('Open Oracle helpers', () => {
 		expect(details.pendingOperation?.targetVault).toBe(client.account.address)
 	})
 
-	test('queueOracleManagerOperation returns queued operation metadata for the pending slot', async () => {
+	test('queueOracleManagerOperation returns queued operation metadata for the pending settlement list', async () => {
 		const result = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(result.queuedOperation).toBeDefined()
@@ -996,7 +996,7 @@ describe('Open Oracle helpers', () => {
 		expect(result.stagedExecution).toBeUndefined()
 	})
 
-	test('queueOracleManagerOperation preserves incremental ids when another pending slot already exists for a liquidation target vault', async () => {
+	test('queueOracleManagerOperation preserves incremental ids when adding to the pending settlement list', async () => {
 		const firstResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		const secondResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'liquidation', addressString(TEST_ADDRESSES[1]), 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
@@ -1007,7 +1007,7 @@ describe('Open Oracle helpers', () => {
 
 		expect(firstResult.queuedOperation?.isPendingSlot).toBe(true)
 		expect(secondResult.queuedOperation).toBeDefined()
-		expect(secondResult.queuedOperation?.isPendingSlot).toBe(false)
+		expect(secondResult.queuedOperation?.isPendingSlot).toBe(true)
 		expect(secondResult.queuedOperation?.operationId).toBeGreaterThan(firstOperationId)
 		expect(details.activeStagedOperationCount).toBe(2n)
 		expect(details.pendingOperationSlotId).toBe(firstOperationId)
