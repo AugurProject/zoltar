@@ -47,6 +47,7 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		openOracleAddress: zeroAddress,
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
+		pendingSettlementOperationIds: [],
 		pendingReportId: 0n,
 		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,

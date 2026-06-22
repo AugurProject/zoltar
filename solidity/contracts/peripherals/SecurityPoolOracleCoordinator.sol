@@ -84,7 +84,6 @@ contract SecurityPoolOracleCoordinator {
 	mapping(uint256 => uint256) private newerActiveStagedOperationIds;
 	mapping(uint256 => bool) private isActiveStagedOperation;
 	uint256[] private pendingSettlementOperationIds;
-	mapping(uint256 => bool) private isPendingSettlementOperation;
 
 	constructor(
 		OpenOracle _openOracle,
@@ -141,9 +140,17 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {
-		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice) + 101;
+		uint256 ethCost =
+			block.basefee * 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice) + 101;
 		return ethCost;
 	}
+
+	function getSettlementCallbackGasLimit() public view returns (uint32) {
+		uint256 callbackGasLimit = uint256(gasConsumedSettlement) * MAX_PENDING_SETTLEMENT_OPERATIONS;
+		require(callbackGasLimit <= type(uint32).max, 'settlement gas too high');
+		return uint32(callbackGasLimit);
+	}
+
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
 		uint256 ethCost = getRequestPriceEthCost();
@@ -164,7 +171,7 @@ contract SecurityPoolOracleCoordinator {
 			disputeDelay: disputeDelay,
 			protocolFee: protocolFee,
 			token2Address: address(weth), // address of token2 in the oracle report instance
-			callbackGasLimit: gasConsumedSettlement, // gas the settlement callback must use
+			callbackGasLimit: getSettlementCallbackGasLimit(), // gas the settlement callback must use
 			feePercentage: feePercentage,
 			multiplier: multiplier,
 			timeType: timeType,
@@ -216,9 +223,6 @@ contract SecurityPoolOracleCoordinator {
 		emit PriceReported(reportId, lastPrice);
 		if (pendingSettlementOperationIds.length != 0) {
 			uint256[] memory operationIds = pendingSettlementOperationIds;
-			for (uint256 index = 0; index < operationIds.length; index++) {
-				delete isPendingSettlementOperation[operationIds[index]];
-			}
 			delete pendingSettlementOperationIds;
 			pendingOperationSlotId = 0;
 			for (uint256 index = 0; index < operationIds.length; index++) {
@@ -527,9 +531,7 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function _trackPendingSettlementOperation(uint256 operationId) private returns (bool) {
-		if (isPendingSettlementOperation[operationId]) return true;
 		if (pendingSettlementOperationIds.length >= MAX_PENDING_SETTLEMENT_OPERATIONS) return false;
-		isPendingSettlementOperation[operationId] = true;
 		pendingSettlementOperationIds.push(operationId);
 		if (pendingOperationSlotId == 0) {
 			pendingOperationSlotId = operationId;
@@ -538,8 +540,6 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function _consumePendingSettlementOperation(uint256 operationId) private {
-		if (!isPendingSettlementOperation[operationId]) return;
-		delete isPendingSettlementOperation[operationId];
 		uint256 operationCount = pendingSettlementOperationIds.length;
 		for (uint256 index = 0; index < operationCount; index++) {
 			if (pendingSettlementOperationIds[index] != operationId) continue;
@@ -547,9 +547,9 @@ contract SecurityPoolOracleCoordinator {
 				pendingSettlementOperationIds[shiftIndex - 1] = pendingSettlementOperationIds[shiftIndex];
 			}
 			pendingSettlementOperationIds.pop();
-			break;
+			pendingOperationSlotId = pendingSettlementOperationIds.length == 0 ? 0 : pendingSettlementOperationIds[0];
+			return;
 		}
-		pendingOperationSlotId = pendingSettlementOperationIds.length == 0 ? 0 : pendingSettlementOperationIds[0];
 	}
 
 	function _consumeActiveStagedOperation(uint256 operationId) private {

@@ -37,6 +37,22 @@ const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'ExecutedStagedOperation')
 
+const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'SettlementCallbackExecuted')
+
 type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
@@ -149,6 +165,34 @@ describe('Price Oracle Refund Security Tests', () => {
 		for (let index = 0; index < 4; index++) {
 			await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? ethCost : 0n)
 		}
+	}
+
+	const settlePendingReportWithPrice = async (forceRepEthPriceTo: bigint) => {
+		const pendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.ok(pendingReportId > 0n, 'Operation is not queued')
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		const amount1 = reportMeta.exactToken1Report
+		const amount2 = (amount1 * 10n ** 18n) / forceRepEthPriceTo
+		const openOracle = getInfraContractAddresses().openOracle
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await approveToken(client, WETH_ADDRESS, openOracle)
+		const ethBalance = await getETHBalance(client, client.account.address)
+		if (ethBalance <= amount2) await mockWindow.setBalance(client.account.address, amount2 + 10n ** 18n)
+		const wethBalanceBefore = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		await wrapWeth(client, amount2)
+		const wethBalance = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		assert.strictEqual(wethBalance - wethBalanceBefore, amount2, 'Did not wrap correct amount of weth')
+		const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
+		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		const settleHash = await openOracleSettle(client, pendingReportId)
+		const settleReceipt = await client.waitForTransactionReceipt({ hash: settleHash })
+		return { pendingReportId, settleReceipt }
 	}
 
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
@@ -638,6 +682,13 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'pendingOperationSlotId',
 			args: [],
 		})
+		const pendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		const pendingReportExtraData = await getOpenOracleExtraData(client, pendingReportId)
 		const pendingSettlementOperationCount = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
@@ -663,6 +714,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [0n, 5n],
 		})
 		assert.strictEqual(pendingOperationSlotId, 1n, 'first queued self operation should remain the compatibility pending slot')
+		assert.strictEqual(pendingReportExtraData.callbackGasLimit, ORACLE_SETTLEMENT_GAS * 4, 'oracle report callback gas should cover the full pending settlement list')
 		assert.strictEqual(pendingSettlementOperationCount, 4n, 'pending settlement operation count should cap the auto-execute list')
 		assert.deepStrictEqual(Array.from(pendingSettlementOperationIds), [1n, 2n, 3n, 4n], 'pending settlement operations should stay in queue order')
 		assert.strictEqual(activeStagedOperationCount, 5n, 'active staged operation count should track pending and manual operations')
@@ -673,7 +725,10 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(activeOperations[3]?.amount, secondAllowance, 'older pending operation should retain its amount')
 		assert.strictEqual(activeOperations[4]?.amount, firstAllowance, 'oldest pending operation should retain its amount')
 
-		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
+		const callbackLog = findSettlementCallbackExecutedLog(settleReceipt.logs)
+		if (callbackLog === undefined) throw new Error('missing settlement callback execution event')
+		assert.strictEqual(callbackLog.args.success, true, 'bounded pending operation settlement callback should succeed')
 		const pendingOperationSlotIdAfterSettlement = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,

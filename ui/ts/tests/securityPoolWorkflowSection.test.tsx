@@ -150,6 +150,7 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		openOracleAddress: zeroAddress,
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
+		pendingSettlementOperationIds: [],
 		pendingReportId: 0n,
 		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
@@ -2199,6 +2200,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
+						pendingSettlementOperationIds: [],
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
@@ -2245,6 +2247,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							targetVault: zeroAddress,
 						},
 						pendingOperationSlotId: 7n,
+						pendingSettlementOperationIds: [7n],
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
@@ -2262,6 +2265,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
+		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
@@ -2319,6 +2323,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							targetVault: zeroAddress,
 						},
 						pendingOperationSlotId: 7n,
+						pendingSettlementOperationIds: [7n],
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
@@ -2356,6 +2361,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
+						pendingSettlementOperationIds: [],
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
