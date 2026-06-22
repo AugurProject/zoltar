@@ -171,6 +171,20 @@ const prepareEscalationFork = async (context: PoolContext) => {
 	return { forkThreshold }
 }
 
+const prepareExternalZoltarFork = async (context: PoolContext, titlePrefix: string) => {
+	const now = await anvil.getTime()
+	const forkQuestionData = {
+		...context.questionData,
+		title: `${titlePrefix} ${now}`,
+		endTime: now + DAY,
+	}
+	const forkQuestionId = getQuestionId(forkQuestionData, questionOutcomes)
+	await confirmTx(alice, createQuestion(alice, forkQuestionData, [...questionOutcomes]))
+	await anvil.setTime(forkQuestionData.endTime + 1n)
+	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
+	await confirmTx(alice, forkUniverse(alice, genesisUniverse, forkQuestionId))
+}
+
 const prepareYesChildForAuction = async () => {
 	const context = await setupPool('Gas auction question')
 	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
@@ -181,7 +195,6 @@ const prepareYesChildForAuction = async () => {
 	await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 	await prepareEscalationFork(context)
 	await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
-	await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 	await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
 	await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
 	await confirmTx(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
@@ -543,8 +556,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas initiate security pool fork')
 			await confirmApproveAndDepositRep(alice, context)
-			await prepareEscalationFork(context)
-			await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
+			await prepareExternalZoltarFork(context, 'Gas initiate security pool fork source')
 			return await waitForGas(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 		},
 	},
@@ -554,8 +566,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas migrate vault')
 			await confirmApproveAndDepositRep(alice, context)
-			await prepareEscalationFork(context)
-			await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
+			await prepareExternalZoltarFork(context, 'Gas migrate vault fork source')
 			await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
 			return await waitForGas(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
@@ -569,7 +580,6 @@ const scenarios: Scenario[] = [
 			await confirmApproveAndDepositRep(alice, context)
 			await prepareEscalationFork(context)
 			await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
-			await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
 			await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
 			return await waitForGas(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
@@ -581,8 +591,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas create child pool')
 			await confirmApproveAndDepositRep(alice, context)
-			await prepareEscalationFork(context)
-			await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
+			await prepareExternalZoltarFork(context, 'Gas create child pool fork source')
 			await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
 			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]))
 			return await waitForGas(alice, createChildUniverse(alice, context.addresses.securityPool, QuestionOutcome.Invalid))
