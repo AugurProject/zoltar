@@ -211,6 +211,11 @@ function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
 	return BigInt(pageIndex) * BigInt(pageSize)
 }
 
+function requireBigintValue(value: unknown, context: string) {
+	if (typeof value === 'bigint') return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
 async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({
 		address: securityPoolAddress,
@@ -980,7 +985,7 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 	} satisfies SecurityVaultActionResult
 }
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, priceRoundId, priceRoundMaxNotional, priceRoundConsumedNotional, priceRoundRemainingNotional] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'lastPrice',
@@ -1023,7 +1028,35 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			address: managerAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundId',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundMaxNotional',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundConsumedNotional',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'getPriceRoundRemainingNotional',
+			address: managerAddress,
+			args: [],
+		},
 	])
+	const normalizedPriceRoundMaxNotional = requireBigintValue(priceRoundMaxNotional, 'price round max notional')
+	const normalizedPriceRoundConsumedNotional = requireBigintValue(priceRoundConsumedNotional, 'price round consumed notional')
+	const normalizedPriceRoundRemainingNotional = requireBigintValue(priceRoundRemainingNotional, 'price round remaining notional')
+	const normalizedPriceRoundId = requireBigintValue(priceRoundId, 'price round id')
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
@@ -1106,6 +1139,10 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingOperation,
 		pendingOperationSlotId,
 		pendingReportId,
+		priceRoundConsumedNotional: normalizedPriceRoundConsumedNotional,
+		priceRoundId: normalizedPriceRoundId,
+		priceRoundMaxNotional: normalizedPriceRoundMaxNotional,
+		priceRoundRemainingNotional: normalizedPriceRoundRemainingNotional,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
 		stagedOperations,

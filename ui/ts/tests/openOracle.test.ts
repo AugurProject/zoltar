@@ -49,7 +49,7 @@ const genesisUniverse = 0n
 const securityMultiplier = 2n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const reportedRepEthPrice = 10n
-const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 30n * 60n
+const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
 const outcomes = ['Yes', 'No']
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
@@ -1028,6 +1028,7 @@ describe('Open Oracle helpers', () => {
 		const openOracleAddress = getOpenOracleAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
 		await approveToken(client, WETH_ADDRESS, openOracleAddress)
+		await mockWindow.setBalance(client.account.address, amount2 + 10n ** 18n)
 		await wrapWethTestHelper(client, amount2)
 
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
@@ -1065,6 +1066,7 @@ describe('Open Oracle helpers', () => {
 		const openOracleAddress = getOpenOracleAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
 		await approveToken(client, WETH_ADDRESS, openOracleAddress)
+		await mockWindow.setBalance(client.account.address, amount2 + 10n ** 18n)
 		await wrapWethTestHelper(client, amount2)
 
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
@@ -1085,6 +1087,7 @@ describe('Open Oracle helpers', () => {
 		const openOracleAddress = getOpenOracleAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
 		await approveToken(client, WETH_ADDRESS, openOracleAddress)
+		await mockWindow.setBalance(client.account.address, amount2 + 10n ** 18n)
 		await wrapWethTestHelper(client, amount2)
 
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash

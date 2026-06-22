@@ -7,8 +7,10 @@ import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 
 // price oracle
-uint256 constant PRICE_VALID_FOR_SECONDS = 1 hours;
+uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant PRICE_PRECISION = 1e18;
+uint256 constant ORACLE_BUDGET_BPS = 10000;
+uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
 
 enum OperationType {
 	Liquidation,
@@ -50,6 +52,14 @@ contract SecurityPoolOracleCoordinator {
 	bool public immutable timeType;
 	bool public immutable trackDisputes;
 	address public immutable protocolFeeRecipient;
+	uint256 public immutable priceRoundBudgetMultiplierBps;
+	uint256 public immutable escalationHaltMultiplierBps;
+	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
+	uint256 public immutable minLiquidationPriceDistanceBps;
+	uint256 public pendingReportMaxSettlementBaseFee;
+	uint256 public priceRoundId;
+	uint256 public priceRoundMaxNotional;
+	uint256 public priceRoundConsumedNotional;
 
 	event PriceReported(uint256 reportId, uint256 price);
 	event StagedOperationQueued(
@@ -90,7 +100,11 @@ contract SecurityPoolOracleCoordinator {
 		uint16 _multiplier,
 		bool _timeType,
 		bool _trackDisputes,
-		address _protocolFeeRecipient
+		address _protocolFeeRecipient,
+		uint256 _priceRoundBudgetMultiplierBps,
+		uint256 _escalationHaltMultiplierBps,
+		uint256 _maxSettlementBaseFeeMultiplierBps,
+		uint256 _minLiquidationPriceDistanceBps
 	) {
 		reputationToken = _reputationToken;
 		openOracle = _openOracle;
@@ -106,6 +120,14 @@ contract SecurityPoolOracleCoordinator {
 		timeType = _timeType;
 		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
+		require(_priceRoundBudgetMultiplierBps > 0, 'price budget multiplier is zero');
+		require(_escalationHaltMultiplierBps > 0, 'escalation halt multiplier is zero');
+		priceRoundBudgetMultiplierBps = _priceRoundBudgetMultiplierBps;
+		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
+		require(_maxSettlementBaseFeeMultiplierBps >= ORACLE_BUDGET_BPS, 'base fee multiplier too low');
+		require(_minLiquidationPriceDistanceBps <= ORACLE_BUDGET_BPS, 'liquidation distance too high');
+		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
+		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
@@ -126,11 +148,12 @@ contract SecurityPoolOracleCoordinator {
 		require(pendingReportId == 0, 'Already pending request');
 		uint256 ethCost = getRequestPriceEthCost();
 		require(msg.value >= ethCost, 'not big enough eth bounty');
-		uint256 escalationHalt = reputationToken.totalSupply() / 100000;
+		uint256 escalationHalt = (exactToken1Report * escalationHaltMultiplierBps) / ORACLE_BUDGET_BPS;
 		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
 		require(exactToken1Report <= type(uint128).max, 'exactToken1Report too large');
 		require(escalationHalt <= type(uint128).max, 'escalation halt too large');
 		require(settlerReward <= type(uint96).max, 'settler reward too large');
+		pendingReportMaxSettlementBaseFee = (block.basefee * maxSettlementBaseFeeMultiplierBps) / ORACLE_BUDGET_BPS;
 
 		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
 			exactToken1Report: uint128(exactToken1Report),
@@ -170,6 +193,11 @@ contract SecurityPoolOracleCoordinator {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
 		pendingReportId = 0;
+		if (block.basefee > pendingReportMaxSettlementBaseFee) {
+			pendingReportMaxSettlementBaseFee = 0;
+			return;
+		}
+		pendingReportMaxSettlementBaseFee = 0;
 		if (amount1 == 0 || amount2 == 0) {
 			return;
 		}
@@ -179,6 +207,12 @@ contract SecurityPoolOracleCoordinator {
 		}
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
+		priceRoundId++;
+		priceRoundConsumedNotional = 0;
+		priceRoundMaxNotional =
+			(exactToken1Report * PRICE_PRECISION * priceRoundBudgetMultiplierBps) /
+			price /
+			ORACLE_BUDGET_BPS;
 		emit PriceReported(reportId, lastPrice);
 		if (pendingSettlementOperationIds.length != 0) {
 			uint256[] memory operationIds = pendingSettlementOperationIds;
@@ -202,6 +236,11 @@ contract SecurityPoolOracleCoordinator {
 			lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
+	function getPriceRoundRemainingNotional() public view returns (uint256) {
+		if (priceRoundMaxNotional <= priceRoundConsumedNotional) return 0;
+		return priceRoundMaxNotional - priceRoundConsumedNotional;
+	}
+
 	function requestPriceIfNeededAndStageOperation(
 		OperationType operation,
 		address targetVault,
@@ -212,6 +251,7 @@ contract SecurityPoolOracleCoordinator {
 			require(amount > 0, 'need to do non zero operation');
 		}
 		require(validForSeconds > 0, 'operation timeout must be positive');
+		require(validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS, 'operation timeout too long');
 		if (operation != OperationType.Liquidation) {
 			require(targetVault == msg.sender, 'self operation target must match initiator');
 		}
@@ -245,11 +285,14 @@ contract SecurityPoolOracleCoordinator {
 
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
-		if (isPriceValid()) {
+		if (
+			isPriceValid() && _getOperationNotional(stagedOperations[operationId]) <= getPriceRoundRemainingNotional()
+		) {
 			emit StagedOperationQueued(operationId, operation, msg.sender, targetVault, amount, false);
 			executeStagedOperation(operationId);
 			// no cost when price is valid
 		} else {
+			bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds.length == 0;
 			bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
 			emit StagedOperationQueued(
 				operationId,
@@ -259,7 +302,7 @@ contract SecurityPoolOracleCoordinator {
 				amount,
 				isPendingSettlementOperationId
 			);
-			if (pendingReportId == 0) {
+			if (shouldRequestPrice && isPendingSettlementOperationId) {
 				uint256 ethCost = getRequestPriceEthCost();
 				require(msg.value >= ethCost, 'not enough eth to request price');
 				retained += ethCost;
@@ -297,6 +340,24 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'stale liquidation');
 				return;
 			}
+		}
+		uint256 operationNotional = _getOperationNotional(stagedOperation);
+		if (operationNotional > getPriceRoundRemainingNotional()) {
+			_consumeStagedOperation(operationId);
+			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle budget exceeded');
+			return;
+		}
+		if (stagedOperation.operation == OperationType.Liquidation) {
+			if (!_isLiquidationBeyondMinPriceDistance(stagedOperation)) {
+				_consumeStagedOperation(operationId);
+				emit ExecutedStagedOperation(
+					operationId,
+					stagedOperation.operation,
+					false,
+					'liquidation too close to threshold'
+				);
+				return;
+			}
 			_consumeStagedOperation(operationId);
 			try
 				securityPool.performLiquidation(
@@ -309,6 +370,7 @@ contract SecurityPoolOracleCoordinator {
 					stagedOperation.snapshotDenominator
 				)
 			{
+				_consumePriceRoundNotional(operationNotional);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -320,6 +382,7 @@ contract SecurityPoolOracleCoordinator {
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
 			_consumeStagedOperation(operationId);
 			try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
+				_consumePriceRoundNotional(operationNotional);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -331,6 +394,7 @@ contract SecurityPoolOracleCoordinator {
 		} else {
 			_consumeStagedOperation(operationId);
 			try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
+				_consumePriceRoundNotional(operationNotional);
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
@@ -340,6 +404,71 @@ contract SecurityPoolOracleCoordinator {
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		}
+	}
+
+	function _consumePriceRoundNotional(uint256 notional) private {
+		priceRoundConsumedNotional += notional;
+	}
+
+	function _getOperationNotional(StagedOperation memory stagedOperation) private view returns (uint256) {
+		if (stagedOperation.operation == OperationType.Liquidation) {
+			uint256 debtToMove = _getLiquidationDebtToMove(stagedOperation);
+			uint256 repToMove = _getLiquidationRepToMove(stagedOperation, debtToMove);
+			uint256 repEthValue = _repToEthNotional(repToMove);
+			return debtToMove > repEthValue ? debtToMove : repEthValue;
+		}
+		if (stagedOperation.operation == OperationType.WithdrawRep) {
+			uint256 price = lastPrice;
+			if (price == 0 || stagedOperation.amount == 0) return 0;
+			uint256 numerator = stagedOperation.amount * PRICE_PRECISION;
+			return (numerator - 1) / price + 1;
+		}
+		if (stagedOperation.amount <= stagedOperation.snapshotTargetAllowance) return 0;
+		return stagedOperation.amount - stagedOperation.snapshotTargetAllowance;
+	}
+
+	function _getSnapshotVaultRep(StagedOperation memory stagedOperation) private pure returns (uint256) {
+		if (stagedOperation.snapshotDenominator == 0) {
+			return stagedOperation.snapshotTargetOwnership / PRICE_PRECISION;
+		}
+		return
+			(stagedOperation.snapshotTargetOwnership * stagedOperation.snapshotTotalRep) /
+			stagedOperation.snapshotDenominator;
+	}
+
+	function _getLiquidationDebtToMove(StagedOperation memory stagedOperation) private pure returns (uint256) {
+		return
+			stagedOperation.amount > stagedOperation.snapshotTargetAllowance
+				? stagedOperation.snapshotTargetAllowance
+				: stagedOperation.amount;
+	}
+
+	function _getLiquidationRepToMove(
+		StagedOperation memory stagedOperation,
+		uint256 debtToMove
+	) private pure returns (uint256) {
+		if (stagedOperation.snapshotTargetAllowance == 0 || debtToMove == 0) return 0;
+		return (debtToMove * _getSnapshotVaultRep(stagedOperation)) / stagedOperation.snapshotTargetAllowance;
+	}
+
+	function _repToEthNotional(uint256 repAmount) private view returns (uint256) {
+		uint256 price = lastPrice;
+		if (price == 0 || repAmount == 0) return 0;
+		uint256 numerator = repAmount * PRICE_PRECISION;
+		return (numerator - 1) / price + 1;
+	}
+
+	function _isLiquidationBeyondMinPriceDistance(StagedOperation memory stagedOperation) private view returns (bool) {
+		if (minLiquidationPriceDistanceBps == 0) return true;
+		uint256 snapshotTargetAllowance = stagedOperation.snapshotTargetAllowance;
+		if (snapshotTargetAllowance == 0) return false;
+		uint256 currentPrice = lastPrice;
+		if (currentPrice == 0) return false;
+		uint256 vaultRep = _getSnapshotVaultRep(stagedOperation);
+		uint256 securityMultiplier = securityPool.securityMultiplier();
+		uint256 thresholdPrice = (vaultRep * PRICE_PRECISION) / (snapshotTargetAllowance * securityMultiplier);
+		if (currentPrice <= thresholdPrice) return false;
+		return ((currentPrice - thresholdPrice) * ORACLE_BUDGET_BPS) / currentPrice >= minLiquidationPriceDistanceBps;
 	}
 
 	function _consumeStagedOperation(uint256 operationId) private {

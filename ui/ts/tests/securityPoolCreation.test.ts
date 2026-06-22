@@ -3,13 +3,13 @@
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from 'viem'
 import { createSecurityPool } from '../contracts.js'
-import { createWalletWriteClient } from '../lib/clients.js'
+import { createWalletWriteClient, type WriteClient as UiWriteClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { DAY, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
 import { ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'
@@ -27,7 +27,7 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 describe('security pool creation helper', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
-	let client: WriteClient
+	let client: SolidityWriteClient
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -74,7 +74,7 @@ describe('security pool creation helper', () => {
 		const deploySecurityPoolInputs = deploySecurityPoolEvent.inputs.map(input => ({ name: input.name, type: input.type }))
 
 		const expectedSecurityPoolAddress = addressString(TEST_ADDRESSES[6]) as Address
-		const fakeClientBase: Pick<WriteClient, 'account' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
+		const fakeClientBase: Pick<UiWriteClient, 'account' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
 			account: {
 				address: addressString(TEST_ADDRESSES[0]) as Address,
 				type: 'json-rpc',
@@ -95,7 +95,7 @@ describe('security pool creation helper', () => {
 					],
 				}) as never,
 		}
-		const fakeClient = fakeClientBase as WriteClient
+		const fakeClient = fakeClientBase as UiWriteClient
 
 		const result = await createSecurityPool(fakeClient, {
 			currentRetentionRate: 999_999_996_848_000_000n,

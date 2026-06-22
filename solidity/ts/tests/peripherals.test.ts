@@ -1885,7 +1885,7 @@ describe('Peripherals Contract Test Suite', () => {
 	test('Can Liquidate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolAllowance = repDeposit / 4n
+		const securityPoolAllowance = 75n * 10n ** 18n
 		strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const initialPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -1895,14 +1895,15 @@ describe('Peripherals Contract Test Suite', () => {
 		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
-		const openInterestAmount = 100n * 10n ** 18n
+		const openInterestAmount = 50n * 10n ** 18n
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		await mockWindow.advanceTime(100000n)
 
 		strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 		const forcedPrice = PRICE_PRECISION * 10n
-		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		const liquidationAmount = 25n * 10n ** 18n
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
 
 		await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
@@ -1911,19 +1912,19 @@ describe('Peripherals Contract Test Suite', () => {
 
 		strictEqualTypeSafe(canLiquidate(currentPrice, securityPoolAllowance, repDeposit, 2n), true, 'Should be able to liquidate now')
 
-		// liquidator should have all the assets now
 		const originalVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-		strictEqualTypeSafe(originalVault.securityBondAllowance, 0n, 'original vault should not have any security bonds')
-		strictEqualTypeSafe(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
-		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, "liquidator doesn't have all the security pool allowances")
-		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit + repDeposit * 10n, 'liquidator should have all the rep in the pool')
+		const expectedRepMoved = (liquidationAmount * repDeposit) / securityPoolAllowance
+		strictEqualTypeSafe(originalVault.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'original vault should keep only the non-liquidated security bonds')
+		strictEqualTypeSafe(originalVault.repDepositShare / PRICE_PRECISION, repDeposit - expectedRepMoved, 'original vault should keep the non-liquidated REP')
+		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, liquidationAmount, "liquidator doesn't have the liquidated security pool allowance")
+		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit * 10n + expectedRepMoved, 'liquidator should receive the liquidated REP')
 	})
 
 	test('liquidation should use snapshot to prevent blocking via additional rep deposit', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolAllowance = repDeposit / 4n
+		const securityPoolAllowance = 75n * 10n ** 18n
 		// Set the target's security bond allowance
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		assert.ok((await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)) > 0n, 'Price was not set!')
@@ -1935,7 +1936,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
 
 		// Create open interest
-		const openInterestAmount = 100n * 10n ** 18n
+		const openInterestAmount = 50n * 10n ** 18n
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		await mockWindow.advanceTime(100000n)
 
@@ -1950,7 +1951,8 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Queue liquidation (liquidator requests price to trigger liquidation)
 		const forcedPrice = PRICE_PRECISION * 10n
-		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		const liquidationAmount = 25n * 10n ** 18n
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
 
 		// Record liquidator's ownership before attack
 		const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -1973,11 +1975,10 @@ describe('Peripherals Contract Test Suite', () => {
 		const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 		const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
-		// Target's allowance should be zero after liquidation (since we moved the full allowance)
-		strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'target security bond allowance should be zero after liquidation')
+		strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, securityPoolAllowance - liquidationAmount, 'target security bond allowance should decrease by the liquidated amount')
 
 		// Compute expected changes based on snapshot
-		const debtToMove = securityPoolAllowance
+		const debtToMove = liquidationAmount
 		const effectiveDebtToMove = debtToMove < snapshotTargetAllowance ? debtToMove : snapshotTargetAllowance
 		const repToMove = (effectiveDebtToMove * snapshotExpectedRepDeposit) / snapshotTargetAllowance
 		const ownershipToMove = (repToMove * denominatorAfter) / totalRepAfter
@@ -1996,7 +1997,7 @@ describe('Peripherals Contract Test Suite', () => {
 	})
 
 	test('liquidation only moves REP that is not committed to escalation', async () => {
-		const securityPoolAllowance = 400n * 10n ** 18n
+		const securityPoolAllowance = 200n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
 		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -2008,7 +2009,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
-		const lockedDeposit = 300n * 10n ** 18n
+		const lockedDeposit = 700n * 10n ** 18n
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 
 		const targetVaultAfterLock = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -2094,6 +2095,49 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(completeSetCollateralAmountPercentage, expected, 'return amount did not match')
 		const contractBalance = await getETHBalance(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')
+	})
+
+	test('redeemCompleteSet exits at the fee-adjusted share exchange rate', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const firstHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		await createCompleteSet(firstHolder, securityPoolAddresses.securityPool, 4n * 10n ** 18n)
+		await createCompleteSet(secondHolder, securityPoolAddresses.securityPool, 6n * 10n ** 18n)
+
+		await mockWindow.advanceTime(30n * DAY)
+		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+		const firstHolderShares = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const secondHolderShares = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
+		const redeemAmount = ensureDefined(firstHolderShares[0], 'first holder complete-set shares missing') / 2n
+		const initialCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const initialShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+		const initialFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		assert.ok(initialFeesOwed > 0n, 'test setup should accrue open-interest fees before redemption')
+
+		const balanceBeforeRedeem = await getETHBalance(client, firstHolder.account.address)
+		await redeemCompleteSet(firstHolder, securityPoolAddresses.securityPool, redeemAmount)
+
+		const collateralAfterRedeem = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const feesAfterRedeem = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+		const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - balanceBeforeRedeem
+		const feeDelta = feesAfterRedeem - initialFeesOwed
+		const firstHolderSharesAfterRedeem = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const secondHolderSharesAfterRedeem = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
+		const shareSupplyAfterRedeem = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+
+		assert.ok(firstHolderPayout > 0n, 'redeeming complete sets should pay ETH to the holder')
+		strictEqualTypeSafe(collateralAfterRedeem + firstHolderPayout + feeDelta, initialCollateral, 'complete-set redemption should conserve collateral after fee accrual')
+		strictEqualTypeSafe(shareSupplyAfterRedeem, initialShareSupply - redeemAmount, 'complete-set redemption should reduce share supply by the burned set amount')
+		strictEqualTypeSafe(firstHolderSharesAfterRedeem[0], firstHolderShares[0] - redeemAmount, 'redeeming should burn the holders invalid-side share')
+		strictEqualTypeSafe(firstHolderSharesAfterRedeem[1], firstHolderShares[1] - redeemAmount, 'redeeming should burn the holders yes-side share')
+		strictEqualTypeSafe(firstHolderSharesAfterRedeem[2], firstHolderShares[2] - redeemAmount, 'redeeming should burn the holders no-side share')
+		strictEqualTypeSafe(secondHolderSharesAfterRedeem[0], secondHolderShares[0], 'redeeming should not burn another holders invalid-side share')
+		strictEqualTypeSafe(secondHolderSharesAfterRedeem[1], secondHolderShares[1], 'redeeming should not burn another holders yes-side share')
+		strictEqualTypeSafe(secondHolderSharesAfterRedeem[2], secondHolderShares[2], 'redeeming should not burn another holders no-side share')
+		strictEqualTypeSafe(await sharesToCash(client, securityPoolAddresses.securityPool, shareSupplyAfterRedeem), collateralAfterRedeem, 'remaining complete sets should keep the fee-adjusted exchange rate')
 	})
 
 	test('can set security bonds allowance, mint complete sets and fork happily', async () => {
@@ -2256,7 +2300,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await sharesToCash(client, securityPoolAddresses.securityPool, winningShares), 0n, 'once winning supply is exhausted, leftover losing shares should no longer map to any cash value')
 	})
 
-	test('redeemShares stays available after an unrelated late fork once the question has finalized', async () => {
+	test('redeemShares and redeemRep stay available after an unrelated late fork once the question has finalized', async () => {
 		const securityPoolAllowance = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
@@ -2286,8 +2330,21 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(attackerClient, genesisUniverse, lateForkQuestionId)
 
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'late unrelated fork should not erase finalized market outcome')
+		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'late unrelated Zoltar fork should not initiate this security pool fork')
+		const walletRepBeforeClaims = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should still complete after the unrelated fork')
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		const walletRepAfterEscrowSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultAfterRedeem = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const walletRepAfterRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		strictEqualTypeSafe(vaultAfterRedeem.repDepositShare, 0n, 'rep redemption should still empty the vault after the unrelated fork')
+		strictEqualTypeSafe(vaultAfterRedeem.repInEscalationGame, 0n, 'rep redemption should leave no escrowed REP after the unrelated fork')
+		strictEqualTypeSafe(walletRepAfterEscrowSettlement - walletRepBeforeClaims, reportBond, 'escrow settlement should return locked REP after the unrelated fork')
+		strictEqualTypeSafe(walletRepAfterRedeem - walletRepAfterEscrowSettlement, repDeposit - reportBond, 'rep redemption should return vault-held REP after the unrelated fork')
 	})
 
 	test('two security pools with disagreement', async () => {
@@ -3590,8 +3647,6 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork child currently reports a finalized outcome before the pool is operational')
 		await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /not operational/)
 	})
-
-	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after question ends
 
 	test('simple truth auction: participant buys rep and can claim proceeds', async () => {
 		// Setup: create open interest, trigger fork, migrate

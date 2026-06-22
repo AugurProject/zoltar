@@ -1,4 +1,5 @@
 import { sameAddress } from './address.js'
+import { isOracleManagerPriceUsable } from './securityVault.js'
 import type { OracleManagerDetails, SecurityPoolOverviewActionResult } from '../types/contracts.js'
 
 type LiquidationNoticeState = 'failed' | 'queued' | 'submitted' | 'successful'
@@ -19,6 +20,6 @@ export function getLiquidationNoticeState({
 	if (securityPoolOverviewResult.queuedOperation?.operation === 'liquidation') return 'queued'
 	if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'submitted'
 	if (currentPoolOracleManagerDetails.pendingOperation?.operation === 'liquidation' && sameAddress(currentPoolOracleManagerDetails.pendingOperation.targetVault, liquidationTargetVault)) return 'queued'
-	if (currentPoolOracleManagerDetails.isPriceValid) return 'successful'
+	if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails)) return 'successful'
 	return 'submitted'
 }

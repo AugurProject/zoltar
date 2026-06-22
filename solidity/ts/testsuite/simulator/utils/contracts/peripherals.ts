@@ -20,7 +20,7 @@ export enum OperationType {
 	SetSecurityBondsAllowance = 2,
 }
 
-const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 24n * 60n * 60n
+const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 
 export const requestPriceIfNeededAndStageOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)

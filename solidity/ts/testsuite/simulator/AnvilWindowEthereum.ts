@@ -79,7 +79,7 @@ export function normalizeAnvilTransactionParams(params: unknown[]) {
 
 	const normalizedTransactionRequest: Record<string, unknown> = {
 		...firstParam,
-		gasPrice: '0x0',
+		gasPrice: firstParam.gasPrice ?? '0x0',
 	}
 
 	delete normalizedTransactionRequest['maxFeePerGas']

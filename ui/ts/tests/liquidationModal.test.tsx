@@ -37,7 +37,7 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 }
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
+	const details = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
@@ -48,12 +48,14 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingReportId: 0n,
+		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		requestPriceEthCost: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
 	}
+	return details
 }
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
@@ -139,7 +141,7 @@ describe('LiquidationModal', () => {
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
 				liquidationTargetVault={defaultTargetVaultAddress}
-				liquidationTimeoutMinutes='30'
+				liquidationTimeoutMinutes='5'
 				loadingPoolOracleManager={false}
 				onLoadPoolOracleManager={() => undefined}
 				onLiquidationAmountChange={() => undefined}
@@ -190,7 +192,7 @@ describe('LiquidationModal', () => {
 		expectTransactionButtonDisabled(document.body, 'Queue Liquidation')
 	})
 
-	test('defaults queued liquidation timeout copy to 30 minutes', async () => {
+	test('defaults queued liquidation timeout copy to 5 minutes', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
@@ -198,7 +200,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('This queued staged operation will expire 30m after the oracle settlement window completes.')).toBe(true)
+		expect(document.body.textContent?.includes('This queued staged operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
 	test('requires a queued liquidation timeout of at least 1 minute', async () => {
@@ -270,7 +272,7 @@ describe('LiquidationModal', () => {
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					liquidationTargetVault={zeroAddress}
 					onLoadPoolOracleManager={() => undefined}
@@ -419,6 +421,26 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
 
+	test('queues liquidation when the current oracle price has no remaining round budget', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				pendingOperation: undefined,
+				pendingOperationSlotId: 0n,
+				priceRoundRemainingNotional: 0n,
+			}),
+			liquidationAmount: '5',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Queue Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Queue Liquidation' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Execute Vault Liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Execute Liquidation' })).toBeNull()
+	})
+
 	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -486,7 +508,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
@@ -580,7 +602,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
@@ -675,7 +697,7 @@ describe('LiquidationModal', () => {
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+			<ChainTimestampContext.Provider value={1n + 5n * 60n + 60n}>
 				<LiquidationModal
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => undefined}
@@ -687,7 +709,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={() => undefined}
@@ -884,7 +906,7 @@ describe('LiquidationModal', () => {
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
 					liquidationTargetVault={defaultTargetVaultAddress}
-					liquidationTimeoutMinutes='30'
+					liquidationTimeoutMinutes='5'
 					loadingPoolOracleManager={false}
 					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={setLiquidationAmount}
