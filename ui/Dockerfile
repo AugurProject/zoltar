@@ -2,7 +2,9 @@
 # App Setup: Install dependencies and build app
 # ---------------------------------------------
 
-FROM oven/bun:1.3.9-alpine AS builder
+ARG BUN_VERSION=1.3.13
+
+FROM oven/bun:${BUN_VERSION}-alpine AS builder
 
 # git is required by preinstall hook scripts (link-shared-node-modules.mjs uses git rev-parse)
 RUN apk add --no-cache git
@@ -13,15 +15,16 @@ RUN git init
 COPY ./scripts/ /source/scripts/
 COPY ./ui/scripts/ /source/ui/scripts/
 
-# Install root dependencies
-COPY ./package.json ./bun.lock /source/
-RUN bun install --frozen-lockfile
-
-# Shared package metadata and outputs for local package resolution
+# Shared package metadata and source for local package resolution
 COPY ./shared/package.json /source/shared/package.json
 COPY ./shared/tsconfig.json /source/shared/tsconfig.json
-COPY ./shared/js/ /source/shared/js/
 COPY ./shared/ts/ /source/shared/ts/
+RUN mkdir -p /source/shared/js
+
+# Install root dependencies and build generated shared outputs from tracked source.
+COPY ./package.json ./bun.lock /source/
+RUN bun install --frozen-lockfile
+RUN bun run shared:build
 
 # Install Solidity dependencies
 COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
