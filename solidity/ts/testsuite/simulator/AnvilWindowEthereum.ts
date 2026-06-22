@@ -39,6 +39,8 @@ type RpcTransaction = {
 	readonly blockNumber?: string
 }
 
+const PRESERVE_ANVIL_FEE_CAP_FIELD = '__preserveFeeCap'
+
 type RpcTransactionRequest = {
 	readonly from?: string
 	readonly to?: string
@@ -47,7 +49,7 @@ type RpcTransactionRequest = {
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
 	readonly type?: string
-	readonly __preserveFeeCap?: boolean
+	readonly [PRESERVE_ANVIL_FEE_CAP_FIELD]?: boolean
 }
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
@@ -74,15 +76,20 @@ function isRpcTransactionRequest(value: unknown): value is RpcTransactionRequest
 	return typeof value === 'object' && value !== null
 }
 
+export const preserveAnvilFeeCap = <T extends Record<string, unknown>>(transaction: T) => ({
+	...transaction,
+	[PRESERVE_ANVIL_FEE_CAP_FIELD]: true,
+})
+
 export function normalizeAnvilTransactionParams(params: unknown[]) {
 	const [firstParam, ...remainingParams] = params
 	if (!isRpcTransactionRequest(firstParam)) return params
 
-	if (firstParam.__preserveFeeCap === true) {
+	if (firstParam[PRESERVE_ANVIL_FEE_CAP_FIELD] === true) {
 		const normalizedTransactionRequest: Record<string, unknown> = {
 			...firstParam,
 		}
-		delete normalizedTransactionRequest['__preserveFeeCap']
+		delete normalizedTransactionRequest[PRESERVE_ANVIL_FEE_CAP_FIELD]
 		return [normalizedTransactionRequest, ...remainingParams]
 	}
 

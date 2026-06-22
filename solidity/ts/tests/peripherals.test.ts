@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:te
 import assert from 'node:assert/strict'
 import { decodeEventLog, encodeAbiParameters, encodeFunctionData, keccak256 } from 'viem'
 import type { Abi, Address, Hash } from 'viem'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum, preserveAnvilFeeCap } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
@@ -1903,18 +1903,18 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const forkCaller = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 		const forkBaseFee = 1000n
-		const expectedReward = forkBaseFee * 2n
 		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${forkBaseFee.toString(16)}`] })
 		const callerBalanceBeforeFork = await getETHBalance(client, forkCaller.account.address)
 		const collateralBeforeFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 		const feesBeforeFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		let forkGasCost = 0n
+		let forkReward = 0n
 
 		try {
 			const forkHash = (await mockWindow.request({
 				method: 'eth_sendTransaction',
 				params: [
-					{
+					preserveAnvilFeeCap({
 						from: forkCaller.account.address,
 						to: getInfraContractAddresses().securityPoolForker,
 						data: encodeFunctionData({
@@ -1925,8 +1925,7 @@ describe('Peripherals Contract Test Suite', () => {
 						maxFeePerGas: `0x${forkBaseFee.toString(16)}`,
 						maxPriorityFeePerGas: '0x0',
 						type: '0x2',
-						__preserveFeeCap: true,
-					},
+					}),
 				],
 			})) as Hash
 			const forkReceipt = await forkCaller.waitForTransactionReceipt({ hash: forkHash })
@@ -1949,13 +1948,14 @@ describe('Peripherals Contract Test Suite', () => {
 			assert.ok(callerRewardLog, 'fork reward should emit a caller reward event')
 			strictEqualTypeSafe(BigInt(callerRewardLog.args.securityPool), BigInt(securityPoolAddresses.securityPool), 'fork reward event should identify the security pool')
 			strictEqualTypeSafe(BigInt(callerRewardLog.args.caller), BigInt(forkCaller.account.address), 'fork reward event should identify the caller')
-			strictEqualTypeSafe(callerRewardLog.args.reward, expectedReward, 'fork reward event should report the paid amount')
+			forkReward = callerRewardLog.args.reward
+			assert.ok(forkReward > forkBaseFee * 21_000n, 'fork reward should scale by measured gas instead of paying only two base-fee units')
 		} finally {
 			await mockWindow.setNextBlockBaseFeePerGasToZero()
 		}
 
-		strictEqualTypeSafe((await getETHBalance(client, forkCaller.account.address)) - callerBalanceBeforeFork + forkGasCost, expectedReward, 'fork initiator should receive the basefee reward')
-		strictEqualTypeSafe(collateralBeforeFork - (await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)), expectedReward, 'fork reward should be paid from complete-set collateral')
+		strictEqualTypeSafe((await getETHBalance(client, forkCaller.account.address)) - callerBalanceBeforeFork + forkGasCost, forkReward, 'fork initiator should receive the basefee reward')
+		strictEqualTypeSafe(collateralBeforeFork - (await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)), forkReward, 'fork reward should be paid from complete-set collateral')
 		strictEqualTypeSafe(await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool), feesBeforeFork, 'fork reward should not spend accrued vault fees')
 	})
 

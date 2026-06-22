@@ -282,6 +282,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	function initiateSecurityPoolFork(ISecurityPool securityPool) public {
+		uint256 forkGasStart = gasleft();
 		EscalationGame escalationGame = securityPool.escalationGame();
 		SecurityPoolForkerForkData storage data = _prepareForkState(securityPool, escalationGame);
 		ReputationToken rep = securityPool.repToken();
@@ -298,11 +299,11 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		data.auctionableRepAtFork = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		require(data.auctionableRepAtFork >= previousMigrationBalance, 'migration balance regressed');
 		emit InitiateSecurityPoolFork(data.auctionableRepAtFork);
-		_payForkInitiatorReward(securityPool, msg.sender);
+		_payForkInitiatorReward(securityPool, msg.sender, forkGasStart);
 	}
 
-	function _payForkInitiatorReward(ISecurityPool securityPool, address caller) private {
-		uint256 reward = block.basefee * 2;
+	function _payForkInitiatorReward(ISecurityPool securityPool, address caller, uint256 forkGasStart) private {
+		uint256 reward = (forkGasStart - gasleft()) * block.basefee * 2;
 		if (reward == 0) return;
 		uint256 collateral = securityPool.completeSetCollateralAmount();
 		if (collateral < reward) return;
