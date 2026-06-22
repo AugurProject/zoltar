@@ -31,7 +31,7 @@ import {
 	openOracleSettleWithGasPrice,
 	openOracleSubmitInitialReport,
 	requestPrice,
-	requestPriceIfNeededAndStageOperation,
+	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
 	wrapWeth,
 } from '../testsuite/simulator/utils/contracts/peripherals'
@@ -204,7 +204,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit / 4n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const pendingMaxSettlementBaseFee = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
@@ -279,7 +279,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		// Call requestPriceIfNeededAndStageOperation with overpayment
 		const caller = client.account.address
 		const sendValue = ethCost * 2n
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.WithdrawRep, caller, 100n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, sendValue)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, caller, 100n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, sendValue)
 
 		// After the call, the pre-existing balance should remain intact.
 		// The contract should have retained ethCost (to pay OpenOracle) and refunded the excess (sendValue - ethCost).
@@ -292,7 +292,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const impossibleAllowance = repDeposit * 10n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, impossibleAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, impossibleAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
@@ -310,7 +310,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
@@ -344,7 +344,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const secondAllowance = repDeposit / 5n
 
 		const balanceBefore = await getETHBalance(client, client.account.address)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const balanceAfter = await getETHBalance(client, client.account.address)
 		const pendingReportIdAfterSecondOperation = await getPendingReportId(client, priceOracle)
 
@@ -360,7 +360,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const openOracle = getInfraContractAddresses().openOracle
@@ -398,10 +398,10 @@ describe('Price Oracle Refund Security Tests', () => {
 		const thirdAllowance = repDeposit / 6n
 		const fourthAllowance = repDeposit / 7n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, thirdAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, thirdAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 
 		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
 		const activeStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
@@ -439,8 +439,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const budgetConsumingAllowance = 900n * 10n ** 18n
 		const budgetExceedingAllowance = 1050n * 10n ** 18n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetConsumingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetExceedingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetConsumingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetExceedingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
@@ -460,17 +460,17 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(secondStagedOperation[1], zeroAddress, 'budget-exceeded operations should be consumed as failed staged operations')
 
 		const incrementalAllowance = 950n * 10n ** 18n
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, incrementalAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, incrementalAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const consumedAfterIncrement = await getPriceRoundConsumedNotional(client, priceOracle)
 		assert.strictEqual(consumedAfterIncrement, 950n * 10n ** 18n, 'allowance increases should only consume incremental exposure')
 
 		const budgetExhaustingWithdrawal = 50n * 10n ** 18n
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.WithdrawRep, client.account.address, budgetExhaustingWithdrawal, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, budgetExhaustingWithdrawal, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const remainingAfterBudgetExhaustingWithdrawal = await getPriceRoundRemainingNotional(client, priceOracle)
 		assert.strictEqual(remainingAfterBudgetExhaustingWithdrawal, 0n, 'test setup should exhaust the price-round budget')
 
 		const reducedAllowance = 925n * 10n ** 18n
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, reducedAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, reducedAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const consumedAfterReduction = await getPriceRoundConsumedNotional(client, priceOracle)
 		const vaultAfterReduction = await getSecurityVault(client, securityPool, client.account.address)
 		assert.strictEqual(consumedAfterReduction, 1000n * 10n ** 18n, 'allowance reductions should not consume price-round budget')
@@ -487,11 +487,11 @@ describe('Price Oracle Refund Security Tests', () => {
 		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		await depositRep(liquidatorClient, securityPool, repDeposit)
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
 
-		await requestPriceIfNeededAndStageOperation(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 		await handleOracleReporting(client, mockWindow, priceOracle, nearThresholdPrice)
 
 		const targetVault = await getSecurityVault(client, securityPool, client.account.address)
@@ -509,8 +509,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const successfulAllowance = repDeposit / 4n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, successfulAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, successfulAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await executeStagedOperation(client, priceOracle, 2n)
@@ -523,7 +523,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const nonLiquidationOperations = [OperationType.WithdrawRep, OperationType.SetSecurityBondsAllowance]
 
 		for (const operation of nonLiquidationOperations) {
-			await assert.rejects(async () => await requestPriceIfNeededAndStageOperation(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /self operation target must match initiator/i)
+			await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /self operation target must match initiator/i)
 		}
 	})
 
@@ -532,8 +532,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const liquidationTimeoutSeconds = 60n
 		const targetVault = addressString(TEST_ADDRESSES[1])
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds, ethCost)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds, 0n)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(liquidationTimeoutSeconds + 1n)
@@ -556,8 +556,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const selfOperationTimeoutSeconds = 60n
 
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.Liquidation, client.account.address, 1n, selfOperationTimeoutSeconds, ethCost)
-		await requestPriceIfNeededAndStageOperation(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, 1n, selfOperationTimeoutSeconds, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.Liquidation, client.account.address, 1n, selfOperationTimeoutSeconds, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, 1n, selfOperationTimeoutSeconds, 0n)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(selfOperationTimeoutSeconds + 1n)

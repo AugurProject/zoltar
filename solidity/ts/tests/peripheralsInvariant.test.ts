@@ -17,6 +17,7 @@ import {
 	finalizeTruthAuction,
 	getMigratedRep,
 	getMigrationProxyAddress,
+	getOwnForkRepBuckets,
 	getSecurityPoolForkerForkData,
 	initiateSecurityPoolFork,
 	migrateRepToZoltar,
@@ -217,6 +218,9 @@ describe('Peripherals invariant harness', () => {
 
 		const migrationProxyAddress = await getMigrationProxyAddress(client, context.securityPool)
 		const migrationBalanceBefore = await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress)
+		const { vaultRepAtFork } = await getOwnForkRepBuckets(client, context.securityPool)
+		assert.ok(vaultRepAtFork > 0n, 'own-fork migration should expose a positive branch migration amount')
+		assert.ok(vaultRepAtFork <= migrationBalanceBefore, 'branch migration amount must be backed by the proxy migration balance')
 		for (const outcome of branchOrder) {
 			const childUniverseId = getChildUniverseIdForOutcome(outcome)
 			const childRepToken = getRepTokenAddress(childUniverseId)
@@ -227,6 +231,7 @@ describe('Peripherals invariant harness', () => {
 			const childMinted = childBalanceAfter - childBalanceBefore
 			assert.ok(childBalanceAfter >= childBalanceBefore, 'migration should never reduce child REP')
 			assert.ok(childMinted > 0n, 'migration should mint REP into the selected child pool')
+			strictEqualTypeSafe(childMinted, vaultRepAtFork, 'selected branch should receive exactly the fork migration amount')
 			assert.ok(childMinted <= migrationBalanceBefore, 'child REP minted must not exceed the caller migration balance for the selected branch')
 		}
 

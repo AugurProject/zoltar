@@ -22,17 +22,20 @@ export enum OperationType {
 
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 
-export const requestPriceIfNeededAndStageOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, value?: bigint) => {
-	const ethCost = value ?? (await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer))
-	return await writeContractAndWait(client, () =>
+export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint) =>
+	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operation, targetVault, amount, validForSeconds],
-			value: ethCost,
+			value,
 		}),
 	)
+
+export const requestPriceIfNeededAndStageOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
+	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
+	return await requestPriceIfNeededAndStageOperationWithValue(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, ethCost)
 }
 
 export const executeStagedOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operationId: bigint) =>
