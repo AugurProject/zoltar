@@ -94,8 +94,5 @@ jobs:
           (cd ui && bun audit)
           (cd solidity && bun audit)
 
-      - name: Mainnet deployment validation
-        run: bun run check:mainnet-deployment
-
-      - name: Production UI build
+      - name: Production UI build and mainnet deployment validation
         run: bun run ui:build:prod
