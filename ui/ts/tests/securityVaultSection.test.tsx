@@ -92,6 +92,7 @@ function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['or
 		openOracleAddress: zeroAddress,
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
+		pendingSettlementOperationIds: [],
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
 		requestPriceEthCost: 0n,
