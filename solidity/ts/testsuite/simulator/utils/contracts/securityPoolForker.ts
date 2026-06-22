@@ -53,7 +53,7 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVault',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, Number(outcome)],
+			args: [securityPoolAddress, BigInt(outcome)],
 		}),
 	)
 
@@ -63,7 +63,7 @@ export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, 
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, vault, Number(childOutcome)],
+			args: [securityPoolAddress, vault, BigInt(childOutcome)],
 		}),
 	)
 
@@ -135,13 +135,13 @@ export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress
 	})
 }
 
-export const createChildUniverse = async (client: WriteClient, securityPoolAddress: Address, outcome: QuestionOutcome) =>
+export const createChildUniverse = async (client: WriteClient, securityPoolAddress: Address, outcome: bigint | QuestionOutcome) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'createChildUniverse',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, Number(outcome)],
+			args: [securityPoolAddress, BigInt(outcome)],
 		}),
 	)
 
