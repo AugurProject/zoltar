@@ -212,6 +212,7 @@ export function ZoltarMigrationSection({
 						pendingLabel='Approving REP...'
 						requiredAmount={missingPreparationAmount}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
+						safetyId='zoltar.approveForkRep'
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -230,8 +231,8 @@ export function ZoltarMigrationSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton idleLabel='Prepare REP' pendingLabel='Preparing REP...' onClick={onPrepareRepForMigration} pending={zoltarMigrationActiveAction === 'prepare'} tone='secondary' availability={{ disabled: !canPrepare, reason: prepareHintMessage }} />
-						<TransactionActionButton idleLabel='Split REP' pendingLabel='Splitting REP...' onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: splitHintMessage }} />
+						<TransactionActionButton safetyId='zoltar-migration.prepareRep' idleLabel='Prepare REP' pendingLabel='Preparing REP...' onClick={onPrepareRepForMigration} pending={zoltarMigrationActiveAction === 'prepare'} tone='secondary' availability={{ disabled: !canPrepare, reason: prepareHintMessage }} />
+						<TransactionActionButton safetyId='zoltar-migration.splitRep' idleLabel='Split REP' pendingLabel='Splitting REP...' onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: splitHintMessage }} />
 					</div>
 				</div>
 			</SectionBlock>

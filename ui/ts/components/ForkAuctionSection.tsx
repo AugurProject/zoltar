@@ -20,6 +20,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TruthAuctionDepthChart, type TruthAuctionDepthPoint } from './TruthAuctionDepthChart.js'
 import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../contracts.js'
+import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
@@ -1294,6 +1295,7 @@ export function ForkAuctionSection({
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
+				safetyId={getForkAuctionActionSafetyId(action)}
 				idleLabel={idleLabel}
 				pendingLabel={pendingLabel}
 				onClick={onClick}

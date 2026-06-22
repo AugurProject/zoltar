@@ -909,8 +909,11 @@ describe('contracts helpers', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
+		const decodedArgs = decodedCall.args as readonly [Address, Address, bigint]
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
-		expect(decodedCall.args).toEqual([securityPoolAddress, vaultAddress, 2n])
+		expect(decodedArgs[0]).toBe(securityPoolAddress)
+		expect(decodedArgs[1]).toBe(vaultAddress)
+		expect(decodedArgs[2]).toBe(2n)
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
 			hash: transactionHash,

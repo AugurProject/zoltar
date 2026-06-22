@@ -1,11 +1,11 @@
 import { LoadingText } from './LoadingText.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
-export function TransactionActionButton({ availability, className = '', disabled = false, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = false, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+export function TransactionActionButton({ availability, className = '', disabled = false, idleLabel, onClick, pending = false, pendingLabel, safetyId, showDisabledReason = false, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
 	const isDisabled = disabled || pending || availability?.disabled === true
 	const disabledReason = isDisabled ? availability?.reason : undefined
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			<button className={`tx-action-button ${tone}`} type={type} onClick={onClick} disabled={isDisabled} title={disabledReason}>
+			<button className={`tx-action-button ${tone}`} data-action-safety-id={safetyId} type={type} onClick={onClick} disabled={isDisabled} title={disabledReason}>
 				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{(() => {

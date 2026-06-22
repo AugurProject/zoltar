@@ -21,6 +21,7 @@ import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
+import { getSecurityVaultActionSafetyId } from '../lib/actionSafety/ids.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
@@ -399,6 +400,10 @@ export function SecurityVaultSection({
 		selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
 	})
+	const effectiveDepositBlocker = depositGuardMessage ?? (depositRepEnabled ? undefined : 'Deposit REP is not available right now.')
+	const effectiveRepExitBlocker = repExitGuardMessage ?? (repExitEnabled ? undefined : `${repExitActionLabel} is not available right now.`)
+	const effectiveBondAllowanceBlocker = setSecurityBondAllowanceGuardMessage ?? (bondAllowanceEnabled ? undefined : 'Set Security Bond Allowance is not available right now.')
+	const effectiveClaimFeesBlocker = claimFeesGuardMessage ?? (claimFeesEnabled ? undefined : 'Claim Fees is not available right now.')
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
@@ -463,32 +468,40 @@ export function SecurityVaultSection({
 			actionLabel: 'Deposit REP',
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
+			safetyId: getSecurityVaultActionSafetyId('depositRep'),
 			...(depositRepEnabled ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled ? 'ready' : 'blocked',
+			...(effectiveDepositBlocker === undefined ? {} : { blocker: effectiveDepositBlocker }),
 			title: 'Deposit REP',
 		},
 		{
 			actionLabel: repExitActionLabel,
 			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal once a valid oracle price exists.',
 			key: 'rep-exit',
+			safetyId: effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep'),
 			...(repExitEnabled ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
 			readiness: repExitEnabled ? 'ready' : 'blocked',
+			...(effectiveRepExitBlocker === undefined ? {} : { blocker: effectiveRepExitBlocker }),
 			title: repExitActionLabel,
 		},
 		{
 			actionLabel: 'Set Bond Allowance',
 			description: 'Queue a new security bond allowance using the current oracle price context.',
 			key: 'set-bond-allowance',
+			safetyId: getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance'),
 			...(bondAllowanceEnabled ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
 			readiness: bondAllowanceEnabled ? 'ready' : 'blocked',
+			...(effectiveBondAllowanceBlocker === undefined ? {} : { blocker: effectiveBondAllowanceBlocker }),
 			title: 'Set Security Bond Allowance',
 		},
 		{
 			actionLabel: 'Claim Fees',
 			description: 'Review claimable fees and confirm the fee redemption for the selected vault.',
 			key: 'claim-fees',
-			onAction: () => setVaultActionModal('claim-fees'),
-			readiness: 'ready',
+			safetyId: getSecurityVaultActionSafetyId('redeemFees'),
+			...(claimFeesEnabled && claimFeesGuardMessage === undefined ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
+			readiness: claimFeesEnabled && claimFeesGuardMessage === undefined ? 'ready' : 'blocked',
+			...(effectiveClaimFeesBlocker === undefined ? {} : { blocker: effectiveClaimFeesBlocker }),
 			title: 'Claim Fees',
 		},
 		...extraReadinessActions,
@@ -550,6 +563,7 @@ export function SecurityVaultSection({
 							pendingLabel='Approving REP...'
 							requiredAmount={depositAmount}
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
+							safetyId={getSecurityVaultActionSafetyId('approveRep')}
 							tokenSymbol='REP'
 							tokenUnits={18}
 							disabled={!approveRepEnabled}
@@ -565,7 +579,14 @@ export function SecurityVaultSection({
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								Cancel
 							</button>
-							<TransactionActionButton idleLabel='Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }} />
+							<TransactionActionButton
+								safetyId={getSecurityVaultActionSafetyId('depositRep')}
+								idleLabel='Deposit REP'
+								pendingLabel='Depositing REP...'
+								onClick={onDepositRep}
+								pending={securityVaultActiveAction === 'depositRep'}
+								availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
+							/>
 						</div>
 					</>
 				)}
@@ -674,6 +695,7 @@ export function SecurityVaultSection({
 								Cancel
 							</button>
 							<TransactionActionButton
+								safetyId={effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep')}
 								idleLabel={repExitActionLabel}
 								pendingLabel={effectiveRepExitMode === 'redeem' ? 'Redeeming REP...' : 'Queueing REP withdrawal...'}
 								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
@@ -734,6 +756,7 @@ export function SecurityVaultSection({
 								Cancel
 							</button>
 							<TransactionActionButton
+								safetyId={getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance')}
 								idleLabel='Set Security Bond Allowance'
 								pendingLabel='Queueing allowance update...'
 								onClick={onSetSecurityBondAllowance}
@@ -761,7 +784,14 @@ export function SecurityVaultSection({
 					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 						Cancel
 					</button>
-					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }} />
+					<TransactionActionButton
+						safetyId={getSecurityVaultActionSafetyId('redeemFees')}
+						idleLabel='Claim Fees'
+						pendingLabel='Claiming fees...'
+						onClick={onRedeemFees}
+						pending={securityVaultActiveAction === 'redeemFees'}
+						availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }}
+					/>
 				</div>
 			</OperationModal>
 		</>
@@ -778,7 +808,14 @@ export function SecurityVaultSection({
 					</div>
 				)}
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }} />
+					<TransactionActionButton
+						safetyId={getSecurityVaultActionSafetyId('redeemFees')}
+						idleLabel='Claim Fees'
+						pendingLabel='Claiming fees...'
+						onClick={onRedeemFees}
+						pending={securityVaultActiveAction === 'redeemFees'}
+						availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }}
+					/>
 				</div>
 			</SectionBlock>
 
@@ -811,12 +848,20 @@ export function SecurityVaultSection({
 					pendingLabel='Approving REP...'
 					requiredAmount={depositAmount}
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
+					safetyId={getSecurityVaultActionSafetyId('approveRep')}
 					tokenSymbol='REP'
 					tokenUnits={18}
 					disabled={!approveRepEnabled}
 				/>
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }} />
+					<TransactionActionButton
+						safetyId={getSecurityVaultActionSafetyId('depositRep')}
+						idleLabel='Deposit REP'
+						pendingLabel='Depositing REP...'
+						onClick={onDepositRep}
+						pending={securityVaultActiveAction === 'depositRep'}
+						availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
+					/>
 				</div>
 				{(() => {
 					if (repBalanceGap !== undefined && repBalanceGap > 0n) return <ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
@@ -858,6 +903,7 @@ export function SecurityVaultSection({
 						{renderStagedOperationTimeoutField()}
 						<div className='actions'>
 							<TransactionActionButton
+								safetyId={getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance')}
 								idleLabel='Set Security Bond Allowance'
 								pendingLabel='Queueing allowance update...'
 								onClick={onSetSecurityBondAllowance}
@@ -917,6 +963,7 @@ export function SecurityVaultSection({
 				{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
 				<div className='actions'>
 					<TransactionActionButton
+						safetyId={effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep')}
 						idleLabel={repExitActionLabel}
 						pendingLabel={effectiveRepExitMode === 'redeem' ? 'Redeeming REP...' : 'Queueing REP withdrawal...'}
 						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}

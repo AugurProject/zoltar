@@ -34,6 +34,7 @@ import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSo
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
+import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
@@ -111,6 +112,7 @@ export type ReadinessAction = {
 	description: string
 	onAction?: () => void
 	readiness: 'blocked' | 'ready' | 'warning'
+	safetyId: ActionSafetyId
 	key: string
 	title: string
 }
@@ -292,6 +294,7 @@ export type TransactionActionButtonProps = {
 	onClick: () => void
 	pending?: boolean
 	pendingLabel: ComponentChildren
+	safetyId: ActionSafetyId
 	showDisabledReason?: boolean
 	tone?: 'primary' | 'secondary'
 	type?: 'button' | 'submit'

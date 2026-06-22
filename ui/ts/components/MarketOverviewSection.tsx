@@ -114,6 +114,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								onClick: () => setSelectedChildOutcomeIndex(child.outcomeIndex),
 								pending: zoltarChildUniversePendingOutcomeIndex === child.outcomeIndex,
 								pendingLabel: 'Opening...',
+								safetyId: 'child-universe.deploy',
 							})}
 							renderBadge={child => <ChildUniverseStatusBadge child={child} />}
 							renderBody={child => <ChildUniverseDetails child={child} />}
@@ -148,6 +149,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						pending={selectedChildUniverse !== undefined && zoltarChildUniversePendingOutcomeIndex === selectedChildUniverse.outcomeIndex}
 						pendingLabel='Deploying universe...'
 						requirements={childUniverseRequirements}
+						safetyId='child-universe.deploy'
 						title='Create Child Universe'
 					>
 						{selectedChildUniverse === undefined ? undefined : (

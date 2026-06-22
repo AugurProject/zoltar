@@ -866,24 +866,30 @@ export function SecurityPoolWorkflowSection({
 												{...securityVault}
 												compactLayout
 												extraReadinessActions={[
-													{
-														actionLabel: 'Liquidate Vault',
-														description: 'Queue a high-risk liquidation against the selected vault.',
-														key: 'liquidate-vault',
-														readiness: liquidationEnabled ? 'ready' : 'blocked',
-														title: 'Liquidate Vault',
-														...(() => {
-															if (selectedPool === undefined || selectedVaultDetails === undefined) return { blocker: 'Refresh the selected vault first.' }
-															if (selectedVaultAddress === '') return { blocker: 'Select a pool and vault first.' }
+													(() => {
+														const liquidationBlocker = (() => {
+															if (selectedPool === undefined || selectedVaultDetails === undefined) return 'Refresh the selected vault first.'
+															if (selectedVaultAddress === '') return 'Select a pool and vault first.'
+															if (!liquidationEnabled) return 'Liquidation is not available right now.'
 
-															return {}
-														})(),
-														...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled
-															? {}
-															: {
-																	onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.securityBondAllowance),
-																}),
-													},
+															return undefined
+														})()
+
+														return {
+															actionLabel: 'Liquidate Vault',
+															...(liquidationBlocker === undefined ? {} : { blocker: liquidationBlocker }),
+															description: 'Queue a high-risk liquidation against the selected vault.',
+															key: 'liquidate-vault',
+															readiness: liquidationEnabled ? 'ready' : 'blocked',
+															safetyId: 'security-pool.queueLiquidation',
+															title: 'Liquidate Vault',
+															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled
+																? {}
+																: {
+																		onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.securityBondAllowance),
+																	}),
+														}
+													})(),
 												]}
 												modalFirst
 												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
@@ -999,6 +1005,7 @@ export function SecurityPoolWorkflowSection({
 											</button>
 											{currentPoolOracleManagerDetails === undefined ? undefined : (
 												<TransactionActionButton
+													safetyId='security-pool.executeStagedOperation'
 													idleLabel='Execute Staged Operation'
 													pendingLabel='Executing staged operation...'
 													onClick={() => {
@@ -1047,6 +1054,7 @@ export function SecurityPoolWorkflowSection({
 												{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : 'Refresh Oracle'}
 											</button>
 											<TransactionActionButton
+												safetyId='security-pool.requestPrice'
 												idleLabel='Request New Price'
 												pendingLabel='Requesting new price...'
 												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}

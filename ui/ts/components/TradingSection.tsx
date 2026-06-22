@@ -13,6 +13,7 @@ import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { getTradingActionSafetyId } from '../lib/actionSafety/ids.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { tryParseBigIntListInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -120,6 +121,7 @@ export function TradingSection({
 
 		return (() => {
 			if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
+			if (selectedPool?.questionOutcome !== 'none') return 'This market has already finalized.'
 			if (remainingMintCapacity === undefined) return 'Loading mint capacity.'
 
 			return (() => {
@@ -175,13 +177,14 @@ export function TradingSection({
 		: (() => {
 				if (accountState.address === undefined) return 'Connect a wallet before redeeming shares.'
 				if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
+				if (selectedPool?.questionOutcome === 'none') return 'Wait for the selected pool to resolve before redeeming shares.'
 
 				return undefined
 			})()
-	const effectiveMintLauncherBlocker = mintEnabled ? mintLauncherBlocker : undefined
-	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsEnabled ? redeemCompleteSetsLauncherBlocker : undefined
-	const effectiveMigrateSharesLauncherBlocker = migrateSharesEnabled ? migrateSharesLauncherBlocker : undefined
-	const effectiveRedeemSharesLauncherBlocker = redeemSharesEnabled ? redeemSharesLauncherBlocker : undefined
+	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : 'Mint complete sets is not available right now.')
+	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : 'Redeem complete sets is not available right now.')
+	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : 'Migrate forked shares is not available right now.')
+	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : 'Redeem resolved shares is not available right now.')
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -210,6 +213,7 @@ export function TradingSection({
 			description: 'Review mint capacity, available backing, and the collateral amount before minting complete sets.',
 			key: 'mint-complete-sets',
 			readiness: mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
+			safetyId: getTradingActionSafetyId('createCompleteSet'),
 			title: 'Mint Complete Sets',
 			...(mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
 			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
@@ -219,6 +223,7 @@ export function TradingSection({
 			description: 'Redeem matching yes, no, and invalid shares back into collateral using the available complete-set balance.',
 			key: 'redeem-complete-sets',
 			readiness: redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
+			safetyId: getTradingActionSafetyId('redeemCompleteSet'),
 			title: 'Redeem Complete Sets',
 			...(redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
 			...(effectiveRedeemCompleteSetsLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemCompleteSetsLauncherBlocker }),
@@ -228,6 +233,7 @@ export function TradingSection({
 			description: 'Select the source outcome and target child universes before migrating forked shares.',
 			key: 'migrate-shares',
 			readiness: migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
+			safetyId: getTradingActionSafetyId('migrateShares'),
 			title: 'Migrate Forked Shares',
 			...(migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
 			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
@@ -237,6 +243,7 @@ export function TradingSection({
 			description: 'Redeem finalized winning shares once the selected pool has resolved.',
 			key: 'redeem-shares',
 			readiness: redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
+			safetyId: getTradingActionSafetyId('redeemShares'),
 			title: 'Redeem Resolved Shares',
 			...(redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
@@ -336,7 +343,14 @@ export function TradingSection({
 				</label>
 				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Mint Complete Sets' pendingLabel='Minting complete sets...' onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={{ disabled: !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }} />
+					<TransactionActionButton
+						safetyId={getTradingActionSafetyId('createCompleteSet')}
+						idleLabel='Mint Complete Sets'
+						pendingLabel='Minting complete sets...'
+						onClick={onCreateCompleteSet}
+						pending={tradingActiveAction === 'createCompleteSet'}
+						availability={{ disabled: !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }}
+					/>
 				</div>
 			</OperationModal>
 
@@ -361,6 +375,7 @@ export function TradingSection({
 				{redeemCompleteSetGuardMessage === undefined ? undefined : <p className='detail'>{redeemCompleteSetGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
+						safetyId={getTradingActionSafetyId('redeemCompleteSet')}
 						idleLabel='Redeem Complete Sets'
 						pendingLabel='Redeeming complete sets...'
 						onClick={onRedeemCompleteSet}
@@ -388,6 +403,7 @@ export function TradingSection({
 				{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
+						safetyId={getTradingActionSafetyId('migrateShares')}
 						idleLabel='Migrate Shares'
 						pendingLabel='Migrating shares...'
 						onClick={onMigrateShares}
@@ -402,6 +418,7 @@ export function TradingSection({
 				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
+						safetyId={getTradingActionSafetyId('redeemShares')}
 						idleLabel='Redeem Shares'
 						pendingLabel='Redeeming shares...'
 						onClick={onRedeemShares}

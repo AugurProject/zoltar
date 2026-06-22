@@ -4,9 +4,9 @@ import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
+import { LoadingText } from './LoadingText.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
-import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
@@ -51,7 +51,13 @@ export function OverviewPanels({
 		<section className='overview-shell'>
 			<article className='overview-panel overview-wallet-panel'>
 				<RouteHeader
-					actions={accountState.address === undefined ? <TransactionActionButton idleLabel='Connect wallet' pendingLabel='Connecting...' onClick={onConnect} pending={isConnectingWallet} /> : undefined}
+					actions={
+						accountState.address === undefined ? (
+							<button className='secondary' type='button' onClick={onConnect} disabled={isConnectingWallet}>
+								{isConnectingWallet ? <LoadingText>Connecting...</LoadingText> : 'Connect wallet'}
+							</button>
+						) : undefined
+					}
 					badge={universeHasForked ? <Badge tone='warning'>Forked</Badge> : undefined}
 					description={operationsHeaderDescription}
 					eyebrow='Operations'

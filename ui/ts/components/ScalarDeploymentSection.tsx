@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection, ChildUniverseStatusBadge } from './ChildUniversesSection.js'
+import { ActionLauncherButton } from './ActionLauncherButton.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
-import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
@@ -69,7 +69,8 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			<ChildUniversesSection childUniverses={childUniverses} emptyMessage='No deployed child universes yet.' headerTitle='Existing Child Universes' renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
 			<ScalarOutcomePicker
 				action={
-					<TransactionActionButton
+					<ActionLauncherButton
+						safetyId='child-universe.deploy'
 						idleLabel={(() => {
 							if (selectedScalarChildExists) return 'Deployed'
 							if (scalarOutcomeInvalid) return 'Create invalid universe'
@@ -88,6 +89,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						pending={false}
 						tone='secondary'
 						availability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
+						showDisabledReason
 					/>
 				}
 				details={{
@@ -119,6 +121,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				pending={scalarDeployPending}
 				pendingLabel='Deploying universe...'
 				requirements={scalarDeployRequirements}
+				safetyId='child-universe.deploy'
 				title='Create Child Universe'
 			>
 				{selectedScalarChild === undefined ? undefined : (

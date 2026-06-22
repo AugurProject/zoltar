@@ -30,6 +30,7 @@ describe('TransactionActionButton', () => {
 				onClick: () => undefined,
 				pending: true,
 				pendingLabel: 'Submitting...',
+				safetyId: 'deployment.deployNextMissing',
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -49,6 +50,7 @@ describe('TransactionActionButton', () => {
 				idleLabel: 'Submit',
 				onClick: () => undefined,
 				pendingLabel: 'Submitting...',
+				safetyId: 'deployment.deployNextMissing',
 				showDisabledReason: true,
 			}),
 		)
