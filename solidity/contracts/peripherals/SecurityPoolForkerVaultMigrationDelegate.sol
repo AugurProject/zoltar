@@ -18,12 +18,12 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		);
 	}
 
-	function createChildUniverse(ISecurityPool parent, uint8 outcomeIndex) public {
+	function createChildUniverse(ISecurityPool parent, uint256 outcomeIndex) public {
 		require(address(childrenByPoolAndOutcome[parent][outcomeIndex]) == address(0x0), 'ec');
 		_getOrDeployChildPool(parent, outcomeIndex);
 	}
 
-	function migrateVault(ISecurityPool parent, uint8 outcomeIndex) public {
+	function migrateVault(ISecurityPool parent, uint256 outcomeIndex) public {
 		require(block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'mwc');
 		parent.updateVaultFees(msg.sender);
 		ISecurityPool child = _getOrDeployChildPool(parent, outcomeIndex);

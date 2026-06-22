@@ -2,18 +2,21 @@ import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:te
 import assert from 'node:assert/strict'
 import { decodeEventLog, encodeAbiParameters, keccak256, zeroAddress } from 'viem'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
-import { DAY, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { addressString } from '../testsuite/simulator/utils/bigint'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { deployUniformPriceDualCapBatchAuction } from '../testsuite/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { getEthRaiseCap, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { executeStagedOperation, getEthRaiseCap, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
-import { createChildUniverse, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
-import { ensureZoltarDeployed, getTotalTheoreticalSupply } from '../testsuite/simulator/utils/contracts/zoltar'
+import { createChildUniverse, initiateSecurityPoolFork, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
+import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { getChildUniverseId, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../types/contractArtifact'
+import { approveToken, contractExists, getChildUniverseId, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { createWriteClient, type WriteClient } from '../testsuite/simulator/utils/viem'
+import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -77,18 +80,38 @@ describe('security regression coverage', () => {
 		return getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 	}
 
+	test('external scalar Zoltar forks allow Placeholder REP migration to the scalar child branch', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const scalarQuestionData = {
+			title: `external scalar fork ${await mockWindow.getTime()}`,
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 100n,
+			displayValueMin: 0n,
+			displayValueMax: 100n * 10n ** 18n,
+			answerUnit: 'points',
+		}
+		await createQuestion(client, scalarQuestionData, [])
+		const scalarQuestionId = getQuestionId(scalarQuestionData, [])
+		const scalarOutcomeIndex = getScalarOutcomeIndex(scalarQuestionData, 42n)
+
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, scalarQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [scalarOutcomeIndex])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, scalarOutcomeIndex)
+		const scalarUniverse = getChildUniverseId(genesisUniverse, scalarOutcomeIndex)
+		const scalarChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, scalarUniverse, questionId, securityMultiplier)
+		assert.ok(await contractExists(client, scalarChildPool.securityPool), 'scalar child security pool should deploy')
+	})
+
 	test('child truth-auction address cannot be reserved by an untrusted caller', async () => {
 		const yesUniverse = await prepareOwnForkToYes()
 		const securityPoolSalt = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier]))
 
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.abi,
-				address: getInfraContractAddresses().uniformPriceDualCapBatchAuctionFactory,
-				functionName: 'deployUniformPriceDualCapBatchAuction',
-				args: [getInfraContractAddresses().securityPoolForker, securityPoolSalt],
-			}),
-		)
+		await deployUniformPriceDualCapBatchAuction(client, getInfraContractAddresses().securityPoolForker, securityPoolSalt)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -110,33 +133,16 @@ describe('security regression coverage', () => {
 			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidator.account.address, BigInt(index + 1))
 		}
 		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetAllowance)
-		const liquidationOperationId = await client.readContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
-			functionName: 'stagedOperationCounter',
-			args: [],
-		})
+		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
 		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
-		const staleExecutionHash = await writeContractAndWait(liquidator, () =>
-			liquidator.writeContract({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-				address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
-				functionName: 'executeStagedOperation',
-				args: [liquidationOperationId],
-			}),
-		)
+		const staleExecutionHash = await executeStagedOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
 
 		const targetVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidator.account.address)
 		const totalAllowance = await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool)
-		const stagedOperation = await client.readContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
-			functionName: 'stagedOperations',
-			args: [liquidationOperationId],
-		})
+		const stagedOperation = await getStagedOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
 		const staleExecutionReceipt = await liquidator.waitForTransactionReceipt({ hash: staleExecutionHash })
 		const executionLog = staleExecutionReceipt.logs
 			.map(log => {

@@ -121,7 +121,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	function migrateVaultWithUnresolvedEscalation(
 		ISecurityPool parent,
 		address vault,
-		uint8 childOutcomeIndex
+		uint256 childOutcomeIndex
 	) public returns (bool moreToMigrate) {
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
 		require(parentForkData.unresolvedEscalationAtFork, 'ee');
@@ -137,7 +137,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool parent,
 		EscalationGame parentEscalationGame,
 		address vault,
-		uint8 childOutcomeIndex
+		uint256 childOutcomeIndex
 	) private returns (bool moreToMigrate) {
 		parent.updateVaultFees(vault);
 		ISecurityPool child = _getOrDeployOwnForkMigrationChild(parent, childOutcomeIndex);
@@ -181,7 +181,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool parent,
 		EscalationGame parentEscalationGame,
 		address vault,
-		uint8 childOutcomeIndex
+		uint256 childOutcomeIndex
 	) private returns (bool moreToMigrate) {
 		parent.updateVaultFees(vault);
 		ISecurityPool child = _getOrDeployChildPool(parent, childOutcomeIndex);
@@ -220,7 +220,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 
 	function _getOrDeployOwnForkMigrationChild(
 		ISecurityPool parent,
-		uint8 childOutcomeIndex
+		uint256 childOutcomeIndex
 	) private returns (ISecurityPool child) {
 		child = childrenByPoolAndOutcome[parent][childOutcomeIndex];
 		if (address(child) != address(0x0)) {

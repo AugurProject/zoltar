@@ -49,13 +49,13 @@ contract Zoltar {
 		forkThresholdDivisor = _forkThresholdDivisor;
 		forkBurnDivisor = _forkBurnDivisor;
 		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
-		if (Constants.GENESIS_REPUTATION_TOKEN.code.length != 0) {
-			// The configured genesis token must expose `getTotalTheoreticalSupply()`.
-			// This constructor intentionally relies on that non-ERC20 extension when wiring
-			// the genesis universe to an external REP deployment.
-			universeTheoreticalSupplies[0] = ReputationToken(Constants.GENESIS_REPUTATION_TOKEN)
-				.getTotalTheoreticalSupply();
-		}
+		require(Constants.GENESIS_REPUTATION_TOKEN.code.length != 0, 'genesis rep missing code');
+		// The configured genesis token must expose `getTotalTheoreticalSupply()`.
+		// This constructor intentionally relies on that non-ERC20 extension when wiring
+		// the genesis universe to an external REP deployment.
+		uint256 genesisSupply = ReputationToken(Constants.GENESIS_REPUTATION_TOKEN).getTotalTheoreticalSupply();
+		require(genesisSupply != 0, 'genesis rep missing supply');
+		universeTheoreticalSupplies[0] = genesisSupply;
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
@@ -78,6 +78,9 @@ contract Zoltar {
 
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
 		Universe memory universe = universes[universeId];
+		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized');
+		require(address(universe.reputationToken).code.length != 0, 'Universe rep missing code');
+		require(universeTheoreticalSupplies[universeId] != 0, 'Universe has no supply');
 		require(universe.forkTime == 0, 'Universe has forked already');
 		// Intended behavior: Zoltar treats questions as global protocol objects rather
 		// than binding them to a specific universe. Any ended question can force a fork

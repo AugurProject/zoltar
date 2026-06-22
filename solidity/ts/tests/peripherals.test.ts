@@ -5,6 +5,7 @@ import type { Abi, Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -102,7 +103,7 @@ const migrateVaultWithUnresolvedEscalationReturnAbi = [
 		inputs: [
 			{ internalType: 'contract ISecurityPool', name: 'securityPool', type: 'address' },
 			{ internalType: 'address', name: 'vault', type: 'address' },
-			{ internalType: 'uint8', name: 'childOutcomeIndex', type: 'uint8' },
+			{ internalType: 'uint256', name: 'childOutcomeIndex', type: 'uint256' },
 		],
 		name: 'migrateVaultWithUnresolvedEscalation',
 		outputs: [{ internalType: 'bool', name: 'moreToMigrate', type: 'bool' }],
@@ -891,11 +892,11 @@ describe('Peripherals Contract Test Suite', () => {
 		const bobVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
+		const theoreticalSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		await mockWindow.addStateOverrides({
 			[repToken]: {
 				stateDiff: {
-					[slot5]: repDeposit * 10n,
+					[theoreticalSupplySlot]: repDeposit * 10n,
 				},
 			},
 		})
@@ -955,11 +956,11 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
+		const theoreticalSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		await mockWindow.addStateOverrides({
 			[repToken]: {
 				stateDiff: {
-					[slot5]: repDeposit * 10n,
+					[theoreticalSupplySlot]: repDeposit * 10n,
 				},
 			},
 		})
@@ -1505,11 +1506,11 @@ describe('Peripherals Contract Test Suite', () => {
 		await mockWindow.advanceTime(4n * DAY)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
+		const theoreticalSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		await mockWindow.addStateOverrides({
 			[repToken]: {
 				stateDiff: {
-					[slot5]: repDeposit * 10n,
+					[theoreticalSupplySlot]: repDeposit * 10n,
 				},
 			},
 		})
@@ -1673,7 +1674,7 @@ describe('Peripherals Contract Test Suite', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			address: getInfraContractAddresses().securityPoolForker,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
-			args: [yesSecurityPool.securityPool, client.account.address, Number(QuestionOutcome.Yes)],
+			args: [yesSecurityPool.securityPool, client.account.address, BigInt(QuestionOutcome.Yes)],
 		})
 		await client.waitForTransactionReceipt({ hash })
 
@@ -2183,7 +2184,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.ok(forkData.auctionableRepAtFork > 0n, 'rep at fork should stay positive after the own-game fork')
 		assert.ok(forkData.auctionableRepAtFork <= repBalance + forkThreshold * 2n, 'rep at fork should stay bounded by the REP that actually participated in the own-game fork')
 		strictEqualTypeSafe(forkData.migratedRep, 0n, 'migrated rep should be 0 so far')
-		strictEqualTypeSafe(forkData.outcomeIndex, 0, 'there should be no outcome')
+		strictEqualTypeSafe(forkData.outcomeIndex, 0n, 'there should be no outcome')
 		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
 		const totalFeesOwedToVaultsRightAfterFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
@@ -2310,7 +2311,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const repTotalSupplySlot = '0x' + 5n.toString(16).padStart(64, '0')
+		const repTotalSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		await mockWindow.addStateOverrides({
 			[repToken]: {
 				stateDiff: {
@@ -3142,17 +3143,17 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const parentForkDataSlot = getMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
-		const parentOutcomeIndexSlot = formatStorageSlot(parentForkDataSlot + 14n)
+		const parentOutcomeIndexSlot = formatStorageSlot(parentForkDataSlot + 15n)
 		await mockWindow.addStateOverrides({
 			[getInfraContractAddresses().securityPoolForker]: {
 				stateDiff: {
-					[parentOutcomeIndexSlot]: 0x0201n,
+					[parentOutcomeIndexSlot]: BigInt(QuestionOutcome.No),
 				},
 			},
 		})
 
 		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(parentForkData.outcomeIndex, QuestionOutcome.No, 'storage override should poison the parent fork outcome bucket for the regression')
+		strictEqualTypeSafe(parentForkData.outcomeIndex, BigInt(QuestionOutcome.No), 'storage override should poison the parent fork outcome bucket for the regression')
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const walletRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)

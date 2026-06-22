@@ -72,6 +72,16 @@ export const requestPriceWithValue = async (client: WriteClient, priceOracleMana
 		}),
 	)
 
+export const recoverSettledPendingReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'recoverSettledPendingReport',
+			address: priceOracleManagerAndOperatorQueuer,
+			args: [],
+		}),
+	)
+
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
@@ -126,6 +136,14 @@ export const getStagedOperation = async (client: ReadClient, priceOracleManagerA
 		functionName: 'stagedOperations',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [operationId],
+	})
+
+export const getStagedOperationCounter = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		functionName: 'stagedOperationCounter',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
 	})
 
 export const getActiveStagedOperationCount = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
