@@ -1,0 +1,98 @@
+name: CI Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.3.11
+  FOUNDRY_VERSION: v1.5.1
+
+jobs:
+  required:
+    name: Required
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Foundry / Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb', 'ui/bun.lock', 'ui/bun.lockb', 'solidity/bun.lock', 'solidity/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd ui && bun install --frozen-lockfile)
+          (cd solidity && bun install --frozen-lockfile)
+
+      - name: Verify Anvil
+        run: anvil --version
+
+      - name: Generate and verify generated artifacts
+        run: bun run check:generated-clean
+
+      - name: TypeScript type checking
+        run: bun run tsc
+
+      - name: Tests
+        run: bun run test
+
+      - name: Format
+        run: bun run format
+
+      - name: Verify formatter produced no tracked or untracked diff
+        run: |
+          if ! git diff --exit-code -- .; then
+            echo 'Formatter changed tracked files. Run bun run format and commit the result.'
+            exit 1
+          fi
+
+          if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+            git status --short
+            echo 'CI generated untracked files. Commit them or update .gitignore as appropriate.'
+            exit 1
+          fi
+
+      - name: Biome and Solidity checks
+        run: bun run check
+
+      - name: Dead code analysis
+        run: bun run knip
+
+      - name: Dependency audit
+        run: |
+          bun audit
+          (cd ui && bun audit)
+          (cd solidity && bun audit)
+
+      - name: Production UI build and mainnet deployment validation
+        run: bun run ui:build:prod

@@ -28,6 +28,6 @@
 		"build": "bun x tsc --project tsconfig.json"
 	},
 	"dependencies": {
-		"viem": "2.38.3"
+		"viem": "2.53.1"
 	}
 }
