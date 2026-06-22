@@ -96,6 +96,22 @@ export const getPendingOperationSlotId = async (client: ReadClient, priceOracleM
 		args: [],
 	})
 
+export const getPendingSettlementOperationCount = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		functionName: 'getPendingSettlementOperationCount',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
+export const getPendingSettlementOperationIds = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		functionName: 'getPendingSettlementOperationIds',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
 export const getIsPriceValid = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,

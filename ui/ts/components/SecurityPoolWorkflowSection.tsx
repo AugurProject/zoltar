@@ -106,6 +106,9 @@ function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAl
 			return assertNever(operation)
 	}
 }
+function getStagedOperationExecutionModeLabel(operationId: bigint, pendingSettlementOperationIds: bigint[]) {
+	return pendingSettlementOperationIds.includes(operationId) ? 'Auto-exec pending' : 'Manual execution'
+}
 function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {
 	if (systemState === 'operational') return 'ok'
 	if (systemState === undefined) return 'muted'
@@ -408,6 +411,7 @@ export function SecurityPoolWorkflowSection({
 	})
 	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
+	const pendingSettlementOperationIds = currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? []
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
 	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = (() => {
@@ -954,7 +958,7 @@ export function SecurityPoolWorkflowSection({
 													<div className='entity-card-header'>
 														<div className='entity-card-copy'>
 															<h3>{getPendingOperationLabel(operation.operation)}</h3>
-															{currentPoolOracleManagerDetails?.pendingOperationSlotId === operation.operationId ? <p className='detail'>Auto-exec slot</p> : <p className='detail'>Manual execution</p>}
+															<p className='detail'>{getStagedOperationExecutionModeLabel(operation.operationId, pendingSettlementOperationIds)}</p>
 														</div>
 													</div>
 													<MetricGrid className='entity-card-body'>

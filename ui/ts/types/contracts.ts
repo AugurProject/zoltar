@@ -191,6 +191,7 @@ export type OracleManagerDetails = {
 	openOracleAddress: Address
 	pendingOperation: StagedOracleOperation | undefined
 	pendingOperationSlotId: bigint
+	pendingSettlementOperationIds: bigint[]
 	pendingReportId: bigint
 	priceRoundConsumedNotional?: bigint
 	priceRoundId?: bigint
