@@ -537,7 +537,7 @@ contract EscalationGame {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'to');
 		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'af');
-		require(amount >= startBond, 'md');
+		require(amount > 0, 'md');
 		uint256 outcomeIndex = uint256(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		uint256 currentBalance = selectedOutcomeState.balance;
@@ -1361,9 +1361,9 @@ contract EscalationGame {
 
 		if (newBalance == maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
 			acceptedAmount -= 1;
-			require(acceptedAmount >= startBond, 'tie adjustment would break min deposit');
 			newBalance = currentBalance + acceptedAmount;
 		}
+		require(acceptedAmount >= startBond || newBalance == nonDecisionThreshold, 'md');
 	}
 
 	function _getStableLocalParentDepositIndex(uint256 depositIndex) private view returns (uint256) {

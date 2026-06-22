@@ -509,7 +509,7 @@ describe('Escalation Game Test Suite', () => {
 	test('depositOnOutcome rejects tie adjustments that would drop the accepted deposit below the minimum bond', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
-		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /tie adjustment would break min deposit/i)
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /md/i)
 		const balances = await getBalances(client, escalationGameAddress)
 		assert.strictEqual(balances.invalid, reportBond, 'original leading balance should stay untouched')
 		assert.strictEqual(balances.yes, 0n, 'tying minimum deposit should not be partially accepted')
