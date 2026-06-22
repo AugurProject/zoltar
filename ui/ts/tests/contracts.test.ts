@@ -909,7 +909,7 @@ describe('contracts helpers', () => {
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
-		expect(decodedCall.args).toEqual([securityPoolAddress, vaultAddress, 2])
+		expect(decodedCall.args).toEqual([securityPoolAddress, vaultAddress, 2n])
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
 			hash: transactionHash,

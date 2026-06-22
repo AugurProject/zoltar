@@ -22,7 +22,7 @@ const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address 
 
 const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 3n
 
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 type SecurityPoolDeploymentQueryResult = {
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address

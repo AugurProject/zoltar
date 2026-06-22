@@ -15,7 +15,7 @@ import { SecurityPoolForkerForkData, OwnForkChildRepAllocation } from './Securit
 abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStorage {
 	Zoltar public immutable zoltar;
 
-	event MigrateVault(address vault, uint8 outcome, uint256 poolOwnership, uint256 securityBondAllowance);
+	event MigrateVault(address vault, uint256 outcome, uint256 poolOwnership, uint256 securityBondAllowance);
 	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentPoolOwnership);
 	event ClaimForkedEscalationDepositsToWallet(
 		ISecurityPool parent,
@@ -42,7 +42,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 			securityPool.poolOwnershipDenominator();
 	}
 
-	function _getOrDeployChildPool(ISecurityPool parent, uint8 outcomeIndex) internal returns (ISecurityPool child) {
+	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal returns (ISecurityPool child) {
 		child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) {
 			require(parent.systemState() == SystemState.PoolForked, 'e1');
@@ -98,7 +98,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		_sweepChildRepToPool(parent, outcomeIndex);
 	}
 
-	function _sweepChildRepToPool(ISecurityPool parent, uint8 outcomeIndex) internal {
+	function _sweepChildRepToPool(ISecurityPool parent, uint256 outcomeIndex) internal {
 		ISecurityPool child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) return;
 		uint256 pendingChildRep = pendingChildRepByPoolAndOutcome[parent][outcomeIndex];
@@ -233,7 +233,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		parent.configureVault(vault, 0, 0, parentVaultFeeIndex);
 	}
 
-	function _recordAllocatedVaultMigrationRep(ISecurityPool parent, uint8 outcomeIndex, uint256 amount) internal {
+	function _recordAllocatedVaultMigrationRep(ISecurityPool parent, uint256 outcomeIndex, uint256 amount) internal {
 		if (amount == 0) return;
 		OwnForkChildRepAllocation storage allocated = ownForkChildRepAllocationByPoolAndOutcome[parent][outcomeIndex];
 		uint256 newAllocatedAmount = allocated.vaultChildRepUsed + amount;
@@ -241,7 +241,11 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		allocated.vaultChildRepUsed = newAllocatedAmount;
 	}
 
-	function _recordAllocatedEscalationMigrationRep(ISecurityPool parent, uint8 outcomeIndex, uint256 amount) internal {
+	function _recordAllocatedEscalationMigrationRep(
+		ISecurityPool parent,
+		uint256 outcomeIndex,
+		uint256 amount
+	) internal {
 		if (amount == 0) return;
 		OwnForkChildRepAllocation storage allocated = ownForkChildRepAllocationByPoolAndOutcome[parent][outcomeIndex];
 		uint256 newAllocatedAmount = allocated.escrowChildRepUsed + amount;
@@ -252,7 +256,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 
 	function _capOwnForkEscalationChildRep(
 		ISecurityPool parent,
-		uint8 outcomeIndex,
+		uint256 outcomeIndex,
 		uint256 requestedAmount
 	) internal view returns (uint256) {
 		uint256 escalationChildRepAtFork = forkDataByPool[parent].escalationChildRepAtFork;
@@ -264,7 +268,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 
 	function _splitMigrationRepToChild(
 		ISecurityPool parent,
-		uint8 outcomeIndex,
+		uint256 outcomeIndex,
 		uint256 amount,
 		bool enforceOwnForkAllocationCap,
 		bool fromEscalationBucket

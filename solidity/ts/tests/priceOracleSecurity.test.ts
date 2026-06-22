@@ -1,6 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert/strict'
-import { decodeEventLog, encodeDeployData, type Address, type Hex, zeroAddress } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -20,6 +20,7 @@ import { isIgnorableLogDecodeError } from './logDecodeErrors'
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
+const OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT = 6n
 
 const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -45,6 +46,18 @@ function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArg
 		bytecode: `0x${peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.evm.bytecode.object}`,
 		args,
 	})
+}
+
+function formatStorageSlot(slot: bigint) {
+	return `0x${slot.toString(16).padStart(64, '0')}`
+}
+
+function getMappingStorageSlot(key: bigint, mappingSlot: bigint) {
+	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [key, mappingSlot])))
+}
+
+function packOpenOracleExtraCallbackSlot(callbackContract: Address, numReports: number, callbackGasLimit: number) {
+	return BigInt(callbackContract) | (BigInt(numReports) << 160n) | (BigInt(callbackGasLimit) << 192n)
 }
 
 describe('Price Oracle Refund Security Tests', () => {
@@ -551,6 +564,98 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingOperationSlotId, 0n, 'expired pending auto-execute slots should be cleared during callback')
 		assert.strictEqual(stagedOperation[1], zeroAddress, 'expired pending auto-execute operations should be consumed')
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'expired pending operations must not execute during later valid settlement')
+	})
+
+	test('failed OpenOracle settlement callbacks do not leave the coordinator permanently pending', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPrice',
+					value: ethCost,
+				}),
+		)
+
+		const pendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
+
+		const openOracle = getInfraContractAddresses().openOracle
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		const amount1 = reportMeta.exactToken1Report
+		const amount2 = amount1
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await approveToken(client, WETH_ADDRESS, openOracle)
+		await wrapWeth(client, amount2)
+
+		const extraData = await getOpenOracleExtraData(client, pendingReportId)
+		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, extraData.stateHash)
+
+		const callbackSlot = getMappingStorageSlot(pendingReportId, OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT) + 1n
+		await mockWindow.addStateOverrides({
+			[openOracle]: {
+				stateDiff: {
+					[formatStorageSlot(callbackSlot)]: packOpenOracleExtraCallbackSlot(extraData.callbackContract, extraData.numReports, 1),
+				},
+			},
+		})
+		const overriddenExtraData = await getOpenOracleExtraData(client, pendingReportId)
+		assert.strictEqual(overriddenExtraData.callbackGasLimit, 1, 'setup should force the settlement callback to fail')
+
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await openOracleSettle(client, pendingReportId)
+
+		const pendingReportIdAfterSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.strictEqual(pendingReportIdAfterSettlement, pendingReportId, 'failed callbacks should leave recovery work to the coordinator recovery function')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'recoverSettledPendingReport',
+					args: [],
+				}),
+		)
+
+		const pendingReportIdAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.strictEqual(pendingReportIdAfterRecovery, 0n, 'recovery should clear settled reports whose callback failed')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPrice',
+					value: ethCost,
+				}),
+		)
+		const nextPendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.ok(nextPendingReportId > pendingReportId, 'recovery should allow creating a fresh oracle report')
 	})
 
 	test('active staged operations stay newest-first after pending-slot settlement and manual execution', async () => {

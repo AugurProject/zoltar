@@ -115,6 +115,53 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /token returned false/i)
 	})
 
+	test('constructor rejects missing genesis REP token code', async () => {
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const deployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				code: hexToBytes('0x'),
+			},
+		})
+
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
+			/genesis rep/i,
+		)
+	})
+
+	test('forkUniverse rejects uninitialized universes without mutating fork state', async () => {
+		const missingUniverseId = 999_999n
+		const questionData = {
+			title: 'missing universe fork test',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		await assert.rejects(forkUniverse(client, missingUniverseId, questionId), /Universe not initialized|reverted/i)
+
+		const universeData = await getUniverseData(client, missingUniverseId)
+		assert.strictEqual(universeData.forkTime, 0n, 'missing universe should remain unforked')
+	})
+
 	test('canForkQuestion', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()

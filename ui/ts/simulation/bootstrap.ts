@@ -29,7 +29,7 @@ import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoo
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/forkAuction.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
-import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'
 import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -56,6 +56,8 @@ const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
 const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
+const REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT = 5n
+const ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS = MAINNET_NETWORK_PROFILE.genesisRepTokenAddress
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ZOLTAR_UNIVERSES_SLOT = 0n
@@ -157,7 +159,7 @@ async function seedGenesisRepTokenState({
 }) {
 	const originalNonce = await memoryClient.getTransactionCount({ address: zoltarAddress })
 	try {
-		await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
+		return await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
 			const zoltarWriteClient = createWriteClient(zoltarAddress)
 			let totalSupply = 0n
 			for (const [index, account] of accounts.entries()) {
@@ -180,10 +182,24 @@ async function seedGenesisRepTokenState({
 			})
 			await zoltarWriteClient.waitForTransactionReceipt({ hash: syncHash })
 			await reportBootstrapProgress(onProgress, 'Finalizing REP token state', 0.23)
+			return totalSupply
 		})
 	} finally {
 		await memoryClient.setNonce({ address: zoltarAddress, nonce: originalNonce })
 	}
+}
+
+async function seedZoltarConstructorGenesisRepToken({ memoryClient, profileGenesisRepTokenAddress, theoreticalSupply }: { memoryClient: TevmLikeClient; profileGenesisRepTokenAddress: Address; theoreticalSupply: bigint }) {
+	if (profileGenesisRepTokenAddress.toLowerCase() === ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS.toLowerCase()) return
+	await memoryClient.setCode({
+		address: ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS,
+		bytecode: `0x${ReputationToken_ReputationToken.evm.deployedBytecode.object}`,
+	})
+	await memoryClient.setStorageAt({
+		address: ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS,
+		index: storageIndex(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT),
+		value: storageValue(theoreticalSupply),
+	})
 }
 
 export async function updateZoltarGenesisRepToken({ createWriteClient, memoryClient, repAddress, zoltarAddress }: { createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
@@ -308,13 +324,18 @@ async function deploySimulationTokens({
 		bytecode: `0x${peripherals_WETH9_WETH9.evm.deployedBytecode.object}`,
 	})
 	await reportBootstrapProgress(onProgress, 'Installing simulation WETH token', 0.2)
-	await seedGenesisRepTokenState({
+	const theoreticalSupply = await seedGenesisRepTokenState({
 		accounts,
 		createWriteClient,
 		memoryClient,
 		onProgress,
 		repAddress: profile.genesisRepTokenAddress,
 		zoltarAddress,
+	})
+	await seedZoltarConstructorGenesisRepToken({
+		memoryClient,
+		profileGenesisRepTokenAddress: profile.genesisRepTokenAddress,
+		theoreticalSupply,
 	})
 }
 

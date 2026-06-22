@@ -8,11 +8,12 @@ import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresse
 import { getEthRaiseCap, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
-import { createChildUniverse, getSecurityPoolForkerForkData, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
-import { ensureZoltarDeployed, getTotalTheoreticalSupply } from '../testsuite/simulator/utils/contracts/zoltar'
+import { createChildUniverse, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
+import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
@@ -77,6 +78,33 @@ describe('security regression coverage', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		return getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 	}
+
+	test('external scalar Zoltar forks allow Placeholder REP migration to the scalar child branch', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const scalarQuestionData = {
+			title: `external scalar fork ${await mockWindow.getTime()}`,
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 100n,
+			displayValueMin: 0n,
+			displayValueMax: 100n * 10n ** 18n,
+			answerUnit: 'points',
+		}
+		await createQuestion(client, scalarQuestionData, [])
+		const scalarQuestionId = getQuestionId(scalarQuestionData, [])
+		const scalarOutcomeIndex = getScalarOutcomeIndex(scalarQuestionData, 42n)
+
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, scalarQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [scalarOutcomeIndex])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, scalarOutcomeIndex)
+		const scalarUniverse = getChildUniverseId(genesisUniverse, scalarOutcomeIndex)
+		const scalarChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, scalarUniverse, questionId, securityMultiplier)
+		assert.ok(await contractExists(client, scalarChildPool.securityPool), 'scalar child security pool should deploy')
+	})
 
 	test('child truth-auction address cannot be reserved by an untrusted caller', async () => {
 		const yesUniverse = await prepareOwnForkToYes()

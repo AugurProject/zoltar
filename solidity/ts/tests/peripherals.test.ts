@@ -102,7 +102,7 @@ const migrateVaultWithUnresolvedEscalationReturnAbi = [
 		inputs: [
 			{ internalType: 'contract ISecurityPool', name: 'securityPool', type: 'address' },
 			{ internalType: 'address', name: 'vault', type: 'address' },
-			{ internalType: 'uint8', name: 'childOutcomeIndex', type: 'uint8' },
+			{ internalType: 'uint256', name: 'childOutcomeIndex', type: 'uint256' },
 		],
 		name: 'migrateVaultWithUnresolvedEscalation',
 		outputs: [{ internalType: 'bool', name: 'moreToMigrate', type: 'bool' }],
@@ -1673,7 +1673,7 @@ describe('Peripherals Contract Test Suite', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			address: getInfraContractAddresses().securityPoolForker,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
-			args: [yesSecurityPool.securityPool, client.account.address, Number(QuestionOutcome.Yes)],
+			args: [yesSecurityPool.securityPool, client.account.address, BigInt(QuestionOutcome.Yes)],
 		})
 		await client.waitForTransactionReceipt({ hash })
 
@@ -2183,7 +2183,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.ok(forkData.auctionableRepAtFork > 0n, 'rep at fork should stay positive after the own-game fork')
 		assert.ok(forkData.auctionableRepAtFork <= repBalance + forkThreshold * 2n, 'rep at fork should stay bounded by the REP that actually participated in the own-game fork')
 		strictEqualTypeSafe(forkData.migratedRep, 0n, 'migrated rep should be 0 so far')
-		strictEqualTypeSafe(forkData.outcomeIndex, 0, 'there should be no outcome')
+		strictEqualTypeSafe(forkData.outcomeIndex, 0n, 'there should be no outcome')
 		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
 		const totalFeesOwedToVaultsRightAfterFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
@@ -3141,17 +3141,17 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const parentForkDataSlot = getMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
-		const parentOutcomeIndexSlot = formatStorageSlot(parentForkDataSlot + 14n)
+		const parentOutcomeIndexSlot = formatStorageSlot(parentForkDataSlot + 15n)
 		await mockWindow.addStateOverrides({
 			[getInfraContractAddresses().securityPoolForker]: {
 				stateDiff: {
-					[parentOutcomeIndexSlot]: 0x0201n,
+					[parentOutcomeIndexSlot]: BigInt(QuestionOutcome.No),
 				},
 			},
 		})
 
 		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(parentForkData.outcomeIndex, QuestionOutcome.No, 'storage override should poison the parent fork outcome bucket for the regression')
+		strictEqualTypeSafe(parentForkData.outcomeIndex, BigInt(QuestionOutcome.No), 'storage override should poison the parent fork outcome bucket for the regression')
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const walletRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)

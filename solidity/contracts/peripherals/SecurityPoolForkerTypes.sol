@@ -19,7 +19,7 @@ struct SecurityPoolForkerForkData {
 	bool ownFork;
 	uint256 vaultRepAtFork;
 	bool unresolvedEscalationAtFork;
-	uint8 outcomeIndex;
+	uint256 outcomeIndex;
 	uint256 ownForkCollateralAtFork;
 	uint256 ownForkMigratedRepCollateralized;
 	uint256 ownForkCollateralTransferred;

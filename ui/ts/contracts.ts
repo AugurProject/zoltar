@@ -96,7 +96,7 @@ const OPEN_ORACLE_PRICE_UNITS = 30n
 const NULLIFIER_DEPTH = 64
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type TruthAuctionTickSummaryStruct = {
 	tick: bigint
@@ -1989,7 +1989,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'createChildUniverse',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
 	)
 }
@@ -2061,7 +2061,7 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
 	)
 }
@@ -2085,7 +2085,7 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, vaultAddress, outcomeIndex],
+				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
 			}))
 			if (!(await hasPendingUnresolvedEscalationMigration(client, securityPoolAddress, vaultAddress))) return lastHash
 		}
