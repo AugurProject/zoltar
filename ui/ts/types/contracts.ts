@@ -318,7 +318,7 @@ export type SecurityPoolVaultSummary = {
 	vaultAddress: Address
 }
 
-export type OwnForkRepBuckets = {
+type OwnForkRepBuckets = {
 	vaultRepAtFork: bigint
 	unallocatedEscrowChildRep: bigint
 	escrowSourceRepAtFork: bigint

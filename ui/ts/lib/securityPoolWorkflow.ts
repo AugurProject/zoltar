@@ -9,7 +9,7 @@ import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
 import type { ListedSecurityPool, OracleManagerDetails, ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 
-export const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const
+const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const
 export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
 
