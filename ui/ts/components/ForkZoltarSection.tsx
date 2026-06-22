@@ -124,6 +124,7 @@ export function ForkZoltarSection({
 						pendingLabel='Approving REP Threshold...'
 						requiredAmount={rootUniverse?.forkThreshold}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
+						safetyId='zoltar.approveForkRep'
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -143,6 +144,7 @@ export function ForkZoltarSection({
 
 				<div className='actions'>
 					<TransactionActionButton
+						safetyId='zoltar.forkZoltar'
 						idleLabel='Fork Zoltar'
 						pendingLabel='Forking Zoltar...'
 						onClick={() => {

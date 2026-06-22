@@ -600,6 +600,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						}),
 					],
 					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ address: vaultAddress }),
 						selectedPoolSecurityMultiplier: 2n,
 						securityVaultDetails: createSecurityVaultDetails({ vaultAddress }),
 						securityVaultForm: {
@@ -725,7 +726,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		expectTransactionButtonEnabled(document.body, 'Set Bond Allowance')
-		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
 	})
 
 	test('shows an Ended badge, allows REP redemption, and blocks ended-pool collateral actions in the vault workflow', async () => {

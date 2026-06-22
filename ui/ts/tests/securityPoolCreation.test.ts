@@ -95,7 +95,7 @@ describe('security pool creation helper', () => {
 					],
 				}) as never,
 		}
-		const fakeClient = fakeClientBase as WriteClient
+		const fakeClient = fakeClientBase as unknown as Parameters<typeof createSecurityPool>[0]
 
 		const result = await createSecurityPool(fakeClient, {
 			currentRetentionRate: 999_999_996_848_000_000n,

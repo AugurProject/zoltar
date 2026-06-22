@@ -390,7 +390,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
-		expect(migrateButton.title).toBe('')
+		expect(migrateButton.title).toBe('Refresh the fork target universes.')
 	})
 
 	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
@@ -428,7 +428,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(redeemSharesButton.title).toBe('')
+		expect(redeemSharesButton.title).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 
 	void test('blocks minting once the selected market has finalized', async () => {
@@ -444,7 +444,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe('')
+		expect(mintButton.title).toBe('This market has already finalized.')
 	})
 
 	void test('shows mint write failures through the shared error notice', async () => {

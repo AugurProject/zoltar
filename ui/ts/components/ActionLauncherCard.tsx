@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { TransactionActionButton } from './TransactionActionButton.js'
+import { ActionLauncherButton } from './ActionLauncherButton.js'
 import type { ReadinessAction } from '../types/components.js'
 
 type ActionLauncherCardProps = {
@@ -11,15 +11,16 @@ type ActionLauncherCardProps = {
 }
 
 export function ActionLauncherCard({ action, children, pending = false, pendingLabel = 'Opening...', tone = 'secondary' }: ActionLauncherCardProps) {
+	if (action.onAction === undefined && action.blocker === undefined) return undefined
 	return (
-		<section className={`action-launcher-card ${action.readiness}`}>
+		<section className={`action-launcher-card ${action.readiness}`} data-action-safety-id={action.safetyId}>
 			<div className='action-launcher-card-copy'>
 				<h4>{action.title}</h4>
 				<p className='detail'>{action.description}</p>
 				{children}
 			</div>
 			<div className='action-launcher-card-actions'>
-				<TransactionActionButton idleLabel={action.actionLabel} pendingLabel={pendingLabel} onClick={() => action.onAction?.()} pending={pending} tone={tone} availability={{ disabled: action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }} />
+				<ActionLauncherButton safetyId={action.safetyId} idleLabel={action.actionLabel} pendingLabel={pendingLabel} onClick={() => action.onAction?.()} pending={pending} tone={tone} availability={{ disabled: action.onAction === undefined, reason: action.blocker }} showDisabledReason />
 			</div>
 		</section>
 	)

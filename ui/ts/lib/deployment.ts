@@ -1,6 +1,8 @@
 import type { ActionAvailability } from '../types/components.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
+type DeploymentStepAvailabilityState = Pick<DeploymentStatus, 'id' | 'deployed' | 'dependencies' | 'label'>
+
 type DeploymentSectionDefinition = {
 	title: string
 	stepIds: DeploymentStatus['id'][]
@@ -38,7 +40,19 @@ export function findNextDeployableStep(steps: DeploymentStatus[]) {
 	return steps.find((step, index) => !step.deployed && getPrerequisiteLabel(steps, index) === undefined)
 }
 
-export function getDeploymentStepAvailability({ accountAddress, busyStepId, isMainnet, prerequisiteLabel, step }: { accountAddress: string | undefined; busyStepId: DeploymentStatus['id'] | undefined; isMainnet: boolean; prerequisiteLabel: string | undefined; step: DeploymentStatus }): ActionAvailability {
+export function getDeploymentStepAvailability({
+	accountAddress,
+	busyStepId,
+	isMainnet,
+	prerequisiteLabel,
+	step,
+}: {
+	accountAddress: string | undefined
+	busyStepId: DeploymentStatus['id'] | undefined
+	isMainnet: boolean
+	prerequisiteLabel: string | undefined
+	step: DeploymentStepAvailabilityState
+}): ActionAvailability {
 	if (step.deployed) return { disabled: true, reason: 'Already deployed.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
 	if (accountAddress === undefined) return { disabled: true, reason: 'Connect wallet to deploy this contract.' }
@@ -58,7 +72,7 @@ export function getDeployNextMissingAvailability({
 	busyStepId: DeploymentStatus['id'] | undefined
 	deployNextMissingPending: boolean
 	isMainnet: boolean
-	nextMissingStep: DeploymentStatus | undefined
+	nextMissingStep: Pick<DeploymentStatus, 'id' | 'label'> | undefined
 }): ActionAvailability {
 	if (deployNextMissingPending) return { disabled: true, reason: 'Deployment in progress.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: 'Another deployment is already in progress.' }
