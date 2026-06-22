@@ -39,7 +39,7 @@ import {
 	startTruthAuction,
 } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import {
@@ -2731,6 +2731,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(clientVaultAfterRedeem.repDepositShare, 0n, 'redeeming a vault should zero out its child-pool ownership')
 		assert.ok(denominatorAfterRedeem <= denominatorBeforeRedeem, 'redeeming a vault should not increase the child pool denominator')
 		approximatelyEqual(attackerClaimAfterRedeem, attackerClaimBeforeRedeem, 10n, 'redeeming another vault should preserve the remaining vault claim up to rounding')
+		await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /no redeemable rep/)
 	})
 
 	test('parent pool halts on fork while a migrated child can resume operational flows', async () => {
@@ -4237,6 +4238,18 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.ForkMigration, 'Invalid child should be in ForkMigration')
 		strictEqualTypeSafe(await getQuestionOutcome(client, invalidSecurityPool.securityPool), QuestionOutcome.Invalid, 'Invalid outcome should be set')
 		assert.ok(await contractExists(client, invalidSecurityPool.securityPool), 'INVALID security pool should exist')
+
+		const childUniverseIds = [yesUniverse, noUniverse, invalidUniverse]
+		strictEqualTypeSafe(new Set(childUniverseIds).size, childUniverseIds.length, 'each supported fork outcome should map to a distinct child universe id')
+		const yesUniverseData = await getUniverseData(client, yesUniverse)
+		const noUniverseData = await getUniverseData(client, noUniverse)
+		const invalidUniverseData = await getUniverseData(client, invalidUniverse)
+		strictEqualTypeSafe(yesUniverseData.parentUniverseId, genesisUniverse, 'Yes child should point back to genesis')
+		strictEqualTypeSafe(noUniverseData.parentUniverseId, genesisUniverse, 'No child should point back to genesis')
+		strictEqualTypeSafe(invalidUniverseData.parentUniverseId, genesisUniverse, 'Invalid child should point back to genesis')
+		strictEqualTypeSafe(yesUniverseData.forkingOutcomeIndex, BigInt(QuestionOutcome.Yes), 'Yes child should retain its outcome index')
+		strictEqualTypeSafe(noUniverseData.forkingOutcomeIndex, BigInt(QuestionOutcome.No), 'No child should retain its outcome index')
+		strictEqualTypeSafe(invalidUniverseData.forkingOutcomeIndex, BigInt(QuestionOutcome.Invalid), 'Invalid child should retain its outcome index')
 	})
 
 	test('own-fork initializes unresolved escalation child denominators', async () => {

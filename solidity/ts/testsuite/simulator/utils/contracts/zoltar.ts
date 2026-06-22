@@ -131,6 +131,14 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: Ad
 	})
 }
 
+export const getUniverseTheoreticalSupply = async (client: ReadClient, universeId: bigint) =>
+	await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getUniverseTheoreticalSupply',
+		address: getZoltarAddress(),
+		args: [universeId],
+	})
+
 export const getZoltarForkThreshold = async (client: ReadClient, universeId: bigint) =>
 	await client.readContract({
 		abi: Zoltar_Zoltar.abi,

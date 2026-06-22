@@ -2,19 +2,18 @@ import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:te
 import assert from 'node:assert/strict'
 import { decodeEventLog, encodeAbiParameters, keccak256, zeroAddress } from 'viem'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
-import { addressString } from '../testsuite/simulator/utils/bigint'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { DAY, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { getEthRaiseCap, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
-import { createChildUniverse, getSecurityPoolForkerForkData, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { createChildUniverse, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { ensureZoltarDeployed, getTotalTheoreticalSupply } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { getChildUniverseId, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../types/contractArtifact'
+import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -161,23 +160,5 @@ describe('security regression coverage', () => {
 		assert.equal(executionLog.args.operation, OperationType.Liquidation)
 		assert.equal(executionLog.args.success, false)
 		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
-	})
-
-	test('own-fork locks excess parent REP into the migration balance', async () => {
-		const yesUniverse = await prepareOwnForkToYes()
-		const migrationProxyAddress = await client.readContract({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			address: getInfraContractAddresses().securityPoolForker,
-			functionName: 'getMigrationProxyAddress',
-			args: [securityPoolAddresses.securityPool],
-		})
-		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		const parentRepBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), migrationProxyAddress)
-
-		assert.equal(parentRepBalance, 0n)
-		assert.ok(forkData.auctionableRepAtFork > 0n, 'own-fork migration balance should include non-burned parent REP')
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		assert.ok((await getEthRaiseCap(client, yesChild.truthAuction)) === 0n, 'own-fork child auction should deploy normally')
 	})
 })
