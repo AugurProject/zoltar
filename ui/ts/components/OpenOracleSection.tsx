@@ -24,6 +24,7 @@ import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
+import { getOpenOracleActionSafetyId } from '../lib/actionSafety/ids.js'
 import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../lib/chainTimestamp.js'
@@ -220,6 +221,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={`Approving ${token1Symbol}...`}
 								requiredAmount={initialReportSubmission.amount1}
 								resetKey={`token1:${token1Symbol}:${initialReportSubmission.amount1?.toString() ?? ''}:${openOracleForm.reportId}`}
+								safetyId={getOpenOracleActionSafetyId('approveToken1')}
 								tokenSymbol={token1Symbol}
 								tokenUnits={initialReportSubmission.token1Decimals ?? 18}
 							/>
@@ -242,6 +244,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={`Approving ${token2Symbol}...`}
 								requiredAmount={initialReportSubmission.amount2}
 								resetKey={`token2:${token2Symbol}:${initialReportSubmission.amount2?.toString() ?? ''}:${openOracleForm.reportId}`}
+								safetyId={getOpenOracleActionSafetyId('approveToken2')}
 								tokenSymbol={token2Symbol}
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
@@ -256,6 +259,7 @@ export function renderSelectedReportActionSection({
 						<div className='actions'>
 							{!initialReportSubmission.hasWethWrapAction ? undefined : (
 								<TransactionActionButton
+									safetyId={getOpenOracleActionSafetyId('wrapWeth')}
 									idleLabel='Wrap needed ETH to WETH'
 									pendingLabel='Wrapping ETH...'
 									onClick={onWrapWethForInitialReport}
@@ -273,6 +277,7 @@ export function renderSelectedReportActionSection({
 								/>
 							)}
 							<TransactionActionButton
+								safetyId={getOpenOracleActionSafetyId('submitInitialReport')}
 								idleLabel='Submit Initial Report'
 								pendingLabel='Submitting...'
 								onClick={onSubmitInitialReport}
@@ -351,6 +356,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={`Approving ${token1Symbol}...`}
 								requiredAmount={disputeSubmission?.token1ContributionAmount}
 								resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+								safetyId={getOpenOracleActionSafetyId('approveToken1')}
 								tokenSymbol={token1Symbol}
 								tokenUnits={disputeSubmission?.token1Decimals ?? 18}
 							/>
@@ -367,6 +373,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={`Approving ${token2Symbol}...`}
 								requiredAmount={disputeSubmission?.token2ContributionAmount}
 								resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+								safetyId={getOpenOracleActionSafetyId('approveToken2')}
 								tokenSymbol={token2Symbol}
 								tokenUnits={disputeSubmission?.token2Decimals ?? 18}
 							/>
@@ -374,6 +381,7 @@ export function renderSelectedReportActionSection({
 						{disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
+								safetyId={getOpenOracleActionSafetyId('dispute')}
 								idleLabel='Dispute & Swap'
 								pendingLabel='Submitting dispute...'
 								onClick={onDisputeReport}
@@ -409,6 +417,7 @@ export function renderSelectedReportActionSection({
 						<p className='detail'>Settlement is confirmation-first. Review the current report state and confirm only when the dispute window is closed.</p>
 						<div className='actions'>
 							<TransactionActionButton
+								safetyId={getOpenOracleActionSafetyId('settle')}
 								idleLabel='Settle Report'
 								pendingLabel='Settling report...'
 								onClick={onSettleReport}
@@ -508,16 +517,14 @@ function renderReportDetailsCard(
 		hasReport: true,
 		reportId: openOracleForm.reportId,
 		settleMessage: settleAvailability.message,
-	}).map(action =>
-		action.key === 'submit-initial-report'
-			? { ...action, onAction: () => onSelectedReportModalChange('initial-report') }
-			: (() => {
-					if (action.key === 'dispute-report') return { ...action, onAction: () => onSelectedReportModalChange('dispute') }
-					if (action.key === 'settle-report') return { ...action, onAction: () => onSelectedReportModalChange('settle') }
+	}).map(action => {
+		if (action.blocker !== undefined) return action
+		if (action.key === 'submit-initial-report') return { ...action, onAction: () => onSelectedReportModalChange('initial-report') }
+		if (action.key === 'dispute-report') return { ...action, onAction: () => onSelectedReportModalChange('dispute') }
+		if (action.key === 'settle-report') return { ...action, onAction: () => onSelectedReportModalChange('settle') }
 
-					return action
-				})(),
-	)
+		return action
+	})
 	if (openOracleInitialReportSubmission === undefined) return undefined
 	return (
 		<>
@@ -990,7 +997,14 @@ export function OpenOracleSection({
 							</SectionBlock>
 
 							<div className='actions'>
-								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }} />
+								<TransactionActionButton
+									safetyId={getOpenOracleActionSafetyId('createReportInstance')}
+									idleLabel='Create Open Oracle Game'
+									pendingLabel='Creating...'
+									onClick={onCreateOpenOracleGame}
+									pending={loadingOpenOracleCreate}
+									availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }}
+								/>
 							</div>
 						</div>
 					</SectionBlock>

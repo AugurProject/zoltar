@@ -13,6 +13,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { assertNever } from '../lib/assert.js'
+import { getReportingActionSafetyId } from '../lib/actionSafety/ids.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
@@ -442,7 +443,9 @@ export function ReportingSection({
 	const forkTriggeredActions =
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<div className='actions'>
-				{showTriggerZoltarForkAction ? <TransactionActionButton idleLabel='Trigger Zoltar Fork' pendingLabel='Triggering Zoltar fork...' onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} /> : undefined}
+				{showTriggerZoltarForkAction ? (
+					<TransactionActionButton safetyId='reporting.triggerZoltarFork' idleLabel='Trigger Zoltar Fork' pendingLabel='Triggering Zoltar fork...' onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} />
+				) : undefined}
 				{showForkWorkflowAction ? (
 					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
 						Open Fork Workflow
@@ -622,7 +625,14 @@ export function ReportingSection({
 						</p>
 					)}
 					<div className='actions'>
-						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }} />
+						<TransactionActionButton
+							safetyId={getReportingActionSafetyId('reportOutcome')}
+							idleLabel={reportButtonLabel}
+							pendingLabel='Submitting report...'
+							onClick={onReportOutcome}
+							pending={reportingActiveAction === 'reportOutcome'}
+							availability={{ disabled: !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
+						/>
 					</div>
 					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
 				</SectionBlock>
@@ -691,6 +701,7 @@ export function ReportingSection({
 
 										<div className='actions'>
 											<TransactionActionButton
+												safetyId={getReportingActionSafetyId('withdrawEscalation')}
 												idleLabel={getWithdrawSelectedButtonLabel(side.label)}
 												pendingLabel={getWithdrawPendingLabel(side.label)}
 												onClick={() => handleWithdrawEscalation(side.key, selectedWithdrawDepositIndexes)}
@@ -700,6 +711,7 @@ export function ReportingSection({
 												availability={{ disabled: !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
 											/>
 											<TransactionActionButton
+												safetyId={getReportingActionSafetyId('withdrawEscalation')}
 												idleLabel={getWithdrawAllButtonLabel(side.label)}
 												pendingLabel={getWithdrawPendingLabel(side.label)}
 												onClick={() => handleWithdrawEscalation(side.key, allWithdrawDepositIndexes)}

@@ -26,12 +26,12 @@ globalThis.global ??= globalThis
 function createBrowserVendorAliasPlugin() {
 	const aliasEntries: Array<[RegExp, string]> = [
 		[/^pino$/, path.join(MODULES_ROOT_PATH, 'pino', 'browser.js')],
-		[/^viem$/, path.join(MODULES_ROOT_PATH, 'viem', 'index.ts')],
-		[/^viem\/chains$/, path.join(MODULES_ROOT_PATH, 'viem', 'chains', 'index.ts')],
-		[/^viem\/window$/, path.join(MODULES_ROOT_PATH, 'viem', 'window', 'index.ts')],
-		[/^viem\/actions$/, path.join(MODULES_ROOT_PATH, 'viem', 'actions', 'index.ts')],
-		[/^viem\/accounts$/, path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.ts')],
-		[/^viem\/utils$/, path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.ts')],
+		[/^viem$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'index.js')],
+		[/^viem\/chains$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'chains', 'index.js')],
+		[/^viem\/window$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'window', 'index.js')],
+		[/^viem\/actions$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'actions', 'index.js')],
+		[/^viem\/accounts$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'accounts', 'index.js')],
+		[/^viem\/utils$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'utils', 'index.js')],
 		[/^tevm$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
 		[/^tevm\/common$/, path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
 		[/^@tevm\/memory-client$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
@@ -53,7 +53,11 @@ function createBrowserVendorAliasPlugin() {
 
 async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 	await fs.mkdir(path.dirname(destinationPath), { recursive: true })
-	await fs.copyFile(sourcePath, destinationPath)
+	const sourceFile = Bun.file(sourcePath)
+	if (!(await sourceFile.exists())) {
+		throw new Error(`Missing static asset: ${sourcePath}`)
+	}
+	await Bun.write(destinationPath, await sourceFile.arrayBuffer())
 }
 
 async function writeProductionIndexHtml() {

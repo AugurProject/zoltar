@@ -31,7 +31,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				eyebrow='Deploy'
 				title='Deterministic contract deployment'
 				description='Deploy and verify the shared deterministic contracts that back the application.'
-				actions={<TransactionActionButton idleLabel={buttonContent} pendingLabel='Deploying...' onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
+				actions={<TransactionActionButton safetyId='deployment.deployNextMissing' idleLabel={buttonContent} pendingLabel='Deploying...' onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
 				summary={
 					<DataGrid columns='auto'>
 						<div>
