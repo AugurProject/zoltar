@@ -97,6 +97,14 @@ export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddr
 		}),
 	)
 
+export const getMigrationProxyAddress = async (client: ReadClient, securityPoolAddress: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'getMigrationProxyAddress',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	})
+
 export const settleAuctionBids = async (client: WriteClient, securityPoolAddress: Address, vault: Address, claimTickIndices: readonly { tick: bigint; bidIndex: bigint }[], refundTickIndices: readonly { tick: bigint; bidIndex: bigint }[]) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({

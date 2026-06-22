@@ -1,5 +1,5 @@
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
 import { bytes32String } from '../bigint'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
@@ -127,13 +127,13 @@ export const isFinalized = async (client: ReadClient, auctionAddress: Address) =
 		args: [],
 	})
 
-export const deployUniformPriceDualCapBatchAuction = async (client: WriteClient, owner: Address) =>
+export const deployUniformPriceDualCapBatchAuction = async (client: WriteClient, owner: Address, salt: Hex = bytes32String(0n)) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.abi,
 			functionName: 'deployUniformPriceDualCapBatchAuction',
 			address: getInfraContractAddresses().uniformPriceDualCapBatchAuctionFactory,
-			args: [owner, bytes32String(0n)],
+			args: [owner, salt],
 		}),
 	)
 

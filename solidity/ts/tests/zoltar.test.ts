@@ -26,7 +26,7 @@ import {
 	splitMigrationRep,
 } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
+import { ensureDefined, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { test_peripherals_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 
@@ -277,6 +277,53 @@ describe('Contract Test Suite', () => {
 		}
 	})
 
+	test('splitMigrationRep preserves child balances across outcome orderings and rejects double use of the same balance', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'split migration ordering property',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No', 'Maybe', 'Later'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		const migrationBalance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		const outcomeOrderings: Array<(number | bigint)[]> = [
+			[0n, 1n, 3n],
+			[3n, 1n, 0n],
+		]
+		const snapshot = await mockWindow.anvilSnapshot()
+		const results: Array<{ childBalances: bigint[]; remainingMigrationBalance: bigint }> = []
+
+		for (const outcomeIndexes of outcomeOrderings) {
+			await splitMigrationRep(client, genesisUniverse, migrationBalance, outcomeIndexes)
+			const childBalances = await Promise.all(
+				outcomeIndexes.map(async outcomeIndex => {
+					const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
+					const repToken = getRepTokenAddress(childUniverseId)
+					return await getERC20Balance(client, repToken, client.account.address)
+				}),
+			)
+			results.push({
+				childBalances,
+				remainingMigrationBalance: await getMigrationRepBalance(client, genesisUniverse, client.account.address),
+			})
+			await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, outcomeIndexes), /cannot migrate more than internal balance/i)
+			await mockWindow.anvilRevert(snapshot)
+		}
+
+		assert.deepStrictEqual(results[0], results[1], 'split migration results should not depend on outcome ordering')
+	})
+
 	test('deployChild creates a child universe without requiring migration balance', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -342,6 +389,54 @@ describe('Contract Test Suite', () => {
 
 		const migrationBalance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
 		await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, [malformedOutcomeIndex]), /Malformed/)
+	})
+
+	test('child universe ids remain deterministic and scalar malformed answers never deploy', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const scalarQuestionData = {
+			title: 'scalar child universe determinism',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 10n,
+			displayValueMin: 0n,
+			displayValueMax: 10n,
+			answerUnit: 'km',
+		}
+		await createQuestion(client, scalarQuestionData, [])
+		const scalarQuestionId = getQuestionId(scalarQuestionData, [])
+
+		await forkUniverse(client, genesisUniverse, scalarQuestionId)
+		const validScalarOutcomeIndexes = [getScalarOutcomeIndex(scalarQuestionData, 0n), getScalarOutcomeIndex(scalarQuestionData, 5n), getScalarOutcomeIndex(scalarQuestionData, 10n)]
+		const childUniverseIds = validScalarOutcomeIndexes.map(outcomeIndex => getChildUniverseId(genesisUniverse, outcomeIndex))
+		const repeatedChildUniverseIds = validScalarOutcomeIndexes.map(outcomeIndex => getChildUniverseId(genesisUniverse, outcomeIndex))
+		let firstChildSupply: bigint | undefined
+
+		assert.deepStrictEqual(repeatedChildUniverseIds, childUniverseIds, 'child universe ids should be deterministic for each scalar answer')
+		strictEqualTypeSafe(new Set(childUniverseIds).size, childUniverseIds.length, 'each scalar child universe id should map to exactly one outcome index')
+
+		for (const outcomeIndex of validScalarOutcomeIndexes) {
+			await deployChild(client, genesisUniverse, outcomeIndex)
+			const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
+			const childUniverseData = await getUniverseData(client, childUniverseId)
+			const childSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId))
+
+			strictEqualTypeSafe(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent universe')
+			strictEqualTypeSafe(childUniverseData.forkingOutcomeIndex, outcomeIndex, 'child universe should store the exact scalar answer index')
+			assert.ok(childSupply > 0n, 'child theoretical supply should remain positive')
+			if (firstChildSupply === undefined) {
+				firstChildSupply = childSupply
+			} else {
+				strictEqualTypeSafe(childSupply, firstChildSupply, 'scalar child theoretical supply should be stable across valid outcomes')
+			}
+		}
+
+		const malformedScalarOutcomeIndex = 11n
+		const malformedChildUniverseId = getChildUniverseId(genesisUniverse, malformedScalarOutcomeIndex)
+		await assert.rejects(deployChild(client, genesisUniverse, malformedScalarOutcomeIndex), /Malformed/)
+		assert.ok(!(await contractExists(client, getRepTokenAddress(malformedChildUniverseId))), 'malformed scalar child universe should not be deployed')
 	})
 
 	test('getDeployedChildUniverses pages deployed child universes', async () => {
@@ -445,6 +540,8 @@ describe('Contract Test Suite', () => {
 		await deployChild(client, genesisUniverse, 1n)
 		const lateChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 1)))
 
+		assert.ok(earlyChildSupply > 0n, 'early child supply should remain positive')
+		assert.ok(lateChildSupply > 0n, 'late child supply should remain positive')
 		assert.strictEqual(lateChildSupply, earlyChildSupply, 'child universes from the same fork should share the same theoretical supply snapshot')
 	})
 
