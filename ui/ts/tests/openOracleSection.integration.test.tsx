@@ -5,10 +5,10 @@ import { fireEvent, waitFor, within } from './testUtils/queries'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from 'viem'
-import { zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from 'viem'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
 import { RouteSubNavigation } from '../components/RouteSubNavigation.js'
-import { getOpenOracleAddress, loadErc20Allowance, loadErc20Balance, loadOpenOracleReportDetails } from '../contracts.js'
+import { approveErc20, createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Allowance, loadErc20Balance, loadOpenOracleReportDetails, submitInitialOracleReport, wrapWeth } from '../contracts.js'
 import { useOpenOracleOperations } from '../hooks/useOpenOracleOperations.js'
 import type { AccountState } from '../types/app.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
@@ -32,6 +32,20 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const walletAddress = addressString(TEST_ADDRESSES[0])
 const reportId = 1n
+const initialReportPrice = 4n
+const openOracleCreateParameters = {
+	disputeDelay: 10,
+	escalationHalt: 0n,
+	exactToken1Report: 100n * 10n ** 18n,
+	ethValue: 1100n,
+	feePercentage: 100,
+	multiplier: 100,
+	protocolFee: 100,
+	settlementTime: 60,
+	settlerReward: 1000n,
+	token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+	token2Address: getAddress(WETH_ADDRESS),
+}
 
 function createInjectedWalletShim(mockWindow: AnvilWindowEthereum, accountAddress: Address): InjectedEthereum {
 	const request: InjectedEthereum['request'] = async parameters => {
@@ -47,8 +61,8 @@ function createInjectedWalletShim(mockWindow: AnvilWindowEthereum, accountAddres
 	}
 }
 
-function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address }) {
-	const [activeView, setActiveView] = useState<OpenOracleView>('create')
+function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create' }: { accountAddress: Address; initialActiveView?: OpenOracleView }) {
+	const [activeView, setActiveView] = useState<OpenOracleView>(initialActiveView)
 	const openOracle = useOpenOracleOperations({
 		accountAddress,
 		enabled: true,
@@ -156,6 +170,46 @@ async function clickElement(element: HTMLElement) {
 	})
 }
 
+async function fillOpenOracleCreateForm() {
+	await setInputValue('Token1 Address', openOracleCreateParameters.token1Address)
+	await setInputValue('Token2 Address', openOracleCreateParameters.token2Address)
+	await setInputValue('Exact Token1 Report', openOracleCreateParameters.exactToken1Report.toString())
+	await setInputValue('Settler Reward', openOracleCreateParameters.settlerReward.toString())
+	await setInputValue('ETH Value To Send', openOracleCreateParameters.ethValue.toString())
+	await setInputValue('Fee Percentage', openOracleCreateParameters.feePercentage.toString())
+	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
+	await setInputValue('Settlement Time', openOracleCreateParameters.settlementTime.toString())
+	await setInputValue('Escalation Halt', openOracleCreateParameters.escalationHalt.toString())
+	await setInputValue('Dispute Delay', openOracleCreateParameters.disputeDelay.toString())
+	await setInputValue('Protocol Fee', openOracleCreateParameters.protocolFee.toString())
+}
+
+async function loadSelectedReportInUi() {
+	const reportIdInput = await setInputValue('Report ID', reportId.toString())
+	const reportIdField = reportIdInput.closest('.field')
+	if (!(reportIdField instanceof HTMLElement)) throw new Error('Expected report ID field wrapper')
+	const reportControlButton = reportIdField.querySelector('button')
+	if (!(reportControlButton instanceof HTMLButtonElement)) throw new Error('Expected report ID control button')
+	await clickElement(reportControlButton)
+	await waitFor(() => getSectionByTitle('Selected Report Actions'))
+}
+
+async function createSubmittedOpenOracleReport(writeClient: WriteClient, readClient: ReturnType<typeof createConnectedReadClient>) {
+	const openOracleAddress = getOpenOracleAddress()
+	await createOpenOracleReportInstance(writeClient, openOracleCreateParameters)
+	const reportDetails = await loadOpenOracleReportDetails(readClient, openOracleAddress, reportId)
+	const amount2 = reportDetails.exactToken1Report / initialReportPrice
+
+	await approveErc20(writeClient, reportDetails.token1, openOracleAddress, reportDetails.exactToken1Report, 'approveToken1')
+	await approveErc20(writeClient, reportDetails.token2, openOracleAddress, amount2, 'approveToken2')
+	await wrapWeth(writeClient, amount2)
+	await submitInitialOracleReport(writeClient, openOracleAddress, reportId, reportDetails.exactToken1Report, amount2, reportDetails.stateHash)
+
+	return {
+		openOracleAddress,
+	}
+}
+
 async function waitForLatestAction(actionName: string) {
 	for (let attempt = 0; attempt < 20; attempt += 1) {
 		if (within(document.body).queryAllByText(actionName).length > 0) return
@@ -210,17 +264,7 @@ describe.serial('OpenOracleSection integration', () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await setInputValue('Token1 Address', addressString(GENESIS_REPUTATION_TOKEN))
-		await setInputValue('Token2 Address', WETH_ADDRESS)
-		await setInputValue('Exact Token1 Report', '100000000000000000000')
-		await setInputValue('Settler Reward', '1000')
-		await setInputValue('ETH Value To Send', '1100')
-		await setInputValue('Fee Percentage', '100')
-		await setInputValue('Multiplier', '100')
-		await setInputValue('Settlement Time', '60')
-		await setInputValue('Escalation Halt', '0')
-		await setInputValue('Dispute Delay', '10')
-		await setInputValue('Protocol Fee', '100')
+		await fillOpenOracleCreateForm()
 
 		await clickElement(within(document.body).getByRole('button', { name: 'Create Open Oracle Game' }))
 
@@ -247,11 +291,11 @@ describe.serial('OpenOracleSection integration', () => {
 		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
 		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
 		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
-		await setInputValue(/^Price \(/, '4')
+		await setInputValue(/^Price \(/, initialReportPrice.toString())
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const openOracleAddress = getOpenOracleAddress()
-		const expectedAmount2 = reportDetails.exactToken1Report / 4n
+		const expectedAmount2 = reportDetails.exactToken1Report / initialReportPrice
 
 		await waitFor(() => {
 			const [currentToken1ApprovalSection, currentToken2ApprovalSection] = getApprovalSections()
@@ -323,87 +367,11 @@ describe.serial('OpenOracleSection integration', () => {
 	})
 
 	test('disables dispute and enables settle after the settlement window elapses', async () => {
-		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
+		const { openOracleAddress } = await createSubmittedOpenOracleReport(client, uiReadClient)
+		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} initialActiveView='selected-report' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await setInputValue('Token1 Address', addressString(GENESIS_REPUTATION_TOKEN))
-		await setInputValue('Token2 Address', WETH_ADDRESS)
-		await setInputValue('Exact Token1 Report', '100000000000000000000')
-		await setInputValue('Settler Reward', '1000')
-		await setInputValue('ETH Value To Send', '1100')
-		await setInputValue('Fee Percentage', '100')
-		await setInputValue('Multiplier', '100')
-		await setInputValue('Settlement Time', '60')
-		await setInputValue('Escalation Halt', '0')
-		await setInputValue('Dispute Delay', '10')
-		await setInputValue('Protocol Fee', '100')
-
-		await clickElement(within(document.body).getByRole('button', { name: 'Create Open Oracle Game' }))
-		await waitForLatestAction('createReportInstance')
-		await waitFor(async () => {
-			const createdReport = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
-			expect(createdReport.reportId).toBe(reportId)
-		})
-
-		await clickElement(within(document.body).getByRole('tab', { name: 'Browse' }))
-		await waitFor(() => {
-			expect(within(document.body).getByText(`Report #${reportId.toString()}`)).not.toBeNull()
-		})
-		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
-
-		await waitFor(() => getSectionByTitle('Selected Report'))
-		await waitFor(() => {
-			expect(within(document.body).getByRole('button', { name: 'Initial Report' })).not.toBeNull()
-		})
-		await clickElement(within(document.body).getByRole('button', { name: 'Initial Report' }))
-		await waitFor(() => {
-			expect(within(document.body).getByRole('heading', { level: 4, name: 'Initial Report' })).not.toBeNull()
-		})
-		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
-		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
-		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
-		await setInputValue(/^Price \(/, '4')
-
-		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
-		const openOracleAddress = getOpenOracleAddress()
-		const expectedAmount2 = reportDetails.exactToken1Report / 4n
-
-		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections()
-		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) throw new Error('Expected both token approval sections to be rendered')
-
-		await clickElement(getApproveButton(token1ApprovalSection))
-		await waitForLatestAction('approveToken1')
-		await waitFor(async () => {
-			expect(await loadErc20Allowance(uiReadClient, reportDetails.token1, walletAddress, openOracleAddress)).toBe(reportDetails.exactToken1Report)
-		})
-
-		const refreshedApprovalSections = getApprovalSections()
-		const refreshedToken2ApprovalSection = refreshedApprovalSections[1]
-		if (refreshedToken2ApprovalSection === undefined) throw new Error('Expected the second token approval section to remain rendered')
-
-		await clickElement(getApproveButton(refreshedToken2ApprovalSection))
-		await waitForLatestAction('approveToken2')
-		await waitFor(async () => {
-			expect(await loadErc20Allowance(uiReadClient, reportDetails.token2, walletAddress, openOracleAddress)).toBe(expectedAmount2)
-		})
-
-		await clickElement(within(document.body).getByRole('button', { name: 'Wrap needed ETH to WETH' }))
-		await waitFor(async () => {
-			expect(await loadErc20Balance(uiReadClient, reportDetails.token2, walletAddress)).toBe(expectedAmount2)
-		})
-
-		await waitFor(() => {
-			const submitButton = within(document.body).getByRole('button', { name: 'Submit Initial Report' }) as HTMLButtonElement
-			expect(submitButton.disabled).toBe(false)
-		})
-
-		await clickElement(within(document.body).getByRole('button', { name: 'Submit Initial Report' }))
-		await waitForLatestAction('submitInitialReport')
-		await waitFor(async () => {
-			const submittedReport = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
-			expect(submittedReport.currentReporter).not.toBe(zeroAddress)
-			expect(submittedReport.reportTimestamp > 0n).toBe(true)
-		})
+		await loadSelectedReportInUi()
 
 		const submittedReport = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 		const submittedClock = submittedReport.timeType ? submittedReport.currentTime : submittedReport.currentBlockNumber

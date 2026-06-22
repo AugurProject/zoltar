@@ -17,6 +17,7 @@ const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_SECURITY_BOND_ALLOWANCE = 100n * 10n ** 18n
+type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
@@ -34,6 +35,12 @@ async function createBootstrappedSimulationBackendWithRetry(scenario: Simulation
 		}
 	}
 	throw lastError instanceof Error ? lastError : new Error(`Failed to bootstrap ${scenario} simulation backend`)
+}
+
+async function resetSelectedAccountAndTransactionDelay(backend: SimulationBackend) {
+	const primaryAccount = backend.accounts[0]
+	if (primaryAccount !== undefined && backend.selectedAccount !== primaryAccount) await backend.selectAccount(primaryAccount)
+	backend.setTransactionDelayMilliseconds(0)
 }
 
 void describe('active environment', () => {
@@ -172,33 +179,47 @@ void describe('active environment', () => {
 })
 
 void describe('simulation backend', () => {
-	let coldBaselineBackend: Awaited<ReturnType<typeof createSimulationBackend>>
-	let warmBaselineBackend: Awaited<ReturnType<typeof createSimulationBackend>>
-	let deployedBackend: Awaited<ReturnType<typeof createSimulationBackend>>
+	let coldBaselineBackend: SimulationBackend
+	let warmBaselineBackend: SimulationBackend
+	let deployedBackend: SimulationBackend
+	let securityPoolBackend: SimulationBackend
+	let securityPoolX2Backend: SimulationBackend
+	let securityPoolX2AuctionBackend: SimulationBackend
 
 	beforeAll(async () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
-		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
-		deployedBackend = await createBootstrappedSimulationBackendWithRetry('deployed')
+		const [nextWarmBaselineBackend, nextDeployedBackend, nextSecurityPoolBackend, nextSecurityPoolX2Backend, nextSecurityPoolX2AuctionBackend] = await Promise.all([
+			createBootstrappedSimulationBackendWithRetry('baseline'),
+			createBootstrappedSimulationBackendWithRetry('deployed'),
+			createBootstrappedSimulationBackendWithRetry('security-pool', 1),
+			createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1),
+			createBootstrappedSimulationBackendWithRetry('securitypoolx2-auction', 1),
+		])
+		warmBaselineBackend = nextWarmBaselineBackend
+		deployedBackend = nextDeployedBackend
+		securityPoolBackend = nextSecurityPoolBackend
+		securityPoolX2Backend = nextSecurityPoolX2Backend
+		securityPoolX2AuctionBackend = nextSecurityPoolX2AuctionBackend
 		warmBaselineBackend.setTransactionDelayMilliseconds(0)
 		deployedBackend.setTransactionDelayMilliseconds(0)
-	}, 30_000)
+		securityPoolBackend.setTransactionDelayMilliseconds(0)
+		securityPoolX2Backend.setTransactionDelayMilliseconds(0)
+		securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
+	}, 180_000)
 
 	beforeEach(async () => {
-		const coldPrimaryAccount = coldBaselineBackend.accounts[0]
-		if (coldPrimaryAccount !== undefined && coldBaselineBackend.selectedAccount !== coldPrimaryAccount) await coldBaselineBackend.selectAccount(coldPrimaryAccount)
-		const warmPrimaryAccount = warmBaselineBackend.accounts[0]
-		if (warmPrimaryAccount !== undefined && warmBaselineBackend.selectedAccount !== warmPrimaryAccount) await warmBaselineBackend.selectAccount(warmPrimaryAccount)
-		warmBaselineBackend.setTransactionDelayMilliseconds(0)
-		const deployedPrimaryAccount = deployedBackend.accounts[0]
-		if (deployedPrimaryAccount !== undefined && deployedBackend.selectedAccount !== deployedPrimaryAccount) await deployedBackend.selectAccount(deployedPrimaryAccount)
-		deployedBackend.setTransactionDelayMilliseconds(0)
+		await resetSelectedAccountAndTransactionDelay(coldBaselineBackend)
+		await resetSelectedAccountAndTransactionDelay(warmBaselineBackend)
+		await resetSelectedAccountAndTransactionDelay(deployedBackend)
 	}, 30_000)
 
 	afterAll(async () => {
 		if (coldBaselineBackend !== undefined) await coldBaselineBackend.dispose()
 		if (warmBaselineBackend !== undefined) await warmBaselineBackend.dispose()
 		if (deployedBackend !== undefined) await deployedBackend.dispose()
+		if (securityPoolBackend !== undefined) await securityPoolBackend.dispose()
+		if (securityPoolX2Backend !== undefined) await securityPoolX2Backend.dispose()
+		if (securityPoolX2AuctionBackend !== undefined) await securityPoolX2AuctionBackend.dispose()
 	}, 30_000)
 
 	void test('reports wallet presence and returns the selected account', async () => {
@@ -335,32 +356,28 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('keeps the deployed-scenario fork threshold in sync after minting REP', async () => {
-		const backend = await createBootstrappedSimulationBackendWithRetry('deployed')
+		const backend = deployedBackend
 
-		try {
-			const readClient = backend.createReadClient()
-			const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
-			if (zoltarStep === undefined) throw new Error('Expected the Zoltar deployment step')
-			const universeSummaryBefore = await loadZoltarUniverseSummary(readClient, 0n)
-			if (universeSummaryBefore === undefined) {
-				throw new Error('Expected the genesis Zoltar universe to be available in the deployed scenario')
-			}
-			const zoltarBalanceBefore = await readClient.getBalance({ address: zoltarStep.address })
-
-			await backend.mintRep(SIMULATION_REP_MINT_AMOUNT)
-
-			const universeSummaryAfter = await loadZoltarUniverseSummary(readClient, 0n)
-			if (universeSummaryAfter === undefined) {
-				throw new Error('Expected the genesis Zoltar universe after minting REP')
-			}
-			const zoltarBalanceAfter = await readClient.getBalance({ address: zoltarStep.address })
-
-			expect(universeSummaryAfter.totalTheoreticalSupply).toBe(universeSummaryBefore.totalTheoreticalSupply + SIMULATION_REP_MINT_AMOUNT)
-			expect(universeSummaryAfter.forkThreshold).toBe(universeSummaryBefore.forkThreshold + SIMULATION_REP_MINT_AMOUNT / 20n)
-			expect(zoltarBalanceAfter).toBe(zoltarBalanceBefore)
-		} finally {
-			await backend.dispose()
+		const readClient = backend.createReadClient()
+		const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
+		if (zoltarStep === undefined) throw new Error('Expected the Zoltar deployment step')
+		const universeSummaryBefore = await loadZoltarUniverseSummary(readClient, 0n)
+		if (universeSummaryBefore === undefined) {
+			throw new Error('Expected the genesis Zoltar universe to be available in the deployed scenario')
 		}
+		const zoltarBalanceBefore = await readClient.getBalance({ address: zoltarStep.address })
+
+		await backend.mintRep(SIMULATION_REP_MINT_AMOUNT)
+
+		const universeSummaryAfter = await loadZoltarUniverseSummary(readClient, 0n)
+		if (universeSummaryAfter === undefined) {
+			throw new Error('Expected the genesis Zoltar universe after minting REP')
+		}
+		const zoltarBalanceAfter = await readClient.getBalance({ address: zoltarStep.address })
+
+		expect(universeSummaryAfter.totalTheoreticalSupply).toBe(universeSummaryBefore.totalTheoreticalSupply + SIMULATION_REP_MINT_AMOUNT)
+		expect(universeSummaryAfter.forkThreshold).toBe(universeSummaryBefore.forkThreshold + SIMULATION_REP_MINT_AMOUNT / 20n)
+		expect(zoltarBalanceAfter).toBe(zoltarBalanceBefore)
 	}, 60_000)
 
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
@@ -517,23 +534,21 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('bootstraps seeded security-pool scenarios without reverting', async () => {
-		const seededScenarios: Array<SimulationScenario> = ['security-pool', 'securitypoolx2', 'securitypoolx2-auction']
-		for (const scenario of seededScenarios) {
-			const backend = await createBootstrappedSimulationBackendWithRetry(scenario, 1)
-			try {
-				expect(backend.currentScenario).toBe(scenario)
-				const readClient = backend.createReadClient()
-				const pools = await loadAllSecurityPools(readClient)
-				expect(pools.length).toBeGreaterThan(0)
-			} finally {
-				await backend.dispose()
-			}
+		const seededScenarios = [
+			{ backend: securityPoolBackend, scenario: 'security-pool' },
+			{ backend: securityPoolX2Backend, scenario: 'securitypoolx2' },
+			{ backend: securityPoolX2AuctionBackend, scenario: 'securitypoolx2-auction' },
+		] satisfies Array<{ backend: SimulationBackend; scenario: SimulationScenario }>
+		for (const { backend, scenario } of seededScenarios) {
+			expect(backend.currentScenario).toBe(scenario)
+			const readClient = backend.createReadClient()
+			const pools = await loadAllSecurityPools(readClient)
+			expect(pools.length).toBeGreaterThan(0)
 		}
 	}, 180_000)
 
 	void test('bootstraps the security-pool scenario with one undercollateralized seeded vault', async () => {
-		const backend = await createSimulationBackend({ scenario: 'security-pool' })
-		await backend.bootstrap()
+		const backend = securityPoolBackend
 		const primaryAccount = backend.accounts[0]
 		if (primaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
