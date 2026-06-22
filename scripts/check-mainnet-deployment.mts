@@ -73,8 +73,8 @@ function normalizeManifest(manifest: MainnetDeploymentManifest) {
 }
 
 async function loadComputedManifest(): Promise<MainnetDeploymentManifest> {
-	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'js', 'contracts', 'deployment.js')
-	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'js', 'protocolConfig.js')
+	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deployment.ts')
+	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 
 	try {
 		const deploymentModule = await import(url.pathToFileURL(deploymentModulePath).href)
@@ -142,15 +142,13 @@ async function readManifest(): Promise<MainnetDeploymentManifest> {
 	}
 }
 
-async function main() {
-	const write = process.argv.includes('--write')
-	const computedManifest = await loadComputedManifest()
-	if (write) {
-		await writeManifest(computedManifest)
-		return
-	}
+export async function writeMainnetDeploymentManifest(): Promise<void> {
+	await writeManifest(await loadComputedManifest())
+}
 
+export async function assertMainnetDeploymentManifestFresh(): Promise<void> {
 	const expectedManifest = await readManifest()
+	const computedManifest = await loadComputedManifest()
 	const expected = normalizeManifest(expectedManifest)
 	const computed = normalizeManifest(computedManifest)
 	if (expected !== computed) {
@@ -158,7 +156,22 @@ async function main() {
 	}
 }
 
-main().catch(error => {
-	console.error(error)
-	process.exit(1)
-})
+async function main() {
+	const write = process.argv.includes('--write')
+	if (write) {
+		await writeMainnetDeploymentManifest()
+		return
+	}
+
+	await assertMainnetDeploymentManifestFresh()
+}
+
+const currentScriptPath = url.fileURLToPath(import.meta.url)
+const invokedScriptPath = process.argv[1]
+
+if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+	main().catch(error => {
+		console.error(error)
+		process.exit(1)
+	})
+}
