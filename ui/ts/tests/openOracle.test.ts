@@ -39,10 +39,20 @@ import { getOpenOracleExtraData, OperationType, requestPriceIfNeededAndStageOper
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
+function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }
 	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
-	globalWindow.window.ethereum = mockWindow as InjectedEthereum
+	const request: InjectedEthereum['request'] = async args => {
+		if (args.method === 'eth_accounts' || args.method === 'eth_requestAccounts') return [accountAddress] as never
+		if (args.method === 'eth_chainId') return '0x1' as never
+		return (await mockWindow.request(args)) as never
+	}
+	const injectedEthereum: InjectedEthereum = {
+		on: mockWindow.on,
+		removeListener: mockWindow.removeListener,
+		request,
+	}
+	globalWindow.window.ethereum = injectedEthereum
 }
 
 const genesisUniverse = 0n

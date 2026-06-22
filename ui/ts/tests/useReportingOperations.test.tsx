@@ -6,7 +6,9 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from 'viem'
 import type { ReportingDetails } from '../types/contracts.js'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type UseReportingOperations = typeof import('../hooks/useReportingOperations.js')['useReportingOperations']
@@ -97,16 +99,20 @@ function requireHookState(state: UseReportingOperationsState | undefined) {
 
 describe('useReportingOperations', () => {
 	let restoreDomEnvironment: (() => void) | undefined
+	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 	})
 
 	afterEach(async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
 		mock.restore()

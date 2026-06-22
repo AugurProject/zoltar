@@ -1865,7 +1865,7 @@
 						</div>
 						<div class="parameter-card">
 							<span>Price Validity</span>
-							<b><code>PRICE_VALID_FOR_SECONDS = 1 hour</code>.</b>
+							<b><code>PRICE_VALID_FOR_SECONDS = 5 minutes</code>.</b>
 						</div>
 					</div>
 					<h3>Escalation Parameters</h3>
@@ -1982,13 +1982,13 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr><td><code>PRICE_VALID_FOR_SECONDS</code></td><td><code>1 hour</code></td><td>How long a settled REP/ETH price remains valid.</td></tr>
+							<tr><td><code>PRICE_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>How long a settled REP/ETH price remains valid.</td></tr>
 							<tr><td><code>gasConsumedOpenOracleReportPrice</code></td><td><code>100000</code></td><td>Coordinator gas estimate for report submission.</td></tr>
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Coordinator gas estimate for settlement callback.</td></tr>
 							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><code>26392439800</code></td><td>Hard-coded initial report liquidity parameter.</td></tr>
 							<tr><td>OpenOracle <code>escalationHalt</code></td><td><code>reputationToken.totalSupply() / 100000</code></td><td>Dynamic halt threshold for report escalation.</td></tr>
 							<tr><td>OpenOracle <code>settlerReward</code></td><td><code>block.basefee * 2 * gasConsumedOpenOracleReportPrice</code></td><td>Dynamic ETH reward paid to settler.</td></tr>
-							<tr><td>OpenOracle <code>settlementTime</code></td><td><code>180</code></td><td>Settlement delay encoded as <code>15 * 12</code>.</td></tr>
+							<tr><td>OpenOracle <code>settlementTime</code></td><td><code>480</code></td><td>Settlement delay encoded as <code>40 * 12</code>.</td></tr>
 							<tr><td>OpenOracle <code>disputeDelay</code></td><td><code>0</code></td><td>No extra waiting period after each report.</td></tr>
 							<tr><td>OpenOracle <code>protocolFee</code></td><td><code>0</code></td><td>Protocol fee disabled.</td></tr>
 							<tr><td>OpenOracle <code>callbackGasLimit</code></td><td><code>1000000</code></td><td>Settlement callback gas limit.</td></tr>

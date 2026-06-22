@@ -17,11 +17,12 @@ type UseDeploymentFlowParameters = {
 	setDeploymentStatuses: (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => void
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
+export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const deploymentFeedback = useSignal<ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined>(undefined)
 	const errorMessage = useSignal<string | undefined>(undefined)
@@ -60,7 +61,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		try {
 			onTransactionRequested(createDeploymentTransactionIntent(step.label))
-			const client = createWalletWriteClient(accountAddress, { onTransactionSubmitted })
+			const client = createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted })
 			const hash = await step.deploy(client)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
 			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)

@@ -6,7 +6,9 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import type { OpenOracleReportDetails } from '../types/contracts.js'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type UseOpenOracleOperations = typeof import('../hooks/useOpenOracleOperations.js')['useOpenOracleOperations']
@@ -87,16 +89,20 @@ function requireHookState(state: UseOpenOracleOperationsState | undefined) {
 
 describe('useOpenOracleOperations', () => {
 	let restoreDomEnvironment: (() => void) | undefined
+	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 	})
 
 	afterEach(async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
 		mock.restore()

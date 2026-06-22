@@ -38,6 +38,7 @@ import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
+import type { ReadBackendStatus } from '../lib/chainBackend.js'
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
@@ -338,6 +339,7 @@ export type OverviewPanelsProps = {
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefreshRepPrices: () => void
+	readBackendStatus?: ReadBackendStatus
 } & RepPerEthPriceProps
 
 export type TabNavigationProps = {
@@ -604,6 +606,9 @@ type OpenOracleRouteContentProps = {
 		defaultPriceSourceUrl: string | undefined
 		ethBalance: bigint | undefined
 		ethBalanceError: string | undefined
+		quoteBlockNumber?: bigint | undefined
+		quoteLoadedAtMs?: number | undefined
+		quoteStale?: boolean
 		quoteLoading: boolean
 		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined

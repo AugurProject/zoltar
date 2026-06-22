@@ -25,6 +25,12 @@ function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage:
 	}
 }
 
+function mergeQuestionLists(existingQuestions: MarketDetails[], nextQuestions: readonly MarketDetails[]) {
+	const questionsById = new Map(existingQuestions.map(question => [question.questionId.toLowerCase(), question]))
+	for (const question of nextQuestions) questionsById.set(question.questionId.toLowerCase(), question)
+	return [...questionsById.values()]
+}
+
 type UseZoltarUniverseParameters = {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
@@ -33,11 +39,12 @@ type UseZoltarUniverseParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
+export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
 	const universeLoad = useLoadController()
 	const questionCountLoad = useLoadController()
 	const questionsLoad = useLoadController()
@@ -197,6 +204,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			onSuccess: page => {
 				if (!isMounted.current) return
 				zoltarQuestionPage.value = page
+				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, page.questions)
 			},
 			onError: error => {
 				loadError = loadError ?? error
@@ -229,7 +237,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				onTransactionRequested(createChildUniverseTransactionIntent('zoltar'))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar needs to fork before child universes can be deployed')
-				const transaction = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
+				const transaction = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, outcomeIndex)
 				result = {
 					action: 'createChildUniverse',
 					hash: transaction.hash,

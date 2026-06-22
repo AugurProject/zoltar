@@ -20,6 +20,7 @@ type UseZoltarMigrationParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
@@ -53,6 +54,7 @@ export function useZoltarMigration({
 	onTransactionFailed,
 	onTransactionFinished,
 	onTransactionPresented,
+	onTransactionPrepared,
 	onTransactionRequested,
 	onTransactionSubmitted,
 	refreshState,
@@ -152,7 +154,7 @@ export function useZoltarMigration({
 	const prepareRepForMigration = useCallback(async () => {
 		await runZoltarMigrationAction({
 			actionName: 'prepare',
-			action: async (walletAddress, universe, amount) => await prepareRepForMigrationInZoltar(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, amount),
+			action: async (walletAddress, universe, amount) => await prepareRepForMigrationInZoltar(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount),
 			errorFallback: 'Failed to prepare REP for migration',
 			refreshAfter: false,
 			requiresOutcomeIndexes: false,
@@ -163,7 +165,7 @@ export function useZoltarMigration({
 	const migrateInternalRep = useCallback(async () => {
 		await runZoltarMigrationAction({
 			actionName: 'split',
-			action: async (walletAddress, universe, amount, outcomeIndexes) => await migrateInternalRepInZoltar(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes),
+			action: async (walletAddress, universe, amount, outcomeIndexes) => await migrateInternalRepInZoltar(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes),
 			errorFallback: 'Failed to migrate REP',
 			refreshAfter: true,
 			requiresOutcomeIndexes: true,

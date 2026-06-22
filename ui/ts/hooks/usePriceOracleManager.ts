@@ -19,12 +19,13 @@ type UsePriceOracleManagerParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function usePriceOracleManager({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
+export function usePriceOracleManager({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const poolOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
@@ -102,7 +103,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						walletEthBalance,
 					})
 					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
-					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
+					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress)
 				},
 				'Failed to request price',
 				result => {
@@ -145,7 +146,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						poolOracleManagerError.value = message
 					},
 				},
-				async walletAddress => await executeOracleManagerStagedOperation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, operationId),
+				async walletAddress => await executeOracleManagerStagedOperation(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, operationId),
 				'Failed to execute staged operation',
 				result => {
 					poolPriceOracleResult.value = result

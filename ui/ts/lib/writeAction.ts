@@ -1,5 +1,6 @@
 import type { Address, Hash } from 'viem'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
+import { assertActiveWallet } from './walletGuards.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
 
@@ -22,6 +23,7 @@ type BuildWriteActionConfigParameters = {
 	onTransactionFailed: WriteOperationsParameters['onTransactionFailed'] | undefined
 	onTransactionFinished: WriteOperationsParameters['onTransactionFinished']
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	refreshState: WriteOperationsParameters['refreshState']
 }
@@ -55,6 +57,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 	try {
 		let result: TResult | undefined
 		try {
+			await assertActiveWallet(parameters.accountAddress)
 			parameters.onTransactionRequested()
 			parameters.setErrorMessage(undefined)
 			result = await action(parameters.accountAddress)

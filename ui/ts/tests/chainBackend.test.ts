@@ -140,7 +140,7 @@ describe('injected backend read transport', () => {
 		expect(requestCalls).toEqual([])
 	})
 
-	test('handles malformed wallet and chain responses without throwing', async () => {
+	test('handles malformed wallet responses and rejects malformed chain responses', async () => {
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
 			if (method === 'eth_accounts') return 'not-an-array'
 			if (method === 'eth_chainId') return 42
@@ -151,10 +151,10 @@ describe('injected backend read transport', () => {
 		const backend = createInjectedBackend()
 		expect(await backend.getAccounts()).toEqual([])
 		expect(await backend.requestAccounts()).toEqual([])
-		expect(await backend.getChainId()).toBe('0x1')
+		await expect(backend.getChainId()).rejects.toThrow('Wallet returned an invalid chain ID.')
 	})
 
-	test('falls back to mainnet defaults when the chainId response is malformed', async () => {
+	test('rejects malformed chainId responses instead of defaulting to mainnet', async () => {
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
 			if (method === 'eth_accounts') return []
 			if (method === 'eth_chainId') return 123
@@ -163,7 +163,7 @@ describe('injected backend read transport', () => {
 		})
 
 		const backend = createInjectedBackend()
-		expect(await backend.getChainId()).toBe('0x1')
+		await expect(backend.getChainId()).rejects.toThrow('Wallet returned an invalid chain ID.')
 	})
 
 	test('reports wallet presence and uses read paths when a provider is available', async () => {
@@ -200,6 +200,7 @@ describe('injected backend read transport', () => {
 		const callbacks: string[] = []
 		let sendRawTransactionCalls = 0
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0x1'
 			if (method === 'eth_getTransactionCount') return '0x1'
 			if (method === 'eth_estimateGas') return '0x5208'
@@ -255,14 +256,14 @@ describe('injected backend read transport', () => {
 		await expect(backend.createReadClient().getCode({ address: zeroAddress })).rejects.toThrow('provider unavailable')
 	})
 
-	test('falls back to default chain id when chain RPC calls fail', async () => {
+	test('rejects chain RPC failures instead of defaulting to mainnet', async () => {
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
 			if (method === 'eth_chainId') throw new Error('RPC offline')
 			return []
 		})
 
 		const backend = createInjectedBackend()
-		expect(await backend.getChainId()).toBe('0x1')
+		await expect(backend.getChainId()).rejects.toThrow('Unable to verify wallet network.')
 	})
 
 	test('subscribes and unsubscribes event listeners cleanly', async () => {
@@ -295,9 +296,9 @@ describe('injected backend read transport', () => {
 		expect(normalizeAccount(123)).toBe(undefined)
 	})
 
-	test('returns the chain id fallback without an injected provider', async () => {
+	test('rejects chain id reads without an injected provider', async () => {
 		delete ensureWindowObject().ethereum
 		const backend = createInjectedBackend()
-		expect(await backend.getChainId()).toBe('0x1')
+		await expect(backend.getChainId()).rejects.toThrow('Unable to verify wallet network because no injected wallet was found.')
 	})
 })

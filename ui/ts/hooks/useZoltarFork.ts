@@ -25,6 +25,7 @@ type UseZoltarForkParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
@@ -43,7 +44,21 @@ function formatQuestionId(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
 }
 
-export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, shouldAutoLoadForkAccess, zoltarUniverse }: UseZoltarForkParameters) {
+export function useZoltarFork({
+	accountAddress,
+	activeUniverseId,
+	ensureZoltarUniverse,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionPrepared,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+	refreshZoltarUniverse,
+	shouldAutoLoadForkAccess,
+	zoltarUniverse,
+}: UseZoltarForkParameters) {
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
@@ -219,7 +234,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 				'approve',
 				async (walletAddress, universe, questionId) => {
 					const approvalAmount = amount ?? universe.forkThreshold
-					const approval = await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.reputationToken, getZoltarAddress(), approvalAmount, 'approveForkRep')
+					const approval = await approveErc20(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.reputationToken, getZoltarAddress(), approvalAmount, 'approveForkRep')
 					return {
 						action: 'approveForkRep',
 						hash: approval.hash,
@@ -239,7 +254,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 			'fork',
 			async (walletAddress, universe, questionId) => {
 				if (universe.hasForked) throw new Error('Zoltar has already forked')
-				return await forkZoltarUniverse(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, questionId)
+				return await forkZoltarUniverse(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, questionId)
 			},
 			'Failed to fork Zoltar',
 			true,
