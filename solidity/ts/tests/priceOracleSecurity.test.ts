@@ -38,6 +38,22 @@ const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'ExecutedStagedOperation')
 
+const findPendingOperationRecoveryConsumedLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'PendingOperationRecoveryConsumed')
+
 type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
@@ -669,6 +685,34 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.ok(nextPendingReportId > pendingReportId, 'recovery should allow creating a fresh oracle report')
 	})
 
+	test('pending report recovery rejects unsettled reports', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPrice',
+					value: ethCost,
+				}),
+		)
+
+		await assert.rejects(
+			writeContractAndWait(
+				client,
+				async () =>
+					await client.writeContract({
+						abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+						address: priceOracle,
+						functionName: 'recoverSettledPendingReport',
+						args: [],
+					}),
+			),
+			/ReportNotSettled|reverted/i,
+		)
+	})
+
 	test('failed callback recovery clears the auto-execute slot so staged operations can request a fresh report', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const firstAllowance = repDeposit / 4n
@@ -702,7 +746,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		assert.strictEqual(pendingOperationSlotIdAfterSettlement, 1n, 'failed callbacks should leave the original operation in the auto-execute slot until recovery')
 
-		await writeContractAndWait(
+		const recoveryHash = await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
@@ -712,6 +756,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					args: [],
 				}),
 		)
+		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
 
 		const pendingReportIdAfterRecovery = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
@@ -737,6 +782,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingOperationSlotIdAfterRecovery, 0n, 'recovery should clear the stale auto-execute slot')
 		assert.strictEqual(recoveredStagedOperation[1], zeroAddress, 'recovery should consume the operation whose callback could not complete')
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'recovery must not execute staged allowance changes without a successful callback')
+		const recoveryConsumedLog = findPendingOperationRecoveryConsumedLog(recoveryReceipt.logs)
+		assert.strictEqual(recoveryConsumedLog?.args.operationId, 1n, 'recovery should emit the consumed operation id')
+		assert.strictEqual(recoveryConsumedLog?.args.operation, OperationType.SetSecurityBondsAllowance, 'recovery should emit the consumed operation type')
 
 		const secondAllowance = repDeposit / 5n
 		await writeContractAndWait(

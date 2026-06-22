@@ -62,6 +62,7 @@ contract SecurityPoolOracleCoordinator {
 
 	event PriceReported(uint256 reportId, uint256 price);
 	event PendingReportRecovered(uint256 reportId, uint256 settlementTimestamp);
+	event PendingOperationRecoveryConsumed(uint256 operationId, OperationType operation);
 	event StagedOperationQueued(
 		uint256 operationId,
 		OperationType operation,
@@ -198,7 +199,7 @@ contract SecurityPoolOracleCoordinator {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		if (stagedOperation.initiatorVault == address(0)) return;
 		_consumeStagedOperation(operationId);
-		emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle callback failed');
+		emit PendingOperationRecoveryConsumed(operationId, stagedOperation.operation);
 	}
 
 	function openOracleCallback(
