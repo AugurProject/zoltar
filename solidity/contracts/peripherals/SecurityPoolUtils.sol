@@ -10,7 +10,7 @@ library SecurityPoolUtils {
 
 	uint256 constant MAX_RETENTION_RATE = 999_999_996_848_000_000; // ≈90% yearly (10% fees)
 	uint256 constant MIN_RETENTION_RATE = 999_999_977_880_000_000; // ≈50% yearly (50% fees)
-	uint256 constant RETENTION_RATE_DIP = 80; // 80% utilization
+	uint256 constant RETENTION_RATE_DIP = (80 * PRICE_PRECISION) / 100; // 80% utilization
 
 	// smallest vaults
 	uint256 constant MIN_SECURITY_BOND_DEBT = 1 ether; // 1 eth
@@ -26,14 +26,14 @@ library SecurityPoolUtils {
 		}
 	}
 
-	// starts from MAX_RETENTION_RATE, decreases linearly until RETENTION_RATE_DIP% utilization is hit and then caps to MIN_RETENTION_RATE
-	// TODO: research more on how this should work
+	// Starts at MAX_RETENTION_RATE, decreases linearly until the 80% utilization dip,
+	// and then caps at MIN_RETENTION_RATE.
 	function calculateRetentionRate(
 		uint256 completeSetCollateralAmount,
 		uint256 securityBondAllowance
 	) external pure returns (uint256 z) {
 		if (securityBondAllowance == 0) return MAX_RETENTION_RATE;
-		uint256 utilization = (completeSetCollateralAmount * 100) / securityBondAllowance;
+		uint256 utilization = (completeSetCollateralAmount * PRICE_PRECISION) / securityBondAllowance;
 		if (utilization <= RETENTION_RATE_DIP) {
 			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
 			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
