@@ -4,16 +4,27 @@ import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { approveAndDepositRep, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { OperationType, getQuestionEndDate, participateAuction } from '../testsuite/simulator/utils/contracts/peripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { ensureZoltarDeployed, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, migrateVaultWithUnresolvedEscalation, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+import {
+	claimAuctionProceeds,
+	createChildUniverse,
+	finalizeTruthAuction,
+	getMigratedRep,
+	getMigrationProxyAddress,
+	getSecurityPoolForkerForkData,
+	initiateSecurityPoolFork,
+	migrateRepToZoltar,
+	migrateVault,
+	migrateVaultWithUnresolvedEscalation,
+	startTruthAuction,
+} from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRep, getCompleteSetCollateralAmount, getPoolOwnershipDenominator, getSecurityVault, getSystemState, poolOwnershipToRep, redeemRep } from '../testsuite/simulator/utils/contracts/securityPool'
-import { forkUniverse } from '../testsuite/simulator/utils/contracts/zoltar'
 import { approveToken, contractExists, getChildUniverseId as deriveChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
@@ -28,27 +39,6 @@ const securityMultiplier = 2n
 const repDeposit = 1000n * 10n ** 18n
 const maxRetentionRate = 999_999_996_848_000_000n
 const AUCTION_TIME = 604800n
-const getMigrationProxyAddressAbi = [
-	{
-		inputs: [
-			{
-				internalType: 'contract ISecurityPool',
-				name: 'securityPool',
-				type: 'address',
-			},
-		],
-		name: 'getMigrationProxyAddress',
-		outputs: [
-			{
-				internalType: 'address',
-				name: '',
-				type: 'address',
-			},
-		],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
 
 type HarnessContext = {
 	questionId: bigint
@@ -192,7 +182,9 @@ describe('Peripherals invariant harness', () => {
 	test('fork and migration state transitions preserve REP supply and child mapping', async () => {
 		const parentRepToken = getRepTokenAddress(genesisUniverse)
 		const parentSupplyBeforeFork = await getTotalTheoreticalSupply(client, parentRepToken)
+		const burnAddressBalanceBeforeFork = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
 		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		const expectedChildSupplySnapshot = parentSupplyBeforeFork - forkThreshold
 		const branchOrder = shuffle([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No], 0xdecafbadn)
 		const attackerClient = createClient(1)
 		await approveAndDepositRep(attackerClient, repDeposit, context.questionId)
@@ -202,9 +194,11 @@ describe('Peripherals invariant harness', () => {
 
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'parent should enter forked state')
 		const parentSupplyAfterFork = await getUniverseTheoreticalSupply(client, genesisUniverse)
+		const burnAddressBalanceAfterFork = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
+		const burnedParentRep = burnAddressBalanceAfterFork - burnAddressBalanceBeforeFork
+		strictEqualTypeSafe(parentSupplyBeforeFork - parentSupplyAfterFork, burnedParentRep, 'parent theoretical supply decrease should equal burned parent REP')
 		assert.ok(parentSupplyAfterFork < parentSupplyBeforeFork, 'fork should reduce parent theoretical supply')
 
-		let firstChildUniverseSupply: bigint | undefined
 		for (const outcome of branchOrder) {
 			await createChildUniverse(client, context.securityPool, outcome)
 			const childUniverseId = getChildUniverseIdForOutcome(outcome)
@@ -215,51 +209,25 @@ describe('Peripherals invariant harness', () => {
 			strictEqualTypeSafe(childUniverse.forkingOutcomeIndex, BigInt(outcome), 'child should retain its outcome index')
 			const childUniverseSupply = await getUniverseTheoreticalSupply(client, childUniverseId)
 			assert.ok(childUniverseSupply > 0n, 'child universe supply should stay positive')
-			if (firstChildUniverseSupply === undefined) {
-				firstChildUniverseSupply = childUniverseSupply
-			} else {
-				strictEqualTypeSafe(childUniverseSupply, firstChildUniverseSupply, 'child universe supply should stay stable across branch orderings')
-			}
+			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should equal the parent snapshot immediately after fork burn')
 		}
 
 		const childUniverseIds = branchOrder.map(outcome => getChildUniverseIdForOutcome(outcome))
 		assert.strictEqual(new Set(childUniverseIds).size, childUniverseIds.length, 'supported child universes should map to distinct ids')
 
-		const migrationBalanceBefore = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		const migrationProxyAddress = await getMigrationProxyAddress(client, context.securityPool)
+		const migrationBalanceBefore = await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress)
 		for (const outcome of branchOrder) {
 			const childUniverseId = getChildUniverseIdForOutcome(outcome)
 			const childRepToken = getRepTokenAddress(childUniverseId)
-			const childBalanceBefore = await client.readContract({
-				abi: [
-					{
-						inputs: [{ internalType: 'address', name: 'account', type: 'address' }],
-						name: 'balanceOf',
-						outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-						stateMutability: 'view',
-						type: 'function',
-					},
-				] as const,
-				functionName: 'balanceOf',
-				address: childRepToken,
-				args: [client.account.address],
-			})
+			const childSecurityPool = getSecurityPoolAddresses(context.securityPool, childUniverseId, context.questionId, securityMultiplier).securityPool
+			const childBalanceBefore = await getERC20Balance(client, childRepToken, childSecurityPool)
 			await migrateRepToZoltar(client, context.securityPool, [outcome])
-			const childBalanceAfter = await client.readContract({
-				abi: [
-					{
-						inputs: [{ internalType: 'address', name: 'account', type: 'address' }],
-						name: 'balanceOf',
-						outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-						stateMutability: 'view',
-						type: 'function',
-					},
-				] as const,
-				functionName: 'balanceOf',
-				address: childRepToken,
-				args: [client.account.address],
-			})
+			const childBalanceAfter = await getERC20Balance(client, childRepToken, childSecurityPool)
+			const childMinted = childBalanceAfter - childBalanceBefore
 			assert.ok(childBalanceAfter >= childBalanceBefore, 'migration should never reduce child REP')
-			assert.ok(childBalanceAfter <= migrationBalanceBefore, 'child REP minted must not exceed the caller migration balance')
+			assert.ok(childMinted > 0n, 'migration should mint REP into the selected child pool')
+			assert.ok(childMinted <= migrationBalanceBefore, 'child REP minted must not exceed the caller migration balance for the selected branch')
 		}
 
 		await assert.rejects(migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes]))
@@ -281,21 +249,21 @@ describe('Peripherals invariant harness', () => {
 	test('own-fork locks excess parent REP into the migration balance', async () => {
 		await mockWindow.setTime(context.questionEndDate + 10n)
 		const repToken = getRepTokenAddress(genesisUniverse)
+		const parentSupplyBeforeFork = await getUniverseTheoreticalSupply(client, genesisUniverse)
+		const burnAddressBalanceBeforeFork = await getERC20Balance(client, repToken, addressString(BURN_ADDRESS))
 		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
 		await depositRep(client, context.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, context.securityPool)
 
-		const migrationProxyAddress = await client.readContract({
-			abi: getMigrationProxyAddressAbi,
-			functionName: 'getMigrationProxyAddress',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [context.securityPool],
-		})
+		const migrationProxyAddress = await getMigrationProxyAddress(client, context.securityPool)
 		const migrationProxyRepBalance = await getERC20Balance(client, repToken, migrationProxyAddress)
+		const parentSupplyAfterFork = await getUniverseTheoreticalSupply(client, genesisUniverse)
+		const burnAddressBalanceAfterFork = await getERC20Balance(client, repToken, addressString(BURN_ADDRESS))
 		const forkData = await getSecurityPoolForkerForkData(client, context.securityPool)
 
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'parent should enter forked state')
 		assert.equal(migrationProxyRepBalance, 0n, 'forking should burn the parent REP that leaves the parent pool')
+		strictEqualTypeSafe(parentSupplyBeforeFork - parentSupplyAfterFork, burnAddressBalanceAfterFork - burnAddressBalanceBeforeFork, 'burned parent REP should equal the parent theoretical supply decrease')
 		assert.ok(forkData.auctionableRepAtFork > 0n, 'own-fork migration balance should include non-burned parent REP')
 	})
 
@@ -393,6 +361,8 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(orderA.bidderABalanceAfter, orderB.bidderABalanceAfter, 'bidder A payout should be order-independent')
 		strictEqualTypeSafe(orderA.bidderBBalanceAfter, orderB.bidderBBalanceAfter, 'bidder B payout should be order-independent')
 		assert.ok(orderA.auctionBalanceAfter <= orderA.auctionBalanceBefore, 'auction settlement should never pay out more ETH than the auction held')
+		const totalBidderPayout = orderA.bidderABalanceAfter - orderA.bidderABalanceBefore + (orderA.bidderBBalanceAfter - orderA.bidderBBalanceBefore)
+		strictEqualTypeSafe(totalBidderPayout, orderA.auctionBalanceBefore - orderA.auctionBalanceAfter, 'total bidder ETH paid should reconcile to the auction balance decrease')
 		await assert.rejects(withdrawBids(client, auctionAddress, bidderA.account.address, [{ tick: tickA, bidIndex: 0n }]), /already claimed/i)
 	})
 
@@ -415,20 +385,26 @@ describe('Peripherals invariant harness', () => {
 		const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool, attackerClient.account.address)
 		const attackerClaimBeforeRedeem = await poolOwnershipToRep(client, yesSecurityPool, attackerVaultBeforeRedeem.repDepositShare)
 		const denominatorBeforeRedeem = await getPoolOwnershipDenominator(client, yesSecurityPool)
-		const walletBeforeRedeem = await getETHBalance(client, client.account.address)
+		const childRepToken = getRepTokenAddress(yesUniverseId)
+		const walletRepBeforeRedeem = await getERC20Balance(client, childRepToken, client.account.address)
+		const poolRepBeforeRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool)
+		const clientVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool, client.account.address)
+		const clientClaimBeforeRedeem = await poolOwnershipToRep(client, yesSecurityPool, clientVaultBeforeRedeem.repDepositShare)
 
 		await redeemRep(client, yesSecurityPool, client.account.address)
 
 		const clientVaultAfterRedeem = await getSecurityVault(client, yesSecurityPool, client.account.address)
 		const denominatorAfterRedeem = await getPoolOwnershipDenominator(client, yesSecurityPool)
 		const attackerClaimAfterRedeem = await poolOwnershipToRep(client, yesSecurityPool, attackerVaultBeforeRedeem.repDepositShare)
-		const walletAfterRedeem = await getETHBalance(client, client.account.address)
+		const walletRepAfterRedeem = await getERC20Balance(client, childRepToken, client.account.address)
+		const poolRepAfterRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool)
 
 		strictEqualTypeSafe(clientVaultAfterRedeem.repDepositShare, 0n, 'redeeming a vault should zero out its child-pool ownership')
 		assert.ok(denominatorAfterRedeem <= denominatorBeforeRedeem, 'redeeming a vault should not increase the child pool denominator')
 		const claimDelta = attackerClaimAfterRedeem > attackerClaimBeforeRedeem ? attackerClaimAfterRedeem - attackerClaimBeforeRedeem : attackerClaimBeforeRedeem - attackerClaimAfterRedeem
 		assert.ok(claimDelta <= 1n, 'redeeming another vault should preserve the remaining vault claim up to rounding')
-		assert.ok(walletAfterRedeem >= walletBeforeRedeem, 'redeemRep should not reduce the wallet balance')
+		strictEqualTypeSafe(walletRepAfterRedeem - walletRepBeforeRedeem, clientClaimBeforeRedeem, 'redeemRep should pay the caller REP claim exactly')
+		strictEqualTypeSafe(poolRepBeforeRedeem - poolRepAfterRedeem, clientClaimBeforeRedeem, 'redeemRep should debit the child pool REP by the caller claim exactly')
 		await assert.rejects(redeemRep(client, yesSecurityPool, client.account.address), /no redeemable rep/)
 	})
 })

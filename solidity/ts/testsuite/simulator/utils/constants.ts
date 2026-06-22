@@ -1,4 +1,5 @@
 export const GENESIS_REPUTATION_TOKEN = 0x221657776846890989a759ba2973e427dff5c9bbn
+export const BURN_ADDRESS = 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefn
 
 export const PROXY_DEPLOYER_ADDRESS = 0x7a0d94f55792c434d74a40883c6ed8545e406d12n
 
