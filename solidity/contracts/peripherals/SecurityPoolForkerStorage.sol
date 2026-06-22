@@ -7,10 +7,10 @@ import { SecurityPoolForkerForkData, OwnForkChildRepAllocation } from './Securit
 
 abstract contract SecurityPoolForkerStorage {
 	mapping(ISecurityPool => SecurityPoolForkerForkData) internal forkDataByPool;
-	mapping(ISecurityPool => mapping(uint8 => OwnForkChildRepAllocation))
+	mapping(ISecurityPool => mapping(uint256 => OwnForkChildRepAllocation))
 		internal ownForkChildRepAllocationByPoolAndOutcome;
-	mapping(ISecurityPool => mapping(uint8 => ISecurityPool)) internal childrenByPoolAndOutcome;
+	mapping(ISecurityPool => mapping(uint256 => ISecurityPool)) internal childrenByPoolAndOutcome;
 	mapping(ISecurityPool => SecurityPoolMigrationProxy) internal migrationProxyByPool;
-	mapping(ISecurityPool => mapping(uint8 => uint256)) internal pendingChildRepByPoolAndOutcome;
+	mapping(ISecurityPool => mapping(uint256 => uint256)) internal pendingChildRepByPoolAndOutcome;
 	mapping(address => bool) internal trustedAuctionAddresses;
 }

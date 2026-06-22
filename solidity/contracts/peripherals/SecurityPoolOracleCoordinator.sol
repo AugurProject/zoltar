@@ -62,6 +62,8 @@ contract SecurityPoolOracleCoordinator {
 	uint256 public priceRoundConsumedNotional;
 
 	event PriceReported(uint256 reportId, uint256 price);
+	event PendingReportRecovered(uint256 reportId, uint256 settlementTimestamp);
+	event PendingOperationRecoveryConsumed(uint256 operationId, OperationType operation);
 	event StagedOperationQueued(
 		uint256 operationId,
 		OperationType operation,
@@ -189,6 +191,27 @@ contract SecurityPoolOracleCoordinator {
 			require(sent, 'failed to refund excess');
 		}
 	}
+
+	function recoverSettledPendingReport() public {
+		uint256 reportId = pendingReportId;
+		require(reportId != 0, 'No pending request');
+		(, uint256 settlementTimestamp) = openOracle.getSettlementData(reportId);
+		pendingReportId = 0;
+		pendingReportMaxSettlementBaseFee = 0;
+		_consumeRecoveredPendingOperation();
+		emit PendingReportRecovered(reportId, settlementTimestamp);
+	}
+
+	function _consumeRecoveredPendingOperation() private {
+		uint256 operationId = pendingOperationSlotId;
+		if (operationId == 0) return;
+		pendingOperationSlotId = 0;
+		StagedOperation memory stagedOperation = stagedOperations[operationId];
+		if (stagedOperation.initiatorVault == address(0)) return;
+		_consumeStagedOperation(operationId);
+		emit PendingOperationRecoveryConsumed(operationId, stagedOperation.operation);
+	}
+
 	function openOracleCallback(
 		uint256 reportId,
 		uint256 amount1,

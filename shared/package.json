@@ -11,6 +11,10 @@
 			"types": "./ts/bigInt.ts",
 			"default": "./js/bigInt.js"
 		},
+		"./constants": {
+			"types": "./ts/constants.ts",
+			"default": "./js/constants.js"
+		},
 		"./deploymentAddresses": {
 			"types": "./ts/deploymentAddresses.ts",
 			"default": "./js/deploymentAddresses.js"
