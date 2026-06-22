@@ -56,7 +56,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 			uint256 escalationNonDecisionThresholdAtFork,
 			bool ownFork,
 			bool unresolvedEscalationAtFork,
-			uint8 outcomeIndex
+			uint256 outcomeIndex
 		)
 	{
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
@@ -305,9 +305,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		if (migrationAmount > 0) {
 			for (uint256 index = 0; index < outcomeIndices.length; index++) {
 				uint256 outcomeIndex = outcomeIndices[index];
-				require(outcomeIndex <= type(uint8).max, 'eb');
-				uint8 normalizedOutcomeIndex = uint8(outcomeIndex);
-				ISecurityPool child = childrenByPoolAndOutcome[securityPool][normalizedOutcomeIndex];
+				ISecurityPool child = childrenByPoolAndOutcome[securityPool][outcomeIndex];
 				if (address(child) != address(0x0)) {
 					require(child.systemState() == SystemState.ForkMigration, 'child branch already priced');
 				}
@@ -315,9 +313,9 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
 					'migration window closed'
 				);
-				_splitMigrationRepToChild(securityPool, normalizedOutcomeIndex, migrationAmount, data.ownFork, false);
-				pendingChildRepByPoolAndOutcome[securityPool][normalizedOutcomeIndex] += migrationAmount;
-				_sweepChildRepToPool(securityPool, normalizedOutcomeIndex);
+				_splitMigrationRepToChild(securityPool, outcomeIndex, migrationAmount, data.ownFork, false);
+				pendingChildRepByPoolAndOutcome[securityPool][outcomeIndex] += migrationAmount;
+				_sweepChildRepToPool(securityPool, outcomeIndex);
 			}
 		}
 	}
@@ -332,7 +330,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		return data;
 	}
 
-	function createChildUniverse(ISecurityPool, uint8) public {
+	function createChildUniverse(ISecurityPool, uint256) public {
 		_delegateVaultMigration();
 	}
 
@@ -347,14 +345,14 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	// migrates vault into outcome universe after fork
-	function migrateVault(ISecurityPool, uint8) public {
+	function migrateVault(ISecurityPool, uint256) public {
 		_delegateVaultMigration();
 	}
 
 	function migrateVaultWithUnresolvedEscalation(
 		ISecurityPool,
 		address vault,
-		uint8
+		uint256
 	) public returns (bool moreToMigrate) {
 		require(msg.sender == vault, 'ov');
 		bytes memory returnData = _delegateEscalationGameForker();
@@ -708,7 +706,10 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		if (address(parent) != address(0x0)) {
 			SecurityPoolForkerForkData storage parentData = _getForkData(parent);
 			SecurityPoolForkerForkData storage childData = _getForkData(securityPool);
-			if (parentData.ownFork) return BinaryOutcomes.BinaryOutcome(childData.outcomeIndex);
+			if (parentData.ownFork) {
+				require(childData.outcomeIndex <= uint256(BinaryOutcomes.BinaryOutcome.No), 'bad own fork outcome');
+				return BinaryOutcomes.BinaryOutcome(childData.outcomeIndex);
+			}
 		}
 		if (systemState == SystemState.Operational) {
 			EscalationGame escalationGame = securityPool.escalationGame();

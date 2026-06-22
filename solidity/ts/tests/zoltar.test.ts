@@ -1,6 +1,7 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -32,6 +33,10 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/si
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
 const MAX_UINT256 = 2n ** 256n - 1n
+
+function formatStorageSlot(slot: bigint) {
+	return `0x${slot.toString(16).padStart(64, '0')}`
+}
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -113,6 +118,80 @@ describe('Contract Test Suite', () => {
 		})
 
 		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /token returned false/i)
+	})
+
+	test('constructor rejects missing genesis REP token code', async () => {
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const deployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				code: hexToBytes('0x'),
+			},
+		})
+
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
+			/genesis rep/i,
+		)
+	})
+
+	test('constructor rejects zero genesis REP theoretical supply', async () => {
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const deployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				stateDiff: {
+					[formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 0n,
+				},
+			},
+		})
+
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
+			/genesis rep missing supply/i,
+		)
+	})
+
+	test('forkUniverse rejects uninitialized universes without mutating fork state', async () => {
+		const missingUniverseId = 999_999n
+		const questionData = {
+			title: 'missing universe fork test',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		await assert.rejects(forkUniverse(client, missingUniverseId, questionId), /Universe not initialized|reverted/i)
+
+		const universeData = await getUniverseData(client, missingUniverseId)
+		assert.strictEqual(universeData.forkTime, 0n, 'missing universe should remain unforked')
 	})
 
 	test('canForkQuestion', async () => {

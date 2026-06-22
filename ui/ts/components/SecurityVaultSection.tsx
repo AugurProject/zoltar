@@ -606,7 +606,7 @@ export function SecurityVaultSection({
 								errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the withdrawal immediately, but the security pool rejected it.'}
 								executedTitle='REP Withdrawal Executed'
 								failedTitle='REP Withdrawal Failed'
-								manualQueuedDescription='Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.'
+								manualQueuedDescription='The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
 								missingDescription='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.'
 								missingTitle='REP Withdrawal Submitted'
 								onViewStagedOperations={onViewStagedOperations}
@@ -716,7 +716,7 @@ export function SecurityVaultSection({
 							errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the allowance update immediately, but the security pool rejected it.'}
 							executedTitle='Bond Allowance Executed'
 							failedTitle='Bond Allowance Failed'
-							manualQueuedDescription='Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.'
+							manualQueuedDescription='The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
 							missingDescription='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.'
 							missingTitle='Bond Allowance Submitted'
 							onViewStagedOperations={onViewStagedOperations}

@@ -50,7 +50,7 @@ export type ActionAvailability = {
 	reason: string | undefined
 }
 
-export type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
+type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
 
 export type BadgeTone = 'blocked' | 'danger' | 'muted' | 'ok' | 'pending' | 'warning'
 
@@ -61,7 +61,7 @@ export type NoticeItem = {
 	tone: NoticeTone
 }
 
-export type GlobalTransactionTone = 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
+type GlobalTransactionTone = 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
 
 export type GlobalTransactionRow = {
 	label: string
@@ -580,7 +580,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	showHeader?: boolean
 }
 
-export type OpenOracleRouteContentProps = {
+type OpenOracleRouteContentProps = {
 	accountState: AccountState
 	loadingOracleReport: boolean
 	onApproveToken1: (amount?: bigint) => void

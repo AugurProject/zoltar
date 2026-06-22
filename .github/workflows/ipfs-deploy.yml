@@ -1,77 +1,89 @@
 name: Build and Push to IPFS
 
 on:
+  workflow_run:
+    workflows: [CI Gate]
+    branches: [main]
+    types: [completed]
   push:
-    # Publish `master` as Docker `latest` image.
-    branches:
-      - main
-
-    # Publish `v1.2.3` tags as releases.
     tags:
       - v*
+  workflow_dispatch:
 
-# Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: true
+
 env:
+  BUN_VERSION: 1.3.13
   REGISTRY: ghcr.io
 
 jobs:
-  # Push image to GitHub Packages.
-  # See also https://docs.docker.com/docker-hub/builds/
-  push:
+  publish:
+    name: Publish IPFS Image
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - name: Set IMAGE_TAG
-        run: echo "IMAGE_TAG=$(echo ${{ github.repository }} | tr '[A-Z]' '[a-z]')" >> $GITHUB_ENV
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd ui && bun install --frozen-lockfile)
+          (cd solidity && bun install --frozen-lockfile)
+
+      - name: Validate production build
+        run: bun run ui:build:prod
+
+      - name: Set image metadata
+        run: |
+          IMAGE_NAME="${REGISTRY}/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" || "${GITHUB_REF_NAME}" == "main" ]]; then
+            VERSION="latest"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_ENV"
+          echo "IMAGE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "IMAGE_RELEASE_ID=${IMAGE_NAME}:${VERSION}" >> "$GITHUB_ENV"
 
       - name: Build image
-        run: |
-          docker build . --file ui/Dockerfile --tag $IMAGE_TAG
+        run: docker build . --file ui/Dockerfile --build-arg BUN_VERSION="${BUN_VERSION}" --tag "${IMAGE_RELEASE_ID}"
 
-      # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
       - name: Log in to the Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push image
-        run: |
-          IMAGE_ID=ghcr.io/$IMAGE_TAG
-
-          # Strip git ref prefix from version
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-          # Use Docker `latest` tag convention
-          [ "$VERSION" == "master" ] && VERSION=latest
-
-          echo IMAGE_ID=$IMAGE_ID
-          echo VERSION=$VERSION
-
-          docker tag $IMAGE_TAG $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-          # Make image reference available to subsequent steps
-          echo "IMAGE_RELEASE_ID=$(echo $IMAGE_ID:$VERSION)" >> $GITHUB_ENV
+        run: docker push "${IMAGE_RELEASE_ID}"
 
       - name: Create a reference for IPFS hash
         if: github.ref_type == 'tag'
         run: |
-          echo "IPFS_HASH=$(docker run --entrypoint /bin/sh $IMAGE_RELEASE_ID -c 'cat /ipfs_hash.txt')" >> $GITHUB_ENV
+          IPFS_HASH=$(docker run --entrypoint /bin/sh "${IMAGE_RELEASE_ID}" -c 'cat /ipfs_hash.txt')
+          echo "IPFS_HASH=${IPFS_HASH}" >> "$GITHUB_ENV"
 
       - name: Create a release
         if: github.ref_type == 'tag'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Markdown template for the release notes
           RELEASE_NOTE_TEMPLATE=$(cat << EOF
           #### IPFS Hash
 
@@ -79,7 +91,7 @@ jobs:
           $IPFS_HASH
           \`\`\`
 
-          You can view published versions of Rep Crowdsourcer through any IPFS Gateway
+          You can view published versions of Zoltar through any IPFS gateway.
 
           [ipfs://$IPFS_HASH](ipfs://$IPFS_HASH) __(Recommended)__
           _requires Brave Browser or IPFS Desktop_
@@ -90,7 +102,6 @@ jobs:
           EOF
           )
 
-          # Generate payload for creating a new release
           PAYLOAD_TEMPLATE=$(cat <<EOF
           {
             "name": "$GITHUB_REF_NAME",
@@ -102,8 +113,6 @@ jobs:
           EOF
           )
 
-          # Create a github release
-          # https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#create-a-release
           REQUEST_DATA=$(echo "$PAYLOAD_TEMPLATE" | jq -c)
           RESPONSE=$(curl \
             --silent \
@@ -117,12 +126,10 @@ jobs:
             "https://api.github.com/repos/$GITHUB_REPOSITORY/releases"
           )
 
-          # Extract the response body and the appended http code
           RESPONSE_CODE=${RESPONSE: -3}
           RESPONSE_BODY=${RESPONSE//$RESPONSE_CODE/}
 
-          # Successful creation will return a status 201 (Created), otherwise show the error
-          if [ "$RESPONSE_CODE" -ne  201 ]; then
+          if [ "$RESPONSE_CODE" -ne 201 ]; then
             ERROR_MESSAGE=$(echo "$RESPONSE_BODY" | jq '.message')
             echo "HTTP $RESPONSE_CODE - $ERROR_MESSAGE"
             exit 1

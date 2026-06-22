@@ -96,7 +96,7 @@ const OPEN_ORACLE_PRICE_UNITS = 30n
 const NULLIFIER_DEPTH = 64
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, number]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type TruthAuctionTickSummaryStruct = {
 	tick: bigint
@@ -209,6 +209,21 @@ function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
 	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
 	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
 	return BigInt(pageIndex) * BigInt(pageSize)
+}
+
+function requireBigintValue(value: unknown, context: string) {
+	if (typeof value === 'bigint') return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
+function requireBigintArray(value: unknown, context: string) {
+	if (!Array.isArray(value)) throw new Error(`Unexpected ${context} response`)
+	const result: bigint[] = []
+	for (const item of value) {
+		if (typeof item !== 'bigint') throw new Error(`Unexpected ${context} response`)
+		result.push(item)
+	}
+	return result
 }
 
 async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
@@ -980,7 +995,7 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 	} satisfies SecurityVaultActionResult
 }
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, priceRoundId, priceRoundMaxNotional, priceRoundConsumedNotional, priceRoundRemainingNotional] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, priceRoundId, priceRoundMaxNotional, priceRoundConsumedNotional, priceRoundRemainingNotional] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'lastPrice',
@@ -990,6 +1005,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'pendingOperationSlotId',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'getPendingSettlementOperationIds',
 			address: managerAddress,
 			args: [],
 		},
@@ -1048,6 +1069,11 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			args: [],
 		},
 	])
+	const normalizedPriceRoundMaxNotional = requireBigintValue(priceRoundMaxNotional, 'price round max notional')
+	const normalizedPriceRoundConsumedNotional = requireBigintValue(priceRoundConsumedNotional, 'price round consumed notional')
+	const normalizedPriceRoundRemainingNotional = requireBigintValue(priceRoundRemainingNotional, 'price round remaining notional')
+	const normalizedPriceRoundId = requireBigintValue(priceRoundId, 'price round id')
+	const normalizedPendingSettlementOperationIds = requireBigintArray(pendingSettlementOperationIds, 'pending settlement operation ids')
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
@@ -1129,11 +1155,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		openOracleAddress: resolvedOracleAddress,
 		pendingOperation,
 		pendingOperationSlotId,
+		pendingSettlementOperationIds: normalizedPendingSettlementOperationIds,
 		pendingReportId,
-		priceRoundConsumedNotional,
-		priceRoundId,
-		priceRoundMaxNotional,
-		priceRoundRemainingNotional,
+		priceRoundConsumedNotional: normalizedPriceRoundConsumedNotional,
+		priceRoundId: normalizedPriceRoundId,
+		priceRoundMaxNotional: normalizedPriceRoundMaxNotional,
+		priceRoundRemainingNotional: normalizedPriceRoundRemainingNotional,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
 		stagedOperations,
@@ -1980,7 +2007,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'createChildUniverse',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
 	)
 }
@@ -2052,7 +2079,7 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
-				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
 	)
 }
@@ -2076,7 +2103,7 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, vaultAddress, outcomeIndex],
+				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
 			}))
 			if (!(await hasPendingUnresolvedEscalationMigration(client, securityPoolAddress, vaultAddress))) return lastHash
 		}

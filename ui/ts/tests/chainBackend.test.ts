@@ -133,7 +133,10 @@ describe('injected backend read transport', () => {
 		backend.setReadTransportMode?.('rpc')
 		const code = await backend.createReadClient().getCode({ address: zeroAddress })
 		expect(code).toBeUndefined()
-		expect(fetchCalls).toEqual(['https://rpc.example'])
+		expect(fetchCalls).toHaveLength(1)
+		const [fetchUrl] = fetchCalls
+		if (fetchUrl === undefined) throw new Error('Expected configured RPC fetch call')
+		expect(new URL(fetchUrl).origin).toBe('https://rpc.example')
 		expect(requestCalls).toEqual([])
 	})
 

@@ -150,6 +150,7 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		openOracleAddress: zeroAddress,
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
+		pendingSettlementOperationIds: [],
 		pendingReportId: 0n,
 		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
@@ -977,7 +978,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 	})
 
-	test('shows manual execution guidance for off-slot queued withdrawals', async () => {
+	test('shows manual execution guidance for overflow queued withdrawals', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -1031,7 +1032,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const dialogQueries = within(withdrawDialog)
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 		expect(dialogQueries.getByText('#11')).not.toBeNull()
-		expect(dialogQueries.getByText('Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+		expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
 	})
 
 	test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {
@@ -2200,6 +2201,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
+						pendingSettlementOperationIds: [],
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
@@ -2246,6 +2248,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							targetVault: zeroAddress,
 						},
 						pendingOperationSlotId: 7n,
+						pendingSettlementOperationIds: [7n],
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
@@ -2263,6 +2266,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
+		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
@@ -2320,6 +2324,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							targetVault: zeroAddress,
 						},
 						pendingOperationSlotId: 7n,
+						pendingSettlementOperationIds: [7n],
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,
@@ -2357,6 +2362,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
+						pendingSettlementOperationIds: [],
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						requestPriceEthCost: 1n,

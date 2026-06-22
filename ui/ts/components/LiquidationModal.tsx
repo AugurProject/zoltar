@@ -120,7 +120,7 @@ function renderQueuedLiquidationStatusCard({
 						)}
 					</MetricGrid>
 				}
-				detail={queuedLiquidationStatus === 'manual-queued' ? 'Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.' : undefined}
+				detail={queuedLiquidationStatus === 'manual-queued' ? 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.' : undefined}
 				actions={
 					<button className='secondary' type='button' onClick={onViewInStagedOperations}>
 						View In Staged Operations

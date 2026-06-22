@@ -391,6 +391,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 						}
 					: undefined,
 				pendingOperationSlotId: pendingOperation === undefined ? 0n : 1n,
+				pendingSettlementOperationIds: pendingOperation === undefined ? [] : [1n],
 				pendingReportId: pendingOperation === undefined ? 0n : 1n,
 				priceValidUntilTimestamp: 0n,
 				requestPriceEthCost: 0n,
@@ -763,6 +764,65 @@ describe('simulation bootstrap', () => {
 		expect(progressCalls).toContain('Simulation scenario ready')
 		expect(writeCalls.length).toBeGreaterThan(1)
 		expect(writeCalls.some(call => call.value !== undefined)).toBe(true)
+	})
+
+	test('mirrors seeded REP supply at the Zoltar constructor genesis address for simulation profiles', async () => {
+		const profile = createBaselineProfile({
+			genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000d1'),
+		})
+		const storageWrites: MemoryStorageCall[] = []
+		const setCodeCalls: Array<{ address: string; bytecode: string }> = []
+		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+		const memoryClient = {
+			tevmReady: async () => undefined,
+			getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
+			getBalance: async () => 0n,
+			getStorageAt: async () => toHex(0n, { size: 32 }),
+			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
+				storageWrites.push(payload)
+			},
+			getTransactionCount: async () => 0n,
+			setCode: async (payload: { address: string; bytecode: string }) => {
+				setCodeCalls.push(payload)
+			},
+			impersonateAccount: async () => undefined,
+			setBalance: async () => undefined,
+			setNonce: async () => undefined,
+			getCode: async () => '0x01',
+		} as never
+		const createWriteClient = (accountAddress: Address) =>
+			({
+				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+				},
+				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
+				getCode: async () => '0x01',
+				writeContract: async () => '0x01',
+			}) as never
+
+		await bootstrapSimulationChain({
+			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
+			createReadClient: () => ({}) as never,
+			createWriteClient,
+			memoryClient,
+			onProgress: () => undefined,
+			primaryAccount: MOCK_PRIMARY_ACCOUNT,
+			profile,
+			scenario: 'baseline',
+		})
+
+		const constructorRepAddress = MAINNET_NETWORK_PROFILE.genesisRepTokenAddress.toLowerCase()
+		const expectedSupply = 2n * 100_000_000n * 10n ** 18n
+		const constructorCodeWrite = setCodeCalls.find(call => call.address.toLowerCase() === constructorRepAddress)
+		const constructorSupplyWrite = storageWrites.find(write => write.address.toLowerCase() === constructorRepAddress)
+
+		expect(constructorCodeWrite).toBeDefined()
+		expect(constructorSupplyWrite).toEqual({
+			address: MAINNET_NETWORK_PROFILE.genesisRepTokenAddress,
+			index: toHex(5n, { size: 32 }),
+			value: toHex(expectedSupply, { size: 32 }),
+		})
 	})
 
 	test('rejects security-pool bootstrap when the primary QA account is missing', async () => {

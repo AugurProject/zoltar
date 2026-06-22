@@ -44,10 +44,10 @@ export type SimulationWorkerCallMethod = keyof SimulationWorkerCallMap
 type SimulationWorkerCallResult = {
 	[TMethod in SimulationWorkerCallMethod]: SimulationWorkerCallMap[TMethod]['result']
 }[SimulationWorkerCallMethod]
-export type SimulationWorkerJsonValue = string | number | boolean | bigint | null | { [key: string]: SimulationWorkerJsonValue } | SimulationWorkerJsonValue[] | readonly SimulationWorkerJsonValue[]
+type SimulationWorkerJsonValue = string | number | boolean | bigint | null | { [key: string]: SimulationWorkerJsonValue } | SimulationWorkerJsonValue[] | readonly SimulationWorkerJsonValue[]
 export type SimulationWorkerResultValue = SimulationWorkerCallResult | SimulationWorkerJsonValue
 
-export type SimulationWorkerInitMessage = {
+type SimulationWorkerInitMessage = {
 	initialization: SimulationInitialization
 	type: 'init'
 }
@@ -70,24 +70,24 @@ export type SimulationWorkerRpcMessage = {
 
 export type SimulationWorkerMessage = SimulationWorkerInitMessage | SimulationWorkerCallMessage | SimulationWorkerRpcMessage
 
-export type SimulationWorkerReadyEvent = {
+type SimulationWorkerReadyEvent = {
 	state: SimulationWorkerState
 	type: 'ready'
 }
 
-export type SimulationWorkerResultEvent = {
+type SimulationWorkerResultEvent = {
 	id: number
 	type: 'result'
 	value: SimulationWorkerResultValue
 }
 
-export type SimulationWorkerErrorEvent = {
+type SimulationWorkerErrorEvent = {
 	id?: number
 	message: string
 	type: 'error'
 }
 
-export type SimulationWorkerStateEvent = {
+type SimulationWorkerStateEvent = {
 	state: SimulationWorkerState
 	type: 'state'
 }

@@ -1,5 +1,6 @@
 import 'viem/window'
 import { encodeAbiParameters, keccak256 } from 'viem'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { ReadClient, WriteClient, writeContractAndWait } from './viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
@@ -96,11 +97,11 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	// In the storage layout of ReputationToken (which inherits from ERC20), the variable
 	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
 	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
-	const slot5 = `0x${5n.toString(16).padStart(64, '0')}`
+	const theoreticalSupplySlot = `0x${REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT.toString(16).padStart(64, '0')}`
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
-				[slot5]: totalTheoreticalSupply,
+				[theoreticalSupplySlot]: totalTheoreticalSupply,
 			},
 		},
 	})

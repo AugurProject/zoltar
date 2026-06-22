@@ -550,7 +550,7 @@ describe('contracts helpers', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) !== 'lastPrice') throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-				return [1n, pendingOperationSlotId, 0n, 5n, true, 10n, 40n, 1n, 3000n, 0n, 3000n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 0n, 5n, true, 10n, 40n, 1n, 3000n, 0n, 3000n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'getActiveStagedOperations') {
@@ -599,6 +599,7 @@ describe('contracts helpers', () => {
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
+		expect(details.pendingSettlementOperationIds).toEqual([pendingOperationSlotId, 13n])
 		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
 		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
 		expect(details.stagedOperations).toHaveLength(26)
@@ -908,8 +909,11 @@ describe('contracts helpers', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
+		const decodedArgs = decodedCall.args as readonly [Address, Address, bigint]
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
-		expect(decodedCall.args).toEqual([securityPoolAddress, vaultAddress, 2])
+		expect(decodedArgs[0]).toBe(securityPoolAddress)
+		expect(decodedArgs[1]).toBe(vaultAddress)
+		expect(decodedArgs[2]).toBe(2n)
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
 			hash: transactionHash,

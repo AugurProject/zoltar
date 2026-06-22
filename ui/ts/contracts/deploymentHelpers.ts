@@ -168,12 +168,14 @@ export const getSecurityPoolFactoryByteCode = ({
 		})
 	})()
 
-export const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
+const zoltarAddressHelpers = createZoltarAddressHelpers({
 	getZoltarInitCode,
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
 	zeroSalt: ZERO_SALT,
 	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
 })
+export const { getZoltarAddress } = zoltarAddressHelpers
+const { getZoltarQuestionDataAddress } = zoltarAddressHelpers
 
 export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getEscalationGameFactoryByteCode,

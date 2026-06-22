@@ -191,6 +191,7 @@ export type OracleManagerDetails = {
 	openOracleAddress: Address
 	pendingOperation: StagedOracleOperation | undefined
 	pendingOperationSlotId: bigint
+	pendingSettlementOperationIds: bigint[]
 	pendingReportId: bigint
 	priceRoundConsumedNotional?: bigint
 	priceRoundId?: bigint
@@ -318,7 +319,7 @@ export type SecurityPoolVaultSummary = {
 	vaultAddress: Address
 }
 
-export type OwnForkRepBuckets = {
+type OwnForkRepBuckets = {
 	vaultRepAtFork: bigint
 	unallocatedEscrowChildRep: bigint
 	escrowSourceRepAtFork: bigint
