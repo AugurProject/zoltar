@@ -472,7 +472,8 @@ contract SecurityPool is ISecurityPool {
 	// Complete Sets
 	////////////////////////////////////////
 	function createCompleteSet() external payable isOperational {
-		// TODO, we want to be able to create complete sets in the children right away, figure accounting out
+		// Child pools mint complete sets only after migration and truth-auction
+		// accounting have restored `SystemState.Operational`.
 		require(!isEscalationResolved(), 'question resolved');
 		require(msg.value > 0, 'need eth');
 		updateCollateralAmount();
