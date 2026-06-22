@@ -108,7 +108,7 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '30',
+		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
 		loadingSecurityPools: false,

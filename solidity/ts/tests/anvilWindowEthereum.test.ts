@@ -29,6 +29,29 @@ test('normalizeAnvilTransactionParams forces legacy zero-gas pricing for send tr
 	])
 })
 
+test('normalizeAnvilTransactionParams preserves explicit legacy gas pricing for basefee tests', () => {
+	const params = [
+		{
+			from: '0x1234',
+			to: '0x5678',
+			gasPrice: '0x1',
+			maxFeePerGas: '0x2',
+			maxPriorityFeePerGas: '0x3',
+			type: '0x2',
+			value: '0x0',
+		},
+	]
+
+	expect(normalizeAnvilTransactionParams(params)).toEqual([
+		{
+			from: '0x1234',
+			to: '0x5678',
+			gasPrice: '0x1',
+			value: '0x0',
+		},
+	])
+})
+
 test('normalizeAnvilTransactionParams leaves non-object params unchanged', () => {
 	const params = ['latest']
 

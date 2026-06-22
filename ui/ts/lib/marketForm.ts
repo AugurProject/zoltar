@@ -36,7 +36,7 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 		repWithdrawAmount: '0',
 		selectedVaultAddress: '',
 		securityPoolAddress: '',
-		stagedOperationTimeoutMinutes: '30',
+		stagedOperationTimeoutMinutes: '5',
 	}
 }
 

@@ -140,7 +140,7 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 }
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
+	const details = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
@@ -151,12 +151,14 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingReportId: 0n,
+		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		requestPriceEthCost: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
 	}
+	return details
 }
 
 function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
@@ -309,7 +311,7 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '30',
+		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
@@ -2138,7 +2140,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+			<ChainTimestampContext.Provider value={1n + 5n * 60n + 60n}>
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
 						checkedSecurityPoolAddress: zeroAddress,

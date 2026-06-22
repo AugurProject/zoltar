@@ -980,7 +980,7 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 	} satisfies SecurityVaultActionResult
 }
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, priceRoundId, priceRoundMaxNotional, priceRoundConsumedNotional, priceRoundRemainingNotional] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'lastPrice',
@@ -1020,6 +1020,30 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'getActiveStagedOperationCount',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundId',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundMaxNotional',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundConsumedNotional',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'getPriceRoundRemainingNotional',
 			address: managerAddress,
 			args: [],
 		},
@@ -1106,6 +1130,10 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingOperation,
 		pendingOperationSlotId,
 		pendingReportId,
+		priceRoundConsumedNotional,
+		priceRoundId,
+		priceRoundMaxNotional,
+		priceRoundRemainingNotional,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
 		stagedOperations,

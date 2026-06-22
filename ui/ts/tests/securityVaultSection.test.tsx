@@ -207,7 +207,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
 	})
 
-	test('defaults queued self-service timeout copy to 30 minutes when the form has no explicit timeout', async () => {
+	test('defaults queued self-service timeout copy to 5 minutes when the form has no explicit timeout', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -217,7 +217,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('This queued self-service operation will expire 30m after the oracle settlement window completes.')).toBe(true)
+		expect(document.body.textContent?.includes('This queued self-service operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
 	test('blocks non-zero security bond allowances below the minimum', async () => {

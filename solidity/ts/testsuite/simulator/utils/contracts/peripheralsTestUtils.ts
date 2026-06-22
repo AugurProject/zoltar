@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
 import { addressString } from '../bigint'
 import { GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../constants'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals'
-import { approveToken, contractExists, getERC20Balance } from '../utilities'
+import { approveToken, contractExists, getERC20Balance, getETHBalance } from '../utilities'
 import { WriteClient } from '../viem'
 import assert from 'node:assert/strict'
 import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, wrapWeth } from './peripherals'
@@ -59,6 +59,8 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	const openOracle = getInfraContractAddresses().openOracle
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
 	await approveToken(client, WETH_ADDRESS, openOracle)
+	const ethBalance = await getETHBalance(client, client.account.address)
+	if (ethBalance <= amount2) await mockWindow.setBalance(client.account.address, amount2 + 10n ** 18n)
 	const wethBalanceBefore = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 	await wrapWeth(client, amount2)
 	const wethBalance = await getERC20Balance(client, WETH_ADDRESS, client.account.address)

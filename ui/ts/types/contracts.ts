@@ -192,6 +192,10 @@ export type OracleManagerDetails = {
 	pendingOperation: StagedOracleOperation | undefined
 	pendingOperationSlotId: bigint
 	pendingReportId: bigint
+	priceRoundConsumedNotional?: bigint
+	priceRoundId?: bigint
+	priceRoundMaxNotional?: bigint
+	priceRoundRemainingNotional?: bigint
 	priceValidUntilTimestamp: bigint | undefined
 	requestPriceEthCost: bigint
 	stagedOperations?: StagedOracleOperation[]

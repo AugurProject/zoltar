@@ -217,7 +217,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 }
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
+	const details = {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: true,
@@ -228,12 +228,14 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingReportId: 0n,
+		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		requestPriceEthCost: 1n,
 		token1: zeroAddress,
 		token2: zeroAddress,
 		...overrides,
 	}
+	return details
 }
 
 function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
@@ -249,7 +251,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '30',
+		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
@@ -308,7 +310,7 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '30',
+		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
 		loadingSecurityPools: false,
