@@ -186,7 +186,19 @@ contract SecurityPoolOracleCoordinator {
 		require(reportId != 0, 'No pending request');
 		(, uint256 settlementTimestamp) = openOracle.getSettlementData(reportId);
 		pendingReportId = 0;
+		pendingReportMaxSettlementBaseFee = 0;
+		_consumeRecoveredPendingOperation();
 		emit PendingReportRecovered(reportId, settlementTimestamp);
+	}
+
+	function _consumeRecoveredPendingOperation() private {
+		uint256 operationId = pendingOperationSlotId;
+		if (operationId == 0) return;
+		pendingOperationSlotId = 0;
+		StagedOperation memory stagedOperation = stagedOperations[operationId];
+		if (stagedOperation.initiatorVault == address(0)) return;
+		_consumeStagedOperation(operationId);
+		emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle callback failed');
 	}
 
 	function openOracleCallback(

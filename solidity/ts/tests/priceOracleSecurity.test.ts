@@ -118,6 +118,33 @@ describe('Price Oracle Refund Security Tests', () => {
 		return contractAddress
 	}
 
+	const settlePendingReportWithFailedCallback = async (pendingReportId: bigint) => {
+		const openOracle = getInfraContractAddresses().openOracle
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		const amount1 = reportMeta.exactToken1Report
+		const amount2 = amount1
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await approveToken(client, WETH_ADDRESS, openOracle)
+		await wrapWeth(client, amount2)
+
+		const extraData = await getOpenOracleExtraData(client, pendingReportId)
+		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, extraData.stateHash)
+
+		const callbackSlot = getMappingStorageSlot(pendingReportId, OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT) + 1n
+		await mockWindow.addStateOverrides({
+			[openOracle]: {
+				stateDiff: {
+					[formatStorageSlot(callbackSlot)]: packOpenOracleExtraCallbackSlot(extraData.callbackContract, extraData.numReports, 1),
+				},
+			},
+		})
+		const overriddenExtraData = await getOpenOracleExtraData(client, pendingReportId)
+		assert.strictEqual(overriddenExtraData.callbackGasLimit, 1, 'setup should force the settlement callback to fail')
+
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await openOracleSettle(client, pendingReportId)
+	}
+
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -587,30 +614,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
 
-		const openOracle = getInfraContractAddresses().openOracle
-		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		const amount1 = reportMeta.exactToken1Report
-		const amount2 = amount1
-		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
-		await approveToken(client, WETH_ADDRESS, openOracle)
-		await wrapWeth(client, amount2)
-
-		const extraData = await getOpenOracleExtraData(client, pendingReportId)
-		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, extraData.stateHash)
-
-		const callbackSlot = getMappingStorageSlot(pendingReportId, OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT) + 1n
-		await mockWindow.addStateOverrides({
-			[openOracle]: {
-				stateDiff: {
-					[formatStorageSlot(callbackSlot)]: packOpenOracleExtraCallbackSlot(extraData.callbackContract, extraData.numReports, 1),
-				},
-			},
-		})
-		const overriddenExtraData = await getOpenOracleExtraData(client, pendingReportId)
-		assert.strictEqual(overriddenExtraData.callbackGasLimit, 1, 'setup should force the settlement callback to fail')
-
-		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-		await openOracleSettle(client, pendingReportId)
+		await settlePendingReportWithFailedCallback(pendingReportId)
 
 		const pendingReportIdAfterSettlement = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
@@ -638,6 +642,13 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 		assert.strictEqual(pendingReportIdAfterRecovery, 0n, 'recovery should clear settled reports whose callback failed')
+		const pendingMaxSettlementBaseFeeAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportMaxSettlementBaseFee',
+			args: [],
+		})
+		assert.strictEqual(pendingMaxSettlementBaseFeeAfterRecovery, 0n, 'recovery should clear the stale basefee guard')
 
 		await writeContractAndWait(
 			client,
@@ -656,6 +667,104 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 		assert.ok(nextPendingReportId > pendingReportId, 'recovery should allow creating a fresh oracle report')
+	})
+
+	test('failed callback recovery clears the auto-execute slot so staged operations can request a fresh report', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const firstAllowance = repDeposit / 4n
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					value: ethCost,
+				}),
+		)
+
+		const pendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
+
+		await settlePendingReportWithFailedCallback(pendingReportId)
+
+		const pendingOperationSlotIdAfterSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+		assert.strictEqual(pendingOperationSlotIdAfterSettlement, 1n, 'failed callbacks should leave the original operation in the auto-execute slot until recovery')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'recoverSettledPendingReport',
+					args: [],
+				}),
+		)
+
+		const pendingReportIdAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		const pendingOperationSlotIdAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+		const recoveredStagedOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [1n],
+		})
+		const vault = await getSecurityVault(client, securityPool, client.account.address)
+
+		assert.strictEqual(pendingReportIdAfterRecovery, 0n, 'recovery should clear the failed report')
+		assert.strictEqual(pendingOperationSlotIdAfterRecovery, 0n, 'recovery should clear the stale auto-execute slot')
+		assert.strictEqual(recoveredStagedOperation[1], zeroAddress, 'recovery should consume the operation whose callback could not complete')
+		assert.strictEqual(vault.securityBondAllowance, 0n, 'recovery must not execute staged allowance changes without a successful callback')
+
+		const secondAllowance = repDeposit / 5n
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+					value: ethCost,
+				}),
+		)
+		const nextPendingReportId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingReportId',
+			args: [],
+		})
+		const nextPendingOperationSlotId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+
+		assert.ok(nextPendingReportId > pendingReportId, 'a new staged operation should be able to fund a fresh report after recovery')
+		assert.strictEqual(nextPendingOperationSlotId, 2n, 'the new staged operation should become the next auto-execute slot')
 	})
 
 	test('active staged operations stay newest-first after pending-slot settlement and manual execution', async () => {

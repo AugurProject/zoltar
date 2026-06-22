@@ -32,6 +32,11 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/si
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
 const MAX_UINT256 = 2n ** 256n - 1n
+const REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT = 5n
+
+function formatStorageSlot(slot: bigint) {
+	return `0x${slot.toString(16).padStart(64, '0')}`
+}
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -137,6 +142,33 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
 			/genesis rep/i,
+		)
+	})
+
+	test('constructor rejects zero genesis REP theoretical supply', async () => {
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const deployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				stateDiff: {
+					[formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 0n,
+				},
+			},
+		})
+
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
+			/genesis rep missing supply/i,
 		)
 	})
 
