@@ -30,7 +30,6 @@
 		"viem": "2.53.1"
 	},
 	"overrides": {
-		"follow-redirects": "1.16.0",
 		"tmp": "0.2.7",
 		"ws": "8.21.0"
 	}
