@@ -421,6 +421,26 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
 
+	test('queues liquidation when the current oracle price has no remaining round budget', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				pendingOperation: undefined,
+				pendingOperationSlotId: 0n,
+				priceRoundRemainingNotional: 0n,
+			}),
+			liquidationAmount: '5',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Queue Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Queue Liquidation' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Execute Vault Liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Execute Liquidation' })).toBeNull()
+	})
+
 	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
