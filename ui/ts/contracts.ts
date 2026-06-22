@@ -211,6 +211,11 @@ function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
 	return BigInt(pageIndex) * BigInt(pageSize)
 }
 
+function requireBigintValue(value: unknown, context: string) {
+	if (typeof value === 'bigint') return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
 async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({
 		address: securityPoolAddress,
@@ -1048,6 +1053,10 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			args: [],
 		},
 	])
+	const normalizedPriceRoundMaxNotional = requireBigintValue(priceRoundMaxNotional, 'price round max notional')
+	const normalizedPriceRoundConsumedNotional = requireBigintValue(priceRoundConsumedNotional, 'price round consumed notional')
+	const normalizedPriceRoundRemainingNotional = requireBigintValue(priceRoundRemainingNotional, 'price round remaining notional')
+	const normalizedPriceRoundId = requireBigintValue(priceRoundId, 'price round id')
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
@@ -1130,10 +1139,10 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingOperation,
 		pendingOperationSlotId,
 		pendingReportId,
-		priceRoundConsumedNotional,
-		priceRoundId,
-		priceRoundMaxNotional,
-		priceRoundRemainingNotional,
+		priceRoundConsumedNotional: normalizedPriceRoundConsumedNotional,
+		priceRoundId: normalizedPriceRoundId,
+		priceRoundMaxNotional: normalizedPriceRoundMaxNotional,
+		priceRoundRemainingNotional: normalizedPriceRoundRemainingNotional,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
 		stagedOperations,

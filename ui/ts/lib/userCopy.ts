@@ -5,7 +5,7 @@ import type { LoadableValueState } from './loadState.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'page_not_found' | 'load_failed'
 
-export type UserMessageTone = 'muted' | 'pending' | 'blocked' | 'error' | 'ok'
+type UserMessageTone = 'muted' | 'pending' | 'blocked' | 'error' | 'ok'
 
 export type UserMessagePresentation = {
 	actionHint?: string

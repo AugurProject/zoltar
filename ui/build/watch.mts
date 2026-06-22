@@ -18,7 +18,8 @@ const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity',
 const PROJECT_ARTIFACT_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'projectArtifacts.mts')
 const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
 const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
-const VENDOR_INPUT_PATHS = [path.join(UI_ROOT_PATH, 'build', 'vendor.mts'), path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
+const VENDOR_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'vendor.mts')
+const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
 const WORKER_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'workers.mts')
 const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
 
@@ -453,7 +454,7 @@ const runVendorBuild = async (reason: string) => {
 	vendorBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	try {
-		vendorBuildProcess = spawn('bun', ['./build/vendor.mts'], {
+		vendorBuildProcess = spawn('bun', [VENDOR_BUILD_PATH], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -502,7 +503,7 @@ const runWorkerBuild = async (reason: string) => {
 	workerBuildRunning = true
 	console.log(`[ui:watch] Rebuilding simulation worker because ${reason} changed`)
 	try {
-		workerBuildProcess = spawn('bun', ['./build/workers.mts'], {
+		workerBuildProcess = spawn('bun', [WORKER_BUILD_PATH], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})

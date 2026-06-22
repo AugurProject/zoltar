@@ -8,8 +8,8 @@
 		"better-typescript-lib": "2.11.0",
 		"bun-types": "1.3.11",
 		"funtypes": "5.1.1",
-		"happy-dom": "20.9.0",
-		"knip": "5.86.0",
+		"happy-dom": "20.10.6",
+		"knip": "6.17.1",
 		"preact": "10.26.4",
 		"prettier": "3.8.4",
 		"prettier-plugin-solidity": "2.3.1",
@@ -18,8 +18,18 @@
 	"dependencies": {
 		"@preact/signals": "2.0.1",
 		"@zoltar/shared": "file:shared",
-		"tevm": "1.0.0-next.149",
-		"viem": "2.38.3"
+		"tevm": "1.0.0-rc.151",
+		"viem": "2.53.1"
+	},
+	"overrides": {
+		"brace-expansion": "5.0.6",
+		"esbuild": "0.28.1",
+		"fast-uri": "4.0.0",
+		"follow-redirects": "1.16.0",
+		"picomatch": "4.0.4",
+		"tmp": "0.2.7",
+		"vite": "8.0.16",
+		"ws": "8.21.0"
 	},
 	"scripts": {
 		"preinstall": "bun ./scripts/link-shared-node-modules.mjs",

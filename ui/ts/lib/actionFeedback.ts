@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import type { Hash } from 'viem'
 
-export type ActionFeedbackStatus = {
+type ActionFeedbackStatus = {
 	detail: ComponentChildren
 	hash?: Hash
 	title: ComponentChildren
