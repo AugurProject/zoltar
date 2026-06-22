@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as url from 'node:url'
-import { buildProductionBundle } from './production.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
@@ -19,7 +19,13 @@ const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.joi
 let server: Bun.Server | undefined
 
 beforeAll(async () => {
-	await buildProductionBundle()
+	const result = spawnSync('bun', ['run', 'ui:build:prod'], {
+		cwd: repositoryRootPath,
+		encoding: 'utf8',
+	})
+	if (result.status !== 0) {
+		throw new Error(`ui:build:prod failed\n${result.stdout}${result.stderr}`)
+	}
 
 	server = Bun.serve({
 		fetch: async request => {
