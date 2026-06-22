@@ -79,6 +79,25 @@ describe('Price Oracle Refund Security Tests', () => {
 		securityPool = addresses.securityPool
 	})
 
+	const queueStagedOperation = async (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [operation, targetVault, amount, validForSeconds],
+					value,
+				}),
+		)
+
+	const fillPendingSettlementOperationList = async (ethCost: bigint, validForSeconds: bigint) => {
+		for (let index = 0; index < 4; index++) {
+			await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? ethCost : 0n)
+		}
+	}
+
 	test('requestPrice should refund excess Ether when overpaid', async () => {
 		// Test that overpayment is refunded, not kept by contract
 		const initialBalance = await getETHBalance(client, client.account.address)
@@ -259,12 +278,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'invalid oracle prices must not execute staged allowance updates')
 	})
 
-	test('active staged operations stay newest-first after pending-slot settlement and manual execution', async () => {
+	test('settlement auto-executes a bounded pending operation list and leaves overflow manual', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const firstAllowance = repDeposit / 4n
 		const secondAllowance = repDeposit / 5n
 		const thirdAllowance = repDeposit / 6n
 		const fourthAllowance = repDeposit / 7n
+		const fifthAllowance = repDeposit / 8n
 
 		await writeContractAndWait(
 			client,
@@ -307,11 +327,33 @@ describe('Price Oracle Refund Security Tests', () => {
 					args: [OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
 				}),
 		)
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, fifthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+				}),
+		)
 
 		const pendingOperationSlotId = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
 			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+		const pendingSettlementOperationCount = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'getPendingSettlementOperationCount',
+			args: [],
+		})
+		const pendingSettlementOperationIds = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'getPendingSettlementOperationIds',
 			args: [],
 		})
 		const activeStagedOperationCount = await client.readContract({
@@ -324,27 +366,32 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
 			functionName: 'getActiveStagedOperations',
-			args: [0n, 4n],
+			args: [0n, 5n],
 		})
-		assert.strictEqual(pendingOperationSlotId, 1n, 'first queued self operation should keep the auto-execute slot')
-		assert.strictEqual(activeStagedOperationCount, 4n, 'active staged operation count should track pending and manual operations')
-		assert.deepStrictEqual(Array.from(operationIds), [4n, 3n, 2n, 1n], 'active staged operations should enumerate newest queued operations first')
-		assert.strictEqual(activeOperations[0]?.amount, fourthAllowance, 'newest enumerated operation should retain its amount')
-		assert.strictEqual(activeOperations[1]?.amount, thirdAllowance, 'second newest enumerated operation should retain its amount')
-		assert.strictEqual(activeOperations[2]?.amount, secondAllowance, 'third newest enumerated operation should retain its amount')
-		assert.strictEqual(activeOperations[3]?.amount, firstAllowance, 'oldest enumerated operation should retain its amount')
+		assert.strictEqual(pendingOperationSlotId, 1n, 'first queued self operation should remain the compatibility pending slot')
+		assert.strictEqual(pendingSettlementOperationCount, 4n, 'pending settlement operation count should cap the auto-execute list')
+		assert.deepStrictEqual(Array.from(pendingSettlementOperationIds), [1n, 2n, 3n, 4n], 'pending settlement operations should stay in queue order')
+		assert.strictEqual(activeStagedOperationCount, 5n, 'active staged operation count should track pending and manual operations')
+		assert.deepStrictEqual(Array.from(operationIds), [5n, 4n, 3n, 2n, 1n], 'active staged operations should enumerate newest queued operations first')
+		assert.strictEqual(activeOperations[0]?.amount, fifthAllowance, 'newest overflow operation should retain its amount')
+		assert.strictEqual(activeOperations[1]?.amount, fourthAllowance, 'newest pending operation should retain its amount')
+		assert.strictEqual(activeOperations[2]?.amount, thirdAllowance, 'middle pending operation should retain its amount')
+		assert.strictEqual(activeOperations[3]?.amount, secondAllowance, 'older pending operation should retain its amount')
+		assert.strictEqual(activeOperations[4]?.amount, firstAllowance, 'oldest pending operation should retain its amount')
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'executeStagedOperation',
-					args: [3n],
-				}),
-		)
+		const pendingOperationSlotIdAfterSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'pendingOperationSlotId',
+			args: [],
+		})
+		const pendingSettlementOperationCountAfterSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'getPendingSettlementOperationCount',
+			args: [],
+		})
 		const updatedActiveStagedOperationCount = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
@@ -355,7 +402,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
 			functionName: 'getActiveStagedOperations',
-			args: [0n, 4n],
+			args: [0n, 5n],
 		})
 
 		const stagedOperation1 = await client.readContract({
@@ -382,42 +429,54 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'stagedOperations',
 			args: [4n],
 		})
-		assert.strictEqual(stagedOperation1[1], zeroAddress, 'pending-slot operation should be consumed after the oracle settles it')
-		assert.strictEqual(stagedOperation2[1], client.account.address, 'older still-active operations should remain staged after newer manual execution')
-		assert.strictEqual(stagedOperation3[1], zeroAddress, 'manually executed middle operations should be consumed after success')
-		assert.strictEqual(stagedOperation4[1], client.account.address, 'newest operations should remain active when older manual operations are consumed')
-		assert.strictEqual(stagedOperation4[3], fourthAllowance, 'newest operations should retain their requested amount until execution')
-		assert.strictEqual(updatedActiveStagedOperationCount, 2n, 'active staged operation count should shrink as operations are consumed')
-		assert.deepStrictEqual(Array.from(remainingOperationIds), [4n, 2n], 'active staged operations should stay newest first after middle entries are consumed')
-		assert.strictEqual(remainingOperations[0]?.amount, fourthAllowance, 'remaining newest operation should stay first in the preview')
-		assert.strictEqual(remainingOperations[1]?.amount, secondAllowance, 'older remaining operation should stay second in the preview')
+		const stagedOperation5 = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [5n],
+		})
+		const vaultAfterSettlement = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(pendingOperationSlotIdAfterSettlement, 0n, 'settlement should clear the compatibility pending slot after auto-executing pending operations')
+		assert.strictEqual(pendingSettlementOperationCountAfterSettlement, 0n, 'settlement should clear the pending operation list after auto-execution')
+		assert.strictEqual(stagedOperation1[1], zeroAddress, 'first pending operation should be consumed after oracle settlement')
+		assert.strictEqual(stagedOperation2[1], zeroAddress, 'second pending operation should be consumed after oracle settlement')
+		assert.strictEqual(stagedOperation3[1], zeroAddress, 'third pending operation should be consumed after oracle settlement')
+		assert.strictEqual(stagedOperation4[1], zeroAddress, 'fourth pending operation should be consumed after oracle settlement')
+		assert.strictEqual(stagedOperation5[1], client.account.address, 'overflow operation should remain staged for manual execution')
+		assert.strictEqual(stagedOperation5[3], fifthAllowance, 'overflow operation should retain its requested amount until manual execution')
+		assert.strictEqual(vaultAfterSettlement.securityBondAllowance, fourthAllowance, 'pending settlement operations should execute in queue order')
+		assert.strictEqual(updatedActiveStagedOperationCount, 1n, 'active staged operation count should leave only the overflow operation')
+		assert.deepStrictEqual(Array.from(remainingOperationIds), [5n], 'active staged operations should keep the overflow operation active')
+		assert.strictEqual(remainingOperations[0]?.amount, fifthAllowance, 'overflow operation should stay in the active preview')
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'executeStagedOperation',
+					args: [5n],
+				}),
+		)
+		const finalActiveStagedOperationCount = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'getActiveStagedOperationCount',
+			args: [],
+		})
+		const finalVault = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(finalActiveStagedOperationCount, 0n, 'manual overflow execution should consume the final active operation')
+		assert.strictEqual(finalVault.securityBondAllowance, fifthAllowance, 'manual overflow execution should apply the final allowance update')
 	})
 
 	test('staged operations can only be executed once', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const successfulAllowance = repDeposit / 4n
+		const manualOperationId = 5n
 
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.Liquidation, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
-					value: ethCost,
-				}),
-		)
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, client.account.address, successfulAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
-				}),
-		)
+		await fillPendingSettlementOperationList(ethCost, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, successfulAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await writeContractAndWait(
@@ -427,7 +486,7 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'executeStagedOperation',
-					args: [2n],
+					args: [manualOperationId],
 				}),
 		)
 
@@ -440,7 +499,7 @@ describe('Price Oracle Refund Security Tests', () => {
 							abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 							address: priceOracle,
 							functionName: 'executeStagedOperation',
-							args: [2n],
+							args: [manualOperationId],
 						}),
 				),
 			/no such operation/i,
@@ -472,29 +531,11 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('staged liquidations expire after their caller-selected validity window', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const liquidationTimeoutSeconds = 60n
+		const manualOperationId = 5n
 		const targetVault = addressString(TEST_ADDRESSES[1])
 
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds],
-					value: ethCost,
-				}),
-		)
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds],
-				}),
-		)
+		await fillPendingSettlementOperationList(ethCost, liquidationTimeoutSeconds)
+		await queueStagedOperation(OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(liquidationTimeoutSeconds + 1n)
@@ -517,20 +558,20 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'executeStagedOperation',
-					args: [2n],
+					args: [manualOperationId],
 				}),
 		)
 		const expiredOperation = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
 			functionName: 'stagedOperations',
-			args: [2n],
+			args: [manualOperationId],
 		})
 		const expiredExecutionReceipt = await client.waitForTransactionReceipt({ hash: expiredExecutionHash })
 		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
 		if (executionLog === undefined) throw new Error('missing expired liquidation execution event')
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired liquidation should be consumed after execution attempt')
-		assert.strictEqual(executionLog.args.operationId, 2n)
+		assert.strictEqual(executionLog.args.operationId, manualOperationId)
 		assert.strictEqual(executionLog.args.operation, OperationType.Liquidation)
 		assert.strictEqual(executionLog.args.success, false)
 		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
@@ -539,28 +580,10 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('staged self operations expire after their caller-selected validity window', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const selfOperationTimeoutSeconds = 60n
+		const manualOperationId = 5n
 
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.Liquidation, client.account.address, 1n, selfOperationTimeoutSeconds],
-					value: ethCost,
-				}),
-		)
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, client.account.address, 1n, selfOperationTimeoutSeconds],
-				}),
-		)
+		await fillPendingSettlementOperationList(ethCost, selfOperationTimeoutSeconds)
+		await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, 1n, selfOperationTimeoutSeconds)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(selfOperationTimeoutSeconds + 1n)
@@ -583,20 +606,20 @@ describe('Price Oracle Refund Security Tests', () => {
 					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'executeStagedOperation',
-					args: [2n],
+					args: [manualOperationId],
 				}),
 		)
 		const expiredOperation = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			address: priceOracle,
 			functionName: 'stagedOperations',
-			args: [2n],
+			args: [manualOperationId],
 		})
 		const expiredExecutionReceipt = await client.waitForTransactionReceipt({ hash: expiredExecutionHash })
 		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
 		if (executionLog === undefined) throw new Error('missing expired self-operation execution event')
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired self operation should be consumed after execution attempt')
-		assert.strictEqual(executionLog.args.operationId, 2n)
+		assert.strictEqual(executionLog.args.operationId, manualOperationId)
 		assert.strictEqual(executionLog.args.operation, OperationType.SetSecurityBondsAllowance)
 		assert.strictEqual(executionLog.args.success, false)
 		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')

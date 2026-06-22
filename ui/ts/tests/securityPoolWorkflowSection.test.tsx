@@ -974,7 +974,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 	})
 
-	test('shows manual execution guidance for off-slot queued withdrawals', async () => {
+	test('shows manual execution guidance for overflow queued withdrawals', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -1028,7 +1028,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const dialogQueries = within(withdrawDialog)
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 		expect(dialogQueries.getByText('#11')).not.toBeNull()
-		expect(dialogQueries.getByText('Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+		expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
 	})
 
 	test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {

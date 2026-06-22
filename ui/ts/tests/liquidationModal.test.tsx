@@ -353,7 +353,7 @@ describe('LiquidationModal', () => {
 		expect(selectedViews).toEqual(['staged-operations'])
 	})
 
-	test('shows manual execution guidance for off-slot queued liquidations', async () => {
+	test('shows manual execution guidance for overflow queued liquidations', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
@@ -385,7 +385,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
 		expect(documentQueries.getByText('#10')).not.toBeNull()
-		expect(documentQueries.getByText('Another staged operation already holds the auto-execute slot. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+		expect(documentQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
 	})
 
 	test('shows immediate execution when liquidation uses an already valid oracle price', async () => {
