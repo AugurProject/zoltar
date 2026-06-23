@@ -22,7 +22,7 @@ import {
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { getTruthAuctionBidGuardMessage, getTruthAuctionTickAtPrice } from '../lib/forkAuction.js'
+import { getTruthAuctionBidGuardMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
 import { sameAddress } from '../lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
