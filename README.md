@@ -126,6 +126,18 @@ Run the full test suite:
 bun run test
 ```
 
+Run fast coverage checks:
+
+```bash
+bun run coverage
+```
+
+Run full coverage, including the slow Solidity bytecode trace phase:
+
+```bash
+bun run coverage:full
+```
+
 Type-check the TypeScript code:
 
 ```bash
@@ -188,5 +200,6 @@ Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the comm
 - `bun install --frozen-lockfile` must be run before standalone commands like `bun run tsc` on a fresh checkout.
 - `bun run tsc` is a pure typecheck for the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts. It does not regenerate shared assets or vendor output.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
+- `bun run coverage` runs the fast UI and contract TypeScript coverage phases. Use `bun run coverage:full` when you also need the slower Solidity bytecode trace coverage phase.
 - The legacy `ui:*` commands still exist as compatibility aliases, but `app:*` names are the clearer entrypoints because they run more than frontend-only work.
 - The repo uses exact dependency versions for reproducible installs.
