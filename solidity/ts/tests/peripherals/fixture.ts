@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
-import assert from 'node:assert/strict'
+import assert from '../../testsuite/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, keccak256 } from 'viem'
 import type { Abi, Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'

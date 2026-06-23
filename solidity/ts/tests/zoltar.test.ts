@@ -6,7 +6,7 @@ import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
-import assert from 'node:assert/strict'
+import assert from '../testsuite/simulator/utils/assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { encodeDeployData, hexToBytes } from 'viem'
 import {

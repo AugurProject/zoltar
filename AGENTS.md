@@ -123,23 +123,22 @@ Validation:
 Known risks or areas needing close attention:
 - <risk, tradeoff, or "none known">
 
-Review the current branch diff against main, the stated acceptance criteria, and whether the changed code is named clearly, readable, and easy to understand.
+Review the current worktree diff against origin/main, including committed branch changes, staged changes, unstaged changes, and untracked files intended for the task. Review the stated acceptance criteria and whether the changed code is named clearly, readable, and easy to understand.
 Do not modify files.
 Return findings grouped by High, Medium, and Low.
 
 Also include:
 - Validation assessment
 - Review limitations, or "None" if there are no limitations
-- Branch-diff quality score from 0 to 100 using the reviewer rubric
+- Worktree-diff quality score from 0 to 100 using the reviewer rubric
 ```
 
 After the reviewer finishes, the main agent must read the full review and decide how to handle every finding:
 
-- Fix all valid High and Medium issues before completing the task.
-- Fix Low issues when they are connected to a High or Medium fix or when touching the same code makes the cleanup straightforward.
+- Fix all valid High, Medium, and Low issues before completing the task.
 - If a finding is a non-issue, improve the code, tests, names, or local explanation so a future reviewer can understand why the concern does not apply without needing this conversation.
-- If no High or Medium issues are found, the task may be marked complete after summarizing any Low findings and explaining whether they were addressed.
-- If High or Medium issues are fixed, rerun the required checks and repeat the reviewer gate until no High or Medium issues remain.
+- If no High, Medium, or Low issues are found, the task may be marked complete.
+- If any High, Medium, or Low issues are fixed, rerun the required checks and repeat the reviewer gate until no valid findings remain.
 
 In the final response to the user, summarize the reviewer feedback received, report the score from each review pass, state which findings were addressed, note any findings considered non-issues and what readability or self-documenting improvements were made, and list the checks run after the final changes.
 
