@@ -40,4 +40,6 @@ Return findings first, grouped by severity:
 - Low: small readability, naming, test clarity, or local cleanup issues.
 
 For each finding, include file and line references, why it matters for the stated intent, and a concrete suggested fix. If no High or Medium issues are found, say that clearly.
+
+After the findings, include a Review score section with a single integer score from 0 to 100 for the branch diff's overall quality against the stated intent. Base the score on correctness, completeness, risk, maintainability, and validation quality. Briefly explain the main reasons for the score.
 """

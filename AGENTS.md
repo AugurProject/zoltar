@@ -102,6 +102,8 @@ Intent summary:
 <user goal, implemented behavior, changed areas, checks run, tradeoffs>
 
 Review the branch diff against the stated intent and relevant codebase context.
+
+Also return a branch-diff quality score from 0 to 100.
 ```
 
 After the reviewer finishes, the main agent must read the full review and decide how to handle every finding:
@@ -112,7 +114,7 @@ After the reviewer finishes, the main agent must read the full review and decide
 - If no High or Medium issues are found, the task may be marked complete after summarizing any Low findings and explaining whether they were addressed.
 - If High or Medium issues are fixed, rerun the required checks and repeat the reviewer gate until no High or Medium issues remain.
 
-In the final response to the user, summarize the reviewer feedback received, which findings were addressed, any findings considered non-issues and what readability or self-documenting improvements were made, and the checks run after the final changes.
+In the final response to the user, summarize the reviewer feedback received, report the score from each review pass, state which findings were addressed, note any findings considered non-issues and what readability or self-documenting improvements were made, and list the checks run after the final changes.
 
 # Package Guidelines
 
