@@ -1,13 +1,54 @@
 /// <reference types='bun-types' />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import type { ChainBackend } from '../lib/chainBackend.js'
+import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
 import { runWriteAction } from '../lib/writeAction.js'
 
 const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
+const nextWalletAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000a1'
 
 describe('runWriteAction', () => {
+	let restoreActiveEnvironment: (() => void) | undefined
+
+	function installWalletBackend({ accounts = [walletAddress], chainId = MAINNET_NETWORK_PROFILE.chainIdHex }: { accounts?: readonly (typeof walletAddress)[]; chainId?: string } = {}) {
+		const backend: ChainBackend = {
+			bootstrapError: undefined,
+			bootstrapLabel: undefined,
+			bootstrapProgress: undefined,
+			createReadClient: () => {
+				throw new Error('read client not used')
+			},
+			createWriteClient: () => {
+				throw new Error('write client not used')
+			},
+			getAccounts: async () => accounts,
+			getChainId: async () => chainId,
+			getProvider: () => undefined,
+			hasWallet: () => true,
+			id: 'injected',
+			profile: MAINNET_NETWORK_PROFILE,
+			requestAccounts: async () => accounts,
+			subscribe: undefined,
+			subscribeAccountsChanged: () => () => undefined,
+			subscribeChainChanged: () => () => undefined,
+		}
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(backend)
+	}
+
+	beforeEach(() => {
+		installWalletBackend()
+	})
+
+	afterEach(() => {
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = undefined
+	})
+
 	test('uses the provided missing-wallet message when no wallet is connected', async () => {
 		let errorMessage: string | undefined
 
@@ -55,6 +96,54 @@ describe('runWriteAction', () => {
 
 		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome.')
 		expect(transactionFailureMessage).toBe('Transaction failed while attempting to report on outcome.')
+	})
+
+	test('fails before requesting a transaction when the active wallet account changed', async () => {
+		let errorMessage: string | undefined
+		let transactionRequested = false
+		installWalletBackend({ accounts: [nextWalletAddress] })
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => {
+					transactionRequested = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					errorMessage = message
+				},
+			},
+			async () => ({ hash: transactionHash }),
+			'Failed to report on outcome',
+		)
+
+		expect(transactionRequested).toBe(false)
+		expect(errorMessage).toBe('Wallet account changed. Review the action with the connected account and try again')
+	})
+
+	test('passes the validated active chain to the write action', async () => {
+		let activeChainId: string | undefined
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => undefined,
+				refreshState: async () => undefined,
+				setErrorMessage: () => undefined,
+			},
+			async (_walletAddress, activeWallet) => {
+				activeChainId = activeWallet.chainId
+				return { hash: transactionHash }
+			},
+			'Failed to report on outcome',
+		)
+
+		expect(activeChainId).toBe(MAINNET_NETWORK_PROFILE.chainIdHex)
 	})
 
 	test('delegates missing-wallet errors to onWriteError when provided', async () => {

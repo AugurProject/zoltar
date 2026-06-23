@@ -545,6 +545,42 @@ describe('MarketSection', () => {
 		expect(documentQueries.getByText('Loading questions...')).not.toBeNull()
 	})
 
+	test('selects a paginated question for the fork workflow', async () => {
+		const selectedQuestionIds: string[] = []
+		const selectedViews: string[] = []
+		const question = createBinaryForkQuestion()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					onActiveViewChange: view => {
+						selectedViews.push(view)
+					},
+					onUseQuestionForFork: questionId => {
+						selectedQuestionIds.push(questionId)
+					},
+					zoltarQuestionCount: 1n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 1n,
+						questions: [question],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const useForForkButton = documentQueries.getByRole('button', { name: 'Use For Fork' })
+		await act(() => {
+			useForForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+		})
+
+		expect(selectedQuestionIds).toEqual([question.questionId])
+		expect(selectedViews).toEqual(['fork'])
+	})
+
 	test('does not render redundant universe summary cards for questions view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

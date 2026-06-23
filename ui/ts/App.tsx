@@ -30,8 +30,9 @@ import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
 import { applyReportingFormUpdate } from './lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from './lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from './lib/transactionTray.js'
 import type { TransactionTrayState } from './lib/transactionTray.js'
+import type { TransactionRequestPreview } from './lib/chainBackend.js'
 import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
 import { getUniversePresentation } from './lib/userCopy.js'
@@ -47,6 +48,9 @@ export function App() {
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransactionRequested = (intent: TransactionIntent) => {
 		transactionState.value = markTransactionRequested(transactionState.value, intent)
+	}
+	const onTransactionPrepared = (preview: TransactionRequestPreview) => {
+		transactionState.value = markTransactionPrepared(transactionState.value, preview)
 	}
 	const onTransactionSubmitted = (hash: Hash) => {
 		transactionState.value = markTransactionSubmitted(transactionState.value, hash)
@@ -72,6 +76,7 @@ export function App() {
 		environmentReady,
 		errorMessage: walletErrorMessage,
 		readBackendMessage,
+		readBackendStatus,
 		hasLoadedDeploymentStatuses,
 		isConnectingWallet,
 		isLoadingDeploymentStatuses,
@@ -87,6 +92,7 @@ export function App() {
 		onTransactionFailed,
 		onTransactionFinished,
 		onTransactionPresented,
+		onTransactionPrepared,
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,
@@ -291,6 +297,7 @@ export function App() {
 		repUsdcPrice,
 		repUsdcSource,
 		repUsdcSourceUrl,
+		readBackendStatus,
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation,

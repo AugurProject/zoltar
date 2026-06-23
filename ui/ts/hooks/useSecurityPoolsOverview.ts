@@ -22,12 +22,13 @@ type UseSecurityPoolsOverviewParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
+export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
 	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
@@ -140,7 +141,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 			securityPoolOverviewFeedback.value = createPendingActionFeedback('queueLiquidation', 'Submitting liquidation')
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation', createLiquidationTransactionIntent()),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation', createLiquidationTransactionIntent()),
 					onRefreshError: (message, hash) => {
 						if (completedResult?.stagedExecution?.success === false) return
 						securityPoolOverviewFeedback.value =
@@ -167,7 +168,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
 					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be at least 1 minute')
-					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount, validForSeconds)
+					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, targetVault, amount, validForSeconds)
 				},
 				'Failed to queue liquidation',
 				async result => {

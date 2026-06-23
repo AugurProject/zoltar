@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RPC_URL, resolveConfiguredRpcUrl } from '../lib/rpcConfig.js'
+import { DEFAULT_RPC_URL, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl } from '../lib/rpcConfig.js'
 
 describe('rpc config', () => {
 	test('prefers explicit overrides over every other source', () => {
@@ -35,6 +35,27 @@ describe('rpc config', () => {
 				},
 			}),
 		).toBe('https://hash.example')
+	})
+
+	test('returns the source for configured RPC URLs', () => {
+		expect(
+			resolveConfiguredRpcConfig({
+				location: {
+					hash: '#/browse?rpcUrl=https://hash.example',
+				},
+			}),
+		).toEqual({ source: 'url', url: 'https://hash.example' })
+
+		expect(
+			resolveConfiguredRpcConfig({
+				location: {
+					search: '',
+				},
+				storage: {
+					getItem: () => 'https://storage.example',
+				},
+			}),
+		).toEqual({ source: 'localStorage', url: 'https://storage.example' })
 	})
 
 	test('uses storage when no override or query parameter is present', () => {

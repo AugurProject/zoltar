@@ -40,7 +40,7 @@ function createDeferred<T>() {
 	return { promise, reject, resolve }
 }
 
-function createReadClient({ ethBalance = 0n, blockNumber = 10n, blockTimestamp = 20n }: { ethBalance?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
+function createReadClient({ ethBalance = 0n, blockNumber = 10n, blockTimestamp = BigInt(Math.floor(Date.now() / 1000)) }: { ethBalance?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
 	return {
 		getBalance: async () => ethBalance,
 		getBlock: async () => ({ number: blockNumber, timestamp: blockTimestamp }),
@@ -306,8 +306,9 @@ describe('useOnchainState (integration)', () => {
 		}))
 
 		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const rpcBlockTimestamp = BigInt(Math.floor(Date.now() / 1000))
 		const rpcReadClient = {
-			...createReadClient({ blockNumber: 321n, blockTimestamp: 654n, ethBalance: 123n }),
+			...createReadClient({ blockNumber: 321n, blockTimestamp: rpcBlockTimestamp, ethBalance: 123n }),
 			getChainId: async () => 1,
 		} as ReadClient
 		const { backend, subscriptionState } = createBackend({
@@ -334,7 +335,7 @@ describe('useOnchainState (integration)', () => {
 		})
 		expect(requireHookState(hookState).readBackendMessage).toBeUndefined()
 		expect(requireHookState(hookState).currentBlockNumber).toBe(321n)
-		expect(requireHookState(hookState).currentTimestamp).toBe(654n)
+		expect(requireHookState(hookState).currentTimestamp).toBe(rpcBlockTimestamp)
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
 		expect(subscriptionState.readTransportModes).toEqual(['rpc'])
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)

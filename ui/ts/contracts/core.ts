@@ -1,6 +1,7 @@
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from 'viem'
 import { getMulticall3Address } from './deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
+import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 
 export type ContractRevertReasonParams = {
 	account?: Account | Address | undefined | null
@@ -18,6 +19,8 @@ type ContractCallClient = {
 
 export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<WriteClient, 'sendTransaction'> &
 	ContractCallClient & {
+		chain?: WriteClient['chain']
+		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 		waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 	}
 
@@ -82,6 +85,15 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 	const account = callParams.account ?? undefined
 	let hash: Hash
 	try {
+		client.onTransactionPrepared?.({
+			account,
+			args: callParams.args,
+			chainName: client.chain?.name,
+			contractAddress: callParams.address,
+			data,
+			functionName: callParams.functionName,
+			value: callParams.value,
+		})
 		hash = await client.sendTransaction({
 			account,
 			data,
