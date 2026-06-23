@@ -122,16 +122,8 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 invalidBalance = outcomeState[0].balance;
 		uint256 yesBalance = outcomeState[1].balance;
 		uint256 noBalance = outcomeState[2].balance;
-		uint256 maxBalance =
-			invalidBalance > yesBalance
-				? (invalidBalance > noBalance ? invalidBalance : noBalance)
-				: (yesBalance > noBalance ? yesBalance : noBalance);
-		bool otherHasMax =
-			outcomeIndex == 0
-				? (yesBalance == maxBalance || noBalance == maxBalance)
-				: outcomeIndex == 1
-					? (invalidBalance == maxBalance || noBalance == maxBalance)
-					: (invalidBalance == maxBalance || yesBalance == maxBalance);
+		uint256 maxBalance = _maxOutcomeBalance(invalidBalance, yesBalance, noBalance);
+		bool otherHasMax = _otherOutcomeHasBalance(outcomeIndex, invalidBalance, yesBalance, noBalance, maxBalance);
 
 		if (newBalance == maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
 			acceptedAmount -= 1;
@@ -231,6 +223,28 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 noBalance
 	) private pure returns (bool) {
 		return invalidBalance == 0 && yesBalance == 0 && noBalance == 0;
+	}
+
+	function _maxOutcomeBalance(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance
+	) private pure returns (uint256 maxBalance) {
+		maxBalance = invalidBalance;
+		if (yesBalance > maxBalance) maxBalance = yesBalance;
+		if (noBalance > maxBalance) maxBalance = noBalance;
+	}
+
+	function _otherOutcomeHasBalance(
+		uint256 outcomeIndex,
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance,
+		uint256 targetBalance
+	) private pure returns (bool) {
+		if (outcomeIndex == 0) return yesBalance == targetBalance || noBalance == targetBalance;
+		if (outcomeIndex == 1) return invalidBalance == targetBalance || noBalance == targetBalance;
+		return invalidBalance == targetBalance || yesBalance == targetBalance;
 	}
 
 	function _strictLeadingOutcome(

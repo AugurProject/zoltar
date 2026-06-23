@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
+import { EscalationGameProofs } from './EscalationGameProofs.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
 	CarriedDepositProof,
@@ -275,7 +276,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	}
 
 	function _clearLocalCarryLeafFromCurrentSnapshot(OutcomeState storage state, uint256 leafIndex) private {
-		(uint256 peakHeight, uint256 peakStartIndex) = _getCurrentCarryPeakForLeaf(state.currentLeafCount, leafIndex);
+		(uint256 peakHeight, uint256 peakStartIndex) = EscalationGameProofs.getCurrentCarryPeakForLeaf(
+			state.currentLeafCount,
+			leafIndex
+		);
 		bytes32 nodeHash = bytes32(0);
 		uint256 nodeStartIndex = leafIndex;
 		state.currentCarryNodeHashes[0][nodeStartIndex] = nodeHash;
@@ -296,48 +300,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 
 		state.currentPeaks[peakHeight] = nodeHash;
-	}
-
-	function _getCurrentCarryPeakForLeaf(
-		uint256 leafCount,
-		uint256 leafIndex
-	) private pure returns (uint256 peakHeight, uint256 peakStartIndex) {
-		for (uint256 reverseHeight = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; reverseHeight > 0; ) {
-			unchecked {
-				--reverseHeight;
-			}
-			uint256 currentPeakHeight = reverseHeight;
-			if (((leafCount >> currentPeakHeight) & 1) != 1) continue;
-			uint256 nextPeakStartIndex = peakStartIndex + (uint256(1) << currentPeakHeight);
-			if (leafIndex < nextPeakStartIndex) return (currentPeakHeight, peakStartIndex);
-			peakStartIndex = nextPeakStartIndex;
-		}
-		revert();
-	}
-
-	function _bagCarryPeaks(
-		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes,
-		uint256 leafCount
-	) private pure returns (bytes32) {
-		if (leafCount == 0) return bytes32(0);
-
-		uint256 peakCount = 0;
-		for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
-			if (((leafCount >> peakIndex) & 1) == 1) {
-				peakCount += 1;
-			}
-		}
-
-		bytes32[] memory peaks = new bytes32[](peakCount);
-		uint256 writeIndex = 0;
-		for (uint256 peakIndex = 0; peakIndex < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; peakIndex++) {
-			if (((leafCount >> peakIndex) & 1) == 1) {
-				peaks[writeIndex] = peakHashes[peakIndex];
-				writeIndex += 1;
-			}
-		}
-
-		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
 	function _getCurrentNullifierRoot(uint8 outcomeIndex) private view returns (bytes32) {
@@ -362,7 +324,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			proof.cumulativeAmount,
 			proof.sourceNodeId
 		);
-		bytes32 computedRoot = _computeMerkleMountainRangeRootFromProof(
+		bytes32 computedRoot = EscalationGameProofs.computeMerkleMountainRangeRootFromProof(
 			leafHash,
 			leafCount,
 			proof.leafIndex,
@@ -370,53 +332,9 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			proof.merkleMountainRangeSiblings
 		);
 		require(
-			computedRoot == _bagCarryPeaks(state.snapshotPeaks, state.snapshotLeafCount),
+			computedRoot == EscalationGameProofs.bagCarryPeaks(state.snapshotPeaks, state.snapshotLeafCount),
 			'invalid carry inclusion proof'
 		);
-	}
-
-	function _computeMerkleMountainRangeRootFromProof(
-		bytes32 leafHash,
-		uint256 leafCount,
-		uint256 leafIndex,
-		uint256 peakHeight,
-		bytes32[] calldata siblings
-	) private pure returns (bytes32) {
-		require(((leafCount >> peakHeight) & 1) == 1, 'peak absent');
-		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'iph');
-		require(leafIndex < (uint256(1) << peakHeight), 'lior');
-
-		bytes32 peakRoot = leafHash;
-		for (uint256 level = 0; level < peakHeight; level++) {
-			bytes32 siblingHash = siblings[level];
-			if (((leafIndex >> level) & 1) == 0) {
-				peakRoot = MerkleMountainRange.hashParent(peakRoot, siblingHash);
-			} else {
-				peakRoot = MerkleMountainRange.hashParent(siblingHash, peakRoot);
-			}
-		}
-
-		uint256 peakCount = 0;
-		for (uint256 index = 0; index < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; index++) {
-			if (((leafCount >> index) & 1) == 1) {
-				peakCount += 1;
-			}
-		}
-		require(siblings.length == peakHeight + peakCount - 1, 'invalid Merkle Mountain Range proof length');
-		bytes32[] memory peaks = new bytes32[](peakCount);
-		uint256 writeIndex = 0;
-		uint256 siblingIndex = peakHeight;
-		for (uint256 index = 0; index < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; index++) {
-			if (((leafCount >> index) & 1) != 1) continue;
-			if (index == peakHeight) {
-				peaks[writeIndex] = peakRoot;
-			} else {
-				peaks[writeIndex] = siblings[siblingIndex];
-				siblingIndex += 1;
-			}
-			writeIndex += 1;
-		}
-		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
 	function _verifyAndAdvanceNullifier(
@@ -426,28 +344,15 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	) private {
 		require(siblings.length == NULLIFIER_DEPTH, 'invalid nullifier proof length');
 		bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);
-		bytes32 emptyRoot = _computeNullifierRoot(parentDepositIndex, siblings, bytes32(0));
+		bytes32 emptyRoot = EscalationGameProofs.computeNullifierRoot(parentDepositIndex, siblings, bytes32(0));
 		require(emptyRoot == currentRoot, 'invalid nullifier proof');
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		state.currentNullifierRoot = _computeNullifierRoot(parentDepositIndex, siblings, bytes32(uint256(1)));
+		state.currentNullifierRoot = EscalationGameProofs.computeNullifierRoot(
+			parentDepositIndex,
+			siblings,
+			bytes32(uint256(1))
+		);
 		state.proofConsumedDepositIndexes.push(parentDepositIndex);
-	}
-
-	function _computeNullifierRoot(
-		uint256 parentDepositIndex,
-		bytes32[] calldata siblings,
-		bytes32 leafValue
-	) private pure returns (bytes32 root) {
-		root = leafValue;
-		uint256 path = uint256(keccak256(abi.encode(parentDepositIndex)));
-		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
-			bytes32 siblingHash = siblings[depth];
-			if (((path >> depth) & 1) == 0) {
-				root = MerkleMountainRange.hashParent(root, siblingHash);
-			} else {
-				root = MerkleMountainRange.hashParent(siblingHash, root);
-			}
-		}
 	}
 
 	function _markLocalDepositConsumed(
@@ -498,7 +403,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		currentPeaks = state.currentPeaks;
 		currentLeafCount = state.currentLeafCount;
-		currentCarryRoot = _bagCarryPeaks(currentPeaks, currentLeafCount);
+		currentCarryRoot = EscalationGameProofs.bagCarryPeaks(currentPeaks, currentLeafCount);
 		currentCarryTotal = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
 	}
 }

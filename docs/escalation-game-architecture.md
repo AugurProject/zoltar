@@ -11,12 +11,13 @@ The modules form a narrow inheritance ladder:
 | `EscalationGameTypes.sol` | Constants and structs shared by the stack. |
 | `EscalationGameState.sol` | Storage layout, events, constructor wiring, shared access control, and the primitive escrow/unresolved counters. |
 | `EscalationGameCalculations.sol` | Pure/view attrition, resolution, accepted-deposit, and payout math. |
+| `EscalationGameProofs.sol` | Storage-free Merkle Mountain Range and nullifier proof math. |
 | `EscalationGameCarry.sol` | Fork carry snapshots, Merkle Mountain Range state, nullifier roots, proof verification, and local carry consumption. |
 | `EscalationGameEscrow.sol` | Forked escrow records, vault export cursors, batch export bounds, and child REP accounting. |
 | `EscalationGameSettlement.sol` | Claim, withdraw, proof-backed settlement, residual sweeping, and public deposit pagination. |
 | `EscalationGame.sol` | Start/resume entrypoints and local deposit intake from `SecurityPool`. |
 
-This order matters because storage remains inherited from `EscalationGameState`. Future modules should be appended through inheritance only when they need the full state surface. Helpers that do not need storage should stay as free functions, libraries, or tests.
+This order matters because storage remains inherited from `EscalationGameState`. Future modules should be appended through inheritance only when they need the full state surface. Helpers that do not need storage should stay as free functions, libraries, or tests. `EscalationGameProofs` is the template for that boundary: it computes roots and proof-derived values, but it does not advance nullifiers, mark deposits consumed, or mutate accounting totals.
 
 ## Accounting invariants
 
@@ -43,6 +44,14 @@ bun run update:escalation-game-abi-snapshot
 
 Review the fixture diff together with the Solidity change. Accidental ABI drift should be fixed in Solidity instead of updating the snapshot.
 
+The bytecode snapshot lives at `solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json`. If executable runtime bytecode changes intentionally, refresh it with:
+
+```bash
+bun run update:escalation-game-bytecode-snapshot
+```
+
+Review that diff together with the Solidity change. The snapshot strips Solidity metadata before hashing runtime bytecode, so comment-only or metadata-only changes should not require updating the runtime hash.
+
 ## Deployment and bytecode
 
 The split is source-only, so `EscalationGame` still deploys as one contract. The current compiled artifact measures:
@@ -60,5 +69,5 @@ For gas-sensitive changes, run the scenario tests first, then `bun run gas-costs
 Prefer further extraction only when it removes an ownership boundary that is still too broad:
 
 - Move math into a storage-free helper only if it can be tested independently and does not need `outcomeState` or `securityPool`.
-- Move proof helpers only if the caller still owns nullifier advancement and consumed-index accounting.
+- Move proof helpers only if the caller still owns nullifier advancement, consumed-index accounting, and escrow/carry total mutation.
 - Do not split escrow or settlement into separate deployed contracts unless there is a concrete bytecode limit or upgradeability requirement. That would create new trust, approval, and accounting surfaces.

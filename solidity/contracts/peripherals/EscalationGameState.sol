@@ -4,8 +4,8 @@ pragma solidity 0.8.35;
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { MerkleMountainRange } from './MerkleMountainRange.sol';
-import { ForkedEscrowState, Node, NULLIFIER_DEPTH, OutcomeState } from './EscalationGameTypes.sol';
+import { EscalationGameProofs } from './EscalationGameProofs.sol';
+import { ForkedEscrowState, Node, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameState {
 	uint256 public constant activationDelay = 3 days;
@@ -113,10 +113,7 @@ abstract contract EscalationGameState {
 		totalLocalUnresolvedRep -= amount;
 	}
 
-	function _computeEmptyNullifierRoot() private pure returns (bytes32 root) {
-		root = bytes32(0);
-		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
-			root = MerkleMountainRange.hashParent(root, root);
-		}
+	function _computeEmptyNullifierRoot() private pure returns (bytes32) {
+		return EscalationGameProofs.computeEmptyNullifierRoot();
 	}
 }

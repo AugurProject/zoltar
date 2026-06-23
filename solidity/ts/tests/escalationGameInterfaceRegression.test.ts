@@ -1,11 +1,21 @@
 import { test } from 'bun:test'
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { keccak256, type Hex } from 'viem'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
 const escalationGameSourcePath = 'contracts/peripherals/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
 const escalationGameAbiSnapshotPath = `${import.meta.dir}/fixtures/escalationGameAbi.snapshot`
+const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
+const eip170DeployedBytecodeLimitBytes = 24_576
+const escalationGameDeployedBytecodeBudgetBytes = 24_000
+
+type EscalationGameBytecodeSnapshot = {
+	creationBytes: number
+	deployedBytes: number
+	deployedBytecodeWithoutMetadataHash: Hex
+}
 
 function getEscalationGameOutput(): Record<string, unknown> {
 	const artifacts = loadContractsJson(import.meta.dir)
@@ -60,6 +70,11 @@ function getOptionalString(value: unknown): string {
 	return getString(value, 'Expected ABI string field')
 }
 
+function getNumber(value: unknown, errorMessage: string): number {
+	if (typeof value !== 'number') throw new Error(errorMessage)
+	return value
+}
+
 function normalizeAbiParameter(parameter: unknown): string {
 	const normalizedParameter = getRecord(parameter, 'Invalid ABI parameter')
 	const parameterType = getString(normalizedParameter.type, 'ABI parameter missing type')
@@ -102,6 +117,41 @@ function getExpectedEscalationGameAbiSnapshot(normalizedAbi: readonly string[]):
 		writeFileSync(escalationGameAbiSnapshotPath, snapshotText)
 	}
 	return readFileSync(escalationGameAbiSnapshotPath, 'utf8').trimEnd().split('\n')
+}
+
+function getBytecodeObject(contractOutput: Record<string, unknown>, sectionName: 'bytecode' | 'deployedBytecode'): string {
+	const evm = getRecord(contractOutput.evm, 'EscalationGame output is missing EVM bytecode')
+	const bytecodeSection = getRecord(evm[sectionName], `EscalationGame output is missing EVM ${sectionName}`)
+	return getString(bytecodeSection.object, `EscalationGame EVM ${sectionName} is missing object`)
+}
+
+function normalizeHexBytecode(bytecode: string): string {
+	return bytecode.startsWith('0x') ? bytecode.slice(2) : bytecode
+}
+
+function getBytecodeBytes(bytecode: string): number {
+	return normalizeHexBytecode(bytecode).length / 2
+}
+
+function stripSolidityMetadata(bytecode: string): string {
+	const normalizedBytecode = normalizeHexBytecode(bytecode)
+	const metadataStart = normalizedBytecode.lastIndexOf('a2646970667358')
+	if (metadataStart === -1) return normalizedBytecode
+	return normalizedBytecode.slice(0, metadataStart)
+}
+
+function getExpectedEscalationGameBytecodeSnapshot(actualSnapshot: EscalationGameBytecodeSnapshot): EscalationGameBytecodeSnapshot {
+	const snapshotText = `${JSON.stringify(actualSnapshot, undefined, '\t')}\n`
+	if (process.env.UPDATE_ESCALATION_GAME_BYTECODE_SNAPSHOT === '1') {
+		writeFileSync(escalationGameBytecodeSnapshotPath, snapshotText)
+	}
+	const parsedSnapshot: unknown = JSON.parse(readFileSync(escalationGameBytecodeSnapshotPath, 'utf8'))
+	const snapshot = getRecord(parsedSnapshot, 'EscalationGame bytecode snapshot must be an object')
+	return {
+		creationBytes: getNumber(snapshot.creationBytes, 'EscalationGame bytecode snapshot missing creationBytes'),
+		deployedBytes: getNumber(snapshot.deployedBytes, 'EscalationGame bytecode snapshot missing deployedBytes'),
+		deployedBytecodeWithoutMetadataHash: getString(snapshot.deployedBytecodeWithoutMetadataHash, 'EscalationGame bytecode snapshot missing runtime hash') as Hex,
+	}
 }
 
 test('EscalationGame storage layout keeps inherited state slots stable', () => {
@@ -186,4 +236,20 @@ test('EscalationGame ABI preserves public functions, events, and tuple shapes', 
 		.sort()
 
 	assert.deepStrictEqual(normalizedAbi, getExpectedEscalationGameAbiSnapshot(normalizedAbi))
+})
+
+test('EscalationGame bytecode stays within size budgets and preserves runtime snapshot', () => {
+	const escalationGameOutput = getEscalationGameOutput()
+	const creationBytecode = getBytecodeObject(escalationGameOutput, 'bytecode')
+	const deployedBytecode = getBytecodeObject(escalationGameOutput, 'deployedBytecode')
+	const deployedBytecodeWithoutMetadata = stripSolidityMetadata(deployedBytecode)
+	const actualSnapshot: EscalationGameBytecodeSnapshot = {
+		creationBytes: getBytecodeBytes(creationBytecode),
+		deployedBytes: getBytecodeBytes(deployedBytecode),
+		deployedBytecodeWithoutMetadataHash: keccak256(`0x${deployedBytecodeWithoutMetadata}` as Hex),
+	}
+
+	assert.ok(actualSnapshot.deployedBytes <= eip170DeployedBytecodeLimitBytes, `EscalationGame deployed bytecode exceeds EIP-170: ${actualSnapshot.deployedBytes}`)
+	assert.ok(actualSnapshot.deployedBytes <= escalationGameDeployedBytecodeBudgetBytes, `EscalationGame deployed bytecode exceeds project budget: ${actualSnapshot.deployedBytes}`)
+	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot))
 })
