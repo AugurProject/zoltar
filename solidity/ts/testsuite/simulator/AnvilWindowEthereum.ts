@@ -141,25 +141,29 @@ export interface AnvilWindowEthereum {
 	removeListener: () => void
 }
 
-export const getDefaultAnvilRpcUrl = (): string => (process.platform === 'win32' ? 'http://127.0.0.1:8545' : 'http://host.docker.internal:8545')
+export const getDefaultAnvilRpcUrl = (): string => 'http://127.0.0.1:8545'
+
+export const validateLocalAnvilRpcUrl = (url: string): void => {
+	let parsed: URL
+	try {
+		parsed = new URL(url)
+	} catch (error) {
+		const detail = error instanceof Error ? ` ${error.message}` : ''
+		throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.${detail}`)
+	}
+
+	if (parsed.protocol !== 'http:') throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must use http:// for a local Anvil endpoint.`)
+
+	const allowedHosts = ['localhost', '127.0.0.1', '::1', '[::1]', 'host.docker.internal']
+	if (!allowedHosts.includes(parsed.hostname)) throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
+}
 
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
 	let currentTimestamp = 0n
 	let snapshotTimestamp = 0n
 
-	// Validate RPC endpoint points to localhost only for test security
-	const validateLocalhostUrl = (url: string): void => {
-		try {
-			const parsed = new URL(url)
-			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
-			if (!allowedHosts.includes(parsed.hostname)) throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
-		} catch (error) {
-			if (error instanceof Error && error.message.includes('unauthorized')) throw error
-			throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.`)
-		}
-	}
-	validateLocalhostUrl(ANVIL_RPC)
+	validateLocalAnvilRpcUrl(ANVIL_RPC)
 
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
