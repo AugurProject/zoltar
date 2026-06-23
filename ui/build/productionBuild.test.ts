@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import * as process from 'node:process'
 import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
@@ -19,12 +20,14 @@ const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.joi
 let server: Bun.Server | undefined
 
 beforeAll(async () => {
-	const result = spawnSync('bun', ['run', 'ui:build:prod'], {
-		cwd: repositoryRootPath,
-		encoding: 'utf8',
-	})
-	if (result.status !== 0) {
-		throw new Error(`ui:build:prod failed\n${result.stdout}${result.stderr}`)
+	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
+		const result = spawnSync('bun', ['run', 'ui:build:prod'], {
+			cwd: repositoryRootPath,
+			encoding: 'utf8',
+		})
+		if (result.status !== 0) {
+			throw new Error(`ui:build:prod failed\n${result.stdout}${result.stderr}`)
+		}
 	}
 
 	server = Bun.serve({
