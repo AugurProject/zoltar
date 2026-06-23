@@ -7,7 +7,7 @@ import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulat
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { getInfraContractAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import assert from 'node:assert/strict'
+import assert from '../testsuite/simulator/utils/assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
