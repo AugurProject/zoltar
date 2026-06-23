@@ -148,7 +148,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n], 3n, [0n, 0n, 0n]]
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, defaultForkData, 3n, [0n, 0n, 0n]]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -167,6 +167,29 @@ describe('contracts helpers', () => {
 		expect(details.forkOutcome).toBe('none')
 		expect(details.hasForkActivity).toBe(false)
 		expect(details.ownForkRepBuckets).toBeUndefined()
+	})
+
+	test('loadForkAuctionDetails rejects malformed fork data instead of casting tuple reads', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(5n),
+			multicall: async request => {
+				const firstContract = request.contracts[0]
+				if (getContractFunctionName(firstContract) === 'questionId') {
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 3n, [0n, 0n, 0n]]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadForkAuctionDetails(client, securityPoolAddress)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
 	})
 
 	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {

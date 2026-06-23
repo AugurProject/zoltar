@@ -65,6 +65,7 @@ import {
 } from './contracts/helpers.js'
 import { type ContractRevertReasonParams, type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
 import { getInfraContractAddresses, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
+import { requireForkDataView } from './contracts/forkData.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from './contracts/securityPoolActions.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
@@ -82,7 +83,6 @@ const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address 
 const UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT = 128
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
@@ -1049,8 +1049,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const forkDataTuple: ForkDataTuple = forkData
-	const [auctionableRepAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple
+	const { auctionableRepAtFork, truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, unallocatedEscrowChildRep, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
@@ -1527,8 +1526,7 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 						})
 					: Promise.all([getSecurityPoolVaultCount(client, securityPoolAddress)]).then(([vaultCount]) => ({ hasLoadedVaults: vaultCount === 0n, vaultCount, vaults: [] })),
 			])
-			const forkDataTuple: ForkDataTuple = forkData
-			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkDataTuple
+			const { truthAuctionStartedAt, migratedRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 			const poolSystemState = getSecurityPoolSystemState(systemState)
 			const hasForkActivity = deriveHasForkActivity({
