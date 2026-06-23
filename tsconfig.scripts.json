@@ -20,5 +20,5 @@
 		"lib": ["ESNext", "DOM"],
 		"types": ["bun-types", "node"]
 	},
-	"include": ["bun-test-setup.ts", "scripts/**/*.mts", "scripts/**/*.ts", "ui/build/**/*.mts", "ui/dev-server.ts"]
+	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "ui/build/**/*.mts", "ui/dev-server.ts"]
 }
