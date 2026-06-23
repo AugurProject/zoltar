@@ -1,5 +1,5 @@
 import { beforeAll, describe, setDefaultTimeout, test } from 'bun:test'
-import assert from 'assert'
+import assert from '../testsuite/simulator/utils/assert'
 import { type Address } from 'viem'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'

@@ -1,5 +1,5 @@
 import { test } from 'bun:test'
-import assert from 'node:assert/strict'
+import assert from '../testsuite/simulator/utils/assert'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { keccak256, type Hex } from 'viem'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'

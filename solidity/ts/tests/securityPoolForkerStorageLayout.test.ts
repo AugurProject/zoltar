@@ -1,5 +1,5 @@
 import { test } from 'bun:test'
-import assert from 'node:assert/strict'
+import assert from '../testsuite/simulator/utils/assert'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
 test('SecurityPoolForker retains unified own-fork fields in fork session storage', () => {
@@ -10,7 +10,7 @@ test('SecurityPoolForker retains unified own-fork fields in fork session storage
 	const forkDataByPoolValueType = getRecord(forkDataByPoolEntry.type.value, 'Storage layout missing forkDataByPool value type')
 	const forkDataMembers = getArray(forkDataByPoolValueType.members, 'Storage layout missing forkDataByPool value members')
 	const forkDataLabels = new Set(forkDataMembers.map(member => getString(getRecord(member, 'Invalid forkDataByPool member').label, 'Missing member label for forkDataByPool struct type')))
-	assert(forkDataLabels.has('vaultRepAtFork'))
-	assert(forkDataLabels.has('escalationChildRepAtFork'))
-	assert(forkDataLabels.has('escalationSourceRepAtFork'))
+	assert.ok(forkDataLabels.has('vaultRepAtFork'))
+	assert.ok(forkDataLabels.has('escalationChildRepAtFork'))
+	assert.ok(forkDataLabels.has('escalationSourceRepAtFork'))
 })

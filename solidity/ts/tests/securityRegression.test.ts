@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import assert from 'node:assert/strict'
+import assert from '../testsuite/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from 'viem'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { addressString } from '../testsuite/simulator/utils/bigint'
