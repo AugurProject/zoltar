@@ -123,7 +123,7 @@ Validation:
 Known risks or areas needing close attention:
 - <risk, tradeoff, or "none known">
 
-Review the current branch diff against main and the stated acceptance criteria.
+Review the current branch diff against main, the stated acceptance criteria, and whether the changed code is named clearly, readable, and easy to understand.
 Do not modify files.
 Return findings grouped by High, Medium, and Low.
 

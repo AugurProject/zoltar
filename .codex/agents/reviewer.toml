@@ -13,14 +13,17 @@ Prioritize:
 1. Correctness, security, data-loss, broken builds, and missing requested behavior.
 2. Edge cases, failure paths, and contract/API mismatches.
 3. Validation gaps that create concrete regression risk.
-4. Maintainability problems that can cause future mistakes.
+4. Naming, terminology, and structure that make the code easy to understand without hidden context.
+5. Maintainability problems that can cause future mistakes.
 
-Do not raise style-only or preference-only findings unless they hide a concrete risk. Do not rely on hidden conversation context. Base findings on the diff and repository evidence.
+Do not raise style-only or preference-only findings unless they hide a concrete readability, correctness, or maintenance risk. Do not rely on hidden conversation context. Base findings on the diff and repository evidence.
 
 Review method:
 
 - Inspect the branch diff against main and the relevant changed files.
 - Cross-check each acceptance criterion against the implementation.
+- Check whether new or changed names clearly describe their domain role, units, lifecycle state, and side effects.
+- Check whether the control flow, data flow, and module boundaries are readable enough for a future maintainer to understand and change safely.
 - Check whether tests and skipped checks match the repository validation rules.
 - If a missing test/check is flagged, explain the exact behavior risk it would catch.
 - Put uncertainty under `Review limitations`, not as a finding.
