@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import {
+	buildForkCarriedEscalationProofs,
 	getOpenOracleAddress,
 	loadAllSecurityPools,
 	loadEscalationDeposits,
@@ -36,6 +37,7 @@ const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
+const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
 
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
 type MockLoaderClient = Parameters<typeof loadAllSecurityPools>[0]
@@ -146,7 +148,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n], 3n, [0n, 0n, 0n]]
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, defaultForkData, 3n, [0n, 0n, 0n]]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -165,6 +167,29 @@ describe('contracts helpers', () => {
 		expect(details.forkOutcome).toBe('none')
 		expect(details.hasForkActivity).toBe(false)
 		expect(details.ownForkRepBuckets).toBeUndefined()
+	})
+
+	test('loadForkAuctionDetails rejects malformed fork data instead of casting tuple reads', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(5n),
+			multicall: async request => {
+				const firstContract = request.contracts[0]
+				if (getContractFunctionName(firstContract) === 'questionId') {
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 3n, [0n, 0n, 0n]]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadForkAuctionDetails(client, securityPoolAddress)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
 	})
 
 	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {
@@ -275,7 +300,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -313,6 +338,46 @@ describe('contracts helpers', () => {
 		expect(pool.hasForkActivity).toBe(false)
 	})
 
+	test('loadSecurityPoolPage rejects malformed fork data instead of casting tuple reads', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const firstContract = request.contracts[0]
+				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, 0n]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: securityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadSecurityPoolPage(client, 0, 1)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
+	})
+
 	test('loadSecurityPoolPage does not infer parent fork activity from other pools on the same page', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
@@ -326,8 +391,8 @@ describe('contracts helpers', () => {
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
-					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n, 1n]
-					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 1n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -388,7 +453,7 @@ describe('contracts helpers', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 100n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 100n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -458,7 +523,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 0n, 0n, false, 0], 0n, 0n, 3n, 0n, 5n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 5n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				if (getContractFunctionName(firstContract) === 'securityVaults') {
@@ -893,6 +958,45 @@ describe('contracts helpers', () => {
 		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
 
+	test('loadEscalationDeposits rejects malformed deposit pages instead of dropping entries', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getDepositsByOutcome') {
+				return [{ amount: 1n, cumulativeAmount: 1n, depositor: 'not-an-address' }]
+			}
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadEscalationDeposits(client, escalationGameAddress, 'yes')).rejects.toThrow('Unexpected escalation deposit page response')
+	})
+
+	test('buildForkCarriedEscalationProofs rejects malformed carry leaf pages instead of dropping entries', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.functionName === 'getOutcomeState')
+					return {
+						currentCarryRoot: zeroHash,
+						currentLeafCount: 0n,
+						currentNullifierRoot: zeroHash,
+					}
+				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'getCarryLeafPageByOutcome') return [[{ amount: 1n, cumulativeAmount: 1n, depositor: vaultAddress, parentDepositIndex: 'bad-index', sourceNodeId: 1n }], 0n]
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected carry leaf page response')
+	})
+
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
@@ -1061,6 +1165,16 @@ describe('contracts helpers', () => {
 		})
 	})
 
+	test('loadTruthAuctionTickPage rejects malformed tick summary pages instead of trusting ABI shapes', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getTickCount') return 1n
+			if (request.functionName === 'getTickPage') return [{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 'bad-count', active: true }]
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 10)).rejects.toThrow('Unexpected truth auction tick page submission count response')
+	})
+
 	test('loadTruthAuctionActiveTickPage maps active ladder pages and converts page indexes to offsets', async () => {
 		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
 		const client = createMockReadClient(async request => {
@@ -1119,6 +1233,26 @@ describe('contracts helpers', () => {
 			bidCount: 2n,
 			bids: [],
 		})
+	})
+
+	test('loadTruthAuctionTickBidPage rejects malformed per-tick bid pages instead of trusting ABI shapes', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getBidCountAtTick') return 1n
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 11n, bidIndex: 0n, bidder: securityPoolAddress, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: 'bad-refund-flag' }]
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionTickBidPage(client, truthAuctionAddress, 11n, 0, 10)).rejects.toThrow('Unexpected truth auction tick bid page refunded flag response')
+	})
+
+	test('loadTruthAuctionBidderBidPage rejects malformed bid pages instead of trusting ABI shapes', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getBidderBidCount') return 1n
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, bidder: 'not-an-address', ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }]
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionBidderBidPage(client, truthAuctionAddress, securityPoolAddress, 0, 10)).rejects.toThrow('Unexpected truth auction bidder bid page bidder response')
 	})
 
 	test('loadTruthAuctionBidderBidPage maps bidder bid tuples and converts bidder pages to offsets', async () => {

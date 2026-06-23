@@ -13,6 +13,7 @@ import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import { sameAddress } from '../lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js'
+import { requireForkDataView } from './forkData.js'
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityVaultTupleArray } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
@@ -22,7 +23,6 @@ const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address 
 
 const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 3n
 
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 type SecurityPoolDeploymentQueryResult = {
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
@@ -329,7 +329,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 					previewLimit: ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT,
 				}),
 			])
-			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkData as ForkDataTuple
+			const { truthAuctionStartedAt, migratedRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 			const systemState = getSecurityPoolSystemState(systemStateValue)
 			const hasForkActivity = deriveHasForkActivity({
