@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import {
+	buildForkCarriedEscalationProofs,
 	getOpenOracleAddress,
 	loadAllSecurityPools,
 	loadEscalationDeposits,
@@ -893,6 +894,45 @@ describe('contracts helpers', () => {
 		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
 
+	test('loadEscalationDeposits rejects malformed deposit pages instead of dropping entries', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getDepositsByOutcome') {
+				return [{ amount: 1n, cumulativeAmount: 1n, depositor: 'not-an-address' }]
+			}
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadEscalationDeposits(client, escalationGameAddress, 'yes')).rejects.toThrow('Unexpected escalation deposit page response')
+	})
+
+	test('buildForkCarriedEscalationProofs rejects malformed carry leaf pages instead of dropping entries', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.functionName === 'getOutcomeState')
+					return {
+						currentCarryRoot: zeroHash,
+						currentLeafCount: 0n,
+						currentNullifierRoot: zeroHash,
+					}
+				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'getCarryLeafPageByOutcome') return [[{ amount: 1n, cumulativeAmount: 1n, depositor: vaultAddress, parentDepositIndex: 'bad-index', sourceNodeId: 1n }], 0n]
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected carry leaf page response')
+	})
+
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
@@ -1061,6 +1101,16 @@ describe('contracts helpers', () => {
 		})
 	})
 
+	test('loadTruthAuctionTickPage rejects malformed tick summary pages instead of trusting ABI shapes', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getTickCount') return 1n
+			if (request.functionName === 'getTickPage') return [{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 'bad-count', active: true }]
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 10)).rejects.toThrow('Unexpected truth auction tick page response')
+	})
+
 	test('loadTruthAuctionActiveTickPage maps active ladder pages and converts page indexes to offsets', async () => {
 		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
 		const client = createMockReadClient(async request => {
@@ -1119,6 +1169,16 @@ describe('contracts helpers', () => {
 			bidCount: 2n,
 			bids: [],
 		})
+	})
+
+	test('loadTruthAuctionBidderBidPage rejects malformed bid pages instead of trusting ABI shapes', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getBidderBidCount') return 1n
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, bidder: 'not-an-address', ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }]
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionBidderBidPage(client, truthAuctionAddress, securityPoolAddress, 0, 10)).rejects.toThrow('Unexpected truth auction bidder bid page response')
 	})
 
 	test('loadTruthAuctionBidderBidPage maps bidder bid tuples and converts bidder pages to offsets', async () => {
