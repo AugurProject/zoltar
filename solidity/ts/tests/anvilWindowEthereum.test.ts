@@ -1,10 +1,21 @@
 import { expect, test } from 'bun:test'
-import { getDefaultAnvilRpcUrl, normalizeAnvilTransactionParams } from '../testsuite/simulator/AnvilWindowEthereum'
+import { getDefaultAnvilRpcUrl, normalizeAnvilTransactionParams, validateLocalAnvilRpcUrl } from '../testsuite/simulator/AnvilWindowEthereum'
 
-test('getDefaultAnvilRpcUrl uses localhost on Windows and docker host elsewhere', () => {
-	const expected = process.platform === 'win32' ? 'http://127.0.0.1:8545' : 'http://host.docker.internal:8545'
+test('getDefaultAnvilRpcUrl uses localhost for host CLI execution', () => {
+	expect(getDefaultAnvilRpcUrl()).toBe('http://127.0.0.1:8545')
+})
 
-	expect(getDefaultAnvilRpcUrl()).toBe(expected)
+test('validateLocalAnvilRpcUrl accepts local HTTP endpoints', () => {
+	expect(() => validateLocalAnvilRpcUrl('http://127.0.0.1:8545')).not.toThrow()
+	expect(() => validateLocalAnvilRpcUrl('http://host.docker.internal:8545')).not.toThrow()
+})
+
+test('validateLocalAnvilRpcUrl rejects non-HTTP endpoints', () => {
+	expect(() => validateLocalAnvilRpcUrl('https://127.0.0.1:8545')).toThrow('Must use http:// for a local Anvil endpoint')
+})
+
+test('validateLocalAnvilRpcUrl rejects non-local endpoints', () => {
+	expect(() => validateLocalAnvilRpcUrl('http://example.com:8545')).toThrow("ANVIL_RPC points to unauthorized host 'example.com'")
 })
 
 test('normalizeAnvilTransactionParams forces legacy zero-gas pricing for send transactions', () => {
