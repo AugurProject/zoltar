@@ -57,7 +57,6 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress
 
 const genesisUniverse = 0n
 const securityMultiplier = 2n
-const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const reportedRepEthPrice = 10n
 const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
 const outcomes = ['Yes', 'No']
@@ -211,7 +210,7 @@ describe('Open Oracle helpers', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
 		managerAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 		await setBaselineSnapshot()
 	})

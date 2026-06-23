@@ -244,7 +244,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				questionId,
 			}
 		}),
-		createSecurityPool: mock(async (_client: never, input: { currentRetentionRate: bigint; questionId: bigint; securityMultiplier: bigint }) => {
+		createSecurityPool: mock(async (_client: never, input: { questionId: bigint; securityMultiplier: bigint }) => {
 			state.callLog.createSecurityPool += 1
 			const poolAddress = getPoolAddressForMarket(securityPoolCount)
 			const managerAddress = getManagerForPool(poolAddress)

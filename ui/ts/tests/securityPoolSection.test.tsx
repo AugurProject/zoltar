@@ -5,6 +5,7 @@ import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
 import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolSection } from '../components/SecurityPoolSection.js'
+import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import type { AccountState } from '../types/app.js'
 import type { MarketDetails } from '../types/contracts.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
@@ -63,7 +64,6 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			currentRetentionRate: '10',
 			marketId: '0x01',
 			securityMultiplier: '2',
 		},
@@ -127,12 +127,16 @@ describe('SecurityPoolSection', () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const documentQueries = within(document.body)
 		const headings = Array.from(document.querySelectorAll('h3')).map(heading => heading.textContent?.trim())
 
 		expect(headings).toContain('Create Pool')
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
+		expect(documentQueries.getByText('Initial Open Interest Fee / Year')).not.toBeNull()
+		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
+		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
 	})
 
 	test('renders the created pool banner detail with the shared address value component', async () => {

@@ -11,7 +11,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
-import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
+import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
@@ -121,7 +121,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Create Pool' description='Configure the binary question, security multiplier, and retention rate before deploying the pool.'>
+					<SectionBlock title='Create Pool' description='Choose the binary question and security multiplier before deploying the pool.'>
 						<div className='form-grid'>
 							<label className='field'>
 								<span>Question ID</span>
@@ -138,10 +138,10 @@ export function SecurityPoolSection({
 								<FormInput value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
 							</label>
 
-							<label className='field'>
-								<span>Open Interest Fee / Year (%)</span>
-								<FormInput value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} placeholder={formatOpenInterestFeePerYearPercent(999999996848000000n)} />
-							</label>
+							<div className='field'>
+								<span>Initial Open Interest Fee / Year</span>
+								<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
+							</div>
 
 							<div className='actions'>
 								<TransactionActionButton safetyId='security-pool.createPool' idleLabel={createButtonLabel} pendingLabel='Creating Pool...' onClick={onCreateSecurityPool} pending={securityPoolCreating} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
