@@ -17,7 +17,6 @@ const OPEN_ORACLE_UPSTREAM_PATH = 'src/OpenOracleL1.sol'
 const OPEN_ORACLE_IMPORT_PREFIX = '@openzeppelin/contracts/'
 const OPEN_ORACLE_EXACT_PRAGMA = 'pragma solidity 0.8.28;'
 const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity >=0.8.28 <0.9.0;'
-const OPEN_ORACLE_SOLC_VERSION = 'v0.8.28+commit.7893614a'
 const allowedImmutableContractWarnings = [
 	{
 		sourcePath: 'contracts/peripherals/Multicall3.sol',
@@ -183,12 +182,12 @@ async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
 	return openOracleCompilerPromise
 }
 
-async function computeContractHash(sourceFiles: Map<string, string>): Promise<string> {
+async function computeContractHash(sourceFiles: Map<string, string>, openOracleCompiler: SolcCompiler): Promise<string> {
 	const hasher = createHash('sha256')
 
 	hasher.update(getCompilerVersion(solc))
 	hasher.update('\n')
-	hasher.update(OPEN_ORACLE_SOLC_VERSION)
+	hasher.update(getCompilerVersion(openOracleCompiler))
 	hasher.update('\n')
 	hasher.update(
 		JSON.stringify({
@@ -427,7 +426,8 @@ const compileContracts = async () => {
 		sources.set(relativePath, await fs.readFile(file, 'utf8'))
 	}
 
-	const currentContractHash = await computeContractHash(sources)
+	const openOracleCompiler = await loadOpenOracleCompiler()
+	const currentContractHash = await computeContractHash(sources, openOracleCompiler)
 	const cache = await loadHashCache()
 	let needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
 
@@ -445,7 +445,6 @@ const compileContracts = async () => {
 
 	if (needsRecompilation) {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
-		const openOracleCompiler = await loadOpenOracleCompiler()
 		const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings)
 		const openOracleResult = compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings)
 		const mergedResult = CompileResult.parse(mergeCompileResults(mainResult, openOracleResult))
