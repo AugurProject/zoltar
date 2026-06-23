@@ -1878,9 +1878,9 @@
 								pool. The vault owner must migrate all remaining unresolved parent locks for the
 								chosen child universe through repeated
 								<code>migrateVaultWithUnresolvedEscalation</code> calls until the function reports
-								no more work. If the vault does not migrate in time, the unresolved position is
-								left behind and is burned under the same fork-migration rules as other
-								non-migrated parent-pool state.
+								no more work. If the vault does not migrate in time, the unresolved position
+								remains locked in the parent escalation game and is no longer withdrawable from
+								the parent pool.
 							</p>
 				</section>
 
@@ -2964,9 +2964,9 @@
 							<li><code>startAuction</code> also sets <code>maxRepBeingSold</code>, the maximum REP inventory the child pool will sell.</li>
 						<li>Only the owner, which is the <code>SecurityPoolForker</code> for child-pool truth auctions, can start and finalize the auction.</li>
 						<li>Bids are accepted only after start, before finalization, and before <code>auctionStarted + 1 week</code>.</li>
-						<li>Finalization walks bids from the highest ETH/REP tick to the lowest.</li>
+						<li>Finalization walks aggregate AVL tick totals from the highest ETH/REP tick to the lowest; raw bids are settled later through paged withdrawals.</li>
 						<li>The sweep stops when the ETH raise cap binds or when the ETH collected so far, at that price, would buy all REP being sold.</li>
-						<li>In an underfunded auction, the contract computes <code>underfundedThreshold = ethRaised / maxRepBeingSold</code>.</li>
+						<li>In an underfunded auction, the contract computes <code>underfundedThreshold = ethRaised * PRICE_PRECISION / maxRepBeingSold</code>.</li>
 						<li>Only bids at or above that underfunded threshold count as winners; all winning ETH buys the full REP inventory pro rata.</li>
 						<li>Division dust in the underfunded path is carried through <code>underfundedRemainder</code> as bids are withdrawn.</li>
 						<li>Before finalization, losing bids below the currently found clearing tick can be refunded in paged batches.</li>
