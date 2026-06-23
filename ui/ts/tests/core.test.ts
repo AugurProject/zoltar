@@ -1,15 +1,16 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Hash, type TransactionReceipt } from 'viem'
+import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from 'viem'
 import { getMulticall3Address } from '../contracts/deploymentHelpers.js'
 import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '../contracts/core.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 
 type MulticallRequest = Parameters<ReadClient['multicall']>[0]
-type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransactionReceipt'> & {
-	call?: WriteClient['call']
-}
+type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransactionReceipt'> &
+	Partial<Pick<WriteClient, 'onTransactionPrepared'>> & {
+		call?: WriteClient['call']
+	}
 
 function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
 	return {
@@ -87,6 +88,40 @@ describe('contract core helpers', () => {
 		expect(returnedHashOnly).toBe(hash)
 		expect(returnedHashWithReceipt.hash).toBe(hash)
 		expect(returnedHashWithReceipt.receipt.status).toBe('success')
+	})
+
+	test('writeContractAndWaitForReceipt includes encoded calldata in prepared previews', async () => {
+		const hash = `0x${'d'.repeat(64)}` as Hash
+		const abi = [{ type: 'function', stateMutability: 'nonpayable', name: 'setValue', inputs: [{ name: 'value', type: 'uint256' }], outputs: [] }] as const
+		const address = getAddress('0x5555555555555555555555555555555555555555')
+		const args = [42n] as const
+		const encodedData = encodeFunctionData({
+			abi,
+			functionName: 'setValue',
+			args,
+		})
+		let preparedData: string | undefined
+		let sentData: string | undefined
+		const contractCall: WriteContractClient = {
+			onTransactionPrepared: preview => {
+				preparedData = preview.data
+			},
+			sendTransaction: async request => {
+				sentData = request.data
+				return hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		}
+
+		await writeContractAndWaitForReceipt(contractCall, () => ({
+			abi,
+			address,
+			args,
+			functionName: 'setValue',
+		}))
+
+		expect(preparedData).toBe(encodedData)
+		expect(sentData).toBe(encodedData)
 	})
 
 	test('writeContractAndWaitForReceipt maps transaction revert and fallback error messages', async () => {

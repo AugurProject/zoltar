@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { waitFor } from './testUtils/queries'
 import { zeroAddress, type Address, type Hash } from 'viem'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
@@ -103,15 +105,19 @@ function createHarness(useSecurityPoolCreation: UseSecurityPoolCreation, props: 
 
 describe('useSecurityPoolCreation', () => {
 	let cleanupDom: (() => void) | undefined
+	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
 		cleanupDom = installDomEnvironment().cleanup
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 	})
 
 	afterEach(async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = undefined
 		cleanupDom?.()
 		cleanupDom = undefined
 		mock.restore()
@@ -431,7 +437,9 @@ describe('useSecurityPoolCreation', () => {
 		if (firstCreate === undefined) {
 			throw new Error('Expected createPool promise')
 		}
-		expect(requireState(state).securityPoolCreating).toBe(true)
+		await waitFor(() => {
+			expect(requireState(state).securityPoolCreating).toBe(true)
+		})
 
 		await act(async () => {
 			await requireState(state).createPool()

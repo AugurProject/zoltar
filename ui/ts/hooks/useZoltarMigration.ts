@@ -9,6 +9,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createZoltarMigrationSuccessPresentation, createZoltarMigrationTransactionIntent, createZoltarMigrationWarningPresentation } from '../lib/transactionPresentations.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import { assertActiveWallet } from '../lib/walletGuards.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import type { WriteOperationsParameters, ZoltarMigrationFormState } from '../types/app.js'
@@ -20,6 +21,7 @@ type UseZoltarMigrationParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
@@ -53,6 +55,7 @@ export function useZoltarMigration({
 	onTransactionFailed,
 	onTransactionFinished,
 	onTransactionPresented,
+	onTransactionPrepared,
 	onTransactionRequested,
 	onTransactionSubmitted,
 	refreshState,
@@ -93,6 +96,7 @@ export function useZoltarMigration({
 			zoltarMigrationResult.value = undefined
 
 			try {
+				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')
@@ -152,23 +156,23 @@ export function useZoltarMigration({
 	const prepareRepForMigration = useCallback(async () => {
 		await runZoltarMigrationAction({
 			actionName: 'prepare',
-			action: async (walletAddress, universe, amount) => await prepareRepForMigrationInZoltar(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, amount),
+			action: async (walletAddress, universe, amount) => await prepareRepForMigrationInZoltar(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount),
 			errorFallback: 'Failed to prepare REP for migration',
 			refreshAfter: false,
 			requiresOutcomeIndexes: false,
 			resolveAmount: resolvePrepareMigrationAmount,
 		})
-	}, [onTransactionSubmitted, runZoltarMigrationAction])
+	}, [onTransactionPrepared, onTransactionSubmitted, runZoltarMigrationAction])
 
 	const migrateInternalRep = useCallback(async () => {
 		await runZoltarMigrationAction({
 			actionName: 'split',
-			action: async (walletAddress, universe, amount, outcomeIndexes) => await migrateInternalRepInZoltar(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes),
+			action: async (walletAddress, universe, amount, outcomeIndexes) => await migrateInternalRepInZoltar(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes),
 			errorFallback: 'Failed to migrate REP',
 			refreshAfter: true,
 			requiresOutcomeIndexes: true,
 		})
-	}, [onTransactionSubmitted, runZoltarMigrationAction])
+	}, [onTransactionPrepared, onTransactionSubmitted, runZoltarMigrationAction])
 
 	return {
 		migrateInternalRep,

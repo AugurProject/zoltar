@@ -50,7 +50,7 @@ function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: Reporti
 	}
 }
 
-export function useReportingOperations({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: ResolvedReportingOperationsParameters) {
+export function useReportingOperations({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: ResolvedReportingOperationsParameters) {
 	const reportingLoad = useLoadController()
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
@@ -99,7 +99,7 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 			reportingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market', createReportingTransactionIntent(actionName)),
+					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market', createReportingTransactionIntent(actionName)),
 					onRefreshError: (message, hash) => {
 						reportingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = reportingResult.value
@@ -156,7 +156,7 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 				const availableVaultRep = latestDetails.viewerVaultAvailableEscalationRep ?? 0n
 				if (contributionPreview.actualDepositAmount > availableVaultRep) throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
 
-				return await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, reportAmount)
+				return await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, selectedOutcome, reportAmount)
 			},
 			'Failed to report on outcome',
 		)
@@ -191,7 +191,7 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 					throw new Error('Select at least one deposit to settle or use Settle all for this side.')
 				}
 
-				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, outcome, depositIndexes)
+				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, outcome, depositIndexes)
 			},
 			'Failed to settle escalation deposits',
 		)

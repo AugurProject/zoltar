@@ -105,6 +105,26 @@ function renderInitialPriceSourceLabel(priceSource: string, priceSourceUrl: stri
 		</strong>
 	)
 }
+
+function formatQuoteAge(quoteLoadedAtMs: number) {
+	const elapsedSeconds = Math.max(0, Math.floor((Date.now() - quoteLoadedAtMs) / 1000))
+	if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`
+	const elapsedMinutes = Math.floor(elapsedSeconds / 60)
+	if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`
+	const elapsedHours = Math.floor(elapsedMinutes / 60)
+	return `${elapsedHours}h ago`
+}
+
+function renderInitialPriceFreshness(openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'], priceSource: OpenOracleInitialReportSubmissionDetails['priceSource']) {
+	if (priceSource !== 'MOCK' && priceSource !== 'Uniswap V3' && priceSource !== 'Uniswap V4') return undefined
+	if (openOracleInitialReportState.quoteLoadedAtMs === undefined) return undefined
+	const blockText = openOracleInitialReportState.quoteBlockNumber === undefined ? '' : ` at block ${openOracleInitialReportState.quoteBlockNumber.toString()}`
+	return (
+		<p className='detail'>
+			Quote loaded{blockText} {formatQuoteAge(openOracleInitialReportState.quoteLoadedAtMs)}.{openOracleInitialReportState.quoteStale === true ? ' This quote is stale and will be refreshed before submission.' : ''}
+		</p>
+	)
+}
 function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport: (reportId: bigint) => void) {
 	const status = getOpenOracleReportStatus(report)
 	const statusTone = getOpenOracleReportStatusTone(status)
@@ -209,6 +229,7 @@ export function renderSelectedReportActionSection({
 							</div>
 						</div>
 						<p className='detail'>Price source: {showQuoteLoadingPlaceholder ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
+						{renderInitialPriceFreshness(openOracleInitialReportState, initialReportSubmission.priceSource)}
 						<SectionBlock headingLevel={4} title={`${token1Symbol} Approval`} variant='embedded'>
 							<TokenApprovalControl
 								actionLabel='submitting the initial report'

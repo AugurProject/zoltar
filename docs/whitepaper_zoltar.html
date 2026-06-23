@@ -64,6 +64,7 @@
 			}
 
 			body {
+				counter-reset: figure equation;
 				margin: 0;
 				background:
 					linear-gradient(120deg, rgb(28 118 89 / 10%), transparent 32rem),
@@ -271,18 +272,40 @@
 				padding-left: 0.2rem;
 			}
 
-			.formula {
-				display: block;
-				width: fit-content;
-				max-width: 100%;
+			.equation {
+				counter-increment: equation;
+				scroll-margin-top: 1rem;
 				margin: 1rem 0;
-				padding: 0.7rem 1rem;
-				overflow-x: auto;
+				padding: 1rem;
 				border: 1px solid var(--soft-line);
 				border-radius: 0.45rem;
 				background: var(--code-bg);
-				font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-				white-space: nowrap;
+				overflow-x: auto;
+			}
+
+			.equation math {
+				display: block;
+				min-width: max-content;
+				font-size: 1.02rem;
+			}
+
+			.equation-caption {
+				margin: 0.7rem 0 0;
+				color: var(--muted);
+				font-size: 0.92rem;
+			}
+
+			.equation-label {
+				color: var(--ink);
+				font-weight: 800;
+			}
+
+			.equation-label::before {
+				content: "Equation " counter(equation) ": ";
+			}
+
+			.equation-label::after {
+				content: ". ";
 			}
 
 			.table-wrap {
@@ -328,6 +351,8 @@
 			}
 
 			.diagram {
+				counter-increment: figure;
+				scroll-margin-top: 1rem;
 				margin: 1.4rem 0;
 				padding: 1rem;
 				border: 1px solid var(--line);
@@ -354,6 +379,19 @@
 				margin: 0.75rem 0 0;
 				color: var(--muted);
 				font-size: 0.94rem;
+			}
+
+			.figure-label {
+				color: var(--ink);
+				font-weight: 800;
+			}
+
+			.figure-label::before {
+				content: "Figure " counter(figure) ": ";
+			}
+
+			.figure-label::after {
+				content: ". ";
 			}
 
 			.legend {
@@ -836,7 +874,7 @@
 						</div>
 					</div>
 
-					<figure class="diagram" aria-labelledby="overview-diagram-title">
+					<figure class="diagram" id="fig-zoltar-layer-boundary" aria-labelledby="overview-diagram-title">
 						<p class="diagram-title" id="overview-diagram-title">Core Layer Boundary</p>
 						<svg viewBox="0 0 820 260" role="img" aria-label="Zoltar manages questions, universes, forks, and REP splitting.">
 							<defs>
@@ -853,7 +891,7 @@
 							<text class="svg-small" x="100" y="101" text-anchor="middle">registered questions</text>
 							<text class="svg-small" x="720" y="101" text-anchor="middle">child universes</text>
 						</svg>
-						<p class="diagram-caption">Zoltar is the branching oracle layer: applications feed it questions and later consume the child-universe structure it defines.</p>
+						<p class="diagram-caption"><span class="figure-label">Core Layer Boundary</span>Zoltar is the branching oracle layer: applications feed it questions and later consume the child-universe structure it defines.</p>
 					</figure>
 				</section>
 
@@ -878,7 +916,27 @@
 						genesis token configured in <code>Constants.GENESIS_REPUTATION_TOKEN</code>.
 						Child universes are identified deterministically as:
 					</p>
-					<span class="formula">childUniverseId = uint248(keccak256(abi.encode(parentUniverseId, outcomeIndex)))</span>
+					<div class="equation" id="eq-zoltar-child-universe-id">
+						<math display="block" aria-label="child universe id equals uint248 of keccak256 of abi encode parent universe id and outcome index" data-source="childUniverseId = uint248(keccak256(abi.encode(parentUniverseId, outcomeIndex)))">
+							<mrow>
+								<mi>childUniverseId</mi>
+								<mo>=</mo>
+								<mi>uint248</mi>
+								<mo>(</mo>
+								<mi>keccak256</mi>
+								<mo>(</mo>
+								<mi>abi.encode</mi>
+								<mo>(</mo>
+								<mi>parentUniverseId</mi>
+								<mo>,</mo>
+								<mi>outcomeIndex</mi>
+								<mo>)</mo>
+								<mo>)</mo>
+								<mo>)</mo>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Child Universe Id</span>Child universe ids are deterministic hashes of the parent universe and outcome index.</p>
+					</div>
 					<p>
 						This makes each branch reproducible from parent universe and outcome index
 						alone. Child universes are deployed lazily when a forked branch is actually
@@ -895,7 +953,7 @@
 						</div>
 					</div>
 
-					<figure class="diagram" aria-labelledby="universe-diagram-title">
+					<figure class="diagram" id="fig-zoltar-fork-branch-set" aria-labelledby="universe-diagram-title">
 						<p class="diagram-title" id="universe-diagram-title">Fork Branch Set</p>
 						<svg viewBox="0 0 920 430" role="img" aria-label="A parent universe forks into children for Invalid and each valid outcome.">
 							<defs>
@@ -930,13 +988,47 @@
 							<span class="legend-item"><span class="legend-swatch teal"></span>Invalid branch</span>
 							<span class="legend-item"><span class="legend-swatch blue"></span>Valid outcome branches</span>
 						</div>
-						<p class="diagram-caption">A fork creates the full valid branch set; no branch is privileged by the contract.</p>
+						<p class="diagram-caption"><span class="figure-label">Fork Branch Set</span>A fork creates the full valid branch set; no branch is privileged by the contract.</p>
 					</figure>
 					<div class="callout">
 						<strong>Important distinction</strong>
 						Zoltar defines the branch set. It does not select one canonical child universe
 						or delete the others.
 					</div>
+					<h3>Global Question Scope</h3>
+					<p>
+						Questions are global protocol objects in Zoltar. <code>forkUniverse</code> checks
+						that the target universe exists, still has supply, has not already forked, and
+						that the supplied question exists and has ended. It does not require the question
+						to have been created for that universe. Applications that need a stricter
+						universe/question relationship enforce it above Zoltar.
+					</p>
+					<figure class="diagram" id="fig-zoltar-question-registry-boundary" aria-labelledby="global-question-title">
+						<p class="diagram-title" id="global-question-title">Question Registry vs Application Binding</p>
+						<svg viewBox="0 0 920 330" role="img" aria-label="An ended global question can fork an unforked universe, while applications enforce their own binding rules.">
+							<defs>
+								<marker id="arrow-global-question" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
+								</marker>
+							</defs>
+							<rect class="svg-blue" x="56" y="58" width="230" height="78" rx="12"></rect>
+							<text class="svg-label" x="171" y="90" text-anchor="middle">Question Registry</text>
+							<text class="svg-small" x="171" y="114" text-anchor="middle">created and ended</text>
+							<path class="svg-line" marker-end="url(#arrow-global-question)" d="M 286 97 H 380"></path>
+							<rect class="svg-gold" x="380" y="58" width="230" height="78" rx="12"></rect>
+							<text class="svg-label" x="495" y="90" text-anchor="middle">forkUniverse</text>
+							<text class="svg-small" x="495" y="114" text-anchor="middle">question + universe id</text>
+							<path class="svg-line" marker-end="url(#arrow-global-question)" d="M 610 97 H 704"></path>
+							<rect class="svg-red" x="704" y="58" width="170" height="78" rx="12"></rect>
+							<text class="svg-label" x="789" y="90" text-anchor="middle">Forked</text>
+							<text class="svg-small" x="789" y="114" text-anchor="middle">parent universe</text>
+							<rect class="svg-box" x="262" y="210" width="396" height="76" rx="12"></rect>
+							<text class="svg-label" x="460" y="241" text-anchor="middle">Application Layer</text>
+							<text class="svg-small" x="460" y="265" text-anchor="middle">optional stricter market/pool binding</text>
+							<path class="svg-line" marker-end="url(#arrow-global-question)" d="M 460 210 V 150"></path>
+						</svg>
+						<p class="diagram-caption"><span class="figure-label">Question Registry Boundary</span>Zoltar enforces global question validity and fork timing. Higher-level protocols decide whether a specific question is eligible for a specific market or pool.</p>
+					</figure>
 				</section>
 
 				<section class="paper-section" id="economics">
@@ -945,15 +1037,59 @@
 						<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 					</div>
 					<p>The current fork threshold is:</p>
-					<span class="formula">forkThreshold = totalTheoreticalRepSupply / 20</span>
+					<div class="equation" id="eq-zoltar-fork-threshold">
+						<math display="block" aria-label="fork threshold equals total theoretical REP supply divided by 20" data-source="forkThreshold = totalTheoreticalRepSupply / 20">
+							<mrow>
+								<mi>forkThreshold</mi>
+								<mo>=</mo>
+								<mfrac>
+									<mi>totalTheoreticalRepSupply</mi>
+									<mn>20</mn>
+								</mfrac>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Fork Threshold</span>The default fork threshold is one twentieth of theoretical REP supply.</p>
+					</div>
 					<p>
 						Initiating a fork requires supplying REP equal to 5% of the universe’s total
 						theoretical supply. Under the current constants, 20% of that threshold deposit
 						is permanently burned, which is 1% of total theoretical supply, and the
 						remaining 80% becomes the initiator’s migration balance.
 					</p>
-					<span class="formula">burnedRepAmount = forkThreshold / 5</span>
-					<span class="formula">forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 * forkThreshold / 5</span>
+					<div class="equation" id="eq-zoltar-fork-burn">
+						<math display="block" aria-label="burned REP amount equals fork threshold divided by 5" data-source="burnedRepAmount = forkThreshold / 5">
+							<mrow>
+								<mi>burnedRepAmount</mi>
+								<mo>=</mo>
+								<mfrac>
+									<mi>forkThreshold</mi>
+									<mn>5</mn>
+								</mfrac>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Fork Burn</span>The default burn is one fifth of the threshold deposit.</p>
+					</div>
+					<div class="equation" id="eq-zoltar-initiator-migration-balance">
+						<math display="block" aria-label="fork initiator migration balance equals fork threshold minus burned REP amount, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 * forkThreshold / 5">
+							<mrow>
+								<mi>forkInitiatorMigrationBalance</mi>
+								<mo>=</mo>
+								<mi>forkThreshold</mi>
+								<mo>-</mo>
+								<mi>burnedRepAmount</mi>
+								<mo>=</mo>
+								<mfrac>
+									<mrow>
+										<mn>4</mn>
+										<mo>*</mo>
+										<mi>forkThreshold</mi>
+									</mrow>
+									<mn>5</mn>
+								</mfrac>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>The default remaining four fifths becomes the initiator's migration balance.</p>
+					</div>
 					<div class="implementation-grid">
 						<div class="implementation-note">
 							<b>Implementation entry points</b>
@@ -965,7 +1101,7 @@
 						</div>
 					</div>
 
-					<figure class="diagram" aria-labelledby="deposit-diagram-title">
+					<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
 						<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit splits into 20 percent burned and 80 percent migration balance.">
 							<defs>
@@ -993,7 +1129,7 @@
 							<span class="legend-item"><span class="legend-swatch red"></span>Burned REP</span>
 							<span class="legend-item"><span class="legend-swatch teal"></span>Migration balance</span>
 						</div>
-						<p class="diagram-caption">The initiator pays to force the branch point into existence, but most of the deposit becomes migratable REP.</p>
+						<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The initiator pays to force the branch point into existence, but most of the deposit becomes migratable REP.</p>
 					</figure>
 
 					<p>
@@ -1048,7 +1184,8 @@
 						<code>deployChild</code>. A user can also add more REP into the migration balance
 						with <code>addRepToMigrationBalance</code>. The core post-fork action is
 						<code>splitMigrationRep</code>, which lets a holder mint child-universe REP for
-						one or more non-malformed outcome indices.
+						non-malformed outcome indices. Supplying no outcome indices is accepted as a
+						no-op at the Zoltar layer.
 					</p>
 					<p>
 						For categorical questions, <code>Invalid</code> and any in-range categorical
@@ -1066,7 +1203,7 @@
 						</div>
 					</div>
 
-					<figure class="diagram" aria-labelledby="split-diagram-title">
+					<figure class="diagram" id="fig-zoltar-migration-reproduction" aria-labelledby="split-diagram-title">
 						<p class="diagram-title" id="split-diagram-title">Migration Balance Reproduction</p>
 						<svg viewBox="0 0 930 520" role="img" aria-label="A migration balance can mint REP into one selected child or be reproduced across multiple selected children.">
 							<defs>
@@ -1108,7 +1245,7 @@
 							<span class="legend-item"><span class="legend-swatch teal"></span>Reproduced selected branches</span>
 							<span class="legend-item"><span class="legend-swatch blue"></span>Single selected branch</span>
 						</div>
-						<p class="diagram-caption">Selecting multiple branches mints child REP in each selected child universe from the same migration balance.</p>
+						<p class="diagram-caption"><span class="figure-label">Migration Balance Reproduction</span>Selecting multiple branches mints child REP in each selected child universe from the same migration balance.</p>
 					</figure>
 
 					<div class="callout">
@@ -1116,6 +1253,14 @@
 						The same migration balance can mint child REP in each selected child. Later
 						value concentration determines which branch matters economically.
 					</div>
+					<p>
+						At the implementation level, <code>splitMigrationRep</code> validates each
+						selected outcome against the parent universe's fork question, lazily deploys any
+						missing child universe, and records how much of the caller's migration balance
+						has already been minted into each child. A caller cannot mint more into one child
+						than the source migration balance available to that caller, but the same source
+						balance can be reproduced into multiple valid children.
+					</p>
 				</section>
 
 				<section class="paper-section" id="security">
@@ -1195,7 +1340,7 @@
 						</div>
 					</div>
 
-					<figure class="diagram" aria-labelledby="packed-diagram-title">
+					<figure class="diagram" id="fig-zoltar-packed-scalar-answer" aria-labelledby="packed-diagram-title">
 						<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
 						<svg viewBox="0 0 920 520" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators.">
 							<defs>
@@ -1242,7 +1387,7 @@
 							<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>
 							<span class="legend-item"><span class="legend-swatch blue"></span>Second payout</span>
 						</div>
-						<p class="diagram-caption">A scalar answer is easier to read as a namespace flag plus two payout fields: <code>0</code> means invalid namespace, while <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
+						<p class="diagram-caption"><span class="figure-label">Packed Scalar Answer</span>A scalar answer is easier to read as a namespace flag plus two payout fields: <code>0</code> means invalid namespace, while <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
 					</figure>
 
 					<p>
@@ -1250,7 +1395,18 @@
 						questions. For a valid scalar answer, the two payout numerators must sum exactly
 						to <code>numTicks</code>:
 					</p>
-					<span class="formula">firstPayoutNumerator + secondPayoutNumerator = numTicks</span>
+					<div class="equation" id="eq-zoltar-scalar-validity">
+						<math display="block" aria-label="first payout numerator plus second payout numerator equals num ticks" data-source="firstPayoutNumerator + secondPayoutNumerator = numTicks">
+							<mrow>
+								<mi>firstPayoutNumerator</mi>
+								<mo>+</mo>
+								<mi>secondPayoutNumerator</mi>
+								<mo>=</mo>
+								<mi>numTicks</mi>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Scalar Validity</span>A valid scalar answer must allocate all ticks across the two payout numerators.</p>
+					</div>
 					<p>
 						At the helper and UI level, a scalar tick index named <code>tickIndex</code> is
 						encoded as:
@@ -1260,13 +1416,46 @@
 						<li><code>secondPayoutNumerator = tickIndex</code></li>
 						<li><code>highest bit = 1</code></li>
 					</ul>
-					<span class="formula">(numTicks - tickIndex, tickIndex)</span>
+					<div class="equation" id="eq-zoltar-scalar-tick-encoding">
+						<math display="block" aria-label="scalar tick encoding is an ordered pair of num ticks minus tick index, and tick index" data-source="(numTicks - tickIndex, tickIndex)">
+							<mrow>
+								<mo>(</mo>
+								<mi>numTicks</mi>
+								<mo>-</mo>
+								<mi>tickIndex</mi>
+								<mo>,</mo>
+								<mi>tickIndex</mi>
+								<mo>)</mo>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Scalar Tick Encoding</span>The helper encodes a tick as left and right payout numerators.</p>
+					</div>
 					<p>
 						<a href="../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a>
 						interprets <code>secondPayoutNumerator</code> as the position along the scalar
 						range:
 					</p>
-					<span class="formula">displayedValue = displayValueMin + secondPayoutNumerator / numTicks * (displayValueMax - displayValueMin)</span>
+					<div class="equation" id="eq-zoltar-scalar-display-value">
+						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks * (displayValueMax - displayValueMin)">
+							<mrow>
+								<mi>displayedValue</mi>
+								<mo>=</mo>
+								<mi>displayValueMin</mi>
+								<mo>+</mo>
+								<mfrac>
+									<mi>secondPayoutNumerator</mi>
+									<mi>numTicks</mi>
+								</mfrac>
+								<mo>*</mo>
+								<mo>(</mo>
+								<mi>displayValueMax</mi>
+								<mo>-</mo>
+								<mi>displayValueMin</mi>
+								<mo>)</mo>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Scalar Display Value</span>The second payout numerator interpolates the human-readable value inside the scalar range.</p>
+					</div>
 					<p>
 						The contract implementation performs this interpolation with fixed-point integer
 						math and formats the result with 18 decimal places, trimming trailing zeroes for

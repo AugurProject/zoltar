@@ -15,13 +15,14 @@ type UseZoltarOperationsParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
-	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted })
+export function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
+	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted })
 	const refreshZoltarUniverse = useCallback(async () => {
 		await universe.refreshZoltarUniverse()
 	}, [universe.refreshZoltarUniverse])
@@ -32,6 +33,7 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, activeZo
 		onTransactionFailed,
 		onTransactionFinished,
 		onTransactionPresented,
+		onTransactionPrepared,
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,
@@ -50,6 +52,7 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, activeZo
 		onTransactionFailed,
 		onTransactionFinished,
 		onTransactionPresented,
+		onTransactionPrepared,
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,

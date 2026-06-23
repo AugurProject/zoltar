@@ -20,6 +20,7 @@ export function OverviewPanels({
 	onGoToGenesisUniverse,
 	onRefreshRepPrices,
 	parentUniverseId,
+	readBackendStatus,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -34,10 +35,31 @@ export function OverviewPanels({
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
+	const effectiveReadBackendStatus = readBackendStatus ?? {
+		blockNumber: undefined,
+		blockTimestamp: undefined,
+		rpcSource: 'default' as const,
+		rpcUrl: 'Unavailable',
+		transportMode: 'provider' as const,
+	}
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
+	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
+	const isProviderReadBackend = effectiveReadBackendStatus.transportMode === 'provider' && !isBrowserSimulationReadBackend
+	const readBackendHost = (() => {
+		if (isBrowserSimulationReadBackend) return 'browser simulation'
+		if (isProviderReadBackend) return 'wallet provider'
+		try {
+			return new URL(effectiveReadBackendStatus.rpcUrl).host
+		} catch (error) {
+			if (!(error instanceof TypeError)) throw error
+			return effectiveReadBackendStatus.rpcUrl
+		}
+	})()
+	const readBackendLabel = isProviderReadBackend ? 'provider' : `${effectiveReadBackendStatus.transportMode} / ${effectiveReadBackendStatus.rpcSource}`
+	const readBackendTitle = isProviderReadBackend ? `Reads are using the connected wallet provider. Configured fallback RPC: ${effectiveReadBackendStatus.rpcUrl}` : effectiveReadBackendStatus.rpcUrl
 	const operationsHeaderDescription = (() => {
 		if (!universeHasForked) return undefined
 		if (universeForkTime === undefined) return 'Zoltar has forked.'
@@ -107,6 +129,12 @@ export function OverviewPanels({
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>
+					<MetricField label='Read RPC'>
+						<span title={readBackendTitle}>
+							{readBackendLabel}: {readBackendHost}
+							{effectiveReadBackendStatus.blockNumber === undefined ? '' : ` @ ${effectiveReadBackendStatus.blockNumber.toString()}`}
+						</span>
+					</MetricField>
 					{shouldShowParentUniverse ? (
 						<MetricField label='Parent Universe'>
 							<UniverseLink universeId={parentUniverseId} />

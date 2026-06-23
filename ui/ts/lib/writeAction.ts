@@ -1,5 +1,6 @@
 import type { Address, Hash } from 'viem'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
+import { assertActiveWallet, type ActiveWalletContext } from './walletGuards.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
 
@@ -22,6 +23,7 @@ type BuildWriteActionConfigParameters = {
 	onTransactionFailed: WriteOperationsParameters['onTransactionFailed'] | undefined
 	onTransactionFinished: WriteOperationsParameters['onTransactionFinished']
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	refreshState: WriteOperationsParameters['refreshState']
 }
@@ -42,7 +44,7 @@ export function buildWriteActionConfig(params: BuildWriteActionConfigParameters,
 	}
 }
 
-export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
+export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address, activeWallet: ActiveWalletContext) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
 	if (parameters.accountAddress === undefined) {
 		if (parameters.onWriteError === undefined) {
 			parameters.setErrorMessage(parameters.missingWalletMessage)
@@ -55,9 +57,10 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 	try {
 		let result: TResult | undefined
 		try {
+			const activeWallet = await assertActiveWallet(parameters.accountAddress)
 			parameters.onTransactionRequested()
 			parameters.setErrorMessage(undefined)
-			result = await action(parameters.accountAddress)
+			result = await action(parameters.accountAddress, activeWallet)
 			if (result === undefined) return
 		} catch (error) {
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)

@@ -1,8 +1,9 @@
 import type { ComponentChildren } from 'preact'
-import type { Hash } from 'viem'
+import type { Account, Hash } from 'viem'
 import { AddressValue } from '../components/AddressValue.js'
 import { UniverseLink } from '../components/UniverseLink.js'
 import { formatCurrencyBalance } from './formatters.js'
+import type { TransactionRequestPreview } from './chainBackend.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
 import type {
@@ -62,6 +63,40 @@ function humanizeAction(action: string) {
 	return action.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
 }
 
+function getPreviewAccountAddress(account: Account | string | undefined) {
+	if (account === undefined) return undefined
+	return typeof account === 'string' ? account : account.address
+}
+
+function formatPreviewArgument(value: unknown): string {
+	if (typeof value === 'bigint') return value.toString()
+	if (Array.isArray(value)) return `[${value.map(formatPreviewArgument).join(', ')}]`
+	if (value === undefined) return 'undefined'
+	if (value === null) return 'null'
+	return String(value)
+}
+
+function formatPreviewData(data: string) {
+	const byteLength = Math.max(0, (data.length - 2) / 2)
+	if (data.length <= 74) return data
+	return `${data.slice(0, 66)}... (${byteLength.toString()} bytes)`
+}
+
+function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
+	const senderAddress = getPreviewAccountAddress(preview.account)
+	return [
+		...(intent.rows ?? []),
+		...(senderAddress === undefined ? [] : [{ label: 'Sender', value: senderAddress }]),
+		...(preview.chainName === undefined ? [] : [{ label: 'Chain', value: preview.chainName }]),
+		...(preview.contractAddress === undefined ? [] : [{ label: 'Contract', value: preview.contractAddress }]),
+		...(preview.to === undefined ? [] : [{ label: 'To', value: preview.to }]),
+		{ label: 'Function', value: preview.functionName },
+		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: 'ETH Value', value: `${formatCurrencyBalance(preview.value)} ETH` }]),
+		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? 'Calldata', value: formatPreviewData(preview.data) }]),
+		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: 'Arguments', value: preview.args.map(formatPreviewArgument).join(', ') }]),
+	]
+}
+
 export function createDeploymentTransactionIntent(stepLabel: string) {
 	return buildIntent({
 		action: 'deploy',
@@ -87,6 +122,16 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 		title: intent.submittedTitle,
 		tone: 'awaiting-wallet',
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+	})
+}
+
+export function createPreparedWalletPresentation(intent: TransactionIntent, preview: TransactionRequestPreview, dismissKey: string): GlobalTransactionPresentation {
+	return buildHashlessPresentation({
+		detail: preview.requiresWalletConfirmation === false ? 'Review the prepared transaction before it is submitted.' : 'Review the prepared transaction, then confirm it in your wallet.',
+		dismissKey,
+		rows: getPreparedTransactionRows(intent, preview),
+		title: intent.submittedTitle,
+		tone: 'awaiting-wallet',
 	})
 }
 

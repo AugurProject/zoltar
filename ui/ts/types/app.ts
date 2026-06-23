@@ -1,6 +1,7 @@
 import type { MarketType, ReportingOutcomeKey } from './contracts.js'
 import type { Address, Hash } from 'viem'
 import type { GlobalTransactionPresentation, TransactionIntent } from './components.js'
+import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 
 export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
 
@@ -9,6 +10,7 @@ export type WriteOperationsParameters = {
 	onTransactionFailed?: (message: string) => void
 	onTransactionFinished: () => void
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void
+	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
 	onTransactionRequested: (intent: TransactionIntent) => void
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
