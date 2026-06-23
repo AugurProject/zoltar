@@ -128,6 +128,11 @@ type LoadAllSecurityPoolsOptions = {
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
 }
+type SecurityPoolMintCapacity = {
+	completeSetCollateralAmount: bigint
+	totalRepDeposit: bigint
+	totalSecurityBondAllowance: bigint
+}
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
@@ -2353,6 +2358,33 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 		...pool,
 		hasForkActivity: pool.hasForkActivity || loadedPools.some(candidate => sameAddress(candidate.parent, pool.securityPoolAddress)),
 	}))
+}
+export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
+	const [completeSetCollateralAmount, totalRepDeposit, totalSecurityBondAllowance] = await readRequiredMulticall(client, [
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'completeSetCollateralAmount',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'getTotalRepBalance',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'totalSecurityBondAllowance',
+			address: securityPoolAddress,
+			args: [],
+		},
+	])
+	return {
+		completeSetCollateralAmount,
+		totalRepDeposit,
+		totalSecurityBondAllowance,
+	}
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
 	if (accountAddress === undefined) {

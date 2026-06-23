@@ -10,6 +10,7 @@ import {
 	loadOracleManagerDetails,
 	loadOpenOracleReportSummaries,
 	loadReportingDetails,
+	loadSecurityPoolMintCapacity,
 	loadSecurityPoolPage,
 	loadTruthAuctionActiveTickPage,
 	loadTruthAuctionBidderBidPage,
@@ -538,6 +539,32 @@ describe('contracts helpers', () => {
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
 		expect(deferredPool.vaultCount).toBe(2n)
+	})
+
+	test('loadSecurityPoolMintCapacity reads only selected-pool capacity fields', async () => {
+		const requestedFunctionNames: string[] = []
+		const requestedAddresses: Address[] = []
+		const client: Parameters<typeof loadSecurityPoolMintCapacity>[0] = {
+			multicall: createMulticallStub(async request => {
+				for (const contract of request.contracts) {
+					requestedFunctionNames.push(getContractFunctionName(contract))
+					const address = Reflect.get(contract, 'address')
+					if (typeof address !== 'string') throw new Error('Expected security pool address')
+					requestedAddresses.push(getAddress(address))
+				}
+				return [11n, 22n, 33n]
+			}),
+		}
+
+		const capacity = await loadSecurityPoolMintCapacity(client, securityPoolAddress)
+
+		expect(capacity).toEqual({
+			completeSetCollateralAmount: 11n,
+			totalRepDeposit: 22n,
+			totalSecurityBondAllowance: 33n,
+		})
+		expect(requestedFunctionNames).toEqual(['completeSetCollateralAmount', 'getTotalRepBalance', 'totalSecurityBondAllowance'])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress])
 	})
 
 	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {

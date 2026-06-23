@@ -124,6 +124,28 @@ describe('runWriteAction', () => {
 		expect(errorMessage).toBe('Wallet account changed. Review the action with the connected account and try again')
 	})
 
+	test('passes the validated active chain to the write action', async () => {
+		let activeChainId: string | undefined
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => undefined,
+				refreshState: async () => undefined,
+				setErrorMessage: () => undefined,
+			},
+			async (_walletAddress, activeWallet) => {
+				activeChainId = activeWallet.chainId
+				return { hash: transactionHash }
+			},
+			'Failed to report on outcome',
+		)
+
+		expect(activeChainId).toBe(MAINNET_NETWORK_PROFILE.chainIdHex)
+	})
+
 	test('delegates missing-wallet errors to onWriteError when provided', async () => {
 		let onWriteErrorMessage: string | undefined
 
