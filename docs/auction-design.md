@@ -1,5 +1,23 @@
 # Uniform Price Dual Cap Batch Auction
 
+## Operational Lifecycle
+
+The auction is owned by the coordinating `SecurityPoolForker`, not by the
+bidder. That ownership is intentional:
+
+```text
+child pool shortfall -> forker starts auction -> bidders submit ETH
+                    -> forker finalizes after 1 week
+                    -> anyone can ask the forker to settle bid pages for a vault
+```
+
+`startAuction` and `finalize` are owner-only. Bids are accepted only after the
+auction starts, before finalization, and before `auctionStarted + 1 week`.
+After finalization, bidders do not call `withdrawBids` directly. The forker
+withdraws auction results from the auction and converts purchased REP into
+child-pool vault ownership plus the matching share of auctioned security-bond
+allowance.
+
 ## Gas and Spam Bounds
 
 The auction intentionally does not cap total bids or active price levels. A cap
@@ -21,3 +39,21 @@ max-depth tree for the full tick domain. They assert each path remains below
 Bid-count spam at one tick does not change finalization gas or clearing
 correctness because same-tick bids only increase that tick's aggregate ETH. They
 are settled later through caller-supplied, paged bid indexes.
+
+## Refund and Settlement Paths
+
+Clearly losing bids can be refunded before finalization once current demand is
+enough to find a clearing tick. Only ticks below that found clearing tick can be
+withdrawn through the pre-finalization refund path; binding or potentially
+winning bids stay in the auction.
+
+After finalization, paged settlement handles both claim and refund cases:
+
+- losing bids receive ETH refunds
+- winning bids convert ETH into purchased REP at the uniform clearing price
+- marginal clearing-tick bids may be partially filled and partially refunded
+- underfunded winning bids receive REP pro rata by ETH contribution
+
+The underfunded path carries division dust through `underfundedRemainder` as
+bid pages are withdrawn, so later withdrawals receive the remainder carried from
+earlier integer division.
