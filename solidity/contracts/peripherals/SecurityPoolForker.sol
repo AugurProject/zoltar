@@ -8,7 +8,8 @@ import { Zoltar } from '../Zoltar.sol';
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
-import { EscalationGame, MERKLE_MOUNTAIN_RANGE_MAX_PEAKS } from './EscalationGame.sol';
+import { EscalationGame } from './EscalationGame.sol';
+import { ESCALATION_TIME_LENGTH, MERKLE_MOUNTAIN_RANGE_MAX_PEAKS } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
@@ -19,7 +20,6 @@ import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	using SafeERC20Ops for IERC20;
-	uint256 constant ESCALATION_TIME_LENGTH = 4233600; // 7 weeks
 	address private immutable vaultMigrationDelegate;
 	address private immutable escalationGameForkerDelegate;
 
