@@ -44,6 +44,7 @@ const ATTOETH_PER_ETH = 10n ** 18n
 const PRICE_PRECISION = ATTOETH_PER_ETH
 const AUCTION_TIME = 604800n
 const MIN_TICK = -524288n
+const LOWEST_POSITIVE_PRICE_TICK = -414486n
 const MAX_TICK = 524288n
 const DEFAULT_TOLERANCE = 1000n
 
@@ -848,16 +849,32 @@ describe('Auction', () => {
 			await submitBid(client, auctionAddress, 0n, 1n)
 		})
 
-		test('submitBid accepts both finite tick-domain edges', async () => {
+		test('submitBid accepts the lowest positive-price tick and maximum tick', async () => {
 			const ethRaiseCap = 100n * 10n ** 18n
 			const maxRepBeingSold = 10n * 10n ** 18n
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
-			await submitBid(client, auctionAddress, MIN_TICK, 1n * 10n ** 18n)
+			assert.strictEqual(tickToPrice(LOWEST_POSITIVE_PRICE_TICK - 1n), 0n, 'test setup should sit just above the zero-price boundary')
+			assert.strictEqual(tickToPrice(LOWEST_POSITIVE_PRICE_TICK), 1n, 'test setup should use the lowest positive-price tick')
+
+			await submitBid(client, auctionAddress, LOWEST_POSITIVE_PRICE_TICK, 1n * 10n ** 18n)
 			await submitBid(client, auctionAddress, MAX_TICK, 1n * 10n ** 18n)
 
-			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, MIN_TICK), 1n, 'minimum tick bid count')
+			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, LOWEST_POSITIVE_PRICE_TICK), 1n, 'lowest positive-price tick bid count')
 			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, MAX_TICK), 1n, 'maximum tick bid count')
+		})
+
+		test('submitBid rejects zero-price ticks', async () => {
+			const ethRaiseCap = 1000n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 1n
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			const zeroPriceTick = LOWEST_POSITIVE_PRICE_TICK - 1n
+			const bidAmount = 1n * ATTOETH_PER_ETH
+
+			assert.strictEqual(tickToPrice(zeroPriceTick), 0n, 'test setup should use a zero-price tick')
+			await assert.rejects(async () => await submitBid(client, auctionAddress, zeroPriceTick, bidAmount), /price too low/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, MIN_TICK, bidAmount), /price too low/)
+			await assertContractEmpty(client, auctionAddress)
 		})
 
 		test('submitBid invalid states: before auction start and after finalize', async () => {
@@ -1517,73 +1534,33 @@ describe('Auction', () => {
 			// 5) Owner withdraws own clearing bid (optional for completeness)
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: clearingTick, bidIndex: 0n }])
 		})
-		test('withdrawBids should succeed with zero clearing price (extreme negative tick)', async () => {
-			// Setup: high cap to avoid hitting it, tiny maxRepBeingSold so rep target not reached
+	})
+
+	describe('Zero-price bid boundary', () => {
+		test('underfunded auction ignores a rejected zero-price bid and settles a lowest positive-price winner', async () => {
 			const ethRaiseCap = 1000n * ATTOETH_PER_ETH
-			const maxRepBeingSold = 1n // 1 wei REP
+			const maxRepBeingSold = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			const zeroPriceTick = LOWEST_POSITIVE_PRICE_TICK - 1n
+			const lowPositiveTick = LOWEST_POSITIVE_PRICE_TICK
+			const bidAmount = 1n * ATTOETH_PER_ETH
 
-			// Use a tick where tickToPrice returns 0 (very negative). -450000 yields price 0
-			const zeroPriceTick = -450000n
-			const bidAmount = 1n * ATTOETH_PER_ETH // 1 ETH
+			assert.strictEqual(tickToPrice(zeroPriceTick), 0n, 'test setup should use a zero-price tick')
+			await assert.rejects(async () => await submitBid(client, auctionAddress, zeroPriceTick, bidAmount), /price too low/)
+			await submitBidAndVerifyLock(client, auctionAddress, lowPositiveTick, bidAmount)
+			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, zeroPriceTick), 0n, 'rejected zero-price bid count')
+			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, lowPositiveTick), 1n, 'lowest positive-price bid count')
 
-			await submitBidAndVerifyLock(client, auctionAddress, zeroPriceTick, bidAmount)
+			const clearing = await computeClearing(client, auctionAddress)
+			assert.strictEqual(clearing.hitCap, false, 'lowest positive-price bid should leave this setup underfunded')
 
-			// Finalize: should succeed
-			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalizeAndVerify(client, auctionAddress)
-
-			// Regression test: withdraw should succeed without reverting even when the
-			// clearing price is zero.
-			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
-			assert.strictEqual(amounts.totalFilledRep, 1n, 'zero-price clearing bids should receive the full underfunded REP allocation')
-			assert.strictEqual(amounts.totalEthRefund, 0n, 'zero-price clearing winners should not receive an ETH refund')
-
-			// Actual withdrawBids should also succeed
-			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), maxRepBeingSold, 'underfunded winner should receive the available REP')
+			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: lowPositiveTick, bidIndex: 0n }])
+			assert.strictEqual(amounts.totalFilledRep, maxRepBeingSold, 'lowest positive-price winner should receive underfunded REP allocation')
+			assert.strictEqual(amounts.totalEthRefund, 0n, 'lowest positive-price winner should not receive an ETH refund')
+			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: lowPositiveTick, bidIndex: 0n }])
 			await assertContractEmpty(client, auctionAddress)
-		})
-
-		test('computeClearing should not revert with zero-price bid', async () => {
-			const ethRaiseCap = 1000n * ATTOETH_PER_ETH
-			const maxRepBeingSold = 1n // 1 wei REP
-			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
-			const zeroPriceTick = -450000n
-			await submitBid(client, auctionAddress, zeroPriceTick, 1n * ATTOETH_PER_ETH)
-			// Should not revert due to division by zero
-			const result = await computeClearing(client, auctionAddress)
-			// With zero price, no rep can be sold, so hitCap should be false
-			assert.strictEqual(result.hitCap, false, 'no clearing price when all bids have zero price')
-		})
-
-		test('zero-price bids (non-clearing) should get full refund', async () => {
-			const ethRaiseCap = 100n * ATTOETH_PER_ETH
-			// Set target low enough that 1 ETH at tick 0 exceeds it
-			const maxRepBeingSold = ATTOETH_PER_ETH / 2n // 0.5 ETH worth of REP
-			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
-
-			// Zero-price tick (very negative)
-			const zeroPriceTick = -450000n
-			const zeroPriceBidAmount = 1n * ATTOETH_PER_ETH
-			await submitBid(client, auctionAddress, zeroPriceTick, zeroPriceBidAmount)
-
-			// Winning bid with enough ETH to meet/exceed rep target
-			const winningTick = 0n
-			const winningAmount = 1n * ATTOETH_PER_ETH // yields 1 REP wei at price 1, > 0.5 target
-			await submitBid(client, auctionAddress, winningTick, winningAmount)
-
-			await finalizeAndVerify(client, auctionAddress)
-
-			const clearingTick = await getClearingTick(client, auctionAddress)
-			// Clearing tick should be the winning bid's tick (0), not the zero-price tick
-			assert.strictEqual(clearingTick, winningTick, 'clearing tick should be winning tick')
-
-			// Zero-price bid is below clearing tick, so it's a losing bid: full refund, no REP
-			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
-			assert.strictEqual(amounts.totalFilledRep, 0n, 'zero-price bid: no REP filled')
-			assert.strictEqual(amounts.totalEthRefund, zeroPriceBidAmount, 'zero-price bid: full ETH refund')
-
-			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
 		})
 	})
 })
