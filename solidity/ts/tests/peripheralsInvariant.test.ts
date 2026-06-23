@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import assert from 'node:assert/strict'
+import assert from '../testsuite/simulator/utils/assert'
 import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
@@ -38,7 +38,6 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 const genesisUniverse = 0n
 const securityMultiplier = 2n
 const repDeposit = 1000n * 10n ** 18n
-const maxRetentionRate = 999_999_996_848_000_000n
 const AUCTION_TIME = 604800n
 
 type HarnessContext = {
@@ -86,7 +85,7 @@ describe('Peripherals invariant harness', () => {
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, maxRetentionRate)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
 		await approveAndDepositRep(client, repDeposit, questionId)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 		return {

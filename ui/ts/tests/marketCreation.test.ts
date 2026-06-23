@@ -299,7 +299,6 @@ void describe('market creation helpers', () => {
 	test('requires a valid question id for security pool creation', () => {
 		expect(() =>
 			createSecurityPoolParameters({
-				currentRetentionRate: '12',
 				marketId: '   ',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState),
@@ -308,18 +307,17 @@ void describe('market creation helpers', () => {
 
 	test('parses security-pool market IDs as decimal and hexadecimal values', () => {
 		const form: SecurityPoolFormState = {
-			currentRetentionRate: '12',
 			marketId: '0x2a',
 			securityMultiplier: '3',
 		}
 
-		expect(createSecurityPoolParameters(form).questionId).toBe(42n)
+		const parameters = createSecurityPoolParameters(form)
+		expect(parameters.questionId).toBe(42n)
 	})
 
 	test('normalizes and rejects malformed security-pool market IDs', () => {
 		expect(
 			createSecurityPoolParameters({
-				currentRetentionRate: '12',
 				marketId: '  55  ',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState).questionId,
@@ -327,7 +325,6 @@ void describe('market creation helpers', () => {
 
 		expect(() =>
 			createSecurityPoolParameters({
-				currentRetentionRate: '12',
 				marketId: 'not-a-number',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState),
@@ -354,13 +351,27 @@ void describe('market creation helpers', () => {
 		expect(validation.notice).toContain('Fix invalid fields: Scalar max must be greater than scalar min')
 	})
 
-	test('security pool creation rejects retention rates outside the supported percentage range', () => {
-		expect(() =>
-			createSecurityPoolParameters({
-				currentRetentionRate: '101',
-				marketId: '42',
-				securityMultiplier: '2',
-			} as SecurityPoolFormState),
-		).toThrow('Open interest fee per year must be between 0 and 100')
+	test('security pool creation parameters exclude origin retention input', () => {
+		const parameters = createSecurityPoolParameters({
+			marketId: '42',
+			securityMultiplier: '2',
+		} as SecurityPoolFormState)
+
+		expect(parameters).toEqual({
+			questionId: 42n,
+			securityMultiplier: 2n,
+		})
+		expect('currentRetentionRate' in parameters).toBe(false)
+	})
+
+	test('security pool creation rejects multipliers the origin factory cannot accept', () => {
+		for (const securityMultiplier of ['0', '1']) {
+			expect(() =>
+				createSecurityPoolParameters({
+					marketId: '42',
+					securityMultiplier,
+				} as SecurityPoolFormState),
+			).toThrow('Security multiplier must be greater than 1')
+		}
 	})
 })

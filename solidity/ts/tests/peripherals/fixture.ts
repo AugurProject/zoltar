@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
-import assert from 'node:assert/strict'
+import assert from '../../testsuite/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, keccak256 } from 'viem'
 import type { Abi, Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
@@ -326,7 +326,7 @@ function usePeripheralsTestFixture() {
 		}
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
 		await approveAndDepositRep(client, repDeposit, questionId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 	}

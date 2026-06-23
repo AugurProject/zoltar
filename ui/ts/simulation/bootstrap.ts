@@ -42,7 +42,6 @@ const DAY_IN_SECONDS = 24n * 60n * 60n
 const FORK_MIGRATION_TIME_SECONDS = 8n * 7n * DAY_IN_SECONDS
 const ETH_BALANCE_AMOUNT = 10n ** 30n
 const GENESIS_UNIVERSE_ID = 0n
-const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const SEEDED_REP_ETH_PRICE = 3n * 10n ** 18n
 const REP_TOKEN_MINT_AMOUNT = 100_000_000n * 10n ** 18n
 const SECURITY_MULTIPLIER = 2n
@@ -468,7 +467,6 @@ async function createSeededSecurityPool({ createWriteClient, currentTimestamp, d
 	const marketResult = await createMarket(deployerWriteClient, createSecurityPoolSeedParameters(currentTimestamp, questionTitle))
 	const questionId = BigInt(marketResult.questionId)
 	const poolResult = await createSecurityPool(deployerWriteClient, {
-		currentRetentionRate: MAX_RETENTION_RATE,
 		questionId,
 		securityMultiplier: SECURITY_MULTIPLIER,
 	})

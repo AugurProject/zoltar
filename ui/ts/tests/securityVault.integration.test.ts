@@ -36,7 +36,6 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress
 
 const genesisUniverse = 0n
 const securityMultiplier = 2n
-const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const outcomes = ['Yes', 'No']
 const depositAmount = 10_000n * 10n ** 18n
 const belowMinimumDepositAmount = 9n * 10n ** 18n
@@ -75,7 +74,7 @@ describe('Security vault integration', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
 		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
 	})
 
