@@ -12,5 +12,6 @@ abstract contract SecurityPoolForkerStorage {
 	mapping(ISecurityPool => mapping(uint256 => ISecurityPool)) internal childrenByPoolAndOutcome;
 	mapping(ISecurityPool => SecurityPoolMigrationProxy) internal migrationProxyByPool;
 	mapping(ISecurityPool => mapping(uint256 => uint256)) internal pendingChildRepByPoolAndOutcome;
+	mapping(ISecurityPool => mapping(uint256 => uint256)) internal childPoolRepSplitByPoolAndOutcome;
 	mapping(address => bool) internal trustedAuctionAddresses;
 }

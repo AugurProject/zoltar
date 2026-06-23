@@ -186,6 +186,27 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		parent.transferEth(payable(address(child)), ethToTransfer);
 	}
 
+	function _ensureMigratedVaultRepBacked(
+		ISecurityPool parent,
+		ISecurityPool child,
+		uint256 requiredMigratedRep
+	) internal {
+		if (requiredMigratedRep == 0) return;
+		uint256 outcomeIndex = forkDataByPool[child].outcomeIndex;
+		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredMigratedRep);
+		require(child.repToken().balanceOf(address(child)) >= requiredMigratedRep, 'child rep shortfall');
+	}
+
+	function _ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplit) internal {
+		uint256 alreadySplit = childPoolRepSplitByPoolAndOutcome[parent][outcomeIndex];
+		if (alreadySplit >= requiredSplit) return;
+		uint256 shortfall = requiredSplit - alreadySplit;
+		_splitMigrationRepToChild(parent, outcomeIndex, shortfall, forkDataByPool[parent].ownFork, false);
+		childPoolRepSplitByPoolAndOutcome[parent][outcomeIndex] = requiredSplit;
+		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] += shortfall;
+		_sweepChildRepToPool(parent, outcomeIndex);
+	}
+
 	function _migrateVaultUnlockedState(
 		ISecurityPool parent,
 		ISecurityPool child,
@@ -214,7 +235,10 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		if (parentSecurityBondAllowance > 0) vaultFeeIndex = child.feeIndex();
 		if (parent.poolOwnershipDenominator() > 0 && parentRepAtFork > 0 && parentPoolOwnership > 0) {
 			migratedRep = (parentPoolOwnership * parentRepAtFork) / parent.poolOwnershipDenominator();
-			forkDataByPool[child].migratedRep += migratedRep;
+			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
+			uint256 nextMigratedRep = childForkData.migratedRep + migratedRep;
+			_ensureMigratedVaultRepBacked(parent, child, nextMigratedRep);
+			childForkData.migratedRep = nextMigratedRep;
 			if (shouldTransferCollateral) {
 				uint256 collateralToTransfer = (parent.completeSetCollateralAmount() * migratedRep) / parentRepAtFork;
 				parent.transferEth(payable(child), collateralToTransfer);

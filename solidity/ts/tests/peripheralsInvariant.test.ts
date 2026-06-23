@@ -132,7 +132,7 @@ describe('Peripherals invariant harness', () => {
 		await createCompleteSet(openInterestHolder, context.securityPool, openInterestAmount)
 		await triggerExternalForkForSecurityPool(undefined, 'mixed bids fork source')
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
-		await assert.rejects(migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes]), /cannot migrate more than internal balance/i)
+		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
@@ -235,7 +235,12 @@ describe('Peripherals invariant harness', () => {
 			assert.ok(childMinted <= migrationBalanceBefore, 'child REP minted must not exceed the caller migration balance for the selected branch')
 		}
 
-		await assert.rejects(migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes]))
+		const repeatedYesChildRepToken = getRepTokenAddress(getChildUniverseIdForOutcome(QuestionOutcome.Yes))
+		const repeatedYesSecurityPool = getSecurityPoolAddresses(context.securityPool, getChildUniverseIdForOutcome(QuestionOutcome.Yes), context.questionId, securityMultiplier).securityPool
+		const repeatedYesBalanceBefore = await getERC20Balance(client, repeatedYesChildRepToken, repeatedYesSecurityPool)
+		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
+		const repeatedYesBalanceAfter = await getERC20Balance(client, repeatedYesChildRepToken, repeatedYesSecurityPool)
+		strictEqualTypeSafe(repeatedYesBalanceAfter, repeatedYesBalanceBefore, 'repeated branch migration should be a no-op once child REP is fully split')
 
 		for (const outcome of branchOrder) {
 			await migrateVault(client, context.securityPool, outcome)
@@ -248,7 +253,9 @@ describe('Peripherals invariant harness', () => {
 		const yesUniverseId = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverseId, context.questionId, securityMultiplier).securityPool
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool), SystemState.ForkMigration, 'yes child should be in fork migration')
-		await assert.rejects(migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes]))
+		const yesBalanceBeforeRepeat = await getERC20Balance(client, getRepTokenAddress(yesUniverseId), yesSecurityPool)
+		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverseId), yesSecurityPool), yesBalanceBeforeRepeat, 'repeat migration after vault migration should not mint extra child REP')
 	})
 
 	test('own-fork locks excess parent REP into the migration balance', async () => {

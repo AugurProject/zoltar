@@ -313,9 +313,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
 					'migration window closed'
 				);
-				_splitMigrationRepToChild(securityPool, outcomeIndex, migrationAmount, data.ownFork, false);
-				pendingChildRepByPoolAndOutcome[securityPool][outcomeIndex] += migrationAmount;
-				_sweepChildRepToPool(securityPool, outcomeIndex);
+				_ensureChildPoolRepSplit(securityPool, outcomeIndex, migrationAmount);
 			}
 		}
 	}
