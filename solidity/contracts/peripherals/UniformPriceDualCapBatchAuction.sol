@@ -110,6 +110,7 @@ contract UniformPriceDualCapBatchAuction {
 	function submitBid(int256 tick) external payable isOperational {
 		require(msg.value >= minBidSize, 'bid too small');
 		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
+		require(tickToPrice(tick) > 0, 'price too low');
 		root = _insert(root, tick, msg.sender, msg.value);
 		emit SubmitBid(msg.sender, tick, msg.value);
 	}

@@ -18,6 +18,9 @@ const injectedBackend = createInjectedBackend()
 let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
 
+const SIMULATION_QUERY_PARAM = 'simulate'
+const SIMULATION_QUERY_VALUE = '1'
+
 function readLocationParams(location: LocationLike) {
 	const params = new URLSearchParams(location.search)
 	const hash = location.hash ?? ''
@@ -33,7 +36,10 @@ function readLocationParams(location: LocationLike) {
 
 export function shouldUseSimulationLocation(location: LocationLike) {
 	const params = readLocationParams(location)
-	return params.get('simulate') === '1'
+	// Simulation mode is intentionally available as a public URL opt-in on any hostname,
+	// including production deployments. It boots a browser-local chain instead of
+	// granting privileged access to production state.
+	return params.get(SIMULATION_QUERY_PARAM) === SIMULATION_QUERY_VALUE
 }
 
 function getSimulationScenario(location: LocationLike): SimulationScenario {

@@ -49,13 +49,16 @@ void describe('active environment', () => {
 		expect(getActiveBackend().profile.id).toBe('mainnet')
 	})
 
-	void test('enables simulation mode whenever ?simulate=1 is present', () => {
+	void test('enables simulation mode when the explicit URL flag is present', () => {
 		expect(shouldUseSimulationLocation({ hostname: 'localhost', search: '?simulate=1' })).toBe(true)
 		expect(shouldUseSimulationLocation({ hostname: '127.0.0.1', search: '?foo=bar&simulate=1' })).toBe(true)
-		expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?simulate=1' })).toBe(true)
-		expect(shouldUseSimulationLocation({ hash: '#/zoltar?simulate=1', hostname: 'example.com', search: '' })).toBe(true)
 		expect(shouldUseSimulationLocation({ hostname: 'localhost', search: '?simulate=0' })).toBe(false)
 		expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?foo=bar' })).toBe(false)
+	})
+
+	void test('intentionally allows simulation mode on production-style hostnames', () => {
+		expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?simulate=1' })).toBe(true)
+		expect(shouldUseSimulationLocation({ hash: '#/zoltar?simulate=1', hostname: 'example.com', search: '' })).toBe(true)
 	})
 
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
