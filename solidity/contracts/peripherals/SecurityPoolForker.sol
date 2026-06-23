@@ -388,14 +388,15 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		)
 	{
 		require(securityPool.systemState() == SystemState.ForkMigration, 'f2');
-		require(
-			block.timestamp > zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-			'f3'
-		);
+		parent = securityPool.parent();
+		// The truth auction ends the parent's migration phase for this child branch.
+		// A child universe has no fork time until it forks again, so using the child
+		// universe timestamp would let auctions start immediately on normal chains.
+		uint256 parentForkTime = zoltar.getForkTime(parent.universeId());
+		require(parentForkTime > 0 && block.timestamp > parentForkTime + SecurityPoolUtils.MIGRATION_TIME, 'f3');
 		data = _getForkData(securityPool);
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
-		parent = securityPool.parent();
 		parent.updateCollateralAmount();
 		securityPool.setTotalShares(parent.shareTokenSupply());
 		parentData = _getForkData(parent);
