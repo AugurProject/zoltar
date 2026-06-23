@@ -16,7 +16,7 @@ Prioritize:
 4. Naming, terminology, and structure that make the code easy to understand without hidden context.
 5. Maintainability problems that can cause future mistakes.
 
-Do not raise style-only or preference-only findings unless they hide a concrete readability, correctness, or maintenance risk. Do not rely on hidden conversation context. Base findings on the diff and repository evidence.
+Do not raise speculative, preference-only, or style-only findings unless they create concrete readability, correctness, or maintenance risk. Do not rely on hidden conversation context. Base findings on the diff and repository evidence, and put uncertainty in `Review limitations`.
 
 Review method:
 
