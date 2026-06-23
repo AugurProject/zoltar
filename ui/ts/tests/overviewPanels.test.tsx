@@ -241,6 +241,21 @@ describe('OverviewPanels', () => {
 		expect(document.body.textContent?.includes('ethereum.dark.florist')).toBe(false)
 	})
 
+	test('keeps browser-simulation reads labeled as browser simulation', async () => {
+		const documentQueries = await renderOverviewPanels({
+			readBackendStatus: {
+				blockNumber: 12n,
+				blockTimestamp: undefined,
+				rpcSource: 'default',
+				rpcUrl: 'browser-simulation',
+				transportMode: 'provider',
+			},
+		})
+
+		expect(documentQueries.getByText('provider / default: browser simulation @ 12')).toBeDefined()
+		expect(document.body.textContent?.includes('wallet provider')).toBe(false)
+	})
+
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
 		setClientWidthResolver(element => {
 			if (!element.classList.contains('currency-value')) return 0

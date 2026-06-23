@@ -24,6 +24,7 @@ export type TransactionRequestPreview = {
 	chainName: string | undefined
 	contractAddress?: Address | undefined
 	data?: Hex | undefined
+	dataLabel?: string | undefined
 	functionName: string
 	requiresWalletConfirmation?: boolean | undefined
 	to?: Address | undefined

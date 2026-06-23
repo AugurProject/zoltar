@@ -166,14 +166,14 @@ describe('contract deployment internals', () => {
 		const proxyStep = steps.find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
 		const seen: string[] = []
-		const preparedFunctions: string[] = []
+		const preparedPreviews: Parameters<NonNullable<WriteClient['onTransactionPrepared']>>[0][] = []
 		const fundHash = `0x${'c'.repeat(64)}` as Hash
 		const deployHash = `0x${'d'.repeat(64)}` as Hash
 
 		const client = asWriteClient({
 			getCode: async () => undefined,
 			onTransactionPrepared: preview => {
-				preparedFunctions.push(preview.functionName)
+				preparedPreviews.push(preview)
 			},
 			sendTransaction: async request => {
 				seen.push(request.to ?? 'none')
@@ -191,7 +191,12 @@ describe('contract deployment internals', () => {
 		expect(hash).toBe(deployHash)
 		expect(seen[0]).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
 		expect(seen[1]).toBe('0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222')
-		expect(preparedFunctions).toEqual(['Fund deterministic proxy deployer signer', 'Broadcast deterministic proxy deployer transaction'])
+		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(['Fund deterministic proxy deployer signer', 'Broadcast deterministic proxy deployer transaction'])
+		const rawBroadcastPreview = preparedPreviews[1]
+		if (rawBroadcastPreview === undefined) throw new Error('Expected raw broadcast preview')
+		expect(rawBroadcastPreview.account).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
+		expect(rawBroadcastPreview.dataLabel).toBe('Raw transaction')
+		expect(rawBroadcastPreview.requiresWalletConfirmation).toBe(false)
 	})
 
 	test('zoltar deployment step patches the Genesis REP token in simulation mode', async () => {

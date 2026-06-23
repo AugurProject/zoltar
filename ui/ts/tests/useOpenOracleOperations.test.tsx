@@ -359,6 +359,136 @@ describe('useOpenOracleOperations', () => {
 		}
 	})
 
+	test('submitInitialReport blocks a stale auto-filled quote when refresh throws', async () => {
+		const originalDateNow = Date.now
+		let nowMs = 2_000_000
+		Date.now = () => nowMs
+		try {
+			const reportDetails = createOpenOracleReportDetails()
+			const readOptionalMulticall = mock(async () => [
+				{ result: 100n, status: 'success' },
+				{ result: 25n, status: 'success' },
+				{ result: 100n, status: 'success' },
+				{ result: 25n, status: 'success' },
+			])
+			const submitInitialOracleReport = mock(async () => ({
+				action: 'submitInitialReport',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000d4',
+			}))
+			let quoteLoadCount = 0
+			const loadOpenOracleInitialReportPriceResult = mock(async () => {
+				quoteLoadCount += 1
+				if (quoteLoadCount > 1) throw new Error('Stale quote RPC unavailable')
+				return {
+					price: 4n,
+					priceSource: 'MOCK',
+					priceSourceUrl: undefined,
+					status: 'success',
+					token2Amount: 25n,
+				}
+			})
+
+			mock.module('../contracts.js', () => ({
+				approveErc20: mock(async () => {
+					throw new Error('approveErc20 should not be called in this test')
+				}),
+				createOpenOracleReportInstance: mock(async () => {
+					throw new Error('createOpenOracleReportInstance should not be called in this test')
+				}),
+				disputeOracleReport: mock(async () => {
+					throw new Error('disputeOracleReport should not be called in this test')
+				}),
+				getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+				loadOpenOracleReportDetails: mock(async () => reportDetails),
+				readOptionalMulticall,
+				settleOracleReport: mock(async () => {
+					throw new Error('settleOracleReport should not be called in this test')
+				}),
+				submitInitialOracleReport,
+				wrapWeth: mock(async () => {
+					throw new Error('wrapWeth should not be called in this test')
+				}),
+			}))
+			mock.module('../lib/clients.js', () => ({
+				createConnectedReadClient: mock(() => ({ getBlockNumber: async () => 10n, kind: 'read-client' })),
+				createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+			}))
+			mock.module('../lib/openOracle.js', () => ({
+				deriveOpenOracleDisputeSubmissionDetails: () => ({
+					blockMessage: undefined,
+					canSubmit: true,
+					expectedNewAmount1: 100n,
+					token1ContributionAmount: 0n,
+					token1Decimals: 18,
+					token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
+					token2ContributionAmount: 0n,
+					token2Decimals: 18,
+					token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
+				}),
+				deriveOpenOracleInitialReportSubmissionDetails: () => ({
+					amount1: 100n,
+					amount2: 25n,
+					blockMessage: undefined,
+					canSubmit: true,
+					hasWethWrapAction: false,
+					priceSource: 'MOCK',
+					priceSourceUrl: undefined,
+					requiredWethWrapAmount: 0n,
+					token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
+					token1Decimals: 18,
+					token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
+					token2Decimals: 18,
+					wrapRequiredWethMessage: undefined,
+				}),
+				formatOpenOracleDisputeWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
+				formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
+				formatOpenOraclePriceInput: (price: bigint) => price.toString(),
+				formatOpenOracleSettleWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
+				getOpenOracleCreateGuardMessage: () => undefined,
+				getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
+				getOpenOracleSelectedReportActionMode: (details: OpenOracleReportDetails) => (details.currentReporter === zeroAddress || details.reportTimestamp === 0n ? 'initial-report' : 'dispute'),
+				getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
+				loadOpenOracleInitialReportPriceResult,
+			}))
+
+			const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(useOpenOracleOperations, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await waitFor(() => {
+				expect(requireHookState(hookState).openOracleForm.price).toBe('4')
+			})
+
+			await act(async () => {
+				requireHookState(hookState).setOpenOracleForm(current => ({
+					...current,
+					reportId: REPORT_ID.toString(),
+					stateHash: STATE_HASH,
+				}))
+			})
+			nowMs += 6 * 60 * 1000
+
+			await act(async () => {
+				await requireHookState(hookState).submitInitialReport()
+			})
+
+			expect(loadOpenOracleInitialReportPriceResult).toHaveBeenCalledTimes(2)
+			expect(requireHookState(hookState).openOracleForm.price).toBe('')
+			expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Automatic price quote is stale and could not be refreshed. Refresh the quote or enter a manual price before submitting.')
+			expect(submitInitialOracleReport).not.toHaveBeenCalled()
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
 	test('disputeReport reloads token access after a successful write', async () => {
 		const reportDetails = createOpenOracleReportDetails({
 			currentReporter: WALLET_ADDRESS,

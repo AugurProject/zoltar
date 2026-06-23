@@ -16,6 +16,7 @@ import {
 	getZoltarQuestionDataByteCode,
 } from './deploymentHelpers.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
+import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
@@ -24,12 +25,16 @@ const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 
-function markDeploymentTransactionPrepared(client: WriteClient, { data, functionName, requiresWalletConfirmation, to, value }: { data?: Hex; functionName: string; requiresWalletConfirmation?: boolean; to?: Address; value?: bigint }) {
+function markDeploymentTransactionPrepared(
+	client: WriteClient,
+	{ account = client.account, data, dataLabel, functionName, requiresWalletConfirmation, to, value }: { account?: TransactionRequestPreview['account']; data?: Hex; dataLabel?: string; functionName: string; requiresWalletConfirmation?: boolean; to?: Address; value?: bigint },
+) {
 	client.onTransactionPrepared?.({
-		account: client.account,
+		account,
 		args: undefined,
 		chainName: client.chain?.name,
 		data,
+		dataLabel,
 		functionName,
 		requiresWalletConfirmation,
 		to,
@@ -130,7 +135,9 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	await client.waitForTransactionReceipt({ hash: fundHash })
 
 	markDeploymentTransactionPrepared(client, {
+		account: PROXY_DEPLOYER_SIGNER,
 		data: PROXY_DEPLOYER_RAW_TRANSACTION,
+		dataLabel: 'Raw transaction',
 		functionName: 'Broadcast deterministic proxy deployer transaction',
 		requiresWalletConfirmation: false,
 	})

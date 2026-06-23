@@ -92,7 +92,7 @@ function getPreparedTransactionRows(intent: TransactionIntent, preview: Transact
 		...(preview.to === undefined ? [] : [{ label: 'To', value: preview.to }]),
 		{ label: 'Function', value: preview.functionName },
 		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: 'ETH Value', value: `${formatCurrencyBalance(preview.value)} ETH` }]),
-		...(preview.data === undefined ? [] : [{ label: 'Calldata', value: formatPreviewData(preview.data) }]),
+		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? 'Calldata', value: formatPreviewData(preview.data) }]),
 		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: 'Arguments', value: preview.args.map(formatPreviewArgument).join(', ') }]),
 	]
 }

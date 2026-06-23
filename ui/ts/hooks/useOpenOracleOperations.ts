@@ -300,10 +300,11 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		const isCurrent = nextOpenOracleInitialReportPriceLoad()
 		if (currentDetails === undefined) {
 			resetOpenOracleInitialReportQuoteState()
-			return
+			return false
 		}
 
-		await openOracleInitialReportPriceLoad.run({
+		const shouldUpdateFormQuote = () => openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString() || (replacePriceInput !== undefined && openOracleForm.value.price.trim() === replacePriceInput)
+		const result = await openOracleInitialReportPriceLoad.run({
 			isCurrent,
 			onStart: () => {
 				if (!preserveExisting) resetOpenOracleInitialReportQuoteState()
@@ -331,8 +332,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				openOracleInitialReportQuoteFailureKind.value = priceFailure?.failureKind
 				openOracleInitialReportQuoteFailureReason.value = priceFailure?.reason
 
-				const shouldUpdateFormQuote = openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString() || (replacePriceInput !== undefined && openOracleForm.value.price.trim() === replacePriceInput)
-				if (shouldUpdateFormQuote)
+				if (shouldUpdateFormQuote())
 					openOracleForm.value = {
 						...openOracleForm.value,
 						amount1: currentDetails.exactToken1Report.toString(),
@@ -340,8 +340,26 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 						price: initialPrice === undefined ? '' : formatOpenOraclePriceInput(initialPrice.price),
 					}
 			},
-			onError: () => undefined,
+			onError: error => {
+				openOracleInitialReportDefaultPrice.value = undefined
+				openOracleInitialReportDefaultPriceError.value = getErrorMessage(error, 'Failed to refresh automatic price quote')
+				openOracleInitialReportDefaultPriceSource.value = undefined
+				openOracleInitialReportDefaultPriceSourceUrl.value = undefined
+				openOracleInitialReportQuoteBlockNumber.value = undefined
+				openOracleInitialReportQuoteLoadedAtMs.value = undefined
+				openOracleInitialReportQuoteAttemptedSources.value = undefined
+				openOracleInitialReportQuoteFailureKind.value = 'quote-failed'
+				openOracleInitialReportQuoteFailureReason.value = openOracleInitialReportDefaultPriceError.value
+				if (shouldUpdateFormQuote())
+					openOracleForm.value = {
+						...openOracleForm.value,
+						amount1: currentDetails.exactToken1Report.toString(),
+						amount2: '0',
+						price: '',
+					}
+			},
 		})
+		return result !== undefined
 	}
 
 	const refreshOpenOracleInitialReportTokenAccess = async (details: OpenOracleReportDetails | undefined, { preserveExisting = false }: RefreshOpenOracleInitialReportOptions = {}) => {
@@ -667,7 +685,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 
 				if (isUsingAutoInitialReportQuote() && isOpenOracleInitialReportQuoteStale()) {
 					const staleAutoPriceInput = openOracleInitialReportDefaultPrice.value
-					await refreshOpenOracleInitialReportQuote(reportDetails, { preserveExisting: true, replacePriceInput: staleAutoPriceInput })
+					const quoteRefreshCompleted = await refreshOpenOracleInitialReportQuote(reportDetails, { preserveExisting: true, replacePriceInput: staleAutoPriceInput })
+					if (!quoteRefreshCompleted) throw new Error('Automatic price quote is stale and could not be refreshed. Refresh the quote or enter a manual price before submitting.')
 				}
 				await refreshOpenOracleInitialReportTokenAccess(reportDetails, { preserveExisting: true })
 				const submission = getInitialReportSubmission(reportDetails)

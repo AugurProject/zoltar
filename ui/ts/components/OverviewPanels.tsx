@@ -46,10 +46,11 @@ export function OverviewPanels({
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
-	const isProviderReadBackend = effectiveReadBackendStatus.transportMode === 'provider'
+	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
+	const isProviderReadBackend = effectiveReadBackendStatus.transportMode === 'provider' && !isBrowserSimulationReadBackend
 	const readBackendHost = (() => {
+		if (isBrowserSimulationReadBackend) return 'browser simulation'
 		if (isProviderReadBackend) return 'wallet provider'
-		if (effectiveReadBackendStatus.rpcUrl === 'browser-simulation') return 'browser simulation'
 		try {
 			return new URL(effectiveReadBackendStatus.rpcUrl).host
 		} catch (error) {

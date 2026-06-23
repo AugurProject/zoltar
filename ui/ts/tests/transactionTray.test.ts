@@ -81,17 +81,19 @@ describe('transactionTray', () => {
 			submittedTitle: 'Deploying Contract',
 		})
 		const prepared = markTransactionPrepared(requested, {
-			account: undefined,
+			account: '0x00000000000000000000000000000000000000c3',
 			args: undefined,
 			chainName: 'Ethereum',
 			data: '0x1234',
+			dataLabel: 'Raw transaction',
 			functionName: 'Broadcast deterministic proxy deployer transaction',
 			requiresWalletConfirmation: false,
 			value: undefined,
 		})
 
 		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
-		expect(prepared.active?.rows?.some(row => row.label === 'Calldata' && row.value === '0x1234')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Sender' && row.value === '0x00000000000000000000000000000000000000c3')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Raw transaction' && row.value === '0x1234')).toBe(true)
 	})
 
 	test('turns a requested transaction into a dismissible failure when submission fails', () => {
