@@ -860,8 +860,8 @@
 							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 584 94 H 734"></path>
 							<text class="svg-small" x="654" y="79" text-anchor="middle">mint shares</text>
 							<path class="svg-line" marker-end="url(#arrow-assets)" d="M 734 126 C 610 182 350 182 224 126"></path>
-							<text class="svg-small" x="484" y="205" text-anchor="middle">redeem full set before finalization</text>
-							<text class="svg-small" x="484" y="227" text-anchor="middle">or winning shares after finalization</text>
+							<text class="svg-small" x="484" y="205" text-anchor="middle">redeem full sets while operational</text>
+							<text class="svg-small" x="484" y="227" text-anchor="middle">or finalized winning shares</text>
 							<rect class="svg-gold" x="54" y="272" width="170" height="72" rx="10"></rect>
 							<text class="svg-label" x="139" y="304" text-anchor="middle">Vault</text>
 							<text class="svg-small" x="139" y="327" text-anchor="middle">deposits REP</text>
@@ -899,8 +899,8 @@
 						becomes <code>completeSetCollateralAmount</code>.
 					</p>
 					<ul>
-						<li>Before finalization, a full complete set can be burned with <code>redeemCompleteSet</code> to recover its pro rata share of collateral.</li>
-						<li>After finalization, users redeem only the winning outcome through <code>redeemShares</code>.</li>
+						<li>While the pool is operational, a full complete set can be burned with <code>redeemCompleteSet</code> to recover its pro rata share of collateral.</li>
+						<li>After the fork route finalizes an outcome, users can redeem winning outcome shares through <code>redeemShares</code>.</li>
 					</ul>
 					<h3>Fee Extraction and Retention Rate</h3>
 					<p>
@@ -980,7 +980,7 @@
 					<figure class="diagram">
 						<svg viewBox="0 0 860 340" role="img" aria-labelledby="shares-title shares-desc">
 							<title id="shares-title">Complete set lifecycle</title>
-							<desc id="shares-desc">ETH mints Invalid, Yes, and No shares. Before finalization a full set redeems collateral; after finalization only winning shares redeem.</desc>
+							<desc id="shares-desc">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</desc>
 							<defs>
 								<marker id="arrow-shares" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -1825,10 +1825,10 @@
 							<text class="svg-label" x="695" y="74" text-anchor="middle">1 week</text>
 							<text class="svg-small" x="695" y="98" text-anchor="middle">auction</text>
 							<rect class="svg-box" x="780" y="42" width="150" height="76" rx="10"></rect>
-							<text class="svg-label" x="855" y="74" text-anchor="middle">1 hour</text>
+							<text class="svg-label" x="855" y="74" text-anchor="middle">5 minutes</text>
 							<text class="svg-small" x="855" y="98" text-anchor="middle">price validity</text>
 						</svg>
-						<p class="diagram-caption">The operational clock is mostly measured in days and weeks, except REP/ETH solvency prices, which expire after one hour.</p>
+						<p class="diagram-caption">The operational clock is mostly measured in days and weeks, except REP/ETH solvency prices, which expire after five minutes.</p>
 					</figure>
 					<div class="parameter-grid">
 						<div class="parameter-card">
@@ -1985,19 +1985,23 @@
 							<tr><td><code>PRICE_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>How long a settled REP/ETH price remains valid.</td></tr>
 							<tr><td><code>gasConsumedOpenOracleReportPrice</code></td><td><code>100000</code></td><td>Coordinator gas estimate for report submission.</td></tr>
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Coordinator gas estimate for settlement callback.</td></tr>
-							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><code>26392439800</code></td><td>Hard-coded initial report liquidity parameter.</td></tr>
-							<tr><td>OpenOracle <code>escalationHalt</code></td><td><code>reputationToken.totalSupply() / 100000</code></td><td>Dynamic halt threshold for report escalation.</td></tr>
+							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><code>250 * 10^18</code></td><td>Hard-coded initial report liquidity parameter.</td></tr>
+							<tr><td>OpenOracle <code>escalationHalt</code></td><td><code>exactToken1Report * 10</code></td><td>Dynamic halt threshold for report escalation.</td></tr>
 							<tr><td>OpenOracle <code>settlerReward</code></td><td><code>block.basefee * 2 * gasConsumedOpenOracleReportPrice</code></td><td>Dynamic ETH reward paid to settler.</td></tr>
 							<tr><td>OpenOracle <code>settlementTime</code></td><td><code>480</code></td><td>Settlement delay encoded as <code>40 * 12</code>.</td></tr>
 							<tr><td>OpenOracle <code>disputeDelay</code></td><td><code>0</code></td><td>No extra waiting period after each report.</td></tr>
-							<tr><td>OpenOracle <code>protocolFee</code></td><td><code>0</code></td><td>Protocol fee disabled.</td></tr>
+							<tr><td>OpenOracle <code>protocolFee</code></td><td><code>100000</code></td><td>OpenOracle protocol fee parameter.</td></tr>
 							<tr><td>OpenOracle <code>callbackGasLimit</code></td><td><code>1000000</code></td><td>Settlement callback gas limit.</td></tr>
 							<tr><td>OpenOracle <code>feePercentage</code></td><td><code>10000</code></td><td>Fee paid to previous reporter, annotated in code as <code>0.1%</code>.</td></tr>
-							<tr><td>OpenOracle <code>multiplier</code></td><td><code>140</code></td><td>New report amount must be <code>1.4x</code> the prior amount.</td></tr>
+							<tr><td>OpenOracle <code>multiplier</code></td><td><code>115</code></td><td>New report amount must be <code>1.15x</code> the prior amount.</td></tr>
 							<tr><td>OpenOracle <code>timeType</code></td><td><code>true</code></td><td>OpenOracle uses block timestamps rather than block numbers.</td></tr>
-							<tr><td>OpenOracle <code>trackDisputes</code></td><td><code>false</code></td><td>Dispute history is not stored for these reports.</td></tr>
+							<tr><td>OpenOracle <code>trackDisputes</code></td><td><code>true</code></td><td>Dispute history is stored for these reports.</td></tr>
 							<tr><td>OpenOracle <code>keepFee</code></td><td><code>false</code></td><td>Initial reporter reward does not stay with the initial reporter.</td></tr>
 							<tr><td>OpenOracle <code>feeToken</code></td><td><code>true</code></td><td>OpenOracle fees are paid in token-to-swap terms.</td></tr>
+							<tr><td>Coordinator <code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Shared per-price-round operation budget multiplier.</td></tr>
+							<tr><td>Coordinator <code>escalationHaltMultiplierBps</code></td><td><code>100000</code></td><td>Multiplier used to derive the OpenOracle escalation halt from <code>exactToken1Report</code>.</td></tr>
+							<tr><td>Coordinator <code>maxSettlementBaseFeeMultiplierBps</code></td><td><code>30000</code></td><td>Maximum base-fee multiplier accepted for automated oracle settlement.</td></tr>
+							<tr><td>Coordinator <code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum distance from the liquidation threshold required for oracle-backed liquidation execution.</td></tr>
 							<tr><td>Coordinator <code>WETH</code></td><td><code>0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2</code></td><td>Mainnet WETH address used in REP/ETH price reports.</td></tr>
 						</tbody>
 					</table>

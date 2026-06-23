@@ -477,11 +477,12 @@ contract SecurityPool is ISecurityPool {
 		require(!isEscalationResolved(), 'question resolved');
 		require(msg.value > 0, 'need eth');
 		updateCollateralAmount();
-		require(totalSecurityBondAllowance >= msg.value + completeSetCollateralAmount, 'no set capacity');
 		uint256 completeSetsToMint = cashToShares(msg.value);
-		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMint);
+		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
+		require(totalSecurityBondAllowance >= nextCompleteSetCollateralAmount, 'no set capacity');
 		shareTokenSupply += completeSetsToMint;
-		completeSetCollateralAmount += msg.value;
+		completeSetCollateralAmount = nextCompleteSetCollateralAmount;
+		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMint);
 		emit CreateCompleteSet(shareTokenSupply, completeSetsToMint, completeSetCollateralAmount);
 		updateRetentionRate();
 	}

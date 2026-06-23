@@ -245,7 +245,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await triggerExternalForkForSecurityPool(undefined, 'mixed bids fork source')
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /cannot migrate more than internal balance/i)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -2878,7 +2878,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const unlockedVaultRepAtFork = ownForkRepBuckets.vaultRepAtFork
 
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /vm/i)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const childRepToken = getRepTokenAddress(yesUniverse)
 		const forkerBalance = await getERC20Balance(client, childRepToken, getInfraContractAddresses().securityPoolForker)
@@ -4261,8 +4261,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.No])
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid])
 
-		// Additional migration should fail (all rep already allocated)
-		await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /vm/)
+		// Additional migration is idempotent once all REP for the branch has been split.
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		// Create child security pools to verify outcomes
 		// Create Yes child

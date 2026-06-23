@@ -1,22 +1,23 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert/strict'
-import { decodeEventLog, encodeAbiParameters, keccak256, zeroAddress } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, zeroAddress } from 'viem'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { deployUniformPriceDualCapBatchAuction } from '../testsuite/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { executeStagedOperation, getEthRaiseCap, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { depositRep, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
-import { createChildUniverse, initiateSecurityPoolFork, migrateRepToZoltar } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { depositRep, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
+import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
-import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { approveToken, contractExists, getChildUniverseId, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { createWriteClient, type WriteClient } from '../testsuite/simulator/utils/viem'
-import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -79,6 +80,89 @@ describe('security regression coverage', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		return getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 	}
+
+	const deployCompleteSetReentrantReceiver = async (securityPool: Address) => {
+		const hash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
+				bytecode: `0x${test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.evm.bytecode.object}`,
+				args: [securityPool],
+			}),
+		})
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		const contractAddress = receipt.contractAddress
+		if (contractAddress === undefined || contractAddress === null) throw new Error('reentrant receiver deployment missing address')
+		return contractAddress
+	}
+
+	test('complete-set capacity is enforced across ERC1155 receiver reentrancy', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const capacity = 10n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, capacity)
+		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
+
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
+					address: receiver,
+					functionName: 'attack',
+					args: [6n * 10n ** 18n, 6n * 10n ** 18n],
+					value: 12n * 10n ** 18n,
+				}),
+			),
+			/receiver rejected tokens/,
+		)
+		assert.equal(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n)
+	})
+
+	test('vault migration backs migrated child accounting even without prior branch REP migration', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		await mockWindow.setTime(questionEndDate + 10n * DAY)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attacker, repDeposit, questionId)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const { vaultRepAtFork } = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const migratedRep = await getMigratedRep(client, yesChild.securityPool)
+		const childPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)
+		assert.ok(migratedRep > 0n, 'vault migration should credit migrated REP')
+		assert.ok(childPoolRepBalance >= migratedRep, 'child pool REP must back migrated vault accounting')
+		assert.ok(migratedRep < vaultRepAtFork, 'single-vault migration should leave remaining branch REP unsplit')
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		const toppedUpChildPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)
+		assert.ok(toppedUpChildPoolRepBalance >= vaultRepAtFork, 'bulk migration should top up the remaining branch REP')
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		assert.equal(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool), toppedUpChildPoolRepBalance)
+	})
+
+	test('escalation deposits can fill final threshold dust below the start bond', async () => {
+		const startBond = 10n * 10n ** 18n
+		const nonDecisionThreshold = 25n * 10n ** 18n
+		const escalationGame = await deployEscalationGame(client, startBond, nonDecisionThreshold)
+
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, nonDecisionThreshold)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, nonDecisionThreshold - 1n)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, startBond)
+
+		const noState = await getEscalationGameOutcomeState(client, escalationGame, QuestionOutcome.No)
+		const nonDecisionTimestamp = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGame,
+			functionName: 'nonDecisionTimestamp',
+		})
+		assert.equal(noState.balance, nonDecisionThreshold)
+		assert.ok(nonDecisionTimestamp > 0n, 'final dust fill should trigger non-decision')
+	})
 
 	test('external scalar Zoltar forks allow Placeholder REP migration to the scalar child branch', async () => {
 		const mockWindow = getAnvilWindowEthereum()
