@@ -37,7 +37,6 @@ export type MarketFormState = {
 }
 
 export type SecurityPoolFormState = {
-	currentRetentionRate: string
 	marketId: string
 	securityMultiplier: string
 }

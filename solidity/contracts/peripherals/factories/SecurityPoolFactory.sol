@@ -132,13 +132,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function deployOriginSecurityPool(
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
-		uint256 /* currentRetentionRate */
+		uint256 securityMultiplier
 	) external returns (ISecurityPool securityPool) {
 		// Origin pool deployment is intentionally public, so first deployers must not be able to
 		// lock unsafe economic parameters into the canonical pool for a question/multiplier pair.
-		// The legacy retention-rate argument is ignored; zero-utilization origin pools always
-		// start at the protocol retention curve's maximum rate.
+		// Zero-utilization origin pools always start at the protocol retention curve's maximum rate.
 		require(securityMultiplier > 1, 'security multiplier');
 
 		// Validate that the question exists

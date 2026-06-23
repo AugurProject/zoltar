@@ -30,7 +30,6 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const genesisUniverse = 0n
 const securityMultiplier = 2n
-const maxRetentionRate = 999_999_996_848_000_000n
 const repDeposit = 1000n * 10n ** 18n
 const outcomes = ['Yes', 'No']
 
@@ -62,7 +61,7 @@ describe('security regression coverage', () => {
 		}
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, maxRetentionRate)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
 		await approveAndDepositRep(client, repDeposit, questionId)
 		securityPoolAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 	}
@@ -249,7 +248,7 @@ describe('security regression coverage', () => {
 		assert.ok(await contractExists(client, squatterShareTokenAddress), 'untrusted caller should deploy only its own share token')
 		assert.equal(await contractExists(client, expectedAddresses.shareToken), false, 'canonical share token address should remain available')
 
-		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, securityMultiplier, maxRetentionRate)
+		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, securityMultiplier)
 		assert.ok(await contractExists(client, expectedAddresses.securityPool), 'canonical origin security pool should deploy')
 		assert.ok(await contractExists(client, expectedAddresses.shareToken), 'canonical origin share token should deploy')
 	})

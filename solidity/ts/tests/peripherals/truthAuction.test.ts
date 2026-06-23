@@ -76,7 +76,6 @@ describe('Peripherals: truth auction', () => {
 		repDeposit,
 		genesisUniverse,
 		securityMultiplier,
-		MAX_RETENTION_RATE,
 		outcomes,
 		triggerExternalForkForSecurityPool,
 		setupTruthAuctionWithMixedBids,
@@ -350,7 +349,7 @@ describe('Peripherals: truth auction', () => {
 			}
 			const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
 			await createQuestion(client, secondQuestionData, outcomes)
-			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier)
 
 			const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
@@ -396,7 +395,7 @@ describe('Peripherals: truth auction', () => {
 			}
 			const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
 			await createQuestion(client, secondQuestionData, outcomes)
-			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier)
 
 			const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
@@ -506,7 +505,7 @@ describe('Peripherals: truth auction', () => {
 			}
 			const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
 			await createQuestion(client, secondQuestionData, outcomes)
-			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier)
 
 			const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
@@ -553,7 +552,7 @@ describe('Peripherals: truth auction', () => {
 			}
 			const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
 			await createQuestion(client, secondQuestionData, outcomes)
-			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+			await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier)
 
 			const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)

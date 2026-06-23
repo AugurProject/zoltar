@@ -101,7 +101,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const multiOutcomeQuestionId = getQuestionId(multiOutcomeQuestionData, multiOutcomes)
 
 		// Attempt to deploy security pool with non-binary question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier, MAX_RETENTION_RATE))
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier))
 	})
 
 	test('cannot deploy security pool with scalar question', async () => {
@@ -121,7 +121,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const scalarQuestionId = getQuestionId(scalarQuestionData, scalarOutcomes)
 
 		// Attempt to deploy security pool with scalar question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier, MAX_RETENTION_RATE))
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier))
 	})
 
 	test('cannot deploy security pool with non-existent question', async () => {
@@ -129,7 +129,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const nonExistentQuestionId = 999999999999n
 
 		// Attempt to deploy security pool with non-existent question should fail
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier, MAX_RETENTION_RATE))
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier))
 	})
 
 	test('cannot deploy origin security pool in an already-forked universe', async () => {
@@ -144,16 +144,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE), /universe forked/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier), /universe forked/)
 	})
 
 	test('cannot deploy origin security pool in a missing universe', async () => {
 		const missingUniverseId = 999999n
 
-		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier, MAX_RETENTION_RATE), /universe missing/)
+		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe missing/)
 	})
 
-	test('origin security pool deployment derives protocol parameters instead of trusting the first deployer', async () => {
+	test('origin security pool deployment derives protocol parameters for the first deployer', async () => {
 		const createBinaryQuestion = async (title: string) => {
 			const deploymentQuestionData = {
 				...questionData,
@@ -163,14 +163,13 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			return getQuestionId(deploymentQuestionData, outcomes)
 		}
 		const zeroMultiplierQuestionId = await createBinaryQuestion(`zero multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n, MAX_RETENTION_RATE), /security multiplier/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /security multiplier/)
 
 		const oneMultiplierQuestionId = await createBinaryQuestion(`one multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n, MAX_RETENTION_RATE), /security multiplier/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n), /security multiplier/)
 
-		const callerSuppliedRetentionRate = 0n
 		const callerRetentionQuestionId = await createBinaryQuestion(`caller retention ${await mockWindow.getTime()}`)
-		await deployOriginSecurityPool(client, genesisUniverse, callerRetentionQuestionId, securityMultiplier, callerSuppliedRetentionRate)
+		await deployOriginSecurityPool(client, genesisUniverse, callerRetentionQuestionId, securityMultiplier)
 		const callerRetentionPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, callerRetentionQuestionId, securityMultiplier).securityPool
 		const retentionRate = await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -728,7 +727,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			}
 			const scenarioQuestionId = getQuestionId(scenarioQuestionData, outcomes)
 			await createQuestion(client, scenarioQuestionData, outcomes)
-			await deployOriginSecurityPool(client, genesisUniverse, scenarioQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+			await deployOriginSecurityPool(client, genesisUniverse, scenarioQuestionId, securityMultiplier)
 			const scenarioPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, scenarioQuestionId, securityMultiplier).securityPool
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, scenarioPool))) / 20n / securityMultiplier
 			const depositorsByAddress = new Map<Address, WriteClient>([

@@ -3,7 +3,6 @@ import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, QuestionData } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { parseBigIntInput, parseTimestampInput, tryParseBigIntInput } from './marketForm.js'
-import { ORIGIN_POOL_INITIAL_RETENTION_RATE } from './retentionRate.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
 type MarketFormValidation = {
@@ -203,7 +202,6 @@ export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	const securityMultiplier = parseBigIntInput(form.securityMultiplier, 'Security multiplier')
 	if (securityMultiplier <= 1n) throw new Error('Security multiplier must be greater than 1')
 	return {
-		currentRetentionRate: ORIGIN_POOL_INITIAL_RETENTION_RATE,
 		questionId: parseQuestionIdInput(form.marketId),
 		securityMultiplier,
 	}

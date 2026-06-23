@@ -2,7 +2,6 @@
 
 import { describe, expect, test } from 'bun:test'
 import { createMarketParameters, createSecurityPoolParameters, hasDeployedStep, validateMarketForm } from '../lib/marketCreation.js'
-import { ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { sortStringArrayByKeccak } from '../lib/sortStringArrayByKeccak.js'
 import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
 
@@ -300,7 +299,6 @@ void describe('market creation helpers', () => {
 	test('requires a valid question id for security pool creation', () => {
 		expect(() =>
 			createSecurityPoolParameters({
-				currentRetentionRate: '12',
 				marketId: '   ',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState),
@@ -309,20 +307,17 @@ void describe('market creation helpers', () => {
 
 	test('parses security-pool market IDs as decimal and hexadecimal values', () => {
 		const form: SecurityPoolFormState = {
-			currentRetentionRate: 'not used',
 			marketId: '0x2a',
 			securityMultiplier: '3',
 		}
 
 		const parameters = createSecurityPoolParameters(form)
-		expect(parameters.currentRetentionRate).toBe(ORIGIN_POOL_INITIAL_RETENTION_RATE)
 		expect(parameters.questionId).toBe(42n)
 	})
 
 	test('normalizes and rejects malformed security-pool market IDs', () => {
 		expect(
 			createSecurityPoolParameters({
-				currentRetentionRate: '12',
 				marketId: '  55  ',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState).questionId,
@@ -330,7 +325,6 @@ void describe('market creation helpers', () => {
 
 		expect(() =>
 			createSecurityPoolParameters({
-				currentRetentionRate: '12',
 				marketId: 'not-a-number',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState),
@@ -357,21 +351,23 @@ void describe('market creation helpers', () => {
 		expect(validation.notice).toContain('Fix invalid fields: Scalar max must be greater than scalar min')
 	})
 
-	test('security pool creation ignores legacy retention input and uses the protocol origin value', () => {
+	test('security pool creation parameters exclude origin retention input', () => {
 		const parameters = createSecurityPoolParameters({
-			currentRetentionRate: '101',
 			marketId: '42',
 			securityMultiplier: '2',
 		} as SecurityPoolFormState)
 
-		expect(parameters.currentRetentionRate).toBe(ORIGIN_POOL_INITIAL_RETENTION_RATE)
+		expect(parameters).toEqual({
+			questionId: 42n,
+			securityMultiplier: 2n,
+		})
+		expect('currentRetentionRate' in parameters).toBe(false)
 	})
 
 	test('security pool creation rejects multipliers the origin factory cannot accept', () => {
 		for (const securityMultiplier of ['0', '1']) {
 			expect(() =>
 				createSecurityPoolParameters({
-					currentRetentionRate: 'not used',
 					marketId: '42',
 					securityMultiplier,
 				} as SecurityPoolFormState),

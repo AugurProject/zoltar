@@ -64,7 +64,6 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			currentRetentionRate: '10',
 			marketId: '0x01',
 			securityMultiplier: '2',
 		},

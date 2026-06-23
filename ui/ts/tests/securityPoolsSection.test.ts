@@ -356,7 +356,6 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			currentRetentionRate: '',
 			marketId: '',
 			securityMultiplier: '',
 		},

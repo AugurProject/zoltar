@@ -205,7 +205,6 @@ async function loadSecurityPoolVaultSummaries(
 export async function createSecurityPool(
 	client: WriteClient,
 	parameters: {
-		currentRetentionRate: bigint
 		questionId: bigint
 		securityMultiplier: bigint
 	},
@@ -214,7 +213,7 @@ export async function createSecurityPool(
 		address: getDeploymentStepAddress('securityPoolFactory'),
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate],
+		args: [0n, parameters.questionId, parameters.securityMultiplier],
 	}))
 
 	return {
