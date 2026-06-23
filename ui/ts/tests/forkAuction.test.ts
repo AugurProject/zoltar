@@ -2,8 +2,25 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, getTruthAuctionBidGuardMessage, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, hasForkActivity, TRUTH_AUCTION_PRICE_PRECISION } from '../lib/forkAuction.js'
-import type { TruthAuctionMetrics } from '../types/contracts.js'
+import type { Address } from 'viem'
+import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '../lib/forkAuction.js'
+import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
+import {
+	buildTruthAuctionDepthPoints,
+	getTruthAuctionBidDisposition,
+	getTruthAuctionBidGuardMessage,
+	getTruthAuctionOverviewProgress,
+	getTruthAuctionPriceAtTick,
+	getTruthAuctionTickAtPrice,
+	sortTruthAuctionBidsByPriority,
+	sortTruthAuctionTickSummariesDescending,
+	TRUTH_AUCTION_PRICE_PRECISION,
+} from '../lib/truthAuctionBook.js'
+import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionState } from '../lib/truthAuctionSettlement.js'
+import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
+
+const walletAddress: Address = '0x0000000000000000000000000000000000000001'
+const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {
@@ -23,6 +40,30 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		totalRepPurchased: 0n,
 		underfunded: false,
 		...overrides,
+	}
+}
+
+function createTickSummary(overrides: { tick: bigint } & Partial<Omit<TruthAuctionTickSummary, 'tick'>>): TruthAuctionTickSummary {
+	return {
+		active: overrides.active ?? false,
+		currentTotalEth: overrides.currentTotalEth ?? 0n,
+		price: overrides.price ?? getTruthAuctionPriceAtTick(overrides.tick),
+		submissionCount: overrides.submissionCount ?? 0n,
+		tick: overrides.tick,
+	}
+}
+
+function createBid(overrides: { bidIndex: bigint; tick: bigint } & Partial<Omit<TruthAuctionBidView, 'bidIndex' | 'tick'>>): TruthAuctionBidView {
+	const ethAmount = overrides.ethAmount ?? 1n * 10n ** 18n
+	return {
+		activeCumulativeEthBeforeBid: overrides.activeCumulativeEthBeforeBid ?? 0n,
+		bidIndex: overrides.bidIndex,
+		bidder: overrides.bidder ?? walletAddress,
+		claimed: overrides.claimed ?? false,
+		cumulativeEth: overrides.cumulativeEth ?? ethAmount,
+		ethAmount,
+		refunded: overrides.refunded ?? false,
+		tick: overrides.tick,
 	}
 }
 
@@ -303,5 +344,180 @@ void describe('fork auction helpers', () => {
 				walletEthBalance: undefined,
 			}),
 		).toBe('Loading wallet ETH balance.')
+	})
+
+	void test('derives depth points from visible tick summaries', () => {
+		const auction = createTruthAuction({
+			clearingPrice: getTruthAuctionPriceAtTick(2n),
+			clearingTick: 2n,
+			hitCap: true,
+		})
+		const tickSummaries = sortTruthAuctionTickSummariesDescending([
+			createTickSummary({ active: true, currentTotalEth: 2n * 10n ** 18n, submissionCount: 2n, tick: 1n }),
+			createTickSummary({ active: true, currentTotalEth: 3n * 10n ** 18n, submissionCount: 3n, tick: 3n }),
+			createTickSummary({ active: true, currentTotalEth: 0n, submissionCount: 1n, tick: 2n }),
+			createTickSummary({ active: false, currentTotalEth: 0n, submissionCount: 1n, tick: 4n }),
+		])
+
+		const depthPoints = buildTruthAuctionDepthPoints({
+			enteredBidTick: 1n,
+			selectedBookTick: 3n,
+			tickSummaries,
+			truthAuction: auction,
+		})
+
+		expect(depthPoints.map(point => point.tick)).toEqual([3n, 2n, 1n])
+		expect(depthPoints.map(point => point.cumulativeEth)).toEqual([3n * 10n ** 18n, 3n * 10n ** 18n, 5n * 10n ** 18n])
+		expect(depthPoints.map(point => point.disposition.label)).toEqual(['Above Clearing', 'Historical', 'Below Clearing'])
+		expect(depthPoints.map(point => point.isSelected)).toEqual([true, false, false])
+		expect(depthPoints.map(point => point.isPreviewTick)).toEqual([false, false, true])
+		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])
+	})
+
+	void test('derives provisional truth auction progress from loaded depth', () => {
+		const ethUnit = 10n ** 18n
+		const progress = getTruthAuctionOverviewProgress(
+			createTruthAuction({
+				clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
+				clearingTick: 10n,
+				ethAtClearingTick: 4n * ethUnit,
+				ethRaiseCap: 10n * ethUnit,
+				hitCap: true,
+				maxRepBeingSold: 100n * ethUnit,
+			}),
+			[
+				createTickSummary({ active: true, currentTotalEth: 8n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 12n }),
+				createTickSummary({ active: true, currentTotalEth: 6n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 10n }),
+				createTickSummary({ active: true, currentTotalEth: 5n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 8n }),
+			],
+		)
+
+		expect(progress).toEqual({
+			ethRaised: 10n * ethUnit,
+			repSold: 10n * ethUnit,
+		})
+	})
+
+	void test('sorts auction bids by price priority and bid index', () => {
+		const sortedBids = sortTruthAuctionBidsByPriority([createBid({ bidIndex: 3n, tick: 9n }), createBid({ bidIndex: 2n, tick: 11n }), createBid({ bidIndex: 1n, tick: 11n })])
+
+		expect(sortedBids.map(bid => getTruthAuctionSettlementBidKey(bid))).toEqual(['11:1', '11:2', '9:3'])
+	})
+
+	void test('derives mixed settlement selection and guard messages', () => {
+		const finalizedAuction = createTruthAuction({
+			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
+			clearingTick: 10n,
+			ethAtClearingTick: 2n * 10n ** 18n,
+			finalized: true,
+			hitCap: true,
+			maxRepBeingSold: 100n * 10n ** 18n,
+			totalRepPurchased: 10n * 10n ** 18n,
+		})
+		const refundableBid = createBid({ bidIndex: 1n, tick: 9n })
+		const winningBid = createBid({ bidIndex: 2n, tick: 11n })
+		const otherWalletBid = createBid({ bidIndex: 3n, bidder: otherWalletAddress, tick: 12n })
+		const refundedBid = createBid({ bidIndex: 4n, refunded: true, tick: 8n })
+
+		expect(getTruthAuctionBidDisposition(winningBid, finalizedAuction).summaryKind).toBe('winning')
+		expect(getTruthAuctionBidDisposition(refundableBid, finalizedAuction).summaryKind).toBe('refundable')
+
+		const settlementRows = getTruthAuctionSettlementBidRows({
+			accountAddress: walletAddress,
+			truthAuction: finalizedAuction,
+			viewerBids: [refundableBid, winningBid, otherWalletBid, refundedBid],
+		})
+		const settlementSelection = getTruthAuctionSettlementSelectionState({
+			selectedBidKeys: settlementRows.map(({ bid }) => getTruthAuctionSettlementBidKey(bid)),
+			settlementBidRows: settlementRows,
+		})
+
+		expect(settlementRows.map(({ bid }) => getTruthAuctionSettlementBidKey(bid))).toEqual(['9:1', '11:2'])
+		expect(settlementSelection.selectionMode).toBe('mixed')
+		expect(settlementSelection.selectedRefundKeys).toEqual(['9:1'])
+		expect(settlementSelection.selectedClaimKeys).toEqual(['11:2'])
+		expect(
+			getTruthAuctionSettlementActionAvailabilityMessage({
+				claimingAvailable: false,
+				selectedClaimRows: settlementSelection.selectedClaimRows,
+				selectedRows: settlementSelection.selectedRows,
+				selectionHasClaims: settlementSelection.selectionHasClaims,
+				selectionHasRefunds: settlementSelection.selectionHasRefunds,
+				truthAuction: finalizedAuction,
+			}),
+		).toBe('Finalized settlement is not yet available for this pool.')
+		expect(
+			getTruthAuctionSettlementActionAvailabilityMessage({
+				claimingAvailable: true,
+				selectedClaimRows: settlementSelection.selectedClaimRows,
+				selectedRows: settlementSelection.selectedRows,
+				selectionHasClaims: settlementSelection.selectionHasClaims,
+				selectionHasRefunds: settlementSelection.selectionHasRefunds,
+				truthAuction: finalizedAuction,
+			}),
+		).toBeUndefined()
+	})
+
+	void test('builds truth auction bid row view models without component state', () => {
+		const finalizedAuction = createTruthAuction({
+			clearingTick: 10n,
+			finalized: true,
+			hitCap: true,
+		})
+		const rows = buildTruthAuctionBidRows({
+			bids: [createBid({ bidIndex: 1n, cumulativeEth: 3n, ethAmount: 2n, tick: 11n })],
+			truthAuction: finalizedAuction,
+		})
+
+		expect(rows).toEqual([
+			{
+				bidder: walletAddress,
+				cumulativeEth: 3n,
+				ethAmount: 2n,
+				key: 'aggregate:11:1',
+				price: getTruthAuctionPriceAtTick(11n),
+				statusLabel: 'Winning',
+				statusToneClassName: 'is-success',
+			},
+		])
+		expect(buildTruthAuctionBidRows({ bids: rows.map(row => createBid({ bidIndex: 1n, bidder: row.bidder, cumulativeEth: row.cumulativeEth, ethAmount: row.ethAmount, tick: 11n })), truthAuction: undefined })).toEqual([])
+	})
+
+	void test('builds viewer bid rows with settlement controls and local result status', () => {
+		const finalizedAuction = createTruthAuction({
+			clearingTick: 10n,
+			finalized: true,
+			hitCap: true,
+		})
+		const refundableBid = createBid({ bidIndex: 1n, tick: 9n })
+		const winningBid = createBid({ bidIndex: 2n, tick: 11n })
+		const otherWalletBid = createBid({ bidIndex: 3n, bidder: otherWalletAddress, tick: 12n })
+		const winningBidKey = getTruthAuctionSettlementBidKey(winningBid)
+		const rowsViewModel = buildViewerTruthAuctionBidRows({
+			accountAddress: walletAddress,
+			isSettlementInProgress: false,
+			selectedBidKeys: [winningBidKey],
+			selectedStage: 'settlement',
+			settlementResultByKey: {
+				[getTruthAuctionSettlementBidKey(refundableBid)]: 'refunded',
+			},
+			truthAuction: finalizedAuction,
+			viewerBids: [refundableBid, winningBid, otherWalletBid],
+		})
+
+		expect(rowsViewModel.showSettlementActionColumn).toBe(true)
+		expect(rowsViewModel.rows.map(row => row.statusLabel)).toEqual(['Refunded', 'Winning', 'Winning'])
+		expect(rowsViewModel.rows[0]?.settlementControl?.disabled).toBe(true)
+		expect(rowsViewModel.rows[1]?.settlementControl).toEqual({
+			ariaLabel: 'Select bid for settlement',
+			bidKey: winningBidKey,
+			checked: true,
+			disabled: false,
+			title: 'Select bid for settlement',
+		})
+		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
+		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], winningBidKey, true)).toEqual([winningBidKey])
+		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], '9:1', true)).toEqual([winningBidKey, '9:1'])
+		expect(updateTruthAuctionSettlementBidSelection([winningBidKey, '9:1'], winningBidKey, false)).toEqual(['9:1'])
 	})
 })
