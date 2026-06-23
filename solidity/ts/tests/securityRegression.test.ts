@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert/strict'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, zeroAddress } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from 'viem'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -17,7 +17,13 @@ import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/cont
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver } from '../types/contractArtifact'
+import {
+	peripherals_EscalationGame_EscalationGame,
+	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
+	peripherals_tokens_ShareToken_ShareToken,
+	test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver,
+} from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -200,6 +206,52 @@ describe('security regression coverage', () => {
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		assert.ok((await getEthRaiseCap(client, yesChild.truthAuction)) === 0n, 'legitimate child auction should deploy at its reserved address')
+	})
+
+	test('origin share-token address cannot be reserved by an untrusted caller', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const now = await mockWindow.getTime()
+		const squattedQuestionData = {
+			title: `share token salt squatting ${now}`,
+			description: '',
+			startTime: 0n,
+			endTime: now + 365n * DAY,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const squattedQuestionId = getQuestionId(squattedQuestionData, outcomes)
+		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, squattedQuestionId]))
+		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, securityMultiplier)
+		const squatterShareTokenAddress = getCreate2Address({
+			bytecode: encodeDeployData({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+				args: [attacker.account.address, getZoltarAddress(), squattedQuestionId],
+			}),
+			from: getInfraContractAddresses().shareTokenFactory,
+			salt: shareTokenSalt,
+		})
+
+		await createQuestion(client, squattedQuestionData, outcomes)
+		await writeContractAndWait(attacker, () =>
+			attacker.writeContract({
+				abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
+				address: getInfraContractAddresses().shareTokenFactory,
+				functionName: 'deployShareToken',
+				args: [shareTokenSalt, squattedQuestionId],
+			}),
+		)
+
+		assert.notEqual(squatterShareTokenAddress, expectedAddresses.shareToken, 'direct callers should not share the canonical init code')
+		assert.ok(await contractExists(client, squatterShareTokenAddress), 'untrusted caller should deploy only its own share token')
+		assert.equal(await contractExists(client, expectedAddresses.shareToken), false, 'canonical share token address should remain available')
+
+		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, securityMultiplier, maxRetentionRate)
+		assert.ok(await contractExists(client, expectedAddresses.securityPool), 'canonical origin security pool should deploy')
+		assert.ok(await contractExists(client, expectedAddresses.shareToken), 'canonical origin share token should deploy')
 	})
 
 	test('stale liquidation is consumed without executing after target state changes', async () => {
