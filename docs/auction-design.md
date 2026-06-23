@@ -12,7 +12,8 @@ child pool shortfall -> forker starts auction -> bidders submit ETH
 ```
 
 `startAuction` and `finalize` are owner-only. Bids are accepted only after the
-auction starts, before finalization, and before `auctionStarted + 1 week`.
+auction starts, before finalization, before `auctionStarted + 1 week`, and at a
+tick whose effective `tickToPrice` value is nonzero.
 After finalization, bidders do not call `withdrawBids` directly. The forker
 withdraws auction results from the auction and converts purchased REP into
 child-pool vault ownership plus the matching share of auctioned security-bond
@@ -54,6 +55,8 @@ After finalization, paged settlement handles both claim and refund cases:
 - marginal clearing-tick bids may be partially filled and partially refunded
 - underfunded winning bids receive REP pro rata by ETH contribution
 
+Zero-effective-price ticks are rejected when bids are submitted, so underfunded
+settlement cannot assign REP to bids whose rounded ETH/REP price is zero.
 The underfunded path carries division dust through `underfundedRemainder` as
 bid pages are withdrawn, so later withdrawals receive the remainder carried from
 earlier integer division.
