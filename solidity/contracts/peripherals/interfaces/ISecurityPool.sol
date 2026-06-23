@@ -8,7 +8,7 @@ import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
 import { EscalationGame } from '../EscalationGame.sol';
-import { CarriedDepositProof } from '../EscalationGame.sol';
+import { CarriedDepositProof } from '../EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
