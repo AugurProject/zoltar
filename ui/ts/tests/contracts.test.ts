@@ -1171,6 +1171,16 @@ describe('contracts helpers', () => {
 		})
 	})
 
+	test('loadTruthAuctionTickBidPage rejects malformed per-tick bid pages instead of trusting ABI shapes', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getBidCountAtTick') return 1n
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 11n, bidIndex: 0n, bidder: securityPoolAddress, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: 'bad-refund-flag' }]
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionTickBidPage(client, truthAuctionAddress, 11n, 0, 10)).rejects.toThrow('Unexpected truth auction tick bid page response')
+	})
+
 	test('loadTruthAuctionBidderBidPage rejects malformed bid pages instead of trusting ABI shapes', async () => {
 		const client = createMockReadClient(async request => {
 			if (request.functionName === 'getBidderBidCount') return 1n
