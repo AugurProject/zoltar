@@ -263,6 +263,7 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 				installSimulationProxyDeployer: async ({ address, runtimeCode }) => {
 					await callWorker('installSimulationProxyDeployer', { address, runtimeCode })
 				},
+				onTransactionPrepared: callbacks.onTransactionPrepared,
 				patchSimulationGenesisRepToken: async ({ repAddress, zoltarAddress }) => {
 					await callWorker('patchSimulationGenesisRepToken', { repAddress, zoltarAddress })
 				},
@@ -299,6 +300,13 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 		getAccounts: async () => await callWorker('getAccounts', undefined),
 		getChainId: async () => profile.chainIdHex,
 		getProvider: () => provider,
+		getReadBackendStatus: () => ({
+			blockNumber: requireState().blockCountSinceReset,
+			blockTimestamp: requireState().currentTimestamp,
+			rpcSource: 'default',
+			rpcUrl: 'browser-simulation',
+			transportMode: 'provider',
+		}),
 		hasWallet: () => true,
 		id: 'simulation',
 		isActive: true,

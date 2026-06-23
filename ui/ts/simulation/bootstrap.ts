@@ -28,7 +28,7 @@ import {
 } from '../contracts.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
-import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/forkAuction.js'
+import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'

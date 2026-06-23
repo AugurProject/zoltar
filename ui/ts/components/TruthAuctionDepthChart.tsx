@@ -2,21 +2,7 @@ import { useRef } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
-
-type TruthAuctionDisposition = {
-	label: string
-	tone: 'default' | 'danger' | 'success' | 'warning'
-}
-
-export type TruthAuctionDepthPoint = {
-	tick: bigint
-	price: bigint
-	currentTotalEth: bigint
-	cumulativeEth: bigint
-	disposition: TruthAuctionDisposition
-	isSelected: boolean
-	isPreviewTick: boolean
-}
+import type { TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
 
 type TruthAuctionDepthChartProps = {
 	clearingTick?: bigint

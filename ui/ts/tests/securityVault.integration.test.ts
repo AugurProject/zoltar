@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress, type Address } from 'viem'
 import { approveErc20, depositRepToSecurityPool, loadErc20Allowance, loadErc20Balance, loadSecurityVaultDetails } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import type { InjectedEthereum } from '../injectedEthereum.js'
 import { DAY, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
@@ -17,10 +18,20 @@ import { getSecurityVault, getVaultCount, getVaults, poolOwnershipToRep } from '
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
+function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
 	if (!Reflect.has(globalThis, 'window')) Reflect.set(globalThis, 'window', globalThis)
 	const windowObject = globalThis.window
-	Reflect.set(windowObject, 'ethereum', mockWindow)
+	const request: InjectedEthereum['request'] = async args => {
+		if (args.method === 'eth_accounts' || args.method === 'eth_requestAccounts') return [accountAddress] as never
+		if (args.method === 'eth_chainId') return '0x1' as never
+		return (await mockWindow.request(args)) as never
+	}
+	const injectedEthereum: InjectedEthereum = {
+		on: mockWindow.on,
+		removeListener: mockWindow.removeListener,
+		request,
+	}
+	Reflect.set(windowObject, 'ethereum', injectedEthereum)
 }
 
 const genesisUniverse = 0n

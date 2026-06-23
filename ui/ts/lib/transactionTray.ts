@@ -1,5 +1,6 @@
 import type { Hash } from 'viem'
-import { createAwaitingWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
+import { createAwaitingWalletPresentation, createPreparedWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
+import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
 
 export type TransactionTrayState = {
@@ -29,6 +30,21 @@ export function markTransactionRequested(state: TransactionTrayState, pendingInt
 		pendingIntent,
 		pendingRequestKey: requestKey,
 		requestSequence: state.requestSequence + 1,
+	}
+}
+
+export function markTransactionPrepared(state: TransactionTrayState, preview: TransactionRequestPreview): TransactionTrayState {
+	const pendingIntent = state.pendingIntent
+	const pendingRequestKey = state.pendingRequestKey
+	if (pendingIntent === undefined || pendingRequestKey === undefined) return state
+	const prepared = createPreparedWalletPresentation(pendingIntent, preview, pendingRequestKey)
+	return {
+		...state,
+		active: prepared,
+		pendingIntent: {
+			...pendingIntent,
+			...(prepared.rows === undefined ? {} : { rows: prepared.rows }),
+		},
 	}
 }
 

@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks'
 import type { Address } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../contracts.js'
 import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
-import type { ChainBackend } from '../lib/chainBackend.js'
+import type { ChainBackend, ReadBackendStatus } from '../lib/chainBackend.js'
 import { getErrorMessage, hasErrorCode, hasErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -34,12 +34,39 @@ function buildReadBackendMismatchMessage(backend: ChainBackend, actualChainId: n
 	return `Configured read RPC reports chain ${actualChainId.toString()}, but this app requires ${backend.profile.displayName} (${getExpectedReadChainId(backend).toString()}).`
 }
 
+function getReadBackendStatus(backend: ChainBackend): ReadBackendStatus {
+	return (
+		backend.getReadBackendStatus?.() ?? {
+			blockNumber: undefined,
+			blockTimestamp: undefined,
+			rpcSource: 'default',
+			rpcUrl: backend.profile.displayName,
+			transportMode: 'provider',
+		}
+	)
+}
+
 async function validateConfiguredReadBackend(backend: ChainBackend): Promise<ReadBackendValidationResult> {
 	try {
-		const readChainId = await backend.createReadClient().getChainId()
+		const readClient = backend.createReadClient()
+		const readChainId = await readClient.getChainId()
 		if (readChainId !== getExpectedReadChainId(backend)) {
 			return {
 				readBackendMessage: buildReadBackendMismatchMessage(backend, readChainId),
+				validated: true,
+			}
+		}
+		const block = await readClient.getBlock()
+		const blockNumber = typeof block.number === 'bigint' ? block.number : undefined
+		const blockTimestamp = typeof block.timestamp === 'bigint' ? block.timestamp : undefined
+		backend.setReadBackendBlock?.({
+			number: blockNumber,
+			timestamp: blockTimestamp,
+		})
+		const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000))
+		if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
+			return {
+				readBackendMessage: `Configured read RPC is stale. Latest block timestamp is ${blockTimestamp.toString()}, more than 10 minutes behind local time.`,
 				validated: true,
 			}
 		}
@@ -105,6 +132,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 }
 
 const CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS = 12_000
+const READ_BACKEND_STALE_BLOCK_SECONDS = 10n * 60n
 
 async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock> {
 	if (backend.isBootstrapped === false)
@@ -160,9 +188,17 @@ export function useOnchainState() {
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const readBackendMessage = useSignal<string | undefined>(undefined)
 	const readBackendValidated = useSignal(false)
+	const readBackendStatus = useSignal<ReadBackendStatus>(getReadBackendStatus(getActiveBackend()))
 	const clearChainClock = () => {
 		currentBlockNumber.value = undefined
 		currentTimestamp.value = undefined
+	}
+	const updateReadBackendStatus = (backend: ChainBackend, block?: ChainClock) => {
+		backend.setReadBackendBlock?.({
+			number: block?.currentBlockNumber,
+			timestamp: block?.currentTimestamp,
+		})
+		readBackendStatus.value = getReadBackendStatus(backend)
 	}
 	const isReadBackendReady = () => readBackendValidated.value && readBackendMessage.value === undefined
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
@@ -176,11 +212,13 @@ export function useOnchainState() {
 		if (!isCurrent()) return
 		if (nextChainClock.currentTimestamp !== undefined) currentTimestamp.value = nextChainClock.currentTimestamp
 		if (nextChainClock.currentBlockNumber !== undefined) currentBlockNumber.value = nextChainClock.currentBlockNumber
+		updateReadBackendStatus(backend, nextChainClock)
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
 		const shouldLoadWalletState = options.loadWalletState ?? true
 		const backend = getActiveBackend()
+		updateReadBackendStatus(backend)
 		const isCurrent = nextRefresh()
 		let connectedAddress: Address | undefined
 		let connectedChainId: string | undefined
@@ -220,6 +258,7 @@ export function useOnchainState() {
 				if (!isCurrent()) return
 				readBackendMessage.value = validation.readBackendMessage
 				readBackendValidated.value = validation.validated
+				updateReadBackendStatus(backend)
 				if (validation.readBackendMessage !== undefined) clearChainClock()
 			} catch (error) {
 				if (!isCurrent()) return
@@ -227,6 +266,7 @@ export function useOnchainState() {
 			}
 		} else {
 			readBackendValidated.value = true
+			updateReadBackendStatus(backend)
 		}
 		if (isReadBackendReady()) void refreshChainClock(backend)
 
@@ -402,6 +442,7 @@ export function useOnchainState() {
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		readBackendMessage: readBackendMessage.value,
+		readBackendStatus: readBackendStatus.value,
 		environmentBootstrapError: environmentBootstrapError.value,
 		environmentBootstrapLabel: environmentBootstrapLabel.value,
 		environmentBootstrapProgress: environmentBootstrapProgress.value,

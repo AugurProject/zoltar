@@ -116,4 +116,55 @@ describe('useZoltarMigration', () => {
 		expect(refreshZoltarUniverse).not.toHaveBeenCalled()
 		expect(refreshZoltarForkAccess).not.toHaveBeenCalled()
 	})
+
+	test('does not request a migration transaction when the active wallet network changed', async () => {
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
+			getChainId: async () => '0x5',
+		})
+		const ensureZoltarUniverse = mock(async () => createUniverse())
+		const onTransactionRequested = mock(() => undefined)
+		const onTransactionFailed = mock(() => undefined)
+
+		const { useZoltarMigration } = await import(`../hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
+		let hookState: UseZoltarMigrationState | undefined
+		const Harness = function ZoltarMigrationHarness() {
+			const state = useZoltarMigration({
+				accountAddress: WALLET_ADDRESS,
+				ensureZoltarUniverse,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				refreshZoltarForkAccess: async () => undefined,
+				refreshZoltarUniverse: async () => undefined,
+				zoltarForkRepBalance: 10n ** 19n,
+				zoltarMigrationPreparedRepBalance: 0n,
+			})
+
+			hookState = state
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setZoltarMigrationForm(current => ({
+				...current,
+				amount: '10',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).prepareRepForMigration()
+		})
+
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
+		expect(onTransactionFailed).toHaveBeenCalledWith('Transaction failed while attempting to prepare REP for migration. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+	})
 })

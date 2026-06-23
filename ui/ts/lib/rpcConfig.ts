@@ -2,6 +2,13 @@ export const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
 const RPC_URL_SEARCH_PARAM = 'rpcUrl'
 const RPC_URL_STORAGE_KEY = 'zoltar.rpcUrl'
 
+export type ConfiguredRpcSource = 'default' | 'environment' | 'global' | 'localStorage' | 'override' | 'url'
+
+export type ConfiguredRpcConfig = {
+	source: ConfiguredRpcSource
+	url: string
+}
+
 type LocationLike = {
 	hash?: string
 	search?: string
@@ -47,22 +54,26 @@ function readStoredRpcUrl(storage: StorageLike | undefined) {
 	}
 }
 
-export function resolveConfiguredRpcUrl({ fallbackRpcUrl = DEFAULT_RPC_URL, location, overrideRpcUrl, storage }: { fallbackRpcUrl?: string; location?: LocationLike; overrideRpcUrl?: string; storage?: StorageLike } = {}) {
+export function resolveConfiguredRpcConfig({ fallbackRpcUrl = DEFAULT_RPC_URL, location, overrideRpcUrl, storage }: { fallbackRpcUrl?: string; location?: LocationLike; overrideRpcUrl?: string; storage?: StorageLike } = {}): ConfiguredRpcConfig {
 	const normalizedOverrideRpcUrl = resolveNonEmptyString(overrideRpcUrl)
-	if (normalizedOverrideRpcUrl !== undefined) return normalizedOverrideRpcUrl
+	if (normalizedOverrideRpcUrl !== undefined) return { source: 'override', url: normalizedOverrideRpcUrl }
 
 	const globalWithRpcConfig = globalThis as GlobalWithRpcConfig
 	const rpcUrlSearchParam = resolveNonEmptyString(readLocationParams(location ?? globalWithRpcConfig.location).get(RPC_URL_SEARCH_PARAM))
-	if (rpcUrlSearchParam !== undefined) return rpcUrlSearchParam
+	if (rpcUrlSearchParam !== undefined) return { source: 'url', url: rpcUrlSearchParam }
 
 	const storedRpcUrl = resolveNonEmptyString(readStoredRpcUrl(storage ?? globalWithRpcConfig.localStorage))
-	if (storedRpcUrl !== undefined) return storedRpcUrl
+	if (storedRpcUrl !== undefined) return { source: 'localStorage', url: storedRpcUrl }
 
 	const globalRpcUrl = resolveNonEmptyString(globalWithRpcConfig.__ZOLTAR_RPC_URL__)
-	if (globalRpcUrl !== undefined) return globalRpcUrl
+	if (globalRpcUrl !== undefined) return { source: 'global', url: globalRpcUrl }
 
 	const environmentRpcUrl = resolveNonEmptyString(globalWithRpcConfig.process?.env?.['ZOLTAR_RPC_URL'])
-	if (environmentRpcUrl !== undefined) return environmentRpcUrl
+	if (environmentRpcUrl !== undefined) return { source: 'environment', url: environmentRpcUrl }
 
-	return fallbackRpcUrl
+	return { source: 'default', url: fallbackRpcUrl }
+}
+
+export function resolveConfiguredRpcUrl(options: Parameters<typeof resolveConfiguredRpcConfig>[0] = {}) {
+	return resolveConfiguredRpcConfig(options).url
 }

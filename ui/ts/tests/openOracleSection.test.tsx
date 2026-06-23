@@ -465,6 +465,20 @@ void describe('OpenOracleSection', () => {
 		expect(hasVNodeType(section, ErrorNotice)).toBe(false)
 	})
 
+	void test('renders initial-report quote freshness metadata', () => {
+		const section = renderInitialReportActionSection({
+			openOracleInitialReportState: createOpenOracleInitialReportState({
+				quoteBlockNumber: 123n,
+				quoteLoadedAtMs: Date.now() - 70_000,
+				quoteStale: true,
+			}),
+		})
+		const textContent = getTextContent(section)
+
+		expect(textContent).toContain('Quote loaded at block 123')
+		expect(textContent).toContain('This quote is stale and will be refreshed before submission.')
+	})
+
 	void test('uses the shared form input for initial-report and dispute amount fields', () => {
 		const initialReportSection = renderInitialReportActionSection()
 		const disputeSection = renderDisputeActionSection()
