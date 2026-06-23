@@ -67,7 +67,6 @@ describe('security pool creation helper', () => {
 		await createQuestion(client, questionData, outcomes)
 
 		const result = await createSecurityPool(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), {
-			currentRetentionRate: 999_999_996_848_000_000n,
 			questionId,
 			securityMultiplier: 2n,
 		})
@@ -109,7 +108,6 @@ describe('security pool creation helper', () => {
 		const fakeClient = fakeClientBase as UiWriteClient
 
 		const result = await createSecurityPool(fakeClient, {
-			currentRetentionRate: 999_999_996_848_000_000n,
 			questionId: 123n,
 			securityMultiplier: 2n,
 		})

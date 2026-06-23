@@ -4,8 +4,6 @@ import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 const WHOLE_NUMBER_PATTERN = /^-?\d+$/
 const HEX_BIGINT_PATTERN = /^0x[0-9a-fA-F]+$/
 
-const DEFAULT_CURRENT_RETENTION_RATE = '10'
-
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
@@ -23,7 +21,6 @@ export function getDefaultMarketFormState(): MarketFormState {
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {
-		currentRetentionRate: DEFAULT_CURRENT_RETENTION_RATE,
 		marketId: '',
 		securityMultiplier: '2',
 	}

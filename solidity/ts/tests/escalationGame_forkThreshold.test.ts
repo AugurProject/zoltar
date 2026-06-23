@@ -22,7 +22,6 @@ import { getERC20Balance } from '../testsuite/simulator/utils/utilities'
 import { GENESIS_REPUTATION_TOKEN } from '../testsuite/simulator/utils/constants'
 
 const DAY = 86400n
-const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -67,7 +66,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
 
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
 		await approveAndDepositRep(client, 1000n * 10n ** 18n, questionId)
 
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)

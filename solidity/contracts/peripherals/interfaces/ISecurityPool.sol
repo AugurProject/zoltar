@@ -167,8 +167,7 @@ interface ISecurityPoolFactory {
 	function deployOriginSecurityPool(
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
-		uint256 currentRetentionRate
+		uint256 securityMultiplier
 	) external returns (ISecurityPool securityPool);
 	function securityPoolDeploymentCount() external view returns (uint256);
 	function securityPoolDeploymentsRange(

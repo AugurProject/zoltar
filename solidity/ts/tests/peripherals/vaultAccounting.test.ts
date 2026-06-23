@@ -781,7 +781,7 @@ describe('Peripherals: vault accounting', () => {
 		}
 		const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
 		await createQuestion(client, secondQuestionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier)
 		await approveAndDepositRep(client, repDeposit, secondQuestionId)
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 		await approveAndDepositRep(attackerClient, repDeposit, secondQuestionId)
