@@ -4,7 +4,8 @@ pragma solidity 0.8.35;
 import { Zoltar } from '../../Zoltar.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { BinaryOutcomes } from '../../peripherals/BinaryOutcomes.sol';
-import { CarriedDepositProof, EscalationGame } from '../../peripherals/EscalationGame.sol';
+import { EscalationGame } from '../../peripherals/EscalationGame.sol';
+import { CarriedDepositProof } from '../../peripherals/EscalationGameTypes.sol';
 
 contract EscalationGameProofTestSecurityPool {
 	Zoltar public immutable zoltar;
