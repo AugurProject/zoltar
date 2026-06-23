@@ -2,4 +2,4 @@
 root = "js/tests"
 threads = 2
 timeout = 300000
-preload = ['../bun-test-setup.ts']
+preload = ['../bun-test-setup-solidity.ts']
