@@ -248,7 +248,7 @@ export function useZoltarFork({
 				false,
 				{ requireQuestionIdInput: false },
 			),
-		[runZoltarForkAction, onTransactionSubmitted],
+		[runZoltarForkAction, onTransactionPrepared, onTransactionSubmitted],
 	)
 
 	const forkZoltar = async () =>

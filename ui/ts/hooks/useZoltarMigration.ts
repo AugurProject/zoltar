@@ -162,7 +162,7 @@ export function useZoltarMigration({
 			requiresOutcomeIndexes: false,
 			resolveAmount: resolvePrepareMigrationAmount,
 		})
-	}, [onTransactionSubmitted, runZoltarMigrationAction])
+	}, [onTransactionPrepared, onTransactionSubmitted, runZoltarMigrationAction])
 
 	const migrateInternalRep = useCallback(async () => {
 		await runZoltarMigrationAction({
@@ -172,7 +172,7 @@ export function useZoltarMigration({
 			refreshAfter: true,
 			requiresOutcomeIndexes: true,
 		})
-	}, [onTransactionSubmitted, runZoltarMigrationAction])
+	}, [onTransactionPrepared, onTransactionSubmitted, runZoltarMigrationAction])
 
 	return {
 		migrateInternalRep,
