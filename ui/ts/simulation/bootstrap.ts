@@ -39,6 +39,7 @@ type TevmLikeClient = ReturnType<typeof createMemoryClient>
 type BootstrapProgressHandler = (progress: { label: string; value: number }) => Promise<void> | void
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
+const FORK_MIGRATION_TIME_SECONDS = 8n * 7n * DAY_IN_SECONDS
 const ETH_BALANCE_AMOUNT = 10n ** 30n
 const GENESIS_UNIVERSE_ID = 0n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
@@ -1079,7 +1080,7 @@ async function seedSecurityPoolX2AuctionScenario({
 	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
 	await createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
 	await migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
-	await advanceSimulationTime(memoryClient, 8n * DAY_IN_SECONDS + DAY_IN_SECONDS)
+	await advanceSimulationTime(memoryClient, FORK_MIGRATION_TIME_SECONDS + DAY_IN_SECONDS)
 
 	const yesChildPool = await loadRequiredChildSecurityPool(readClient, parentPool.securityPoolAddress, 'yes')
 	const yesForkDetailsBeforeAuction = await loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
