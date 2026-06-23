@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { createMarketParameters, createSecurityPoolParameters, hasDeployedStep, validateMarketForm } from '../lib/marketCreation.js'
+import { ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { sortStringArrayByKeccak } from '../lib/sortStringArrayByKeccak.js'
 import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
 
@@ -308,12 +309,14 @@ void describe('market creation helpers', () => {
 
 	test('parses security-pool market IDs as decimal and hexadecimal values', () => {
 		const form: SecurityPoolFormState = {
-			currentRetentionRate: '12',
+			currentRetentionRate: 'not used',
 			marketId: '0x2a',
 			securityMultiplier: '3',
 		}
 
-		expect(createSecurityPoolParameters(form).questionId).toBe(42n)
+		const parameters = createSecurityPoolParameters(form)
+		expect(parameters.currentRetentionRate).toBe(ORIGIN_POOL_INITIAL_RETENTION_RATE)
+		expect(parameters.questionId).toBe(42n)
 	})
 
 	test('normalizes and rejects malformed security-pool market IDs', () => {
@@ -354,13 +357,25 @@ void describe('market creation helpers', () => {
 		expect(validation.notice).toContain('Fix invalid fields: Scalar max must be greater than scalar min')
 	})
 
-	test('security pool creation rejects retention rates outside the supported percentage range', () => {
-		expect(() =>
-			createSecurityPoolParameters({
-				currentRetentionRate: '101',
-				marketId: '42',
-				securityMultiplier: '2',
-			} as SecurityPoolFormState),
-		).toThrow('Open interest fee per year must be between 0 and 100')
+	test('security pool creation ignores legacy retention input and uses the protocol origin value', () => {
+		const parameters = createSecurityPoolParameters({
+			currentRetentionRate: '101',
+			marketId: '42',
+			securityMultiplier: '2',
+		} as SecurityPoolFormState)
+
+		expect(parameters.currentRetentionRate).toBe(ORIGIN_POOL_INITIAL_RETENTION_RATE)
+	})
+
+	test('security pool creation rejects multipliers the origin factory cannot accept', () => {
+		for (const securityMultiplier of ['0', '1']) {
+			expect(() =>
+				createSecurityPoolParameters({
+					currentRetentionRate: 'not used',
+					marketId: '42',
+					securityMultiplier,
+				} as SecurityPoolFormState),
+			).toThrow('Security multiplier must be greater than 1')
+		}
 	})
 })

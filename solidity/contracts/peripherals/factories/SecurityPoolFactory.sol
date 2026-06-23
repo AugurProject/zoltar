@@ -15,6 +15,7 @@ import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
+import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -132,8 +133,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint248 universeId,
 		uint256 questionId,
 		uint256 securityMultiplier,
-		uint256 currentRetentionRate
+		uint256 /* currentRetentionRate */
 	) external returns (ISecurityPool securityPool) {
+		// Origin pool deployment is intentionally public, so first deployers must not be able to
+		// lock unsafe economic parameters into the canonical pool for a question/multiplier pair.
+		// The legacy retention-rate argument is ignored; zero-utilization origin pools always
+		// start at the protocol retention curve's maximum rate.
+		require(securityMultiplier > 1, 'security multiplier');
+
 		// Validate that the question exists
 		require(questionData.questionCreatedTimestamp(questionId) > 0, 'question missing');
 
@@ -153,6 +160,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		// sharetoken has different salt as sharetoken address does not change in forks
 		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, questionId));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt, questionId);
+		uint256 initialRetentionRate = SecurityPoolUtils.calculateRetentionRate(0, 0);
 		securityPool = deploySecurityPool(
 			shareToken,
 			ISecurityPool(payable(address(0))),
@@ -160,7 +168,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			universeId,
 			questionId,
 			securityMultiplier,
-			currentRetentionRate,
+			initialRetentionRate,
 			0,
 			address(0)
 		);
@@ -176,7 +184,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				securityMultiplier,
-				currentRetentionRate,
+				initialRetentionRate,
 				0
 			)
 		);

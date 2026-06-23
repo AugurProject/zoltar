@@ -2,6 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Abi, Address } from 'viem'
 import type { WriteClient } from '../../testsuite/simulator/utils/viem'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 
 describe('Peripherals: deployment and own-fork escalation', () => {
 	const fixture = usePeripheralsDeploymentAndOwnForkEscalationFixture()
@@ -150,6 +151,51 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const missingUniverseId = 999999n
 
 		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier, MAX_RETENTION_RATE), /universe missing/)
+	})
+
+	test('origin security pool deployment derives protocol parameters instead of trusting the first deployer', async () => {
+		const createBinaryQuestion = async (title: string) => {
+			const deploymentQuestionData = {
+				...questionData,
+				title,
+			}
+			await createQuestion(client, deploymentQuestionData, outcomes)
+			return getQuestionId(deploymentQuestionData, outcomes)
+		}
+		const zeroMultiplierQuestionId = await createBinaryQuestion(`zero multiplier ${await mockWindow.getTime()}`)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n, MAX_RETENTION_RATE), /security multiplier/)
+
+		const oneMultiplierQuestionId = await createBinaryQuestion(`one multiplier ${await mockWindow.getTime()}`)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n, MAX_RETENTION_RATE), /security multiplier/)
+
+		const callerSuppliedRetentionRate = 0n
+		const callerRetentionQuestionId = await createBinaryQuestion(`caller retention ${await mockWindow.getTime()}`)
+		await deployOriginSecurityPool(client, genesisUniverse, callerRetentionQuestionId, securityMultiplier, callerSuppliedRetentionRate)
+		const callerRetentionPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, callerRetentionQuestionId, securityMultiplier).securityPool
+		const retentionRate = await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'currentRetentionRate',
+			address: callerRetentionPool,
+			args: [],
+		})
+		const factoryAddress = getInfraContractAddresses().securityPoolFactory
+		const deploymentCount = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentCount',
+			address: factoryAddress,
+			args: [],
+		})
+		const deployments = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentsRange',
+			address: factoryAddress,
+			args: [deploymentCount - 1n, 1n],
+		})
+		const deployment = deployments[0]
+		if (deployment === undefined) throw new Error('origin deployment record missing')
+
+		strictEqualTypeSafe(retentionRate, MAX_RETENTION_RATE, 'origin retention rate should come from protocol math')
+		strictEqualTypeSafe(deployment.currentRetentionRate, MAX_RETENTION_RATE, 'origin deployment record should store the protocol retention rate')
 	})
 
 	test('can fork security pool using separate initiate and migrate calls with multiple migrations', async () => {
