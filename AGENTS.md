@@ -85,25 +85,52 @@ For file-changing tasks that are being prepared for a PR, after the selected che
 
 As the final quality gate for any task that changes code, tests, configuration, or repo instructions, the main agent must spawn the project-scoped `reviewer` custom agent defined in `.codex/agents/reviewer.toml` and wait for it to complete before responding to the user. Start the reviewer from a clear task summary instead of relying on inherited conversation context.
 
-The main agent must give the reviewer an intent summary that includes:
+The main agent must give the reviewer a structured request summary that includes:
 
-- the user's requested outcome and why the change exists
-- the implemented behavior and any intentional exclusions
-- the files or areas changed
-- the tests and checks run, including their results and scope-based reasons for skipped checks
-- any known tradeoffs or areas needing close attention
+- a brief verbatim excerpt or exact summary of the original user request
+- acceptance criteria derived from the request
+- intentional non-goals or exclusions
+- implementation summary
+- changed files or areas
+- validation commands and results, including concrete scope-based reasons for skipped checks
+- known risks, tradeoffs, or areas needing close attention
 
 Send the reviewer a prompt with this shape:
 
 ```text
 Use the project-scoped reviewer instructions from .codex/agents/reviewer.toml.
 
-Intent summary:
-<user goal, implemented behavior, changed areas, checks run, tradeoffs>
+Original user request:
+<brief verbatim excerpt or exact task summary>
 
-Review the branch diff against the stated intent and relevant codebase context.
+Acceptance criteria:
+- <requirement 1>
+- <requirement 2>
 
-Also return a branch-diff quality score from 0 to 100.
+Intentional non-goals / exclusions:
+- <anything intentionally not implemented>
+
+Implementation summary:
+- <what changed and why>
+
+Changed files / areas:
+- <file or area list>
+
+Validation:
+- <command>: <passed/failed/skipped>
+- <skip reason, if skipped>
+
+Known risks or areas needing close attention:
+- <risk, tradeoff, or "none known">
+
+Review the current branch diff against main and the stated acceptance criteria.
+Do not modify files.
+Return findings grouped by High, Medium, and Low.
+
+Also include:
+- Validation assessment
+- Review limitations, or "None" if there are no limitations
+- Branch-diff quality score from 0 to 100 using the reviewer rubric
 ```
 
 After the reviewer finishes, the main agent must read the full review and decide how to handle every finding:
