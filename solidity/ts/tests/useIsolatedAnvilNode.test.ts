@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { getAnvilConnectionMode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode } from '../testsuite/simulator/anvilNode'
 
 test('getAnvilConnectionMode uses the platform default when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']
@@ -43,4 +43,45 @@ test('getAnvilConnectionMode uses ANVIL_RPC when provided', () => {
 			process.env['ANVIL_RPC'] = originalAnvilRpc
 		}
 	}
+})
+
+test('getGasCostsAnvilConnectionMode spawns an isolated node when ANVIL_RPC is not set', () => {
+	const originalAnvilRpc = process.env['ANVIL_RPC']
+
+	try {
+		delete process.env['ANVIL_RPC']
+		expect(getGasCostsAnvilConnectionMode()).toEqual({
+			type: 'spawn-isolated',
+			rpcUrl: '',
+			port: 0,
+		})
+	} finally {
+		if (originalAnvilRpc === undefined) {
+			delete process.env['ANVIL_RPC']
+		} else {
+			process.env['ANVIL_RPC'] = originalAnvilRpc
+		}
+	}
+})
+
+test('getGasCostsAnvilConnectionMode uses ANVIL_RPC when provided', () => {
+	const originalAnvilRpc = process.env['ANVIL_RPC']
+
+	try {
+		process.env['ANVIL_RPC'] = 'http://127.0.0.1:8545'
+		expect(getGasCostsAnvilConnectionMode()).toEqual({
+			type: 'use-existing',
+			rpcUrl: 'http://127.0.0.1:8545',
+		})
+	} finally {
+		if (originalAnvilRpc === undefined) {
+			delete process.env['ANVIL_RPC']
+		} else {
+			process.env['ANVIL_RPC'] = originalAnvilRpc
+		}
+	}
+})
+
+test('connectToExistingAnvilNode reports an actionable setup message when RPC validation fails', async () => {
+	await expect(connectToExistingAnvilNode('https://127.0.0.1:8545', 'gas-costs')).rejects.toThrow('Unable to connect to Anvil at https://127.0.0.1:8545 for gas-costs. Start Anvil or set ANVIL_RPC to a local endpoint.')
 })

@@ -1,7 +1,7 @@
 import { zeroAddress } from 'viem'
 import type { Hash } from 'viem'
 import { Zoltar_Zoltar } from './types/contractArtifact'
-import { getMockedEthSimulateWindowEthereum } from './testsuite/simulator/AnvilWindowEthereum'
+import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testsuite/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testsuite/simulator/utils/contracts/deployPeripherals'
 import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, migrateShares, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, wrapWeth } from './testsuite/simulator/utils/contracts/peripherals'
@@ -65,7 +65,8 @@ if (!Number.isFinite(priorityFeeGwei) || priorityFeeGwei < 0) throw new Error('P
 if (!Number.isFinite(baseFeeGwei) || baseFeeGwei < 0) throw new Error('BASE_FEE_GWEI must be a non-negative number')
 if (totalGasPriceGwei <= 0) throw new Error('BASE_FEE_GWEI + PRIORITY_FEE_GWEI must be greater than zero')
 
-const anvil = await getMockedEthSimulateWindowEthereum()
+const anvilNode = await createAnvilNodeForConnectionMode(getGasCostsAnvilConnectionMode(), { context: 'gas-costs', startTimestamp: 1n })
+const anvil = anvilNode.anvilWindowEthereum
 const alice = createWriteClient(anvil, TEST_ADDRESSES[0], 0)
 const bob = createWriteClient(anvil, TEST_ADDRESSES[1], 0)
 const carol = createWriteClient(anvil, TEST_ADDRESSES[2], 0)
@@ -659,36 +660,40 @@ const scenarios: Scenario[] = [
 	},
 ]
 
-const results: { section: string; label: string; gas: bigint }[] = []
+try {
+	const results: { section: string; label: string; gas: bigint }[] = []
 
-for (const scenario of scenarios) {
-	await initializeChain(scenario.init ?? { deployZoltar: true, deployInfra: true })
-	try {
-		const gas = await scenario.run()
-		results.push({ section: scenario.section, label: scenario.label, gas })
-	} catch (error) {
-		throw new Error(`Scenario failed: ${scenario.section} / ${scenario.label} - ${error instanceof Error ? error.message : String(error)}`)
+	for (const scenario of scenarios) {
+		await initializeChain(scenario.init ?? { deployZoltar: true, deployInfra: true })
+		try {
+			const gas = await scenario.run()
+			results.push({ section: scenario.section, label: scenario.label, gas })
+		} catch (error) {
+			throw new Error(`Scenario failed: ${scenario.section} / ${scenario.label} - ${error instanceof Error ? error.message : String(error)}`)
+		}
 	}
-}
 
-const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
-const gasCostInEth = (gas: bigint) => (Number(gas) * totalGasPriceGwei) / 1_000_000_000
-const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd
+	const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
+	const gasCostInEth = (gas: bigint) => (Number(gas) * totalGasPriceGwei) / 1_000_000_000
+	const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd
 
-console.log(`# Pricing Assumptions`)
-console.log(`ETH price: $${usdFormatter.format(ethPriceUsd)}`)
-console.log(`Base fee: ${baseFeeGwei} gwei`)
-console.log(`Priority fee: ${priorityFeeGwei} gwei`)
-console.log(`Total gas price: ${totalGasPriceGwei} gwei`)
-console.log('')
+	console.log(`# Pricing Assumptions`)
+	console.log(`ETH price: $${usdFormatter.format(ethPriceUsd)}`)
+	console.log(`Base fee: ${baseFeeGwei} gwei`)
+	console.log(`Priority fee: ${priorityFeeGwei} gwei`)
+	console.log(`Total gas price: ${totalGasPriceGwei} gwei`)
+	console.log('')
 
-let currentSection = ''
-for (const result of results) {
-	if (result.section !== currentSection) {
-		if (currentSection !== '') console.log('')
-		currentSection = result.section
-		console.log(`# ${currentSection}`)
+	let currentSection = ''
+	for (const result of results) {
+		if (result.section !== currentSection) {
+			if (currentSection !== '') console.log('')
+			currentSection = result.section
+			console.log(`# ${currentSection}`)
+		}
+		const line = `${result.label.padEnd(labelWidth)}  ${numberFormatter.format(result.gas).padStart(10)} gas  ${ethFormatter.format(gasCostInEth(result.gas)).padStart(10)} ETH  $${usdFormatter.format(gasCostInUsd(result.gas)).padStart(8)}`
+		console.log(line)
 	}
-	const line = `${result.label.padEnd(labelWidth)}  ${numberFormatter.format(result.gas).padStart(10)} gas  ${ethFormatter.format(gasCostInEth(result.gas)).padStart(10)} ETH  $${usdFormatter.format(gasCostInUsd(result.gas)).padStart(8)}`
-	console.log(line)
+} finally {
+	await anvilNode.dispose()
 }
