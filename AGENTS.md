@@ -123,14 +123,14 @@ Validation:
 Known risks or areas needing close attention:
 - <risk, tradeoff, or "none known">
 
-Review the current branch diff against main, the stated acceptance criteria, and whether the changed code is named clearly, readable, and easy to understand.
+Review the current worktree diff against origin/main, including committed branch changes, staged changes, unstaged changes, and untracked files intended for the task. Review the stated acceptance criteria and whether the changed code is named clearly, readable, and easy to understand.
 Do not modify files.
 Return findings grouped by High, Medium, and Low.
 
 Also include:
 - Validation assessment
 - Review limitations, or "None" if there are no limitations
-- Branch-diff quality score from 0 to 100 using the reviewer rubric
+- Worktree-diff quality score from 0 to 100 using the reviewer rubric
 ```
 
 After the reviewer finishes, the main agent must read the full review and decide how to handle every finding:
