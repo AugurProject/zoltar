@@ -12,6 +12,7 @@ import {
 	getOraclePriceValidityPresentation,
 	getSelectedPoolCardTitle,
 	getSelectedPoolForkWorkflowView,
+	getForkWorkflowStageSelection,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewForForkStage,
 	getSelectedPoolWorkflowGuardMessage,
@@ -159,6 +160,60 @@ void describe('selected pool workflow lookup state', () => {
 				systemState: 'operational',
 			}),
 		).toBe('settlement')
+	})
+
+	void test('derives current and selected fork workflow stages together', () => {
+		expect(
+			getForkWorkflowStageSelection({
+				currentStageView: undefined,
+				forkAuctionDetails: undefined,
+				forkOutcome: 'none',
+				previewPool: undefined,
+				selectedStageView: undefined,
+				stageView: undefined,
+				systemState: undefined,
+			}),
+		).toEqual({
+			currentStage: 'initiate',
+			currentWorkflowStage: 'fork-triggered',
+			selectedStage: 'fork-triggered',
+		})
+
+		expect(
+			getForkWorkflowStageSelection({
+				currentStageView: undefined,
+				forkAuctionDetails: {
+					claimingAvailable: false,
+					hasForkActivity: true,
+					migratedRep: 5n,
+					truthAuction: {
+						finalized: false,
+					},
+					truthAuctionStartedAt: 10n,
+				},
+				forkOutcome: 'yes',
+				previewPool: undefined,
+				selectedStageView: 'settlement',
+				stageView: undefined,
+				systemState: 'forkTruthAuction',
+			}),
+		).toEqual({
+			currentStage: 'auction',
+			currentWorkflowStage: 'auction',
+			selectedStage: 'settlement',
+		})
+
+		expect(
+			getForkWorkflowStageSelection({
+				currentStageView: 'migration',
+				forkAuctionDetails: undefined,
+				forkOutcome: 'none',
+				previewPool: undefined,
+				selectedStageView: undefined,
+				stageView: 'initiate',
+				systemState: 'poolForked',
+			}).selectedStage,
+		).toBe('fork-triggered')
 	})
 
 	void test('ignores stale non-operational fork-auction details once the selected pool is operational again', () => {

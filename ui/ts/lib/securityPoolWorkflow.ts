@@ -100,6 +100,63 @@ export function getCurrentForkWorkflowSelectionStage({
 	return normalizeForkWorkflowSelectionStage(currentForkStage)
 }
 
+export function getForkWorkflowStageSelection({
+	currentStageView,
+	forkAuctionDetails,
+	forkOutcome,
+	previewPool,
+	selectedStageView,
+	stageView,
+	systemState,
+}: {
+	currentStageView: ForkAuctionStageView | undefined
+	forkAuctionDetails:
+		| {
+				claimingAvailable: boolean
+				hasForkActivity: boolean
+				migratedRep: bigint
+				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
+				truthAuctionStartedAt: bigint
+		  }
+		| undefined
+	forkOutcome: ListedSecurityPool['forkOutcome'] | undefined
+	previewPool: Pick<ListedSecurityPool, 'hasForkActivity' | 'migratedRep' | 'truthAuctionStartedAt'> | undefined
+	selectedStageView: ForkWorkflowSelectionStage | undefined
+	stageView: ForkAuctionStageView | undefined
+	systemState: SecurityPoolSystemState | undefined
+}) {
+	const currentStage =
+		currentStageView ??
+		(systemState === undefined
+			? 'initiate'
+			: getForkAuctionStageView({
+					claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
+					forkOutcome: forkOutcome ?? 'none',
+					migratedRep: forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep ?? 0n,
+					systemState,
+					truthAuction: forkAuctionDetails?.truthAuction,
+					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
+				}))
+	const currentWorkflowStage = getCurrentForkWorkflowSelectionStage({
+		claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
+		currentForkStage: currentStage,
+		hasForkActivity: forkAuctionDetails?.hasForkActivity ?? previewPool?.hasForkActivity ?? false,
+		systemState,
+		truthAuctionFinalized: forkAuctionDetails?.truthAuction?.finalized ?? false,
+	})
+	const selectedStage = (() => {
+		if (selectedStageView !== undefined) return selectedStageView
+		if (stageView === undefined) return currentWorkflowStage
+		return normalizeForkWorkflowSelectionStage(stageView)
+	})()
+
+	return {
+		currentStage,
+		currentWorkflowStage,
+		selectedStage,
+	}
+}
+
 export function getSelectedPoolForkWorkflowView({
 	forkAuctionDetails,
 	selectedPool,
