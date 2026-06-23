@@ -189,6 +189,7 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 	}
 	return {
 		...baseClient,
+		onTransactionPrepared: callbacks.onTransactionPrepared,
 		sendRawTransaction,
 		sendTransaction,
 		writeContract,

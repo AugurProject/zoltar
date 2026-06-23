@@ -22,6 +22,7 @@ type UseSecurityPoolCreationParameters = {
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
@@ -40,7 +41,7 @@ function parseQuestionIdInput(marketId: string) {
 	return BigInt(trimmedMarketId)
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
@@ -172,7 +173,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				}
 
 				capturedDetails = details
-				const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parameters)
+				const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters)
 				return { ...result, hash: result.deployPoolHash }
 			},
 			'Failed to create security pool',

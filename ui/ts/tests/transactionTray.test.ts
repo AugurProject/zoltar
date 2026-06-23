@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 
@@ -47,6 +47,53 @@ describe('transactionTray', () => {
 		const submitted = markTransactionSubmitted(createInitialTransactionTrayState(), transactionHash)
 
 		expect(submitted.active).toBeUndefined()
+	})
+
+	test('adds prepared transaction call details before submission', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const prepared = markTransactionPrepared(requested, {
+			account: '0x00000000000000000000000000000000000000a1',
+			args: [1n, ['yes', 'no']],
+			chainName: 'Ethereum',
+			contractAddress: '0x00000000000000000000000000000000000000b2',
+			functionName: 'createQuestion',
+			value: 0n,
+		})
+		const submitted = markTransactionSubmitted(prepared, transactionHash)
+
+		expect(prepared.active?.tone).toBe('awaiting-wallet')
+		expect(prepared.active?.detail).toBe('Review the prepared transaction, then confirm it in your wallet.')
+		expect(prepared.active?.rows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '1, [yes, no]')).toBe(true)
+		expect(submitted.active?.rows?.some(row => row.label === 'Contract' && row.value === '0x00000000000000000000000000000000000000b2')).toBe(true)
+	})
+
+	test('uses non-wallet prepared copy for raw broadcasts', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'deploy',
+			source: 'deployment',
+			submittedDetail: 'Deployment transaction submitted.',
+			submittedTitle: 'Deploying Contract',
+		})
+		const prepared = markTransactionPrepared(requested, {
+			account: '0x00000000000000000000000000000000000000c3',
+			args: undefined,
+			chainName: 'Ethereum',
+			data: '0x1234',
+			dataLabel: 'Raw transaction',
+			functionName: 'Broadcast deterministic proxy deployer transaction',
+			requiresWalletConfirmation: false,
+			value: undefined,
+		})
+
+		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
+		expect(prepared.active?.rows?.some(row => row.label === 'Sender' && row.value === '0x00000000000000000000000000000000000000c3')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Raw transaction' && row.value === '0x1234')).toBe(true)
 	})
 
 	test('turns a requested transaction into a dismissible failure when submission fails', () => {
