@@ -189,6 +189,22 @@ describe('Escalation Game Test Suite', () => {
 	const readCarryLeafCount = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentLeafCount
 	const readCarryTotal = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryTotal
 	const readNullifierRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentNullifierRoot
+	const readTotalEscrowedRep = async (escalationGameAddress: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'totalEscrowedRep',
+			args: [],
+		})
+
+	const readTotalLocalUnresolvedRep = async (escalationGameAddress: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'totalLocalUnresolvedRep',
+			args: [],
+		})
+
 	const readForkCarrySnapshotInitialized = async (escalationGameAddress: Address) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -228,6 +244,18 @@ describe('Escalation Game Test Suite', () => {
 			functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 			args: [outcome, startIndex, numberOfEntries],
 		})
+
+	const assertEscrowAccounting = async (escalationGameAddress: Address, expectedTotalEscrowedRep: bigint, expectedTotalLocalUnresolvedRep: bigint) => {
+		assert.strictEqual(await readTotalEscrowedRep(escalationGameAddress), expectedTotalEscrowedRep, 'total escrowed REP should match scenario accounting')
+		assert.strictEqual(await readTotalLocalUnresolvedRep(escalationGameAddress), expectedTotalLocalUnresolvedRep, 'total unresolved local REP should match scenario accounting')
+	}
+
+	const assertOutcomeCarryTotalsMatchComponents = async (escalationGameAddress: Address) => {
+		for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
+			const state = await readOutcomeState(escalationGameAddress, outcome)
+			assert.strictEqual(state.currentCarryTotal, state.inheritedUnresolvedTotal + state.localUnresolvedTotal, 'outcome carry total should equal inherited plus local unresolved REP')
+		}
+	}
 
 	type PeakArray = Awaited<ReturnType<typeof readCarryPeaks>>
 
@@ -594,10 +622,16 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		await assertEscrowAccounting(escalationGameAddress, 6n * reportBond, 6n * reportBond)
+		await assertOutcomeCarryTotalsMatchComponents(escalationGameAddress)
+		assert.strictEqual(await readCarryTotal(escalationGameAddress, QuestionOutcome.Yes), 6n * reportBond, 'all local Yes deposits should be represented in the carry total')
 
 		const activationTime = await getActivationTime(client, escalationGameAddress)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+		await assertEscrowAccounting(escalationGameAddress, 4n * reportBond, 4n * reportBond)
+		await assertOutcomeCarryTotalsMatchComponents(escalationGameAddress)
+		assert.strictEqual(await readCarryTotal(escalationGameAddress, QuestionOutcome.Yes), 4n * reportBond, 'claiming the middle local deposit should remove only that unresolved carry')
 
 		const [firstPage, firstNextNodeId] = await readCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 1n)
 		assert.strictEqual(firstPage.length, 1, 'first page should include one unresolved leaf')
@@ -861,6 +895,8 @@ describe('Escalation Game Test Suite', () => {
 		for (let index = 0; index < depositCount; index += 1) {
 			await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		}
+		await assertEscrowAccounting(deployment.escalationGameAddress, BigInt(depositCount) * reportBond, BigInt(depositCount) * reportBond)
+		await assertOutcomeCarryTotalsMatchComponents(deployment.escalationGameAddress)
 
 		const receiver = client.account.address
 		const repToken = getRepTokenAddress(0n)
@@ -880,6 +916,8 @@ describe('Escalation Game Test Suite', () => {
 			functionName: 'hasUnexportedLocalDepositRefs',
 			args: [client.account.address],
 		})
+		await assertEscrowAccounting(deployment.escalationGameAddress, reportBond, reportBond)
+		await assertOutcomeCarryTotalsMatchComponents(deployment.escalationGameAddress)
 
 		await writeContractAndWait(client, async () =>
 			client.writeContract({
@@ -896,6 +934,8 @@ describe('Escalation Game Test Suite', () => {
 			functionName: 'hasUnexportedLocalDepositRefs',
 			args: [client.account.address],
 		})
+		await assertEscrowAccounting(deployment.escalationGameAddress, 0n, 0n)
+		await assertOutcomeCarryTotalsMatchComponents(deployment.escalationGameAddress)
 
 		assert.strictEqual(receiverBalanceAfterFirstExport - receiverBalanceBefore, 64n * reportBond, 'first export should only process the bounded batch size')
 		assert.strictEqual(receiverBalanceAfterSecondExport - receiverBalanceAfterFirstExport, reportBond, 'second export should resume at the cursor')

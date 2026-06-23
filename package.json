@@ -62,6 +62,7 @@
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun test --parallel=4 --timeout 300000",
 		"test:integration:mainnet": "RUN_MAINNET_INTEGRATION_TESTS=1 bun test --timeout 300000 ui/ts/tests/uniswapQuoter.integration.test.ts",
 		"test:auction-fuzz": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun test --timeout 300000 ./solidity/ts/fuzz/auctionTickMath.fuzz.ts",
+		"update:escalation-game-abi-snapshot": "UPDATE_ESCALATION_GAME_ABI_SNAPSHOT=1 bun test solidity/ts/tests/escalationGameInterfaceRegression.test.ts",
 		"coverage:ui": "bun run ensure-shared-build && bun run check:shared-dependencies && bun test --isolate --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/ui ui/ts/tests",
 		"coverage:contracts:ts": "bun run ensure-contract-artifacts && bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/contracts-ts solidity/ts/tests",
 		"coverage:contracts:bytecode": "bun run ensure-contract-artifacts && SOLIDITY_BYTECODE_COVERAGE=1 bun test solidity/ts/tests",

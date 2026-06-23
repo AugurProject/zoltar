@@ -17,7 +17,8 @@ import {
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
-import { EscalationGame, CarriedDepositProof } from './EscalationGame.sol';
+import { EscalationGame } from './EscalationGame.sol';
+import { CarriedDepositProof } from './EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
