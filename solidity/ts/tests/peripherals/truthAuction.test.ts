@@ -102,6 +102,23 @@ describe('Peripherals: truth auction', () => {
 	})
 
 	describe('auction startup and migration isolation', () => {
+		test('startTruthAuction waits for the parent migration window instead of the child universe fork time', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+
+			await triggerExternalForkForSecurityPool(undefined, 'parent migration window fork source')
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /f3/)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should keep accepting migration until the parent window closes')
+		})
+
 		test('startTruthAuction skips auction startup when all REP is already migrated', async () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)
