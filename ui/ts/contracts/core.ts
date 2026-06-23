@@ -90,6 +90,7 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 			args: callParams.args,
 			chainName: client.chain?.name,
 			contractAddress: callParams.address,
+			data,
 			functionName: callParams.functionName,
 			value: callParams.value,
 		})

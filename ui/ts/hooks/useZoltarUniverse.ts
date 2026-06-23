@@ -11,6 +11,7 @@ import { createChildUniverseSuccessPresentation, createChildUniverseTransactionI
 import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import { assertActiveWallet } from '../lib/walletGuards.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -234,6 +235,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			let refreshRequired = false
 			let result: ZoltarChildUniverseActionResult | undefined
 			try {
+				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createChildUniverseTransactionIntent('zoltar'))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar needs to fork before child universes can be deployed')

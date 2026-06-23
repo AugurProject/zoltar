@@ -7,6 +7,7 @@ import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMultica
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import { assertActiveWallet } from '../lib/walletGuards.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
@@ -190,6 +191,7 @@ export function useZoltarFork({
 		try {
 			let result: ZoltarForkActionResult | undefined
 			try {
+				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarForkTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				const questionId = options?.requireQuestionIdInput

@@ -9,6 +9,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createZoltarMigrationSuccessPresentation, createZoltarMigrationTransactionIntent, createZoltarMigrationWarningPresentation } from '../lib/transactionPresentations.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import { assertActiveWallet } from '../lib/walletGuards.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import type { WriteOperationsParameters, ZoltarMigrationFormState } from '../types/app.js'
@@ -95,6 +96,7 @@ export function useZoltarMigration({
 			zoltarMigrationResult.value = undefined
 
 			try {
+				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')

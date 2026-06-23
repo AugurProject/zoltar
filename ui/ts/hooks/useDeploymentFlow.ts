@@ -7,6 +7,7 @@ import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.
 import { formatWriteErrorMessage } from '../lib/errors.js'
 import { createDeploymentSuccessPresentation, createDeploymentTransactionIntent } from '../lib/transactionPresentations.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import { assertActiveWallet } from '../lib/walletGuards.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 
@@ -60,6 +61,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
 
 		try {
+			await assertActiveWallet(accountAddress)
 			onTransactionRequested(createDeploymentTransactionIntent(step.label))
 			const client = createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted })
 			const hash = await step.deploy(client)
