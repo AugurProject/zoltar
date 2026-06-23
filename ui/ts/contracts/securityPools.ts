@@ -13,6 +13,7 @@ import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import { sameAddress } from '../lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js'
+import { requireAddressValue, requireBigintValue, requireBooleanValue, requireTupleValue } from './decoders.js'
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityVaultTupleArray } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
@@ -22,7 +23,6 @@ const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address 
 
 const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 3n
 
-type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 type SecurityPoolDeploymentQueryResult = {
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
@@ -31,6 +31,27 @@ type SecurityPoolDeploymentQueryResult = {
 	securityPool: Address
 	truthAuction: Address
 	universeId: bigint
+}
+
+function requireForkDataView(value: unknown) {
+	const [auctionableRepAtFork, truthAuctionAddress, truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, escalationElapsedAtFork, escalationStartBondAtFork, escalationNonDecisionThresholdAtFork, forkOwnSecurityPool, unresolvedEscalationAtFork, forkOutcomeIndex] = requireTupleValue(
+		value,
+		11,
+		'security pool fork data',
+	)
+	return {
+		auctionableRepAtFork: requireBigintValue(auctionableRepAtFork, 'security pool fork data auctionable REP at fork'),
+		truthAuctionAddress: requireAddressValue(truthAuctionAddress, 'security pool fork data truth auction address'),
+		truthAuctionStartedAt: requireBigintValue(truthAuctionStartedAt, 'security pool fork data truth auction start time'),
+		migratedRep: requireBigintValue(migratedRep, 'security pool fork data migrated REP'),
+		auctionedSecurityBondAllowance: requireBigintValue(auctionedSecurityBondAllowance, 'security pool fork data auctioned security bond allowance'),
+		escalationElapsedAtFork: requireBigintValue(escalationElapsedAtFork, 'security pool fork data escalation elapsed at fork'),
+		escalationStartBondAtFork: requireBigintValue(escalationStartBondAtFork, 'security pool fork data escalation start bond at fork'),
+		escalationNonDecisionThresholdAtFork: requireBigintValue(escalationNonDecisionThresholdAtFork, 'security pool fork data escalation non-decision threshold at fork'),
+		forkOwnSecurityPool: requireBooleanValue(forkOwnSecurityPool, 'security pool fork data own-pool flag'),
+		unresolvedEscalationAtFork: requireBooleanValue(unresolvedEscalationAtFork, 'security pool fork data unresolved escalation flag'),
+		forkOutcomeIndex: requireBigintValue(forkOutcomeIndex, 'security pool fork data fork outcome index'),
+	}
 }
 
 function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionData') {
@@ -329,7 +350,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 					previewLimit: ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT,
 				}),
 			])
-			const [, , truthAuctionStartedAt, migratedRep, , , , , forkOwnSecurityPool, , forkOutcomeIndex] = forkData as ForkDataTuple
+			const { truthAuctionStartedAt, migratedRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 			const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 			const systemState = getSecurityPoolSystemState(systemStateValue)
 			const hasForkActivity = deriveHasForkActivity({

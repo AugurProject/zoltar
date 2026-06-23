@@ -1,7 +1,7 @@
 import type { Address } from 'viem'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
 import type { ReadClient, TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '../types/contracts.js'
-import { requireAddressValue, requireArrayValue, requireBigintValue, requireObjectValue } from './decoders.js'
+import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from './decoders.js'
 
 function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
 	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
@@ -11,13 +11,13 @@ function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
 
 function requireTruthAuctionTickSummary(value: unknown, context: string): TruthAuctionTickSummary {
 	const summary = requireObjectValue(value, context)
-	if ('tick' in summary && 'price' in summary && 'currentTotalEth' in summary && 'submissionCount' in summary && 'active' in summary && typeof summary.active === 'boolean') {
+	if ('tick' in summary && 'price' in summary && 'currentTotalEth' in summary && 'submissionCount' in summary && 'active' in summary) {
 		return {
-			tick: requireBigintValue(summary.tick, context),
-			price: requireBigintValue(summary.price, context),
-			currentTotalEth: requireBigintValue(summary.currentTotalEth, context),
-			submissionCount: requireBigintValue(summary.submissionCount, context),
-			active: summary.active,
+			tick: requireBigintValue(summary.tick, `${context} tick`),
+			price: requireBigintValue(summary.price, `${context} price`),
+			currentTotalEth: requireBigintValue(summary.currentTotalEth, `${context} current total ETH`),
+			submissionCount: requireBigintValue(summary.submissionCount, `${context} submission count`),
+			active: requireBooleanValue(summary.active, `${context} active flag`),
 		}
 	}
 	throw new Error(`Unexpected ${context} response`)
@@ -29,16 +29,16 @@ function requireTruthAuctionTickSummaryArray(value: unknown, context: string): T
 
 function requireTruthAuctionBidView(value: unknown, context: string): TruthAuctionBidView {
 	const bid = requireObjectValue(value, context)
-	if ('tick' in bid && 'bidIndex' in bid && 'bidder' in bid && 'ethAmount' in bid && 'cumulativeEth' in bid && 'activeCumulativeEthBeforeBid' in bid && 'claimed' in bid && typeof bid.claimed === 'boolean' && 'refunded' in bid && typeof bid.refunded === 'boolean') {
+	if ('tick' in bid && 'bidIndex' in bid && 'bidder' in bid && 'ethAmount' in bid && 'cumulativeEth' in bid && 'activeCumulativeEthBeforeBid' in bid && 'claimed' in bid && 'refunded' in bid) {
 		return {
-			tick: requireBigintValue(bid.tick, context),
-			bidIndex: requireBigintValue(bid.bidIndex, context),
-			bidder: requireAddressValue(bid.bidder, context),
-			ethAmount: requireBigintValue(bid.ethAmount, context),
-			cumulativeEth: requireBigintValue(bid.cumulativeEth, context),
-			activeCumulativeEthBeforeBid: requireBigintValue(bid.activeCumulativeEthBeforeBid, context),
-			claimed: bid.claimed,
-			refunded: bid.refunded,
+			tick: requireBigintValue(bid.tick, `${context} tick`),
+			bidIndex: requireBigintValue(bid.bidIndex, `${context} bid index`),
+			bidder: requireAddressValue(bid.bidder, `${context} bidder`),
+			ethAmount: requireBigintValue(bid.ethAmount, `${context} ETH amount`),
+			cumulativeEth: requireBigintValue(bid.cumulativeEth, `${context} cumulative ETH`),
+			activeCumulativeEthBeforeBid: requireBigintValue(bid.activeCumulativeEthBeforeBid, `${context} active cumulative ETH before bid`),
+			claimed: requireBooleanValue(bid.claimed, `${context} claimed flag`),
+			refunded: requireBooleanValue(bid.refunded, `${context} refunded flag`),
 		}
 	}
 	throw new Error(`Unexpected ${context} response`)
