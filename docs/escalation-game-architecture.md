@@ -56,9 +56,9 @@ Review that diff together with the Solidity change. The snapshot strips Solidity
 
 The split is source-only, so `EscalationGame` still deploys as one contract. The current compiled artifact measures:
 
-- creation bytecode: `23,683` bytes
-- deployed bytecode: `23,218` bytes
-- EIP-170 deployed bytecode headroom: `1,358` bytes below `24,576`
+- creation bytecode: `23,649` bytes
+- deployed bytecode: `23,184` bytes
+- EIP-170 deployed bytecode headroom: `1,392` bytes below `24,576`
 
 Any Solidity change can alter deterministic deployment addresses because address derivation uses init code. After contract changes, regenerate and review deployment outputs with the normal artifact workflow and keep `docs/mainnet-deployment-addresses.json` plus `docs/mainnet-deployment-addresses.md` in sync when expected addresses change.
 
