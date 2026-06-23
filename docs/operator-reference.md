@@ -4,6 +4,14 @@ This reference maps implementation guardrails to their contract sources for
 operators, indexers, reviewers, and UI maintainers. The white paper explains the
 protocol flow; this page keeps the operational edge cases in one place.
 
+## Launch Release Checklist
+
+Before tagging a launch release, run `bun run ui:build:prod` from a fresh
+dependency install and confirm the generated deployment manifest remains clean.
+Push the final `v*` tag only after the CI Gate succeeds on the same commit. The
+`Build and Push to IPFS` workflow must succeed for that tag, and the resulting
+GitHub release must record the IPFS hash emitted from the published artifact.
+
 ## Security Pool Guardrails
 
 | Area | Implementation behavior | Source |
