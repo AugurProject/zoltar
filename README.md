@@ -168,6 +168,20 @@ Measure Solidity gas costs:
 bun run gas-costs
 ```
 
+By default, `gas-costs` starts an isolated Anvil node. To measure against an existing local node instead, start Anvil in one terminal:
+
+```bash
+anvil --host 127.0.0.1 --port 8545 --chain-id 1 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee
+```
+
+Then run `gas-costs` against it from another terminal:
+
+```bash
+ANVIL_RPC=http://127.0.0.1:8545 bun run gas-costs
+```
+
+Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the command runs from a container that reaches the host through Docker routing.
+
 ## Notes
 
 - `bun run setup` is the quickest way to bootstrap a fresh checkout.
