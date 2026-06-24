@@ -468,7 +468,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool parent = securityPool.parent();
 		uint256 repPurchased = _consumeTruthAuctionRep(securityPool, data);
 		_captureUnclaimedCollateralForAuction(securityPool, parent, data);
-		_finalizeOwnershipAfterAuction(securityPool, parentData, repPurchased);
+		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
 		_finalizeEscalationStateAfterAuction(securityPool, parentData);
 		_emitFinalizeAuctionEvent(securityPool, parentData, data, repPurchased);
 		securityPool.updateRetentionRate();
@@ -506,20 +506,25 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 
 	function _finalizeOwnershipAfterAuction(
 		ISecurityPool securityPool,
+		SecurityPoolForkerForkData storage data,
 		SecurityPoolForkerForkData storage parentData,
 		uint256 repPurchased
 	) private {
 		uint256 repAvailable = _getPoolAuctionableRepAtFork(parentData);
 		if (repAvailable > 0) {
-			uint256 unsoldRep = repAvailable - repPurchased;
-			if (unsoldRep > 0) {
-				// Preserve the current vault-ownership distribution while scaling it down to the
-				// unsold REP that remains redeemable by migrated parent vaults. Auction buyers
-				// will mint into the reserved gap via `claimAuctionProceeds`.
-				uint256 currentOwnershipDenominator = securityPool.poolOwnershipDenominator();
-				securityPool.setOwnershipDenominator((currentOwnershipDenominator * repAvailable) / unsoldRep);
-			} else {
-				// All rep purchased; avoid division by zero by using repAvailable directly
+			uint256 currentOwnershipDenominator = securityPool.poolOwnershipDenominator();
+			uint256 auctionPoolOwnershipPerRep = _calculateAuctionPoolOwnershipPerRep(
+				currentOwnershipDenominator,
+				repAvailable,
+				repPurchased
+			);
+			if (auctionPoolOwnershipPerRep > 0) {
+				// Make every auction claim an exact ownership conversion. The final denominator
+				// is a multiple of total pool REP, so `amount * auctionPoolOwnershipPerRep`
+				// round-trips through `poolOwnershipToRep` without per-claim ceiling drift.
+				data.auctionPoolOwnershipPerRep = auctionPoolOwnershipPerRep;
+				securityPool.setOwnershipDenominator(repAvailable * auctionPoolOwnershipPerRep);
+			} else if (currentOwnershipDenominator == 0) {
 				securityPool.setOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
 			}
 		}
@@ -527,6 +532,21 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 			// wipe all rep holders in vaults
 			securityPool.setOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
 		}
+	}
+
+	function _calculateAuctionPoolOwnershipPerRep(
+		uint256 currentOwnershipDenominator,
+		uint256 repAvailable,
+		uint256 repPurchased
+	) private pure returns (uint256) {
+		if (repPurchased == 0 || repAvailable == 0) return 0;
+		uint256 unsoldRep = repAvailable - repPurchased;
+		if (unsoldRep == 0) {
+			return
+				currentOwnershipDenominator == 0 ? SecurityPoolUtils.PRICE_PRECISION : currentOwnershipDenominator + 1;
+		}
+		if (currentOwnershipDenominator == 0) return SecurityPoolUtils.PRICE_PRECISION;
+		return (currentOwnershipDenominator - 1) / unsoldRep + 1;
 	}
 
 	function _finalizeEscalationStateAfterAuction(
@@ -660,12 +680,20 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		require(data.truthAuction.finalized(), 'f9');
 		(uint256 amount, ) = data.truthAuction.withdrawBids(vault, tickIndices);
 		if (amount == 0) return;
-		uint256 poolOwnershipAmount = repToPoolOwnership(securityPool, amount);
+		uint256 auctionPoolOwnershipPerRep = data.auctionPoolOwnershipPerRep;
+		require(auctionPoolOwnershipPerRep > 0, 'f10');
+		uint256 poolOwnershipAmount = amount * auctionPoolOwnershipPerRep;
+		uint256 nextClaimedAuctionPoolOwnership = data.claimedAuctionPoolOwnership + poolOwnershipAmount;
+		require(
+			nextClaimedAuctionPoolOwnership <= data.truthAuction.totalRepPurchased() * auctionPoolOwnershipPerRep,
+			'f11'
+		);
 		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
 			.securityVaults(vault);
 		uint256 newSecurityBondAllowance = _calculateAuctionedSecurityBondAllowance(data, amount);
 		data.claimedAuctionRepPurchased += amount;
 		data.claimedAuctionedSecurityBondAllowance += newSecurityBondAllowance;
+		data.claimedAuctionPoolOwnership = nextClaimedAuctionPoolOwnership;
 		uint256 nextFeeIndex = currentSecurityBondAllowance > 0 ? currentFeeIndex : securityPool.feeIndex();
 		securityPool.configureVault(
 			vault,

@@ -234,7 +234,7 @@ function usePeripheralsTestFixture() {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 	}
 
-	const setupTruthAuctionWithMixedBids = async (finalizeAuction: boolean) => {
+	const setupStartedTruthAuction = async (titlePrefix: string) => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -249,7 +249,7 @@ function usePeripheralsTestFixture() {
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
-		await triggerExternalForkForSecurityPool(undefined, 'mixed bids fork source')
+		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -264,6 +264,16 @@ function usePeripheralsTestFixture() {
 		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
 		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+
+		return {
+			yesSecurityPool,
+			repAtFork,
+			expectedEthToBuy,
+		}
+	}
+
+	const setupTruthAuctionWithMixedBids = async (finalizeAuction: boolean) => {
+		const { yesSecurityPool, repAtFork, expectedEthToBuy } = await setupStartedTruthAuction('mixed bids fork source')
 		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		const losingEth = expectedEthToBuy / 10n
@@ -285,6 +295,46 @@ function usePeripheralsTestFixture() {
 			losingEth,
 			losingTick,
 			winningTick,
+		}
+	}
+
+	const setupTruthAuctionWithTwoWinningBids = async (finalizeAuction: boolean) => {
+		const { yesSecurityPool, repAtFork, expectedEthToBuy } = await setupStartedTruthAuction('two winning bids fork source')
+		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const winningBidderA = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const winningBidderB = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const losingEth = expectedEthToBuy / 10n
+		const winningEthA = expectedEthToBuy / 2n
+		const winningEthB = expectedEthToBuy - winningEthA
+		strictEqualTypeSafe(losingEth > 0n, true, 'losing bid should invest a positive amount')
+		strictEqualTypeSafe(winningEthA > 0n, true, 'first winning bid should invest a positive amount')
+		strictEqualTypeSafe(winningEthB > 0n, true, 'second winning bid should invest a positive amount')
+		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
+		const winningRepA = repAtFork / 8n
+		const winningRepB = (winningEthB * winningRepA) / winningEthA
+		const winningTickA = await participateAuction(winningBidderA, yesSecurityPool.truthAuction, winningRepA, winningEthA)
+		const winningTickB = await participateAuction(winningBidderB, yesSecurityPool.truthAuction, winningRepB, winningEthB)
+		const winningBidIndexB = winningTickA === winningTickB ? 1n : 0n
+
+		if (finalizeAuction) {
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		}
+
+		return {
+			yesSecurityPool,
+			repAtFork,
+			expectedEthToBuy,
+			losingBidder,
+			winningBidderA,
+			winningBidderB,
+			losingEth,
+			winningEthA,
+			winningEthB,
+			losingTick,
+			winningTickA,
+			winningTickB,
+			winningBidIndexB,
 		}
 	}
 
@@ -503,6 +553,7 @@ function usePeripheralsTestFixture() {
 		triggerExternalForkForSecurityPool,
 		setupOwnForkWithEscrow,
 		setupTruthAuctionWithMixedBids,
+		setupTruthAuctionWithTwoWinningBids,
 		setupFinalizedTruthAuctionWithMixedBids,
 	}
 }
@@ -914,6 +965,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		peripherals_SecurityPoolForker_SecurityPoolForker: fixture.peripherals_SecurityPoolForker_SecurityPoolForker,
 		getMigrationProxyAddressAbi: fixture.getMigrationProxyAddressAbi,
 		PRICE_PRECISION: fixture.PRICE_PRECISION,
+		reportBond: fixture.reportBond,
 		repDeposit: fixture.repDeposit,
 		genesisUniverse: fixture.genesisUniverse,
 		securityMultiplier: fixture.securityMultiplier,
@@ -921,6 +973,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		outcomes: fixture.outcomes,
 		triggerExternalForkForSecurityPool: fixture.triggerExternalForkForSecurityPool,
 		setupTruthAuctionWithMixedBids: fixture.setupTruthAuctionWithMixedBids,
+		setupTruthAuctionWithTwoWinningBids: fixture.setupTruthAuctionWithTwoWinningBids,
 		setupFinalizedTruthAuctionWithMixedBids: fixture.setupFinalizedTruthAuctionWithMixedBids,
 		get mockWindow() {
 			return fixture.mockWindow
