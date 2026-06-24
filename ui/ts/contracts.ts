@@ -91,6 +91,7 @@ type LoadAllSecurityPoolsOptions = {
 }
 type SecurityPoolMintCapacity = {
 	completeSetCollateralAmount: bigint
+	shareTokenSupply: bigint
 	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint
 }
@@ -1460,7 +1461,7 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 			const shouldLoadVaults = vaultDetailMode === 'all' || (selectedSecurityPoolAddress !== undefined && (sameAddress(securityPoolAddress, selectedSecurityPoolAddress) || sameAddress(parent, selectedSecurityPoolAddress)))
-			const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemState, totalRepDeposit, totalSecurityBondAllowance, universeForkTime], marketDetails, vaultSummary] = await Promise.all([
+			const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemState, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance, universeForkTime], marketDetails, vaultSummary] = await Promise.all([
 				readRequiredMulticall(client, [
 					{
 						abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1501,6 +1502,12 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 					{
 						abi: peripherals_SecurityPool_SecurityPool.abi,
 						functionName: 'systemState',
+						address: securityPoolAddress,
+						args: [],
+					},
+					{
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'shareTokenSupply',
 						address: securityPoolAddress,
 						args: [],
 					},
@@ -1557,6 +1564,7 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 				questionId: getQuestionIdHex(questionId),
 				securityMultiplier,
 				securityPoolAddress,
+				shareTokenSupply,
 				systemState: poolSystemState,
 				totalRepDeposit,
 				totalSecurityBondAllowance,
@@ -1576,10 +1584,16 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 	}))
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [completeSetCollateralAmount, totalRepDeposit, totalSecurityBondAllowance] = await readRequiredMulticall(client, [
+	const [completeSetCollateralAmount, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'completeSetCollateralAmount',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'shareTokenSupply',
 			address: securityPoolAddress,
 			args: [],
 		},
@@ -1598,6 +1612,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 	])
 	return {
 		completeSetCollateralAmount,
+		shareTokenSupply,
 		totalRepDeposit,
 		totalSecurityBondAllowance,
 	}

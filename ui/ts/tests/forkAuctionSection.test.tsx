@@ -163,6 +163,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: '0x00000000000000000000000000000000000000f1',
+		shareTokenSupply: 0n,
 		systemState: 'operational',
 		totalRepDeposit: 0n,
 		totalSecurityBondAllowance: 0n,

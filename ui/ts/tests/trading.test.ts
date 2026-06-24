@@ -202,6 +202,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '1',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
@@ -215,6 +216,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: false,
 				isMainnet: true,
 				mintAmountInput: '1',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
@@ -228,6 +230,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: false,
 				mintAmountInput: '1',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
@@ -243,6 +246,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '100',
+				shareTokenSupply: undefined,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
@@ -256,6 +260,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '100',
+				shareTokenSupply: 10n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
@@ -269,6 +274,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '100',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 20n * 10n ** 18n,
 				totalSecurityBondAllowance: 0n,
 			}),
@@ -282,6 +288,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: 'abc',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n ** 18n,
 			}),
@@ -295,6 +302,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '0',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n ** 18n,
 			}),
@@ -308,6 +316,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '0.3',
+				shareTokenSupply: 10n ** 18n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n ** 18n,
 			}),
@@ -321,10 +330,27 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '1',
+				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
 			}),
 		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
+	})
+
+	void test('blocks minting when migrated complete-set shares have no collateral exchange rate', () => {
+		expect(
+			getTradingMintGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 0n,
+				ethBalance: 2n * 10n ** 18n,
+				hasSelectedPool: true,
+				isMainnet: true,
+				mintAmountInput: '1',
+				shareTokenSupply: 10n * 10n ** 18n,
+				totalRepDeposit: 20n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			}),
+		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
 	})
 
 	void test('allows minting when the pool has capacity and the wallet has enough ETH', () => {
@@ -336,6 +362,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '0.5',
+				shareTokenSupply: 10n ** 18n,
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
 			}),

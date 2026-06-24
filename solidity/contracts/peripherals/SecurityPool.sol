@@ -28,6 +28,8 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 contract SecurityPool is ISecurityPool {
 	using SafeERC20Ops for IERC20;
 
+	error UndefinedCompleteSetExchangeRate();
+
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
 	uint256 public immutable initialEscalationGameDeposit;
@@ -336,10 +338,11 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function cashToShares(uint256 eth) public view returns (uint256) {
-		return
-			completeSetCollateralAmount == 0
-				? (eth * SecurityPoolUtils.PRICE_PRECISION)
-				: ((eth * shareTokenSupply) / completeSetCollateralAmount);
+		if (completeSetCollateralAmount == 0) {
+			if (shareTokenSupply != 0) revert UndefinedCompleteSetExchangeRate();
+			return eth * SecurityPoolUtils.PRICE_PRECISION;
+		}
+		return (eth * shareTokenSupply) / completeSetCollateralAmount;
 	}
 
 	function depositRep(uint256 repAmount) external isOperational {
