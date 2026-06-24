@@ -1,12 +1,19 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { encodeDeployData, type Hex } from 'viem'
+import { encodeDeployData, type Hex, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { applyLibraries } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy, test_peripherals_FalseReturningERC20_FalseReturningERC20, test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness } from '../types/contractArtifact'
+import {
+	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy,
+	test_peripherals_FalseReturningERC20_FalseReturningERC20,
+	test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness,
+	test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
+} from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -101,6 +108,33 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: deploymentData })),
 			/token returned false/i,
+		)
+	})
+
+	test('security pool deployment worker bubbles constructor revert reasons', async () => {
+		const fakeZoltar = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
+				bytecode: `0x${test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
+			}),
+		)
+		const deploymentWorker = await deployContract(
+			encodeDeployData({
+				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+			}),
+		)
+
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+					address: deploymentWorker,
+					functionName: 'deploy',
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+				}),
+			),
+			/SafeERC20Ops token address must contain contract code/,
 		)
 	})
 })

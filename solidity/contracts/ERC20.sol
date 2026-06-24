@@ -6,7 +6,6 @@ pragma solidity 0.8.35;
 import { IERC20 } from './IERC20.sol';
 import { IERC20Metadata } from './IERC20Metadata.sol';
 import { Context } from './Context.sol';
-import { IERC20Errors } from './draft-IERC6093.sol';
 
 /**
  * @dev Implementation of the {IERC20} interface.
@@ -26,7 +25,7 @@ import { IERC20Errors } from './draft-IERC6093.sol';
  * conventional and does not conflict with the expectations of ERC-20
  * applications.
  */
-abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
+abstract contract ERC20 is Context, IERC20, IERC20Metadata {
 	mapping(address account => uint256) internal _balances;
 
 	mapping(address account => mapping(address spender => uint256)) internal _allowances;
@@ -165,10 +164,10 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
 	 */
 	function _transfer(address from, address to, uint256 value) internal {
 		if (from == address(0)) {
-			revert ERC20InvalidSender(address(0));
+			revert('ERC20 transfer sender must not be the zero address');
 		}
 		if (to == address(0)) {
-			revert ERC20InvalidReceiver(address(0));
+			revert('ERC20 transfer receiver must not be the zero address');
 		}
 		_update(from, to, value);
 	}
@@ -187,7 +186,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
 		} else {
 			uint256 fromBalance = _balances[from];
 			if (fromBalance < value) {
-				revert ERC20InsufficientBalance(from, fromBalance, value);
+				revert('ERC20 transfer amount exceeds sender balance');
 			}
 			unchecked {
 				// Overflow not possible: value <= fromBalance <= totalSupply.
@@ -220,7 +219,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
 	 */
 	function _mint(address account, uint256 value) internal {
 		if (account == address(0)) {
-			revert ERC20InvalidReceiver(address(0));
+			revert('ERC20 mint receiver must not be the zero address');
 		}
 		_update(address(0), account, value);
 	}
@@ -235,7 +234,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
 	 */
 	function _burn(address account, uint256 value) internal {
 		if (account == address(0)) {
-			revert ERC20InvalidSender(address(0));
+			revert('ERC20 burn account must not be the zero address');
 		}
 		_update(account, address(0), value);
 	}
@@ -279,10 +278,10 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
 	 */
 	function _approve(address owner, address spender, uint256 value, bool emitEvent) internal virtual {
 		if (owner == address(0)) {
-			revert ERC20InvalidApprover(address(0));
+			revert('ERC20 approval owner must not be the zero address');
 		}
 		if (spender == address(0)) {
-			revert ERC20InvalidSpender(address(0));
+			revert('ERC20 approval spender must not be the zero address');
 		}
 		_allowances[owner][spender] = value;
 		if (emitEvent) {
@@ -302,7 +301,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
 		uint256 currentAllowance = allowance(owner, spender);
 		if (currentAllowance < type(uint256).max) {
 			if (currentAllowance < value) {
-				revert ERC20InsufficientAllowance(spender, currentAllowance, value);
+				revert('ERC20 transfer amount exceeds spender allowance');
 			}
 			unchecked {
 				_approve(owner, spender, currentAllowance - value, false);

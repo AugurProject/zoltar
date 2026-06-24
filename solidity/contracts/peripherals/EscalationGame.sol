@@ -4,12 +4,17 @@ pragma solidity 0.8.35;
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
 import { Deposit, ESCALATION_TIME_LENGTH, Node, OutcomeState } from './EscalationGameTypes.sol';
 
 contract EscalationGame is EscalationGameSettlement {
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken) EscalationGameState(_securityPool, _repToken) {}
+	constructor(
+		ISecurityPool _securityPool,
+		ReputationToken _repToken,
+		EscalationGameProofVerifier _proofVerifier
+	) EscalationGameState(_securityPool, _repToken, _proofVerifier) {}
 
 	function start(uint256 _startBond, uint256 _nonDecisionThreshold) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
@@ -19,33 +24,29 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function startFromFork(uint256 _startBond, uint256 _nonDecisionThreshold, uint256 elapsedAtFork) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
-		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'it');
+		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'Fork time too high');
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 
 	function resumeFromFork() external {
-		require(owner == msg.sender || address(securityPool) == msg.sender, 'or');
-		require(forkContinuation, 'fc');
-		require(forkResumedAt == 0, 'ar');
+		require(owner == msg.sender || address(securityPool) == msg.sender, 'Only owner or security pool');
+		require(forkContinuation, 'No fork mode');
+		require(forkResumedAt == 0, 'Fork resumed');
 		forkResumedAt = block.timestamp;
 		emit ForkContinuationResumed(block.timestamp);
-	}
-
-	function forkContinuationResumed() public view returns (bool) {
-		return forkResumedAt != 0;
 	}
 
 	function previewDepositOnOutcome(
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint256 amount
 	) external view returns (uint256 acceptedAmount, uint256 resultingCumulativeAmount) {
-		require(nonDecisionTimestamp == 0, 'nd');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
-		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'to');
-		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'af');
-		require(amount >= startBond, 'md');
+		require(nonDecisionTimestamp == 0, 'Non-decision done');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
+		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
+		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Outcome full');
+		require(amount >= startBond, 'Below start bond');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balance;
 		uint256 room = nonDecisionThreshold - currentBalance;
@@ -63,12 +64,12 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 amount,
 		uint256 expectedCumulativeAmount
 	) external returns (uint256 parentDepositIndex) {
-		require(nonDecisionTimestamp == 0, 'nd');
-		require(msg.sender == address(securityPool), 'only pool');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
-		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'to');
-		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'af');
-		require(amount > 0, 'md');
+		require(nonDecisionTimestamp == 0, 'Non-decision done');
+		require(msg.sender == address(securityPool), 'Only security pool');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
+		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
+		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Outcome full');
+		require(amount > 0, 'Amount is zero');
 		uint256 outcomeIndex = uint256(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		uint256 currentBalance = selectedOutcomeState.balance;
@@ -79,8 +80,8 @@ contract EscalationGame is EscalationGameSettlement {
 			currentBalance,
 			room
 		);
-		require(effectiveDeposit == amount, 'ds');
-		require(newBalance == expectedCumulativeAmount, 'ps');
+		require(effectiveDeposit == amount, 'Deposit exceeds room');
+		require(newBalance == expectedCumulativeAmount, 'Preview mismatch');
 
 		selectedOutcomeState.balance += effectiveDeposit;
 		escrowedRepByVault[depositor] += effectiveDeposit;
@@ -119,21 +120,30 @@ contract EscalationGame is EscalationGameSettlement {
 			stableParentDepositIndex,
 			deposit.cumulativeAmount
 		);
-		emit DepositOnOutcome(depositor, outcome, deposit.amount, depositIndex, deposit.cumulativeAmount);
+		emit DepositOnOutcome(
+			depositor,
+			outcome,
+			deposit.amount,
+			depositIndex,
+			deposit.cumulativeAmount,
+			escrowedRepByVault[depositor],
+			totalEscrowedRep
+		);
 		if (hasReachedNonDecision()) {
 			nonDecisionTimestamp = block.timestamp;
+			emit NonDecisionReached(nonDecisionTimestamp);
 		}
 	}
 
 	function _initializeStartParams(uint256 _startBond, uint256 _nonDecisionThreshold) private {
-		require(owner == msg.sender, 'os');
-		require(activationTime == 0, 'as');
-		require(_nonDecisionThreshold > _startBond, 'te');
-		require(_startBond > 0, 'sb');
-		require(_startBond >= 1e18, 's1');
-		require(_nonDecisionThreshold >= 1e18, 't1');
+		require(owner == msg.sender, 'Only game owner');
+		require(activationTime == 0, 'Game started');
+		require(_nonDecisionThreshold > _startBond, 'Threshold too low');
+		require(_startBond > 0, 'Start bond zero');
+		require(_startBond >= 1e18, 'Start bond below 1 REP');
+		require(_nonDecisionThreshold >= 1e18, 'Threshold below 1 REP');
 		startBond = _startBond;
 		nonDecisionThreshold = _nonDecisionThreshold;
-		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
+		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBond, _nonDecisionThreshold);
 	}
 }

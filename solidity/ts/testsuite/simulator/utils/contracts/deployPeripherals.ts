@@ -208,11 +208,11 @@ export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracle
 })
 
 export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
-	getEscalationGameInitCode: (securityPool, repToken) =>
+	getEscalationGameInitCode: (securityPool, repToken, proofVerifier) =>
 		encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [securityPool, repToken],
+			args: [securityPool, repToken, proofVerifier],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
@@ -340,6 +340,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		priceOracleManagerAndOperatorQueuerFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceOracleManagerAndOperatorQueuerFactory'),
 		securityPoolForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForker'),
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
+		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
 		scalarOutcomes: isDeploymentStatusOracleStepDeployed(deploymentMask, 'scalarOutcomes'),
 		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),

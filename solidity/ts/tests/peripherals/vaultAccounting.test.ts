@@ -1,4 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { parseAbiItem } from 'viem'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
 
 describe('Peripherals: vault accounting', () => {
@@ -98,6 +99,30 @@ describe('Peripherals: vault accounting', () => {
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
+	})
+
+	test('deposit events expose updated vault and pool ownership state', async () => {
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		const depositAmount = repDeposit / 10n
+		const depositHash = await depositRep(client, securityPoolAddresses.securityPool, depositAmount)
+		const receipt = await client.getTransactionReceipt({ hash: depositHash })
+		const depositLogs = await client.getLogs({
+			address: securityPoolAddresses.securityPool,
+			event: parseAbiItem('event DepositRep(address vault, uint256 repAmount, uint256 poolOwnership, uint256 poolOwnershipDenominator)'),
+			fromBlock: receipt.blockNumber,
+			toBlock: receipt.blockNumber,
+		})
+		const depositLog = ensureDefined(
+			depositLogs.find(log => log.transactionHash === depositHash),
+			'DepositRep log missing from deposit transaction',
+		)
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+
+		strictEqualTypeSafe(depositLog.args.vault, client.account.address, 'event should identify the updated vault')
+		strictEqualTypeSafe(depositLog.args.repAmount, depositAmount, 'event should include the deposited REP amount')
+		strictEqualTypeSafe(depositLog.args.poolOwnership, vault.repDepositShare, 'event should include updated vault ownership')
+		strictEqualTypeSafe(depositLog.args.poolOwnershipDenominator, poolOwnershipDenominator, 'event should include updated pool ownership denominator')
 	})
 
 	test('share token metadata includes the question id', async () => {
@@ -332,7 +357,7 @@ describe('Peripherals: vault accounting', () => {
 		const lockedRepBeforeWithdrawal = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repInEscalationGame
 		const withdrawalHash = await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n, 2n, 3n])
 		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
-		const winningClaimAmount = withdrawalReceipt.logs
+		const winningClaimLogs = withdrawalReceipt.logs
 			.map(log => {
 				try {
 					return decodeEventLog({
@@ -346,10 +371,30 @@ describe('Peripherals: vault accounting', () => {
 				}
 			})
 			.filter(log => log?.eventName === 'ClaimDeposit')
-			.reduce((sum, log) => sum + (log?.args.amountToWithdraw ?? 0n), 0n)
+		const winningClaimAmount = winningClaimLogs.reduce((sum, log) => sum + (log?.args.amountToWithdraw ?? 0n), 0n)
 		const vaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question should resolve to yes')
+		strictEqualTypeSafe(winningClaimLogs.length, 4, 'one transaction should emit one claim event for each winning deposit')
+		assert.deepStrictEqual(
+			winningClaimLogs.map(log => log?.args.parentDepositIndex),
+			[0n, 1n, 2n, 3n],
+			'multi-claim events should identify each stable deposit index in call order',
+		)
+		assert.deepStrictEqual(
+			winningClaimLogs.map(log => log?.args.originalDepositAmount),
+			[firstWinningDeposit, secondWinningDeposit, thirdWinningDeposit, fourthWinningDeposit],
+			'multi-claim events should preserve each original principal',
+		)
+		assert.deepStrictEqual(
+			winningClaimLogs.map(log => log?.args.amountToWithdraw),
+			[7n * 10n ** 18n, 7n * 10n ** 18n, 7n * 10n ** 18n, 2n * 10n ** 18n],
+			'multi-claim events should expose each new payout value',
+		)
+		assert.ok(
+			winningClaimLogs.every(log => log?.args.transferredRep === true),
+			'security-pool winner withdrawals should transfer REP',
+		)
 		strictEqualTypeSafe(lockedRepBeforeWithdrawal, totalWinningPrincipal, 'winner should have exactly the winning-side principal locked before withdrawal')
 		strictEqualTypeSafe(expectedBindingCapital, losingDeposit, 'single losing side should set the binding capital in this scenario')
 		strictEqualTypeSafe(expectedRewardEligibleCap, expectedBindingCapital + expectedBindingCapital / 2n, 'reward-eligible cap should extend 50% beyond binding capital')
@@ -439,7 +484,7 @@ describe('Peripherals: vault accounting', () => {
 		await finalizeQuestionAsYesWithoutFork()
 
 		const walletRepBeforeRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /settle locks first/)
+		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /Escalation deposits locked/)
 
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		const vaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -504,7 +549,7 @@ describe('Peripherals: vault accounting', () => {
 	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {
 		await finalizeQuestionAsYesWithoutFork()
 
-		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved/)
+		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved, so staged operations are unavailable/)
 	})
 
 	test('oracle-staged security bond allowance updates can clear the allowance to zero', async () => {
@@ -684,8 +729,8 @@ describe('Peripherals: vault accounting', () => {
 		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
 
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'external fork should leave the parent question unresolved')
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex]), /migrate forked locks/)
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex]), /migrate forked locks/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex]), /Forked deposits must migrate first/)
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex]), /Forked deposits must migrate first/)
 
 		const aliceVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const bobVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
@@ -700,7 +745,7 @@ describe('Peripherals: vault accounting', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Invalid deposit index/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Bad deposit index/)
 	})
 
 	test('winning escalation settlement cannot be processed twice and unsettled deposit discovery updates accordingly', async () => {
@@ -717,7 +762,7 @@ describe('Peripherals: vault accounting', () => {
 
 		const unsettledAfter = (await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)).filter(deposit => deposit.depositor === client.account.address && deposit.amount > 0n).map(deposit => deposit.depositIndex)
 		strictEqualTypeSafe(unsettledAfter.length, 0, 'settled winning deposits should disappear from discovery results')
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /deposit already settled/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Deposit settled/)
 	})
 
 	test('withdrawFromEscalationGame rejects none outcome after an external fork', async () => {
@@ -747,7 +792,7 @@ describe('Peripherals: vault accounting', () => {
 		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /invalid none/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /Invalid None outcome/)
 	})
 
 	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
@@ -770,7 +815,7 @@ describe('Peripherals: vault accounting', () => {
 		const attackerVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 		strictEqualTypeSafe(attackerVaultAfterSettlement.repInEscalationGame, 0n, 'losing-side settlement should clear the resolved escalation lock')
 		strictEqualTypeSafe(attackerVaultAfterSettlement.repDepositShare, attackerVaultBeforeSettlement.repDepositShare, 'settling a fully losing escalation deposit should not mint new vault ownership to the loser')
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /deposit already settled/)
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /Deposit settled/)
 	})
 
 	test('mixed-outcome settlements from one vault are settlement-order independent after exchange-rate changes', async () => {

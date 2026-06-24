@@ -1,5 +1,5 @@
 import { encodeDeployData } from 'viem'
-import { ReputationToken_ReputationToken, peripherals_EscalationGame_EscalationGame } from '../../../../types/contractArtifact'
+import { ReputationToken_ReputationToken, peripherals_EscalationGame_EscalationGame, peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { CONTRACT_PAGE_SIZE } from './pagination'
@@ -83,11 +83,19 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 	})
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
+	const verifierDeploymentHash = await writeClient.sendTransaction({
+		data: encodeDeployData({
+			abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+			bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+		}),
+	})
+	const verifierDeploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: verifierDeploymentHash })
+	const proofVerifierAddress = requireContractAddress(verifierDeploymentReceipt.contractAddress, 'proof verifier deployment address')
 	const deploymentHash = await writeClient.sendTransaction({
 		data: encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address, getRepTokenAddress(0n)],
+			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress],
 		}),
 	})
 	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })

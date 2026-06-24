@@ -17,11 +17,11 @@ library SafeERC20Ops {
 	}
 
 	function _callOptionalReturn(IERC20 token, bytes memory callData) private {
-		require(address(token).code.length > 0, 'token missing code');
+		require(address(token).code.length > 0, 'SafeERC20Ops token address must contain contract code');
 		(bool success, bytes memory returnData) = address(token).call(callData);
-		require(success, 'token call failed');
+		require(success, 'SafeERC20Ops token call reverted');
 		if (returnData.length > 0) {
-			require(abi.decode(returnData, (bool)), 'token returned false');
+			require(abi.decode(returnData, (bool)), 'SafeERC20Ops token returned false from ERC20 call');
 		}
 	}
 }

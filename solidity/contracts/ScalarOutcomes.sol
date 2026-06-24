@@ -11,8 +11,8 @@ library ScalarOutcomes {
 		int256 minValue,
 		int256 maxValue
 	) internal pure returns (string memory) {
-		require(numTicks > 0, 'numTicks=0');
-		require(maxValue > minValue, 'invalid range');
+		require(numTicks > 0, 'Scalar outcome numTicks must be greater than zero');
+		require(maxValue > minValue, 'Scalar outcome max value must be greater than min value');
 		uint256 payout = uint256(payoutNumerators[1]);
 		uint256 diffU;
 		unchecked {
@@ -28,17 +28,17 @@ library ScalarOutcomes {
 	function addInt256Uint256(int256 value, uint256 addend) internal pure returns (int256) {
 		if (value >= 0) {
 			uint256 valueU = uint256(value);
-			require(addend <= uint256(type(int256).max) - valueU, 'scalarValue overflow');
+			require(addend <= uint256(type(int256).max) - valueU, 'Scalar value addition exceeds int256 maximum');
 			return int256(valueU + addend);
 		}
 		uint256 absoluteValue = absoluteInt256(value);
 		if (addend >= absoluteValue) {
 			uint256 positiveValue = addend - absoluteValue;
-			require(positiveValue <= uint256(type(int256).max), 'scalarValue overflow');
+			require(positiveValue <= uint256(type(int256).max), 'Scalar value positive result exceeds int256 maximum');
 			return int256(positiveValue);
 		}
 		uint256 negativeValue = absoluteValue - addend;
-		require(negativeValue <= uint256(type(int256).max) + 1, 'scalarValue overflow');
+		require(negativeValue <= uint256(type(int256).max) + 1, 'Scalar value negative result exceeds int256 minimum');
 		if (negativeValue == uint256(type(int256).max) + 1) return type(int256).min;
 		return -int256(negativeValue);
 	}
@@ -51,7 +51,7 @@ library ScalarOutcomes {
 	}
 
 	function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {
-		require(denominator > 0, 'denominator=0');
+		require(denominator > 0, 'mulDiv denominator must be greater than zero');
 		unchecked {
 			// Compute the 512-bit product x * y as prod1:prod0, matching the standard
 			// full-precision mulDiv pattern used by Uniswap-style implementations.
@@ -65,7 +65,7 @@ library ScalarOutcomes {
 			if (prod1 == 0) {
 				return prod0 / denominator;
 			}
-			require(denominator > prod1, 'mulDiv overflow');
+			require(denominator > prod1, 'mulDiv result would overflow uint256');
 			uint256 remainder;
 			assembly {
 				remainder := mulmod(x, y, denominator)

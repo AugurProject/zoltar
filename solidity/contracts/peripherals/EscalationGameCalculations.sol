@@ -7,7 +7,6 @@ import {
 	ESCALATION_TIME_LENGTH,
 	EXCESS_REWARD_WINDOW_DIVISOR,
 	LN2_SCALED,
-	MAX_ATANH_ITERATIONS,
 	MAX_EXP_ITERATIONS,
 	SCALE
 } from './EscalationGameTypes.sol';
@@ -22,7 +21,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function computeIterativeAttritionCost(uint256 timeSinceStart) public view returns (uint256) {
 		uint256 startBondLocal = startBond;
 		uint256 nonDecisionThresholdLocal = nonDecisionThreshold;
-		require(timeSinceStart <= ESCALATION_TIME_LENGTH, 'it');
+		require(timeSinceStart <= ESCALATION_TIME_LENGTH, 'Time too high');
 		// Exact edge cases
 		if (timeSinceStart == 0) return startBondLocal;
 		if (timeSinceStart == ESCALATION_TIME_LENGTH) return nonDecisionThresholdLocal;
@@ -58,7 +57,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (attritionCost <= startBond) return 0;
 		if (attritionCost >= nonDecisionThreshold) return ESCALATION_TIME_LENGTH;
 
-		uint256 lnCostRatioScaled = _computeLnRatioScaled(startBond, attritionCost);
+		uint256 lnCostRatioScaled = proofVerifier.computeLnRatioScaled(startBond, attritionCost);
 		return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled;
 	}
 
@@ -129,7 +128,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			acceptedAmount -= 1;
 			newBalance = currentBalance + acceptedAmount;
 		}
-		require(acceptedAmount >= startBond || newBalance == nonDecisionThreshold, 'md');
+		require(acceptedAmount >= startBond || newBalance == nonDecisionThreshold, 'Below start bond');
 	}
 
 	function _computeWinningWithdrawal(
@@ -161,38 +160,6 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
 		if (actualForkThreshold < nonDecisionThreshold) {
 			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
-		}
-	}
-
-	function _computeLnRatioScaled(uint256 lowValue, uint256 highValue) internal pure returns (uint256) {
-		uint256 normalizedLow = lowValue;
-		uint256 log2Count = 0;
-		while (highValue >= normalizedLow * 2) {
-			unchecked {
-				normalizedLow *= 2;
-				++log2Count;
-			}
-		}
-
-		uint256 diff = highValue - normalizedLow;
-		uint256 sum = highValue + normalizedLow;
-		uint256 z = (diff * SCALE) / sum; // z ∈ [0, SCALE / 3] after range reduction
-		if (z == 0) return 0;
-		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z); // ln(highValue / lowValue) * SCALE
-	}
-
-	function _computeAtanhScaled(uint256 z) private pure returns (uint256 atanhScaled) {
-		uint256 z2 = (z * z) / SCALE; // = Z^2 * SCALE
-		uint256 term = z; // k=0: z / 1
-		atanhScaled = term;
-
-		for (uint256 k = 1; k < MAX_ATANH_ITERATIONS; ) {
-			term = (term * z2 * (2 * k - 1)) / ((2 * k + 1) * SCALE);
-			if (term == 0) break;
-			atanhScaled += term;
-			unchecked {
-				++k;
-			}
 		}
 	}
 

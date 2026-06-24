@@ -18,6 +18,7 @@ import {
 	getActiveStagedOperationCount,
 	getActiveStagedOperations,
 	getIsPriceValid,
+	getLastPrice,
 	getOpenOracleExtraData,
 	getOpenOracleReportMeta,
 	getPendingOperationSlotId,
@@ -78,6 +79,70 @@ const findPendingOperationRecoveryConsumedLog = (logs: TransactionReceiptLogs) =
 			}
 		})
 		.find(log => log?.eventName === 'PendingOperationRecoveryConsumed')
+
+const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'PendingReportRecovered')
+
+const findPriceReportedLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'PriceReported')
+
+const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'PriceReportRejected')
+
+const findPriceRoundNotionalConsumedLogs = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.filter(log => log?.eventName === 'PriceRoundNotionalConsumed')
 
 const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -284,19 +349,19 @@ describe('Price Oracle Refund Security Tests', () => {
 		const invalidRiskParameterCases: Array<{ args: OracleCoordinatorConstructorArgs; message: RegExp }> = [
 			{
 				args: buildArgsWithRiskParameters(0n, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
-				message: /price budget multiplier is zero/i,
+				message: /price round budget multiplier must be greater than zero/i,
 			},
 			{
 				args: buildArgsWithRiskParameters(ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS, 0n, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
-				message: /escalation halt multiplier is zero/i,
+				message: /escalation halt multiplier must be greater than zero/i,
 			},
 			{
 				args: buildArgsWithRiskParameters(ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, 9999n, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
-				message: /base fee multiplier too low/i,
+				message: /max settlement base fee multiplier must be at least one oracle budget/i,
 			},
 			{
 				args: buildArgsWithRiskParameters(ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, 10001n),
-				message: /liquidation distance too high/i,
+				message: /minimum liquidation price distance cannot exceed one oracle budget/i,
 			},
 		]
 
@@ -315,6 +380,26 @@ describe('Price Oracle Refund Security Tests', () => {
 		const pendingMaxSettlementBaseFee = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
 		assert.strictEqual(pendingMaxSettlementBaseFee, 0n, 'zero-basefee request should only settle under zero basefee')
+		const lastPriceBeforeSettlement = await getLastPrice(client, priceOracle)
+		const lastSettlementTimestampBeforeSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'lastSettlementTimestamp',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundIdBeforeSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundId',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundMaxNotionalBeforeSettlement = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundMaxNotional',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundConsumedNotionalBeforeSettlement = await getPriceRoundConsumedNotional(client, priceOracle)
 
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
 		const amount1 = reportMeta.exactToken1Report
@@ -328,7 +413,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x1'] })
-		await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
+		const settlementHash = await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 
 		const isPriceValid = await getIsPriceValid(client, priceOracle)
@@ -337,6 +423,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
 		const stagedOperation = await getStagedOperation(client, priceOracle, 1n)
 		const vault = await getSecurityVault(client, securityPool, client.account.address)
+		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
+		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
 
 		assert.strictEqual(isPriceValid, false, 'high-basefee settlement must not validate the price')
 		assert.strictEqual(pendingReportIdAfterSettlement, 0n, 'high-basefee settlement should clear the stale pending report')
@@ -344,6 +432,15 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingOperationSlotId, 1n, 'high-basefee settlement should leave the auto-execute slot pending for a future valid price')
 		assert.strictEqual(stagedOperation[1], client.account.address, 'high-basefee settlement must not consume staged operations')
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'high-basefee settlement must not execute staged allowance updates')
+		assert.strictEqual(rejectedLog.args.reportId, pendingReportId, 'PriceReportRejected should identify the rejected report')
+		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'PriceReportRejected should expose the rejection reason')
+		assert.strictEqual(rejectedLog.args.pendingReportId, pendingReportIdAfterSettlement, 'PriceReportRejected should expose the cleared pending report id')
+		assert.strictEqual(rejectedLog.args.pendingReportMaxSettlementBaseFee, pendingMaxSettlementBaseFeeAfterSettlement, 'PriceReportRejected should expose the cleared basefee guard')
+		assert.strictEqual(rejectedLog.args.lastPrice, lastPriceBeforeSettlement, 'PriceReportRejected should expose the unchanged last price')
+		assert.strictEqual(rejectedLog.args.lastSettlementTimestamp, lastSettlementTimestampBeforeSettlement, 'PriceReportRejected should expose the unchanged settlement timestamp')
+		assert.strictEqual(rejectedLog.args.priceRoundId, priceRoundIdBeforeSettlement, 'PriceReportRejected should expose the unchanged price round id')
+		assert.strictEqual(rejectedLog.args.priceRoundMaxNotional, priceRoundMaxNotionalBeforeSettlement, 'PriceReportRejected should expose the unchanged price round max notional')
+		assert.strictEqual(rejectedLog.args.priceRoundConsumedNotional, priceRoundConsumedNotionalBeforeSettlement, 'PriceReportRejected should expose the unchanged consumed notional')
 
 		await requestPrice(client, priceOracle)
 		const recoveryPendingReportId = await getPendingReportId(client, priceOracle)
@@ -408,7 +505,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(stagedOperation[1], zeroAddress, 'failed staged operations should be consumed after their first execution attempt')
 		assert.strictEqual(stagedOperation[3], impossibleAllowance, 'failed staged operations should retain their record for auditability')
 
-		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /no such operation/i)
+		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /staged operation does not exist/i)
 	})
 
 	test('invalid settled oracle reports clear pending report without validating price or executing staged allowances', async () => {
@@ -508,12 +605,44 @@ describe('Price Oracle Refund Security Tests', () => {
 		const pendingReportIdAfterSettlement = await getPendingReportId(client, priceOracle)
 		assert.strictEqual(pendingReportIdAfterSettlement, pendingReportId, 'failed callbacks should leave recovery work to the coordinator recovery function')
 
-		await recoverSettledPendingReport(client, priceOracle)
+		const recoveryHash = await recoverSettledPendingReport(client, priceOracle)
+		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
 
 		const pendingReportIdAfterRecovery = await getPendingReportId(client, priceOracle)
-		assert.strictEqual(pendingReportIdAfterRecovery, 0n, 'recovery should clear settled reports whose callback failed')
 		const pendingMaxSettlementBaseFeeAfterRecovery = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
+		const lastPriceAfterRecovery = await getLastPrice(client, priceOracle)
+		const lastSettlementTimestampAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'lastSettlementTimestamp',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundIdAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundId',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundMaxNotionalAfterRecovery = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundMaxNotional',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundConsumedNotionalAfterRecovery = await getPriceRoundConsumedNotional(client, priceOracle)
+		const recoveryLog = findPendingReportRecoveredLog(recoveryReceipt.logs)
+		if (recoveryLog === undefined) throw new Error('missing PendingReportRecovered log')
+
+		assert.strictEqual(pendingReportIdAfterRecovery, 0n, 'recovery should clear settled reports whose callback failed')
 		assert.strictEqual(pendingMaxSettlementBaseFeeAfterRecovery, 0n, 'recovery should clear the stale basefee guard')
+		assert.strictEqual(recoveryLog.args.reportId, pendingReportId, 'PendingReportRecovered should identify the recovered report')
+		assert.strictEqual(recoveryLog.args.pendingReportId, pendingReportIdAfterRecovery, 'PendingReportRecovered should expose the cleared pending report id')
+		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFee, pendingMaxSettlementBaseFeeAfterRecovery, 'PendingReportRecovered should expose the cleared basefee guard')
+		assert.strictEqual(recoveryLog.args.lastPrice, lastPriceAfterRecovery, 'PendingReportRecovered should expose the unchanged last price')
+		assert.strictEqual(recoveryLog.args.lastSettlementTimestamp, lastSettlementTimestampAfterRecovery, 'PendingReportRecovered should expose the unchanged settlement timestamp')
+		assert.strictEqual(recoveryLog.args.priceRoundId, priceRoundIdAfterRecovery, 'PendingReportRecovered should expose the unchanged price round id')
+		assert.strictEqual(recoveryLog.args.priceRoundMaxNotional, priceRoundMaxNotionalAfterRecovery, 'PendingReportRecovered should expose the unchanged price round max notional')
+		assert.strictEqual(recoveryLog.args.priceRoundConsumedNotional, priceRoundConsumedNotionalAfterRecovery, 'PendingReportRecovered should expose the unchanged consumed notional')
 
 		await requestPriceWithValue(client, priceOracle, ethCost)
 		const nextPendingReportId = await getPendingReportId(client, priceOracle)
@@ -552,6 +681,11 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingOperationSlotIdAfterRecovery, 0n, 'recovery should clear the stale auto-execute slot')
 		assert.strictEqual(recoveredStagedOperation[1], zeroAddress, 'recovery should consume the operation whose callback could not complete')
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'recovery must not execute staged allowance changes without a successful callback')
+		const recoveryLog = findPendingReportRecoveredLog(recoveryReceipt.logs)
+		if (recoveryLog === undefined) throw new Error('missing PendingReportRecovered log')
+		assert.strictEqual(recoveryLog.args.reportId, pendingReportId, 'PendingReportRecovered should identify the recovered report')
+		assert.strictEqual(recoveryLog.args.pendingReportId, pendingReportIdAfterRecovery, 'PendingReportRecovered should expose the cleared pending report id')
+		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFee, 0n, 'PendingReportRecovered should expose the cleared basefee guard')
 		const recoveryConsumedLog = findPendingOperationRecoveryConsumedLog(recoveryReceipt.logs)
 		assert.strictEqual(recoveryConsumedLog?.args.operationId, 1n, 'recovery should emit the consumed operation id')
 		assert.strictEqual(recoveryConsumedLog?.args.operation, OperationType.SetSecurityBondsAllowance, 'recovery should emit the consumed operation type')
@@ -598,9 +732,43 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(activeOperations[3]?.amount, secondAllowance, 'older pending operation should retain its amount')
 		assert.strictEqual(activeOperations[4]?.amount, firstAllowance, 'oldest pending operation should retain its amount')
 
-		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
+		const { pendingReportId: settledReportId, settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
+		const priceReportedLog = findPriceReportedLog(settleReceipt.logs)
+		if (priceReportedLog === undefined) throw new Error('missing PriceReported log')
+		const priceRoundNotionalConsumedLogs = findPriceRoundNotionalConsumedLogs(settleReceipt.logs)
+		const finalPriceRoundNotionalConsumedLog = priceRoundNotionalConsumedLogs[priceRoundNotionalConsumedLogs.length - 1]
+		if (finalPriceRoundNotionalConsumedLog === undefined) throw new Error('missing PriceRoundNotionalConsumed log')
 		const callbackLog = findSettlementCallbackExecutedLog(settleReceipt.logs)
 		if (callbackLog === undefined) throw new Error('missing settlement callback execution event')
+		const lastPrice = await getLastPrice(client, priceOracle)
+		const lastSettlementTimestamp = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'lastSettlementTimestamp',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundId = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundId',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundMaxNotional = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundMaxNotional',
+			address: priceOracle,
+			args: [],
+		})
+		const priceRoundConsumedNotional = await getPriceRoundConsumedNotional(client, priceOracle)
+		assert.strictEqual(settledReportId, pendingReportId, 'settled report should match the pending report')
+		assert.strictEqual(priceReportedLog.args.reportId, settledReportId, 'PriceReported should identify the settled report')
+		assert.strictEqual(priceReportedLog.args.price, lastPrice, 'PriceReported should expose the updated price')
+		assert.strictEqual(priceReportedLog.args.lastSettlementTimestamp, lastSettlementTimestamp, 'PriceReported should expose the updated settlement timestamp')
+		assert.strictEqual(priceReportedLog.args.priceRoundId, priceRoundId, 'PriceReported should expose the updated price round')
+		assert.strictEqual(priceReportedLog.args.priceRoundMaxNotional, priceRoundMaxNotional, 'PriceReported should expose the updated round max notional')
+		assert.strictEqual(priceReportedLog.args.priceRoundConsumedNotional, 0n, 'PriceReported should expose the reset consumed notional before staged operations execute')
+		assert.strictEqual(finalPriceRoundNotionalConsumedLog.args.priceRoundId, priceRoundId, 'PriceRoundNotionalConsumed should identify the current price round')
+		assert.strictEqual(finalPriceRoundNotionalConsumedLog.args.priceRoundConsumedNotional, priceRoundConsumedNotional, 'PriceRoundNotionalConsumed should expose the final consumed notional')
 		assert.strictEqual(callbackLog.args.success, true, 'bounded pending operation settlement callback should succeed')
 		const pendingOperationSlotIdAfterSettlement = await getPendingOperationSlotId(client, priceOracle)
 		const pendingSettlementOperationCountAfterSettlement = await getPendingSettlementOperationCount(client, priceOracle)
@@ -713,7 +881,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await executeStagedOperation(client, priceOracle, manualOperationId)
 
-		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, manualOperationId), /no such operation/i)
+		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, manualOperationId), /staged operation does not exist/i)
 	})
 
 	test('non-liquidation staged operations require the initiator vault as target', async () => {
@@ -721,7 +889,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const nonLiquidationOperations = [OperationType.WithdrawRep, OperationType.SetSecurityBondsAllowance]
 
 		for (const operation of nonLiquidationOperations) {
-			await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /self operation target must match initiator/i)
+			await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, otherVault, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /self-targeted staged operation target must match the initiator/i)
 		}
 	})
 
