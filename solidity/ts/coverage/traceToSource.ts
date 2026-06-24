@@ -265,11 +265,95 @@ const lineRangeFromSourceOffset = (source: string, sourceOffset: number, sourceL
 	return { startLine, endLine }
 }
 
+const stripSolidityComments = (source: string): readonly string[] => {
+	let insideBlockComment = false
+	return source.split('\n').map(line => {
+		let output = ''
+		let index = 0
+		while (index < line.length) {
+			if (insideBlockComment) {
+				const blockEnd = line.indexOf('*/', index)
+				if (blockEnd === -1) break
+				insideBlockComment = false
+				index = blockEnd + 2
+				continue
+			}
+
+			const lineComment = line.indexOf('//', index)
+			const blockStart = line.indexOf('/*', index)
+			if (lineComment !== -1 && (blockStart === -1 || lineComment < blockStart)) {
+				output += line.slice(index, lineComment)
+				break
+			}
+			if (blockStart !== -1) {
+				output += line.slice(index, blockStart)
+				insideBlockComment = true
+				index = blockStart + 2
+				continue
+			}
+			output += line.slice(index)
+			break
+		}
+		return output.trim()
+	})
+}
+
+const isSolidityDeclarationOrSignatureLine = (line: string): boolean =>
+	/^(pragma|import)\b/.test(line) ||
+	/^(abstract\s+contract|contract|library|interface)\b/.test(line) ||
+	/^(struct|enum|event|error|modifier)\b/.test(line) ||
+	/^(function|constructor)\b/.test(line) ||
+	/^\)\s*(public|external|internal|private|view|pure|payable|virtual|override|returns)\b/.test(line) ||
+	/^(public|external|internal|private|view|pure|payable|virtual|override|returns)\b/.test(line) ||
+	/^returns\b/.test(line) ||
+	/^(mapping|bytes\d*|u?int\d*|address|bool|string)\b.*\b(private|public|internal|external|constant|immutable)\b/.test(line) ||
+	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*[,)]?$/.test(line)
+
+const isSimpleSolidityReturn = (line: string): boolean =>
+	/^return\s+[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
+	/^return\s+\([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\)\s*;?$/.test(line) ||
+	/^return\s+new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
+	/^return\s+(string|bytes\d*|u?int\d*|address)\([^)]*\)\s*;?$/.test(line) ||
+	/^return\s+(true|false)\s*;?$/.test(line)
+
+const isSoliditySourceMapBookkeepingLine = (line: string): boolean =>
+	/^(for|while)\s*\(/.test(line) ||
+	/^(\+\+|--)[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
+	/^[A-Za-z_][A-Za-z0-9_]*(\+\+|--)\s*;?$/.test(line) ||
+	/^if\s*\([^)]*\)\s*continue\s*;?$/.test(line) ||
+	/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*|bytes\d*\([^)]*\)|u?int\d*\([^)]*\)|address\([^)]*\)|\d+|true|false)\s*;?$/.test(line) ||
+	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*|bytes\d*\([^)]*\)|u?int\d*\([^)]*\)|address\([^)]*\)|\d+|true|false)\s*;?$/.test(line) ||
+	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[A-Za-z_][A-Za-z0-9_.]*\($/.test(line) ||
+	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
+	/\.push\(/.test(line)
+
+const isSolidityCoverableLine = (line: string): boolean => {
+	if (line === '') return false
+	if (line === '{' || line === '}' || line === '};' || line === '});' || line === ');' || line === ',' || line === '[' || line === ']') return false
+	if (line === 'unchecked {' || line === 'assembly {') return false
+	if (isSolidityDeclarationOrSignatureLine(line)) return false
+	if (isSimpleSolidityReturn(line)) return false
+	if (isSoliditySourceMapBookkeepingLine(line)) return false
+	return /\b(if|for|while|require|revert|emit|try|catch|assembly|unchecked|delete|return)\b|[+\-*/%|&^]?=|\+\+|--|\.push\b|\.pop\b|\bnew\b/.test(line)
+}
+
+const coverableLinesByFile = new Map<string, readonly boolean[]>()
+
+const getCoverableLinesForSource = (absoluteSourcePath: string, source: string): readonly boolean[] => {
+	const existing = coverableLinesByFile.get(absoluteSourcePath)
+	if (existing !== undefined) return existing
+	const coverableLines = stripSolidityComments(source).map(isSolidityCoverableLine)
+	coverableLinesByFile.set(absoluteSourcePath, coverableLines)
+	return coverableLines
+}
+
 const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string): Promise<{ readonly absoluteSourcePath: string; readonly sourceCode: string } | undefined> => {
 	const candidates = [path.join(rootPath, sourcePath), path.join(rootPath, 'solidity', sourcePath)]
 	for (const candidate of candidates) {
 		try {
 			const sourceCode = await fs.readFile(candidate, 'utf8')
+			const relativeSourcePath = path.relative(rootPath, candidate).split(path.sep).join('/')
+			if (relativeSourcePath.startsWith('solidity/contracts/test/')) return undefined
 			return { absoluteSourcePath: candidate, sourceCode }
 		} catch (error) {
 			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
@@ -375,6 +459,7 @@ const recordLineHitsForProfileSegment = async (profile: CoverageProfile, segment
 
 	const { startLine, endLine } = lineRangeFromSourceOffset(source, segment.sourceOffset, segment.sourceLength)
 	if (startLine <= 0 || endLine <= 0) return
+	const coverableLines = getCoverableLinesForSource(sourceFile.absoluteSourcePath, source)
 
 	let fileCoverage = lineCoverage.get(sourceFile.absoluteSourcePath)
 	if (fileCoverage === undefined) {
@@ -383,6 +468,7 @@ const recordLineHitsForProfileSegment = async (profile: CoverageProfile, segment
 	}
 
 	for (let line = startLine; line <= endLine; line++) {
+		if (coverableLines[line - 1] !== true) continue
 		fileCoverage.set(line, (fileCoverage.get(line) ?? 0) + 1)
 	}
 }
@@ -402,6 +488,7 @@ const initializeCoverageLinesForProfileSegment = async (profile: CoverageProfile
 
 	const { startLine, endLine } = lineRangeFromSourceOffset(source, segment.sourceOffset, segment.sourceLength)
 	if (startLine <= 0 || endLine <= 0) return
+	const coverableLines = getCoverableLinesForSource(sourceFile.absoluteSourcePath, source)
 
 	let fileCoverage = lineCoverage.get(sourceFile.absoluteSourcePath)
 	if (fileCoverage === undefined) {
@@ -410,6 +497,7 @@ const initializeCoverageLinesForProfileSegment = async (profile: CoverageProfile
 	}
 
 	for (let line = startLine; line <= endLine; line++) {
+		if (coverableLines[line - 1] !== true) continue
 		if (!fileCoverage.has(line)) fileCoverage.set(line, 0)
 	}
 }
@@ -481,6 +569,7 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 
 export const resetSolidityBytecodeCoverageAddressCache = (): void => {
 	addressProfileCache.clear()
+	coverableLinesByFile.clear()
 }
 
 export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {

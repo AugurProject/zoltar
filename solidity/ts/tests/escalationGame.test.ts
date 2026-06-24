@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { concatHex, decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from 'viem'
+import { concatHex, decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -253,6 +253,28 @@ describe('Escalation Game Test Suite', () => {
 			args: [outcome, startIndex, numberOfEntries],
 		})
 
+	const transactWithEscalationGame = async (escalationGameAddress: Address, data: Hex) => await writeContractAndWait(client, () => client.sendTransaction({ to: escalationGameAddress, data }))
+
+	const traceCarryLeafPage = async (escalationGameAddress: Address, outcome: QuestionOutcome, startNodeId: bigint, maxEntries: bigint) =>
+		await transactWithEscalationGame(
+			escalationGameAddress,
+			encodeFunctionData({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getCarryLeafPageByOutcome',
+				args: [outcome, startNodeId, maxEntries],
+			}),
+		)
+
+	const traceProofConsumedCarriedDepositIndexes = async (escalationGameAddress: Address, outcome: QuestionOutcome, startIndex: bigint, numberOfEntries: bigint) =>
+		await transactWithEscalationGame(
+			escalationGameAddress,
+			encodeFunctionData({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
+				args: [outcome, startIndex, numberOfEntries],
+			}),
+		)
+
 	const assertEscrowAccounting = async (escalationGameAddress: Address, expectedTotalEscrowedRep: bigint, expectedTotalLocalUnresolvedRep: bigint) => {
 		assert.strictEqual(await readTotalEscrowedRep(escalationGameAddress), expectedTotalEscrowedRep, 'total escrowed REP should match scenario accounting')
 		assert.strictEqual(await readTotalLocalUnresolvedRep(escalationGameAddress), expectedTotalLocalUnresolvedRep, 'total unresolved local REP should match scenario accounting')
@@ -397,6 +419,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 
 	const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
+	const oneHash = () => `0x${'0'.repeat(63)}1` as Hex
 
 	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
 		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
@@ -697,6 +720,11 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(secondPage[0]?.parentDepositIndex, 0n, 'second page should return the remaining unresolved oldest leaf')
 		assert.strictEqual(secondPage[0]?.amount, reportBond, 'second page should preserve the oldest unresolved leaf amount')
 		assert.strictEqual(secondNextNodeId, 0n, 'second page should finish the cursor traversal')
+
+		await traceCarryLeafPage(escalationGameAddress, QuestionOutcome.None, 0n, 1n)
+		await traceCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 0n)
+		await traceCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 1n)
+		await traceCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, firstNextNodeId, 2n)
 	})
 
 	test('fork carry leaf paging rejects cursors from another outcome chain', async () => {
@@ -783,6 +811,9 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(remainingCarryTotal, 0n)
 		const consumedIndexes = await readProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 0n, MAX_UINT256)
 		assert.deepStrictEqual(consumedIndexes, [0n, 1n], 'max-count proof-consumed paging should return all consumed inherited indexes')
+		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.None, 0n, 1n)
+		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 2n, 1n)
+		await traceProofConsumedCarriedDepositIndexes(child.escalationGameAddress, QuestionOutcome.Yes, 0n, MAX_UINT256)
 	})
 
 	test('fork carry proof settlement rejects reusing the same carried proof twice', async () => {
@@ -802,8 +833,31 @@ describe('Escalation Game Test Suite', () => {
 
 		const nullifierTree = new SparseNullifierTree()
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], nullifierTree.getProof(0n))
+		const invalidNullifierProof = { ...proof, nullifierSiblings: [oneHash(), ...nullifierTree.getProof(0n).slice(1)] }
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, invalidNullifierProof), /invalid nullifier proof/)
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
 		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /invalid nullifier proof|deposit already settled/)
+	})
+
+	test('fork carry proof settlement rejects when no carry snapshot is available', async () => {
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await advanceForkContinuationPastStart(child.escalationGameAddress)
+
+		await assert.rejects(
+			withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, {
+				depositor: client.account.address,
+				amount: reportBond,
+				parentDepositIndex: 0n,
+				cumulativeAmount: reportBond,
+				sourceNodeId: 1n,
+				leafIndex: 0n,
+				merkleMountainRangeSiblings: [],
+				merkleMountainRangePeakIndex: 0n,
+				nullifierSiblings: new SparseNullifierTree().getProof(0n),
+			}),
+			/ncs/,
+		)
 	})
 
 	test('fork carry grandchild instances can settle inherited parent carry from a recursive child snapshot', async () => {
