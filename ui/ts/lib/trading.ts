@@ -18,11 +18,18 @@ export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
 export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
 export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. No active security bond allowance.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
+export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 
 const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE]
 
-export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined) {
+export function hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined) {
+	if (completeSetCollateralAmount === undefined || shareTokenSupply === undefined) return undefined
+	return completeSetCollateralAmount === 0n && shareTokenSupply !== 0n
+}
+
+export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply?: bigint | undefined) {
 	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
+	if (hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply) === true) return 0n
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
 }
 
@@ -114,6 +121,7 @@ export function getTradingMintGuardMessage({
 	hasSelectedPool,
 	isMainnet,
 	mintAmountInput,
+	shareTokenSupply,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
@@ -123,6 +131,7 @@ export function getTradingMintGuardMessage({
 	hasSelectedPool: boolean
 	isMainnet: boolean
 	mintAmountInput: string
+	shareTokenSupply: bigint | undefined
 	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
 }) {
@@ -130,7 +139,11 @@ export function getTradingMintGuardMessage({
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
 
-	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount)
+	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply)
+	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
+	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
+
+	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount, shareTokenSupply)
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
 		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE

@@ -7,7 +7,7 @@ import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
-import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE } from '../lib/trading.js'
+import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 import type { TradingSectionProps } from '../types/components.js'
@@ -49,6 +49,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
+		shareTokenSupply: 0n,
 		systemState: 'operational',
 		totalRepDeposit: 0n,
 		totalSecurityBondAllowance: 5n * 10n ** 18n,
@@ -350,6 +351,28 @@ void describe('TradingSection', () => {
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
 		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+	})
+
+	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						completeSetCollateralAmount: 0n,
+						shareTokenSupply: 10n * 10n ** 18n,
+						totalSecurityBondAllowance: 5n * 10n ** 18n,
+						universeHasForked: false,
+					}),
+					tradingForm: createTradingForm({ completeSetAmount: '1' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(mintButton.title).toBe(UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE)
 	})
 
 	void test('shows the complete-set redemption disabled reason on the launcher when the wallet lacks matching shares', async () => {
