@@ -79,6 +79,16 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('This security pool address was not found.')).not.toBeNull()
 	})
 
+	test('keeps selected-pool load errors inline instead of opening liquidation', async () => {
+		await renderLoadedPool({
+			securityPoolOverviewError: 'Failed to load security pools',
+		})
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('alert').textContent).toContain('Failed to load security pools')
+		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
+	})
+
 	test('renders a vault workspace header and local mode switch for a loaded pool', async () => {
 		const poolVault = createSecurityPoolVaultSummary()
 		await renderLoadedPool({
@@ -130,7 +140,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(vaultSummaryHeading).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
 		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Vault Action Launchers' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
 		expect(documentQueries.getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)

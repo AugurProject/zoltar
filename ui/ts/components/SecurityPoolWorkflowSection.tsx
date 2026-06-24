@@ -152,6 +152,7 @@ export function SecurityPoolWorkflowSection({
 	selectedPoolView,
 	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
+	securityPoolLiquidationError,
 	securityPoolOverviewResult,
 	securityPoolAddress,
 	securityPools,
@@ -747,6 +748,7 @@ export function SecurityPoolWorkflowSection({
 				</div>
 				{selectedPoolSummaryContent}
 			</StickyObjectContext>
+			<ErrorNotice message={securityPoolOverviewError} />
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
 				<SectionBlock title='Universe Mismatch' tone='critical'>
@@ -1094,7 +1096,7 @@ export function SecurityPoolWorkflowSection({
 				repPerEthSourceUrl={repPerEthSourceUrl}
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
-				securityPoolOverviewError={securityPoolOverviewError}
+				securityPoolLiquidationError={securityPoolLiquidationError}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				walletEthBalance={accountState.ethBalance}
 				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}

@@ -254,6 +254,30 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Create Open Oracle Game', 'Need 100 more ETH in this wallet to create the selected Open Oracle game.')
 	})
 
+	test('describes advanced create fields with units and numeric input modes', async () => {
+		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const exactToken1ReportInput = documentQueries.getByLabelText('Exact Token1 Report')
+		const settlerRewardInput = documentQueries.getByLabelText('Settler Reward')
+		const settlementTimeInput = documentQueries.getByLabelText('Settlement Time')
+		const protocolFeeInput = documentQueries.getByLabelText('Protocol Fee')
+
+		expect(exactToken1ReportInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expect(settlerRewardInput.getAttribute('aria-describedby')).toBe('open-oracle-settler-reward-help')
+		expect(settlementTimeInput.getAttribute('aria-describedby')).toBe('open-oracle-settlement-time-help')
+		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-help')
+		expect(exactToken1ReportInput.getAttribute('inputmode')).toBe('numeric')
+		expect(settlerRewardInput.getAttribute('inputmode')).toBe('numeric')
+		expect(settlementTimeInput.getAttribute('inputmode')).toBe('numeric')
+		expect(protocolFeeInput.getAttribute('inputmode')).toBe('numeric')
+		expect(documentQueries.getByText('Raw token1 amount in smallest token units.')).not.toBeNull()
+		expect(documentQueries.getByText('Wei paid to the account that settles the report.')).not.toBeNull()
+		expect(documentQueries.getByText('Unix timestamp in seconds when settlement can begin.')).not.toBeNull()
+		expect(documentQueries.getByText('Protocol fee amount in wei.')).not.toBeNull()
+	})
+
 	test('uses the shared live chain timestamp to switch a selected report into settle mode', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={161n}>

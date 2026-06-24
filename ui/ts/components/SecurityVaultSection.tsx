@@ -508,7 +508,7 @@ export function SecurityVaultSection({
 	] satisfies ReadinessAction[])
 	const actionSections = modalFirst ? (
 		<>
-			<SectionBlock title='Vault Action Launchers'>
+			<SectionBlock title='Vault Actions'>
 				<div className='vault-action-launcher-grid'>
 					{vaultReadinessActions.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />

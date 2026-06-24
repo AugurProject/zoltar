@@ -82,7 +82,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 	return (
 		<>
 			<RouteSubNavigation
-				ariaLabel='Open Oracle views'
+				ariaLabel='Oracle report views'
 				value={activeView}
 				onChange={setActiveView}
 				options={[

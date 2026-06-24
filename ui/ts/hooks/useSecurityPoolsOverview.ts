@@ -46,6 +46,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewFeedback = useSignal<ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined>(undefined)
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
+	const securityPoolLiquidationError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 	const nextSecurityPoolsLoad = useRequestGuard()
@@ -108,6 +109,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 
 	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
 		securityPoolOverviewError.value = undefined
+		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewFeedback.value = undefined
 		securityPoolOverviewResult.value = undefined
 		liquidationManagerAddress.value = managerAddress
@@ -119,7 +121,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	}
 
 	const closeLiquidationModal = () => {
-		securityPoolOverviewError.value = undefined
+		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewFeedback.value = undefined
 		securityPoolOverviewResult.value = undefined
 		liquidationModalOpen.value = false
@@ -134,6 +136,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	}
 
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
+		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewResult.value = undefined
 		let completedResult: SecurityPoolOverviewActionResult | undefined
 		try {
@@ -149,6 +152,8 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						if (completedResult !== undefined) onTransactionPresented(createLiquidationWarningPresentation(completedResult, message))
 					},
 					onWriteError: message => {
+						liquidationModalOpen.value = true
+						securityPoolLiquidationError.value = message
 						securityPoolOverviewFeedback.value = createErrorActionFeedback('queueLiquidation', 'Liquidation failed', message)
 					},
 				},
@@ -180,6 +185,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 					}
 					completedResult = nextResult
+					securityPoolLiquidationError.value = undefined
 					securityPoolOverviewResult.value = nextResult
 					securityPoolOverviewFeedback.value = getLiquidationFeedbackFromResult(nextResult)
 					onTransactionPresented(createLiquidationSuccessPresentation(nextResult))
@@ -210,6 +216,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		queueLiquidation,
 		securityPoolOverviewActiveAction: securityPoolOverviewActiveAction.value,
 		securityPoolOverviewError: securityPoolOverviewError.value,
+		securityPoolLiquidationError: securityPoolLiquidationError.value,
 		securityPoolOverviewFeedback: securityPoolOverviewFeedback.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
 		securityPoolBrowseCount: securityPoolBrowseCount.value,

@@ -69,6 +69,20 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 	}
 }
 
+function isDetailsElement(element: Element | null): element is HTMLDetailsElement {
+	return element instanceof HTMLElement && element.tagName === 'DETAILS'
+}
+
+function openAdvancedControls(container: Element): HTMLElement {
+	const summary = within(container).getByText('QA controls, prices, and time travel')
+	const details = summary.closest('details')
+	if (!isDetailsElement(details)) throw new Error('Expected simulation controls to render inside a details disclosure')
+	expect(details.open).toBe(false)
+	fireEvent.click(summary)
+	expect(details.open).toBe(true)
+	return details
+}
+
 describe('SimulationBanner', () => {
 	test('shows the selected scenario description', async () => {
 		const domEnvironment = installDomEnvironment()
@@ -79,6 +93,27 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('labels the scenario and QA account selectors', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController()
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByLabelText('Simulation scenario')).toBeTruthy()
+			expect(documentQueries.getByLabelText('Simulation QA account')).toBeTruthy()
+			const accountSelect = documentQueries.getByLabelText('Simulation QA account')
+			const accountOption = accountSelect.querySelector('option')
+			if (accountOption === null) throw new Error('Expected QA account option')
+			expect(accountOption.getAttribute('value')).toBe(controller.selectedAccount)
+			expect(accountOption.textContent).toBe('QA 0x0000…00a1')
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -114,8 +149,9 @@ describe('SimulationBanner', () => {
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
 
 		try {
-			const documentQueries = within(renderedComponent.container)
-			const repPerEthLabel = documentQueries.getByText('REP / ETH mock price')
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			const advancedQueries = within(advancedControls)
+			const repPerEthLabel = advancedQueries.getByText('REP / ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
 			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
 
@@ -146,8 +182,8 @@ describe('SimulationBanner', () => {
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
 
 		try {
-			const documentQueries = within(renderedComponent.container)
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint 1 million REP' }))
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Mint 1 million REP' }))
 
 			await waitFor(() => {
 				expect(mintRep).toHaveBeenCalledWith(SIMULATION_REP_MINT_AMOUNT)
@@ -167,9 +203,10 @@ describe('SimulationBanner', () => {
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
 
 		try {
-			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('Actions')).toBeTruthy()
-			expect(documentQueries.getByText('Time travel')).toBeTruthy()
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			const advancedQueries = within(advancedControls)
+			expect(advancedQueries.getByText('Actions')).toBeTruthy()
+			expect(advancedQueries.getByText('Time travel')).toBeTruthy()
 
 			const expectedPresets = [
 				{ label: '+1 hour', seconds: 60n * 60n },
@@ -180,11 +217,11 @@ describe('SimulationBanner', () => {
 			] as const
 
 			for (const preset of expectedPresets) {
-				expect(documentQueries.getByRole('button', { name: preset.label })).toBeTruthy()
+				expect(advancedQueries.getByRole('button', { name: preset.label })).toBeTruthy()
 			}
 
 			for (const [index, preset] of expectedPresets.slice(2).entries()) {
-				fireEvent.click(documentQueries.getByRole('button', { name: preset.label }))
+				fireEvent.click(advancedQueries.getByRole('button', { name: preset.label }))
 				await waitFor(() => {
 					expect(advanceTime).toHaveBeenNthCalledWith(index + 1, preset.seconds)
 					expect(onRefresh).toHaveBeenCalledTimes(index + 1)
@@ -234,7 +271,8 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByRole('option', { name: 'Saved baseline' })).toBeTruthy()
 
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Export state' }))
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Export state' }))
 
 			await waitFor(() => {
 				const exportDialog = documentQueries.getByRole('dialog')
@@ -339,7 +377,8 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Remove corrupted saves' }))
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
 			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog'))
 			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
 
@@ -379,7 +418,8 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Import state' }))
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Import state' }))
 			const importDialog = await waitFor(() => documentQueries.getByRole('dialog'))
 			const dialogQueries = within(importDialog)
 			const textArea = dialogQueries.getByLabelText('JSON state') as HTMLTextAreaElement
@@ -433,7 +473,8 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Import state' }))
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Import state' }))
 			const importDialog = await waitFor(() => documentQueries.getByRole('dialog'))
 			const dialogQueries = within(importDialog)
 			const textArea = dialogQueries.getByLabelText('JSON state') as HTMLTextAreaElement
@@ -469,8 +510,10 @@ describe('SimulationBanner', () => {
 		const customRendered = await renderIntoDocument(<SimulationBanner controller={customController} onRefresh={onRefresh} />)
 
 		try {
-			expect(within(builtInRendered.container).queryByRole('button', { name: 'Delete save' })).toBeNull()
-			expect(within(customRendered.container).getByRole('button', { name: 'Delete save' })).toBeTruthy()
+			const builtInAdvancedControls = openAdvancedControls(builtInRendered.container)
+			const customAdvancedControls = openAdvancedControls(customRendered.container)
+			expect(within(builtInAdvancedControls).queryByRole('button', { name: 'Delete save' })).toBeNull()
+			expect(within(customAdvancedControls).getByRole('button', { name: 'Delete save' })).toBeTruthy()
 		} finally {
 			await builtInRendered.cleanup()
 			await customRendered.cleanup()

@@ -39,7 +39,9 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: '@noble/hashes', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { crypto: 'crypto.js', sha3: 'sha3.js', utils: 'utils.js', _assert: '_assert.js', sha256: 'sha256.js', sha512: 'sha512.js', pbkdf2: 'pbkdf2.js', hmac: 'hmac.js', ripemd160: 'ripemd160.js' } },
 	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { secp256k1: 'secp256k1.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'abstract/utils.js' } },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
+	{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js', alternateEntrypoints: {} },
 	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { BlockOverrides: 'core/BlockOverrides.js', AbiConstructor: 'core/AbiConstructor.js', AbiFunction: 'core/AbiFunction.js' } },
+	{ packageName: 'viem', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 ]
 
 async function vendorDependencies() {
@@ -76,27 +78,48 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 	await fs.writeFile(destinationPath, JSON.stringify(fileContents))
 }
 
-async function bundleViem() {
+async function writeViemBrowserEntrypoints() {
 	const viemOutRoot = path.join(VENDOR_OUTPUT_PATH, 'viem')
-	const viemEntries: Record<string, string> = {
-		'': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'index.js'),
-		chains: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'chains', 'index.js'),
-		window: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'window', 'index.js'),
-		actions: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'actions', 'index.js'),
-		accounts: path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.js'),
-		utils: path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.js'),
-	}
-	await Promise.all(
-		Object.entries(viemEntries).map(([subdir, entryPath]) =>
-			Bun.build({
-				entrypoints: [entryPath],
-				naming: { entry: 'index.js' },
-				outdir: path.join(viemOutRoot, subdir),
-				target: 'browser',
-				sourcemap: 'linked',
-			}),
-		),
+	await fs.writeFile(
+		path.join(viemOutRoot, 'index.js'),
+		[
+			"export { createPublicClient } from './clients/createPublicClient.js'",
+			"export { createWalletClient } from './clients/createWalletClient.js'",
+			"export { custom } from './clients/transports/custom.js'",
+			"export { http } from './clients/transports/http.js'",
+			"export { publicActions } from './clients/decorators/public.js'",
+			"export { zeroAddress } from './constants/address.js'",
+			"export { zeroHash } from './constants/bytes.js'",
+			"export { maxUint256 } from './constants/number.js'",
+			"export { RpcError } from './errors/rpc.js'",
+			"export { decodeAbiParameters } from './utils/abi/decodeAbiParameters.js'",
+			"export { decodeEventLog } from './utils/abi/decodeEventLog.js'",
+			"export { decodeFunctionData } from './utils/abi/decodeFunctionData.js'",
+			"export { encodeAbiParameters } from './utils/abi/encodeAbiParameters.js'",
+			"export { encodeDeployData } from './utils/abi/encodeDeployData.js'",
+			"export { encodeEventTopics } from './utils/abi/encodeEventTopics.js'",
+			"export { encodeFunctionData } from './utils/abi/encodeFunctionData.js'",
+			"export { parseAbiItem, parseAbiParameters } from 'abitype'",
+			"export { getAddress } from './utils/address/getAddress.js'",
+			"export { isAddress } from './utils/address/isAddress.js'",
+			"export { getCreate2Address, getCreateAddress } from './utils/address/getContractAddress.js'",
+			"export { concatHex } from './utils/data/concat.js'",
+			"export { isHex } from './utils/data/isHex.js'",
+			"export { bytesToHex } from './utils/encoding/toHex.js'",
+			"export { hexToBytes } from './utils/encoding/toBytes.js'",
+			"export { numberToBytes } from './utils/encoding/toBytes.js'",
+			"export { toHex } from './utils/encoding/toHex.js'",
+			"export { formatEther } from './utils/unit/formatEther.js'",
+			"export { formatUnits } from './utils/unit/formatUnits.js'",
+			"export { parseUnits } from './utils/unit/parseUnits.js'",
+			"export { defineChain } from './utils/chain/defineChain.js'",
+			"export { keccak256 } from './utils/hash/keccak256.js'",
+			"export { parseTransaction } from './utils/transaction/parseTransaction.js'",
+			"export { recoverTransactionAddress } from './utils/signature/recoverTransactionAddress.js'",
+			'',
+		].join('\n'),
 	)
+	await fs.writeFile(path.join(viemOutRoot, 'chains', 'index.js'), "export { mainnet } from './definitions/mainnet.js'\n")
 }
 
 async function bundleTevm() {
@@ -120,9 +143,9 @@ async function bundleTevm() {
 }
 
 const vendor = async () => {
-	await bundleViem()
 	await bundleTevm()
 	await vendorDependencies()
+	await writeViemBrowserEntrypoints()
 	await copyProjectArtifacts()
 }
 

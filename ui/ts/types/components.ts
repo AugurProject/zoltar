@@ -457,6 +457,7 @@ type LiquidationControlsProps = {
 	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	securityPoolOverviewError: string | undefined
+	securityPoolLiquidationError: string | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTimeoutMinutesChange: (value: string) => void
@@ -473,6 +474,7 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
 	loadingSecurityPools: boolean
+	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number) => void
 	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void
@@ -514,6 +516,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	selectedPoolRefreshNonce: number
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	securityPoolOverviewError: string | undefined
+	securityPoolLiquidationError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined

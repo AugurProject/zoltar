@@ -267,7 +267,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Trading Workflow')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Your Shares' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Trading Action Launchers' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Trade' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()

@@ -64,8 +64,10 @@ export function getPoolRegistryPresentation(
 				badgeTone: 'muted',
 			})
 		return createPresentation('empty', {
+			actionHint: 'Create a pool from a binary question to enable trading, reporting, and vault collateral workflows.',
 			badgeLabel: 'None yet',
 			badgeTone: 'muted',
+			detail: 'No security pools are available in this universe yet.',
 		})
 	}
 

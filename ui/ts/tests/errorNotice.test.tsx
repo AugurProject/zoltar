@@ -52,7 +52,10 @@ describe('ErrorNotice', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Something failed')).not.toBeNull()
+		const alert = documentQueries.getByRole('alert')
+		expect(alert.textContent).toContain('Something failed')
+		expect(alert.getAttribute('aria-live')).toBe('assertive')
+		expect(alert.getAttribute('aria-atomic')).toBe('true')
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss error' })).toBeNull()
 	})
 })

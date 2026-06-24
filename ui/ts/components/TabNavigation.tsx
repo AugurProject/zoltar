@@ -2,12 +2,12 @@ import { ViewTabs } from './ViewTabs.js'
 import type { TabNavigationProps } from '../types/components.js'
 
 export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
-	const disabledTabReason = 'Deploy Augur PLACEHOLDER contracts before using this tab.'
+	const disabledTabReason = 'Deploy the application contracts before using this section.'
 	const options: Array<{ disabled?: boolean; href: string; label: string; reason?: string; value: Exclude<TabNavigationProps['route'], 'not-found'> }> = []
 	if (showDeployTab) options.push({ value: 'deploy', label: 'Deploy', href: deployRoute })
 	options.push({
 		value: 'zoltar',
-		label: 'Zoltar',
+		label: 'Questions',
 		href: marketRoute,
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
@@ -21,7 +21,7 @@ export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDep
 	})
 	options.push({
 		value: 'open-oracle',
-		label: 'Open Oracle',
+		label: 'Oracle Reports',
 		href: openOracleRoute,
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),

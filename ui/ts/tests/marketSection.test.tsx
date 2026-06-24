@@ -143,17 +143,17 @@ describe('MarketSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders the Zoltar title without local view tabs in the section header', async () => {
+	test('renders the Questions title without local view tabs in the section header', async () => {
 		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const zoltarTitle = document.body.querySelector('h3')
-		if (!(zoltarTitle instanceof HTMLElement)) throw new Error('Expected to find the Zoltar section heading')
-		expect(zoltarTitle.textContent).toBe('Zoltar')
+		const questionsTitle = document.body.querySelector('h3')
+		if (!(questionsTitle instanceof HTMLElement)) throw new Error('Expected to find the Questions section heading')
+		expect(questionsTitle.textContent).toBe('Questions')
 
-		const sectionHeader = zoltarTitle.closest('.section-block-header')
-		if (sectionHeader === null) throw new Error('Expected Zoltar title to render inside a section header')
-		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Zoltar views"]')).toBeNull()
+		const sectionHeader = questionsTitle.closest('.section-block-header')
+		if (sectionHeader === null) throw new Error('Expected Questions title to render inside a section header')
+		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Question views"]')).toBeNull()
 	})
 
 	test('auto-loads questions once when opening the questions view without loaded data', async () => {
@@ -543,6 +543,34 @@ describe('MarketSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('No questions were returned for the selected page.')).toBeNull()
 		expect(documentQueries.getByText('Loading questions...')).not.toBeNull()
+	})
+
+	test('opens the create question view from the empty questions state', async () => {
+		const selectedViews: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					onActiveViewChange: view => {
+						selectedViews.push(view)
+					},
+					zoltarQuestionCount: 0n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 0n,
+						questions: [],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Question' }))
+		})
+
+		expect(selectedViews).toEqual(['create'])
 	})
 
 	test('selects a paginated question for the fork workflow', async () => {

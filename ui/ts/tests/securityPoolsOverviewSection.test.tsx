@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { waitFor, within } from './testUtils/queries'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
@@ -128,6 +128,7 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 		securityPoolPage: overrides.securityPoolPage ?? defaultPage,
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
+		securityPoolLiquidationError: undefined,
 		securityPoolOverviewResult: undefined,
 		securityPools,
 		...overrides,
@@ -156,7 +157,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			.getAllByRole('heading')
 			.find(node => {
 				const normalizedNodeText = (node.textContent ?? '').replace(/\s+/g, ' ').trim()
-				return normalizedNodeText.includes(normalizedHeadingText) && normalizedNodeText.includes('Collateralization')
+				return normalizedNodeText.includes(normalizedHeadingText)
 			})
 		if (titleHeading === undefined) {
 			throw new Error(`Expected security pool card heading for "${headingText}"`)
@@ -186,6 +187,21 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Submitted' })).toBeNull()
 		expect(documentQueries.queryByText('Check State')).toBeNull()
 		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
+	})
+
+	test('keeps registry load errors inline instead of opening liquidation', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPoolOverviewError: 'Failed to load security pool registry page',
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('alert').textContent).toContain('Failed to load security pool registry page')
+		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 
 	test('shows Finalized as Yes for resolved operational pools', async () => {
@@ -323,6 +339,47 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('Refresh pools to check again.')).toBeNull()
 	})
 
+	test('opens security pool creation from the empty registry state', async () => {
+		let createSecurityPoolClicks = 0
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPools: true,
+					onCreateSecurityPool: () => {
+						createSecurityPoolClicks += 1
+					},
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Security Pool' }))
+		})
+
+		expect(createSecurityPoolClicks).toBe(1)
+	})
+
+	test('keeps the empty registry CTA visible during a background refresh', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPoolPage: true,
+					loadingSecurityPoolPage: true,
+					onCreateSecurityPool: () => undefined,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'No security pools' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create Security Pool' })).not.toBeNull()
+		expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
+	})
+
 	test('shows a loading browse state before the first registry page loads', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -339,6 +396,27 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByText('None yet')).toBeNull()
+	})
+
+	test('does not show the empty registry CTA before the first registry page loads', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPoolPage: false,
+					loadingSecurityPoolPage: false,
+					onCreateSecurityPool: () => undefined,
+					securityPoolPage: undefined,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const hasLoadingOrRefreshCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Refresh pools') !== null
+		expect(hasLoadingOrRefreshCopy).toBe(true)
+		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create Security Pool' })).toBeNull()
 	})
 
 	test('does not infer browse page count from selected-pool cache before the first registry page loads', async () => {

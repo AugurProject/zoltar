@@ -26,7 +26,7 @@ describe('RouteSubNavigation', () => {
 	test('renders linked secondary tabs without extra route path text', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(RouteSubNavigation, {
-				ariaLabel: 'Zoltar views',
+				ariaLabel: 'Question views',
 				onChange: () => undefined,
 				options: [
 					{ href: '#/zoltar?zoltarView=questions', label: 'Questions', value: 'questions' },
@@ -41,6 +41,7 @@ describe('RouteSubNavigation', () => {
 		expect(documentQueries.queryByText('Zoltar > Questions')).toBeNull()
 		expect(document.body.querySelector('.route-subnav-shell')).not.toBeNull()
 		expect(document.body.querySelector('.route-subtab-nav')).not.toBeNull()
+		expect(documentQueries.getByRole('tablist', { name: 'Question views' })).not.toBeNull()
 
 		const questionsTab = documentQueries.getByRole('tab', { name: 'Questions' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')

@@ -16,6 +16,7 @@ type MarketQuestionsSectionProps = {
 	hasForked: boolean
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
+	onCreateQuestion: () => void
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onOpenForkTab: () => void
 	onUseQuestionForFork: (questionId: string) => void
@@ -23,7 +24,7 @@ type MarketQuestionsSectionProps = {
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
 }
-export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestionPage, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestionPage }: MarketQuestionsSectionProps) {
+export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onCreateQuestion, onLoadZoltarQuestionPage, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestionPage }: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
@@ -97,9 +98,14 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 									key: 'empty',
 									badgeLabel: 'None yet',
 									badgeTone: 'muted',
-									detail: 'No questions are available in this universe yet.',
+									detail: 'No questions are available in this universe yet. Create a question first, then use it to create a security pool for trading and reporting.',
 								}}
 								title='No questions'
+								actions={
+									<button className='primary' type='button' onClick={onCreateQuestion}>
+										Create Question
+									</button>
+								}
 							/>
 						)
 					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <StateHint presentation={{ key: 'not_checked', badgeLabel: 'Not checked', badgeTone: 'muted', detail: 'Questions for this page have not loaded yet.' }} />
