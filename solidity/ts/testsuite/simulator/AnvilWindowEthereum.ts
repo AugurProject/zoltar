@@ -1,7 +1,7 @@
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
-import { collectBytecodeCoverageForTransaction, resetSolidityBytecodeCoverageAddressCache } from '../../coverage/traceToSource'
+import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, resetSolidityBytecodeCoverageAddressCache } from '../../coverage/traceToSource'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -205,7 +205,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (hasResult && hasError) throw new Error('Invalid JSON-RPC response: both result and error present')
 		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
 
-		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
+		if (json.error !== undefined) {
+			if (isSendTransactionMethod && params[0] !== undefined && isRpcTransactionRequest(params[0])) {
+				await collectBytecodeCoverageForCall({ request, transaction: params[0] })
+			}
+			throw new Error(json.error.message || 'RPC error')
+		}
 		if (args.method === 'anvil_reset') resetSolidityBytecodeCoverageAddressCache()
 
 		const waitForReceiptStatus = async (hash: string) => {

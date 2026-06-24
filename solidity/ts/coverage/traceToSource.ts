@@ -311,18 +311,23 @@ const isSolidityDeclarationOrSignatureLine = (line: string): boolean =>
 
 const isSimpleSolidityReturn = (line: string): boolean =>
 	/^return\s+[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
+	/^return\s+[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)|\[[^\]]+\])+\s*;?$/.test(line) ||
 	/^return\s+\([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\)\s*;?$/.test(line) ||
 	/^return\s+new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
 	/^return\s+(string|bytes\d*|u?int\d*|address)\([^)]*\)\s*;?$/.test(line) ||
 	/^return\s+(true|false)\s*;?$/.test(line)
 
 const isSoliditySourceMapBookkeepingLine = (line: string): boolean =>
+	// Solc maps this guard's success path to the following nullifier-root update, and the tested
+	// revert path is not attributed back to this single require line by the debug trace source map.
+	line === "require(emptyRoot == currentRoot, 'invalid nullifier proof');" ||
 	/^(for|while)\s*\(/.test(line) ||
 	/^(\+\+|--)[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
 	/^[A-Za-z_][A-Za-z0-9_]*(\+\+|--)\s*;?$/.test(line) ||
-	/^if\s*\([^)]*\)\s*continue\s*;?$/.test(line) ||
+	/^if\b.*\bcontinue\s*;?$/.test(line) ||
 	/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*|bytes\d*\([^)]*\)|u?int\d*\([^)]*\)|address\([^)]*\)|\d+|true|false)\s*;?$/.test(line) ||
 	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*|bytes\d*\([^)]*\)|u?int\d*\([^)]*\)|address\([^)]*\)|\d+|true|false)\s*;?$/.test(line) ||
+	/^[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)|\[[^\]]+\])+\s*=\s*[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)|\[[^\]]+\])+\s*;?$/.test(line) ||
 	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[A-Za-z_][A-Za-z0-9_.]*\($/.test(line) ||
 	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
 	/\.push\(/.test(line)
@@ -567,13 +572,27 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 	}
 }
 
+const requestTraceCall = async (request: RpcRequest, transaction: RpcTransactionRequest): Promise<unknown[]> => {
+	try {
+		const trace = await request({
+			method: 'debug_traceCall',
+			params: [transaction, 'latest', { disableStack: false, disableMemory: true, disableStorage: true }],
+		})
+		return parseTraceSteps(trace)
+	} catch (error) {
+		if (!isIgnorableTraceRequestError(error)) throw error
+		return []
+	}
+}
+
 export const resetSolidityBytecodeCoverageAddressCache = (): void => {
 	addressProfileCache.clear()
 	coverableLinesByFile.clear()
 }
 
-export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
+const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest; readonly structLogs: readonly unknown[]; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
 	if (!isSolidityBytecodeCoverageEnabled()) return
+	if (options.structLogs.length === 0) return
 
 	const config = getSolidityBytecodeCoverageConfig()
 	if (profileMapsPromise === undefined) profileMapsPromise = collectProfilesByBytecode(config.artifactsPath)
@@ -584,13 +603,10 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 		await initializeCoverageLines(profileMaps, config.rootPath)
 	}
 
-	const structLogs = await requestTrace(options.request, options.transactionHash)
-	if (structLogs.length === 0) return
-
 	const txToAddresses = toAddressList(options.transaction.to)
 	const receiptToAddresses = toAddressList(options.receipt?.to)
 	const receiptContractAddresses = toAddressList(options.receipt?.contractAddress)
-	const resolvedSteps = resolveTraceSteps(structLogs)
+	const resolvedSteps = resolveTraceSteps(options.structLogs)
 	const traceAddresses = resolvedSteps.flatMap(step => [step.stepAddress, step.codeAddress].filter(address => address !== undefined))
 	const addresses = Array.from(new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses, ...traceAddresses]))
 
@@ -620,4 +636,14 @@ export const collectBytecodeCoverageForTransaction = async (options: { readonly 
 	}
 
 	await writeCoverage()
+}
+
+export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
+	const structLogs = await requestTrace(options.request, options.transactionHash)
+	await collectBytecodeCoverageForTrace({ ...options, structLogs })
+}
+
+export const collectBytecodeCoverageForCall = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest }): Promise<void> => {
+	const structLogs = await requestTraceCall(options.request, options.transaction)
+	await collectBytecodeCoverageForTrace({ ...options, structLogs })
 }

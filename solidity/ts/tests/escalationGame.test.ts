@@ -406,6 +406,35 @@ describe('Escalation Game Test Suite', () => {
 				}),
 		)
 
+	const withdrawDepositViaProofTestSecurityPoolWithGas = async (
+		testSecurityPoolAddress: Address,
+		outcome: QuestionOutcome,
+		proof: {
+			depositor: Address
+			amount: bigint
+			parentDepositIndex: bigint
+			cumulativeAmount: bigint
+			sourceNodeId: bigint
+			leafIndex: bigint
+			merkleMountainRangeSiblings: readonly Hex[]
+			merkleMountainRangePeakIndex: bigint
+			nullifierSiblings: readonly Hex[]
+		},
+	) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.sendTransaction({
+					to: testSecurityPoolAddress,
+					data: encodeFunctionData({
+						abi: escalationGameProofTestPoolArtifact.abi,
+						functionName: 'withdrawDeposit',
+						args: [outcome, proof],
+					}),
+					gas: 10_000_000n,
+				}),
+		)
+
 	const claimDepositForWinningViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) =>
 		await writeContractAndWait(
 			client,
@@ -834,7 +863,7 @@ describe('Escalation Game Test Suite', () => {
 		const nullifierTree = new SparseNullifierTree()
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], nullifierTree.getProof(0n))
 		const invalidNullifierProof = { ...proof, nullifierSiblings: [oneHash(), ...nullifierTree.getProof(0n).slice(1)] }
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, invalidNullifierProof), /invalid nullifier proof/)
+		await assert.rejects(withdrawDepositViaProofTestSecurityPoolWithGas(child.testSecurityPoolAddress, QuestionOutcome.Yes, invalidNullifierProof), /invalid nullifier proof/)
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
 		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /invalid nullifier proof|deposit already settled/)
 	})

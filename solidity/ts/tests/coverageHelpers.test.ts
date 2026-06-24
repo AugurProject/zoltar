@@ -6,12 +6,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/us
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
-	ReputationToken_ReputationToken,
-	test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness,
-	test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness,
-} from '../types/contractArtifact'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ReputationToken_ReputationToken, test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness, test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

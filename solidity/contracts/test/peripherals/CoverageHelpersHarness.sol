@@ -59,7 +59,9 @@ contract ERC1155CoverageHarness is ERC1155 {
 contract CoverageHelpersHarness {
 	using SafeERC20Ops for IERC20;
 
-	function deployDeploymentStatusOracle(address[] memory deploymentAddresses) external returns (DeploymentStatusOracle) {
+	function deployDeploymentStatusOracle(
+		address[] memory deploymentAddresses
+	) external returns (DeploymentStatusOracle) {
 		return new DeploymentStatusOracle(deploymentAddresses);
 	}
 
@@ -100,7 +102,15 @@ contract CoverageHelpersHarness {
 		uint256 cumulativeAmount,
 		uint256 sourceNodeId
 	) external pure returns (bytes32) {
-		return MerkleMountainRange.hashLeaf(depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId);
+		return
+			MerkleMountainRange.hashLeaf(
+				depositor,
+				outcome,
+				amount,
+				parentDepositIndex,
+				cumulativeAmount,
+				sourceNodeId
+			);
 	}
 
 	function hashParent(bytes32 left, bytes32 right) external pure returns (bytes32) {
@@ -129,7 +139,11 @@ contract CoverageHelpersHarness {
 		return EscalationGameProofs.bagCarryPeaks(peakHashes, leafCount);
 	}
 
-	function bagCarryPeakSamples(bytes32 firstPeakHash, bytes32 secondPeakHash, uint256 leafCount) external pure returns (bytes32) {
+	function bagCarryPeakSamples(
+		bytes32 firstPeakHash,
+		bytes32 secondPeakHash,
+		uint256 leafCount
+	) external pure returns (bytes32) {
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes;
 		peakHashes[0] = firstPeakHash;
 		peakHashes[1] = secondPeakHash;
