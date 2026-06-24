@@ -4,13 +4,31 @@ This reference maps implementation guardrails to their contract sources for
 operators, indexers, reviewers, and UI maintainers. The white paper explains the
 protocol flow; this page keeps the operational edge cases in one place.
 
+## Immutable Protocol Release Posture
+
+Zoltar and Placeholder are intended to launch as immutable, permissionless
+contracts. Launch documentation should not assume an operator can pause,
+upgrade, roll back, or disable protocol behavior after deployment. Release work
+should instead publish verifiable provenance: final commit and tag,
+deterministic addresses, CI and local QA results, production UI artifact hash,
+and any known limitations. UI deployments may describe data freshness and route
+users to verified artifacts, but they must not be documented as emergency
+controls over the protocol.
+
 ## Launch Release Checklist
 
 Before tagging a launch release, run `bun run ui:build:prod` from a fresh
-dependency install and confirm the generated deployment manifest remains clean.
-Push the final `v*` tag only after the CI Gate succeeds on the same commit. The
-`Build and Push to IPFS` workflow must succeed for that tag, and the resulting
-GitHub release must record the IPFS hash emitted from the published artifact.
+dependency install and confirm the generated deployment manifest remains clean
+with `bun run check:mainnet-deployment`. Push the final `v*` tag only after the
+CI Gate succeeds on the same commit. The `Build and Push to IPFS` workflow must
+succeed for that tag, and the resulting GitHub release must record the IPFS hash
+emitted from the published artifact.
+
+Production UI release notes should state that `?simulate=1` is a browser-local
+sandbox and that quote-dependent actions depend on live RPC data plus available
+Uniswap liquidity. Stale, unavailable, or unsupported quotes are production
+blockers for the affected action, not inputs that should be replaced with
+simulation prices.
 
 ## Security Pool Guardrails
 
