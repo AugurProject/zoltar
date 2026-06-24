@@ -1,23 +1,28 @@
 # EscalationGame architecture
 
-`EscalationGame` is intentionally split into source-level modules while preserving one deployed contract. The split reduces review scope for future changes without introducing delegate calls, external libraries, or cross-contract state ownership.
+`EscalationGame` is intentionally split into source-level modules, with storage-free proof math moved into `EscalationGameProofVerifier`. The split reduces review scope for future changes and keeps the largest pure proof routines out of the deployed game bytecode without introducing delegate calls or cross-contract state ownership.
 
-## Inheritance stack
+## Contract split
 
-The modules form a narrow inheritance ladder:
+The state-owning modules form a narrow inheritance ladder:
 
 | Module | Owns |
 | --- | --- |
 | `EscalationGameTypes.sol` | Constants and structs shared by the stack. |
 | `EscalationGameState.sol` | Storage layout, events, constructor wiring, shared access control, and the primitive escrow/unresolved counters. |
 | `EscalationGameCalculations.sol` | Pure/view attrition, resolution, accepted-deposit, and payout math. |
-| `EscalationGameProofs.sol` | Storage-free Merkle Mountain Range and nullifier proof math. |
 | `EscalationGameCarry.sol` | Fork carry snapshots, Merkle Mountain Range state, nullifier roots, proof verification, and local carry consumption. |
 | `EscalationGameEscrow.sol` | Forked escrow records, vault export cursors, batch export bounds, and child REP accounting. |
 | `EscalationGameSettlement.sol` | Claim, withdraw, proof-backed settlement, residual sweeping, and public deposit pagination. |
 | `EscalationGame.sol` | Start/resume entrypoints and local deposit intake from `SecurityPool`. |
 
-This order matters because storage remains inherited from `EscalationGameState`. Future modules should be appended through inheritance only when they need the full state surface. Helpers that do not need storage should stay as free functions, libraries, or tests. `EscalationGameProofs` is the template for that boundary: it computes roots and proof-derived values, but it does not advance nullifiers, mark deposits consumed, or mutate accounting totals.
+The external proof helper is deployed once by `EscalationGameFactory` and then referenced by each game:
+
+| Module | Owns |
+| --- | --- |
+| `EscalationGameProofVerifier.sol` | Storage-free Merkle Mountain Range and nullifier proof math. |
+
+This order matters because storage remains inherited from `EscalationGameState`. Future modules should be appended through inheritance only when they need the full state surface. Helpers that do not need storage should stay in `EscalationGameProofVerifier`, free functions, libraries, or tests. `EscalationGameProofVerifier` is the template for that boundary: it computes roots and proof-derived values, but it does not advance nullifiers, mark deposits consumed, or mutate accounting totals.
 
 ## Accounting invariants
 
@@ -54,11 +59,14 @@ Review that diff together with the Solidity change. The snapshot strips Solidity
 
 ## Deployment and bytecode
 
-The split is source-only, so `EscalationGame` still deploys as one contract. The current compiled artifact measures:
+The proof verifier split keeps `EscalationGame` as the state-owning contract and deploys proof math in `EscalationGameProofVerifier`. The current compiled `EscalationGame` artifact measures:
 
-- creation bytecode: `23,649` bytes
-- deployed bytecode: `23,184` bytes
-- EIP-170 deployed bytecode headroom: `1,392` bytes below `24,576`
+- creation bytecode: `26,939` bytes
+- deployed bytecode: `23,858` bytes
+- project deployed-bytecode budget headroom: `142` bytes below `24,000`
+- EIP-170 deployed-bytecode headroom: `718` bytes below `24,576`
+
+This PR intentionally adds revert strings and event payloads across the system, so `EscalationGame` is not expected to be smaller than the pre-audit `origin/main` artifact. The size target is to keep the enriched contract below the project budget while moving proof verification out to the verifier contract.
 
 Any Solidity change can alter deterministic deployment addresses because address derivation uses init code. After contract changes, regenerate and review deployment outputs with the normal artifact workflow and keep `docs/mainnet-deployment-addresses.json` plus `docs/mainnet-deployment-addresses.md` in sync when expected addresses change.
 

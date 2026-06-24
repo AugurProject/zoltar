@@ -43,7 +43,7 @@ contract ERC1155 is IERC1155 {
 		@return The account's balance of the token type requested
 	*/
 	function balanceOf(address account, uint256 id) public view virtual returns (uint256) {
-		require(account != address(0), 'ERC1155: balance query for the zero address');
+		require(account != address(0), 'ERC1155: balance query account must not be the zero address');
 		return _balances[id][account];
 	}
 
@@ -64,12 +64,12 @@ contract ERC1155 is IERC1155 {
 		address[] memory accounts,
 		uint256[] memory ids
 	) public view virtual returns (uint256[] memory) {
-		require(accounts.length == ids.length, 'ERC1155: accounts and IDs must have same lengths');
+		require(accounts.length == ids.length, 'ERC1155: accounts and IDs arrays must have the same length');
 
 		uint256[] memory batchBalances = new uint256[](accounts.length);
 
 		for (uint256 i = 0; i < accounts.length; ++i) {
-			require(accounts[i] != address(0), 'ERC1155: some address in batch balance query is zero');
+			require(accounts[i] != address(0), 'ERC1155: batch balance query account must not be the zero address');
 			batchBalances[i] = _balances[ids[i]][accounts[i]];
 		}
 
@@ -88,7 +88,7 @@ contract ERC1155 is IERC1155 {
 	 * @param approved representing the status of the approval to be set
 	 */
 	function setApprovalForAll(address operator, bool approved) external {
-		require(msg.sender != operator, 'ERC1155: cannot set approval status for self');
+		require(msg.sender != operator, 'ERC1155: account cannot set approval status for itself');
 		_operatorApprovals[msg.sender][operator] = approved;
 		emit ApprovalForAll(msg.sender, operator, approved);
 	}
@@ -121,10 +121,10 @@ contract ERC1155 is IERC1155 {
 	}
 
 	function _transferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal {
-		require(to != address(0), 'ERC1155: target address must be non-zero');
+		require(to != address(0), 'ERC1155: transfer target address must be non-zero');
 		require(
 			from == msg.sender || isApprovedForAll(from, msg.sender) == true,
-			'ERC1155: need operator approval for 3rd party transfers'
+			'ERC1155: caller needs operator approval for third-party transfers'
 		);
 
 		_internalTransferFrom(from, to, id, value, data);
@@ -191,14 +191,14 @@ contract ERC1155 is IERC1155 {
 		uint256[] memory values,
 		bytes memory data
 	) internal {
-		require(ids.length == values.length, 'ERC1155: IDs and values must have same lengths');
+		require(ids.length == values.length, 'ERC1155: batch transfer IDs and values arrays must have the same length');
 		if (ids.length == 0) {
 			return;
 		}
-		require(to != address(0), 'ERC1155: target address must be non-zero');
+		require(to != address(0), 'ERC1155: batch transfer target address must be non-zero');
 		require(
 			from == msg.sender || isApprovedForAll(from, msg.sender) == true,
-			'ERC1155: need operator approval for 3rd party transfers'
+			'ERC1155: caller needs operator approval for third-party batch transfers'
 		);
 
 		_internalBatchTransferFrom(from, to, ids, values, data);
@@ -246,7 +246,7 @@ contract ERC1155 is IERC1155 {
 	 * @param value Amount of the token to be minted
 	 */
 	function _mint(address to, uint256 id, uint256 value) internal virtual {
-		require(to != address(0), 'ERC1155: mint to the zero address');
+		require(to != address(0), 'ERC1155: mint receiver must not be the zero address');
 
 		_balances[id][to] = _balances[id][to] + value;
 		_supplies[id] = _supplies[id] + value;
@@ -262,8 +262,8 @@ contract ERC1155 is IERC1155 {
 	 * @param values Amounts of the tokens to be minted
 	 */
 	function _mintBatch(address to, uint256[] memory ids, uint256[] memory values) internal virtual {
-		require(to != address(0), 'ERC1155: batch mint to the zero address');
-		require(ids.length == values.length, 'ERC1155: minted IDs and values must have same lengths');
+		require(to != address(0), 'ERC1155: batch mint receiver must not be the zero address');
+		require(ids.length == values.length, 'ERC1155: batch mint IDs and values arrays must have the same length');
 
 		for (uint i = 0; i < ids.length; i++) {
 			_balances[ids[i]][to] = values[i] + _balances[ids[i]][to];
@@ -281,7 +281,7 @@ contract ERC1155 is IERC1155 {
 	 * @param value Amount of the token to be burnt
 	 */
 	function _burn(address account, uint256 id, uint256 value) internal virtual {
-		require(account != address(0), 'ERC1155: attempting to burn tokens on zero account');
+		require(account != address(0), 'ERC1155: burn account must not be the zero address');
 
 		_balances[id][account] = _balances[id][account] - value;
 		_supplies[id] = _supplies[id] - value;
@@ -295,8 +295,8 @@ contract ERC1155 is IERC1155 {
 	 * @param values Amounts of the tokens to be burnt
 	 */
 	function _burnBatch(address account, uint256[] memory ids, uint256[] memory values) internal virtual {
-		require(account != address(0), 'ERC1155: attempting to burn batch of tokens on zero account');
-		require(ids.length == values.length, 'ERC1155: burnt IDs and values must have same lengths');
+		require(account != address(0), 'ERC1155: batch burn account must not be the zero address');
+		require(ids.length == values.length, 'ERC1155: batch burn IDs and values arrays must have the same length');
 
 		for (uint i = 0; i < ids.length; i++) {
 			_balances[ids[i]][account] = _balances[ids[i]][account] - values[i];
@@ -316,13 +316,16 @@ contract ERC1155 is IERC1155 {
 	) private {
 		if (to.code.length == 0) return;
 		try IERC1155Receiver(to).onERC1155Received(operator, from, id, value, data) returns (bytes4 response) {
-			require(response == ERC1155_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens');
+			require(
+				response == ERC1155_RECEIVED_SELECTOR,
+				'ERC1155: receiver rejected tokens by returning an unexpected single-transfer selector'
+			);
 		} catch Error(string memory) {
-			revert('ERC1155: receiver rejected tokens');
+			revert('ERC1155: receiver rejected tokens during single-transfer acceptance check');
 		} catch Panic(uint256) {
-			revert('ERC1155: receiver panicked');
+			revert('ERC1155: receiver panicked during single-transfer acceptance check');
 		} catch (bytes memory) {
-			revert('ERC1155: transfer to non ERC1155Receiver implementer');
+			revert('ERC1155: transfer target does not implement ERC1155Receiver for single transfers');
 		}
 	}
 
@@ -336,13 +339,16 @@ contract ERC1155 is IERC1155 {
 	) private {
 		if (to.code.length == 0) return;
 		try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, values, data) returns (bytes4 response) {
-			require(response == ERC1155_BATCH_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens');
+			require(
+				response == ERC1155_BATCH_RECEIVED_SELECTOR,
+				'ERC1155: receiver rejected tokens by returning an unexpected batch-transfer selector'
+			);
 		} catch Error(string memory) {
-			revert('ERC1155: receiver rejected tokens');
+			revert('ERC1155: receiver rejected tokens during batch-transfer acceptance check');
 		} catch Panic(uint256) {
-			revert('ERC1155: receiver panicked');
+			revert('ERC1155: receiver panicked during batch-transfer acceptance check');
 		} catch (bytes memory) {
-			revert('ERC1155: transfer to non ERC1155Receiver implementer');
+			revert('ERC1155: transfer target does not implement ERC1155Receiver for batch transfers');
 		}
 	}
 }

@@ -26,7 +26,7 @@ contract SecurityPoolMigrationProxy {
 	}
 
 	modifier onlyOwner() {
-		require(msg.sender == owner, 'only owner');
+		require(msg.sender == owner, 'Only the security pool forker can use this migration proxy');
 		_;
 	}
 

@@ -54,7 +54,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory,
 		uint256 _initialEscalationGameDeposit
 	) {
-		require(_initialEscalationGameDeposit > 0, 'initial escalation deposit');
+		require(_initialEscalationGameDeposit > 0, 'Initial escalation game deposit must be greater than zero');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -75,8 +75,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 startIndex,
 		uint256 count
 	) external view returns (SecurityPoolDeployment[] memory deployments) {
-		require(startIndex <= securityPoolDeployments.length, 'start oob');
-		require(count <= securityPoolDeployments.length - startIndex, 'end oob');
+		require(
+			startIndex <= securityPoolDeployments.length,
+			'Security pool deployment range start index is out of bounds'
+		);
+		require(
+			count <= securityPoolDeployments.length - startIndex,
+			'Security pool deployment range count exceeds available entries'
+		);
 		deployments = new SecurityPoolDeployment[](count);
 		for (uint256 index = 0; index < count; index++) {
 			deployments[index] = securityPoolDeployments[startIndex + index];
@@ -92,7 +98,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount
 	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
-		require(msg.sender == address(securityPoolForker), 'only forker');
+		require(msg.sender == address(securityPoolForker), 'Only the security pool forker can deploy child pools');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
@@ -137,20 +143,23 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		// Origin pool deployment is intentionally public, so first deployers must not be able to
 		// lock unsafe economic parameters into the canonical pool for a question/multiplier pair.
 		// Zero-utilization origin pools always start at the protocol retention curve's maximum rate.
-		require(securityMultiplier > 1, 'security multiplier');
+		require(securityMultiplier > 1, 'Security multiplier must be greater than one');
 
 		// Validate that the question exists
-		require(questionData.questionCreatedTimestamp(questionId) > 0, 'question missing');
+		require(
+			questionData.questionCreatedTimestamp(questionId) > 0,
+			'Security pool question must exist before deployment'
+		);
 
 		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
 		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);
-		require(outcomes.length == 2, 'need 2 outcomes');
-		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'first != Yes');
-		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'second != No');
-		require(zoltar.getForkTime(universeId) == 0, 'universe forked');
+		require(outcomes.length == 2, 'Security pool question must have exactly two outcomes');
+		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'Security pool first outcome must be Yes');
+		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Security pool second outcome must be No');
+		require(zoltar.getForkTime(universeId) == 0, 'Security pool universe has already forked');
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
-		require(address(reputationToken) != address(0x0), 'universe missing');
+		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
 		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
