@@ -28,10 +28,14 @@ Use the staged and unstaged diff, including untracked files intended for the PR,
    - For narrow changes, prefer the smallest meaningful targeted test command first. Run the full suite when changes touch contracts, shared behavior, cross-module contracts, package/dependency wiring, or broad app behavior.
    - For docs-only, instruction-only, formatting-only, `.codex/agents`-only, or other non-executable changes, do not run tests unless the change affects a test runner, generated output, or executable tooling. State why tests were skipped.
    - When the task is itself about tests, test fixtures, or test cleanup, do not require additional tests for the tests. Instead verify that the changed tests are meaningful and run the relevant test command.
-   - Full test command:
-    ```bash
-    bun run test
-    ```
+   - Full test command when TypeScript was not selected in the same validation cycle:
+     ```bash
+     bun run test
+     ```
+   - When `bun run tsc` has already passed in the same validation cycle, run the test runner directly so TypeScript is not checked twice:
+     ```bash
+     bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run test:run -- --bail=1
+     ```
    - If tests require Anvil and the `anvil` executable is missing, install it with:
      ```bash
      bun run install:anvil
@@ -81,7 +85,14 @@ Repeat the relevant part of the validation cycle after each fix. If a fix expand
 
 ## Final Review Gate
 
-For file-changing tasks that are being prepared for a PR, after the selected checks above pass, merge the latest `main` into the branch and resolve any conflicts if they exist. Rerun the selected checks after merging `main`, and again after any conflict resolution or follow-up edits. If the merge changes the touched area, update the validation scope before rerunning checks. Skip this step for read-only analysis, exploratory answers, or when the user explicitly asks not to merge; state the reason in the final response.
+For file-changing tasks that are being prepared for a PR, after the selected checks above pass, fetch `origin/main` and check whether the branch is behind:
+
+```bash
+git fetch origin main:refs/remotes/origin/main
+git rev-list --count HEAD..origin/main
+```
+
+If the count is `0`, record that the branch is current and do not merge or rerun checks solely for this gate. If the count is nonzero, merge the latest `main` into the branch and resolve any conflicts if they exist. Rerun the selected checks after merging `main`, and again after any conflict resolution or follow-up edits. If the merge changes the touched area, update the validation scope before rerunning checks. Skip this step for read-only analysis, exploratory answers, or when the user explicitly asks not to merge; state the reason in the final response.
 
 As the final quality gate for any task that changes code, tests, configuration, or repo instructions, the main agent must spawn the project-scoped `reviewer` custom agent defined in `.codex/agents/reviewer.toml` and wait for it to complete before responding to the user. Start the reviewer from a clear task summary instead of relying on inherited conversation context.
 
@@ -150,7 +161,7 @@ In the final response to the user, summarize the reviewer feedback received, rep
 
 - Generated build outputs and protocol artifacts are intentionally untracked. Keep `/ui/js`, `/shared/js`, `/ui/vendor`, `/solidity/artifacts`, `/ui/ts/contractArtifact.ts`, and `/solidity/ts/types/contractArtifact.ts` out of source review.
 - If a deployment workflow ever requires committing generated artifacts, update this policy in the same PR and add a freshness check that regenerates the artifacts and fails on a dirty tracked diff.
-- Use `bun run check:generated-clean` when validating artifact freshness for CI or release work.
+- The generated artifact freshness rule in Validation Selection is the source of truth for when to run artifact freshness checks.
 
 # Code Style Guidelines
 

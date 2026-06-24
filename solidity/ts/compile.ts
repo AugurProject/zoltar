@@ -95,6 +95,7 @@ const HashCache = funtypes.ReadonlyPartial({
 
 const mainCompilerSettings = {
 	viaIR: true,
+	evmVersion: 'osaka',
 	optimizer: {
 		enabled: true,
 		runs: 200,
