@@ -266,8 +266,7 @@ void describe('simulation backend', () => {
 		const backendB = await createSimulationBackend({ scenario: 'baseline' })
 
 		try {
-			await backendA.bootstrap()
-			await backendB.bootstrap()
+			await Promise.all([backendA.bootstrap(), backendB.bootstrap()])
 
 			expect(backendA.currentTimestamp >= SIMULATION_INITIAL_TIMESTAMP).toBe(true)
 			expect(backendA.currentTimestamp).toBe(backendB.currentTimestamp)
