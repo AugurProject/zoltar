@@ -14,7 +14,7 @@ import type { AccountState } from '../types/app.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { createInjectedBackend } from '../lib/chainBackend.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import { formatOpenOracleFeePercentageInput, getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import type { OpenOracleView } from '../types/components.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
@@ -25,6 +25,7 @@ import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsu
 import { ensureInfraDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -173,15 +174,15 @@ async function clickElement(element: HTMLElement) {
 async function fillOpenOracleCreateForm() {
 	await setInputValue('Token1 Address', openOracleCreateParameters.token1Address)
 	await setInputValue('Token2 Address', openOracleCreateParameters.token2Address)
-	await setInputValue('Exact Token1 Report', openOracleCreateParameters.exactToken1Report.toString())
-	await setInputValue('Settler Reward', openOracleCreateParameters.settlerReward.toString())
-	await setInputValue('ETH Value To Send', openOracleCreateParameters.ethValue.toString())
-	await setInputValue('Fee Percentage', openOracleCreateParameters.feePercentage.toString())
+	await setInputValue('Exact Token1 Report', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
+	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerReward))
+	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValue))
+	await setInputValue('Fee Percentage', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
 	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
 	await setInputValue('Settlement Time', openOracleCreateParameters.settlementTime.toString())
-	await setInputValue('Escalation Halt', openOracleCreateParameters.escalationHalt.toString())
+	await setInputValue('Escalation Halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
 	await setInputValue('Dispute Delay', openOracleCreateParameters.disputeDelay.toString())
-	await setInputValue('Protocol Fee', openOracleCreateParameters.protocolFee.toString())
+	await setInputValue('Protocol Fee', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.protocolFee)))
 }
 
 async function loadSelectedReportInUi() {

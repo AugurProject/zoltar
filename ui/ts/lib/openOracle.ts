@@ -1,10 +1,12 @@
 import { zeroAddress, type Address } from 'viem'
+import type { OpenOracleCreateFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { assertNever } from './assert.js'
-import { tryParseDecimalInput } from './decimal.js'
+import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
-import { tryParseBigIntInput } from './marketForm.js'
+import { parseAddressInput } from './inputs.js'
+import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n
@@ -135,9 +137,9 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
 	if (!walletConnected) return 'Connect a wallet before creating an Open Oracle game.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before creating an Open Oracle game.'
-	const ethValue = tryParseBigIntInput(ethValueInput)
+	const ethValue = tryParseDecimalInput(ethValueInput)
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
-	const settlerReward = tryParseBigIntInput(settlerRewardInput)
+	const settlerReward = tryParseDecimalInput(settlerRewardInput)
 	if (settlerReward === undefined) return 'Enter a valid settler reward.'
 	if (ethValue < settlerReward) return 'ETH value to send must be at least the settler reward.'
 	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
@@ -285,6 +287,33 @@ function formatScaledBigInt(value: bigint, scale: bigint, minimumFractionDigits 
 export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined) {
 	if (feePercentage === undefined) return '—'
 	return `${formatScaledBigInt(feePercentage, 100_000n, 0, true)}%`
+}
+export function formatOpenOracleFeePercentageInput(feePercentage: bigint) {
+	return formatScaledBigInt(feePercentage, 100_000n)
+}
+export function parseOpenOracleFeePercentageInput(value: string, label: string) {
+	const trimmed = value.trim()
+	if (trimmed === '') throw new Error(`${label} is required`)
+	const parsed = tryParseDecimalInput(trimmed, 5)
+	if (parsed === undefined) throw new Error(`${label} must be a decimal percentage`)
+	if (parsed < 0n) throw new Error(`${label} must be non-negative`)
+	if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`${label} exceeds the maximum safe integer range`)
+	return Number(parsed)
+}
+export function parseOpenOracleCreateFormSubmission({ form, token1Decimals }: { form: OpenOracleCreateFormState; token1Decimals: number }) {
+	return {
+		disputeDelay: Number(parseBigIntInput(form.disputeDelay, 'Dispute delay')),
+		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
+		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Exact token1 report', token1Decimals),
+		ethValue: parseDecimalInput(form.ethValue, 'ETH value'),
+		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Fee percentage'),
+		multiplier: Number(parseBigIntInput(form.multiplier, 'Multiplier')),
+		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
+		settlementTime: Number(parseBigIntInput(form.settlementTime, 'Settlement time')),
+		settlerReward: parseDecimalInput(form.settlerReward, 'Settler reward'),
+		token1Address: parseAddressInput(form.token1Address, 'Token1 address'),
+		token2Address: parseAddressInput(form.token2Address, 'Token2 address'),
+	}
 }
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
 	if (multiplier === undefined) return '—'

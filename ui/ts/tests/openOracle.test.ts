@@ -9,6 +9,7 @@ import {
 	deriveOpenOracleInitialReportSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleFeePercentage,
+	formatOpenOracleFeePercentageInput,
 	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
 	formatOpenOracleInitialReportBalanceStatusUnavailableMessage,
 	formatOpenOracleInitialReportPriceUnavailableMessage,
@@ -21,7 +22,10 @@ import {
 	getOpenOracleSettleAvailability,
 	loadOpenOracleInitialReportPrice,
 	loadOpenOracleInitialReportPriceResult,
+	parseOpenOracleCreateFormSubmission,
+	parseOpenOracleFeePercentageInput,
 } from '../lib/openOracle.js'
+import { getDefaultOpenOracleCreateFormState } from '../lib/marketForm.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
@@ -830,9 +834,53 @@ describe('Open Oracle helpers', () => {
 
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
+		expect(formatOpenOracleFeePercentageInput(100n)).toBe('0.001')
 		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9,007,199,254,740,991.12345%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.40x')
 		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9007199254740991.01x')
+	})
+
+	test('open oracle fee percentage input parser accepts user-facing percentages', () => {
+		expect(parseOpenOracleFeePercentageInput('0.001', 'Protocol fee')).toBe(100)
+		expect(parseOpenOracleFeePercentageInput('1', 'Protocol fee')).toBe(100_000)
+		expect(() => parseOpenOracleFeePercentageInput('', 'Protocol fee')).toThrow('Protocol fee is required')
+		expect(() => parseOpenOracleFeePercentageInput('-0.1', 'Protocol fee')).toThrow('Protocol fee must be non-negative')
+		expect(() => parseOpenOracleFeePercentageInput('0.000001', 'Protocol fee')).toThrow('Protocol fee must be a decimal percentage')
+	})
+
+	test('open oracle create form parser accepts user-facing decimal values', () => {
+		const token1Address = addressString(GENESIS_REPUTATION_TOKEN)
+		const parsed = parseOpenOracleCreateFormSubmission({
+			form: {
+				...getDefaultOpenOracleCreateFormState(),
+				disputeDelay: '10',
+				escalationHalt: '2.5',
+				exactToken1Report: '1.25',
+				ethValue: '0.0000000000000011',
+				feePercentage: '0.001',
+				multiplier: '100',
+				protocolFee: '0.002',
+				settlementTime: '60',
+				settlerReward: '0.000000000000001',
+				token1Address,
+				token2Address: WETH_ADDRESS,
+			},
+			token1Decimals: 6,
+		})
+
+		expect(parsed).toEqual({
+			disputeDelay: 10,
+			escalationHalt: 2_500_000n,
+			exactToken1Report: 1_250_000n,
+			ethValue: 1100n,
+			feePercentage: 100,
+			multiplier: 100,
+			protocolFee: 200,
+			settlementTime: 60,
+			settlerReward: 1000n,
+			token1Address: getAddress(token1Address),
+			token2Address: getAddress(WETH_ADDRESS),
+		})
 	})
 
 	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {
