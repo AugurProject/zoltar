@@ -27,9 +27,11 @@ import {
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
+	hasUndefinedCompleteSetExchangeRate,
 	hasRepBackedPoolWithNoActiveAllowance,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
+	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 } from '../lib/trading.js'
 import type { ReadinessAction } from '../types/components.js'
 import type { TradingSectionProps } from '../types/components.js'
@@ -86,6 +88,7 @@ export function TradingSection({
 		hasSelectedPool,
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
+		shareTokenSupply: selectedPool?.shareTokenSupply,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
 	})
@@ -113,7 +116,7 @@ export function TradingSection({
 		hasSelectedPool,
 		isMainnet,
 	})
-	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
+	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return 'Load a pool before minting complete sets.'
@@ -123,6 +126,7 @@ export function TradingSection({
 			if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
 			if (selectedPool?.questionOutcome !== 'none') return 'This market has already finalized.'
 			if (remainingMintCapacity === undefined) return 'Loading mint capacity.'
+			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {

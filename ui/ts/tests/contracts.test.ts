@@ -301,7 +301,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -347,7 +347,7 @@ describe('contracts helpers', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, 0n]
+					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -392,8 +392,8 @@ describe('contracts helpers', () => {
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
-					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 1n]
-					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -454,7 +454,7 @@ describe('contracts helpers', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 100n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -524,7 +524,7 @@ describe('contracts helpers', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 5n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, 0n, 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				if (getContractFunctionName(firstContract) === 'securityVaults') {
@@ -617,7 +617,7 @@ describe('contracts helpers', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				return [11n, 22n, 33n]
+				return [11n, 22n, 33n, 44n]
 			}),
 		}
 
@@ -625,11 +625,12 @@ describe('contracts helpers', () => {
 
 		expect(capacity).toEqual({
 			completeSetCollateralAmount: 11n,
-			totalRepDeposit: 22n,
-			totalSecurityBondAllowance: 33n,
+			shareTokenSupply: 22n,
+			totalRepDeposit: 33n,
+			totalSecurityBondAllowance: 44n,
 		})
-		expect(requestedFunctionNames).toEqual(['completeSetCollateralAmount', 'getTotalRepBalance', 'totalSecurityBondAllowance'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress])
+		expect(requestedFunctionNames).toEqual(['completeSetCollateralAmount', 'shareTokenSupply', 'getTotalRepBalance', 'totalSecurityBondAllowance'])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress])
 	})
 
 	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {

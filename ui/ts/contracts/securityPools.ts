@@ -259,7 +259,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 	const pools = await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
-			const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, totalRepDeposit, totalSecurityBondAllowance, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
+			const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
 				readRequiredMulticall(client, [
 					{
 						abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -300,6 +300,12 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 					{
 						abi: peripherals_SecurityPool_SecurityPool.abi,
 						functionName: 'systemState',
+						address: securityPoolAddress,
+						args: [],
+					},
+					{
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'shareTokenSupply',
 						address: securityPoolAddress,
 						args: [],
 					},
@@ -353,6 +359,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 				questionId: getQuestionIdHex(questionId),
 				securityMultiplier,
 				securityPoolAddress,
+				shareTokenSupply,
 				systemState,
 				totalRepDeposit,
 				totalSecurityBondAllowance,

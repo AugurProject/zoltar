@@ -1,4 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { toFunctionSelector } from 'viem'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 
 describe('Peripherals: fork migration', () => {
@@ -1166,6 +1167,41 @@ describe('Peripherals: fork migration', () => {
 			const updatedCollateralBeforeMint = childCollateralAfterMint - childMintAmount
 			const expectedMintedShares = updatedCollateralBeforeMint === 0n ? childMintAmount * PRICE_PRECISION : (childMintAmount * childShareSupplyBeforeMint) / updatedCollateralBeforeMint
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), childShareSupplyBeforeMint + expectedMintedShares, 'child complete-set mint should add shares at the settled exchange rate')
+		})
+
+		test('child pool blocks complete-set minting when migrated shares have no collateral', async () => {
+			const parentAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, parentAllowance)
+
+			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const parentMintAmount = 10n * 10n ** 18n
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, parentMintAmount)
+
+			await triggerExternalForkForSecurityPool(undefined, 'zero-collateral child complete-set fork source')
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [QuestionOutcome.Yes])
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Yes])
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
+				await mockWindow.advanceTime(7n * DAY + DAY)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			}
+
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'test setup requires a zero-collateral child')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), parentMintAmount * PRICE_PRECISION, 'test setup requires migrated child complete-set shares')
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), parentAllowance, 'test setup requires inherited mint capacity')
+
+			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			const exchangeRateErrorSelector = toFunctionSelector('UndefinedCompleteSetExchangeRate()')
+			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), new RegExp(`custom error ${exchangeRateErrorSelector}`))
 		})
 
 		test('can migrate escalation deposits before migrateVault', async () => {
