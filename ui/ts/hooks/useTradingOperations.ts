@@ -161,6 +161,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 							hasSelectedPool: true,
 							isMainnet,
 							mintAmountInput: currentForm.completeSetAmount,
+							shareTokenSupply: latestMintCapacity.shareTokenSupply,
 							totalRepDeposit: latestMintCapacity.totalRepDeposit,
 							totalSecurityBondAllowance: latestMintCapacity.totalSecurityBondAllowance,
 						})

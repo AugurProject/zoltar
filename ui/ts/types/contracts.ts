@@ -292,6 +292,7 @@ export type ListedSecurityPool = {
 	questionId: string
 	securityMultiplier: bigint
 	securityPoolAddress: Address
+	shareTokenSupply: bigint
 	systemState: SecurityPoolSystemState
 	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint

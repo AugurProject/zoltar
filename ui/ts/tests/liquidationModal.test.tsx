@@ -87,6 +87,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
+		shareTokenSupply: 0n,
 		systemState: 'operational',
 		totalRepDeposit: 5n * 10n ** 18n,
 		totalSecurityBondAllowance: 2n * 10n ** 18n,
