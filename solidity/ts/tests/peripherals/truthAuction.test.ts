@@ -23,6 +23,7 @@ describe('Peripherals: truth auction', () => {
 		getETHBalance,
 		addressString,
 		approveAndDepositRep,
+		manipulatePriceOracle,
 		manipulatePriceOracleAndPerformOperation,
 		triggerOwnGameFork,
 		deployOriginSecurityPool,
@@ -189,6 +190,7 @@ describe('Peripherals: truth auction', () => {
 				vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
 			}
 			assert.ok(vaultRep >= requiredVaultRep, 'test setup needs unlocked REP plus escalation REP')
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)

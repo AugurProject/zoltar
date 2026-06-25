@@ -190,7 +190,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		if (principalToTransfer == 0) return (0, principalByOutcome);
 		_consumeEscrowedRepForVault(vault, principalToTransfer);
 		if (transferRep) {
-			repToken.transfer(repReceiver, principalToTransfer);
+			_safeTransferRep(repReceiver, principalToTransfer);
 		}
 	}
 
@@ -229,7 +229,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		if (totalChildRepToTransfer == 0) return (sourcePrincipalByOutcome, childRepByOutcome);
 		_consumeEscrowedRepForVault(vault, totalChildRepToTransfer);
 		if (transferRep) {
-			repToken.transfer(repReceiver, totalChildRepToTransfer);
+			_safeTransferRep(repReceiver, totalChildRepToTransfer);
 		}
 	}
 

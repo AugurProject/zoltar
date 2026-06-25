@@ -535,6 +535,7 @@ describe('Peripherals: vault accounting', () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
 		await manipulatePriceOracleAndPerformOperation(secondVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, secondVault.account.address, 0n)
 		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		assert.ok(vaultBeforeEscrow.repDepositShare > 0n, 'target vault should already be funded')
 		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetAllowance, 'the pool-wide bond should still be satisfied after escrow')

@@ -7,9 +7,9 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simu
 import { deployUniformPriceDualCapBatchAuction } from '../testsuite/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { executeStagedOperation, getEthRaiseCap, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { depositRep, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
+import { depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
@@ -31,6 +31,8 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 const genesisUniverse = 0n
 const securityMultiplier = 2n
 const repDeposit = 1000n * 10n ** 18n
+const initialEscalationGameDeposit = 1n * 10n ** 18n
+const largeEscalationGameDeposit = 100n * 10n ** 18n
 const outcomes = ['Yes', 'No']
 
 describe('security regression coverage', () => {
@@ -303,5 +305,18 @@ describe('security regression coverage', () => {
 		assert.equal(executionLog.args.operation, OperationType.Liquidation)
 		assert.equal(executionLog.args.success, false)
 		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
+	})
+
+	test('large escalation deposits reject stale oracle prices while bond allowance is active', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const securityBondAllowance = 100n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance)
+		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
+
+		await mockWindow.setTime(questionEndDate + 1n)
+		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, largeEscalationGameDeposit), /Oracle price is stale/)
 	})
 })

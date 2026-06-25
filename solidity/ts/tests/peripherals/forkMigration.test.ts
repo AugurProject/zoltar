@@ -344,6 +344,7 @@ describe('Peripherals: fork migration', () => {
 
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 			const lockedDeposit = 700n * 10n ** 18n
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
@@ -1421,6 +1422,7 @@ describe('Peripherals: fork migration', () => {
 			await createCompleteSet(client, securityPoolAddresses.securityPool, collateralAmount)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
 			await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)

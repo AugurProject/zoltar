@@ -1,6 +1,6 @@
 import { createMemoryClient } from 'tevm'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, type Address, type Hex } from 'viem'
+import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from 'viem'
 import {
 	approveErc20,
 	createMarket,
@@ -21,6 +21,7 @@ import {
 	migrateRepToZoltarFromSecurityPool,
 	queueOracleManagerOperation,
 	reportOutcomeInSecurityPool,
+	requestOraclePrice,
 	settleOracleReport,
 	startTruthAuctionForSecurityPool,
 	submitInitialOracleReport,
@@ -693,6 +694,51 @@ async function settleOracleReportIfNeeded({ memoryClient, readClient, writeClien
 	await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
 }
 
+async function refreshSeededOraclePrice({
+	accountAddress,
+	createWriteClient,
+	managerAddress,
+	memoryClient,
+	profile,
+	readClient,
+}: {
+	accountAddress: Address
+	createWriteClient: (accountAddress: Address) => WriteClient
+	managerAddress: Address
+	memoryClient: TevmLikeClient
+	profile: NetworkProfile
+	readClient: ReadClient
+}) {
+	const writeClient = createWriteClient(accountAddress)
+	let managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+	if (managerDetails.isPriceValid) return
+	if (managerDetails.pendingReportId === 0n) {
+		await requestOraclePrice(writeClient, managerAddress)
+		managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+	}
+	if (managerDetails.pendingReportId === 0n || managerDetails.callbackStateHash === undefined || managerDetails.exactToken1Report === undefined || managerDetails.token1 === undefined || managerDetails.token2 === undefined) {
+		throw new Error(`Expected a pending oracle report for ${managerAddress}`)
+	}
+	const reportDetails = await loadOpenOracleReportDetails(readClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
+	if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === zeroAddress) {
+		const amount1 = managerDetails.exactToken1Report
+		const amount2 = (amount1 * 10n ** 18n) / SEEDED_REP_ETH_PRICE
+		await approveErc20(writeClient, managerDetails.token1, managerDetails.openOracleAddress, amount1, 'approveToken1')
+		await ensureSufficientWethBalance(readClient, writeClient, profile, accountAddress, amount2)
+		await approveErc20(writeClient, managerDetails.token2, managerDetails.openOracleAddress, amount2, 'approveToken2')
+		await submitInitialOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId, amount1, amount2, managerDetails.callbackStateHash)
+	}
+	await settleOracleReportIfNeeded({
+		memoryClient,
+		openOracleAddress: managerDetails.openOracleAddress,
+		pendingReportId: managerDetails.pendingReportId,
+		readClient,
+		writeClient,
+	})
+	const refreshedManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+	if (!refreshedManagerDetails.isPriceValid) throw new Error(`Expected a valid seeded oracle price for ${managerAddress}`)
+}
+
 function getSimulationReportTiming(value: unknown) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
@@ -1070,6 +1116,14 @@ async function seedSecurityPoolX2AuctionScenario({
 	}
 
 	const ownForkDepositAmount = universeSummary.forkThreshold / SECURITY_MULTIPLIER
+	await refreshSeededOraclePrice({
+		accountAddress: primaryAccount,
+		createWriteClient,
+		managerAddress: parentPool.managerAddress,
+		memoryClient,
+		profile,
+		readClient,
+	})
 	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)
 	await reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'yes', ownForkDepositAmount)
 	await reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'no', ownForkDepositAmount)
