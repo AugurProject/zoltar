@@ -20,7 +20,7 @@ contract EscalationGameProofTestSecurityPool {
 	}
 
 	function setEscalationGame(EscalationGame game) external {
-		require(address(escalationGame) == address(0), 'escalation game already configured');
+		require(address(escalationGame) == address(0), 'Escalation game proof harness already has a configured game');
 		escalationGame = game;
 	}
 

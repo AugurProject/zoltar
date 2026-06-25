@@ -19,7 +19,10 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	}
 
 	function attack(uint256 initialValue, uint256 _reentrantValue) external payable {
-		require(msg.value == initialValue + _reentrantValue, 'funding');
+		require(
+			msg.value == initialValue + _reentrantValue,
+			'Reentrant receiver funding must equal initial plus reentrant value'
+		);
 		reentrantValue = _reentrantValue;
 		securityPool.createCompleteSet{ value: initialValue }();
 	}
