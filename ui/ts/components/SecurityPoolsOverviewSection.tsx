@@ -42,6 +42,7 @@ export function SecurityPoolsOverviewSection({
 	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
 	loadingSecurityPoolPage,
+	onCreateSecurityPool,
 	onLiquidationAmountChange,
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
@@ -57,6 +58,7 @@ export function SecurityPoolsOverviewSection({
 	securityPoolPage,
 	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
+	securityPoolLiquidationError,
 	securityPoolOverviewResult,
 }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -74,9 +76,10 @@ export function SecurityPoolsOverviewSection({
 	const hasCurrentPageData = securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
 	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
+	const hasLoadedCurrentPage = hasLoadedSecurityPoolPage && hasCurrentPageData
 	const registryPresentation = getPoolRegistryPresentation({
-		hasLoaded: hasLoadedSecurityPoolPage && hasCurrentPageData,
-		isLoading: loadingSecurityPoolPage || isWaitingForPageData,
+		hasLoaded: hasLoadedCurrentPage,
+		isLoading: (loadingSecurityPoolPage || isWaitingForPageData) && !hasLoadedCurrentPage,
 		mode: 'collection',
 		poolCount: pagedSecurityPools.length,
 	})
@@ -183,8 +186,21 @@ export function SecurityPoolsOverviewSection({
 				{(() => {
 					if (pagedSecurityPools.length === 0) {
 						if (registryPresentation === undefined) return undefined
+						const isEmptyRegistry = registryPresentation.key === 'empty'
 
-						return <StateHint presentation={registryPresentation} />
+						return (
+							<StateHint
+								presentation={registryPresentation}
+								title={isEmptyRegistry ? 'No security pools' : undefined}
+								actions={
+									isEmptyRegistry && onCreateSecurityPool !== undefined ? (
+										<button className='primary' type='button' onClick={onCreateSecurityPool}>
+											Create Security Pool
+										</button>
+									) : undefined
+								}
+							/>
+						)
 					}
 					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 
@@ -205,12 +221,7 @@ export function SecurityPoolsOverviewSection({
 									<EntityCard
 										key={pool.securityPoolAddress}
 										className='security-pool-card'
-										title={
-											<div className='security-pool-card-title-row'>
-												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' />
-												<span className='security-pool-card-title-copy'>{getQuestionTitle(pool.marketDetails)}</span>
-											</div>
-										}
+										title={getQuestionTitle(pool.marketDetails)}
 										variant='record'
 										badge={
 											<Badge tone={badgeTone}>
@@ -230,6 +241,9 @@ export function SecurityPoolsOverviewSection({
 										}
 									>
 										<div className='security-pool-card-surface'>
+											<div className='security-pool-card-title-row' aria-label='Pool collateralization'>
+												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label='Pool collateralization' />
+											</div>
 											<div className='security-pool-strip'>
 												<div className='security-pool-strip-story'>
 													<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
@@ -349,9 +363,10 @@ export function SecurityPoolsOverviewSection({
 																					</strong>
 																				</div>
 																				<button
-																					className='secondary security-pool-browse-vault-row-liquidate'
+																					className='secondary destructive-subtle security-pool-browse-vault-row-liquidate'
 																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
+																					title='Liquidation can move vault collateral. Open the pool workflow for full context before using this action.'
 																				>
 																					Liquidate Vault
 																				</button>
@@ -405,7 +420,7 @@ export function SecurityPoolsOverviewSection({
 				repPerEthSourceUrl={repPerEthSourceUrl}
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
-				securityPoolOverviewError={securityPoolOverviewError}
+				securityPoolLiquidationError={securityPoolLiquidationError}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				callerVaultSummary={callerVaultSummary}
 				targetVaultSummary={targetVaultSummary}

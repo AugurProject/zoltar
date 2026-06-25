@@ -61,4 +61,21 @@ describe('StateHint', () => {
 		expect(documentQueries.queryByText('Not found')).toBeNull()
 		expect(document.body.querySelector('.state-hint .badge')).toBeNull()
 	})
+
+	test('uses the badge label as fallback copy when a state has no other visible message', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<StateHint
+				presentation={{
+					badgeLabel: 'None yet',
+					badgeTone: 'muted',
+					key: 'empty',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'None yet' })).not.toBeNull()
+		expect(document.body.querySelector('.state-hint .badge')).toBeNull()
+	})
 })

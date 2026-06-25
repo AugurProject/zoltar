@@ -20,6 +20,7 @@ import {
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
 	loadOpenOracleInitialReportPriceResult,
+	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
 import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -38,6 +39,12 @@ type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 }
 
 const OPEN_ORACLE_INITIAL_REPORT_QUOTE_STALE_MS = 5 * 60 * 1000
+
+function requireTokenDecimals(value: unknown, label: string) {
+	const decimals = Number(value)
+	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Unexpected ${label} decimals response`)
+	return decimals
+}
 
 type TokenAccessLoadResult = {
 	amount: bigint | undefined
@@ -642,7 +649,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			await runOracleAction(
 				'createReportInstance',
 				async walletAddress => {
-					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+					const readClient = createConnectedReadClient()
+					const walletEthBalance = await readClient.getBalance({ address: walletAddress })
 					const createGuardMessage = getOpenOracleCreateGuardMessage({
 						ethValueInput: openOracleCreateForm.value.ethValue,
 						isMainnet: true,
@@ -651,20 +659,18 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 						walletEthBalance,
 					})
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
+					const token1Address = parseAddressInput(openOracleCreateForm.value.token1Address, 'Token1 address')
+					const token1Decimals = requireTokenDecimals(
+						await readClient.readContract({
+							abi: ABIS.mainnet.erc20,
+							address: token1Address,
+							args: [],
+							functionName: 'decimals',
+						}),
+						'token1',
+					)
 
-					return await createOpenOracleReportInstance(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), {
-						disputeDelay: Number(parseBigIntInput(openOracleCreateForm.value.disputeDelay, 'Dispute delay')),
-						escalationHalt: parseBigIntInput(openOracleCreateForm.value.escalationHalt, 'Escalation halt'),
-						exactToken1Report: parseBigIntInput(openOracleCreateForm.value.exactToken1Report, 'Exact token1 report'),
-						ethValue: parseBigIntInput(openOracleCreateForm.value.ethValue, 'ETH value'),
-						feePercentage: Number(parseBigIntInput(openOracleCreateForm.value.feePercentage, 'Fee percentage')),
-						multiplier: Number(parseBigIntInput(openOracleCreateForm.value.multiplier, 'Multiplier')),
-						protocolFee: Number(parseBigIntInput(openOracleCreateForm.value.protocolFee, 'Protocol fee')),
-						settlementTime: Number(parseBigIntInput(openOracleCreateForm.value.settlementTime, 'Settlement time')),
-						settlerReward: parseBigIntInput(openOracleCreateForm.value.settlerReward, 'Settler reward'),
-						token1Address: parseAddressInput(openOracleCreateForm.value.token1Address, 'Token1 address'),
-						token2Address: parseAddressInput(openOracleCreateForm.value.token2Address, 'Token2 address'),
-					})
+					return await createOpenOracleReportInstance(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parseOpenOracleCreateFormSubmission({ form: openOracleCreateForm.value, token1Decimals }))
 				},
 				'Failed to create Open Oracle game',
 			)

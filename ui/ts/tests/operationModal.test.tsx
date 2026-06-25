@@ -109,6 +109,66 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
+	test('associates the optional description with the dialog', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		const description = 'Review the details before submitting.'
+
+		await act(() => {
+			render(
+				<OperationModal isOpen onClose={() => undefined} title='Review Action' description={description}>
+					<button type='button'>Confirm</button>
+				</OperationModal>,
+				container,
+			)
+		})
+
+		const dialog = within(container).getByRole('dialog', { name: 'Review Action' })
+		const descriptionId = dialog.getAttribute('aria-describedby')
+		if (descriptionId === null) throw new Error('Expected dialog description id')
+		const descriptionElement = document.getElementById(descriptionId)
+		expect(descriptionElement?.textContent).toBe(description)
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('uses unique title and description ids for multiple open dialogs', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(
+				<>
+					<OperationModal isOpen onClose={() => undefined} title='First action' description='First action details'>
+						<button type='button'>Confirm first</button>
+					</OperationModal>
+					<OperationModal isOpen onClose={() => undefined} title='Second action' description='Second action details'>
+						<button type='button'>Confirm second</button>
+					</OperationModal>
+				</>,
+				container,
+			)
+		})
+
+		const dialogs = within(container).getAllByRole('dialog')
+		const labelledByIds = dialogs.map(dialog => dialog.getAttribute('aria-labelledby'))
+		const describedByIds = dialogs.map(dialog => dialog.getAttribute('aria-describedby'))
+
+		expect(new Set(labelledByIds).size).toBe(2)
+		expect(new Set(describedByIds).size).toBe(2)
+
+		for (const id of [...labelledByIds, ...describedByIds]) {
+			if (id === null) throw new Error('Expected dialog accessibility id')
+			expect(document.getElementById(id)).not.toBeNull()
+		}
+
+		expect(within(container).getByRole('dialog', { name: 'First action' }).getAttribute('aria-describedby')).not.toBe(within(container).getByRole('dialog', { name: 'Second action' }).getAttribute('aria-describedby'))
+
+		render(null, container)
+		container.remove()
+	})
+
 	test('keeps focus on input while the modal rerenders and wraps focus on Tab', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)

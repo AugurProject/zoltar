@@ -72,7 +72,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title='Zoltar'>
+			<SectionBlock density='compact' title='Questions'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -115,6 +115,7 @@ export function MarketSection({
 						) : undefined}
 						<MarketQuestionsSection
 							hasForked={hasForked}
+							onCreateQuestion={() => onActiveViewChange('create')}
 							onLoadZoltarQuestionPage={onLoadZoltarQuestionPage}
 							loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 							loadingZoltarQuestions={loadingZoltarQuestions}

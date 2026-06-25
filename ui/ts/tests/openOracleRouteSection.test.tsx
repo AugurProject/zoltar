@@ -243,8 +243,8 @@ describe('OpenOracleSection route create view', () => {
 					accountState: createAccountState({ ethBalance: 1_000n * ETH }),
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
-						ethValue: (1_100n * ETH).toString(),
-						settlerReward: (1_000n * ETH).toString(),
+						ethValue: '1100',
+						settlerReward: '1000',
 					},
 				}),
 			),
@@ -252,6 +252,46 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create Open Oracle Game', 'Need 100 more ETH in this wallet to create the selected Open Oracle game.')
+	})
+
+	test('describes advanced create fields with user-facing units and input modes', async () => {
+		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const exactToken1ReportInput = documentQueries.getByLabelText('Exact Token1 Report')
+		const settlerRewardInput = documentQueries.getByLabelText('Settler Reward')
+		const ethValueInput = documentQueries.getByLabelText('ETH Value To Send')
+		const feePercentageInput = documentQueries.getByLabelText('Fee Percentage')
+		const settlementTimeInput = documentQueries.getByLabelText('Settlement Time')
+		const escalationHaltInput = documentQueries.getByLabelText('Escalation Halt')
+		const disputeDelayInput = documentQueries.getByLabelText('Dispute Delay')
+		const protocolFeeInput = documentQueries.getByLabelText('Protocol Fee')
+
+		expect(exactToken1ReportInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expect(settlerRewardInput.getAttribute('aria-describedby')).toBe('open-oracle-settler-reward-help')
+		expect(ethValueInput.getAttribute('aria-describedby')).toBe('open-oracle-eth-value-help')
+		expect(feePercentageInput.getAttribute('aria-describedby')).toBe('open-oracle-fee-percentage-help')
+		expect(settlementTimeInput.getAttribute('aria-describedby')).toBe('open-oracle-settlement-time-help')
+		expect(escalationHaltInput.getAttribute('aria-describedby')).toBe('open-oracle-escalation-halt-help')
+		expect(disputeDelayInput.getAttribute('aria-describedby')).toBe('open-oracle-dispute-delay-help')
+		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-help')
+		expect(exactToken1ReportInput.getAttribute('inputmode')).toBe('decimal')
+		expect(settlerRewardInput.getAttribute('inputmode')).toBe('decimal')
+		expect(ethValueInput.getAttribute('inputmode')).toBe('decimal')
+		expect(feePercentageInput.getAttribute('inputmode')).toBe('decimal')
+		expect(settlementTimeInput.getAttribute('inputmode')).toBe('numeric')
+		expect(escalationHaltInput.getAttribute('inputmode')).toBe('decimal')
+		expect(disputeDelayInput.getAttribute('inputmode')).toBe('numeric')
+		expect(protocolFeeInput.getAttribute('inputmode')).toBe('decimal')
+		expect(documentQueries.getByText('Token1 amount to report, entered as a decimal value for the token1 address.')).not.toBeNull()
+		expect(documentQueries.getByText('ETH paid to the account that settles the report, entered as a decimal ETH value.')).not.toBeNull()
+		expect(documentQueries.getByText('ETH sent with creation; must cover required funding and the settler reward.')).not.toBeNull()
+		expect(documentQueries.getByText('Fee charged during dispute economics, entered as a percentage.')).not.toBeNull()
+		expect(documentQueries.getByText('Delay in seconds after the initial report before settlement can begin.')).not.toBeNull()
+		expect(documentQueries.getByText('Token1 amount where dispute escalation stops, entered as a decimal value for the token1 address.')).not.toBeNull()
+		expect(documentQueries.getByText('Delay in seconds after the initial report before disputes can begin.')).not.toBeNull()
+		expect(documentQueries.getByText('Protocol fee charged during disputes, entered as a percentage.')).not.toBeNull()
 	})
 
 	test('uses the shared live chain timestamp to switch a selected report into settle mode', async () => {

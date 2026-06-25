@@ -320,7 +320,7 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			<SectionBlock title='Trading Action Launchers' description='Actions stay below the holdings summary so the task flow reads top to bottom.'>
+			<SectionBlock title='Trade' description='Mint, redeem, or migrate shares after reviewing balances and pool capacity.'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />

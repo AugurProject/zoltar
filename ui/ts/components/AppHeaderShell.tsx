@@ -14,8 +14,18 @@ type AppHeaderShellProps = {
 }
 
 export function AppHeaderShell({ overview, simulationController, subNavigation, tabNavigation, onRefresh }: AppHeaderShellProps) {
+	const focusAppContent = () => {
+		const appContent = document.getElementById('app-content')
+		if (appContent instanceof HTMLElement) appContent.focus()
+	}
+
 	return (
 		<>
+			{simulationController === undefined ? undefined : (
+				<button className='skip-link' type='button' onClick={focusAppContent}>
+					Skip simulation controls
+				</button>
+			)}
 			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onRefresh={onRefresh} />}
 			<div className='top-shell'>
 				<div className='top-shell-content'>

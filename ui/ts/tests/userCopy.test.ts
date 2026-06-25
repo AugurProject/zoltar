@@ -18,7 +18,8 @@ void describe('user copy helpers', () => {
 		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('not_checked')
 		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBeUndefined()
 		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('empty')
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBeUndefined()
+		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('No security pools are available in this universe yet.')
+		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBe('Create a pool from a binary question to enable trading, reporting, and vault collateral workflows.')
 	})
 
 	void test('maps universe and report lookup states semantically', () => {

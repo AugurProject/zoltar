@@ -83,7 +83,7 @@ export function OverviewPanels({
 					badge={universeHasForked ? <Badge tone='warning'>Forked</Badge> : undefined}
 					description={operationsHeaderDescription}
 					eyebrow='Operations'
-					title='Augur PLACEHOLDER'
+					title='Augur Placeholder'
 				/>
 				<DataGrid className='overview-inline-metrics' columns='auto'>
 					<MetricField className='overview-address-metric' label='Address'>

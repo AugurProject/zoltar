@@ -280,6 +280,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		securityPoolAddress: '',
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
+		securityPoolLiquidationError: undefined,
 		securityPoolOverviewResult: undefined,
 		securityPools: [],
 		securityVault: createSecurityVaultProps(),
@@ -331,6 +332,7 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		securityPoolPage,
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
+		securityPoolLiquidationError: undefined,
 		securityPoolOverviewResult: undefined,
 		securityPools,
 		...overrides,
@@ -506,8 +508,8 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Create' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Operate' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Pool Workflow' })).toBeNull()
 		expect(documentQueries.queryByText('Mode')).toBeNull()
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
@@ -653,8 +655,8 @@ void describe('SecurityPoolsSection', () => {
 		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected operate mode to render the selected pool context card')
 		const contextQueries = within(selectedPoolContext)
 		expect(contextQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
-		expect(contextQueries.queryByRole('tab', { name: 'Create' })).toBeNull()
-		expect(contextQueries.queryByRole('tab', { name: 'Operate' })).toBeNull()
+		expect(contextQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
+		expect(contextQueries.queryByRole('tab', { name: 'Pool Workflow' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(contextQueries.queryByText('Total Security Bond Allowance')).toBeNull()
 		const lookupLabel = contextQueries.getByText('Security Pool Address')

@@ -47,7 +47,7 @@ type LiquidationModalProps = {
 	poolState?: SecurityPoolStateModel | undefined
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
-	securityPoolOverviewError: string | undefined
+	securityPoolLiquidationError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
@@ -164,7 +164,7 @@ export function LiquidationModal({
 	repPerEthSourceUrl,
 	selectedPool,
 	securityPoolOverviewActiveAction,
-	securityPoolOverviewError,
+	securityPoolLiquidationError,
 	securityPoolOverviewResult,
 	callerVaultSummary,
 	targetVaultSummary,
@@ -177,7 +177,7 @@ export function LiquidationModal({
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const onCloseRef = useRef(closeLiquidationModal)
-	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
+	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolLiquidationError !== undefined
 	useEffect(() => {
 		onCloseRef.current = closeLiquidationModal
 	}, [closeLiquidationModal])
@@ -324,7 +324,7 @@ export function LiquidationModal({
 					queuedLiquidationStatus,
 					securityPoolOverviewResult,
 				})}
-				<ErrorNotice message={securityPoolOverviewError} />
+				<ErrorNotice message={securityPoolLiquidationError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
 					<MetricField label='Security Multiplier'>{selectedPool?.securityMultiplier === undefined ? 'Unavailable' : `${selectedPool.securityMultiplier.toString()}x`}</MetricField>

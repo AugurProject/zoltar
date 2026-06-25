@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
+import { formatAddress } from '../lib/addresses.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
@@ -61,6 +62,10 @@ function hasSavedSimulationStateRoute() {
 	const params = new URLSearchParams(getRouteHashSearch())
 	const stateId = params.get('simState')
 	return stateId !== null && stateId.trim() !== ''
+}
+
+function getSimulationAccountOptionLabel(account: string) {
+	return `QA ${formatAddress(account)}`
 }
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
@@ -239,6 +244,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					</div>
 					<select
 						className='simulation-control-select'
+						aria-label='Simulation scenario'
 						value={currentSource.value.kind === 'saved-state' ? `saved:${currentSource.value.stateId}` : `scenario:${currentScenario.value}`}
 						disabled={busy.value || isBootstrapping.value}
 						onChange={event => {
@@ -277,6 +283,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					</div>
 					<select
 						className='simulation-control-select'
+						aria-label='Simulation QA account'
 						value={selectedAccount.value}
 						disabled={busy.value || !isBootstrapped.value}
 						onChange={event => {
@@ -289,7 +296,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					>
 						{controller.accounts.map(account => (
 							<option key={account} value={account}>
-								{account}
+								{getSimulationAccountOptionLabel(account)}
 							</option>
 						))}
 					</select>
@@ -310,172 +317,175 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						</strong>
 					</div>
 				</div>
-				<div className='simulation-banner-controls'>
-					<div className='contract-copy'>
-						<h3>Controls</h3>
-						<p className='detail'>Use these controls for repeatable manual UI QA without a wallet extension.</p>
-						<div className='simulation-delay-grid'>
-							<label className='simulation-delay-field'>
-								<span className='simulation-delay-label'>Query delay (ms)</span>
-								<input
-									className='simulation-control-input'
-									type='number'
-									min='0'
-									step='100'
-									inputMode='numeric'
-									value={queryDelayMilliseconds.value}
-									disabled={busy.value}
-									onInput={event => {
-										queryDelayMilliseconds.value = event.currentTarget.value
-									}}
-									onChange={event => {
-										controller.setQueryDelayMilliseconds(Number(event.currentTarget.value))
-									}}
-								/>
-							</label>
-							<label className='simulation-delay-field'>
-								<span className='simulation-delay-label'>REP / ETH mock price</span>
-								<input
-									className='simulation-control-input'
-									type='text'
-									inputMode='decimal'
-									value={repPerEthPrice.value}
-									disabled={busy.value}
-									onInput={event => {
-										repPerEthPrice.value = event.currentTarget.value
-									}}
-									onChange={event => {
-										const parsedPrice = tryParseDecimalInput(event.currentTarget.value)
-										if (parsedPrice === undefined) {
-											resetRepPerEthPriceInput()
-											return
-										}
-										void runControl(async () => {
-											controller.setRepPerEthPrice(parsedPrice)
-										})
-									}}
-								/>
-							</label>
-							<label className='simulation-delay-field'>
-								<span className='simulation-delay-label'>REP / USDC mock price</span>
-								<input
-									className='simulation-control-input'
-									type='text'
-									inputMode='decimal'
-									value={repPerUsdcPrice.value}
-									disabled={busy.value}
-									onInput={event => {
-										repPerUsdcPrice.value = event.currentTarget.value
-									}}
-									onChange={event => {
-										const parsedPrice = tryParseDecimalInput(event.currentTarget.value, 6)
-										if (parsedPrice === undefined) {
-											resetRepPerUsdcPriceInput()
-											return
-										}
-										void runControl(async () => {
-											controller.setRepPerUsdcPrice(parsedPrice)
-										})
-									}}
-								/>
-							</label>
-							<label className='simulation-delay-field'>
-								<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
-								<input
-									className='simulation-control-input'
-									type='number'
-									min='0'
-									step='100'
-									inputMode='numeric'
-									value={transactionDelayMilliseconds.value}
-									disabled={busy.value}
-									onInput={event => {
-										transactionDelayMilliseconds.value = event.currentTarget.value
-									}}
-									onChange={event => {
-										controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
-									}}
-								/>
-							</label>
+				<details className='simulation-advanced-controls'>
+					<summary>QA controls, prices, and time travel</summary>
+					<div className='simulation-banner-controls'>
+						<div className='contract-copy'>
+							<h3>Controls</h3>
+							<p className='detail'>Use these controls for repeatable manual UI QA without a wallet extension.</p>
+							<div className='simulation-delay-grid'>
+								<label className='simulation-delay-field'>
+									<span className='simulation-delay-label'>Query delay (ms)</span>
+									<input
+										className='simulation-control-input'
+										type='number'
+										min='0'
+										step='100'
+										inputMode='numeric'
+										value={queryDelayMilliseconds.value}
+										disabled={busy.value}
+										onInput={event => {
+											queryDelayMilliseconds.value = event.currentTarget.value
+										}}
+										onChange={event => {
+											controller.setQueryDelayMilliseconds(Number(event.currentTarget.value))
+										}}
+									/>
+								</label>
+								<label className='simulation-delay-field'>
+									<span className='simulation-delay-label'>REP / ETH mock price</span>
+									<input
+										className='simulation-control-input'
+										type='text'
+										inputMode='decimal'
+										value={repPerEthPrice.value}
+										disabled={busy.value}
+										onInput={event => {
+											repPerEthPrice.value = event.currentTarget.value
+										}}
+										onChange={event => {
+											const parsedPrice = tryParseDecimalInput(event.currentTarget.value)
+											if (parsedPrice === undefined) {
+												resetRepPerEthPriceInput()
+												return
+											}
+											void runControl(async () => {
+												controller.setRepPerEthPrice(parsedPrice)
+											})
+										}}
+									/>
+								</label>
+								<label className='simulation-delay-field'>
+									<span className='simulation-delay-label'>REP / USDC mock price</span>
+									<input
+										className='simulation-control-input'
+										type='text'
+										inputMode='decimal'
+										value={repPerUsdcPrice.value}
+										disabled={busy.value}
+										onInput={event => {
+											repPerUsdcPrice.value = event.currentTarget.value
+										}}
+										onChange={event => {
+											const parsedPrice = tryParseDecimalInput(event.currentTarget.value, 6)
+											if (parsedPrice === undefined) {
+												resetRepPerUsdcPriceInput()
+												return
+											}
+											void runControl(async () => {
+												controller.setRepPerUsdcPrice(parsedPrice)
+											})
+										}}
+									/>
+								</label>
+								<label className='simulation-delay-field'>
+									<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
+									<input
+										className='simulation-control-input'
+										type='number'
+										min='0'
+										step='100'
+										inputMode='numeric'
+										value={transactionDelayMilliseconds.value}
+										disabled={busy.value}
+										onInput={event => {
+											transactionDelayMilliseconds.value = event.currentTarget.value
+										}}
+										onChange={event => {
+											controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
+										}}
+									/>
+								</label>
+							</div>
+							<p className='detail'>Query delay slows simulation reads. The REP / ETH and REP / USDC mocks apply to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
 						</div>
-						<p className='detail'>Query delay slows simulation reads. The REP / ETH and REP / USDC mocks apply to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
-					</div>
-					<div className='simulation-control-groups'>
-						<div className='simulation-control-group'>
-							<span className='simulation-control-group-label'>Actions</span>
-							<div className='button-row simulation-button-row'>
-								<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
-									Reset scenario
-								</button>
-								<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
-									Mine block
-								</button>
-								<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
-									Mint 1 million REP
-								</button>
-								<button
-									className='secondary'
-									onClick={() => {
-										saveName.value = getDefaultSavedStateName()
-										savedStateError.value = undefined
-										modal.value = 'save'
-									}}
-									disabled={busy.value || !isBootstrapped.value}
-								>
-									Save state
-								</button>
-								<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
-									Export state
-								</button>
-								<button
-									className='secondary'
-									onClick={() => {
-										importStateText.value = ''
-										savedStateError.value = undefined
-										modal.value = 'import'
-									}}
-									disabled={busy.value}
-								>
-									Import state
-								</button>
-								{savedStateStorageWarning.value === undefined ? undefined : (
+						<div className='simulation-control-groups'>
+							<div className='simulation-control-group'>
+								<span className='simulation-control-group-label'>Actions</span>
+								<div className='button-row simulation-button-row'>
+									<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
+										Reset scenario
+									</button>
+									<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
+										Mine block
+									</button>
+									<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
+										Mint 1 million REP
+									</button>
 									<button
-										className='destructive'
+										className='secondary'
 										onClick={() => {
+											saveName.value = getDefaultSavedStateName()
 											savedStateError.value = undefined
-											modal.value = 'cleanup'
+											modal.value = 'save'
+										}}
+										disabled={busy.value || !isBootstrapped.value}
+									>
+										Save state
+									</button>
+									<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
+										Export state
+									</button>
+									<button
+										className='secondary'
+										onClick={() => {
+											importStateText.value = ''
+											savedStateError.value = undefined
+											modal.value = 'import'
 										}}
 										disabled={busy.value}
 									>
-										Remove corrupted saves
+										Import state
 									</button>
-								)}
-								{currentSource.value.kind !== 'saved-state' ? undefined : (
-									<button
-										className='destructive'
-										onClick={() => {
-											savedStateError.value = undefined
-											modal.value = 'delete'
-										}}
-										disabled={busy.value}
-									>
-										Delete save
-									</button>
-								)}
+									{savedStateStorageWarning.value === undefined ? undefined : (
+										<button
+											className='destructive'
+											onClick={() => {
+												savedStateError.value = undefined
+												modal.value = 'cleanup'
+											}}
+											disabled={busy.value}
+										>
+											Remove corrupted saves
+										</button>
+									)}
+									{currentSource.value.kind !== 'saved-state' ? undefined : (
+										<button
+											className='destructive'
+											onClick={() => {
+												savedStateError.value = undefined
+												modal.value = 'delete'
+											}}
+											disabled={busy.value}
+										>
+											Delete save
+										</button>
+									)}
+								</div>
 							</div>
-						</div>
-						<div className='simulation-control-group'>
-							<span className='simulation-control-group-label'>Time travel</span>
-							<div className='button-row simulation-button-row'>
-								{SIMULATION_TIME_PRESETS.map(preset => (
-									<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
-										{preset.label}
-									</button>
-								))}
+							<div className='simulation-control-group'>
+								<span className='simulation-control-group-label'>Time travel</span>
+								<div className='button-row simulation-button-row'>
+									{SIMULATION_TIME_PRESETS.map(preset => (
+										<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
+											{preset.label}
+										</button>
+									))}
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
+				</details>
 			</div>
 			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title='Save Simulation State'>
 				<div className='field'>

@@ -18,6 +18,10 @@ void describe('error helpers', () => {
 		expect(getErrorMessage(new Error('execution reverted: bad stuff'), 'Couldn’t refresh pools.')).toBe('Couldn’t refresh pools. Reason: bad stuff')
 	})
 
+	void test('rewrites no-data contract read failures with recovery guidance', () => {
+		expect(getErrorMessage(new Error('The contract function "nextReportId" returned no data ("0x").'), 'Failed to load oracle reports')).toBe('Failed to load oracle reports. Reason: No contract data was returned. Check that the selected network or simulation scenario has deployed contracts, then refresh.')
+	})
+
 	void test('falls through nested error details when wrapper messages are useless', () => {
 		expect(getErrorMessage({ cause: { shortMessage: 'RPC unavailable' }, message: 'execution reverted' }, 'Failed to refresh wallet state')).toBe('Failed to refresh wallet state. Reason: RPC unavailable')
 	})

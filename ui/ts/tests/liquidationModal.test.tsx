@@ -155,7 +155,7 @@ describe('LiquidationModal', () => {
 				repPerEthSourceUrl={undefined}
 				selectedPool={createSelectedPool()}
 				securityPoolOverviewActiveAction={undefined}
-				securityPoolOverviewError={undefined}
+				securityPoolLiquidationError={undefined}
 				securityPoolOverviewResult={undefined}
 				callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
 				targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
@@ -287,7 +287,7 @@ describe('LiquidationModal', () => {
 					repPerEthSourceUrl={undefined}
 					selectedPool={createSelectedPool()}
 					securityPoolOverviewActiveAction={undefined}
-					securityPoolOverviewError={undefined}
+					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({ vaultAddress: getAddress('0x0000000000000000000000000000000000000001') })}
 					targetVaultSummary={createTargetVaultSummary()}
@@ -537,7 +537,7 @@ describe('LiquidationModal', () => {
 						securityMultiplier: 2n,
 					})}
 					securityPoolOverviewActiveAction={undefined}
-					securityPoolOverviewError={undefined}
+					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={securityPoolOverviewResult}
 					callerVaultSummary={createTargetVaultSummary({
 						repDepositShare: 20n * 10n ** 18n,
@@ -582,14 +582,14 @@ describe('LiquidationModal', () => {
 	test('keeps the dialog open and shows liquidation errors inside the dialog', async () => {
 		function LiquidationErrorHarness() {
 			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
-			const [securityPoolOverviewError, setSecurityPoolOverviewError] = useState<string | undefined>(undefined)
+			const [securityPoolLiquidationError, setSecurityPoolLiquidationError] = useState<string | undefined>(undefined)
 
 			return (
 				<LiquidationModal
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => {
 						setLiquidationModalOpen(false)
-						setSecurityPoolOverviewError(undefined)
+						setSecurityPoolLiquidationError(undefined)
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
 						isPriceValid: true,
@@ -611,7 +611,7 @@ describe('LiquidationModal', () => {
 					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => {
 						setLiquidationModalOpen(false)
-						setSecurityPoolOverviewError('Liquidation execution reverted')
+						setSecurityPoolLiquidationError('Liquidation execution reverted')
 					}}
 					onSelectedPoolViewChange={() => undefined}
 					repPerEthPrice={1n * 10n ** 18n}
@@ -619,7 +619,7 @@ describe('LiquidationModal', () => {
 					repPerEthSourceUrl={undefined}
 					selectedPool={createSelectedPool()}
 					securityPoolOverviewActiveAction={undefined}
-					securityPoolOverviewError={securityPoolOverviewError}
+					securityPoolLiquidationError={securityPoolLiquidationError}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
 						repDepositShare: 20n * 10n ** 18n,
@@ -726,7 +726,7 @@ describe('LiquidationModal', () => {
 						lastOracleSettlementTimestamp: 1n,
 					})}
 					securityPoolOverviewActiveAction={undefined}
-					securityPoolOverviewError={undefined}
+					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
 					targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
@@ -923,7 +923,7 @@ describe('LiquidationModal', () => {
 						securityMultiplier: 2n,
 					})}
 					securityPoolOverviewActiveAction={undefined}
-					securityPoolOverviewError={undefined}
+					securityPoolLiquidationError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
 						repDepositShare: 12_000n * 10n ** 18n,

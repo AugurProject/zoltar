@@ -952,17 +952,24 @@ export function OpenOracleSection({
 							</div>
 						</SectionBlock>
 					)}
-					<SectionBlock title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
+					<SectionBlock title='Create Open Oracle Game' description='Advanced direct game creation. This bypasses oracle-manager staging, so confirm addresses, token amounts, fees, and timing before submitting.'>
+						<p className='notice warning'>Use this only when you intend to create a standalone oracle game directly from the connected wallet. Pool-managed oracle requests should be started from a selected security pool.</p>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title='Token Pair' variant='embedded'>
 								<div className='field-row'>
 									<label className='field'>
 										<span>Token1 Address</span>
-										<FormInput value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder='0x...' />
+										<FormInput value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder='0x...' aria-label='Token1 Address' aria-describedby='open-oracle-token1-address-help' />
+										<p id='open-oracle-token1-address-help' className='field-help'>
+											Base token for the reported pair.
+										</p>
 									</label>
 									<label className='field'>
 										<span>Token2 Address</span>
-										<FormInput value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder='0x...' />
+										<FormInput value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder='0x...' aria-label='Token2 Address' aria-describedby='open-oracle-token2-address-help' />
+										<p id='open-oracle-token2-address-help' className='field-help'>
+											Quote token for the reported pair.
+										</p>
 									</label>
 								</div>
 							</SectionBlock>
@@ -971,25 +978,40 @@ export function OpenOracleSection({
 								<div className='field-row'>
 									<label className='field'>
 										<span>Exact Token1 Report</span>
-										<FormInput value={openOracleCreateForm.exactToken1Report} onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.exactToken1Report} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} aria-label='Exact Token1 Report' aria-describedby='open-oracle-exact-token1-report-help' />
+										<p id='open-oracle-exact-token1-report-help' className='field-help'>
+											Token1 amount to report, entered as a decimal value for the token1 address.
+										</p>
 									</label>
 									<label className='field'>
 										<span>Settler Reward</span>
-										<FormInput value={openOracleCreateForm.settlerReward} onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.settlerReward} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} aria-label='Settler Reward' aria-describedby='open-oracle-settler-reward-help' />
+										<p id='open-oracle-settler-reward-help' className='field-help'>
+											ETH paid to the account that settles the report, entered as a decimal ETH value.
+										</p>
 									</label>
 								</div>
 								<label className='field'>
 									<span>ETH Value To Send</span>
-									<FormInput value={openOracleCreateForm.ethValue} onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.ethValue} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} aria-label='ETH Value To Send' aria-describedby='open-oracle-eth-value-help' />
+									<p id='open-oracle-eth-value-help' className='field-help'>
+										ETH sent with creation; must cover required funding and the settler reward.
+									</p>
 								</label>
 								<div className='field-row'>
 									<label className='field'>
 										<span>Fee Percentage</span>
-										<FormInput value={openOracleCreateForm.feePercentage} onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.feePercentage} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} aria-label='Fee Percentage' aria-describedby='open-oracle-fee-percentage-help' />
+										<p id='open-oracle-fee-percentage-help' className='field-help'>
+											Fee charged during dispute economics, entered as a percentage.
+										</p>
 									</label>
 									<label className='field'>
 										<span>Multiplier</span>
-										<FormInput value={openOracleCreateForm.multiplier} onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.multiplier} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} aria-label='Multiplier' aria-describedby='open-oracle-multiplier-help' />
+										<p id='open-oracle-multiplier-help' className='field-help'>
+											Escalation multiplier for dispute economics.
+										</p>
 									</label>
 								</div>
 							</SectionBlock>
@@ -998,21 +1020,33 @@ export function OpenOracleSection({
 								<div className='field-row'>
 									<label className='field'>
 										<span>Settlement Time</span>
-										<FormInput value={openOracleCreateForm.settlementTime} onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.settlementTime} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} aria-label='Settlement Time' aria-describedby='open-oracle-settlement-time-help' />
+										<p id='open-oracle-settlement-time-help' className='field-help'>
+											Delay in seconds after the initial report before settlement can begin.
+										</p>
 									</label>
 									<label className='field'>
 										<span>Escalation Halt</span>
-										<FormInput value={openOracleCreateForm.escalationHalt} onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.escalationHalt} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} aria-label='Escalation Halt' aria-describedby='open-oracle-escalation-halt-help' />
+										<p id='open-oracle-escalation-halt-help' className='field-help'>
+											Token1 amount where dispute escalation stops, entered as a decimal value for the token1 address.
+										</p>
 									</label>
 								</div>
 								<div className='field-row'>
 									<label className='field'>
 										<span>Dispute Delay</span>
-										<FormInput value={openOracleCreateForm.disputeDelay} onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.disputeDelay} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} aria-label='Dispute Delay' aria-describedby='open-oracle-dispute-delay-help' />
+										<p id='open-oracle-dispute-delay-help' className='field-help'>
+											Delay in seconds after the initial report before disputes can begin.
+										</p>
 									</label>
 									<label className='field'>
 										<span>Protocol Fee</span>
-										<FormInput value={openOracleCreateForm.protocolFee} onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} />
+										<FormInput value={openOracleCreateForm.protocolFee} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} aria-label='Protocol Fee' aria-describedby='open-oracle-protocol-fee-help' />
+										<p id='open-oracle-protocol-fee-help' className='field-help'>
+											Protocol fee charged during disputes, entered as a percentage.
+										</p>
 									</label>
 								</div>
 							</SectionBlock>

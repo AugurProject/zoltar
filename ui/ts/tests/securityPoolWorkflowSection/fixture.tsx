@@ -340,6 +340,7 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		securityPoolAddress: '',
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
+		securityPoolLiquidationError: undefined,
 		securityPoolOverviewResult: undefined,
 		securityPools: [],
 		securityVault: createSecurityVaultProps(),

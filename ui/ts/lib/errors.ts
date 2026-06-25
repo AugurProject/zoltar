@@ -136,6 +136,14 @@ function isGenericErrorDetail(value: string) {
 	return comparable === '' || comparable === '[object object]' || comparable === 'unknown error' || comparable === 'for an unknown reason'
 }
 
+function getContractNoDataDetail(value: string) {
+	const normalized = value.toLowerCase()
+	if (!normalized.includes('returned no data') && !normalized.includes('no data')) return undefined
+	if (!normalized.includes('contract function') && !normalized.includes('0x')) return undefined
+
+	return 'No contract data was returned. Check that the selected network or simulation scenario has deployed contracts, then refresh.'
+}
+
 function shouldUseStandaloneWriteMessage(detail: string) {
 	const firstCharacter = detail.charAt(0)
 	if (firstCharacter === '') return false
@@ -160,6 +168,8 @@ export function sanitizeErrorDetail(detail: string | undefined, fallbackMessage?
 	sanitized = sanitized.replace(/\.$/, '')
 	if (sanitized === '' || isJsonOnlyValue(sanitized) || isGenericErrorDetail(sanitized)) return undefined
 	if (fallbackMessage !== undefined && normalizeComparableMessage(sanitized) === normalizeComparableMessage(fallbackMessage)) return undefined
+	const contractNoDataDetail = getContractNoDataDetail(sanitized)
+	if (contractNoDataDetail !== undefined) return contractNoDataDetail
 
 	const maxLength = 160
 	return sanitized.length > maxLength ? `${sanitized.slice(0, maxLength - 3).trimEnd()}...` : sanitized

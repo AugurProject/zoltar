@@ -1,10 +1,25 @@
 import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import * as process from 'node:process'
 import * as url from 'node:url'
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRoot = path.join(scriptDirectory, '..')
+const defaultRepositoryRoot = path.join(scriptDirectory, '..')
+
+type GitResult = {
+	status: number | null
+	stdout: string
+	stderr: string
+	error?: Error
+}
+
+export type GitRunner = (args: readonly string[]) => GitResult
+
+export type GeneratedArtifactCheckOptions = {
+	repositoryRoot?: string
+	runGit?: GitRunner
+}
 
 const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'solidity/types/contractArtifact.ts', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts']
 
@@ -14,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function assertExists(relativePath: string) {
+async function assertExists(repositoryRoot: string, relativePath: string) {
 	try {
 		await fs.stat(path.join(repositoryRoot, relativePath))
 	} catch (error) {
@@ -25,13 +40,13 @@ async function assertExists(relativePath: string) {
 	}
 }
 
-async function readJsonObject(relativePath: string) {
+async function readJsonObject(repositoryRoot: string, relativePath: string) {
 	const parsed = JSON.parse(await fs.readFile(path.join(repositoryRoot, relativePath), 'utf8'))
 	if (!isRecord(parsed)) throw new Error(`${relativePath} must contain a JSON object`)
 	return parsed
 }
 
-async function assertContractsJsonReadable() {
+async function assertContractsJsonReadable(repositoryRoot: string) {
 	const contractsJsonPath = path.join(repositoryRoot, 'solidity/artifacts/Contracts.json')
 	try {
 		JSON.parse(await fs.readFile(contractsJsonPath, 'utf8'))
@@ -48,8 +63,8 @@ function normalizeRepositoryRelativePath(baseDirectory: string, relativePath: st
 	return path.posix.normalize(path.posix.join(baseDirectory, relativePath))
 }
 
-async function getSharedPackageGeneratedOutputs() {
-	const packageJson = await readJsonObject('shared/package.json')
+async function getSharedPackageGeneratedOutputs(repositoryRoot: string) {
+	const packageJson = await readJsonObject(repositoryRoot, 'shared/package.json')
 	const exportsValue = packageJson['exports']
 	if (!isRecord(exportsValue)) throw new Error('shared/package.json exports must be an object')
 
@@ -67,7 +82,7 @@ async function getSharedPackageGeneratedOutputs() {
 	return outputs
 }
 
-async function getUiImportMapGeneratedOutputs() {
+async function getUiImportMapGeneratedOutputs(repositoryRoot: string) {
 	const indexHtml = await fs.readFile(path.join(repositoryRoot, 'ui/index.html'), 'utf8')
 	const importMapMatch = indexHtml.match(/<script\b[^>]*\btype\s*=\s*['"]importmap['"][^>]*>([\s\S]*?)<\/script>/i)
 	if (importMapMatch === null) throw new Error('ui/index.html is missing an import map')
@@ -88,16 +103,22 @@ async function getUiImportMapGeneratedOutputs() {
 	return outputs
 }
 
-function runGit(args: readonly string[]) {
-	const result = spawnSync('git', args, {
-		cwd: repositoryRoot,
-		encoding: 'utf8',
-	})
-	if (result.error !== undefined) throw result.error
-	return result
+function createGitRunner(repositoryRoot: string): GitRunner {
+	return args => {
+		const result = spawnSync('git', args, {
+			cwd: repositoryRoot,
+			encoding: 'utf8',
+		})
+		if (result.error !== undefined) throw result.error
+		return {
+			status: result.status,
+			stdout: result.stdout,
+			stderr: result.stderr,
+		}
+	}
 }
 
-function getTrackedGeneratedPaths() {
+function getTrackedGeneratedPaths(runGit: GitRunner) {
 	const result = runGit(['ls-files', '--', ...generatedReviewPaths])
 	if (result.status !== 0) {
 		throw new Error(`Unable to list tracked generated paths.\n${result.stdout}${result.stderr}`)
@@ -114,14 +135,31 @@ function assertNoTrackedGeneratedPaths(trackedGeneratedPaths: readonly string[])
 	throw new Error(`Generated artifacts must remain untracked. Remove these paths from Git and keep them covered by .gitignore and the generated artifact policy:\n${trackedGeneratedPaths.join('\n')}`)
 }
 
-const requiredGeneratedOutputs = new Set([...explicitlyRequiredGeneratedOutputs, ...(await getSharedPackageGeneratedOutputs()), ...(await getUiImportMapGeneratedOutputs())])
+export async function assertGeneratedArtifactsClean(options: GeneratedArtifactCheckOptions = {}) {
+	const repositoryRoot = options.repositoryRoot ?? defaultRepositoryRoot
+	const runGit = options.runGit ?? createGitRunner(repositoryRoot)
+	const requiredGeneratedOutputs = new Set([...explicitlyRequiredGeneratedOutputs, ...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...(await getUiImportMapGeneratedOutputs(repositoryRoot))])
 
-for (const relativePath of requiredGeneratedOutputs) {
-	await assertExists(relativePath)
+	for (const relativePath of requiredGeneratedOutputs) {
+		await assertExists(repositoryRoot, relativePath)
+	}
+	await assertContractsJsonReadable(repositoryRoot)
+
+	const trackedGeneratedPaths = getTrackedGeneratedPaths(runGit)
+	assertNoTrackedGeneratedPaths(trackedGeneratedPaths)
 }
-await assertContractsJsonReadable()
 
-const trackedGeneratedPaths = getTrackedGeneratedPaths()
-assertNoTrackedGeneratedPaths(trackedGeneratedPaths)
+async function main() {
+	await assertGeneratedArtifactsClean()
+	console.log('Generated artifacts verified. Generated outputs are intentionally untracked, so freshness is validated by successful generation and required-output checks.')
+}
 
-console.log('Generated artifacts verified. Generated outputs are intentionally untracked, so freshness is validated by successful generation and required-output checks.')
+const currentScriptPath = url.fileURLToPath(import.meta.url)
+const invokedScriptPath = process.argv[1]
+
+if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+	main().catch(error => {
+		console.error(error)
+		process.exit(1)
+	})
+}

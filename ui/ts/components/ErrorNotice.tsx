@@ -17,7 +17,7 @@ export function ErrorNotice({ message }: ErrorNoticeProps) {
 	if (isCloseable && dismissed) return undefined
 
 	return (
-		<div className={`notice error${isCloseable ? ' closeable' : ''}`}>
+		<div className={`notice error${isCloseable ? ' closeable' : ''}`} role='alert' aria-live='assertive' aria-atomic='true'>
 			{isCloseable ? (
 				<button type='button' className='notice-dismiss' aria-label='Dismiss error' onClick={() => setDismissed(true)}>
 					<span className='notice-dismiss-icon' aria-hidden='true' />

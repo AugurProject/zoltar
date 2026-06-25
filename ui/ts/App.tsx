@@ -3,6 +3,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { AppHeaderShell } from './components/AppHeaderShell.js'
+import { AppPageHeading } from './components/AppPageHeading.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { AppStatusNotices } from './components/AppStatusNotices.js'
 import { GlobalTransactionTray } from './components/GlobalTransactionTray.js'
@@ -23,6 +24,7 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getActiveSimulationController } from './lib/activeEnvironment.js'
+import { getAppPageTitle } from './lib/appPageTitle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from './lib/chainTimestamp.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
@@ -218,6 +220,7 @@ export function App() {
 		queueLiquidation,
 		securityPoolOverviewActiveAction,
 		securityPoolOverviewError,
+		securityPoolLiquidationError,
 		securityPoolOverviewResult,
 		securityPoolBrowseCount,
 		securityPoolPage,
@@ -327,6 +330,7 @@ export function App() {
 	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, ['browse', 'create', 'operate'])
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
 	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
+	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, activeZoltarView, route })
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
@@ -503,12 +507,14 @@ export function App() {
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
 			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
 			onLoadSecurityPools: () => void loadSecurityPools(),
+			onCreateSecurityPool: () => setSecurityPoolsView('create'),
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
 			poolOracleManagerDetails,
 			securityPoolBrowseCount,
 			securityPoolPage,
 			securityPoolOverviewActiveAction,
 			securityPoolOverviewError,
+			securityPoolLiquidationError,
 			securityPoolOverviewResult,
 			securityPools,
 			repPerEthPrice,
@@ -575,6 +581,7 @@ export function App() {
 			},
 			securityPoolOverviewActiveAction,
 			securityPoolOverviewError,
+			securityPoolLiquidationError,
 			securityPoolOverviewResult,
 			poolOracleActiveAction,
 			poolOracleManagerDetails,
@@ -685,7 +692,7 @@ export function App() {
 	if (route === 'zoltar') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel='Zoltar views'
+				ariaLabel='Question views'
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
@@ -709,20 +716,20 @@ export function App() {
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
 					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Operate', value: 'operate' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Pool', value: 'create' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Pool Workflow', value: 'operate' },
 				]}
 			/>
 		)
 	} else if (route === 'open-oracle') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel='Open Oracle views'
+				ariaLabel='Oracle report views'
 				value={activeOpenOracleView}
 				onChange={view => setOpenOracleView(view)}
 				options={[
 					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Game', value: 'create' },
 					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Selected Report', value: 'selected-report' },
 				]}
 			/>
@@ -733,6 +740,7 @@ export function App() {
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
+					<AppPageHeading pageTitle={pageTitle} />
 					<AppStatusNotices
 						errorMessage={errorMessage}
 						readBackendMessage={readBackendMessage}
@@ -745,9 +753,11 @@ export function App() {
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
 					<GlobalTransactionTray transaction={transactionState.value.active} />
 
-					<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-						<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
-					</fieldset>
+					<div id='app-content' tabIndex={-1}>
+						<fieldset className='route-shell' disabled={isRouteContentDisabled}>
+							<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
+						</fieldset>
+					</div>
 				</main>
 			</ChainTimestampContext.Provider>
 		</ChainBlockNumberContext.Provider>
