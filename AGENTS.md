@@ -170,8 +170,10 @@ In the final response to the user, summarize the reviewer feedback received, rep
 - **Semicolons**: Do not use semicolons at the end of statements.
 - **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
-- **Type casts**: Avoid using `as` casts unless they are truly necessary. Prefer narrower helper functions, explicit runtime checks, better generic typing, or inferred types first.
-- **Nullability**: Prefer `undefined` over `null` for absent optional values. Avoid introducing new `null` usage unless there is a strong external API reason.
+- **TypeScript directive comments**: Do not use TypeScript directive comments such as `// @ts-expect-error`, `// @ts-ignore`, or `// @ts-nocheck`; fix the type problem directly or restructure the code so the types are correct.
+- **Type assertions and casts**: Avoid type assertions and casting, especially double-cast patterns like `as unknown as SomeType`; prefer proper typing, generic constraints, narrower APIs, explicit runtime validation, or inferred types first.
+- **Nullability**: Avoid using `null`; prefer `undefined` for absent values unless an external API or schema explicitly requires `null`.
+- **Classes**: Avoid classes and class-based abstractions; prefer functional programming with plain data, pure functions, and composition.
 - **Solidity revert reasons**: Do not use Solidity custom errors. Use normal revert strings; they may be short, but they must be understandable English.
 
 Biome is configured to enforce these rules automatically. Run `bun run format` to format your code and `bun run check` to validate it.
