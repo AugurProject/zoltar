@@ -1,5 +1,4 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { toFunctionSelector } from 'viem'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 
 describe('Peripherals: fork migration', () => {
@@ -14,6 +13,7 @@ describe('Peripherals: fork migration', () => {
 	const strictEqualTypeSafe: PeripheralsForkMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 
 	const {
+		decodeEventLog,
 		sortBigIntsAscending,
 		REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT,
 		createWriteClient,
@@ -79,6 +79,7 @@ describe('Peripherals: fork migration', () => {
 		getRepToken,
 		getShareTokenSupply,
 		getTotalRepBalance,
+		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
 		getTotalFeesOwedToVaults,
@@ -91,6 +92,8 @@ describe('Peripherals: fork migration', () => {
 		sharesToCash,
 		updateVaultFees,
 		withdrawFromEscalationGame,
+		peripherals_EscalationGame_EscalationGame,
+		peripherals_SecurityPoolForker_SecurityPoolForker,
 		peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 		formatStorageSlot,
 		getMappingStorageSlot,
@@ -206,7 +209,7 @@ describe('Peripherals: fork migration', () => {
 
 			const { forkData: forkDataBeforeStrayRep } = await setupOwnForkWithEscrow()
 			await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
-			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /e8/)
+			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Pool already forked/)
 
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
@@ -1000,9 +1003,9 @@ describe('Peripherals: fork migration', () => {
 			const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 			const parentYesBalance = ensureDefined(parentBalancesBeforeFailedMigrations[1], 'parent yes balance is undefined')
 
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /Malformed/)
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /Target outcomes must be strictly increasing/)
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /Target outcomes must be strictly increasing/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /target outcome is malformed/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /strictly increasing order/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /strictly increasing order/)
 
 			const parentBalancesAfterFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 			strictEqualTypeSafe(parentBalancesAfterFailedMigrations[1], parentYesBalance, 'failed migrations should preserve the parent yes share balance')
@@ -1070,7 +1073,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(clientVaultAfterRedeem.repDepositShare, 0n, 'redeeming a vault should zero out its child-pool ownership')
 			assert.ok(denominatorAfterRedeem <= denominatorBeforeRedeem, 'redeeming a vault should not increase the child pool denominator')
 			approximatelyEqual(attackerClaimAfterRedeem, attackerClaimBeforeRedeem, 10n, 'redeeming another vault should preserve the remaining vault claim up to rounding')
-			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /no redeemable rep/)
+			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /No redeemable REP/)
 		})
 
 		test('parent pool halts on fork while a migrated child can resume operational flows', async () => {
@@ -1087,7 +1090,7 @@ describe('Peripherals: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'parent pool should enter PoolForked after the universe fork is activated')
-			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /zoltar forked|question resolved/)
+			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe already forked|Question resolved/)
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -1136,7 +1139,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should wait in migration state before accounting is settled')
-			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /not operational/)
+			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational/)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -1200,8 +1203,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), parentAllowance, 'test setup requires inherited mint capacity')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			const exchangeRateErrorSelector = toFunctionSelector('UndefinedCompleteSetExchangeRate()')
-			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), new RegExp(`custom error ${exchangeRateErrorSelector}`))
+			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), /Exchange rate undefined/)
 		})
 
 		test('can migrate escalation deposits before migrateVault', async () => {
@@ -1288,7 +1290,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /child branch already priced/i)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child migration closed/)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {
@@ -1490,20 +1492,76 @@ describe('Peripherals: fork migration', () => {
 			const yesChildRepToken = getRepTokenAddress(yesUniverse)
 			const walletRepBeforeEscalation = await getERC20Balance(client, yesChildRepToken, client.account.address)
 			const childCollateralBeforeEscalation = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 
-			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
+			const claimHash = await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
 
 			const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const walletRepAfterEscalation = await getERC20Balance(client, yesChildRepToken, client.account.address)
 			const migratedAfterEscalation = await getMigratedRep(client, yesSecurityPool.securityPool)
 			const childCollateralAfterEscalation = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const claimReceipt = await client.getTransactionReceipt({ hash: claimHash })
+			const claimLog = claimReceipt.logs
+				.filter(log => log.address.toLowerCase() === getInfraContractAddresses().securityPoolForker.toLowerCase())
+				.map(log =>
+					decodeEventLog({
+						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+						data: log.data,
+						topics: log.topics,
+					}),
+				)
+				.find(log => log.eventName === 'ClaimForkedEscalationDepositsToWallet')
+			if (claimLog === undefined) throw new Error('ClaimForkedEscalationDepositsToWallet log missing')
+			const parentGameClaimLogs = claimReceipt.logs
+				.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
+				.map(log =>
+					decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					}),
+				)
+				.filter(log => log.eventName === 'ClaimDeposit')
+			const sourceRepClaimedFromGame = parentGameClaimLogs.reduce((total, log) => total + log.args.amountToWithdraw, 0n)
 
 			strictEqualTypeSafe(migratedAfterEscalation, migratedBeforeEscalation, 'own-fork escalation claim should not increase child pool migrated REP accounting')
 			strictEqualTypeSafe(parentVaultBeforeMigration.repInEscalationGame - parentVaultAfterMigration.repInEscalationGame, 2n * winningDeposit, 'migration should clear exactly the winning deposits principal from the parent escalation escrow')
 			strictEqualTypeSafe(childCollateralAfterEscalation, childCollateralBeforeEscalation, 'own-fork escalation claim should not transfer pool collateral')
 			strictEqualTypeSafe(childVaultAfterMigration.repDepositShare, 0n, 'own-fork escalation claim should not mint child pool ownership')
 			assert.ok(walletRepAfterEscalation > walletRepBeforeEscalation, 'own-fork escalation claim should pay child REP directly to the wallet')
+			strictEqualTypeSafe(parentGameClaimLogs.length, 2, 'own-fork wallet claim should emit one parent-game claim log per source deposit')
+			assert.deepStrictEqual(
+				parentGameClaimLogs.map(log => log.args.depositor.toLowerCase()),
+				[client.account.address.toLowerCase(), client.account.address.toLowerCase()],
+				'parent-game claim logs should identify the source vault',
+			)
+			assert.deepStrictEqual(
+				parentGameClaimLogs.map(log => log.args.outcome),
+				[QuestionOutcome.Yes, QuestionOutcome.Yes],
+				'parent-game claim logs should identify the claimed outcome',
+			)
+			assert.deepStrictEqual(
+				parentGameClaimLogs.map(log => log.args.parentDepositIndex),
+				[0n, 1n],
+				'parent-game claim logs should identify each source deposit index',
+			)
+			assert.deepStrictEqual(
+				parentGameClaimLogs.map(log => log.args.originalDepositAmount),
+				[winningDeposit, winningDeposit],
+				'parent-game claim logs should include each source principal',
+			)
+			assert.ok(
+				parentGameClaimLogs.every(log => log.args.transferredRep === false),
+				'own-fork source claims should leave parent REP in the game',
+			)
+			strictEqualTypeSafe(claimLog.args.parent.toLowerCase(), securityPoolAddresses.securityPool.toLowerCase(), 'claim log should identify the parent pool')
+			strictEqualTypeSafe(claimLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'claim log should identify the paid vault')
+			strictEqualTypeSafe(claimLog.args.outcomeIndex, QuestionOutcome.Yes, 'claim log should identify the winning outcome')
+			assert.deepStrictEqual([...claimLog.args.depositIndexes], [0n, 1n], 'claim log should identify the claimed deposit indexes')
+			strictEqualTypeSafe(claimLog.args.sourceRepClaimed, sourceRepClaimedFromGame, 'claim log should report the source REP claimed from the parent game')
+			strictEqualTypeSafe(claimLog.args.walletRepPaid, walletRepAfterEscalation - walletRepBeforeEscalation, 'claim log should report the child REP paid to the wallet')
+			strictEqualTypeSafe(claimLog.args.ownFork, true, 'claim log should mark own-fork wallet payouts')
 		})
 
 		test('claimForkedEscalationDeposits uses the claim outcome when paying own-fork wallet REP', async () => {
@@ -1557,7 +1615,7 @@ describe('Peripherals: fork migration', () => {
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 
-			await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /mwc/)
+			await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /Claim window closed/)
 		})
 
 		test('claimForkedEscalationDeposits rejects once the child branch is already priced', async () => {

@@ -7,10 +7,11 @@ contract ReputationToken is ERC20 {
 	uint256 private totalTheoreticalSupply;
 	address public immutable zoltar;
 	event Mint(address account, uint256 value);
-	event Burn(address account, uint256 value);
+	event Burn(address account, uint256 value, uint256 totalTheoreticalSupply);
+	event TheoreticalSupplySet(uint256 totalTheoreticalSupply);
 
 	modifier isZoltar() {
-		require(msg.sender == zoltar, 'Not zoltar');
+		require(msg.sender == zoltar, 'ReputationToken caller must be the Zoltar contract');
 		_;
 	}
 
@@ -20,6 +21,7 @@ contract ReputationToken is ERC20 {
 
 	function setMaxTheoreticalSupply(uint256 _totalTheoreticalSupply) external isZoltar {
 		totalTheoreticalSupply = _totalTheoreticalSupply;
+		emit TheoreticalSupplySet(totalTheoreticalSupply);
 	}
 
 	function mint(address account, uint256 value) external isZoltar {
@@ -30,7 +32,7 @@ contract ReputationToken is ERC20 {
 	function burn(address account, uint256 value) external isZoltar {
 		_burn(account, value);
 		totalTheoreticalSupply -= value;
-		emit Burn(account, value);
+		emit Burn(account, value, totalTheoreticalSupply);
 	}
 
 	function getTotalTheoreticalSupply() external view returns (uint256) {

@@ -8,7 +8,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from '../testsuite/simulator/utils/assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { encodeDeployData, hexToBytes } from 'viem'
+import { decodeEventLog, encodeDeployData, hexToBytes } from 'viem'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -18,6 +18,7 @@ import {
 	getRepTokenAddress,
 	getTotalTheoreticalSupply,
 	getUniverseData,
+	getUniverseTheoreticalSupply,
 	getZoltarAddress,
 	getZoltarForkBurnDivisor,
 	getZoltarForkThreshold,
@@ -27,7 +28,7 @@ import {
 } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
-import { test_peripherals_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken, test_peripherals_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
@@ -228,16 +229,35 @@ describe('Contract Test Suite', () => {
 		const questionId = getQuestionId(questionData, outcomes)
 
 		// do fork
-		await forkUniverse(client, genesisUniverse, questionId)
+		const forkHash = await forkUniverse(client, genesisUniverse, questionId)
+		const forkReceipt = await client.waitForTransactionReceipt({ hash: forkHash })
 		const afterForkBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 		assert.strictEqual(afterForkBalance + totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION, priorRepbalance, 'balance mismatch')
 		const universeData = await getUniverseData(client, genesisUniverse)
+		const forkLog = forkReceipt.logs
+			.filter(log => log.address.toLowerCase() === getZoltarAddress().toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: Zoltar_Zoltar.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+			.find(log => log.eventName === 'UniverseForked')
+		if (forkLog === undefined) throw new Error('missing UniverseForked log')
 		assert.ok(universeData.forkTime > 0, 'Universe was supposed to be forked')
 		assert.strictEqual(universeData.parentUniverseId, 0n, 'Universe had parent')
 		assert.strictEqual(universeData.forkingOutcomeIndex, 0n, 'Universe has forking outcome index')
 		assert.strictEqual(universeData.reputationToken, genesisRepToken, 'Wrong rep token')
 		ensureDefined(client.account, 'client.account is undefined')
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned (not held)")
+		assert.strictEqual(forkLog.args.forker, client.account.address, 'UniverseForked should identify the forker')
+		assert.strictEqual(forkLog.args.universeId, genesisUniverse, 'UniverseForked should identify the forked universe')
+		assert.strictEqual(forkLog.args.questionId, questionId, 'UniverseForked should identify the fork question')
+		assert.strictEqual(forkLog.args.forkTime, universeData.forkTime, 'UniverseForked should expose the stored fork time')
+		assert.strictEqual(forkLog.args.forkThreshold, totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION, 'UniverseForked should expose the fork threshold')
+		assert.strictEqual(forkLog.args.migrationRepBalance, await getMigrationRepBalance(client, genesisUniverse, client.account.address), 'UniverseForked should expose the forker migration balance')
+		assert.strictEqual(forkLog.args.universeTheoreticalSupply, await getUniverseTheoreticalSupply(client, genesisUniverse), 'UniverseForked should expose the new universe theoretical supply')
 
 		// forker claim balance
 		const outcomeIndexes = [0, 1, 3]
@@ -418,14 +438,45 @@ describe('Contract Test Suite', () => {
 		strictEqualTypeSafe(new Set(childUniverseIds).size, childUniverseIds.length, 'each scalar child universe id should map to exactly one outcome index')
 
 		for (const outcomeIndex of validScalarOutcomeIndexes) {
-			await deployChild(client, genesisUniverse, outcomeIndex)
 			const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
+			const childRepToken = getRepTokenAddress(childUniverseId)
+			const deployChildHash = await deployChild(client, genesisUniverse, outcomeIndex)
+			const deployChildReceipt = await client.waitForTransactionReceipt({ hash: deployChildHash })
 			const childUniverseData = await getUniverseData(client, childUniverseId)
-			const childSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId))
+			const childSupply = await getTotalTheoreticalSupply(client, childRepToken)
+			const deployChildLog = deployChildReceipt.logs
+				.filter(log => log.address.toLowerCase() === getZoltarAddress().toLowerCase())
+				.map(log =>
+					decodeEventLog({
+						abi: Zoltar_Zoltar.abi,
+						data: log.data,
+						topics: log.topics,
+					}),
+				)
+				.find(log => log.eventName === 'DeployChild')
+			const theoreticalSupplyLog = deployChildReceipt.logs
+				.filter(log => log.address.toLowerCase() === childRepToken.toLowerCase())
+				.map(log =>
+					decodeEventLog({
+						abi: ReputationToken_ReputationToken.abi,
+						data: log.data,
+						topics: log.topics,
+					}),
+				)
+				.find(log => log.eventName === 'TheoreticalSupplySet')
+			if (deployChildLog === undefined) throw new Error('missing DeployChild log')
+			if (theoreticalSupplyLog === undefined) throw new Error('missing TheoreticalSupplySet log')
 
 			strictEqualTypeSafe(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent universe')
 			strictEqualTypeSafe(childUniverseData.forkingOutcomeIndex, outcomeIndex, 'child universe should store the exact scalar answer index')
 			assert.ok(childSupply > 0n, 'child theoretical supply should remain positive')
+			assert.strictEqual(deployChildLog.args.deployer, client.account.address, 'DeployChild should identify the deployer')
+			assert.strictEqual(deployChildLog.args.universeId, genesisUniverse, 'DeployChild should identify the parent universe')
+			assert.strictEqual(deployChildLog.args.outcomeIndex, outcomeIndex, 'DeployChild should identify the outcome')
+			assert.strictEqual(deployChildLog.args.childUniverseId, childUniverseId, 'DeployChild should identify the child universe')
+			assert.strictEqual(deployChildLog.args.childReputationToken, childRepToken, 'DeployChild should identify the child REP token')
+			assert.strictEqual(deployChildLog.args.childUniverseTheoreticalSupply, childSupply, 'DeployChild should expose the child theoretical supply')
+			assert.strictEqual(theoreticalSupplyLog.args.totalTheoreticalSupply, childSupply, 'TheoreticalSupplySet should expose the stored child token supply')
 			if (firstChildSupply === undefined) {
 				firstChildSupply = childSupply
 			} else {

@@ -3,12 +3,15 @@ pragma solidity 0.8.35;
 
 import { DeploymentStatusOracle } from '../../DeploymentStatusOracle.sol';
 import { IERC20 } from '../../IERC20.sol';
+import { ReputationToken } from '../../ReputationToken.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
 import { ScalarOutcomes } from '../../ScalarOutcomes.sol';
 import { BinaryOutcomes } from '../../peripherals/BinaryOutcomes.sol';
-import { EscalationGameProofs } from '../../peripherals/EscalationGameProofs.sol';
+import { EscalationGame } from '../../peripherals/EscalationGame.sol';
+import { EscalationGameProofVerifier } from '../../peripherals/EscalationGameProofVerifier.sol';
 import { MERKLE_MOUNTAIN_RANGE_MAX_PEAKS } from '../../peripherals/EscalationGameTypes.sol';
 import { MerkleMountainRange } from '../../peripherals/MerkleMountainRange.sol';
+import { EscalationGameFactory } from '../../peripherals/factories/EscalationGameFactory.sol';
 import { ERC1155 } from '../../peripherals/tokens/ERC1155.sol';
 import { TokenId } from '../../peripherals/tokens/TokenId.sol';
 
@@ -56,8 +59,39 @@ contract ERC1155CoverageHarness is ERC1155 {
 	}
 }
 
+contract EscalationGameFactoryCoverageSecurityPool {
+	ReputationToken public immutable repToken;
+
+	constructor(ReputationToken configuredRepToken) {
+		repToken = configuredRepToken;
+	}
+
+	function deployStartedGame(
+		EscalationGameFactory factory,
+		uint256 startBond,
+		uint256 nonDecisionThreshold
+	) external returns (EscalationGame) {
+		return factory.deployEscalationGame(startBond, nonDecisionThreshold);
+	}
+
+	function deployForkedGame(
+		EscalationGameFactory factory,
+		uint256 startBond,
+		uint256 nonDecisionThreshold,
+		uint256 elapsedAtFork
+	) external returns (EscalationGame) {
+		return factory.deployEscalationGameFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+	}
+}
+
 contract CoverageHelpersHarness {
 	using SafeERC20Ops for IERC20;
+
+	EscalationGameProofVerifier private immutable proofVerifier;
+
+	constructor() {
+		proofVerifier = new EscalationGameProofVerifier();
+	}
 
 	function deployDeploymentStatusOracle(
 		address[] memory deploymentAddresses
@@ -121,33 +155,33 @@ contract CoverageHelpersHarness {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
-	function computeEmptyNullifierRoot() external pure returns (bytes32) {
-		return EscalationGameProofs.computeEmptyNullifierRoot();
+	function computeEmptyNullifierRoot() external view returns (bytes32) {
+		return proofVerifier.computeEmptyNullifierRoot();
 	}
 
 	function getCurrentCarryPeakForLeaf(
 		uint256 leafCount,
 		uint256 leafIndex
-	) external pure returns (uint256 peakHeight, uint256 peakStartIndex) {
-		return EscalationGameProofs.getCurrentCarryPeakForLeaf(leafCount, leafIndex);
+	) external view returns (uint256 peakHeight, uint256 peakStartIndex) {
+		return proofVerifier.getCurrentCarryPeakForLeaf(leafCount, leafIndex);
 	}
 
 	function bagCarryPeaks(
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes,
 		uint256 leafCount
-	) external pure returns (bytes32) {
-		return EscalationGameProofs.bagCarryPeaks(peakHashes, leafCount);
+	) external view returns (bytes32) {
+		return proofVerifier.bagCarryPeaks(peakHashes, leafCount);
 	}
 
 	function bagCarryPeakSamples(
 		bytes32 firstPeakHash,
 		bytes32 secondPeakHash,
 		uint256 leafCount
-	) external pure returns (bytes32) {
+	) external view returns (bytes32) {
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes;
 		peakHashes[0] = firstPeakHash;
 		peakHashes[1] = secondPeakHash;
-		return EscalationGameProofs.bagCarryPeaks(peakHashes, leafCount);
+		return proofVerifier.bagCarryPeaks(peakHashes, leafCount);
 	}
 
 	function computeMerkleMountainRangeRootFromProof(
@@ -156,23 +190,17 @@ contract CoverageHelpersHarness {
 		uint256 leafIndex,
 		uint256 peakHeight,
 		bytes32[] calldata siblings
-	) external pure returns (bytes32) {
+	) external view returns (bytes32) {
 		return
-			EscalationGameProofs.computeMerkleMountainRangeRootFromProof(
-				leafHash,
-				leafCount,
-				leafIndex,
-				peakHeight,
-				siblings
-			);
+			proofVerifier.computeMerkleMountainRangeRootFromProof(leafHash, leafCount, leafIndex, peakHeight, siblings);
 	}
 
 	function computeNullifierRoot(
 		uint256 parentDepositIndex,
 		bytes32[] calldata siblings,
 		bytes32 leafValue
-	) external pure returns (bytes32) {
-		return EscalationGameProofs.computeNullifierRoot(parentDepositIndex, siblings, leafValue);
+	) external view returns (bytes32) {
+		return proofVerifier.computeNullifierRoot(parentDepositIndex, siblings, leafValue);
 	}
 
 	function getScalarOutcomeName(

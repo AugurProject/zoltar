@@ -53,7 +53,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {
-		require(authorized[msg.sender], 'not authorized');
+		require(authorized[msg.sender], 'ShareToken caller is not authorized to add another authorized pool');
 		authorized[address(_securityPoolCandidate)] = true;
 		emit Authorized(address(_securityPoolCandidate));
 	}
@@ -74,7 +74,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external {
-		require(authorized[msg.sender] == true, 'not authorized');
+		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to mint complete sets');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
@@ -87,7 +87,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external {
-		require(authorized[msg.sender] == true, 'not authorized');
+		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn complete sets');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
@@ -100,7 +100,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance) {
-		require(authorized[msg.sender] == true, 'not authorized');
+		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn this token id');
 		balance = balanceOf(_owner, _tokenId);
 		_burn(_owner, _tokenId, balance);
 	}
@@ -154,11 +154,11 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external {
 		uint248 universeId = getUniverseId(fromId);
-		require(universeHasForked(universeId), 'Universe has not forked');
-		require(targetOutcomeIndexes.length > 0, 'No target outcomes');
+		require(universeHasForked(universeId), 'ShareToken universe has not forked, so shares cannot migrate');
+		require(targetOutcomeIndexes.length > 0, 'ShareToken migration requires at least one target outcome');
 
 		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
-		require(fromIdBalance > 0, 'No balance to migrate');
+		require(fromIdBalance > 0, 'ShareToken holder has no balance to migrate from the source token id');
 
 		// Burn from the old token ID using the base ERC1155 _burn function
 		_burn(msg.sender, fromId, fromIdBalance);
@@ -168,8 +168,15 @@ contract ShareToken is ERC1155, IShareToken {
 		uint256 previousOutcomeIndex;
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
 			uint256 outcomeIndex = targetOutcomeIndexes[i];
-			require(!zoltar.zoltarQuestionData().isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed');
-			if (i > 0) require(outcomeIndex > previousOutcomeIndex, 'Target outcomes must be strictly increasing');
+			require(
+				!zoltar.zoltarQuestionData().isMalformedAnswerOption(questionId, outcomeIndex),
+				'ShareToken target outcome is malformed for the fork question'
+			);
+			if (i > 0)
+				require(
+					outcomeIndex > previousOutcomeIndex,
+					'ShareToken target outcomes must be provided in strictly increasing order'
+				);
 			previousOutcomeIndex = outcomeIndex;
 
 			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, outcomeIndex));

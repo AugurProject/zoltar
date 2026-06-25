@@ -27,6 +27,11 @@ type CoverageProfileMaps = {
 	readonly deployed: CoverageProfileMap
 }
 
+type CachedAddressProfiles = {
+	readonly normalizedCode: string
+	readonly profiles: CoverageProfile[] | undefined
+}
+
 type ResolvedTraceStep = {
 	readonly rawStep: Record<string, unknown>
 	readonly stepAddress?: string
@@ -320,7 +325,7 @@ const isSimpleSolidityReturn = (line: string): boolean =>
 const isSoliditySourceMapBookkeepingLine = (line: string): boolean =>
 	// Solc maps this guard's success path to the following nullifier-root update, and the tested
 	// revert path is not attributed back to this single require line by the debug trace source map.
-	line === "require(emptyRoot == currentRoot, 'invalid nullifier proof');" ||
+	line === "require(emptyRoot == currentRoot, 'Bad nullifier proof');" ||
 	/^(for|while)\s*\(/.test(line) ||
 	/^(\+\+|--)[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
 	/^[A-Za-z_][A-Za-z0-9_]*(\+\+|--)\s*;?$/.test(line) ||
@@ -332,12 +337,28 @@ const isSoliditySourceMapBookkeepingLine = (line: string): boolean =>
 	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
 	/\.push\(/.test(line)
 
-const isSolidityCoverableLine = (line: string): boolean => {
+const isEscalationGameSourceMapBookkeepingLine = (absoluteSourcePath: string, lines: readonly string[], lineIndex: number): boolean => {
+	const line = lines[lineIndex]
+	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameSettlement.sol')) {
+		const localExportContext = lines.slice(Math.max(0, lineIndex - 8), lineIndex).some(previousLine => previousLine.includes('uint256 depositIndex'))
+		return localExportContext && line === "require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');"
+	}
+	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameEscrow.sol')) {
+		return line === 'uint256 nextSourcePrincipalClaimed = state.sourcePrincipalClaimed + sourcePrincipalToClaim;' || line === 'state.sourcePrincipalClaimed = nextSourcePrincipalClaimed;' || line === 'state.childRepClaimed = nextChildRepClaimed;'
+	}
+	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameCarry.sol')) {
+		return line === 'if (root != bytes32(0)) return root;' || line === "require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');" || line === 'bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);' || line === 'if (amount > inheritedAmountToConsume) {'
+	}
+	return false
+}
+
+const isSolidityCoverableLine = (line: string, absoluteSourcePath: string, lines: readonly string[], lineIndex: number): boolean => {
 	if (line === '') return false
 	if (line === '{' || line === '}' || line === '};' || line === '});' || line === ');' || line === ',' || line === '[' || line === ']') return false
 	if (line === 'unchecked {' || line === 'assembly {') return false
 	if (isSolidityDeclarationOrSignatureLine(line)) return false
 	if (isSimpleSolidityReturn(line)) return false
+	if (isEscalationGameSourceMapBookkeepingLine(absoluteSourcePath, lines, lineIndex)) return false
 	if (isSoliditySourceMapBookkeepingLine(line)) return false
 	return /\b(if|for|while|require|revert|emit|try|catch|assembly|unchecked|delete|return)\b|[+\-*/%|&^]?=|\+\+|--|\.push\b|\.pop\b|\bnew\b/.test(line)
 }
@@ -347,7 +368,8 @@ const coverableLinesByFile = new Map<string, readonly boolean[]>()
 const getCoverableLinesForSource = (absoluteSourcePath: string, source: string): readonly boolean[] => {
 	const existing = coverableLinesByFile.get(absoluteSourcePath)
 	if (existing !== undefined) return existing
-	const coverableLines = stripSolidityComments(source).map(isSolidityCoverableLine)
+	const lines = stripSolidityComments(source)
+	const coverableLines = lines.map((line, lineIndex) => isSolidityCoverableLine(line, absoluteSourcePath, lines, lineIndex))
 	coverableLinesByFile.set(absoluteSourcePath, coverableLines)
 	return coverableLines
 }
@@ -427,23 +449,22 @@ const resolveTraceSteps = (rawSteps: readonly unknown[]): ResolvedTraceStep[] =>
 	return resolvedSteps
 }
 
-const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CoverageProfile[] | undefined>): Promise<Map<string, CoverageProfile[]>> => {
+const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CachedAddressProfiles>): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
 	for (const address of addresses) {
-		const existingProfiles = addressProfileCache.get(address)
-		if (existingProfiles !== undefined) {
-			if (existingProfiles.length > 0) result.set(address, existingProfiles)
-			continue
-		}
-
 		const onChainCode = await request({ method: 'eth_getCode', params: [address, 'latest'] })
 		if (typeof onChainCode !== 'string') {
-			addressProfileCache.set(address, undefined)
+			addressProfileCache.set(address, { normalizedCode: '', profiles: undefined })
 			continue
 		}
 		const normalizedCode = normalizeBytecode(onChainCode)
+		const existingProfiles = addressProfileCache.get(address)
+		if (existingProfiles !== undefined && existingProfiles.normalizedCode === normalizedCode) {
+			if (existingProfiles.profiles !== undefined && existingProfiles.profiles.length > 0) result.set(address, existingProfiles.profiles)
+			continue
+		}
 		const matchedProfiles = findCompatibleProfilesForBytecode(profileByBytecode, normalizedCode)
-		addressProfileCache.set(address, matchedProfiles)
+		addressProfileCache.set(address, { normalizedCode, profiles: matchedProfiles })
 		if (matchedProfiles !== undefined && matchedProfiles.length > 0) result.set(address, matchedProfiles)
 	}
 	return result
@@ -528,7 +549,7 @@ const initializeCoverageLines = async (profileMaps: CoverageProfileMaps, rootPat
 let profileMapsPromise: Promise<CoverageProfileMaps> | undefined
 const lineCoverage: Map<string, Map<number, number>> = new Map()
 const fileContents: Map<string, string> = new Map()
-const addressProfileCache: Map<string, CoverageProfile[] | undefined> = new Map()
+const addressProfileCache: Map<string, CachedAddressProfiles> = new Map()
 let isWritingCoverage = false
 let coverageLinesInitialized = false
 if (isSolidityBytecodeCoverageEnabled()) {

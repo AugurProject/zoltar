@@ -123,6 +123,12 @@ function parseTransactionBlockNumber(value: unknown): bigint | undefined {
 	return BigInt(blockNumber)
 }
 
+function parseTransactionInput(value: unknown): string | undefined {
+	if (!isObjectRecord(value)) return undefined
+	const input = value['input'] ?? value['data']
+	return typeof input === 'string' ? input : undefined
+}
+
 export interface AnvilWindowEthereum {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
 	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
@@ -211,11 +217,11 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			}
 			throw new Error(json.error.message || 'RPC error')
 		}
-		if (args.method === 'anvil_reset') resetSolidityBytecodeCoverageAddressCache()
+		if (args.method === 'anvil_reset' || args.method === 'anvil_revert') resetSolidityBytecodeCoverageAddressCache()
 
 		const waitForReceiptStatus = async (hash: string) => {
 			let transactionBlockNumber: bigint | undefined
-			for (let attempt = 0; attempt < 20; attempt++) {
+			for (let attempt = 0; attempt < 100; attempt++) {
 				const receipt = await request({
 					method: 'eth_getTransactionReceipt',
 					params: [hash],
@@ -230,6 +236,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					})
 					transactionBlockNumber = parseTransactionBlockNumber(transaction)
 				}
+				await new Promise(resolve => setTimeout(resolve, 10))
 			}
 
 			if (transactionBlockNumber !== undefined) return undefined
@@ -243,6 +250,14 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			const receiptResult = await waitForReceiptStatus(json.result)
 			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
 			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
+			let transactionData = transaction !== undefined && typeof transaction.data === 'string' ? transaction.data : undefined
+			if (transactionData === undefined) {
+				const transactionDetails = await request({
+					method: 'eth_getTransactionByHash',
+					params: [json.result],
+				})
+				transactionData = parseTransactionInput(transactionDetails)
+			}
 			const receipt =
 				parsedReceipt === undefined
 					? undefined
@@ -255,7 +270,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				transactionHash: json.result,
 				transaction: {
 					...(transaction !== undefined && typeof transaction.to === 'string' ? { to: transaction.to } : {}),
-					...(transaction !== undefined && typeof transaction.data === 'string' ? { data: transaction.data } : {}),
+					...(transactionData !== undefined ? { data: transactionData } : {}),
 				},
 				...(receipt !== undefined ? { receipt } : {}),
 			}

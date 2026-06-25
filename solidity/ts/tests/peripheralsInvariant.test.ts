@@ -349,10 +349,10 @@ describe('Peripherals invariant harness', () => {
 		}
 
 		const refundFirst = await settleInOrder('refund-first')
-		await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already claimed/)
+		await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already been (claimed|withdrawn)/)
 		await mockWindow.anvilRevert(orderSnapshot)
 		const claimFirst = await settleInOrder('claim-first')
-		await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already claimed/)
+		await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already been (claimed|withdrawn)/)
 
 		strictEqualTypeSafe(refundFirst.losingBidderBalance, claimFirst.losingBidderBalance, 'losing bidder ETH balance should not depend on claim order')
 		strictEqualTypeSafe(refundFirst.winningVault.repDepositShare, claimFirst.winningVault.repDepositShare, 'winning vault ownership should not depend on claim order')
@@ -416,7 +416,7 @@ describe('Peripherals invariant harness', () => {
 		assert.ok(orderA.auctionBalanceAfter <= orderA.auctionBalanceBefore, 'auction settlement should never pay out more ETH than the auction held')
 		const totalBidderPayout = orderA.bidderABalanceAfter - orderA.bidderABalanceBefore + (orderA.bidderBBalanceAfter - orderA.bidderBBalanceBefore)
 		strictEqualTypeSafe(totalBidderPayout, orderA.auctionBalanceBefore - orderA.auctionBalanceAfter, 'total bidder ETH paid should reconcile to the auction balance decrease')
-		await assert.rejects(withdrawBids(client, auctionAddress, bidderA.account.address, [{ tick: tickA, bidIndex: 0n }]), /already claimed/i)
+		await assert.rejects(withdrawBids(client, auctionAddress, bidderA.account.address, [{ tick: tickA, bidIndex: 0n }]), /already been claimed/i)
 	})
 
 	test('redeemRep becomes unavailable after the first child-pool redemption', async () => {
@@ -460,7 +460,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(walletRepAfterRedeem - walletRepBeforeRedeem, clientClaimBeforeRedeem, 'redeemRep should pay the caller REP claim exactly')
 		strictEqualTypeSafe(poolRepBeforeRedeem - poolRepAfterRedeem, clientClaimBeforeRedeem, 'redeemRep should debit the child pool REP by the caller claim exactly')
 		assert.deepStrictEqual(await readPoolAccountingSnapshot(client, context.securityPool), parentAccountingBeforeRedeem, 'child REP redemption must not mutate parent-pool accounting')
-		await assert.rejects(redeemRep(client, yesSecurityPool, client.account.address), /no redeemable rep/)
+		await assert.rejects(redeemRep(client, yesSecurityPool, client.account.address), /No redeemable REP/)
 	})
 
 	test('oracle-staged operations cannot be overwritten or executed twice', async () => {
@@ -496,7 +496,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(finalVault.securityBondAllowance, allowances[4], 'manual overflow execution should apply the final staged allowance')
 		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 0n, 'manual execution should consume the final active operation')
 		strictEqualTypeSafe(await getStagedOperationCounter(client, priceOracle), 5n, 'executing staged operations must not rewrite the append-only counter')
-		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /no such operation/i)
+		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /staged operation does not exist/i)
 	})
 
 	test('active vault pagination stays unique under deposit, allowance, and exit churn', async () => {
@@ -541,7 +541,7 @@ describe('Peripherals invariant harness', () => {
 
 		await startAuction(client, underfundedAuctionAddress, 1000n * 10n ** 18n, underfundedMaxRepBeingSold)
 		strictEqualTypeSafe(tickToPrice(rejectedZeroPriceTick), 0n, 'rejected setup should use a zero-price tick')
-		await assert.rejects(submitBid(underfundedBidder, underfundedAuctionAddress, rejectedZeroPriceTick, lowPriceBid), /price too low/)
+		await assert.rejects(submitBid(underfundedBidder, underfundedAuctionAddress, rejectedZeroPriceTick, lowPriceBid), /tick price rounds down to zero/)
 		await submitBid(underfundedBidder, underfundedAuctionAddress, lowPriceTick, lowPriceBid)
 
 		const underfundedClearing = await computeClearing(client, underfundedAuctionAddress)
@@ -581,6 +581,6 @@ describe('Peripherals invariant harness', () => {
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }])
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
 		strictEqualTypeSafe(auctionBalanceBeforeWithdrawals - (await getETHBalance(client, refundAuctionAddress)), refundOnlyBid + winningResult.totalEthRefund, 'refund and partial-fill withdrawals should reconcile to the remaining auction ETH balance decrease')
-		await assert.rejects(withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }]), /already claimed/i)
+		await assert.rejects(withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }]), /already been claimed/i)
 	})
 })

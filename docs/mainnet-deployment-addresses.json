@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xd9A77d13f75c335d313AF7242A9407cff333AfEE"
+			"address": "0xDDB6000644d9049B36A82D7FdED8DD9c3Dcc40d4"
 		},
 		{
 			"id": "multicall3",
@@ -23,12 +23,12 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0xAAd99d4Cf6b0A03C871b8410fFBf8a2141Ee9D23"
+			"address": "0xa0780b04C01f2B325c77DF23D4A4Fe33b1d82Fb0"
 		},
 		{
 			"id": "scalarOutcomes",
 			"label": "ScalarOutcomes",
-			"address": "0x5890b011CF7E36d4Fee28Bac8B5be6f61C392a4C"
+			"address": "0x375993210Bd295D329CaB7EeD4CEE17C73493af5"
 		},
 		{
 			"id": "securityPoolUtils",
@@ -43,37 +43,44 @@
 		{
 			"id": "zoltarQuestionData",
 			"label": "ZoltarQuestionData",
-			"address": "0xeadF91d12F549786891350B3D535638713651207"
+			"address": "0x3fDE26F6C206DDc4991087FCeB5f13EC9f6F3E94"
 		},
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x6b5003e3715D5Bc8C753ca9822A0c550801B1fca"
+			"address": "0x5FaE7E52e81250Fad0fCF05db42eCCCB3B0Bed95"
 		},
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0xE78ef3c358973D9372a0E0E2cE56E2bcb161Ae45"
+			"address": "0x8b419DcAd5c607F91dca05FD53baB3b2f6BdD8E3"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "Price Oracle Manager Factory",
-			"address": "0xe21F0e1Cd36BDba08f08b53FFE1F89e3E840c80D"
+			"address": "0x918c0EF3Ba8A2217ECe218D438823355Fc77C36A"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xE2e90610B78A963D1b4f1AdfB30B161E81123D52"
+			"address": "0x9502B6e58a34a3299239b7fBdcC46E5402967c2A"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x633a5B839569c4F94b1bF21B010BE24fFCafbC6b"
+			"address": "0xDabbFb968f01fF2c1e1859Cd9bE937d9f70AAcbe"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x69EFA2DB77c269be04EFe851e9CE9B67CCb38709"
+			"address": "0x622787d84dbd84D22ca94881dEFdd34BBAd2ca66"
+		}
+	],
+	"derivedContracts": [
+		{
+			"id": "escalationGameProofVerifier",
+			"label": "Escalation Game Proof Verifier",
+			"address": "0x4837B6b389E03bE12EF622e559AfA5B4Af49EC72"
 		}
 	]
 }

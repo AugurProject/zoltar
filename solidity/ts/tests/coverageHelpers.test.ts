@@ -1,17 +1,30 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from 'viem'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ReputationToken_ReputationToken, test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness, test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness } from '../types/contractArtifact'
+import { applyLibraries } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import {
+	DeploymentStatusOracle_DeploymentStatusOracle,
+	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
+	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer,
+	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	ReputationToken_ReputationToken,
+	test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness,
+	test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness,
+	test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
+	test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
+} from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const SCALAR_DECIMALS = 18n
+const ONE_REP = 10n ** 18n
 const MAX_INT256 = 2n ** 255n - 1n
 const MIN_INT256 = -(2n ** 255n)
 
@@ -66,6 +79,15 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 				bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
 				args: [deploymentAddresses],
+			}),
+		)
+
+	const deployEscalationGameFactorySecurityPool = async (reputationTokenAddress: Address) =>
+		await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+				bytecode: `0x${test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.evm.bytecode.object}`,
+				args: [reputationTokenAddress],
 			}),
 		)
 
@@ -421,6 +443,122 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 			MAX_INT256,
 			'scalar arithmetic wrapper should preserve max int when adding zero',
+		)
+	})
+
+	test('traces factory deployment paths through transaction-backed calls', async () => {
+		const reputationTokenAddress = await deployReputationToken()
+		const escalationGameFactoryAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
+				bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
+			}),
+		)
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.sendTransaction({
+					to: escalationGameFactoryAddress,
+					data: encodeFunctionData({
+						abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
+						functionName: 'deployEscalationGame',
+						args: [ONE_REP, 2n * ONE_REP],
+					}),
+					gas: 10_000_000n,
+				}),
+			),
+			/execution reverted|reverted with reason|returned no data/i,
+		)
+		const startedGamePoolAddress = await deployEscalationGameFactorySecurityPool(reputationTokenAddress)
+		const forkedGamePoolAddress = await deployEscalationGameFactorySecurityPool(reputationTokenAddress)
+		await transact(
+			startedGamePoolAddress,
+			encodeFunctionData({
+				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+				functionName: 'deployStartedGame',
+				args: [escalationGameFactoryAddress, ONE_REP, 2n * ONE_REP],
+			}),
+		)
+		await transact(
+			forkedGamePoolAddress,
+			encodeFunctionData({
+				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+				functionName: 'deployForkedGame',
+				args: [escalationGameFactoryAddress, ONE_REP, 2n * ONE_REP, 0n],
+			}),
+		)
+		await assert.rejects(
+			transact(
+				startedGamePoolAddress,
+				encodeFunctionData({
+					abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+					functionName: 'deployStartedGame',
+					args: [escalationGameFactoryAddress, ONE_REP, 2n * ONE_REP],
+				}),
+			),
+			/Escalation game deployment failed/,
+		)
+
+		const priceOracleFactoryAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
+				bytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+				args: [zeroAddress, 100000n, 1000000, 250n * 10n ** 18n, 480, 0, 100000, 10000, 115, true, true, client.account.address, 40000n, 100000n, 30000n, 1000n],
+			}),
+		)
+		await transact(
+			priceOracleFactoryAddress,
+			encodeFunctionData({
+				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
+				functionName: 'deployPriceOracleManagerAndOperatorQueuer',
+				args: [zeroAddress, reputationTokenAddress, ZERO_BYTES32],
+			}),
+		)
+
+		const fakeZoltar = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
+				bytecode: `0x${test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
+			}),
+		)
+		const deploymentWorkerAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+			}),
+		)
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.sendTransaction({
+					to: deploymentWorkerAddress,
+					data: encodeFunctionData({
+						abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+						functionName: 'deploy',
+						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+					}),
+					gas: 10_000_000n,
+				}),
+			),
+			/SafeERC20Ops token address must contain contract code/,
+		)
+		const securityPoolDeployerAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
+			}),
+		)
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.sendTransaction({
+					to: securityPoolDeployerAddress,
+					data: encodeFunctionData({
+						abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+						functionName: 'deploy',
+						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+					}),
+					gas: 10_000_000n,
+				}),
+			),
+			/SafeERC20Ops token address must contain contract code/,
 		)
 	})
 })

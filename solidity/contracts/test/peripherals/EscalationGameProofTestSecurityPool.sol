@@ -20,7 +20,7 @@ contract EscalationGameProofTestSecurityPool {
 	}
 
 	function setEscalationGame(EscalationGame game) external {
-		require(address(escalationGame) == address(0), 'escalation game already configured');
+		require(address(escalationGame) == address(0), 'Escalation game proof harness already has a configured game');
 		escalationGame = game;
 	}
 
@@ -131,6 +131,13 @@ contract EscalationGameProofTestSecurityPool {
 		CarriedDepositProof calldata proof
 	) external returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		return escalationGame.exportUnresolvedDeposit(proof, outcome);
+	}
+
+	function exportLocalUnresolvedDeposit(
+		uint256 depositIndex,
+		BinaryOutcomes.BinaryOutcome outcome
+	) external returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
+		return escalationGame.exportUnresolvedDeposit(depositIndex, outcome);
 	}
 
 	function claimDepositForWinning(

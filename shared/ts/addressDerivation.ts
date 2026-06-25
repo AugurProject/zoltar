@@ -2,6 +2,7 @@ import { encodeAbiParameters, getAddress, getCreate2Address, getCreateAddress, k
 
 type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address
+	escalationGameProofVerifier: Address
 	openOracle: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
 	securityPoolFactory: Address
@@ -19,7 +20,7 @@ type RepTokenAddressConfig = {
 }
 
 type SecurityPoolAddressConfig = {
-	getEscalationGameInitCode: (securityPool: Address, repToken: Address) => Hex
+	getEscalationGameInitCode: (securityPool: Address, repToken: Address, proofVerifier: Address) => Hex
 	getInfraContracts: () => SecurityPoolCoreAddresses
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
@@ -134,7 +135,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 			salt: numberToBytes(0, { size: 32 }),
 		})
 		const escalationGame = getCreate2Address({
-			bytecode: config.getEscalationGameInitCode(securityPool, repToken),
+			bytecode: config.getEscalationGameInitCode(securityPool, repToken, infraContracts.escalationGameProofVerifier),
 			from: infraContracts.escalationGameFactory,
 			salt: numberToBytes(0, { size: 32 }),
 		})

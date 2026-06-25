@@ -116,7 +116,7 @@ describe('Peripherals: truth auction', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
-			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /f3/)
+			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Migration window active/)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should keep accepting migration until the parent window closes')
 		})
 
@@ -139,7 +139,8 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 			await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
-			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+			const initiateForkHash = await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+			const initiateForkReceipt = await client.waitForTransactionReceipt({ hash: initiateForkHash })
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -148,6 +149,20 @@ describe('Peripherals: truth auction', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			const denominatorBeforeStart = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+			const initiateForkLog = initiateForkReceipt.logs
+				.filter(log => log.address.toLowerCase() === getInfraContractAddresses().securityPoolForker.toLowerCase())
+				.map(log =>
+					decodeEventLog({
+						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+						data: log.data,
+						topics: log.topics,
+					}),
+				)
+				.find(log => log.eventName === 'InitiateSecurityPoolFork')
+			if (initiateForkLog === undefined) throw new Error('missing InitiateSecurityPoolFork log')
+			assert.strictEqual(initiateForkLog.args.securityPool, securityPoolAddresses.securityPool, 'InitiateSecurityPoolFork should identify the parent pool')
+			assert.strictEqual(initiateForkLog.args.auctionableRepAtFork, forkData.auctionableRepAtFork, 'InitiateSecurityPoolFork should expose the updated auctionable REP')
+			assert.strictEqual(initiateForkLog.args.ownFork, false, 'InitiateSecurityPoolFork should identify external fork mode')
 			strictEqualTypeSafe(await getMigratedRep(client, yesSecurityPool.securityPool), forkData.auctionableRepAtFork, 'all parent REP should already be represented by migrated vault ownership in this fast path')
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -609,7 +624,7 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in fork migration before the truth-auction window ends')
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork child currently reports a finalized outcome before the pool is operational')
-			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /not operational/)
+			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /Pool not operational/)
 		})
 	})
 
@@ -982,7 +997,7 @@ describe('Peripherals: truth auction', () => {
 			const { yesSecurityPool, losingBidder, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
-			await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already claimed/)
+			await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already been claimed/)
 		})
 
 		test('claimAuctionProceeds should add auctioned allowance on top of an existing migrated allowance', async () => {
