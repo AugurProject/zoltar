@@ -319,4 +319,17 @@ describe('security regression coverage', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit)
 		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, largeEscalationGameDeposit), /Oracle price is stale/)
 	})
+
+	test('initial-sized escalation deposits cannot repeatedly use stale oracle prices while bond allowance is active', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const securityBondAllowance = 100n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance)
+		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
+
+		await mockWindow.setTime(questionEndDate + 1n)
+		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit), /Oracle price is stale/)
+	})
 })

@@ -652,7 +652,8 @@ contract SecurityPool is ISecurityPool {
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
 		require(!awaitingForkContinuation, 'Awaiting fork continuation');
-		if (address(escalationGame) == address(0x0)) {
+		bool isFirstEscalationDeposit = address(escalationGame) == address(0x0);
+		if (isFirstEscalationDeposit) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'Question still active');
 			escalationGame = escalationGameFactory.deployEscalationGame(
@@ -669,7 +670,10 @@ contract SecurityPool is ISecurityPool {
 			maxAmount
 		);
 		require(depositedAmount > 0, 'No escalation deposit');
-		if (totalSecurityBondAllowance > 0 && depositedAmount > initialEscalationGameDeposit) {
+		if (
+			totalSecurityBondAllowance > 0 &&
+			(!isFirstEscalationDeposit || depositedAmount > initialEscalationGameDeposit)
+		) {
 			require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Oracle price is stale');
 		}
 		uint256 ownershipToEscrow = repToPoolOwnershipRoundUp(depositedAmount);
