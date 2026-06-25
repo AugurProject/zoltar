@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import { buildPcToSourceMap, normalizeBytecode, type ParsedSourceMapSegment } from './sourceMapParser'
 import { getSolidityBytecodeCoverageConfig, isSolidityBytecodeCoverageEnabled } from './coverageConfig'
 import { writeCoverageArtifacts } from './reporter'
+import { knownSourceMapCoverageGaps, type KnownSourceMapCoverageGapLineRule } from './sourceMapCoverageGaps'
 
 type RpcRequest = (args: { method: string; params?: unknown[] | undefined }) => Promise<unknown>
 
@@ -356,32 +357,35 @@ const isSolidityCallStatementLine = (line: string): boolean => {
 	return line.endsWith(';') || line.endsWith('(') || line.includes(');')
 }
 
-// These source-map ranges have adjacent executed PCs but no traceable PC for the line itself.
-const isKnownSourceMapCoverageGapLine = (absoluteSourcePath: string, lines: readonly string[], lineIndex: number): boolean => {
+const sourcePathMatchesKnownGap = (absoluteSourcePath: string, sourcePath: string): boolean => {
+	const normalizedAbsoluteSourcePath = absoluteSourcePath.replaceAll('\\', '/')
+	return normalizedAbsoluteSourcePath === sourcePath || normalizedAbsoluteSourcePath.endsWith(`/${sourcePath}`)
+}
+
+const isKnownSourceMapCoverageGapRuleMatch = (rule: KnownSourceMapCoverageGapLineRule, lines: readonly string[], lineIndex: number): boolean => {
 	const line = lines[lineIndex]
-	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol')) {
-		return line === 'zoltar = _zoltar;'
-	}
-	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/tokens/ERC1155.sol')) {
-		return line === 'return batchBalances;' || line === "_transferFrom(from, to, id, value, '');"
-	}
-	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameSettlement.sol')) {
-		const localExportContext = lines.slice(Math.max(0, lineIndex - 8), lineIndex).some(previousLine => previousLine.includes('uint256 depositIndex'))
-		return localExportContext && line === "require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');"
-	}
-	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameEscrow.sol')) {
-		return line === 'uint256 nextSourcePrincipalClaimed = state.sourcePrincipalClaimed + sourcePrincipalToClaim;' || line === 'state.sourcePrincipalClaimed = nextSourcePrincipalClaimed;' || line === 'state.childRepClaimed = nextChildRepClaimed;'
-	}
-	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameCarry.sol')) {
-		return (
-			line === 'if (root != bytes32(0)) return root;' ||
-			line === "require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');" ||
-			line === 'bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);' ||
-			line === "require(emptyRoot == currentRoot, 'Bad nullifier proof');" ||
-			line === 'if (amount > inheritedAmountToConsume) {'
-		)
+	if (line === undefined || !rule.linePattern.test(line)) return false
+	const precedingRule = rule.precededBy
+	if (precedingRule === undefined) return true
+	const startIndex = Math.max(0, lineIndex - precedingRule.maxPreviousLines)
+	for (let previousLineIndex = startIndex; previousLineIndex < lineIndex; previousLineIndex++) {
+		const previousLine = lines[previousLineIndex]
+		if (previousLine !== undefined && precedingRule.linePattern.test(previousLine)) return true
 	}
 	return false
+}
+
+const isKnownSourceMapCoverageGapLine = (absoluteSourcePath: string, lines: readonly string[], lineIndex: number): boolean => {
+	const fileGap = knownSourceMapCoverageGaps.find(gap => sourcePathMatchesKnownGap(absoluteSourcePath, gap.sourcePath))
+	if (fileGap === undefined) return false
+	return fileGap.lineRules.some(rule => isKnownSourceMapCoverageGapRuleMatch(rule, lines, lineIndex))
+}
+
+export const getKnownSourceMapCoverageGapRuleMatchCountsForTest = (absoluteSourcePath: string, source: string): readonly number[] => {
+	const fileGap = knownSourceMapCoverageGaps.find(gap => sourcePathMatchesKnownGap(absoluteSourcePath, gap.sourcePath))
+	if (fileGap === undefined) return []
+	const lines = stripSolidityComments(source)
+	return fileGap.lineRules.map(rule => lines.filter((_, lineIndex) => isKnownSourceMapCoverageGapRuleMatch(rule, lines, lineIndex)).length)
 }
 
 // Bytecode coverage reports production executable lines, not every source-map-spanned declaration or harness line.
