@@ -16,6 +16,8 @@ describe('Peripherals: truth auction', () => {
 		DAY,
 		GENESIS_REPUTATION_TOKEN,
 		TEST_ADDRESSES,
+		formatStorageSlot,
+		getMappingStorageSlot,
 		approveToken,
 		contractExists,
 		getChildUniverseId,
@@ -23,6 +25,7 @@ describe('Peripherals: truth auction', () => {
 		getETHBalance,
 		addressString,
 		approveAndDepositRep,
+		manipulatePriceOracle,
 		manipulatePriceOracleAndPerformOperation,
 		triggerOwnGameFork,
 		deployOriginSecurityPool,
@@ -101,6 +104,22 @@ describe('Peripherals: truth auction', () => {
 		questionData = fixture.questionData
 		questionId = fixture.questionId
 	})
+
+	const finalizeChildQuestionAsYes = async (childSecurityPool: typeof securityPoolAddresses) => {
+		const childRepToken = await getRepToken(client, childSecurityPool.securityPool)
+		const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+		await mockWindow.addStateOverrides({
+			[childRepToken]: {
+				stateDiff: {
+					[reporterBalanceSlot]: repDeposit,
+				},
+			},
+		})
+		await approveToken(client, childRepToken, getInfraContractAddresses().openOracle)
+		await manipulatePriceOracle(client, mockWindow, childSecurityPool.priceOracleManagerAndOperatorQueuer)
+		await depositToEscalationGame(client, childSecurityPool.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
+	}
 
 	describe('auction startup and migration isolation', () => {
 		test('startTruthAuction waits for the parent migration window instead of the child universe fork time', async () => {
@@ -189,6 +208,7 @@ describe('Peripherals: truth auction', () => {
 				vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
 			}
 			assert.ok(vaultRep >= requiredVaultRep, 'test setup needs unlocked REP plus escalation REP')
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
@@ -793,8 +813,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(winningVaultBeforeClaim.repDepositShare, 0n, 'winning auction participant should start without child-pool vault ownership')
 			assert.ok(winningRepClaim >= minimumWinningRepAtLimit, 'winning auction participant should receive a vault REP claim at least as good as their limit order')
 
-			await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, reportBond)
-			await mockWindow.advanceTime(10n * DAY)
+			await finalizeChildQuestionAsYes(yesSecurityPool)
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'child question should eventually finalize before auction REP redemption')
 
 			const winningRepBalanceBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidder.account.address)
@@ -836,8 +855,7 @@ describe('Peripherals: truth auction', () => {
 			assert.ok(winningARepClaim >= minimumWinningARepAtLimit, 'first filled auction participant should receive vault REP at least as good as their limit order')
 			assert.ok(winningBRepClaim >= minimumWinningBRepAtLimit, 'second filled auction participant should receive vault REP at least as good as their limit order')
 
-			await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, reportBond)
-			await mockWindow.advanceTime(10n * DAY)
+			await finalizeChildQuestionAsYes(yesSecurityPool)
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'child question should eventually finalize before multi-winner auction REP redemption')
 
 			const winningARepBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidderA.account.address)

@@ -669,6 +669,9 @@ contract SecurityPool is ISecurityPool {
 			maxAmount
 		);
 		require(depositedAmount > 0, 'No escalation deposit');
+		if (totalSecurityBondAllowance > 0) {
+			require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Oracle price is stale');
+		}
 		uint256 ownershipToEscrow = repToPoolOwnershipRoundUp(depositedAmount);
 		uint256 currentRep = poolOwnershipToRep(securityVaults[msg.sender].poolOwnership);
 		require(currentRep >= depositedAmount, 'Vault REP too low');

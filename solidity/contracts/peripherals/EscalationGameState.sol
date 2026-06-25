@@ -2,12 +2,16 @@
 pragma solidity 0.8.35;
 
 import { ReputationToken } from '../ReputationToken.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { ForkedEscrowState, Node, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameState {
+	using SafeERC20Ops for IERC20;
+
 	uint256 internal constant activationDelay = 3 days;
 	uint256 public activationTime;
 	ISecurityPool public immutable securityPool;
@@ -166,5 +170,10 @@ abstract contract EscalationGameState {
 		require(totalLocalUnresolvedRep >= amount, 'Local unresolved REP low');
 		unresolvedRepByVault[depositor] = unresolvedRep - amount;
 		totalLocalUnresolvedRep -= amount;
+	}
+
+	function _safeTransferRep(address receiver, uint256 amount) internal {
+		if (amount == 0) return;
+		IERC20(address(repToken)).safeTransfer(receiver, amount);
 	}
 }

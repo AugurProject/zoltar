@@ -17,9 +17,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		(depositor, amountToWithdraw, originalDepositAmount) = _claimDepositForWinning(depositIndex, outcome, true);
-		if (amountToWithdraw > 0) {
-			repToken.transfer(depositor, amountToWithdraw);
-		}
+		_safeTransferRep(depositor, amountToWithdraw);
 	}
 
 	function claimDepositForWinningWithoutTransfer(
@@ -80,7 +78,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 					forkedEscrowChildRep,
 					forkedEscrowPrincipal
 				);
-				repToken.transfer(depositor, amountToWithdraw);
+				_safeTransferRep(depositor, amountToWithdraw);
 				emit ClaimDeposit(
 					depositor,
 					outcome,
@@ -105,7 +103,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 				proof.cumulativeAmount
 			);
 			if (amountToWithdraw > 0) {
-				repToken.transfer(depositor, amountToWithdraw);
+				_safeTransferRep(depositor, amountToWithdraw);
 			}
 			emit ClaimDeposit(
 				depositor,
@@ -166,7 +164,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(totalEscrowedRep == 0, 'Escrowed REP remains');
 		uint256 amount = repToken.balanceOf(address(this));
 		require(amount > 0, 'No sweepable REP');
-		repToken.transfer(address(securityPool), amount);
+		_safeTransferRep(address(securityPool), amount);
 		emit ResidualRepSweptToSecurityPool(amount);
 	}
 
@@ -175,7 +173,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(receiver != address(0x0), 'REP receiver zero');
 		amount = repToken.balanceOf(address(this));
 		if (amount == 0) return 0;
-		repToken.transfer(receiver, amount);
+		_safeTransferRep(receiver, amount);
 	}
 
 	function getDepositsByOutcome(

@@ -15,7 +15,7 @@ These values are derived from the frozen mainnet protocol config, current contra
 | ID | Label | Expected Address |
 | --- | --- | --- |
 | proxyDeployer | Proxy Deployer | `0x7A0D94F55792C434d74a40883C6ed8545E406D12` |
-| deploymentStatusOracle | Deployment Status Oracle | `0xDDB6000644d9049B36A82D7FdED8DD9c3Dcc40d4` |
+| deploymentStatusOracle | Deployment Status Oracle | `0xF57d0b07495Fa035Bf60104b54b6d9B6d79E1104` |
 | multicall3 | Multicall3 | `0x77609e84c39893D5fB99049FE0F461aEB4F4Ec79` |
 | uniformPriceDualCapBatchAuctionFactory | UniformPriceDualCapBatchAuctionFactory | `0xa0780b04C01f2B325c77DF23D4A4Fe33b1d82Fb0` |
 | scalarOutcomes | ScalarOutcomes | `0x375993210Bd295D329CaB7EeD4CEE17C73493af5` |
@@ -23,11 +23,11 @@ These values are derived from the frozen mainnet protocol config, current contra
 | openOracle | OpenOracle | `0x51DED022c087758c187ce636aa5f6adE6B919abB` |
 | zoltarQuestionData | ZoltarQuestionData | `0x3fDE26F6C206DDc4991087FCeB5f13EC9f6F3E94` |
 | zoltar | Zoltar | `0x5FaE7E52e81250Fad0fCF05db42eCCCB3B0Bed95` |
-| shareTokenFactory | ShareTokenFactory | `0x8b419DcAd5c607F91dca05FD53baB3b2f6BdD8E3` |
-| priceOracleManagerAndOperatorQueuerFactory | Price Oracle Manager Factory | `0x918c0EF3Ba8A2217ECe218D438823355Fc77C36A` |
-| securityPoolForker | Security Pool Forker | `0x9502B6e58a34a3299239b7fBdcC46E5402967c2A` |
-| escalationGameFactory | Escalation Game Factory | `0xDabbFb968f01fF2c1e1859Cd9bE937d9f70AAcbe` |
-| securityPoolFactory | Security Pool Factory | `0x622787d84dbd84D22ca94881dEFdd34BBAd2ca66` |
+| shareTokenFactory | ShareTokenFactory | `0x09934813BAedB1BF75A67177a36eC849832DA206` |
+| priceOracleManagerAndOperatorQueuerFactory | Price Oracle Manager Factory | `0x9603B5d4AF76304E725135c4216b3222dA9e7860` |
+| securityPoolForker | Security Pool Forker | `0x8FA0c151807DdAfC90b36A9D38Ca40752ce92adf` |
+| escalationGameFactory | Escalation Game Factory | `0x1756313E56B8800dB87d6c33424088e84D78F683` |
+| securityPoolFactory | Security Pool Factory | `0xe6a7fb7D851d1DBa98669F1D949b9fdC13c06766` |
 
 ## Derived Side-Effect Contracts
 
@@ -35,6 +35,6 @@ These contracts are deployed by one of the deterministic deployment steps and ar
 
 | ID | Label | Expected Address |
 | --- | --- | --- |
-| escalationGameProofVerifier | Escalation Game Proof Verifier | `0x4837B6b389E03bE12EF622e559AfA5B4Af49EC72` |
+| escalationGameProofVerifier | Escalation Game Proof Verifier | `0xd873fF6FD7B071f084359dA31485c2d4A32b07AF` |
 
 Security pool deployments are deterministic per pool input rather than globally fixed. Their addresses are derived from the deployed factory set plus parent universe, universe ID, question ID, and security multiplier.

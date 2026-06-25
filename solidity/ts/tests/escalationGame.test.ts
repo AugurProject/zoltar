@@ -3,7 +3,7 @@ import { concatHex, decodeEventLog, encodeAbiParameters, encodeDeployData, encod
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { DAY, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
@@ -16,6 +16,7 @@ import {
 	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	ReputationToken_ReputationToken,
 	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
+	test_peripherals_FalseReturningERC20_FalseReturningERC20,
 	test_peripherals_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
 } from '../types/contractArtifact'
 import { getERC20Balance } from '../testsuite/simulator/utils/utilities'
@@ -78,7 +79,7 @@ describe('Escalation Game Test Suite', () => {
 		return deployment
 	}
 
-	async function deployEscalationGameWithProofPool() {
+	async function deployEscalationGameWithProofPool(repTokenAddress: Address = getRepTokenAddress(0n)) {
 		const testSecurityPoolAddress = await deployProofTestSecurityPool()
 		await writeContractAndWait(
 			client,
@@ -102,7 +103,7 @@ describe('Escalation Game Test Suite', () => {
 			data: encodeDeployData({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress],
+				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -142,6 +143,17 @@ describe('Escalation Game Test Suite', () => {
 		})
 		const verifierDeploymentReceipt = await client.waitForTransactionReceipt({ hash: verifierDeploymentHash })
 		return requireContractAddress(verifierDeploymentReceipt.contractAddress, 'incompatible proof verifier deployment address')
+	}
+
+	async function deployFalseReturningToken() {
+		const tokenDeploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: test_peripherals_FalseReturningERC20_FalseReturningERC20.abi,
+				bytecode: `0x${test_peripherals_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
+			}),
+		})
+		const tokenDeploymentReceipt = await client.waitForTransactionReceipt({ hash: tokenDeploymentHash })
+		return requireContractAddress(tokenDeploymentReceipt.contractAddress, 'false-returning token deployment address')
 	}
 
 	const startEscalation = async (escalationGameAddress: Address, startBond: bigint, nonDecisionThreshold: bigint) =>
@@ -743,6 +755,16 @@ describe('Escalation Game Test Suite', () => {
 					}),
 			),
 		)
+	})
+
+	test('claimDepositForWinning rejects false-returning REP transfers', async () => {
+		const falseReturningRepToken = await deployFalseReturningToken()
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
+		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(4n * DAY)
+
+		await assert.rejects(claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes), /token returned false/i)
 	})
 
 	test('local unresolved export rejects none outcome', async () => {
