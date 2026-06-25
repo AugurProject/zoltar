@@ -314,29 +314,6 @@ const isSolidityDeclarationOrSignatureLine = (line: string): boolean =>
 	/^(mapping|bytes\d*|u?int\d*|address|bool|string)\b.*\b(private|public|internal|external|constant|immutable)\b/.test(line) ||
 	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*[,)]?$/.test(line)
 
-const isSimpleSolidityReturn = (line: string): boolean =>
-	/^return\s+[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
-	/^return\s+[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)|\[[^\]]+\])+\s*;?$/.test(line) ||
-	/^return\s+\([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\)\s*;?$/.test(line) ||
-	/^return\s+new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
-	/^return\s+(string|bytes\d*|u?int\d*|address)\([^)]*\)\s*;?$/.test(line) ||
-	/^return\s+(true|false)\s*;?$/.test(line)
-
-const isSoliditySourceMapBookkeepingLine = (line: string): boolean =>
-	// Solc maps this guard's success path to the following nullifier-root update, and the tested
-	// revert path is not attributed back to this single require line by the debug trace source map.
-	line === "require(emptyRoot == currentRoot, 'Bad nullifier proof');" ||
-	/^(for|while)\s*\(/.test(line) ||
-	/^(\+\+|--)[A-Za-z_][A-Za-z0-9_]*\s*;?$/.test(line) ||
-	/^[A-Za-z_][A-Za-z0-9_]*(\+\+|--)\s*;?$/.test(line) ||
-	/^if\b.*\bcontinue\s*;?$/.test(line) ||
-	/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*|bytes\d*\([^)]*\)|u?int\d*\([^)]*\)|address\([^)]*\)|\d+|true|false)\s*;?$/.test(line) ||
-	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*|bytes\d*\([^)]*\)|u?int\d*\([^)]*\)|address\([^)]*\)|\d+|true|false)\s*;?$/.test(line) ||
-	/^[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)|\[[^\]]+\])+\s*=\s*[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)|\[[^\]]+\])+\s*;?$/.test(line) ||
-	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[A-Za-z_][A-Za-z0-9_.]*\($/.test(line) ||
-	/^([A-Za-z_][A-Za-z0-9_<>\[\].]*\s+)*(memory|storage|calldata)?\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*new\s+[A-Za-z_][A-Za-z0-9_]*\[\]\([^)]*\)\s*;?$/.test(line) ||
-	/\.push\(/.test(line)
-
 const isEscalationGameSourceMapBookkeepingLine = (absoluteSourcePath: string, lines: readonly string[], lineIndex: number): boolean => {
 	const line = lines[lineIndex]
 	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameSettlement.sol')) {
@@ -347,7 +324,13 @@ const isEscalationGameSourceMapBookkeepingLine = (absoluteSourcePath: string, li
 		return line === 'uint256 nextSourcePrincipalClaimed = state.sourcePrincipalClaimed + sourcePrincipalToClaim;' || line === 'state.sourcePrincipalClaimed = nextSourcePrincipalClaimed;' || line === 'state.childRepClaimed = nextChildRepClaimed;'
 	}
 	if (absoluteSourcePath.endsWith('/solidity/contracts/peripherals/EscalationGameCarry.sol')) {
-		return line === 'if (root != bytes32(0)) return root;' || line === "require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');" || line === 'bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);' || line === 'if (amount > inheritedAmountToConsume) {'
+		return (
+			line === 'if (root != bytes32(0)) return root;' ||
+			line === "require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');" ||
+			line === 'bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);' ||
+			line === "require(emptyRoot == currentRoot, 'Bad nullifier proof');" ||
+			line === 'if (amount > inheritedAmountToConsume) {'
+		)
 	}
 	return false
 }
@@ -357,9 +340,7 @@ const isSolidityCoverableLine = (line: string, absoluteSourcePath: string, lines
 	if (line === '{' || line === '}' || line === '};' || line === '});' || line === ');' || line === ',' || line === '[' || line === ']') return false
 	if (line === 'unchecked {' || line === 'assembly {') return false
 	if (isSolidityDeclarationOrSignatureLine(line)) return false
-	if (isSimpleSolidityReturn(line)) return false
 	if (isEscalationGameSourceMapBookkeepingLine(absoluteSourcePath, lines, lineIndex)) return false
-	if (isSoliditySourceMapBookkeepingLine(line)) return false
 	return /\b(if|for|while|require|revert|emit|try|catch|assembly|unchecked|delete|return)\b|[+\-*/%|&^]?=|\+\+|--|\.push\b|\.pop\b|\bnew\b/.test(line)
 }
 
@@ -372,6 +353,11 @@ const getCoverableLinesForSource = (absoluteSourcePath: string, source: string):
 	const coverableLines = lines.map((line, lineIndex) => isSolidityCoverableLine(line, absoluteSourcePath, lines, lineIndex))
 	coverableLinesByFile.set(absoluteSourcePath, coverableLines)
 	return coverableLines
+}
+
+export const getSolidityCoverableLineNumbersForTest = (absoluteSourcePath: string, source: string): readonly number[] => {
+	const lines = stripSolidityComments(source)
+	return lines.flatMap((line, lineIndex) => (isSolidityCoverableLine(line, absoluteSourcePath, lines, lineIndex) ? [lineIndex + 1] : []))
 }
 
 const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string): Promise<{ readonly absoluteSourcePath: string; readonly sourceCode: string } | undefined> => {

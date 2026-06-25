@@ -1,6 +1,9 @@
+import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from 'viem'
+import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { getSolidityCoverableLineNumbersForTest } from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -27,8 +30,62 @@ const SCALAR_DECIMALS = 18n
 const ONE_REP = 10n ** 18n
 const MAX_INT256 = 2n ** 255n - 1n
 const MIN_INT256 = -(2n ** 255n)
+const DEFAULT_ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+
+type CoverageFileSummary = {
+	readonly file: string
+	readonly lineHits: Record<string, number>
+}
 
 const bytes32 = (value: bigint): Hex => `0x${value.toString(16).padStart(64, '0')}` as Hex
+const isCoverageEnabled = () => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+const parseRpcQuantity = (value: unknown): bigint => {
+	if (typeof value !== 'string') throw new Error('Expected RPC quantity string')
+	return BigInt(value)
+}
+
+const parseRpcHash = (value: unknown): Hash => {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error('Expected RPC transaction hash')
+	return value as Hash
+}
+
+const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFileSummary> => {
+	const rawSummary = await readFile('solidity/coverage/coverage-summary.json', 'utf8')
+	const parsedSummary: unknown = JSON.parse(rawSummary)
+	if (!isRecord(parsedSummary)) throw new Error('Coverage summary must be an object')
+	const files = parsedSummary['files']
+	if (!isRecord(files)) throw new Error('Coverage summary must contain files')
+	for (const fileSummaryValue of Object.values(files)) {
+		if (!isRecord(fileSummaryValue)) continue
+		const file = fileSummaryValue['file']
+		const lineHits = fileSummaryValue['lineHits']
+		if (typeof file === 'string' && file.endsWith(sourceSuffix) && isRecord(lineHits)) {
+			const parsedLineHits: Record<string, number> = {}
+			for (const [line, hitCount] of Object.entries(lineHits)) {
+				if (typeof hitCount !== 'number') throw new Error(`Coverage line ${line} has non-numeric hit count`)
+				parsedLineHits[line] = hitCount
+			}
+			return { file, lineHits: parsedLineHits }
+		}
+	}
+	throw new Error(`Coverage summary is missing ${sourceSuffix}`)
+}
+
+test('coverage classifier keeps simple executable lines coverable so misses stay visible', () => {
+	const source = [
+		'contract CoverageClassifierRegression {',
+		'    function branch(bool value) external pure returns (bool) {',
+		'        bool observed = value;',
+		'        if (observed) return true;',
+		'        return false;',
+		'    }',
+		'}',
+	].join('\n')
+
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/CoverageClassifierRegression.sol', source), [3, 4, 5])
+})
 
 describe('Solidity bytecode coverage helpers', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -96,6 +153,46 @@ describe('Solidity bytecode coverage helpers', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		participantClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await setupTestAccounts(mockWindow)
+	})
+
+	test('attributes raw transaction deployment coverage using transaction input fetched by hash', async () => {
+		const rawAccount = privateKeyToAccount(DEFAULT_ANVIL_PRIVATE_KEY)
+		await mockWindow.setBalance(rawAccount.address, 10n ** 20n)
+		const nonce = parseRpcQuantity(
+			await mockWindow.request({
+				method: 'eth_getTransactionCount',
+				params: [rawAccount.address, 'latest'],
+			}),
+		)
+		const deploymentData = encodeDeployData({
+			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+			bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
+			args: [[client.account.address]],
+		})
+		const serializedTransaction = await rawAccount.signTransaction({
+			chainId: 1,
+			data: deploymentData,
+			gas: 1_000_000n,
+			gasPrice: 0n,
+			nonce: Number(nonce),
+		})
+		const hash = parseRpcHash(
+			await mockWindow.request({
+				method: 'eth_sendRawTransaction',
+				params: [serializedTransaction],
+			}),
+		)
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		assert.strictEqual(receipt.status, 'success', 'raw deployment transaction should succeed')
+		assert.notStrictEqual(receipt.contractAddress, undefined, 'raw deployment should produce a contract address')
+
+		if (isCoverageEnabled()) {
+			const deploymentStatusCoverage = await readCoverageFileSummary('/solidity/contracts/DeploymentStatusOracle.sol')
+			assert.ok(
+				(deploymentStatusCoverage.lineHits['14'] ?? 0) > 0,
+				'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash',
+			)
+		}
 	})
 
 	test('traces deployment status, ERC20 metadata, and safe ERC20 success paths through transactions', async () => {
