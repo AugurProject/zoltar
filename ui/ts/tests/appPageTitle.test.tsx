@@ -33,15 +33,15 @@ describe('app page titles', () => {
 	test('maps routes and active views to user-facing page titles', () => {
 		const cases: Array<{ input: AppPageTitleInput; title: string }> = [
 			{ input: { ...baseInput, route: 'deploy' }, title: 'Deploy Contracts' },
-			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Questions' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Markets' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
-			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Zoltar' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Oracle' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'browse' }, title: 'Security Pools' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'create' }, title: 'Create Security Pool' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'operate' }, title: 'Operate Security Pool' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'browse' }, title: 'Oracle Reports' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Create Oracle Report Game' },
+			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Advanced Oracle Report Creation' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'selected-report' }, title: 'Selected Oracle Report' },
 			{ input: { ...baseInput, route: 'not-found' }, title: 'Page Not Found' },
 		]

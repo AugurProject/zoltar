@@ -267,7 +267,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await fillOpenOracleCreateForm()
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Create Open Oracle Game' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Create Standalone Oracle Game' }))
 
 		await waitForLatestAction('createReportInstance')
 		await waitFor(async () => {

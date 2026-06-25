@@ -71,7 +71,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 	return (
 		<SectionBlock
 			density='compact'
-			title='Questions'
+			title='Markets'
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}

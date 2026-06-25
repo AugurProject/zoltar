@@ -190,18 +190,18 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
 	})
 
-	test('keeps registry load errors inline instead of opening liquidation', async () => {
+	test('keeps pool-list load errors inline instead of opening liquidation', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					securityPoolOverviewError: 'Failed to load security pool registry page',
+					securityPoolOverviewError: 'Failed to load security pools',
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('alert').textContent).toContain('Failed to load security pool registry page')
+		expect(documentQueries.getByRole('alert').textContent).toContain('Failed to load security pools')
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 
@@ -324,7 +324,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('Operational')).toBeNull()
 	})
 
-	test('does not duplicate refresh guidance when the registry is empty', async () => {
+	test('does not duplicate refresh guidance when the pool list is empty', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -340,7 +340,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('Refresh pools to check again.')).toBeNull()
 	})
 
-	test('opens security pool creation from the empty registry state', async () => {
+	test('opens security pool creation from the empty pool-list state', async () => {
 		let createSecurityPoolClicks = 0
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -362,7 +362,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(createSecurityPoolClicks).toBe(1)
 	})
 
-	test('keeps the empty registry CTA visible during a background refresh', async () => {
+	test('keeps the empty pool-list CTA visible during a background refresh', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -381,7 +381,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
 	})
 
-	test('shows a loading browse state before the first registry page loads', async () => {
+	test('shows a loading browse state before the first pool page loads', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -399,7 +399,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('None yet')).toBeNull()
 	})
 
-	test('does not show the empty registry CTA before the first registry page loads', async () => {
+	test('does not show the empty pool-list CTA before the first pool page loads', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -414,13 +414,40 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const hasLoadingOrRefreshCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Refresh pools') !== null
-		expect(hasLoadingOrRefreshCopy).toBe(true)
+		const hasLoadingOrLoadCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Load security pools to check what is available in this universe.') !== null
+		expect(hasLoadingOrLoadCopy).toBe(true)
 		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create Security Pool' })).toBeNull()
 	})
 
-	test('does not infer browse page count from selected-pool cache before the first registry page loads', async () => {
+	test('offers an explicit retry action when the pool list fails to load', async () => {
+		const requestedPages: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPoolPage: false,
+					loadingSecurityPoolPage: false,
+					onLoadSecurityPoolPage: (pageIndex, pageSize) => {
+						requestedPages.push(`${pageIndex}:${pageSize}`)
+					},
+					securityPoolOverviewError: 'Failed to load security pools.',
+					securityPoolPage: undefined,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const retryButton = within(document.body).getByRole('button', { name: 'Retry Loading Pools' })
+		expect(within(document.body).queryByRole('button', { name: 'Load Security Pools' })).toBeNull()
+		await act(() => {
+			fireEvent.click(retryButton)
+		})
+
+		expect(requestedPages).toContain('0:6')
+	})
+
+	test('does not infer browse page count from selected-pool cache before the first pool page loads', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -445,7 +472,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 	})
 
-	test('filters the registry by the derived Ended state', async () => {
+	test('filters the pool list by the derived Ended state', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -528,7 +555,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
 	})
 
-	test('stops showing a loading state when a requested registry page fails to load', async () => {
+	test('stops showing a loading state when a requested pool page fails to load', async () => {
 		const failedPageLoad = createDeferred<void>()
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -566,7 +593,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		await waitFor(() => {
 			expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
-			expect(documentQueries.getByText('Refresh pools')).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Load Security Pools' })).not.toBeNull()
 		})
 	})
 

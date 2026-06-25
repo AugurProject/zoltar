@@ -59,9 +59,9 @@ export function getPoolRegistryPresentation(
 			})
 		if (!input.hasLoaded)
 			return createPresentation('not_checked', {
-				actionHint: 'Refresh pools',
 				badgeLabel: 'Not checked',
 				badgeTone: 'muted',
+				detail: 'Load security pools to check what is available in this universe.',
 			})
 		return createPresentation('empty', {
 			actionHint: 'Create a pool from a binary question to enable trading, reporting, and vault collateral workflows.',

@@ -201,7 +201,23 @@ describe('OverviewPanels', () => {
 
 		expect(routeTitleRow.querySelector('.route-header-badge')).toBeNull()
 		expect(routeHeaderMain.children[1]).toBe(badgeSlot)
-		expect(badgeSlot.textContent?.trim()).toBe('Forked')
+		expect(badgeSlot.textContent).toContain('Read-only')
+		expect(badgeSlot.textContent).toContain('Forked')
+	})
+
+	test('distinguishes browser simulation from public network state', async () => {
+		const documentQueries = await renderOverviewPanels({
+			readBackendStatus: {
+				blockNumber: 12n,
+				blockTimestamp: undefined,
+				rpcSource: 'default',
+				rpcUrl: 'browser-simulation',
+				transportMode: 'provider',
+			},
+		})
+
+		expect(documentQueries.getByText('Simulation')).toBeDefined()
+		expect(document.body.textContent ?? '').toContain('Simulation mode uses browser-local contract state.')
 	})
 
 	test('shows the parent universe metric for child universes', async () => {
