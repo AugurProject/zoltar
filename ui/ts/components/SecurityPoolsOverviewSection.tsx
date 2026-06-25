@@ -135,10 +135,10 @@ export function SecurityPoolsOverviewSection({
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
 	return (
-		<RouteWorkflowPanel showHeader={false} title='Pool Registry'>
+		<RouteWorkflowPanel showHeader={false} title='Security Pools'>
 			<SectionBlock
 				density='compact'
-				title='Pool Registry'
+				title='Security Pools'
 				description='Browse deployed pools, inspect their vaults, and open a selected pool workflow.'
 				actions={
 					<PaginationControls
@@ -159,7 +159,7 @@ export function SecurityPoolsOverviewSection({
 				{securityPoolOverviewError === undefined ? undefined : (
 					<div className='actions pool-registry-recovery-actions'>
 						<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-							{loadingSecurityPoolPage ? <LoadingText>Retrying pool registry...</LoadingText> : 'Retry Pool Registry'}
+							{loadingSecurityPoolPage ? <LoadingText>Retrying security pools...</LoadingText> : 'Retry Loading Pools'}
 						</button>
 					</div>
 				)}
@@ -206,10 +206,10 @@ export function SecurityPoolsOverviewSection({
 										Create Security Pool
 									</button>
 								)
-							if (isUncheckedRegistry)
+							if (isUncheckedRegistry && securityPoolOverviewError === undefined)
 								return (
 									<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-										Load Pool Registry
+										Load Security Pools
 									</button>
 								)
 							return undefined

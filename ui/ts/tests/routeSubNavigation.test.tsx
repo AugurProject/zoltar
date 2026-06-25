@@ -31,6 +31,7 @@ describe('RouteSubNavigation', () => {
 				options: [
 					{ href: '#/zoltar?zoltarView=questions', label: 'Browse Markets', value: 'questions' },
 					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
+					{ disabled: true, label: 'Migrate REP', reason: 'Fork Oracle before migrating REP.', value: 'migrate' },
 				],
 				value: 'questions',
 			}),
@@ -46,5 +47,9 @@ describe('RouteSubNavigation', () => {
 		const questionsTab = documentQueries.getByRole('tab', { name: 'Browse Markets' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')
 		expect(questionsTab.getAttribute('href')).toBe('#/zoltar?zoltarView=questions')
+		const migrateRepTab = documentQueries.getByRole('tab', { name: 'Migrate REP' }) as HTMLButtonElement
+		expect(migrateRepTab.disabled).toBe(true)
+		expect(migrateRepTab.title).toBe('Fork Oracle before migrating REP.')
+		expect(migrateRepTab.getAttribute('aria-description')).toBe('Fork Oracle before migrating REP.')
 	})
 })

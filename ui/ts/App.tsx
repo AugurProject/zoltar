@@ -703,7 +703,7 @@ export function App() {
 						label: 'Migrate REP',
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: 'Fork Zoltar before migrating REP.' }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: 'Fork Oracle before migrating REP.' }),
 					},
 				]}
 			/>

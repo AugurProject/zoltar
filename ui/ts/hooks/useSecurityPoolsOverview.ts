@@ -134,7 +134,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				securityPoolPage.value = page
 			},
 			onError: error => {
-				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pool registry page')
+				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
 			},
 		})
 	}

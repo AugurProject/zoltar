@@ -61,7 +61,7 @@ export function getPoolRegistryPresentation(
 			return createPresentation('not_checked', {
 				badgeLabel: 'Not checked',
 				badgeTone: 'muted',
-				detail: 'Load the registry to check for deployed security pools.',
+				detail: 'Load security pools to check what is available in this universe.',
 			})
 		return createPresentation('empty', {
 			actionHint: 'Create a pool from a binary question to enable trading, reporting, and vault collateral workflows.',
