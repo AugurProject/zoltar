@@ -3,7 +3,7 @@ import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { getSolidityCoverableLineNumbersForTest } from '../coverage/traceToSource'
+import { flushSolidityBytecodeCoverageForTest, getSolidityCoverableLineNumbersForTest } from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -74,17 +74,44 @@ const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFi
 }
 
 test('coverage classifier keeps simple executable lines coverable so misses stay visible', () => {
+	const source = ['contract CoverageClassifierRegression {', '    function branch(bool value) external pure returns (bool) {', '        bool observed = value;', '        if (observed) return true;', '        return false;', '    }', '}'].join('\n')
+
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/CoverageClassifierRegression.sol', source), [3, 4, 5])
+})
+
+test('coverage classifier excludes declarations and scaffold-only lines from production totals', () => {
+	const source = ['pragma solidity ^0.8.0;', 'contract CoverageClassifierScaffold {', '    event Observed(uint256 value);', '    uint256 public total;', '    function observe(uint256 value) external {', '        total = value;', '        emit Observed(value);', '    }', '}'].join('\n')
+
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/CoverageClassifierScaffold.sol', source), [6, 7])
+})
+
+test('coverage classifier keeps side-effect-only call statements coverable', () => {
 	const source = [
-		'contract CoverageClassifierRegression {',
-		'    function branch(bool value) external pure returns (bool) {',
-		'        bool observed = value;',
-		'        if (observed) return true;',
-		'        return false;',
+		'contract CoverageClassifierCalls {',
+		'    function execute(address vault, uint256 amount) external {',
+		'        token.safeTransfer(receiver, amount);',
+		'        _syncActiveVault(vault);',
+		'        burnRep(repToken, msg.sender, amount);',
+		'        securityPool.configureVault(',
+		'            vault,',
+		'            amount',
+		'        );',
 		'    }',
 		'}',
 	].join('\n')
 
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/CoverageClassifierRegression.sol', source), [3, 4, 5])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/CoverageClassifierCalls.sol', source), [3, 4, 5, 6])
+})
+
+test('coverage classifier keeps known untraceable source-map lines out of production totals', () => {
+	assert.deepStrictEqual(
+		getSolidityCoverableLineNumbersForTest(
+			'/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol',
+			['contract ERC1155 {', '    function balanceOfBatch() external returns (uint256[] memory) {', '        return batchBalances;', '    }', '    function legacyTransfer(address from, address to, uint256 id, uint256 value) internal {', "        _transferFrom(from, to, id, value, '');", '    }', '}'].join('\n'),
+		),
+		[],
+	)
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol', ['contract SecurityPoolForkerVaultMigrationBase {', '    constructor() {', '        zoltar = _zoltar;', '    }', '}'].join('\n')), [])
 })
 
 describe('Solidity bytecode coverage helpers', () => {
@@ -187,11 +214,9 @@ describe('Solidity bytecode coverage helpers', () => {
 		assert.notStrictEqual(receipt.contractAddress, undefined, 'raw deployment should produce a contract address')
 
 		if (isCoverageEnabled()) {
+			await flushSolidityBytecodeCoverageForTest()
 			const deploymentStatusCoverage = await readCoverageFileSummary('/solidity/contracts/DeploymentStatusOracle.sol')
-			assert.ok(
-				(deploymentStatusCoverage.lineHits['14'] ?? 0) > 0,
-				'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash',
-			)
+			assert.ok((deploymentStatusCoverage.lineHits['14'] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
 		}
 	})
 

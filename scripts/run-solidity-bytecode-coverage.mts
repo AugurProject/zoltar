@@ -143,10 +143,6 @@ const testShards = [
 		'solidity/ts/tests/auction.test.ts',
 	],
 	[
-		'solidity/ts/tests/erc1155.test.ts',
-		'solidity/ts/tests/escalationGame_forkThreshold.test.ts',
-		'solidity/ts/tests/zoltar.test.ts',
-		'solidity/ts/tests/deploymentStatusOracle.test.ts',
 		'solidity/ts/tests/coverageHelpers.test.ts',
 		'solidity/ts/tests/priceOracleSecurity.test.ts',
 		'solidity/ts/tests/anvilWindowEthereum.test.ts',
