@@ -73,7 +73,7 @@ describe('Auction tick math fuzz', () => {
 						address: auctionAddress,
 						args: [tick],
 					}),
-				/tick out of bounds/,
+				/Auction tick is outside the supported price range/,
 			)
 		}
 	})
