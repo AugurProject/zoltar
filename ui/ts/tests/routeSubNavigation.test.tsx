@@ -26,10 +26,10 @@ describe('RouteSubNavigation', () => {
 	test('renders linked secondary tabs without extra route path text', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(RouteSubNavigation, {
-				ariaLabel: 'Question views',
+				ariaLabel: 'Market views',
 				onChange: () => undefined,
 				options: [
-					{ href: '#/zoltar?zoltarView=questions', label: 'Questions', value: 'questions' },
+					{ href: '#/zoltar?zoltarView=questions', label: 'Browse Markets', value: 'questions' },
 					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
 				],
 				value: 'questions',
@@ -38,12 +38,12 @@ describe('RouteSubNavigation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Zoltar > Questions')).toBeNull()
+		expect(documentQueries.queryByText('Zoltar > Browse Markets')).toBeNull()
 		expect(document.body.querySelector('.route-subnav-shell')).not.toBeNull()
 		expect(document.body.querySelector('.route-subtab-nav')).not.toBeNull()
-		expect(documentQueries.getByRole('tablist', { name: 'Question views' })).not.toBeNull()
+		expect(documentQueries.getByRole('tablist', { name: 'Market views' })).not.toBeNull()
 
-		const questionsTab = documentQueries.getByRole('tab', { name: 'Questions' }) as HTMLAnchorElement
+		const questionsTab = documentQueries.getByRole('tab', { name: 'Browse Markets' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')
 		expect(questionsTab.getAttribute('href')).toBe('#/zoltar?zoltarView=questions')
 	})

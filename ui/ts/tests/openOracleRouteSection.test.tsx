@@ -251,7 +251,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Open Oracle Game', 'Need 100 more ETH in this wallet to create the selected Open Oracle game.')
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle game.')
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {

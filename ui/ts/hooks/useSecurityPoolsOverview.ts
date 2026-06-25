@@ -4,7 +4,7 @@ import { loadAllSecurityPools, loadOracleManagerDetails, loadSecurityPoolPage, q
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
@@ -26,6 +26,25 @@ type UseSecurityPoolsOverviewParameters = {
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
+}
+
+const SECURITY_POOL_PAGE_FALLBACK_DETAILS = ['no contract data was returned', 'returned no data']
+
+export function shouldFallbackToAllSecurityPoolsPage(error: unknown) {
+	const detail = getErrorDetail(error)
+	if (detail === undefined) return false
+	const normalizedDetail = detail.toLowerCase()
+	return SECURITY_POOL_PAGE_FALLBACK_DETAILS.some(fallbackDetail => normalizedDetail.includes(fallbackDetail))
+}
+
+export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
+	const startIndex = pageIndex * pageSize
+	return {
+		pageIndex,
+		pageSize,
+		poolCount: BigInt(pools.length),
+		pools: pools.slice(startIndex, startIndex + pageSize),
+	}
 }
 
 export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
@@ -95,7 +114,20 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				if (!isCurrent()) return
 				securityPoolOverviewError.value = undefined
 			},
-			load: async () => await loadSecurityPoolPage(createConnectedReadClient(), pageIndex, pageSize, accountAddress),
+			load: async () => {
+				const readClient = createConnectedReadClient()
+				try {
+					return await loadSecurityPoolPage(readClient, pageIndex, pageSize, accountAddress)
+				} catch (error) {
+					if (!shouldFallbackToAllSecurityPoolsPage(error)) throw error
+					if (hasLoadedSecurityPools.value) return createSecurityPoolPageFromLoadedPools(securityPools.value, pageIndex, pageSize)
+					const pools = await loadAllSecurityPools(readClient, {
+						...(accountAddress === undefined ? {} : { accountAddress }),
+						vaultDetailMode: 'selected',
+					})
+					return createSecurityPoolPageFromLoadedPools(pools, pageIndex, pageSize)
+				}
+			},
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true
 				securityPoolBrowseCount.value = page.poolCount

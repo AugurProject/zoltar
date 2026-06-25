@@ -414,10 +414,36 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const hasLoadingOrRefreshCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Refresh pools') !== null
-		expect(hasLoadingOrRefreshCopy).toBe(true)
+		const hasLoadingOrLoadCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Load the registry to check for deployed security pools.') !== null
+		expect(hasLoadingOrLoadCopy).toBe(true)
 		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create Security Pool' })).toBeNull()
+	})
+
+	test('offers an explicit retry action when the pool registry fails to load', async () => {
+		const requestedPages: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					hasLoadedSecurityPoolPage: false,
+					loadingSecurityPoolPage: false,
+					onLoadSecurityPoolPage: (pageIndex, pageSize) => {
+						requestedPages.push(`${pageIndex}:${pageSize}`)
+					},
+					securityPoolOverviewError: 'Failed to load security pool registry page.',
+					securityPoolPage: undefined,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const retryButton = within(document.body).getByRole('button', { name: 'Retry Pool Registry' })
+		await act(() => {
+			fireEvent.click(retryButton)
+		})
+
+		expect(requestedPages).toContain('0:6')
 	})
 
 	test('does not infer browse page count from selected-pool cache before the first registry page loads', async () => {
@@ -566,7 +592,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		await waitFor(() => {
 			expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
-			expect(documentQueries.getByText('Refresh pools')).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Load Pool Registry' })).not.toBeNull()
 		})
 	})
 

@@ -16,7 +16,8 @@ void describe('user copy helpers', () => {
 
 	void test('maps empty pool registry states semantically', () => {
 		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('not_checked')
-		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBeUndefined()
+		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('Load the registry to check for deployed security pools.')
+		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBeUndefined()
 		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('empty')
 		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('No security pools are available in this universe yet.')
 		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBe('Create a pool from a binary question to enable trading, reporting, and vault collateral workflows.')

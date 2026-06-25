@@ -7,7 +7,7 @@ export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDep
 	if (showDeployTab) options.push({ value: 'deploy', label: 'Deploy', href: deployRoute })
 	options.push({
 		value: 'zoltar',
-		label: 'Questions',
+		label: 'Markets',
 		href: marketRoute,
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),

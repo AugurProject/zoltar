@@ -27,14 +27,15 @@ describe('LookupFieldRow', () => {
 		const renderedComponent = await renderIntoDocument(<LookupFieldRow action={<button type='button'>Refresh</button>} disabled inputClassName='custom-input' invalid label='Wallet Address' onInput={() => undefined} placeholder='0x...' value='0x123' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const input = within(document.body).getByRole('textbox') as HTMLInputElement
+		const documentQueries = within(document.body)
+		const input = documentQueries.getByLabelText('Wallet Address') as HTMLInputElement
 
 		expect(input.classList.contains('form-input')).toBe(true)
 		expect(input.classList.contains('custom-input')).toBe(true)
 		expect(input.disabled).toBe(true)
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		expect(input.placeholder).toBe('0x...')
-		expect(within(document.body).getByText('Refresh')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Refresh' })).not.toBeNull()
 	})
 
 	test('forwards input changes through the shared input wrapper', async () => {

@@ -7,7 +7,7 @@ export const OPEN_ORACLE_ACTION_SAFETY_ENTRIES = [
 	createReasonedActionSafetyEntry('open-oracle.submitInitialReport', 'Submit Initial Report', createReasonedActionSafetyFixtures('Submit Initial Report')),
 	createReasonedActionSafetyEntry('open-oracle.dispute', 'Dispute Report', createReasonedActionSafetyFixtures('Dispute Report')),
 	createReasonedActionSafetyEntry('open-oracle.settle', 'Settle Report', createReasonedActionSafetyFixtures('Settle Report')),
-	createReasonedActionSafetyEntry('open-oracle.createReportInstance', 'Create Open Oracle Game', createReasonedActionSafetyFixtures('Create Open Oracle Game')),
+	createReasonedActionSafetyEntry('open-oracle.createReportInstance', 'Create Standalone Oracle Game', createReasonedActionSafetyFixtures('Create Standalone Oracle Game')),
 	createReasonedActionSafetyEntry('open-oracle.executeStagedOperation', 'Execute Staged Operation', createReasonedActionSafetyFixtures('Execute Staged Operation')),
 	createReasonedActionSafetyEntry('open-oracle.queueOperation', 'Queue Operation', createReasonedActionSafetyFixtures('Queue Operation')),
 	createReasonedActionSafetyEntry('open-oracle.requestPrice', 'Request Price', createReasonedActionSafetyFixtures('Request Price')),

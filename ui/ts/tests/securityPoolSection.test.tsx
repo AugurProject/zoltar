@@ -139,6 +139,34 @@ describe('SecurityPoolSection', () => {
 		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
 	})
 
+	test('loads and previews the pasted question before pool creation', async () => {
+		let loadMarketCount = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketDetails: createMarketDetails({
+						description: 'Previewed binary question',
+						title: 'Question ready for a pool',
+					}),
+					onLoadMarket: () => {
+						loadMarketCount += 1
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Paste a binary Zoltar question ID, or use "Use For Create Pool" after creating a question.')).not.toBeNull()
+		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
+		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Load Question' }))
+
+		expect(loadMarketCount).toBe(1)
+	})
+
 	test('renders the created pool banner detail with the shared address value component', async () => {
 		const poolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 		const renderedComponent = await renderIntoDocument(
