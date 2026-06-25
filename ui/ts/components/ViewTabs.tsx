@@ -71,6 +71,7 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			id: tabId,
 			role: 'tab',
 			'aria-controls': option.panelId,
+			'aria-description': option.reason,
 			'aria-selected': active,
 			tabIndex: active ? 0 : -1,
 			title: option.reason,

@@ -143,17 +143,17 @@ describe('MarketSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders the Questions title without local view tabs in the section header', async () => {
+	test('renders the Markets title without local view tabs in the section header', async () => {
 		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const questionsTitle = document.body.querySelector('h3')
-		if (!(questionsTitle instanceof HTMLElement)) throw new Error('Expected to find the Questions section heading')
-		expect(questionsTitle.textContent).toBe('Questions')
+		if (!(questionsTitle instanceof HTMLElement)) throw new Error('Expected to find the Markets section heading')
+		expect(questionsTitle.textContent).toBe('Markets')
 
 		const sectionHeader = questionsTitle.closest('.section-block-header')
-		if (sectionHeader === null) throw new Error('Expected Questions title to render inside a section header')
-		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Question views"]')).toBeNull()
+		if (sectionHeader === null) throw new Error('Expected Markets title to render inside a section header')
+		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Market views"]')).toBeNull()
 	})
 
 	test('auto-loads questions once when opening the questions view without loaded data', async () => {

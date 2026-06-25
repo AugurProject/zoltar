@@ -14,9 +14,9 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 	if (route === 'deploy') return 'Deploy Contracts'
 	if (route === 'zoltar') {
 		if (activeZoltarView === 'create') return 'Create Question'
-		if (activeZoltarView === 'fork') return 'Fork Zoltar'
+		if (activeZoltarView === 'fork') return 'Fork Oracle'
 		if (activeZoltarView === 'migrate') return 'Migrate REP'
-		return 'Questions'
+		return 'Markets'
 	}
 	if (route === 'security-pools') {
 		if (activeSecurityPoolsView === 'create') return 'Create Security Pool'
@@ -24,7 +24,7 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 		return 'Security Pools'
 	}
 	if (route === 'open-oracle') {
-		if (activeOpenOracleView === 'create') return 'Create Oracle Report Game'
+		if (activeOpenOracleView === 'create') return 'Advanced Oracle Report Creation'
 		if (activeOpenOracleView === 'selected-report') return 'Selected Oracle Report'
 		return 'Oracle Reports'
 	}

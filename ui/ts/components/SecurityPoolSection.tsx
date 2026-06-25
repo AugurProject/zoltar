@@ -3,6 +3,7 @@ import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
@@ -22,6 +23,7 @@ export function SecurityPoolSection({
 	loadingMarketDetails,
 	marketDetails,
 	onCreateSecurityPool,
+	onLoadMarket,
 	onOpenCreatedPool,
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
@@ -123,15 +125,30 @@ export function SecurityPoolSection({
 				<>
 					<SectionBlock title='Create Pool' description='Choose the binary question and security multiplier before deploying the pool.'>
 						<div className='form-grid'>
-							<label className='field'>
-								<span>Question ID</span>
-								<FormInput value={securityPoolForm.marketId} onInput={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })} placeholder='0x...' />
-							</label>
+							<div className='field'>
+								<LookupFieldRow
+									label='Question ID'
+									value={securityPoolForm.marketId}
+									onInput={marketId => onSecurityPoolFormChange({ marketId })}
+									placeholder='0x...'
+									action={
+										<button className='secondary' type='button' onClick={onLoadMarket} disabled={loadingMarketDetails || securityPoolForm.marketId.trim() === ''}>
+											{loadingMarketDetails ? <LoadingText>Loading...</LoadingText> : 'Load Question'}
+										</button>
+									}
+								/>
+								<p className='field-help'>Paste a binary Zoltar question ID, or use "Use For Create Pool" after creating a question.</p>
+							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>
 									<LoadingText>Loading question...</LoadingText>
 								</p>
 							) : undefined}
+							{marketDetails === undefined ? undefined : (
+								<div className='loaded-question-preview'>
+									<Question question={marketDetails} variant='preview' />
+								</div>
+							)}
 
 							<label className='field'>
 								<span>Security Multiplier</span>

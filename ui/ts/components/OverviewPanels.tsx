@@ -60,12 +60,31 @@ export function OverviewPanels({
 	})()
 	const readBackendLabel = isProviderReadBackend ? 'provider' : `${effectiveReadBackendStatus.transportMode} / ${effectiveReadBackendStatus.rpcSource}`
 	const readBackendTitle = isProviderReadBackend ? `Reads are using the connected wallet provider. Configured fallback RPC: ${effectiveReadBackendStatus.rpcUrl}` : effectiveReadBackendStatus.rpcUrl
+	const environmentBadge = (() => {
+		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>Simulation</Badge>
+		if (accountState.address === undefined) return <Badge tone='pending'>Read-only</Badge>
+		return <Badge tone='ok'>Connected</Badge>
+	})()
+	const environmentDescription = (() => {
+		if (isBrowserSimulationReadBackend) return 'Simulation mode uses browser-local contract state. Transactions do not affect a public network.'
+		if (accountState.address === undefined) return 'Read-only mode shows contract state. Connect a wallet before submitting transactions.'
+		return undefined
+	})()
 	const operationsHeaderDescription = (() => {
-		if (!universeHasForked) return undefined
-		if (universeForkTime === undefined) return 'Zoltar has forked.'
+		const forkDescription = (() => {
+			if (!universeHasForked) return undefined
+			if (universeForkTime === undefined) return 'Zoltar has forked.'
+			return (
+				<>
+					Zoltar forked on <TimestampValue timestamp={universeForkTime} />.
+				</>
+			)
+		})()
+		if (environmentDescription === undefined) return forkDescription
+		if (forkDescription === undefined) return environmentDescription
 		return (
 			<>
-				Zoltar forked on <TimestampValue timestamp={universeForkTime} />.
+				{environmentDescription} {forkDescription}
 			</>
 		)
 	})()
@@ -80,7 +99,12 @@ export function OverviewPanels({
 							</button>
 						) : undefined
 					}
-					badge={universeHasForked ? <Badge tone='warning'>Forked</Badge> : undefined}
+					badge={
+						<span className='environment-badge-row'>
+							{environmentBadge}
+							{universeHasForked ? <Badge tone='warning'>Forked</Badge> : undefined}
+						</span>
+					}
 					description={operationsHeaderDescription}
 					eyebrow='Operations'
 					title='Augur Placeholder'

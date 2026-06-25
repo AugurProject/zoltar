@@ -118,6 +118,33 @@ describe('MarketCreateQuestionSection', () => {
 		expect(updates.some(update => update.title === 'Updated title')).toBe(true)
 	})
 
+	test('shows timing guidance without duplicating validation notices', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ title: '' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Times use your browser timezone. Reporting and trading settlement depend on the end time.')).not.toBeNull()
+		expect(documentQueries.getAllByText('Missing required fields: Title')).toHaveLength(1)
+	})
+
 	test('renders selected market details and triggers selection callbacks', async () => {
 		let useForForkCount = 0
 		let useForPoolCount = 0

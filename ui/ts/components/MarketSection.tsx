@@ -72,7 +72,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title='Questions'>
+			<SectionBlock density='compact' title='Markets'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}

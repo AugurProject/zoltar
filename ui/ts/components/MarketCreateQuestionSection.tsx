@@ -168,6 +168,7 @@ export function MarketCreateQuestionSection({
 								<FormInput invalid={marketFormValidation.fieldErrors.endTime !== undefined} type='datetime-local' value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
 							</label>
 						</div>
+						<p className='field-help'>Times use your browser timezone. Reporting and trading settlement depend on the end time.</p>
 
 						{marketForm.marketType === 'categorical' ? (
 							<div className='field'>
@@ -241,7 +242,6 @@ export function MarketCreateQuestionSection({
 									})(),
 								}}
 							/>
-							{marketFormValidation.notice === undefined ? undefined : <p className='form-validation-inline'>{marketFormValidation.notice}</p>}
 						</div>
 					</div>
 				</SectionBlock>

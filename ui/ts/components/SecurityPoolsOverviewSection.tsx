@@ -7,6 +7,7 @@ import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LiquidationModal } from './LiquidationModal.js'
+import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { PaginationControls } from './PaginationControls.js'
@@ -105,6 +106,9 @@ export function SecurityPoolsOverviewSection({
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const hasPreviousPage = resolvedPageIndex > 0
 	const hasNextPage = getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
+	const retryPoolRegistryLoad = () => {
+		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE)
+	}
 	useEffect(() => {
 		if (resolvedPageIndex === pageIndex) return
 		setPageIndex(resolvedPageIndex)
@@ -131,10 +135,10 @@ export function SecurityPoolsOverviewSection({
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
 	return (
-		<RouteWorkflowPanel showHeader={false} title='Pool Registry'>
+		<RouteWorkflowPanel showHeader={false} title='Security Pools'>
 			<SectionBlock
 				density='compact'
-				title='Pool Registry'
+				title='Security Pools'
 				description='Browse deployed pools, inspect their vaults, and open a selected pool workflow.'
 				actions={
 					<PaginationControls
@@ -152,6 +156,13 @@ export function SecurityPoolsOverviewSection({
 				}
 			>
 				<ErrorNotice message={securityPoolOverviewError} />
+				{securityPoolOverviewError === undefined ? undefined : (
+					<div className='actions pool-registry-recovery-actions'>
+						<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
+							{loadingSecurityPoolPage ? <LoadingText>Retrying security pools...</LoadingText> : 'Retry Loading Pools'}
+						</button>
+					</div>
+				)}
 				<div className='filter-toolbar'>
 					<label className='field'>
 						<span>Search Pools</span>
@@ -187,20 +198,24 @@ export function SecurityPoolsOverviewSection({
 					if (pagedSecurityPools.length === 0) {
 						if (registryPresentation === undefined) return undefined
 						const isEmptyRegistry = registryPresentation.key === 'empty'
+						const isUncheckedRegistry = registryPresentation.key === 'not_checked'
+						const registryActions = (() => {
+							if (isEmptyRegistry && onCreateSecurityPool !== undefined)
+								return (
+									<button className='primary' type='button' onClick={onCreateSecurityPool}>
+										Create Security Pool
+									</button>
+								)
+							if (isUncheckedRegistry && securityPoolOverviewError === undefined)
+								return (
+									<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
+										Load Security Pools
+									</button>
+								)
+							return undefined
+						})()
 
-						return (
-							<StateHint
-								presentation={registryPresentation}
-								title={isEmptyRegistry ? 'No security pools' : undefined}
-								actions={
-									isEmptyRegistry && onCreateSecurityPool !== undefined ? (
-										<button className='primary' type='button' onClick={onCreateSecurityPool}>
-											Create Security Pool
-										</button>
-									) : undefined
-								}
-							/>
-						)
+						return <StateHint presentation={registryPresentation} title={isEmptyRegistry ? 'No security pools' : undefined} actions={registryActions} />
 					}
 					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 

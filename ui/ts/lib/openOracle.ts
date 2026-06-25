@@ -135,15 +135,15 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
-	if (!walletConnected) return 'Connect a wallet before creating an Open Oracle game.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before creating an Open Oracle game.'
+	if (!walletConnected) return 'Connect a wallet before creating a standalone Open Oracle game.'
+	if (!isMainnet) return 'Switch to Ethereum mainnet before creating a standalone Open Oracle game.'
 	const ethValue = tryParseDecimalInput(ethValueInput)
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
 	const settlerReward = tryParseDecimalInput(settlerRewardInput)
 	if (settlerReward === undefined) return 'Enter a valid settler reward.'
 	if (ethValue < settlerReward) return 'ETH value to send must be at least the settler reward.'
 	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected Open Oracle game.`
+	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected standalone Open Oracle game.`
 	return undefined
 }
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {

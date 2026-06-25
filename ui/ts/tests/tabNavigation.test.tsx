@@ -44,7 +44,7 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tablist', { name: 'Application sections' })).not.toBeNull()
 		expect(documentQueries.getByRole('tab', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy')
-		expect(documentQueries.getByRole('tab', { name: 'Questions' }).getAttribute('href')).toBe('#/zoltar')
+		expect(documentQueries.getByRole('tab', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar')
 		expect(documentQueries.getByRole('tab', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools')
 		expect(documentQueries.getByRole('tab', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle')
 		expect(documentQueries.queryByRole('tab', { name: 'Zoltar' })).toBeNull()
@@ -65,11 +65,12 @@ describe('TabNavigation', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const questionsTab = within(document.body).getByRole('tab', { name: 'Questions' }) as HTMLButtonElement
-		expect(questionsTab.disabled).toBe(true)
-		expect(questionsTab.title).toBe('Deploy the application contracts before using this section.')
+		const marketsTab = within(document.body).getByRole('tab', { name: 'Markets' }) as HTMLButtonElement
+		expect(marketsTab.disabled).toBe(true)
+		expect(marketsTab.title).toBe('Deploy the application contracts before using this section.')
+		expect(marketsTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
 
-		fireEvent.click(questionsTab)
+		fireEvent.click(marketsTab)
 		expect(routeChanges).toEqual([])
 	})
 })

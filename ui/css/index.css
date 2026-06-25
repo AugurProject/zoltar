@@ -495,10 +495,21 @@ button.destructive-subtle:hover:not(:disabled) {
 }
 
 .metric-label-refresh {
-	min-width: 0;
-	padding: 0.12rem 0.38rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 2.25rem;
+	min-height: 2.25rem;
+	padding: 0.35rem;
 	font-size: 0.8rem;
 	line-height: 1;
+}
+
+.environment-badge-row {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	justify-content: flex-end;
 }
 
 .detail {
@@ -543,6 +554,10 @@ button.destructive-subtle:hover:not(:disabled) {
 
 .detail + .actions {
 	margin-top: 0.75rem;
+}
+
+.pool-registry-recovery-actions {
+	margin: 0.25rem 0 1rem;
 }
 
 .panel > h2 + .actions {
@@ -3513,6 +3528,14 @@ strong.metric-value-danger {
 	width: 100%;
 }
 
+.lookup-field-label {
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	font-size: var(--font-label);
+	color: var(--muted);
+}
+
 .lookup-field-controls {
 	display: grid;
 	gap: 1.1rem;
@@ -3538,6 +3561,13 @@ strong.metric-value-danger {
 
 .lookup-field-controls > .actions > * {
 	height: 100%;
+}
+
+.loaded-question-preview {
+	padding: 0.85rem;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-control);
+	background: rgba(9, 18, 31, 0.28);
 }
 
 .field-inline {
@@ -6270,26 +6300,26 @@ button:focus-visible {
 	}
 
 	.simulation-banner {
-		padding: 0.65rem;
+		padding: 0.55rem;
 	}
 
 	.simulation-banner > .contract-panel-header:first-child {
-		margin: -0.65rem -0.65rem 0;
-		padding: 0.65rem 0.65rem 0;
+		margin: -0.55rem -0.55rem 0;
+		padding: 0.55rem 0.55rem 0;
 	}
 
 	.simulation-banner-row {
-		gap: 0.45rem;
-		padding: 0.45rem 0;
+		gap: 0.35rem;
+		padding: 0.35rem 0;
 	}
 
 	.simulation-banner-stats {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.45rem;
+		gap: 0.35rem;
 	}
 
 	.simulation-stat-card {
-		padding: 0.55rem 0.6rem;
+		padding: 0.45rem 0.55rem;
 	}
 
 	.simulation-stat-card-wide {
