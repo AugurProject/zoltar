@@ -133,6 +133,13 @@ contract EscalationGameProofTestSecurityPool {
 		return escalationGame.exportUnresolvedDeposit(proof, outcome);
 	}
 
+	function exportLocalUnresolvedDeposit(
+		uint256 depositIndex,
+		BinaryOutcomes.BinaryOutcome outcome
+	) external returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
+		return escalationGame.exportUnresolvedDeposit(depositIndex, outcome);
+	}
+
 	function claimDepositForWinning(
 		uint256 depositIndex,
 		BinaryOutcomes.BinaryOutcome outcome

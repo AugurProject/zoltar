@@ -15,7 +15,7 @@ These values are derived from the frozen mainnet protocol config, current contra
 | ID | Label | Expected Address |
 | --- | --- | --- |
 | proxyDeployer | Proxy Deployer | `0x7A0D94F55792C434d74a40883C6ed8545E406D12` |
-| deploymentStatusOracle | Deployment Status Oracle | `0x49813EF3128d239A43d33e7D92029F9041736e27` |
+| deploymentStatusOracle | Deployment Status Oracle | `0xDDB6000644d9049B36A82D7FdED8DD9c3Dcc40d4` |
 | multicall3 | Multicall3 | `0x77609e84c39893D5fB99049FE0F461aEB4F4Ec79` |
 | uniformPriceDualCapBatchAuctionFactory | UniformPriceDualCapBatchAuctionFactory | `0xa0780b04C01f2B325c77DF23D4A4Fe33b1d82Fb0` |
 | scalarOutcomes | ScalarOutcomes | `0x375993210Bd295D329CaB7EeD4CEE17C73493af5` |
@@ -25,9 +25,9 @@ These values are derived from the frozen mainnet protocol config, current contra
 | zoltar | Zoltar | `0x5FaE7E52e81250Fad0fCF05db42eCCCB3B0Bed95` |
 | shareTokenFactory | ShareTokenFactory | `0x8b419DcAd5c607F91dca05FD53baB3b2f6BdD8E3` |
 | priceOracleManagerAndOperatorQueuerFactory | Price Oracle Manager Factory | `0x918c0EF3Ba8A2217ECe218D438823355Fc77C36A` |
-| securityPoolForker | Security Pool Forker | `0xF775c4109201a8AAc97399527AA44d6A35B8bAd5` |
+| securityPoolForker | Security Pool Forker | `0x9502B6e58a34a3299239b7fBdcC46E5402967c2A` |
 | escalationGameFactory | Escalation Game Factory | `0xDabbFb968f01fF2c1e1859Cd9bE937d9f70AAcbe` |
-| securityPoolFactory | Security Pool Factory | `0x828b33dB6fdC3c30cf1F9bA75A83a00D5cbF879a` |
+| securityPoolFactory | Security Pool Factory | `0x622787d84dbd84D22ca94881dEFdd34BBAd2ca66` |
 
 ## Derived Side-Effect Contracts
 
