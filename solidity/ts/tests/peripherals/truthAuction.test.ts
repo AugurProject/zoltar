@@ -73,12 +73,14 @@ describe('Peripherals: truth auction', () => {
 		peripherals_SecurityPoolForker_SecurityPoolForker,
 		getMigrationProxyAddressAbi,
 		PRICE_PRECISION,
+		reportBond,
 		repDeposit,
 		genesisUniverse,
 		securityMultiplier,
 		outcomes,
 		triggerExternalForkForSecurityPool,
 		setupTruthAuctionWithMixedBids,
+		setupTruthAuctionWithTwoWinningBids,
 		setupFinalizedTruthAuctionWithMixedBids,
 	} = fixture
 
@@ -752,6 +754,109 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(losingVaultAfterClaim.securityBondAllowance, losingVaultBeforeClaim.securityBondAllowance, 'refund-only finalized claim should not assign security bond allowance')
 			strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'refund-only finalized claim should not alter fee accounting')
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'refund-only finalized claim should not create a new vault')
+		})
+
+		test('auction participants receive limit-priced vault REP or direct ETH refunds and can redeem purchased REP', async () => {
+			const { yesSecurityPool, expectedEthToBuy, losingBidder, losingEth, losingTick, winningBidder, winningTick } = await setupTruthAuctionWithMixedBids(false)
+			const childRepToken = getRepTokenAddress(getChildUniverseId(genesisUniverse, QuestionOutcome.Yes))
+			const childEthBeforeFinalize = await getETHBalance(client, yesSecurityPool.securityPool)
+			const childCollateralBeforeFinalize = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+			const childEthAfterFinalize = await getETHBalance(client, yesSecurityPool.securityPool)
+			const childCollateralAfterFinalize = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(childEthAfterFinalize - childEthBeforeFinalize, expectedEthToBuy, 'child pool should receive the ETH filled by the truth auction')
+			assert.ok(childCollateralAfterFinalize >= childCollateralBeforeFinalize + expectedEthToBuy, 'child pool collateral accounting should include the auction ETH backing open interest')
+			strictEqualTypeSafe(childCollateralAfterFinalize, childEthAfterFinalize, 'child pool collateral accounting should match the final ETH backing')
+
+			const winningVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
+			const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
+			const winningEthBeforeClaim = await getETHBalance(client, winningBidder.account.address)
+			const losingEthBeforeClaim = await getETHBalance(client, losingBidder.account.address)
+
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
+
+			const winningVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
+			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
+			const winningRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, winningVaultAfterClaim.repDepositShare)
+			const losingRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, losingVaultAfterClaim.repDepositShare)
+			const winningLimitPrice = tickToPrice(winningTick)
+			const minimumWinningRepAtLimit = (expectedEthToBuy * PRICE_PRECISION) / winningLimitPrice
+
+			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - losingEthBeforeClaim, losingEth, 'losing auction participant should receive their ETH back')
+			strictEqualTypeSafe(await getETHBalance(client, winningBidder.account.address), winningEthBeforeClaim, 'winning auction participant should not receive an ETH refund for a filled bid')
+			strictEqualTypeSafe(losingVaultAfterClaim.repDepositShare, losingVaultBeforeClaim.repDepositShare, 'losing auction participant should not receive vault ownership')
+			strictEqualTypeSafe(losingRepClaim, 0n, 'losing auction participant should not receive a REP vault claim')
+			strictEqualTypeSafe(winningVaultBeforeClaim.repDepositShare, 0n, 'winning auction participant should start without child-pool vault ownership')
+			assert.ok(winningRepClaim >= minimumWinningRepAtLimit, 'winning auction participant should receive a vault REP claim at least as good as their limit order')
+
+			await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, reportBond)
+			await mockWindow.advanceTime(10n * DAY)
+			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'child question should eventually finalize before auction REP redemption')
+
+			const winningRepBalanceBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidder.account.address)
+			await redeemRep(winningBidder, yesSecurityPool.securityPool, winningBidder.account.address)
+			const winningRepBalanceAfterRedeem = await getERC20Balance(client, childRepToken, winningBidder.account.address)
+			const winningVaultAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
+
+			strictEqualTypeSafe(winningRepBalanceAfterRedeem - winningRepBalanceBeforeRedeem, winningRepClaim, 'winning auction participant should eventually redeem the purchased vault REP to their wallet')
+			strictEqualTypeSafe(winningVaultAfterRedeem.repDepositShare, 0n, 'redeeming purchased auction REP should empty the participants vault ownership')
+		})
+
+		test('multiple filled auction participants can all redeem purchased vault REP', async () => {
+			const { yesSecurityPool, expectedEthToBuy, losingBidder, losingEth, losingTick, winningBidderA, winningBidderB, winningEthA, winningEthB, winningTickA, winningTickB, winningBidIndexB } = await setupTruthAuctionWithTwoWinningBids(false)
+			const childRepToken = getRepTokenAddress(getChildUniverseId(genesisUniverse, QuestionOutcome.Yes))
+			const childEthBeforeFinalize = await getETHBalance(client, yesSecurityPool.securityPool)
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+			strictEqualTypeSafe((await getETHBalance(client, yesSecurityPool.securityPool)) - childEthBeforeFinalize, expectedEthToBuy, 'child pool should receive all ETH filled by multiple winning auction bids')
+
+			const winningAEthBeforeClaim = await getETHBalance(client, winningBidderA.account.address)
+			const winningBEthBeforeClaim = await getETHBalance(client, winningBidderB.account.address)
+			const losingEthBeforeClaim = await getETHBalance(client, losingBidder.account.address)
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderA.account.address, [{ tick: winningTickA, bidIndex: 0n }])
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderB.account.address, [{ tick: winningTickB, bidIndex: winningBidIndexB }])
+
+			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - losingEthBeforeClaim, losingEth, 'losing auction participant should receive their ETH back')
+			strictEqualTypeSafe(await getETHBalance(client, winningBidderA.account.address), winningAEthBeforeClaim, 'first filled auction participant should not receive an ETH refund')
+			strictEqualTypeSafe(await getETHBalance(client, winningBidderB.account.address), winningBEthBeforeClaim, 'second filled auction participant should not receive an ETH refund')
+
+			const winningVaultAAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderA.account.address)
+			const winningVaultBAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderB.account.address)
+			const winningARepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.repDepositShare)
+			const winningBRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repDepositShare)
+			const minimumWinningARepAtLimit = (winningEthA * PRICE_PRECISION) / tickToPrice(winningTickA)
+			const minimumWinningBRepAtLimit = (winningEthB * PRICE_PRECISION) / tickToPrice(winningTickB)
+			assert.ok(winningARepClaim >= minimumWinningARepAtLimit, 'first filled auction participant should receive vault REP at least as good as their limit order')
+			assert.ok(winningBRepClaim >= minimumWinningBRepAtLimit, 'second filled auction participant should receive vault REP at least as good as their limit order')
+
+			await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, reportBond)
+			await mockWindow.advanceTime(10n * DAY)
+			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'child question should eventually finalize before multi-winner auction REP redemption')
+
+			const winningARepBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidderA.account.address)
+			const winningBRepBeforeRedeem = await getERC20Balance(client, childRepToken, winningBidderB.account.address)
+			const childRepBeforeRedeem = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
+			const winningARedeemClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, winningVaultAAfterClaim.repDepositShare)
+			const winningBRedeemClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, winningVaultBAfterClaim.repDepositShare)
+
+			await redeemRep(winningBidderA, yesSecurityPool.securityPool, winningBidderA.account.address)
+			await redeemRep(winningBidderB, yesSecurityPool.securityPool, winningBidderB.account.address)
+
+			const winningVaultAAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderA.account.address)
+			const winningVaultBAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidderB.account.address)
+			const totalRedeemedRep = winningARedeemClaim + winningBRedeemClaim
+			strictEqualTypeSafe((await getERC20Balance(client, childRepToken, winningBidderA.account.address)) - winningARepBeforeRedeem, winningARedeemClaim, 'first filled auction participant should redeem their purchased vault REP')
+			strictEqualTypeSafe((await getERC20Balance(client, childRepToken, winningBidderB.account.address)) - winningBRepBeforeRedeem, winningBRedeemClaim, 'second filled auction participant should redeem their purchased vault REP')
+			strictEqualTypeSafe(childRepBeforeRedeem - (await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)), totalRedeemedRep, 'multi-winner redemptions should debit only the REP paid to auction participants')
+			strictEqualTypeSafe(winningVaultAAfterRedeem.repDepositShare, 0n, 'redeeming purchased auction REP should empty the first participants vault ownership')
+			strictEqualTypeSafe(winningVaultBAfterRedeem.repDepositShare, 0n, 'redeeming purchased auction REP should empty the second participants vault ownership')
 		})
 
 		test('claimAuctionProceeds handles a zero-REP finalized refund path when totalRepPurchased is zero', async () => {
