@@ -652,8 +652,7 @@ contract SecurityPool is ISecurityPool {
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
 		require(!awaitingForkContinuation, 'Awaiting fork continuation');
-		bool isFirstEscalationDeposit = address(escalationGame) == address(0x0);
-		if (isFirstEscalationDeposit) {
+		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'Question still active');
 			escalationGame = escalationGameFactory.deployEscalationGame(
