@@ -3,7 +3,7 @@ import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { flushSolidityBytecodeCoverageForTest, getSolidityCoverableLineNumbersForTest } from '../coverage/traceToSource'
+import { collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -348,6 +348,40 @@ describe('Solidity bytecode coverage helpers', () => {
 			14n,
 			'safe transfers should deliver REP to the recipient',
 		)
+	})
+
+	test('reuses cached address profiles without repeated getCode lookups for the same deployed contract', async () => {
+		if (!isCoverageEnabled()) return
+
+		const helperAddress = await deployCoverageHelper()
+		const data = encodeFunctionData({
+			abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+			functionName: 'getTokenId',
+			args: [7n, 1],
+		})
+		const hash = await client.sendTransaction({ to: helperAddress, data })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		assert.strictEqual(receipt.status, 'success', 'manual coverage transaction should succeed')
+
+		resetSolidityBytecodeCoverageAddressCache()
+		let helperGetCodeRequests = 0
+		const countingRequest = async (args: { method: string; params?: unknown[] | undefined }): Promise<unknown> => {
+			if (args.method === 'eth_getCode' && Array.isArray(args.params) && typeof args.params[0] === 'string' && args.params[0].toLowerCase() === helperAddress.toLowerCase()) helperGetCodeRequests++
+			return await mockWindow.request(args)
+		}
+		const collectManualCoverage = async (): Promise<void> => {
+			await collectBytecodeCoverageForTransaction({
+				request: countingRequest,
+				transactionHash: hash,
+				transaction: { to: helperAddress, data },
+				receipt: { to: helperAddress },
+			})
+		}
+
+		await collectManualCoverage()
+		assert.strictEqual(helperGetCodeRequests, 1, 'first attribution should fetch deployed helper code once')
+		await collectManualCoverage()
+		assert.strictEqual(helperGetCodeRequests, 1, 'second attribution should reuse the cached helper coverage profile')
 	})
 
 	test('traces ERC1155 legacy helper overloads and internal mint, transfer, and burn paths', async () => {

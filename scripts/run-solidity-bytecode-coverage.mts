@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 
 const coverageDirectory = join(process.cwd(), 'solidity', 'coverage')
@@ -154,6 +154,42 @@ const testShards = [
 		'solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts',
 	],
 ]
+
+const discoverSolidityTestFiles = async (directory: string): Promise<string[]> => {
+	const entries = await readdir(directory, { withFileTypes: true })
+	const discoveredFiles: string[] = []
+	for (const entry of entries) {
+		const absolutePath = join(directory, entry.name)
+		if (entry.isDirectory()) {
+			discoveredFiles.push(...(await discoverSolidityTestFiles(absolutePath)))
+			continue
+		}
+		if (!entry.isFile() || !entry.name.endsWith('.test.ts')) continue
+		discoveredFiles.push(relative(process.cwd(), absolutePath).split('\\').join('/'))
+	}
+	return discoveredFiles.sort((first, second) => first.localeCompare(second))
+}
+
+const validateShardCoverage = async (): Promise<void> => {
+	const discoveredFiles = await discoverSolidityTestFiles(join(process.cwd(), 'solidity', 'ts', 'tests'))
+	const listedFiles = testShards.flat()
+	const listedFileCounts = new Map<string, number>()
+	for (const listedFile of listedFiles) listedFileCounts.set(listedFile, (listedFileCounts.get(listedFile) ?? 0) + 1)
+
+	const discoveredFileSet = new Set(discoveredFiles)
+	const missingFiles = discoveredFiles.filter(discoveredFile => !listedFileCounts.has(discoveredFile))
+	const staleFiles = listedFiles.filter(listedFile => !discoveredFileSet.has(listedFile))
+	const duplicateFiles = [...listedFileCounts.entries()].filter(([, count]) => count !== 1).map(([listedFile]) => listedFile)
+	if (missingFiles.length === 0 && staleFiles.length === 0 && duplicateFiles.length === 0) return
+
+	const lines = ['Solidity bytecode coverage shards must list every solidity/ts/tests/**/*.test.ts file exactly once.']
+	if (missingFiles.length > 0) lines.push(`Missing from shards:\n${missingFiles.map(file => `  - ${file}`).join('\n')}`)
+	if (staleFiles.length > 0) lines.push(`Listed but not found:\n${staleFiles.map(file => `  - ${file}`).join('\n')}`)
+	if (duplicateFiles.length > 0) lines.push(`Listed more than once:\n${duplicateFiles.map(file => `  - ${file}`).join('\n')}`)
+	throw new Error(lines.join('\n'))
+}
+
+await validateShardCoverage()
 
 const shardArgumentIndex = process.argv.findIndex(argument => argument === '--shard')
 const shardNumberArgument = shardArgumentIndex === -1 ? undefined : process.argv[shardArgumentIndex + 1]

@@ -504,8 +504,18 @@ const resolveTraceSteps = (rawSteps: readonly unknown[]): ResolvedTraceStep[] =>
 
 const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CachedAddressProfiles>): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
+	const addressesNeedingCode: string[] = []
+	for (const address of addresses) {
+		const cachedProfiles = addressProfileCache.get(address)
+		if (cachedProfiles?.profiles !== undefined && cachedProfiles.profiles.length > 0) {
+			result.set(address, cachedProfiles.profiles)
+			continue
+		}
+		addressesNeedingCode.push(address)
+	}
+
 	const onChainCodeByAddress = await Promise.all(
-		addresses.map(async address => ({
+		addressesNeedingCode.map(async address => ({
 			address,
 			onChainCode: await request({ method: 'eth_getCode', params: [address, 'latest'] }),
 		})),
@@ -711,6 +721,10 @@ export const resetSolidityBytecodeCoverageAddressCache = (): void => {
 	addressProfileCache.clear()
 }
 
+export const invalidateSolidityBytecodeCoverageAddressCache = (address: string): void => {
+	addressProfileCache.delete(normalizeAddress(address))
+}
+
 const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest; readonly structLogs: readonly unknown[]; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
 	if (!isSolidityBytecodeCoverageEnabled()) return
 	if (options.structLogs.length === 0) return
@@ -727,6 +741,7 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 	const txToAddresses = toAddressList(options.transaction.to)
 	const receiptToAddresses = toAddressList(options.receipt?.to)
 	const receiptContractAddresses = toAddressList(options.receipt?.contractAddress)
+	for (const contractAddress of receiptContractAddresses) invalidateSolidityBytecodeCoverageAddressCache(contractAddress)
 	const resolvedSteps = resolveTraceSteps(options.structLogs)
 	const addresses = new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses])
 	for (const step of resolvedSteps) {

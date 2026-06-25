@@ -1,7 +1,7 @@
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
-import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, resetSolidityBytecodeCoverageAddressCache } from '../../coverage/traceToSource'
+import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, invalidateSolidityBytecodeCoverageAddressCache, resetSolidityBytecodeCoverageAddressCache } from '../../coverage/traceToSource'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -218,6 +218,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			throw new Error(json.error.message || 'RPC error')
 		}
 		if (args.method === 'anvil_reset' || args.method === 'anvil_revert') resetSolidityBytecodeCoverageAddressCache()
+		if (args.method === 'anvil_setCode' && typeof params[0] === 'string') invalidateSolidityBytecodeCoverageAddressCache(params[0])
 
 		const waitForReceiptStatus = async (hash: string) => {
 			let transactionBlockNumber: bigint | undefined
