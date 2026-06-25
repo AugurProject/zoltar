@@ -3,7 +3,8 @@ import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
+import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
+import { collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getKnownSourceMapCoverageGapRuleMatchCountsForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -103,15 +104,97 @@ test('coverage classifier keeps side-effect-only call statements coverable', () 
 	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/CoverageClassifierCalls.sol', source), [3, 4, 5, 6])
 })
 
-test('coverage classifier keeps known untraceable source-map lines out of production totals', () => {
-	assert.deepStrictEqual(
-		getSolidityCoverableLineNumbersForTest(
-			'/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol',
-			['contract ERC1155 {', '    function balanceOfBatch() external returns (uint256[] memory) {', '        return batchBalances;', '    }', '    function legacyTransfer(address from, address to, uint256 id, uint256 value) internal {', "        _transferFrom(from, to, id, value, '');", '    }', '}'].join('\n'),
-		),
-		[],
-	)
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol', ['contract SecurityPoolForkerVaultMigrationBase {', '    constructor() {', '        zoltar = _zoltar;', '    }', '}'].join('\n')), [])
+test('coverage classifier keeps known untraceable source-map lines from manifest out of production totals', () => {
+	const cases = [
+		{
+			sourcePath: '/tmp/solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol',
+			source: ['contract SecurityPoolForkerVaultMigrationBase {', '    constructor() {', '        pool = _pool;', '    }', '}'],
+		},
+		{
+			sourcePath: '/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol',
+			source: [
+				'contract ERC1155 {',
+				'    function balanceOfBatch() external returns (uint256[] memory) {',
+				'        return balances;',
+				'    }',
+				'    function legacyTransfer(address sender, address recipient, uint256 tokenId, uint256 amount) internal {',
+				"        _transferFrom(sender, recipient, tokenId, amount, '');",
+				'    }',
+				'}',
+			],
+		},
+		{
+			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol',
+			source: ['contract EscalationGameSettlement {', '    function withdrawDeposit(', '        uint256 claimIndex,', '        BinaryOutcomes.BinaryOutcome selectedOutcome', '    ) public {', "        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');", '    }', '}'],
+		},
+		{
+			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameEscrow.sol',
+			source: [
+				'contract EscalationGameEscrow {',
+				'    function claim(ForkedEscrowState storage state, uint256 principalToClaim) internal {',
+				'        uint256 nextPrincipalClaimed = state.sourcePrincipalClaimed + principalToClaim;',
+				'        state.sourcePrincipalClaimed = nextPrincipalClaimed;',
+				'        state.childRepClaimed = nextRepClaimed;',
+				'    }',
+				'}',
+			],
+		},
+		{
+			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameCarry.sol',
+			source: [
+				'contract EscalationGameCarry {',
+				'    function verify(bytes32[] calldata proofSiblings, uint8 selectedOutcome, uint256 parentDepositIndex, uint256 amount) internal {',
+				'        if (currentRoot != bytes32(0)) return currentRoot;',
+				"        require(proofSiblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');",
+				'        bytes32 observedRoot = _getCurrentNullifierRoot(selectedOutcome);',
+				"        require(emptyRoot == observedRoot, 'Bad nullifier proof');",
+				'        if (amount > inheritedAmountToConsume) {',
+				'        }',
+				'    }',
+				'}',
+			],
+		},
+	]
+
+	for (const { sourcePath, source } of cases) {
+		assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest(sourcePath, source.join('\n')), [], `${sourcePath} should exclude manifest-covered source-map gaps`)
+	}
+})
+
+test('coverage source-map gap manifest stays aligned with current Solidity sources', async () => {
+	for (const fileGap of knownSourceMapCoverageGaps) {
+		const source = await readFile(fileGap.sourcePath, 'utf8')
+		const expectedRuleMatchCounts = fileGap.lineRules.map(rule => rule.currentSourceMatches)
+		assert.deepStrictEqual(getKnownSourceMapCoverageGapRuleMatchCountsForTest(fileGap.sourcePath, source), expectedRuleMatchCounts, `${fileGap.sourcePath} source-map gap manifest should match current source`)
+	}
+})
+
+test('coverage classifier keeps similar lines coverable when source-map gap context does not match', () => {
+	const settlementProofOverload = [
+		'contract EscalationGameSettlement {',
+		'    function exportUnresolvedDeposit(',
+		'        CarriedDepositProof calldata proof,',
+		'        BinaryOutcomes.BinaryOutcome selectedOutcome',
+		'    ) public {',
+		"        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');",
+		'    }',
+		'}',
+	].join('\n')
+	const settlementUnrelatedUintOverload = [
+		'contract EscalationGameSettlement {',
+		'    function validateAmount(',
+		'        uint256 amount,',
+		'        BinaryOutcomes.BinaryOutcome selectedOutcome',
+		'    ) public {',
+		"        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');",
+		'    }',
+		'}',
+	].join('\n')
+	const erc1155Return = ['contract ERC1155 {', '    function balanceOf(address account, uint256 id) public view returns (uint256) {', '        return _balances[id][account];', '    }', '}'].join('\n')
+
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementProofOverload), [6])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementUnrelatedUintOverload), [6])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol', erc1155Return), [3])
 })
 
 describe('Solidity bytecode coverage helpers', () => {
