@@ -385,6 +385,7 @@ void describe('simulation backend', () => {
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
+		backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -408,6 +409,7 @@ void describe('simulation backend', () => {
 	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
+		backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]

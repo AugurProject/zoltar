@@ -64,7 +64,7 @@
 		"ui:vendor": "cd ui && bun ./build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun run test:run",
-		"test:run": "bun test --preload ./bun-test-setup-ui.ts --parallel=4 --timeout 300000",
+		"test:run": "bun ./scripts/run-tests.mts",
 		"test:run:shard": "bun test --preload ./bun-test-setup-ui.ts --reporter=dots --timeout 300000",
 		"test:peripherals": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc:solidity && bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 solidity/ts/tests/peripherals",
 		"test:security-pool-workflow": "bun run ensure-shared-build && bun run check:shared-dependencies && bun run tsc:app && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/ts/tests/securityPoolWorkflowSection",
