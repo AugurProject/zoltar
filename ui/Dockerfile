@@ -38,6 +38,7 @@ RUN cd /source/ui && bun install --frozen-lockfile
 COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
 COPY ./ui/build/ /source/ui/build/
 COPY ./ui/index.html /source/ui/index.html
+COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 
 # Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
