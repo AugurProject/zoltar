@@ -1,5 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import type { Address } from 'viem'
+import { writeContractAndWait } from '../../testsuite/simulator/utils/viem'
 import { usePeripheralsReceiveGuardsFixture, type PeripheralsReceiveGuardsFixture } from './fixture'
 
 describe('Peripherals: receive guards', () => {
@@ -46,7 +47,7 @@ describe('Peripherals: receive guards', () => {
 	const expectUnauthorizedEthSendToReject = async (to: Address, value: bigint) => {
 		const unauthorizedSender = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 		await mockWindow.setBalance(unauthorizedSender.account.address, testInternalSenderBalance)
-		await assert.rejects(unauthorizedSender.sendTransaction({ to, value }))
+		await assert.rejects(writeContractAndWait(unauthorizedSender, () => unauthorizedSender.sendTransaction({ to, value })))
 	}
 
 	test('SecurityPool receive restricts unauthorized senders', async () => {
