@@ -129,7 +129,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 						args: [client.account.address, nonReceiverAddress, yesTokenId, 1n, '0x1234'],
 					}),
 			),
-			/non ERC1155Receiver implementer/,
+			/does not implement ERC1155Receiver for single transfers/,
 		)
 	})
 

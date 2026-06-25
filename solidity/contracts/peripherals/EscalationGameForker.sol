@@ -28,19 +28,19 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		uint256[] calldata depositIndexes
 	) public {
 		EscalationGame escalationGame = parent.escalationGame();
-		require(address(escalationGame) != address(0x0), 'e4');
-		require(escalationGame.nonDecisionTimestamp() > 0, 'ed');
+		require(address(escalationGame) != address(0x0), 'Parent game missing');
+		require(escalationGame.nonDecisionTimestamp() > 0, 'Non-decision required');
 		bool ownFork = forkDataByPool[parent].ownFork;
 		ISecurityPool child;
 		SecurityPoolMigrationProxy migrationProxy;
 		if (ownFork) {
 			child = _getOrDeployChildPool(parent, uint8(outcomeIndex));
 			migrationProxy = migrationProxyByPool[parent];
-			require(address(migrationProxy) != address(0x0), 'mp');
-			require(child.systemState() == SystemState.ForkMigration, 'cap');
+			require(address(migrationProxy) != address(0x0), 'Migration proxy missing');
+			require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 			require(
 				block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-				'mwc'
+				'Claim window closed'
 			);
 		}
 		uint256 repMigratedFromEscalationGame;
@@ -59,7 +59,15 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			if (childRepToSweep == 0) return;
 			_splitMigrationRepToChild(parent, uint8(outcomeIndex), childRepToSweep, true, true);
 			migrationProxy.sweepChildRep(vault, child.repToken(), childRepToSweep);
-			emit ClaimForkedEscalationDepositsToWallet(parent, vault, outcomeIndex, depositIndexes, childRepToSweep);
+			emit ClaimForkedEscalationDepositsToWallet(
+				parent,
+				vault,
+				outcomeIndex,
+				depositIndexes,
+				repMigratedFromEscalationGame,
+				childRepToSweep,
+				true
+			);
 			return;
 		}
 		repMigratedFromEscalationGame = _claimWinningDepositsFromGame(
@@ -75,7 +83,9 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			vault,
 			outcomeIndex,
 			depositIndexes,
-			repMigratedFromEscalationGame
+			repMigratedFromEscalationGame,
+			repMigratedFromEscalationGame,
+			false
 		);
 	}
 
@@ -113,7 +123,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 				ownFork,
 				payWallet
 			);
-			require(depositor == vault, 'e5');
+			require(depositor == vault, 'Wrong deposit vault');
 			totalRepMigrated += amountToWithdraw;
 		}
 	}
@@ -124,9 +134,9 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		uint256 childOutcomeIndex
 	) public returns (bool moreToMigrate) {
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		require(parentForkData.unresolvedEscalationAtFork, 'ee');
+		require(parentForkData.unresolvedEscalationAtFork, 'No unresolved deposits');
 		EscalationGame parentEscalationGame = parent.escalationGame();
-		require(address(parentEscalationGame) != address(0x0), 'mpe');
+		require(address(parentEscalationGame) != address(0x0), 'Parent game missing');
 		if (parentForkData.ownFork) {
 			return _migrateOwnForkUnresolvedEscalation(parent, parentEscalationGame, vault, childOutcomeIndex);
 		}
@@ -149,7 +159,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		);
 		uint256 currentRepToTransfer = _sumOutcomeAmounts(currentRepByOutcome);
 		if (currentRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
-		require(currentRepToTransfer > 0, 'ef');
+		require(currentRepToTransfer > 0, 'No migration REP');
 		uint256 childRepToTransfer = _previewOwnForkEscalationRep(parent, currentRepToTransfer);
 		childRepToTransfer = _capOwnForkEscalationChildRep(parent, childOutcomeIndex, childRepToTransfer);
 		if (childRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
@@ -189,7 +199,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			parent,
 			child
 		);
-		require(child.systemState() == SystemState.ForkMigration, 'cap');
+		require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 		(uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) = _exportUnresolvedRep(
 			parentEscalationGame,
 			vault,
@@ -198,7 +208,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		);
 		uint256 childRepToTransfer = _sumOutcomeAmounts(currentRepByOutcome);
 		if (childRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
-		require(childRepToTransfer > 0, 'ef');
+		require(childRepToTransfer > 0, 'No child REP to migrate');
 		// Non-own continuation follows the same model: inherited carry snapshot + child REP backing.
 		// Replaying parent deposits as child-local deposits would duplicate unresolved state
 		// that already exists in the inherited carry tree.
@@ -224,10 +234,13 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	) private returns (ISecurityPool child) {
 		child = childrenByPoolAndOutcome[parent][childOutcomeIndex];
 		if (address(child) != address(0x0)) {
-			require(child.systemState() == SystemState.ForkMigration, 'cap');
+			require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 			return child;
 		}
-		require(block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'mwc');
+		require(
+			block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+			'Own-fork migration window closed'
+		);
 		child = _getOrDeployChildPool(parent, childOutcomeIndex);
 	}
 
@@ -237,8 +250,8 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	) private view returns (EscalationGame childEscalationGame, SecurityPoolMigrationProxy migrationProxy) {
 		childEscalationGame = child.escalationGame();
 		migrationProxy = migrationProxyByPool[parent];
-		require(address(childEscalationGame) != address(0x0), 'mce');
-		require(address(migrationProxy) != address(0x0), 'mp');
+		require(address(childEscalationGame) != address(0x0), 'Child game missing');
+		require(address(migrationProxy) != address(0x0), 'Migration proxy missing');
 	}
 
 	function _exportUnresolvedRep(

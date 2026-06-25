@@ -27,7 +27,7 @@ contract OwnForkEscalationClaimHarness {
 		RepBuckets storage repBuckets = repBucketsByParent[parent];
 		uint256 unallocatedEscrowSourceRep = repBuckets.unallocatedEscrowSourceRep;
 		uint256 unallocatedEscrowChildRep = repBuckets.unallocatedEscrowChildRep;
-		require(unallocatedEscrowSourceRep >= sourceRepAmount, 'own fork escalation exhausted');
+		require(unallocatedEscrowSourceRep >= sourceRepAmount, 'Own-fork escalation source REP bucket is exhausted');
 		if (sourceRepAmount == unallocatedEscrowSourceRep) {
 			childRepAmount = unallocatedEscrowChildRep;
 		} else {
@@ -44,9 +44,9 @@ contract OwnForkEscalationClaimHarness {
 		uint256 childOwnershipDenominator,
 		uint256 auctionableRepAtFork
 	) external pure returns (uint256 ownershipToCredit) {
-		require(auctionableRepAtFork > 0, 'missing own fork rep');
-		require(childRepAmount > 0, 'invalid child rep');
-		require(childOwnershipDenominator > 0, 'invalid child denominator');
+		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		require(childRepAmount > 0, 'Own-fork child REP amount must be positive');
+		require(childOwnershipDenominator > 0, 'Own-fork child ownership denominator must be positive');
 		ownershipToCredit =
 			(childRepAmount * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
 	}
@@ -56,8 +56,8 @@ contract OwnForkEscalationClaimHarness {
 		uint256 childOwnershipDenominator,
 		uint256 auctionableRepAtFork
 	) external pure returns (uint256[] memory ownershipCredits, uint256 totalOwnershipClaimed) {
-		require(auctionableRepAtFork > 0, 'missing own fork rep');
-		require(childOwnershipDenominator > 0, 'invalid child denominator');
+		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		require(childOwnershipDenominator > 0, 'Own-fork child ownership denominator must be positive');
 		ownershipCredits = new uint256[](childRepAmounts.length);
 		uint256 childRepClaimed = 0;
 		uint256 ownershipClaimed = 0;
@@ -77,7 +77,7 @@ contract OwnForkEscalationClaimHarness {
 		uint256 parentCollateralAtFork,
 		uint256 auctionableRepAtFork
 	) external pure returns (uint256[] memory collateralTransfers, uint256 totalCollateralTransferred) {
-		require(auctionableRepAtFork > 0, 'missing own fork rep');
+		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
 		collateralTransfers = new uint256[](childRepAmounts.length);
 		uint256 childRepTransferred = 0;
 		uint256 collateralTransferred = 0;
@@ -96,7 +96,7 @@ contract OwnForkEscalationClaimHarness {
 		uint256[] calldata sourceAmounts,
 		uint256 childRepAtFork
 	) external pure returns (uint256[] memory childAmounts) {
-		require(vaults.length == sourceAmounts.length, 'length mismatch');
+		require(vaults.length == sourceAmounts.length, 'Vault and source amount arrays must have the same length');
 		uint256 vaultCount = vaults.length;
 		uint256 totalSourceRep = 0;
 		for (uint256 index = 0; index < vaultCount; index++) {

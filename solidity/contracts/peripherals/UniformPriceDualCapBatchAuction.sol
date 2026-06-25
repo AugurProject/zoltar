@@ -87,16 +87,19 @@ contract UniformPriceDualCapBatchAuction {
 	}
 
 	modifier isOperational() {
-		require(auctionStarted != 0, 'not started');
-		require(!finalized, 'finalized');
-		require(block.timestamp < auctionStarted + AUCTION_TIME, 'auction ended');
+		require(auctionStarted != 0, 'Auction must be started before accepting bids');
+		require(!finalized, 'Auction has already been finalized');
+		require(block.timestamp < auctionStarted + AUCTION_TIME, 'Auction bidding period has ended');
 		_;
 	}
 
 	function startAuction(uint256 _ethRaiseCap, uint256 _maxRepBeingSold) public {
-		require(owner == msg.sender, 'only owner can start');
-		require(auctionStarted == 0, 'already started');
-		require(_ethRaiseCap > 0 && _maxRepBeingSold > 0, 'invalid caps');
+		require(owner == msg.sender, 'Only the auction owner can start the auction');
+		require(auctionStarted == 0, 'Auction has already been started');
+		require(
+			_ethRaiseCap > 0 && _maxRepBeingSold > 0,
+			'Auction ETH raise cap and REP sale cap must both be positive'
+		);
 
 		maxRepBeingSold = _maxRepBeingSold;
 		ethRaiseCap = _ethRaiseCap;
@@ -108,18 +111,18 @@ contract UniformPriceDualCapBatchAuction {
 	}
 
 	function submitBid(int256 tick) external payable isOperational {
-		require(msg.value >= minBidSize, 'bid too small');
-		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
-		require(tickToPrice(tick) > 0, 'price too low');
+		require(msg.value >= minBidSize, 'Auction bid is smaller than the minimum bid size');
+		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
+		require(tickToPrice(tick) > 0, 'Auction tick price rounds down to zero');
 		root = _insert(root, tick, msg.sender, msg.value);
 		emit SubmitBid(msg.sender, tick, msg.value);
 	}
 
 	function finalize() external {
-		require(!finalized, 'already finalized');
-		require(msg.sender == owner, 'Only owner can finalize');
-		require(auctionStarted != 0, 'not started');
-		require(block.timestamp >= auctionStarted + AUCTION_TIME, 'auction active');
+		require(!finalized, 'Auction has already been finalized');
+		require(msg.sender == owner, 'Only the auction owner can finalize');
+		require(auctionStarted != 0, 'Auction must be started before finalization');
+		require(block.timestamp >= auctionStarted + AUCTION_TIME, 'Auction bidding period is still active');
 
 		(bool hitCap, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
 		finalized = true;
@@ -151,7 +154,7 @@ contract UniformPriceDualCapBatchAuction {
 		}
 
 		(bool sent, ) = payable(owner).call{ value: ethToSend }('');
-		require(sent, 'Failed to send Ether');
+		require(sent, 'Auction failed to send raised ETH to the owner');
 		emit Finalized(ethToSend, hitCap, clearingTick, totalRepPurchased, accumulatedEth);
 	}
 
@@ -167,11 +170,11 @@ contract UniformPriceDualCapBatchAuction {
 		address withdrawFor,
 		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
 	) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
-		require(finalized, 'not finalized');
+		require(finalized, 'Auction must be finalized before withdrawing bids');
 		// The owner is expected to be the coordinating forker contract for truth auctions,
 		// not the bidder directly. That contract calls this and then accounts the returned
 		// REP into the bidder's child-pool vault state.
-		require(msg.sender == owner, 'Only owner can call');
+		require(msg.sender == owner, 'Only the auction owner can withdraw bids on behalf of bidders');
 
 		uint256 clearingPriceLocal = tickToPrice(clearingTick);
 
@@ -180,8 +183,8 @@ contract UniformPriceDualCapBatchAuction {
 			uint256 index = tickIndices[i].bidIndex;
 
 			Bid storage bid = bidsAtTick[tick][index];
-			require(bid.bidder == withdrawFor, 'not their bid');
-			require(bid.ethAmount > 0 && !bid.claimed, 'already claimed');
+			require(bid.bidder == withdrawFor, 'Bid does not belong to the requested withdrawal address');
+			require(bid.ethAmount > 0 && !bid.claimed, 'Bid has already been claimed or does not exist');
 
 			if (underfunded) {
 				uint256 price = tickToPrice(tick);
@@ -231,7 +234,7 @@ contract UniformPriceDualCapBatchAuction {
 		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 		if (totalEthRefund > 0) {
 			(bool sent, ) = payable(withdrawFor).call{ value: totalEthRefund }('');
-			require(sent, 'eth transfer failed');
+			require(sent, 'Auction failed to refund ETH while withdrawing bids');
 		}
 	}
 
@@ -243,7 +246,7 @@ contract UniformPriceDualCapBatchAuction {
 		address bidder,
 		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
 	) external {
-		require(msg.sender == owner, 'Only owner can call');
+		require(msg.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders');
 		_refundLosingBids(bidder, tickIndices);
 	}
 
@@ -251,12 +254,12 @@ contract UniformPriceDualCapBatchAuction {
 		address bidder,
 		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
 	) private {
-		require(!finalized, 'already finalized');
-		require(auctionStarted != 0, 'not started');
-		require(bidder != address(0x0), 'invalid bidder');
+		require(!finalized, 'Auction has already been finalized');
+		require(auctionStarted != 0, 'Auction must be started before refunding losing bids');
+		require(bidder != address(0x0), 'Auction bidder address must not be the zero address');
 
 		(bool hitCap, int256 foundTick, , ) = computeClearing();
-		require(hitCap, 'no clearing yet');
+		require(hitCap, 'Auction has not reached a clearing price yet');
 
 		uint256 totalEthToRefund = 0;
 
@@ -264,11 +267,11 @@ contract UniformPriceDualCapBatchAuction {
 			int256 tick = tickIndices[i].tick;
 			uint256 index = tickIndices[i].bidIndex;
 
-			require(tick < foundTick, 'cannot withdraw binding bid');
+			require(tick < foundTick, 'Binding or winning bid cannot be refunded before finalization');
 
 			Bid storage bid = bidsAtTick[tick][index];
-			require(bid.bidder == bidder, 'not bidder');
-			require(bid.ethAmount > 0 && !bid.claimed, 'already withdrawn');
+			require(bid.bidder == bidder, 'Bid does not belong to the requested refund bidder');
+			require(bid.ethAmount > 0 && !bid.claimed, 'Bid has already been withdrawn or does not exist');
 
 			uint256 originalEth = bid.ethAmount;
 
@@ -283,13 +286,13 @@ contract UniformPriceDualCapBatchAuction {
 
 		// Send ETH back to user
 		(bool sent, ) = payable(bidder).call{ value: totalEthToRefund }('');
-		require(sent, 'transfer failed');
+		require(sent, 'Auction failed to refund ETH for losing bids');
 
 		emit RefundLosingBids(bidder, tickIndices, totalEthToRefund);
 	}
 
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {
-		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
+		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
 		uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
 		price = PRICE_PRECISION;
 		for (uint8 i = 0; i < 20; i++) {
@@ -689,7 +692,7 @@ contract UniformPriceDualCapBatchAuction {
 		if (index == 17) return 492152882348911033633683;
 		if (index == 18) return 242214459604341065650571799093;
 		if (index == 19) return 58667844441422969901301586347865591163491;
-		revert('Index out of bounds');
+		revert('Auction tick price power index is out of bounds');
 	}
 
 	function _decreaseAtPrice(int256 tick, uint256 ethAmount) internal {
@@ -721,7 +724,7 @@ contract UniformPriceDualCapBatchAuction {
 	}
 
 	function _decrease(uint256 nodeId, int256 tick, uint256 ethAmount) internal returns (uint256) {
-		require(nodeId != 0, 'invalid node');
+		require(nodeId != 0, 'Auction tree node must exist before decreasing its ETH total');
 		Node storage node = nodes[nodeId];
 
 		if (tick < node.tick) {
@@ -730,7 +733,7 @@ contract UniformPriceDualCapBatchAuction {
 			node.right = _decrease(node.right, tick, ethAmount);
 		} else {
 			// Found node
-			require(node.totalEth >= ethAmount, 'eth underflow');
+			require(node.totalEth >= ethAmount, 'Auction tree node ETH total would underflow');
 			node.totalEth -= ethAmount;
 
 			// If node still has ETH, just update
@@ -749,7 +752,7 @@ contract UniformPriceDualCapBatchAuction {
 	}
 
 	function _delete(uint256 nodeId, int256 tick) internal returns (uint256) {
-		require(nodeId != 0, 'delete missing');
+		require(nodeId != 0, 'Auction tree node must exist before deletion');
 		Node storage node = nodes[nodeId];
 
 		if (tick < node.tick) {

@@ -20,6 +20,13 @@ contract ZoltarQuestionData {
 	mapping(uint256 => QuestionData) public questions;
 	uint256[] public questionIds;
 
+	event QuestionCreated(
+		uint256 questionId,
+		uint256 createdTimestamp,
+		QuestionData questionData,
+		string[] outcomeOptions
+	);
+
 	function getQuestionId(
 		QuestionData memory questionData,
 		string[] calldata outcomeOptions
@@ -32,19 +39,22 @@ contract ZoltarQuestionData {
 		string[] calldata outcomeOptions
 	) external returns (uint256) {
 		uint256 questionId = getQuestionId(questionData, outcomeOptions);
-		require(questionCreatedTimestamp[questionId] == 0, 'Question already exists');
-		require(questionData.endTime >= questionData.startTime, 'end time must be on or after start time');
+		require(questionCreatedTimestamp[questionId] == 0, 'Question already exists and cannot be created twice');
+		require(questionData.endTime >= questionData.startTime, 'Question end time must be on or after the start time');
 		if (outcomeOptions.length == 0) {
 			// scalar
-			require(questionData.displayValueMax > questionData.displayValueMin, 'max must be greater than min');
-			require(questionData.numTicks > 0, 'numTicks needs to be positive');
+			require(
+				questionData.displayValueMax > questionData.displayValueMin,
+				'Scalar question display max must be greater than display min'
+			);
+			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
 			// Check that all strings are non-empty
 			uint256 previous = type(uint256).max;
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
-				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
+				require(bytes(outcomeOptions[index]).length > 0, 'Outcome option label must not be an empty string');
 				uint256 iHash = uint256(keccak256(abi.encode(outcomeOptions[index])));
-				require(iHash < previous, 'Outcome option hashes not sorted');
+				require(iHash < previous, 'Outcome option hashes must be provided in descending sorted order');
 				previous = iHash;
 			}
 			outcomeLabels[questionId] = outcomeOptions;
@@ -52,6 +62,7 @@ contract ZoltarQuestionData {
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
 		questionIds.push(questionId);
+		emit QuestionCreated(questionId, questionCreatedTimestamp[questionId], questionData, outcomeOptions);
 
 		return questionId;
 	}

@@ -2,20 +2,43 @@
 pragma solidity 0.8.35;
 
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
-import { MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, NULLIFIER_DEPTH } from './EscalationGameTypes.sol';
+import {
+	LN2_SCALED,
+	MAX_ATANH_ITERATIONS,
+	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
+	NULLIFIER_DEPTH,
+	SCALE
+} from './EscalationGameTypes.sol';
 
-library EscalationGameProofs {
-	function computeEmptyNullifierRoot() internal pure returns (bytes32 root) {
+contract EscalationGameProofVerifier {
+	function computeEmptyNullifierRoot() external pure returns (bytes32 root) {
 		root = bytes32(0);
 		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
 			root = MerkleMountainRange.hashParent(root, root);
 		}
 	}
 
+	function computeLnRatioScaled(uint256 lowValue, uint256 highValue) external pure returns (uint256) {
+		uint256 normalizedLow = lowValue;
+		uint256 log2Count = 0;
+		while (highValue >= normalizedLow * 2) {
+			unchecked {
+				normalizedLow *= 2;
+				++log2Count;
+			}
+		}
+
+		uint256 diff = highValue - normalizedLow;
+		uint256 sum = highValue + normalizedLow;
+		uint256 z = (diff * SCALE) / sum;
+		if (z == 0) return 0;
+		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z);
+	}
+
 	function getCurrentCarryPeakForLeaf(
 		uint256 leafCount,
 		uint256 leafIndex
-	) internal pure returns (uint256 peakHeight, uint256 peakStartIndex) {
+	) external pure returns (uint256 peakHeight, uint256 peakStartIndex) {
 		for (uint256 reverseHeight = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; reverseHeight > 0; ) {
 			unchecked {
 				--reverseHeight;
@@ -26,13 +49,13 @@ library EscalationGameProofs {
 			if (leafIndex < nextPeakStartIndex) return (currentPeakHeight, peakStartIndex);
 			peakStartIndex = nextPeakStartIndex;
 		}
-		revert();
+		revert('Carry peak absent');
 	}
 
 	function bagCarryPeaks(
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes,
 		uint256 leafCount
-	) internal pure returns (bytes32) {
+	) external pure returns (bytes32) {
 		if (leafCount == 0) return bytes32(0);
 
 		uint256 peakCount = 0;
@@ -60,10 +83,18 @@ library EscalationGameProofs {
 		uint256 leafIndex,
 		uint256 peakHeight,
 		bytes32[] calldata siblings
-	) internal pure returns (bytes32) {
-		require(((leafCount >> peakHeight) & 1) == 1, 'peak absent');
-		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'iph');
-		require(leafIndex < (uint256(1) << peakHeight), 'lior');
+	) external pure returns (bytes32) {
+		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'Bad carry peak');
+		require(((leafCount >> peakHeight) & 1) == 1, 'Carry peak absent');
+		require(leafIndex < (uint256(1) << peakHeight), 'Bad carry leaf');
+
+		uint256 peakCount = 0;
+		for (uint256 index = 0; index < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; index++) {
+			if (((leafCount >> index) & 1) == 1) {
+				peakCount += 1;
+			}
+		}
+		require(siblings.length == peakHeight + peakCount - 1, 'Bad MMR proof length');
 
 		bytes32 peakRoot = leafHash;
 		for (uint256 level = 0; level < peakHeight; level++) {
@@ -75,13 +106,6 @@ library EscalationGameProofs {
 			}
 		}
 
-		uint256 peakCount = 0;
-		for (uint256 index = 0; index < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; index++) {
-			if (((leafCount >> index) & 1) == 1) {
-				peakCount += 1;
-			}
-		}
-		require(siblings.length == peakHeight + peakCount - 1, 'invalid Merkle Mountain Range proof length');
 		bytes32[] memory peaks = new bytes32[](peakCount);
 		uint256 writeIndex = 0;
 		uint256 siblingIndex = peakHeight;
@@ -102,7 +126,8 @@ library EscalationGameProofs {
 		uint256 parentDepositIndex,
 		bytes32[] calldata siblings,
 		bytes32 leafValue
-	) internal pure returns (bytes32 root) {
+	) external pure returns (bytes32 root) {
+		require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');
 		root = leafValue;
 		uint256 path = uint256(keccak256(abi.encode(parentDepositIndex)));
 		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
@@ -111,6 +136,21 @@ library EscalationGameProofs {
 				root = MerkleMountainRange.hashParent(root, siblingHash);
 			} else {
 				root = MerkleMountainRange.hashParent(siblingHash, root);
+			}
+		}
+	}
+
+	function _computeAtanhScaled(uint256 z) private pure returns (uint256 atanhScaled) {
+		uint256 z2 = (z * z) / SCALE;
+		uint256 term = z;
+		atanhScaled = term;
+
+		for (uint256 k = 1; k < MAX_ATANH_ITERATIONS; ) {
+			term = (term * z2 * (2 * k - 1)) / ((2 * k + 1) * SCALE);
+			if (term == 0) break;
+			atanhScaled += term;
+			unchecked {
+				++k;
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-import { getCreate2Address, type Address, type Hex } from 'viem'
+import { getCreate2Address, getCreateAddress, type Address, type Hex } from 'viem'
 
 type LibraryReplacement = {
 	address: Address
@@ -48,6 +48,7 @@ type DeploymentStatusOracleAddressConfig = {
 
 type InfraContractAddresses = {
 	escalationGameFactory: Address
+	escalationGameProofVerifier: Address
 	multicall3: Address
 	openOracle: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
@@ -111,9 +112,14 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			scalarOutcomes: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.scalarOutcomesBytecode),
 			uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.uniformPriceDualCapBatchAuctionFactoryBytecode),
 		}
+		const escalationGameProofVerifier = getCreateAddress({
+			from: addresses.escalationGameFactory,
+			nonce: 1n,
+		})
 
 		return {
 			...addresses,
+			escalationGameProofVerifier,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,
 				config.zeroSalt,

@@ -7,6 +7,7 @@ describe('Peripherals: escalation migration', () => {
 	const approximatelyEqual: PeripheralsEscalationMigrationFixture['approximatelyEqual'] = fixture.approximatelyEqual
 	const strictEqualTypeSafe: PeripheralsEscalationMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 	const {
+		decodeEventLog,
 		encodeAbiParameters,
 		keccak256,
 		REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT,
@@ -64,6 +65,7 @@ describe('Peripherals: escalation migration', () => {
 		withdrawFromEscalationGame,
 		peripherals_EscalationGame_EscalationGame,
 		peripherals_SecurityPoolForker_SecurityPoolForker,
+		getMigrationProxyAddressAbi,
 		migrateVaultWithUnresolvedEscalationReturnAbi,
 		formatStorageSlot,
 		getMappingStorageSlot,
@@ -180,6 +182,28 @@ describe('Peripherals: escalation migration', () => {
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const migrationProxyAddress = await client.readContract({
+			abi: getMigrationProxyAddressAbi,
+			address: getInfraContractAddresses().securityPoolForker,
+			functionName: 'getMigrationProxyAddress',
+			args: [securityPoolAddresses.securityPool],
+		})
+		const decodeLocalDepositsExported = async (transactionHash: `0x${string}`, missingMessage: string) => {
+			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
+			return ensureDefined(
+				receipt.logs
+					.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
+					.map(log =>
+						decodeEventLog({
+							abi: peripherals_EscalationGame_EscalationGame.abi,
+							data: log.data,
+							topics: log.topics,
+						}),
+					)
+					.find(log => log.eventName === 'LocalDepositsExported'),
+				missingMessage,
+			)
+		}
 		const firstPreview = await client.simulateContract({
 			abi: migrateVaultWithUnresolvedEscalationReturnAbi,
 			address: getInfraContractAddresses().securityPoolForker,
@@ -188,7 +212,14 @@ describe('Peripherals: escalation migration', () => {
 			account: client.account,
 		})
 		strictEqualTypeSafe(firstPreview.result, true, 'first bounded migration should report a remaining follow-up batch')
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const firstMigrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const firstExportLog = await decodeLocalDepositsExported(firstMigrationHash, 'first LocalDepositsExported log missing')
+		strictEqualTypeSafe(firstExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'first export log should identify the vault')
+		strictEqualTypeSafe(firstExportLog.args.repReceiver, migrationProxyAddress, 'first export log should identify the migration proxy receiver')
+		assert.deepStrictEqual([...firstExportLog.args.principalByOutcome], [0n, BigInt(depositCount - 1) * reportBond, 0n], 'first export log should report the first bounded yes-principal batch')
+		strictEqualTypeSafe(firstExportLog.args.principalToTransfer, BigInt(depositCount - 1) * reportBond, 'first export log should report the REP transferred in the first batch')
+		strictEqualTypeSafe(firstExportLog.args.exportCursor, BigInt(depositCount - 1), 'first export log should expose the cursor after the bounded batch')
+		strictEqualTypeSafe(firstExportLog.args.transferredRep, true, 'external-fork export should transfer REP')
 		strictEqualTypeSafe(
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -208,7 +239,14 @@ describe('Peripherals: escalation migration', () => {
 			account: client.account,
 		})
 		strictEqualTypeSafe(secondPreview.result, false, 'second bounded migration should report completion')
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const secondMigrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const secondExportLog = await decodeLocalDepositsExported(secondMigrationHash, 'second LocalDepositsExported log missing')
+		strictEqualTypeSafe(secondExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'second export log should identify the vault')
+		strictEqualTypeSafe(secondExportLog.args.repReceiver, migrationProxyAddress, 'second export log should identify the migration proxy receiver')
+		assert.deepStrictEqual([...secondExportLog.args.principalByOutcome], [0n, reportBond, 0n], 'second export log should report the final yes-principal batch')
+		strictEqualTypeSafe(secondExportLog.args.principalToTransfer, reportBond, 'second export log should report the REP transferred in the final batch')
+		strictEqualTypeSafe(secondExportLog.args.exportCursor, BigInt(depositCount), 'second export log should expose the exhausted cursor')
+		strictEqualTypeSafe(secondExportLog.args.transferredRep, true, 'external-fork follow-up export should transfer REP')
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'follow-up migration should clear all parent unresolved escrow')
@@ -253,7 +291,7 @@ describe('Peripherals: escalation migration', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 		}
 
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /cap/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Child not migrating/)
 	})
 
 	test('migrateVaultWithUnresolvedEscalation requires the vault owner to call it', async () => {
@@ -784,7 +822,7 @@ describe('Peripherals: escalation migration', () => {
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /question not final/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question not finalized/)
 	})
 
 	test('third parties can permissionlessly settle another vaults resolved escalation deposits', async () => {

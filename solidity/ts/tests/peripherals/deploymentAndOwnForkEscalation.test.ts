@@ -9,6 +9,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 	const assert: PeripheralsDeploymentAndOwnForkEscalationFixture['assert'] = fixture.assert
 	const strictEqualTypeSafe: PeripheralsDeploymentAndOwnForkEscalationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 	const {
+		decodeEventLog,
 		createWriteClient,
 		DAY,
 		GENESIS_REPUTATION_TOKEN,
@@ -55,6 +56,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		getSecurityVault,
 		getSystemState,
 		poolOwnershipToRep,
+		peripherals_EscalationGame_EscalationGame,
 		peripherals_SecurityPoolForker_SecurityPoolForker,
 		test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness,
 		formatStorageSlot,
@@ -144,13 +146,13 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier), /universe forked/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier), /universe has already forked/)
 	})
 
 	test('cannot deploy origin security pool in a missing universe', async () => {
 		const missingUniverseId = 999999n
 
-		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe missing/)
+		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe is missing/)
 	})
 
 	test('origin security pool deployment derives protocol parameters for the first deployer', async () => {
@@ -163,10 +165,10 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			return getQuestionId(deploymentQuestionData, outcomes)
 		}
 		const zeroMultiplierQuestionId = await createBinaryQuestion(`zero multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /security multiplier/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /security multiplier/i)
 
 		const oneMultiplierQuestionId = await createBinaryQuestion(`one multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n), /security multiplier/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n), /security multiplier/i)
 
 		const callerRetentionQuestionId = await createBinaryQuestion(`caller retention ${await mockWindow.getTime()}`)
 		await deployOriginSecurityPool(client, genesisUniverse, callerRetentionQuestionId, securityMultiplier)
@@ -750,7 +752,30 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			await migrateRepToZoltar(client, scenarioPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, scenarioPool, QuestionOutcome.Yes)
 
-			await migrateVaultWithUnresolvedEscalation(client, scenarioPool, client.account.address, QuestionOutcome.Yes)
+			const parentEscalationGame = await getSecurityPoolsEscalationGame(client, scenarioPool)
+			const decodeNoTransferLocalDepositsExported = async (transactionHash: `0x${string}`) => {
+				const receipt = await client.getTransactionReceipt({ hash: transactionHash })
+				const log = receipt.logs
+					.filter(receiptLog => receiptLog.address.toLowerCase() === parentEscalationGame.toLowerCase())
+					.map(receiptLog =>
+						decodeEventLog({
+							abi: peripherals_EscalationGame_EscalationGame.abi,
+							data: receiptLog.data,
+							topics: receiptLog.topics,
+						}),
+					)
+					.find(receiptLog => receiptLog.eventName === 'LocalDepositsExported')
+				if (log === undefined) throw new Error('own-fork LocalDepositsExported log missing')
+				return log
+			}
+			const clientMigrationHash = await migrateVaultWithUnresolvedEscalation(client, scenarioPool, client.account.address, QuestionOutcome.Yes)
+			const noTransferExportLog = await decodeNoTransferLocalDepositsExported(clientMigrationHash)
+			strictEqualTypeSafe(noTransferExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'own-fork export log should identify the client vault')
+			strictEqualTypeSafe(noTransferExportLog.args.repReceiver.toLowerCase(), addressString(0n).toLowerCase(), 'own-fork export should not set a REP receiver')
+			assert.deepStrictEqual([...noTransferExportLog.args.principalByOutcome], [0n, clientYesEscalation, forkThreshold], 'own-fork export log should preserve source principal by original outcome')
+			strictEqualTypeSafe(noTransferExportLog.args.principalToTransfer, clientYesEscalation + forkThreshold, 'own-fork export log should report the consumed unresolved principal')
+			strictEqualTypeSafe(noTransferExportLog.args.exportCursor, 2n, 'own-fork export log should expose the exhausted two-ref cursor')
+			strictEqualTypeSafe(noTransferExportLog.args.transferredRep, false, 'own-fork unresolved export should not transfer parent REP')
 			await migrateVaultWithUnresolvedEscalation(attackerClient, scenarioPool, attackerClient.account.address, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)

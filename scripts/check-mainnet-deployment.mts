@@ -18,6 +18,7 @@ type ManifestDeploymentStep = {
 type MainnetDeploymentManifest = {
 	protocolConfig: ManifestProtocolConfig
 	deploymentSteps: ManifestDeploymentStep[]
+	derivedContracts: ManifestDeploymentStep[]
 }
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
@@ -74,16 +75,27 @@ function normalizeManifest(manifest: MainnetDeploymentManifest) {
 
 async function loadComputedManifest(): Promise<MainnetDeploymentManifest> {
 	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deployment.ts')
+	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deploymentHelpers.ts')
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 
 	try {
 		const deploymentModule = await import(url.pathToFileURL(deploymentModulePath).href)
+		const deploymentHelpersModule = await import(url.pathToFileURL(deploymentHelpersModulePath).href)
 		const protocolConfigModule = await import(url.pathToFileURL(protocolConfigModulePath).href)
 		const getDeploymentSteps = readFunction(deploymentModule, 'getDeploymentSteps')
+		const getInfraContractAddresses = readFunction(deploymentHelpersModule, 'getInfraContractAddresses')
 		const getMainnetProtocolConfig = readFunction(protocolConfigModule, 'getMainnetProtocolConfig')
+		const infraContractAddresses = getInfraContractAddresses()
 		return {
 			protocolConfig: readProtocolConfig(getMainnetProtocolConfig()),
 			deploymentSteps: readDeploymentSteps(getDeploymentSteps()),
+			derivedContracts: [
+				{
+					id: 'escalationGameProofVerifier',
+					label: 'Escalation Game Proof Verifier',
+					address: readStringField(infraContractAddresses, 'escalationGameProofVerifier', 'infraContractAddresses.escalationGameProofVerifier'),
+				},
+			],
 		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)
@@ -99,6 +111,7 @@ function renderMarkdown(manifest: MainnetDeploymentManifest) {
 	]
 	const configTable = configRows.map(([name, value]) => `| ${name} | ${value} |`).join('\n')
 	const addressTable = manifest.deploymentSteps.map(step => `| ${step.id} | ${step.label} | \`${step.address}\` |`).join('\n')
+	const derivedAddressTable = manifest.derivedContracts.map(contract => `| ${contract.id} | ${contract.label} | \`${contract.address}\` |`).join('\n')
 	return `# Mainnet Deployment Addresses
 
 These values are derived from the frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts. The machine-readable source for this table is \`docs/mainnet-deployment-addresses.json\`.
@@ -114,6 +127,14 @@ ${configTable}
 | ID | Label | Expected Address |
 | --- | --- | --- |
 ${addressTable}
+
+## Derived Side-Effect Contracts
+
+These contracts are deployed by one of the deterministic deployment steps and are not separate user-triggered deployment steps.
+
+| ID | Label | Expected Address |
+| --- | --- | --- |
+${derivedAddressTable}
 
 Security pool deployments are deterministic per pool input rather than globally fixed. Their addresses are derived from the deployed factory set plus parent universe, universe ID, question ID, and security multiplier.
 `
@@ -131,6 +152,7 @@ async function readManifest(): Promise<MainnetDeploymentManifest> {
 	if (!isRecord(parsedManifest)) throw new Error('Mainnet deployment manifest must be an object')
 	const protocolConfig = Reflect.get(parsedManifest, 'protocolConfig')
 	const deploymentSteps = Reflect.get(parsedManifest, 'deploymentSteps')
+	const derivedContracts = Reflect.get(parsedManifest, 'derivedContracts')
 	if (!isRecord(protocolConfig)) throw new Error('Mainnet deployment manifest protocolConfig must be an object')
 	return {
 		protocolConfig: {
@@ -139,6 +161,7 @@ async function readManifest(): Promise<MainnetDeploymentManifest> {
 			initialEscalationGameDeposit: readStringField(protocolConfig, 'initialEscalationGameDeposit', 'protocolConfig.initialEscalationGameDeposit'),
 		},
 		deploymentSteps: readDeploymentSteps(deploymentSteps),
+		derivedContracts: readDeploymentSteps(derivedContracts),
 	}
 }
 

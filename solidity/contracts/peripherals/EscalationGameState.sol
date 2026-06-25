@@ -4,18 +4,19 @@ pragma solidity 0.8.35;
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { EscalationGameProofs } from './EscalationGameProofs.sol';
+import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { ForkedEscrowState, Node, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameState {
-	uint256 public constant activationDelay = 3 days;
+	uint256 internal constant activationDelay = 3 days;
 	uint256 public activationTime;
 	ISecurityPool public immutable securityPool;
 	ReputationToken public immutable repToken;
+	EscalationGameProofVerifier internal immutable proofVerifier;
 	uint256 public nonDecisionThreshold;
 	uint256 public startBond;
-	uint256 public lnRatioScaled;
-	address public immutable owner;
+	uint256 internal lnRatioScaled;
+	address internal immutable owner;
 	uint256 public nonDecisionTimestamp;
 	bool public forkContinuation;
 	uint256 public forkElapsedAtStart;
@@ -23,16 +24,16 @@ abstract contract EscalationGameState {
 	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
 	// Outcome-indexed state uses 0 = Invalid, 1 = Yes, 2 = No.
 	OutcomeState[3] internal outcomeState;
-	uint256 public nextNodeId = 1;
+	uint256 internal nextNodeId = 1;
 	mapping(uint256 => Node) public nodes;
 	mapping(address => uint256) public escrowedRepByVault;
 	uint256 public totalEscrowedRep;
-	mapping(address => uint256) public unresolvedRepByVault;
-	uint256 public totalLocalUnresolvedRep;
+	mapping(address => uint256) internal unresolvedRepByVault;
+	uint256 internal totalLocalUnresolvedRep;
 	mapping(address => uint256[]) internal unresolvedLocalDepositRefsByVault;
 	mapping(address => uint256) internal unresolvedLocalDepositExportCursorByVault;
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
-	bool public forkCarrySnapshotRequiresForkedEscrow;
+	bool internal forkCarrySnapshotRequiresForkedEscrow;
 
 	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event GameContinuedFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork);
@@ -42,12 +43,15 @@ abstract contract EscalationGameState {
 		bytes32[3] inheritedNullifierRoots
 	);
 	event ForkContinuationResumed(uint256 resumedAt);
+	event NonDecisionReached(uint256 nonDecisionTimestamp);
 	event DepositOnOutcome(
 		address depositor,
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint256 amount,
 		uint256 depositIndex,
-		uint256 cumulativeAmount
+		uint256 cumulativeAmount,
+		uint256 escrowedRepByVault,
+		uint256 totalEscrowedRep
 	);
 	event WithdrawDeposit(
 		address depositor,
@@ -55,7 +59,15 @@ abstract contract EscalationGameState {
 		uint256 amountToWithdraw,
 		uint256 depositIndex
 	);
-	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
+	event ClaimDeposit(
+		address depositor,
+		BinaryOutcomes.BinaryOutcome outcome,
+		uint256 parentDepositIndex,
+		uint256 originalDepositAmount,
+		uint256 amountToWithdraw,
+		uint256 burnAmount,
+		bool transferredRep
+	);
 	event LocalDepositAppended(
 		uint256 indexed nodeId,
 		BinaryOutcomes.BinaryOutcome outcome,
@@ -72,19 +84,61 @@ abstract contract EscalationGameState {
 		uint256 sourceNodeId,
 		bytes32 leafHash
 	);
+	event LocalDepositsExported(
+		address vault,
+		address repReceiver,
+		uint256[3] principalByOutcome,
+		uint256 principalToTransfer,
+		uint256 exportCursor,
+		bool transferredRep
+	);
+	event ForkedEscrowRecorded(
+		address depositor,
+		BinaryOutcomes.BinaryOutcome outcome,
+		uint256 sourcePrincipalTotal,
+		uint256 childRepTotal,
+		uint256 escrowedRepByVault,
+		uint256 totalEscrowedRep,
+		uint256 outcomeBalance
+	);
+	event VaultEscrowUpdated(address vault, uint256 escrowedRepByVault, uint256 totalEscrowedRep);
+	event ForkedEscrowClaimed(
+		address depositor,
+		BinaryOutcomes.BinaryOutcome outcome,
+		uint256 sourcePrincipalClaimed,
+		uint256 childRepClaimed
+	);
+	event ForkedEscrowExported(
+		address vault,
+		address repReceiver,
+		uint256[3] sourcePrincipalByOutcome,
+		uint256[3] childRepByOutcome,
+		uint256 totalChildRepToTransfer,
+		bool transferredRep
+	);
 	event ResidualRepSweptToSecurityPool(uint256 amount);
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken) {
+	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
 		securityPool = _securityPool;
 		repToken = _repToken;
+		proofVerifier = _proofVerifier;
 		owner = msg.sender;
-		EMPTY_NULLIFIER_ROOT = _computeEmptyNullifierRoot();
+		EMPTY_NULLIFIER_ROOT = _readEmptyNullifierRoot(_proofVerifier);
+	}
+
+	function _readEmptyNullifierRoot(EscalationGameProofVerifier _proofVerifier) private view returns (bytes32) {
+		require(address(_proofVerifier).code.length != 0, 'Proof verifier has no code');
+		require(
+			address(_proofVerifier).codehash == keccak256(type(EscalationGameProofVerifier).runtimeCode),
+			'Proof verifier invalid'
+		);
+		return _proofVerifier.computeEmptyNullifierRoot();
 	}
 
 	modifier onlySecurityPoolOrForker() {
 		require(
 			msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()),
-			'Only Security Pool or designated forker'
+			'Only pool or forker'
 		);
 		_;
 	}
@@ -99,21 +153,18 @@ abstract contract EscalationGameState {
 	function _consumeEscrowedRepForVault(address depositor, uint256 amount) internal {
 		if (amount == 0) return;
 		uint256 escrowedRep = escrowedRepByVault[depositor];
-		require(escrowedRep >= amount, 'ue');
+		require(escrowedRep >= amount, 'Escrowed REP low');
 		escrowedRepByVault[depositor] = escrowedRep - amount;
 		totalEscrowedRep -= amount;
+		emit VaultEscrowUpdated(depositor, escrowedRepByVault[depositor], totalEscrowedRep);
 	}
 
 	function _consumeUnresolvedRepForVault(address depositor, uint256 amount) internal {
 		if (amount == 0) return;
 		uint256 unresolvedRep = unresolvedRepByVault[depositor];
-		require(unresolvedRep >= amount, 'uor');
-		require(totalLocalUnresolvedRep >= amount, 'utb');
+		require(unresolvedRep >= amount, 'Vault unresolved REP low');
+		require(totalLocalUnresolvedRep >= amount, 'Local unresolved REP low');
 		unresolvedRepByVault[depositor] = unresolvedRep - amount;
 		totalLocalUnresolvedRep -= amount;
-	}
-
-	function _computeEmptyNullifierRoot() private pure returns (bytes32) {
-		return EscalationGameProofs.computeEmptyNullifierRoot();
 	}
 }

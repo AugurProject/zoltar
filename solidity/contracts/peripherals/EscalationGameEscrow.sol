@@ -20,11 +20,25 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		uint256 sourcePrincipal,
 		uint256 childRepAmount
 	) external onlySecurityPoolOrForker {
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
-		_recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
+		require(depositor != address(0x0), 'Depositor is zero');
+		if (sourcePrincipal == 0 && childRepAmount == 0) return;
+		require(sourcePrincipal > 0, 'Escrow principal missing');
+		ForkedEscrowState storage state = _recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
+		uint256 outcomeBalance = outcomeState[uint8(outcome)].balance;
 		if (forkCarrySnapshotRequiresForkedEscrow) {
-			outcomeState[uint8(outcome)].balance += childRepAmount;
+			outcomeBalance += childRepAmount;
+			outcomeState[uint8(outcome)].balance = outcomeBalance;
 		}
+		emit ForkedEscrowRecorded(
+			depositor,
+			outcome,
+			state.sourcePrincipal,
+			state.childRep,
+			escrowedRepByVault[depositor],
+			totalEscrowedRep,
+			outcomeBalance
+		);
 	}
 
 	function getForkedEscrowByVaultAndOutcome(
@@ -35,7 +49,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		view
 		returns (uint256 sourcePrincipal, uint256 sourcePrincipalClaimed, uint256 childRep, uint256 childRepClaimed)
 	{
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'bad outcome');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
 		return (state.sourcePrincipal, state.sourcePrincipalClaimed, state.childRep, state.childRepClaimed);
 	}
@@ -61,7 +75,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		onlySecurityPoolOrForker
 		returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome)
 	{
-		require(repReceiver != address(0x0), 'br');
+		require(repReceiver != address(0x0), 'REP receiver zero');
 		return _exportForkedEscrowByOutcome(vault, repReceiver, true);
 	}
 
@@ -90,7 +104,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 	}
 
 	function _encodeLocalDepositRef(uint8 outcomeIndex, uint256 depositIndex) internal pure returns (uint256) {
-		require(depositIndex <= LOCAL_DEPOSIT_REF_INDEX_MASK, 'deposit index too large');
+		require(depositIndex <= LOCAL_DEPOSIT_REF_INDEX_MASK, 'Deposit index too large');
 		return (uint256(outcomeIndex) << LOCAL_DEPOSIT_REF_OUTCOME_SHIFT) | depositIndex;
 	}
 
@@ -105,7 +119,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		if (forkedEscrowPrincipal == 0) return (0, 0, 0);
 		forkedEscrowChildRep = state.childRep;
 		uint256 nextSourcePrincipalClaimed = state.sourcePrincipalClaimed + sourcePrincipalToClaim;
-		require(nextSourcePrincipalClaimed <= forkedEscrowPrincipal, 'forked escrow overclaim');
+		require(nextSourcePrincipalClaimed <= forkedEscrowPrincipal, 'Escrow claim exceeds principal');
 		uint256 nextChildRepClaimed = Math.ceilDiv(
 			nextSourcePrincipalClaimed * forkedEscrowChildRep,
 			forkedEscrowPrincipal
@@ -113,6 +127,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		childRepToRelease = nextChildRepClaimed - state.childRepClaimed;
 		state.sourcePrincipalClaimed = nextSourcePrincipalClaimed;
 		state.childRepClaimed = nextChildRepClaimed;
+		emit ForkedEscrowClaimed(vault, outcome, state.sourcePrincipalClaimed, state.childRepClaimed);
 	}
 
 	function _scaleForkedEscrowAmount(
@@ -136,11 +151,8 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint256 sourcePrincipal,
 		uint256 childRepAmount
-	) private {
-		require(depositor != address(0x0), 'bd');
-		if (sourcePrincipal == 0 && childRepAmount == 0) return;
-		require(sourcePrincipal > 0, 'forked escrow amounts mismatch');
-		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
+	) private returns (ForkedEscrowState storage state) {
+		state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
 		state.sourcePrincipal += sourcePrincipal;
 		state.childRep += childRepAmount;
 		escrowedRepByVault[depositor] += childRepAmount;
@@ -167,6 +179,14 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			principalByOutcome[outcomeIndex] += consumedDeposit.amount;
 		}
 		unresolvedLocalDepositExportCursorByVault[vault] = maxRefIndex;
+		emit LocalDepositsExported(
+			vault,
+			repReceiver,
+			principalByOutcome,
+			principalToTransfer,
+			maxRefIndex,
+			transferRep
+		);
 		if (principalToTransfer == 0) return (0, principalByOutcome);
 		_consumeEscrowedRepForVault(vault, principalToTransfer);
 		if (transferRep) {
@@ -179,8 +199,9 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		address repReceiver,
 		bool transferRep
 	) private returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome) {
-		require(vault != address(0x0), 'bv');
+		require(vault != address(0x0), 'Vault is zero');
 		uint256 totalChildRepToTransfer;
+		bool exported;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[vault][outcomeIndex];
 			uint256 sourcePrincipal = state.sourcePrincipal;
@@ -193,6 +214,17 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			state.sourcePrincipalClaimed = sourcePrincipal;
 			state.childRepClaimed = childRep;
 			totalChildRepToTransfer += remainingChildRep;
+			exported = true;
+		}
+		if (exported) {
+			emit ForkedEscrowExported(
+				vault,
+				repReceiver,
+				sourcePrincipalByOutcome,
+				childRepByOutcome,
+				totalChildRepToTransfer,
+				transferRep
+			);
 		}
 		if (totalChildRepToTransfer == 0) return (sourcePrincipalByOutcome, childRepByOutcome);
 		_consumeEscrowedRepForVault(vault, totalChildRepToTransfer);
@@ -205,7 +237,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		uint256 depositRef
 	) private pure returns (uint8 outcomeIndex, uint256 depositIndex) {
 		outcomeIndex = uint8(depositRef >> LOCAL_DEPOSIT_REF_OUTCOME_SHIFT);
-		require(outcomeIndex < 3, 'bad deposit ref outcome');
+		require(outcomeIndex < 3, 'Bad deposit ref outcome');
 		depositIndex = depositRef & LOCAL_DEPOSIT_REF_INDEX_MASK;
 	}
 }

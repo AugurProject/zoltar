@@ -11,6 +11,7 @@ import assert from '../testsuite/simulator/utils/assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
+import { decodeEventLog } from 'viem'
 
 const MAX_UINT256 = 2n ** 256n - 1n
 
@@ -48,10 +49,29 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 
-		await createQuestion(client, testCategoricalQuestion, outcomeLabels)
+		const createHash = await createQuestion(client, testCategoricalQuestion, outcomeLabels)
 		const questionId = getQuestionId(testCategoricalQuestion, outcomeLabels)
 		const fetchedOutcomeLabels = await getOutcomeLabels(client, questionId)
 		const data = await getQuestionData(client, questionId)
+		const createReceipt = await client.waitForTransactionReceipt({ hash: createHash })
+		const questionDataAddress = getInfraContractAddresses().zoltarQuestionData
+		const createdLog = createReceipt.logs
+			.filter(log => log.address.toLowerCase() === questionDataAddress.toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+			.find(log => log.eventName === 'QuestionCreated')
+		if (createdLog === undefined) throw new Error('missing QuestionCreated log')
+		const createdTimestamp = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'questionCreatedTimestamp',
+			address: questionDataAddress,
+			args: [questionId],
+		})
 		assert.strictEqual(data.title, testCategoricalQuestion.title, 'title mismatch')
 		assert.strictEqual(data.description, testCategoricalQuestion.description, 'description mismatch')
 		assert.strictEqual(data.startTime, testCategoricalQuestion.startTime, 'startTime mismatch')
@@ -61,6 +81,17 @@ describe('Question Data', () => {
 		assert.strictEqual(data.displayValueMin, testCategoricalQuestion.displayValueMin, 'displayValueMin mismatch')
 		assert.strictEqual(data.displayValueMax, testCategoricalQuestion.displayValueMax, 'displayValueMax mismatch')
 		assert.strictEqual(data.answerUnit, testCategoricalQuestion.answerUnit, 'answerUnit mismatch')
+		assert.strictEqual(createdLog.args.questionId, questionId, 'QuestionCreated should identify the question')
+		assert.strictEqual(createdLog.args.createdTimestamp, createdTimestamp, 'QuestionCreated should expose the stored creation timestamp')
+		assert.strictEqual(createdLog.args.questionData.title, data.title, 'QuestionCreated should expose the stored title')
+		assert.strictEqual(createdLog.args.questionData.description, data.description, 'QuestionCreated should expose the stored description')
+		assert.strictEqual(createdLog.args.questionData.startTime, data.startTime, 'QuestionCreated should expose the stored start time')
+		assert.strictEqual(createdLog.args.questionData.endTime, data.endTime, 'QuestionCreated should expose the stored end time')
+		assert.strictEqual(createdLog.args.questionData.numTicks, data.numTicks, 'QuestionCreated should expose the stored tick count')
+		assert.strictEqual(createdLog.args.questionData.displayValueMin, data.displayValueMin, 'QuestionCreated should expose the stored display minimum')
+		assert.strictEqual(createdLog.args.questionData.displayValueMax, data.displayValueMax, 'QuestionCreated should expose the stored display maximum')
+		assert.strictEqual(createdLog.args.questionData.answerUnit, data.answerUnit, 'QuestionCreated should expose the stored answer unit')
+		assert.deepStrictEqual(Array.from(createdLog.args.outcomeOptions), fetchedOutcomeLabels, 'QuestionCreated should expose the stored outcome labels')
 
 		assert.ok(!(await isMalformedAnswerOption(client, questionId, 0n)), 'invalid is valid')
 		assert.ok(!(await isMalformedAnswerOption(client, questionId, 1n)), 'Yes is valid')
@@ -267,9 +298,9 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 		// Duplicate entries: ['Yes', 'Yes']
-		await assert.rejects(createQuestion(client, question, ['Yes', 'Yes']), { message: /Outcome option hashes not sorted/ })
+		await assert.rejects(createQuestion(client, question, ['Yes', 'Yes']), { message: /outcome option hashes must be provided in descending sorted order/i })
 		// Duplicate entries with more options
-		await assert.rejects(createQuestion(client, question, ['Yes', 'No', 'Yes']), { message: /Outcome option hashes not sorted/ })
+		await assert.rejects(createQuestion(client, question, ['Yes', 'No', 'Yes']), { message: /outcome option hashes must be provided in descending sorted order/i })
 	})
 
 	test('createQuestion rejects questions whose end time is before the start time', async () => {
@@ -285,7 +316,7 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 
-		await assert.rejects(createQuestion(client, question, ['Yes', 'No']), { message: /end time must be on or after start time/ })
+		await assert.rejects(createQuestion(client, question, ['Yes', 'No']), { message: /question end time must be on or after the start time/i })
 	})
 
 	test('createQuestion enforces binary outcome order', async () => {
@@ -307,7 +338,7 @@ describe('Question Data', () => {
 		assert.deepStrictEqual(labels1, ['Yes', 'No'], 'binary outcome labels should match')
 
 		// Reversed order ['No','Yes'] should be rejected
-		await assert.rejects(createQuestion(client, question, ['No', 'Yes']), { message: /Outcome option hashes not sorted/ })
+		await assert.rejects(createQuestion(client, question, ['No', 'Yes']), { message: /outcome option hashes must be provided in descending sorted order/i })
 	})
 
 	test('createQuestion rejects unsorted non-binary outcome options', async () => {
@@ -324,7 +355,7 @@ describe('Question Data', () => {
 
 		const unsortedOutcomes = ['Apple', 'Banana', 'Cherry']
 		assert.ok(!areEqualArrays(sortStringArrayByKeccak(unsortedOutcomes), unsortedOutcomes), 'test inputs must be intentionally unsorted')
-		await assert.rejects(createQuestion(client, question, unsortedOutcomes), { message: /Outcome option hashes not sorted/ })
+		await assert.rejects(createQuestion(client, question, unsortedOutcomes), { message: /outcome option hashes must be provided in descending sorted order/i })
 	})
 
 	test('createQuestion accepts non-binary outcome options after sorting them by the contract hash order', async () => {
