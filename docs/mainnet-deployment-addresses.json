@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x39148910F34D3bC4223FAE77Cb04cFa4d6d5D827"
+			"address": "0x5D6E7E99c3219D052676Cf3bf771E91Db0A5dB99"
 		},
 		{
 			"id": "multicall3",
@@ -73,7 +73,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x00C3B2Bd61444F44041D17bCa87e18a9a6376624"
+			"address": "0x7321458e0874F3054468e7c4E4e22c926Efb9e8b"
 		}
 	],
 	"derivedContracts": [

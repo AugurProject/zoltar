@@ -214,6 +214,9 @@ function usePeripheralsTestFixture() {
 	const finalizeQuestionAsYesWithoutFork = async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		if ((await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool)) > 0n) {
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		}
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should finalize as yes')
@@ -917,6 +920,8 @@ export function usePeripheralsTruthAuctionFixture() {
 		DAY: fixture.DAY,
 		GENESIS_REPUTATION_TOKEN: fixture.GENESIS_REPUTATION_TOKEN,
 		TEST_ADDRESSES: fixture.TEST_ADDRESSES,
+		formatStorageSlot: fixture.formatStorageSlot,
+		getMappingStorageSlot: fixture.getMappingStorageSlot,
 		approveToken: fixture.approveToken,
 		contractExists: fixture.contractExists,
 		getChildUniverseId: fixture.getChildUniverseId,
