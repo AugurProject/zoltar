@@ -12,8 +12,56 @@ import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, 
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 import { decodeEventLog } from 'viem'
+import {
+	SCALAR_PARITY_ENCODING_FIXTURES,
+	SCALAR_PARITY_LABEL_FIXTURES,
+	SCALAR_PARITY_QUESTIONS,
+	SCALAR_PARITY_UINT120_MAX,
+	combineScalarParityOutcomeIndex,
+	describeScalarParityOutcomeIndex,
+	formatScalarParityLabel,
+	formatScalarParityOutcomeName,
+	getScalarParityOutcomeIndex,
+	getScalarParityQuestion,
+	isScalarParityMalformedOutcomeIndex,
+} from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
+import type { ScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
 
 const MAX_UINT256 = 2n ** 256n - 1n
+const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12
+const SCALAR_ENCODING_FUZZ_STATE_MASK = (1n << 128n) - 1n
+
+type ScalarEncodingFuzzSample = {
+	firstPart: bigint
+	invalid: boolean
+	secondPart: bigint
+}
+
+function advanceScalarEncodingFuzzState(state: bigint) {
+	return (state * 6364136223846793005n + 1442695040888963407n) & SCALAR_ENCODING_FUZZ_STATE_MASK
+}
+
+function getScalarEncodingFuzzSamples(question: ScalarParityQuestion, seed: bigint) {
+	const samples: ScalarEncodingFuzzSample[] = [
+		{ invalid: true, firstPart: 0n, secondPart: 0n },
+		{ invalid: false, firstPart: question.numTicks, secondPart: 0n },
+		{ invalid: false, firstPart: 0n, secondPart: question.numTicks },
+	]
+	let state = seed
+	for (let index = 0; index < SCALAR_ENCODING_FUZZ_SAMPLE_COUNT; index++) {
+		state = advanceScalarEncodingFuzzState(state)
+		const invalid = (state & 1n) === 0n
+		state = advanceScalarEncodingFuzzState(state)
+		const firstPart = state & SCALAR_PARITY_UINT120_MAX
+		state = advanceScalarEncodingFuzzState(state)
+		const secondPart = state & SCALAR_PARITY_UINT120_MAX
+		const tickIndex = state % (question.numTicks + 1n)
+		samples.push({ invalid, firstPart, secondPart })
+		samples.push({ invalid: false, firstPart: question.numTicks - tickIndex, secondPart: tickIndex })
+		if (index % 3 === 0) samples.push({ invalid: true, firstPart: (firstPart % 19n) + 1n, secondPart: secondPart % 23n })
+	}
+	return samples
+}
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -35,6 +83,42 @@ describe('Question Data', () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	})
+
+	const createScalarParityQuestion = async (question: ScalarParityQuestion) => {
+		const questionData = {
+			title: `scalar parity ${question.name}`,
+			description: 'scalar parity fixture',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: question.numTicks,
+			displayValueMin: question.displayValueMin,
+			displayValueMax: question.displayValueMax,
+			answerUnit: question.answerUnit,
+		}
+		await createQuestion(client, questionData, [])
+		return getQuestionId(questionData, [])
+	}
+
+	const createScalarParityQuestionIds = async () => {
+		const questionIdsByName = new Map<string, bigint>()
+		for (const question of SCALAR_PARITY_QUESTIONS) {
+			questionIdsByName.set(question.name, await createScalarParityQuestion(question))
+		}
+		return questionIdsByName
+	}
+
+	const getScalarParityQuestionId = (questionIdsByName: Map<string, bigint>, questionName: string) => {
+		const questionId = questionIdsByName.get(questionName)
+		if (questionId === undefined) throw new Error(`Missing scalar parity question id: ${questionName}`)
+		return questionId
+	}
+
+	const assertScalarContractMatchesParityModel = async (questionId: bigint, question: ScalarParityQuestion, answer: bigint, context: string) => {
+		const expectedMalformed = isScalarParityMalformedOutcomeIndex(question, answer)
+		const expectedName = formatScalarParityOutcomeName(question, answer)
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, answer), expectedMalformed, `${context} malformed flag mismatch`)
+		assert.strictEqual(await getAnswerOptionName(client, questionId, answer), expectedName, `${context} outcome name mismatch`)
+	}
 
 	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']
@@ -138,6 +222,42 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, testScalarQuestion.numTicks / 2n, testScalarQuestion.numTicks / 2n)), '0 km', 'Middle is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, testScalarQuestion.numTicks + 1n, 0n)), 'Malformed', 'Overflow')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, testScalarQuestion.numTicks + 1n)), 'Malformed', 'Overflow')
+	})
+
+	test('scalar outcome labels match shared TypeScript renderer fixtures', async () => {
+		const questionIdsByName = await createScalarParityQuestionIds()
+		for (const fixture of SCALAR_PARITY_LABEL_FIXTURES) {
+			const question = getScalarParityQuestion(fixture.questionName)
+			const questionId = getScalarParityQuestionId(questionIdsByName, fixture.questionName)
+			const answer = getScalarParityOutcomeIndex(question, fixture.tickIndex)
+			assert.strictEqual(formatScalarParityLabel(question, fixture.tickIndex), fixture.expectedLabel, `${fixture.name} fixture label should be internally consistent`)
+			assert.strictEqual(await getAnswerOptionName(client, questionId, answer), fixture.expectedLabel, `${fixture.name} contract label mismatch`)
+		}
+	})
+
+	test('scalar answer encoding fixtures match shared TypeScript renderer model', async () => {
+		const questionIdsByName = await createScalarParityQuestionIds()
+		for (const fixture of SCALAR_PARITY_ENCODING_FIXTURES) {
+			const question = getScalarParityQuestion(fixture.questionName)
+			const questionId = getScalarParityQuestionId(questionIdsByName, fixture.questionName)
+			const answer = combineScalarParityOutcomeIndex(fixture.invalid, fixture.firstPart, fixture.secondPart)
+			assert.deepStrictEqual(describeScalarParityOutcomeIndex(question, answer), fixture.expectedDescriptor, `${fixture.name} descriptor fixture mismatch`)
+			assert.strictEqual(formatScalarParityOutcomeName(question, answer), fixture.expectedLabel, `${fixture.name} expected name fixture mismatch`)
+			await assertScalarContractMatchesParityModel(questionId, question, answer, fixture.name)
+		}
+	})
+
+	test('fuzzes scalar answer encoding against the shared TypeScript renderer model', async () => {
+		const questionIdsByName = await createScalarParityQuestionIds()
+		let seed = 0x5ca1ab1ef00dn
+		for (const question of SCALAR_PARITY_QUESTIONS) {
+			const questionId = getScalarParityQuestionId(questionIdsByName, question.name)
+			for (const sample of getScalarEncodingFuzzSamples(question, seed)) {
+				const answer = combineScalarParityOutcomeIndex(sample.invalid, sample.firstPart, sample.secondPart)
+				await assertScalarContractMatchesParityModel(questionId, question, answer, `${question.name} fuzz sample ${seed.toString(16)}`)
+				seed = advanceScalarEncodingFuzzState(seed)
+			}
+		}
 	})
 
 	test('isMalformedAnswerOption: scalar answers with high bit set follow the scalar validity rules', async () => {
