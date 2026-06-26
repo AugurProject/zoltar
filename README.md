@@ -14,6 +14,17 @@ Protocol documentation lives in `docs/`:
 
 - [Zoltar visual whitepaper](./docs/whitepaper_zoltar.html)
 - [Augur Placeholder visual whitepaper](./docs/whitepaper_placeholder.html)
+- [Operator reference](./docs/operator-reference.md)
+- [Auction design](./docs/auction-design.md)
+- [Escalation game architecture](./docs/escalation-game-architecture.md)
+- [Release and operator runbook](./docs/release-operator-runbook.md)
+- [Audit status](./docs/audit-status.md)
+
+Repository process documentation:
+
+- [Contributing guide](./CONTRIBUTING.md)
+- [Security policy and disclosure process](./SECURITY.md)
+- [Ownership map](./ownership/CODEOWNERS)
 
 ## Prerequisites
 
@@ -93,61 +104,61 @@ Simulation mode details:
 
 ## Common Commands
 
-Run the full app in development mode. This includes contract generation and the frontend build pipeline:
+Run the full app in development mode. This refreshes Solidity artifacts/types, UI contract artifact and ABI copies, shared JavaScript, UI vendor assets, emitted UI JavaScript, and generated UI test JavaScript before serving the frontend:
 
 ```bash
 bun run app:serve
 ```
 
-Watch and rebuild the full app pipeline:
+Watch and rebuild the full app pipeline. This performs the same generated-output refresh as `app:build` before starting the watcher:
 
 ```bash
 bun run app:watch
 ```
 
-Build the full app:
+Build the full app. This refreshes Solidity artifacts/types, UI contract artifact and ABI copies, shared JavaScript, UI vendor assets, emitted UI JavaScript, and generated UI test JavaScript:
 
 ```bash
 bun run app:build
 ```
 
-Regenerate contract bindings and UI vendor assets:
+Regenerate generated protocol and UI inputs. This refreshes Solidity artifacts/types, UI contract artifact and ABI copies, shared JavaScript, and UI vendor assets:
 
 ```bash
 bun run generate
 ```
 
-Compile the Solidity contracts:
+Compile the Solidity contracts. This refreshes shared JavaScript, Solidity artifacts/types, and the UI contract artifact and ABI copies derived from those artifacts:
 
 ```bash
 bun run compile-contracts
 ```
 
-Run the full test suite:
+Run the full test suite. This may refresh shared JavaScript, Solidity artifacts/types, and UI contract artifact and ABI copies before type-checking and executing tests:
 
 ```bash
 bun run test
 ```
 
-Run the launch-focused fork, auction, and exit invariant gate:
+Run the launch-focused fork, auction, and exit invariant gate. This may refresh shared JavaScript, Solidity artifacts/types, and UI contract artifact and ABI copies before the Solidity type-check and targeted tests:
 
 ```bash
 bun run test:launch-invariants
 ```
 
-Run fast coverage checks:
+Run fast coverage checks. The UI phase may refresh shared JavaScript; the contract phase may refresh shared JavaScript, Solidity artifacts/types, and UI contract artifact and ABI copies:
 
 ```bash
 bun run coverage
 ```
 
-Run full coverage, including the slow Solidity bytecode trace phase:
+Run full coverage, including the slow Solidity bytecode trace phase. This includes the same generated-output preflights as fast coverage:
 
 ```bash
 bun run coverage:full
 ```
 
-Type-check the TypeScript code:
+Type-check the TypeScript code. This may refresh shared JavaScript when it is missing or stale, but it does not emit UI JavaScript, generated UI test JavaScript, UI vendor assets, or contract artifacts:
 
 ```bash
 bun run tsc
@@ -205,10 +216,11 @@ Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the comm
 
 ## Notes
 
-- `bun run setup` is the quickest way to bootstrap a fresh checkout.
+- `bun run setup` is the quickest way to bootstrap a fresh checkout. It installs root, UI, and Solidity dependencies, then refreshes Solidity artifacts/types, UI contract artifact and ABI copies, shared JavaScript, UI vendor assets, emitted UI JavaScript, and generated UI test JavaScript.
 - `bun install --frozen-lockfile` must be run before standalone commands like `bun run tsc` on a fresh checkout.
-- `bun run tsc` is a pure typecheck for the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts. It does not regenerate shared assets or vendor output.
+- `bun run tsc` type-checks the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts after ensuring generated shared JavaScript is present and current. It can refresh `shared/js` when those outputs are missing or stale, but it does not regenerate contract artifacts, UI vendor assets, emitted UI JavaScript, or generated UI test JavaScript.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
+- Generated build outputs and protocol artifacts are intentionally untracked. See [Contributing](./CONTRIBUTING.md#generated-output-policy) before committing files under generated-output paths.
 - `bun run test:launch-invariants` is the targeted pre-release gate for adversarial fork, truth-auction, unresolved escalation carry, and auction edge-case invariants.
 - `bun run coverage` runs the fast UI and contract TypeScript coverage phases. Use `bun run coverage:full` when you also need the slower Solidity bytecode trace coverage phase.
 - The legacy `ui:*` commands still exist as compatibility aliases, but `app:*` names are the clearer entrypoints because they run more than frontend-only work.

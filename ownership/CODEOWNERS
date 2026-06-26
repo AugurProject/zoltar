@@ -1,0 +1,16 @@
+# Advisory ownership map for review routing.
+# GitHub only enforces CODEOWNERS from the repository root, .github/, or docs/.
+# Keep this file in sync with branch-protection CODEOWNERS if enforcement is enabled later.
+
+* @KillariDev
+
+/solidity/ @KillariDev
+/shared/ @KillariDev
+/ui/ @KillariDev
+/scripts/ @KillariDev
+/docs/ @KillariDev
+/.github/ @KillariDev
+/AGENTS.md @KillariDev
+/CONTRIBUTING.md @KillariDev
+/SECURITY.md @KillariDev
+/README.md @KillariDev

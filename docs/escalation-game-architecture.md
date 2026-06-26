@@ -66,7 +66,7 @@ The proof verifier split keeps `EscalationGame` as the state-owning contract and
 - project deployed-bytecode budget headroom: `142` bytes below `24,000`
 - EIP-170 deployed-bytecode headroom: `718` bytes below `24,576`
 
-This PR intentionally adds revert strings and event payloads across the system, so `EscalationGame` is not expected to be smaller than the pre-audit `origin/main` artifact. The size target is to keep the enriched contract below the project budget while moving proof verification out to the verifier contract.
+The current size posture reserves room for revert strings and event payloads across the system, so `EscalationGame` is not expected to be smaller than older pre-extraction artifacts. The size target is to keep the enriched contract below the project budget while moving proof verification out to the verifier contract.
 
 Any Solidity change can alter deterministic deployment addresses because address derivation uses init code. After contract changes, regenerate and review deployment outputs with the normal artifact workflow and keep `docs/mainnet-deployment-addresses.json` plus `docs/mainnet-deployment-addresses.md` in sync when expected addresses change.
 
