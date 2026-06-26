@@ -5,7 +5,9 @@ import { getAddress } from 'viem'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
-import { runWriteAction } from '../lib/writeAction.js'
+import { createInitialTransactionTrayState, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
+import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const nextWalletAddress = getAddress('0x00000000000000000000000000000000000000b2')
@@ -144,6 +146,44 @@ describe('runWriteAction', () => {
 		)
 
 		expect(activeChainId).toBe(MAINNET_NETWORK_PROFILE.chainIdHex)
+	})
+
+	test('uses simulation transaction copy through the shared write action config', async () => {
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: walletAddress, profile: createFakeSimulationProfile() }))
+		let transactionState = createInitialTransactionTrayState()
+		const errorSignal: { value: string | undefined } = { value: undefined }
+		const writeActionConfig = buildWriteActionConfig(
+			{
+				accountAddress: walletAddress,
+				onTransactionFailed: undefined,
+				onTransactionFinished: () => {
+					transactionState = markTransactionFinished(transactionState)
+				},
+				onTransactionPresented: () => undefined,
+				onTransactionPrepared: undefined,
+				onTransactionRequested: intent => {
+					transactionState = markTransactionRequested(transactionState, intent)
+				},
+				refreshState: async () => undefined,
+			},
+			errorSignal,
+			'Connect wallet',
+			{
+				action: 'createMarket',
+				source: 'zoltar',
+				submittedDetail: 'Question creation transaction submitted.',
+				submittedTitle: 'Creating Question',
+			},
+		)
+
+		await runWriteAction(writeActionConfig, async () => ({ hash: transactionHash }), 'Failed to create question')
+
+		expect(transactionState.active?.tone).toBe('preparing')
+		expect(transactionState.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
+		expect(transactionState.pendingIntent?.requiresWalletConfirmation).toBe(false)
+		expect(transactionState.inFlightCount).toBe(0)
+		expect(errorSignal.value).toBeUndefined()
 	})
 
 	test('delegates missing-wallet errors to onWriteError when provided', async () => {

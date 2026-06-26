@@ -4,10 +4,14 @@ import { describe, expect, test } from 'bun:test'
 import { type Address, type Hash, type TransactionReceipt, getAddress } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../contracts.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { createDeploymentTransactionIntent } from '../lib/transactionPresentations.js'
+import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '../lib/transactionTray.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
-type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'patchSimulationGenesisRepToken'>>
+type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
 
 function asWriteClient(client: MockWriteClient): WriteClient {
 	return client as unknown as WriteClient
@@ -103,6 +107,56 @@ describe('contract deployment internals', () => {
 		expect(oracleHash).toBe(txHash)
 		expect(factoryHash).toBe(txHash)
 		expect(preparedFunctions).toEqual(['Deploy contract through deterministic proxy', 'Deploy contract through deterministic proxy'])
+	})
+
+	test('deployViaProxy-backed steps inherit simulation prepared-transaction copy from the write client', async () => {
+		const steps = createDeploymentSteps()
+		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		let preparedPreview: Parameters<NonNullable<WriteClient['onTransactionPrepared']>>[0] | undefined
+		const txHash = `0x${'8'.repeat(64)}` as Hash
+		const client = asWriteClient({
+			getCode: async () => '0x1234',
+			onTransactionPrepared: preview => {
+				preparedPreview = preview
+			},
+			requiresWalletConfirmation: false,
+			sendTransaction: async () => txHash,
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await oracleStep.deploy(client)
+
+		expect(preparedPreview?.functionName).toBe('Deploy contract through deterministic proxy')
+		expect(preparedPreview?.requiresWalletConfirmation).toBe(false)
+	})
+
+	test('simulation deployViaProxy preview keeps the transaction tray in preparing state', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		try {
+			const steps = createDeploymentSteps()
+			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+			if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+			let transactionState = markTransactionRequested(createInitialTransactionTrayState(), createDeploymentTransactionIntent(oracleStep.label))
+			const txHash = `0x${'6'.repeat(64)}` as Hash
+			const client = asWriteClient({
+				getCode: async () => '0x1234',
+				onTransactionPrepared: preview => {
+					transactionState = markTransactionPrepared(transactionState, preview)
+				},
+				requiresWalletConfirmation: false,
+				sendTransaction: async () => txHash,
+				waitForTransactionReceipt: async () => hashReceipt('success'),
+			})
+
+			await oracleStep.deploy(client)
+
+			expect(transactionState.active?.tone).toBe('preparing')
+			expect(transactionState.active?.detail).toBe('Review the prepared transaction before it is submitted.')
+			expect(transactionState.pendingIntent?.requiresWalletConfirmation).toBe(false)
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	test('proxy deployer step returns zero hash when signer-based deploy is already installed', async () => {

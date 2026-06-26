@@ -3524,6 +3524,12 @@ strong.metric-value-danger {
 	min-width: 0;
 }
 
+.field > label {
+	display: grid;
+	gap: 0.5rem;
+	min-width: 0;
+}
+
 .lookup-field-row {
 	width: 100%;
 }
@@ -3616,6 +3622,14 @@ strong.metric-value-danger {
 .field-help {
 	margin: -0.15rem 0 0;
 	color: var(--muted);
+	font-size: var(--font-caption);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+.field-error {
+	margin: -0.1rem 0 0;
+	color: var(--danger);
 	font-size: var(--font-caption);
 	line-height: 1.45;
 	overflow-wrap: anywhere;
@@ -6368,6 +6382,7 @@ button:focus-visible {
 		justify-content: flex-start;
 		flex-wrap: nowrap;
 		width: 100%;
+		min-width: 0;
 	}
 
 	.route-subtab-nav.view-tabs.subroute .view-tab {
@@ -6383,11 +6398,14 @@ button:focus-visible {
 	.selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] {
 		flex-direction: row;
 		overflow-x: auto;
+		max-width: 100%;
+		min-width: 0;
 		padding-bottom: 0.15rem;
 	}
 
 	.selected-pool-workflow-group {
 		display: flex;
+		flex: 0 0 auto;
 		align-items: stretch;
 		gap: var(--space-1);
 	}
@@ -6428,5 +6446,52 @@ button:focus-visible {
 	.vault-content-switch {
 		max-width: 100%;
 		overflow-x: auto;
+	}
+}
+
+@media (max-width: 640px) {
+	.security-pool-detail-rail,
+	.security-pool-browse-vault-row-top,
+	.security-pool-browse-vault-row-top-compact,
+	.security-pool-browse-vault-row-meter,
+	.security-pool-browse-vault-row-actions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.security-pool-browse-vault-row-title,
+	.security-pool-browse-vault-row-id,
+	.security-pool-browse-vault-row-kpi,
+	.security-pool-browse-vault-row-id strong,
+	.security-pool-browse-vault-row-kpi strong {
+		min-width: 0;
+	}
+
+	.security-pool-browse-vault-row-title {
+		align-items: flex-start;
+	}
+
+	.security-pool-browse-vault-row-liquidate,
+	.security-pool-browse-vault-row-actions > button {
+		justify-self: stretch;
+		width: 100%;
+		min-width: 0;
+	}
+
+	.security-pool-browse-vault-row-id .address-value.copyable {
+		max-width: 100%;
+	}
+
+	.route-subnav-shell {
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.route-subtab-nav {
+		width: 100%;
+		min-width: 0;
+	}
+
+	.selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] {
+		width: 100%;
 	}
 }

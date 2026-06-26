@@ -5,7 +5,9 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { zeroAddress, type Address } from 'viem'
 import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage } from '../hooks/useSecurityPoolsOverview.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -92,6 +94,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+		resetActiveEnvironmentForTesting()
 		mock.restore()
 	})
 
@@ -162,5 +165,59 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolBrowseCount).toBe(3n)
 		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x03'])
+	})
+
+	void test('waits for active backend readiness before loading the registry page', async () => {
+		let backendReady = false
+		const readyPromise = Promise.resolve().then(() => {
+			backendReady = true
+		})
+		installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			waitUntilReady: async () => {
+				await readyPromise
+			},
+		})
+		const loadSecurityPoolPage = mock(async () => {
+			if (!backendReady) throw new Error('loadSecurityPoolPage ran before backend readiness')
+			return createSecurityPoolPageFromLoadedPools([createListedSecurityPool('0x01')], 0, 2)
+		})
+
+		mock.module('../contracts.js', () => ({
+			loadAllSecurityPools: mock(async () => {
+				throw new Error('loadAllSecurityPools should not be called in this test')
+			}),
+			loadOracleManagerDetails: mock(async () => {
+				throw new Error('loadOracleManagerDetails should not be called in this test')
+			}),
+			loadSecurityPoolPage,
+			queueSecurityPoolLiquidation: mock(async () => {
+				throw new Error('queueSecurityPoolLiquidation should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({})),
+			createWalletWriteClient: mock(() => {
+				throw new Error('createWalletWriteClient should not be called in this test')
+			}),
+		}))
+
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(useSecurityPoolsOverview, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadBrowseSecurityPoolPage(0, 2)
+		})
+
+		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
+		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x01'])
 	})
 })

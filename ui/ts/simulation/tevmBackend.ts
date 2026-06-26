@@ -267,6 +267,7 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
 				patchSimulationGenesisRepToken: async ({ repAddress, zoltarAddress }) => {
 					await callWorker('patchSimulationGenesisRepToken', { repAddress, zoltarAddress })
 				},
+				requiresWalletConfirmation: false,
 				sendRawTransaction,
 				sendTransaction,
 				waitForTransactionReceipt,

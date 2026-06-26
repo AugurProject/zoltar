@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
@@ -305,6 +305,44 @@ void describe('TradingSection', () => {
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
 	})
 
+	void test('closes a trading modal for a new result without blocking the same modal from reopening', async () => {
+		let updateTradingResult: ((result: TradingActionResult | undefined) => void) | undefined
+
+		function TradingResultHarness() {
+			const [tradingResult, setTradingResult] = useState<TradingActionResult | undefined>(undefined)
+			useEffect(() => {
+				updateTradingResult = setTradingResult
+			}, [])
+
+			return <TradingSection {...createTradingSectionProps({ tradingResult })} />
+		}
+
+		const renderedComponent = await renderIntoDocument(<TradingResultHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
+
+		await act(() => {
+			if (updateTradingResult === undefined) throw new Error('Expected trading result setter')
+			updateTradingResult({
+				action: 'createCompleteSet',
+				hash: zeroHash,
+				securityPoolAddress: zeroAddress,
+				universeId: 1n,
+			})
+		})
+		expect(documentQueries.queryByRole('dialog', { name: 'Mint Complete Sets' })).toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
+	})
+
 	void test('renders your share metrics using rounded values with exact copy affordances', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -329,6 +367,36 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1.234' }).length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.023' }).length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.00041' }).length).toBeGreaterThanOrEqual(2)
+	})
+
+	void test('renders first-mint share balances as complete-set collateral amounts', async () => {
+		const firstMintShareAmount = 10n ** 36n
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						completeSetCollateralAmount: 1n * 10n ** 18n,
+						shareTokenSupply: firstMintShareAmount,
+					}),
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSets: firstMintShareAmount,
+						shareBalances: createShareBalances({
+							invalid: firstMintShareAmount,
+							no: firstMintShareAmount,
+							yes: firstMintShareAmount,
+						}),
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Total Collateral Equivalent')).not.toBeNull()
+		expect(documentQueries.queryByText('Total Shares')).toBeNull()
+		expect(documentQueries.getAllByText('≈ 1.00').length).toBeGreaterThanOrEqual(4)
+		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1' }).length).toBeGreaterThanOrEqual(4)
+		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
 	void test('shows the minting disabled reason on the launcher when the pool has no active allowance', async () => {

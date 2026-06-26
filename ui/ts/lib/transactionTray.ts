@@ -1,4 +1,5 @@
 import type { Hash } from 'viem'
+import { getActiveBackend } from './activeEnvironment.js'
 import { createAwaitingWalletPresentation, createPreparedWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
@@ -21,13 +22,21 @@ export function createInitialTransactionTrayState(): TransactionTrayState {
 	}
 }
 
+function applyActiveBackendTransactionIntentDefaults(intent: TransactionIntent): TransactionIntent {
+	return {
+		...intent,
+		requiresWalletConfirmation: intent.requiresWalletConfirmation ?? getActiveBackend().id !== 'simulation',
+	}
+}
+
 export function markTransactionRequested(state: TransactionTrayState, pendingIntent: TransactionIntent): TransactionTrayState {
 	const requestKey = `transaction-request-${state.requestSequence}`
+	const resolvedIntent = applyActiveBackendTransactionIntentDefaults(pendingIntent)
 	return {
 		...state,
-		active: createAwaitingWalletPresentation(pendingIntent, requestKey),
+		active: createAwaitingWalletPresentation(resolvedIntent, requestKey),
 		inFlightCount: state.inFlightCount + 1,
-		pendingIntent,
+		pendingIntent: resolvedIntent,
 		pendingRequestKey: requestKey,
 		requestSequence: state.requestSequence + 1,
 	}

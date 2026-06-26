@@ -118,7 +118,6 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
 		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
 		onSelectSecurityPool: () => undefined,
 		poolOracleManagerDetails: undefined,
@@ -622,11 +621,15 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
 	})
 
-	test('renders browse-mode vault previews when the paged pool data includes loaded vaults', async () => {
+	test('renders browse-mode vault previews and routes liquidation review into the selected pool workflow', async () => {
 		const previewPoolTitle = 'Pool with preview vaults'
+		let selectedSecurityPoolAddress: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
+					onSelectSecurityPool: securityPoolAddress => {
+						selectedSecurityPoolAddress = securityPoolAddress
+					},
 					securityPools: [
 						createSecurityPool({
 							marketDetails: createMarketDetails({ title: 'Pool with preview vaults' }),
@@ -652,7 +655,12 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
 		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
-		expect(poolCardQueries.getByRole('button', { name: 'Liquidate Vault' })).not.toBeNull()
+		const liquidationReviewButton = poolCardQueries.getByRole('button', { name: 'Open Pool to Liquidate' })
+		expect(liquidationReviewButton).not.toBeNull()
+		await act(() => {
+			fireEvent.click(liquidationReviewButton)
+		})
+		expect(selectedSecurityPoolAddress).toBe('0x0000000000000000000000000000000000000500')
 		expect(poolCardQueries.getByText('Showing 1 of 5 active vaults in this preview, newest activity first.')).not.toBeNull()
 		expect(poolCardQueries.getByText('+4 more vaults')).not.toBeNull()
 	})

@@ -1,11 +1,17 @@
 /// <reference types='bun-types' />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 
 describe('transactionTray', () => {
+	afterEach(() => {
+		resetActiveEnvironmentForTesting()
+	})
+
 	test('tracks a requested transaction through submit, presentation, and finish', () => {
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
 			action: 'createMarket',
@@ -91,9 +97,63 @@ describe('transactionTray', () => {
 			value: undefined,
 		})
 
+		expect(prepared.active?.tone).toBe('preparing')
 		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
 		expect(prepared.active?.rows?.some(row => row.label === 'Sender' && row.value === '0x00000000000000000000000000000000000000c3')).toBe(true)
 		expect(prepared.active?.rows?.some(row => row.label === 'Raw transaction' && row.value === '0x1234')).toBe(true)
+	})
+
+	test('uses preparing copy for requested simulation transactions', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			requiresWalletConfirmation: false,
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+
+		expect(requested.active?.tone).toBe('preparing')
+		expect(requested.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
+		expect(requested.pendingIntent?.requiresWalletConfirmation).toBe(false)
+	})
+
+	test('applies active simulation defaults to undecorated requested transactions', () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		resetEnvironment()
+
+		expect(requested.active?.tone).toBe('preparing')
+		expect(requested.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
+		expect(requested.pendingIntent?.requiresWalletConfirmation).toBe(false)
+	})
+
+	test('uses the defaulted pending intent when prepared previews omit wallet confirmation requirements', () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		resetEnvironment()
+
+		const prepared = markTransactionPrepared(requested, {
+			account: '0x00000000000000000000000000000000000000a1',
+			args: [1n, ['yes', 'no']],
+			chainName: 'Ethereum',
+			contractAddress: '0x00000000000000000000000000000000000000b2',
+			functionName: 'createQuestion',
+			value: 0n,
+		})
+
+		expect(prepared.active?.tone).toBe('preparing')
+		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
+		expect(prepared.active?.rows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
 	})
 
 	test('turns a requested transaction into a dismissible failure when submission fails', () => {

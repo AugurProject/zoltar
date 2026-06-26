@@ -28,11 +28,11 @@ import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a single stable operate header title', () => {
-		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
+		expect(getSelectedPoolCardTitle()).toBe('Pool Workflows')
 
-		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
+		expect(getSelectedPoolCardTitle()).toBe('Pool Workflows')
 
-		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
+		expect(getSelectedPoolCardTitle()).toBe('Pool Workflows')
 	})
 
 	void test('maps the legacy resolution view alias to the reporting tab', () => {

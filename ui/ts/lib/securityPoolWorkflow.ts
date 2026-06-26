@@ -26,7 +26,7 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 		case 'reporting':
 			return 'Reporting'
 		case 'fork-workflow':
-			return 'Fork Workflow'
+			return 'Fork & Migration'
 		case 'staged-operations':
 			return 'Staged Operations'
 		case 'price-oracle':
@@ -301,7 +301,7 @@ export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, 
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
 }
 export function getSelectedPoolCardTitle() {
-	return 'Operate Security Pool'
+	return 'Pool Workflows'
 }
 export function applySelectedPoolWorkflowState(
 	pool: ListedSecurityPool | undefined,

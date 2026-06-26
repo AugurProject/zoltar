@@ -1,3 +1,4 @@
+import type { JSX } from 'preact'
 import { CurrencyValue } from './CurrencyValue.js'
 import { Badge } from './Badge.js'
 import type { EscalationDeposit } from '../types/contracts.js'
@@ -15,6 +16,7 @@ type EscalationSideProps = {
 	disabled?: boolean
 	isLeading: boolean
 	isSelected: boolean
+	isTabStop: boolean
 	onSelect: () => void
 	side: EscalationSideDisplay
 }
@@ -29,18 +31,48 @@ function getChartRatio(value: bigint | undefined, maxValue: bigint) {
 	return `${wholePercent.toString()}.${fractionalPercent}%`
 }
 
-export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false, isLeading, isSelected, onSelect, side }: EscalationSideProps) {
+function getArrowKeyDirection(key: string) {
+	if (key === 'ArrowRight' || key === 'ArrowDown') return 1
+	if (key === 'ArrowLeft' || key === 'ArrowUp') return -1
+	return 0
+}
+
+function moveSelectionWithArrowKey(event: JSX.TargetedKeyboardEvent<HTMLButtonElement>) {
+	const direction = getArrowKeyDirection(event.key)
+	if (direction === 0) return
+	const currentRadio = event.currentTarget
+	if (!(currentRadio instanceof HTMLElement)) return
+	const radioGroup = currentRadio.closest('[role="radiogroup"]')
+	if (!(radioGroup instanceof HTMLElement)) return
+	const enabledRadios = Array.from(radioGroup.querySelectorAll<HTMLElement>('[role="radio"]')).filter(radio => !radio.hasAttribute('disabled') && radio.getAttribute('aria-disabled') !== 'true')
+	const currentIndex = enabledRadios.indexOf(currentRadio)
+	if (currentIndex === -1 || enabledRadios.length === 0) return
+	event.preventDefault()
+	const nextRadio = enabledRadios[(currentIndex + direction + enabledRadios.length) % enabledRadios.length]
+	nextRadio?.focus()
+	nextRadio?.click()
+}
+
+export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false, isLeading, isSelected, isTabStop, onSelect, side }: EscalationSideProps) {
+	const tabIndex = (() => {
+		if (disabled) return undefined
+		return isTabStop ? 0 : -1
+	})()
+
 	return (
 		<button
-			aria-pressed={isSelected}
+			aria-checked={isSelected}
 			className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}
 			disabled={disabled}
 			onClick={onSelect}
+			onKeyDown={moveSelectionWithArrowKey}
+			role='radio'
 			style={{
 				'--binding-ratio': getChartRatio(bindingCapital, chartScaleMax),
 				'--side-ratio': getChartRatio(side.balance, chartScaleMax),
 				'--user-ratio': getChartRatio(side.userStake, chartScaleMax),
 			}}
+			tabIndex={tabIndex}
 			type='button'
 		>
 			<div className='escalation-side-row'>
