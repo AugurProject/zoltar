@@ -14,6 +14,7 @@ export function getVaultApprovalGuardMessage({ accountAddress, isMainnet, select
 export function getVaultDepositGuardMessage({
 	accountAddress,
 	approvalSatisfied,
+	depositAmount,
 	isDepositBelowMinimum,
 	isMainnet,
 	repBalanceGap,
@@ -22,6 +23,7 @@ export function getVaultDepositGuardMessage({
 }: {
 	accountAddress: Address | undefined
 	approvalSatisfied: boolean
+	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
 	isMainnet: boolean
 	repBalanceGap: bigint | undefined
@@ -32,6 +34,8 @@ export function getVaultDepositGuardMessage({
 	if (accountAddress === undefined) return 'Connect a wallet before depositing REP.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before depositing REP.'
 	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before depositing REP.'
+	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
+	if (depositAmount <= 0n) return 'Enter a REP deposit amount greater than zero.'
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
 	if (repBalanceGap !== undefined && repBalanceGap > 0n) return `Need ${formatCurrencyBalance(repBalanceGap)} more REP in this wallet.`
 	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP in the first deposit.`
@@ -63,7 +67,8 @@ export function getVaultWithdrawGuardMessage({
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing REP.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing REP.'
 	if (!hasValidOraclePrice) return 'A valid oracle price is required before withdrawing REP.'
-	if (withdrawAmount === undefined || withdrawAmount <= 0n) return 'Enter a valid REP withdraw amount.'
+	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
+	if (withdrawAmount <= 0n) return 'Enter a REP withdraw amount greater than zero.'
 	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return 'No REP is currently withdrawable from this vault.'
 	if (withdrawAmount > withdrawableRepAmount) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmount)} REP or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'

@@ -305,6 +305,7 @@ export async function approveErc20<Action extends SecurityVaultActionResult['act
 	return { action, hash }
 }
 export async function depositRepToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
+	if (amount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
