@@ -12,6 +12,7 @@ describe('security vault guards', () => {
 			getVaultDepositGuardMessage({
 				accountAddress: zeroAddress,
 				approvalSatisfied: true,
+				depositAmount: 1n,
 				isDepositBelowMinimum: false,
 				isMainnet: true,
 				repBalanceGap: undefined,
@@ -24,6 +25,20 @@ describe('security vault guards', () => {
 			getVaultDepositGuardMessage({
 				accountAddress: zeroAddress,
 				approvalSatisfied: false,
+				depositAmount: 0n,
+				isDepositBelowMinimum: false,
+				isMainnet: true,
+				repBalanceGap: undefined,
+				selectedVaultDetailsLoaded: true,
+				selectedVaultIsOwnedByAccount: true,
+			}),
+		).toBe('Enter a REP deposit amount greater than zero.')
+
+		expect(
+			getVaultDepositGuardMessage({
+				accountAddress: zeroAddress,
+				approvalSatisfied: false,
+				depositAmount: 1n,
 				isDepositBelowMinimum: false,
 				isMainnet: true,
 				repBalanceGap: undefined,
@@ -36,6 +51,7 @@ describe('security vault guards', () => {
 			getVaultDepositGuardMessage({
 				accountAddress: zeroAddress,
 				approvalSatisfied: true,
+				depositAmount: 3n * 10n ** 18n,
 				isDepositBelowMinimum: false,
 				isMainnet: true,
 				repBalanceGap: 2n * 10n ** 18n,
@@ -48,6 +64,7 @@ describe('security vault guards', () => {
 			getVaultDepositGuardMessage({
 				accountAddress: zeroAddress,
 				approvalSatisfied: true,
+				depositAmount: 3n * 10n ** 18n,
 				isDepositBelowMinimum: false,
 				isMainnet: true,
 				repBalanceGap: undefined,
@@ -71,6 +88,20 @@ describe('security vault guards', () => {
 				walletEthBalance: 1n,
 			}),
 		).toBe('A valid oracle price is required before withdrawing REP.')
+
+		expect(
+			getVaultWithdrawGuardMessage({
+				accountAddress: zeroAddress,
+				hasValidOraclePrice: true,
+				isMainnet: true,
+				requestPriceEthCost: undefined,
+				selectedVaultIsOwnedByAccount: true,
+				stagedOperationTimeoutMinutes: 5n,
+				withdrawAmount: 0n,
+				withdrawableRepAmount: 2_500n * 10n ** 18n,
+				walletEthBalance: 1n,
+			}),
+		).toBe('Enter a REP withdraw amount greater than zero.')
 
 		expect(
 			getVaultWithdrawGuardMessage({

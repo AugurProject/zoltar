@@ -293,6 +293,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			'depositRep',
 			async (vaultAddress, securityPoolAddress) => {
 				const depositAmount = parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP collateral amount')
+				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
 				const currentRepBalance = await loadErc20Balance(createConnectedReadClient(), details.repToken, vaultAddress)
