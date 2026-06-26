@@ -307,7 +307,6 @@ export function SecurityVaultSection({
 	})
 		? securityVaultDetails
 		: undefined
-	const hasWithdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '' && normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '0'
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
 	const securityBondAllowanceAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount)
@@ -368,6 +367,7 @@ export function SecurityVaultSection({
 	const depositGuardMessage = getVaultDepositGuardMessage({
 		accountAddress: accountState.address,
 		approvalSatisfied: hasSufficientDepositAllowance,
+		depositAmount,
 		isDepositBelowMinimum,
 		isMainnet,
 		repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
@@ -381,7 +381,7 @@ export function SecurityVaultSection({
 		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
 		selectedVaultIsOwnedByAccount,
 		stagedOperationTimeoutMinutes,
-		withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
+		withdrawAmount,
 		withdrawableRepAmount,
 		walletEthBalance: accountState.ethBalance,
 	})
