@@ -22,6 +22,10 @@
 		"./protocolConfig": {
 			"types": "./ts/protocolConfig.ts",
 			"default": "./js/protocolConfig.js"
+		},
+		"./testing/scalarOutcomeParityFixtures": {
+			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
+			"default": "./js/testing/scalarOutcomeParityFixtures.js"
 		}
 	},
 	"files": [
