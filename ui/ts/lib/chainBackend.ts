@@ -69,7 +69,7 @@ export type ChainBackend = {
 function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum) : http(rpcUrl, { batch: { wait: 100 } }),
+		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum, { retryCount: 0 }) : http(rpcUrl, { batch: { wait: 100 } }),
 	})
 }
 
