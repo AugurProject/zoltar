@@ -744,6 +744,7 @@ export function App() {
 					<AppStatusNotices
 						errorMessage={errorMessage}
 						readBackendMessage={readBackendMessage}
+						readBackendStatus={readBackendStatus}
 						simulationBootstrapError={environmentBootstrapError}
 						showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 						showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
