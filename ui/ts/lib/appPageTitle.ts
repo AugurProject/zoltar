@@ -20,7 +20,7 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 	}
 	if (route === 'security-pools') {
 		if (activeSecurityPoolsView === 'create') return 'Create Security Pool'
-		if (activeSecurityPoolsView === 'operate') return 'Pool Workflows'
+		if (activeSecurityPoolsView === 'operate') return 'Manage Security Pool'
 		return 'Security Pools'
 	}
 	if (route === 'open-oracle') {

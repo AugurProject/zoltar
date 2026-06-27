@@ -39,7 +39,7 @@ describe('app page titles', () => {
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'browse' }, title: 'Security Pools' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'create' }, title: 'Create Security Pool' },
-			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'operate' }, title: 'Pool Workflows' },
+			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'operate' }, title: 'Manage Security Pool' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'browse' }, title: 'Oracle Reports' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Create Oracle Report' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'selected-report' }, title: 'Oracle Report Details' },

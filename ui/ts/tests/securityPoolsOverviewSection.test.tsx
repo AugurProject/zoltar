@@ -118,6 +118,7 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
 		onLoadSecurityPools: () => undefined,
+		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
 		onSelectSecurityPool: () => undefined,
 		poolOracleManagerDetails: undefined,
@@ -621,17 +622,23 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
 	})
 
-	test('renders browse-mode vault previews and routes liquidation review into the selected pool workflow', async () => {
+	test('renders browse-mode vault previews and opens liquidation review for a vault', async () => {
 		const previewPoolTitle = 'Pool with preview vaults'
-		let selectedSecurityPoolAddress: string | undefined
+		let liquidationRequest: { managerAddress: string; securityPoolAddress: string; vaultAddress: string; maxAmount: bigint | undefined } | undefined
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					onSelectSecurityPool: securityPoolAddress => {
-						selectedSecurityPoolAddress = securityPoolAddress
+					onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress, maxAmount) => {
+						liquidationRequest = {
+							managerAddress,
+							securityPoolAddress,
+							vaultAddress,
+							maxAmount,
+						}
 					},
 					securityPools: [
 						createSecurityPool({
+							managerAddress: '0x0000000000000000000000000000000000000502',
 							marketDetails: createMarketDetails({ title: 'Pool with preview vaults' }),
 							securityPoolAddress: '0x0000000000000000000000000000000000000500',
 							vaultCount: 5n,
@@ -655,12 +662,17 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
 		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
-		const liquidationReviewButton = poolCardQueries.getByRole('button', { name: 'Open Pool to Liquidate' })
+		const liquidationReviewButton = poolCardQueries.getByRole('button', { name: 'Review Liquidation' })
 		expect(liquidationReviewButton).not.toBeNull()
 		await act(() => {
 			fireEvent.click(liquidationReviewButton)
 		})
-		expect(selectedSecurityPoolAddress).toBe('0x0000000000000000000000000000000000000500')
+		expect(liquidationRequest).toEqual({
+			managerAddress: '0x0000000000000000000000000000000000000502',
+			securityPoolAddress: '0x0000000000000000000000000000000000000500',
+			vaultAddress: '0x0000000000000000000000000000000000000501',
+			maxAmount: 5n,
+		})
 		expect(poolCardQueries.getByText('Showing 1 of 5 active vaults in this preview, newest activity first.')).not.toBeNull()
 		expect(poolCardQueries.getByText('+4 more vaults')).not.toBeNull()
 	})

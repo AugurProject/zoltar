@@ -227,10 +227,10 @@ export function SecurityPoolWorkflowSection({
 	})
 	const triggerZoltarForkReason = (() => {
 		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolHasActualForkActivity) {
-			return 'Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.'
+			return 'Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.'
 		}
 		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolState !== 'operational') {
-			return 'This pool has already entered its fork workflow. Continue in the Fork workflow.'
+			return 'This pool has already entered Fork & Migration.'
 		}
 		return 'Triggering a Zoltar fork is not available in the current pool state.'
 	})()
@@ -244,7 +244,7 @@ export function SecurityPoolWorkflowSection({
 	})()
 	const selectedPoolForkWorkflowSystemState = selectedPoolLifecycleState === undefined || selectedPoolLifecycleState === 'ended' ? selectedPoolState : selectedPoolLifecycleState
 	const reportingLockedReason = (() => {
-		if (selectedPoolState === 'poolForked') return 'This parent pool is forked. Continue in the Fork Workflow for migration and settlement.'
+		if (selectedPoolState === 'poolForked') return 'This parent pool is forked. Continue in Fork & Migration for migration and settlement.'
 		if (selectedPoolState === 'forkMigration') return 'This pool is in fork migration. Reporting actions unlock once the pool becomes operational.'
 		if (selectedPoolState === 'forkTruthAuction') return 'This pool is in truth auction. Reporting actions unlock once the pool becomes operational.'
 		if (reportingReady) return undefined
@@ -766,8 +766,8 @@ export function SecurityPoolWorkflowSection({
 							ariaLabel='Selected pool views'
 							className='selected-pool-workflow-nav'
 							groups={[
-								{ ariaLabel: 'Primary pool workflows', className: 'selected-pool-workflow-group', values: SELECTED_POOL_PRIMARY_VIEWS },
-								{ ariaLabel: 'Additional pool workflows', className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
+								{ ariaLabel: 'Primary pool actions', className: 'selected-pool-workflow-group', values: SELECTED_POOL_PRIMARY_VIEWS },
+								{ ariaLabel: 'Additional pool actions', className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
 							]}
 							orientation='vertical'
 							size='compact'
@@ -779,7 +779,7 @@ export function SecurityPoolWorkflowSection({
 
 					<div className='selected-pool-workflow-content'>
 						{!showSelectedPoolWorkflowDetails ? (
-							<SectionBlock title={selectedPoolLookupState === 'missing' ? 'Pool not found' : 'Pool Workflows'}>{selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}</SectionBlock>
+							<SectionBlock title={selectedPoolLookupState === 'missing' ? 'Pool not found' : 'Manage Pool'}>{selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}</SectionBlock>
 						) : (
 							<>
 								{view === 'vaults' ? (
