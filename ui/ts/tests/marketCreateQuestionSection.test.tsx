@@ -141,7 +141,10 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		const titleInput = documentQueries.getByLabelText('Title')
 		expect(documentQueries.getByText('Times use your browser timezone. Reporting and trading settlement depend on the end time.')).not.toBeNull()
+		expect(documentQueries.getByText('Title is required')).not.toBeNull()
+		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
 		expect(documentQueries.getAllByText('Missing required fields: Title')).toHaveLength(1)
 	})
 
@@ -192,7 +195,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Use For Fork' }))
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Use For Create Pool' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Pool From Question' }))
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Another Question' }))
 		})
 
@@ -457,6 +460,6 @@ describe('MarketCreateQuestionSection', () => {
 		expect(missingQueries.getByText('Question details are not loaded yet.')).not.toBeNull()
 		expect(missingQueries.getByRole('button', { name: 'Already Forked' })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: 'Use For Create Pool' }).getAttribute('disabled')).toBe('')
+		expect(missingQueries.getByRole('button', { name: 'Create Pool From Question' }).getAttribute('disabled')).toBe('')
 	})
 })

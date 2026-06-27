@@ -20,6 +20,7 @@ const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] =
 	{ value: 'categorical', label: 'Categorical' },
 	{ value: 'scalar', label: 'Scalar' },
 ]
+type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
 type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
 	hasForked: boolean
@@ -45,6 +46,23 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 		answerUnit: marketForm.answerUnit.trim(),
 		...parseScalarFormInputs(marketForm),
 	}
+}
+
+function getFieldErrorId(field: MarketFormFieldName) {
+	return `market-create-${field}-error`
+}
+
+function getFieldErrorDescribedBy(field: MarketFormFieldName, message: string | undefined) {
+	return message === undefined ? undefined : getFieldErrorId(field)
+}
+
+function renderFieldError(field: MarketFormFieldName, message: string | undefined) {
+	if (message === undefined) return undefined
+	return (
+		<p className='field-error' id={getFieldErrorId(field)}>
+			{message}
+		</p>
+	)
 }
 
 export function MarketCreateQuestionSection({
@@ -110,7 +128,7 @@ export function MarketCreateQuestionSection({
 								{hasForked ? 'Already Forked' : 'Use For Fork'}
 							</button>
 							<button className='secondary' onClick={() => onUseQuestionForPool(marketResult.questionId)} disabled={marketResult.marketType !== 'binary'}>
-								Use For Create Pool
+								Create Pool From Question
 							</button>
 							<button className='secondary' onClick={onResetMarket}>
 								Create Another Question
@@ -148,10 +166,19 @@ export function MarketCreateQuestionSection({
 							<EnumDropdown options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
 						</label>
 
-						<label className='field'>
-							<span>Title</span>
-							<FormInput invalid={marketFormValidation.fieldErrors.title !== undefined} value={marketForm.title} onInput={event => onMarketFormChange({ title: event.currentTarget.value })} placeholder='Will event X happen?' />
-						</label>
+						<div className='field'>
+							<label>
+								<span>Title</span>
+								<FormInput
+									aria-describedby={getFieldErrorDescribedBy('title', marketFormValidation.fieldErrors.title)}
+									invalid={marketFormValidation.fieldErrors.title !== undefined}
+									value={marketForm.title}
+									onInput={event => onMarketFormChange({ title: event.currentTarget.value })}
+									placeholder='Will event X happen?'
+								/>
+							</label>
+							{renderFieldError('title', marketFormValidation.fieldErrors.title)}
+						</div>
 
 						<label className='field'>
 							<span>Description</span>
@@ -159,14 +186,26 @@ export function MarketCreateQuestionSection({
 						</label>
 
 						<div className='field-row'>
-							<label className='field'>
-								<span>Start Time</span>
-								<FormInput invalid={marketFormValidation.fieldErrors.startTime !== undefined} type='datetime-local' value={marketForm.startTime} onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })} />
-							</label>
-							<label className='field'>
-								<span>End Time</span>
-								<FormInput invalid={marketFormValidation.fieldErrors.endTime !== undefined} type='datetime-local' value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
-							</label>
+							<div className='field'>
+								<label>
+									<span>Start Time</span>
+									<FormInput
+										aria-describedby={getFieldErrorDescribedBy('startTime', marketFormValidation.fieldErrors.startTime)}
+										invalid={marketFormValidation.fieldErrors.startTime !== undefined}
+										type='datetime-local'
+										value={marketForm.startTime}
+										onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })}
+									/>
+								</label>
+								{renderFieldError('startTime', marketFormValidation.fieldErrors.startTime)}
+							</div>
+							<div className='field'>
+								<label>
+									<span>End Time</span>
+									<FormInput aria-describedby={getFieldErrorDescribedBy('endTime', marketFormValidation.fieldErrors.endTime)} invalid={marketFormValidation.fieldErrors.endTime !== undefined} type='datetime-local' value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
+								</label>
+								{renderFieldError('endTime', marketFormValidation.fieldErrors.endTime)}
+							</div>
 						</div>
 						<p className='field-help'>Times use your browser timezone. Reporting and trading settlement depend on the end time.</p>
 
@@ -176,13 +215,20 @@ export function MarketCreateQuestionSection({
 								<div className='categorical-outcomes'>
 									{marketForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
 										<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
-											<FormInput invalid={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined} value={outcome} onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)} placeholder={`Outcome ${outcomeIndex + 1}`} />
+											<FormInput
+												aria-describedby={getFieldErrorDescribedBy('categoricalOutcomes', marketFormValidation.fieldErrors.categoricalOutcomes)}
+												invalid={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined}
+												value={outcome}
+												onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)}
+												placeholder={`Outcome ${outcomeIndex + 1}`}
+											/>
 											<button className='secondary categorical-outcome-remove' type='button' onClick={() => removeCategoricalOutcome(outcomeIndex)}>
 												Remove
 											</button>
 										</div>
 									))}
 								</div>
+								{renderFieldError('categoricalOutcomes', marketFormValidation.fieldErrors.categoricalOutcomes)}
 								<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
 									Add Outcome
 								</button>
@@ -191,10 +237,19 @@ export function MarketCreateQuestionSection({
 
 						{marketForm.marketType === 'scalar' ? (
 							<div className='field-row'>
-								<label className='field'>
-									<span>Scalar Min</span>
-									<FormInput invalid={marketFormValidation.fieldErrors.scalarMin !== undefined} value={marketForm.scalarMin} onInput={event => onMarketFormChange({ scalarMin: event.currentTarget.value })} placeholder='1' />
-								</label>
+								<div className='field'>
+									<label>
+										<span>Scalar Min</span>
+										<FormInput
+											aria-describedby={getFieldErrorDescribedBy('scalarMin', marketFormValidation.fieldErrors.scalarMin)}
+											invalid={marketFormValidation.fieldErrors.scalarMin !== undefined}
+											value={marketForm.scalarMin}
+											onInput={event => onMarketFormChange({ scalarMin: event.currentTarget.value })}
+											placeholder='1'
+										/>
+									</label>
+									{renderFieldError('scalarMin', marketFormValidation.fieldErrors.scalarMin)}
+								</div>
 								<label className='field'>
 									<span>Answer Unit</span>
 									<FormInput value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder='USD' />
@@ -204,14 +259,32 @@ export function MarketCreateQuestionSection({
 
 						{marketForm.marketType === 'scalar' ? (
 							<div className='field-row'>
-								<label className='field'>
-									<span>Scalar Increment</span>
-									<FormInput invalid={marketFormValidation.fieldErrors.scalarIncrement !== undefined} value={marketForm.scalarIncrement} onInput={event => onMarketFormChange({ scalarIncrement: event.currentTarget.value })} placeholder='0.1' />
-								</label>
-								<label className='field'>
-									<span>Scalar Max</span>
-									<FormInput invalid={marketFormValidation.fieldErrors.scalarMax !== undefined} value={marketForm.scalarMax} onInput={event => onMarketFormChange({ scalarMax: event.currentTarget.value })} placeholder='10' />
-								</label>
+								<div className='field'>
+									<label>
+										<span>Scalar Increment</span>
+										<FormInput
+											aria-describedby={getFieldErrorDescribedBy('scalarIncrement', marketFormValidation.fieldErrors.scalarIncrement)}
+											invalid={marketFormValidation.fieldErrors.scalarIncrement !== undefined}
+											value={marketForm.scalarIncrement}
+											onInput={event => onMarketFormChange({ scalarIncrement: event.currentTarget.value })}
+											placeholder='0.1'
+										/>
+									</label>
+									{renderFieldError('scalarIncrement', marketFormValidation.fieldErrors.scalarIncrement)}
+								</div>
+								<div className='field'>
+									<label>
+										<span>Scalar Max</span>
+										<FormInput
+											aria-describedby={getFieldErrorDescribedBy('scalarMax', marketFormValidation.fieldErrors.scalarMax)}
+											invalid={marketFormValidation.fieldErrors.scalarMax !== undefined}
+											value={marketForm.scalarMax}
+											onInput={event => onMarketFormChange({ scalarMax: event.currentTarget.value })}
+											placeholder='10'
+										/>
+									</label>
+									{renderFieldError('scalarMax', marketFormValidation.fieldErrors.scalarMax)}
+								</div>
 							</div>
 						) : undefined}
 

@@ -515,7 +515,7 @@ function renderReportDetailsCard(
 			})(),
 		})
 		return (
-			<SectionBlock title='Selected Report'>
+			<SectionBlock title='Report Details'>
 				{reportControls}
 				{reportPresentation === undefined ? undefined : <StateHint presentation={reportPresentation} />}
 			</SectionBlock>
@@ -550,7 +550,7 @@ function renderReportDetailsCard(
 	return (
 		<>
 			<StickyObjectContext
-				eyebrow='Open Oracle Selected Report'
+				eyebrow='Open Oracle Report Details'
 				title={`Report #${openOracleReportDetails.reportId.toString()}`}
 				items={[
 					{ label: 'Stage', value: stage.label },
@@ -560,14 +560,14 @@ function renderReportDetailsCard(
 				]}
 			/>
 			<LifecycleStageBanner stage={stage} />
-			<SectionBlock title='Selected Report Actions' description='Open a focused action flow for the selected report when it is available.'>
+			<SectionBlock title='Report Actions' description='Open a focused action flow for the selected report when it is available.'>
 				<div className='action-readiness-grid'>
 					{readinessActions.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />
 					))}
 				</div>
 			</SectionBlock>
-			<SectionBlock badge={<Badge tone={statusTone}>{status}</Badge>} title='Selected Report'>
+			<SectionBlock badge={<Badge tone={statusTone}>{status}</Badge>} title='Report Details'>
 				{reportControls}
 				<MetricGrid variant='question'>
 					{renderReportField('Report ID', openOracleReportDetails.reportId.toString())}

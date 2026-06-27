@@ -67,6 +67,30 @@ export function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances
 	return shareBalances.no
 }
 
+function divideRoundedUp(numerator: bigint, denominator: bigint) {
+	if (denominator <= 0n) throw new RangeError('Denominator must be greater than zero')
+	return (numerator + denominator - 1n) / denominator
+}
+
+export function convertShareAmountToCollateralAmount(shareAmount: undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined): undefined
+export function convertShareAmountToCollateralAmount(shareAmount: bigint, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined): bigint
+export function convertShareAmountToCollateralAmount(shareAmount: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined): bigint | undefined
+export function convertShareAmountToCollateralAmount(shareAmount: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined) {
+	if (shareAmount === undefined) return undefined
+	if (completeSetCollateralAmount === undefined || shareTokenSupply === undefined) return shareAmount
+	if (shareTokenSupply === 0n) return shareAmount
+	return (shareAmount * completeSetCollateralAmount) / shareTokenSupply
+}
+
+export function convertCollateralAmountToShareAmount(collateralAmount: bigint, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined) {
+	if (completeSetCollateralAmount === undefined || shareTokenSupply === undefined) return collateralAmount
+	if (completeSetCollateralAmount === 0n) {
+		if (shareTokenSupply !== 0n) return undefined
+		return collateralAmount
+	}
+	return divideRoundedUp(collateralAmount * shareTokenSupply, completeSetCollateralAmount)
+}
+
 export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalances | undefined, outcome: ReportingOutcomeKey) {
 	if (shareBalances === undefined) return undefined
 	switch (outcome) {
@@ -165,18 +189,22 @@ export function getTradingMintGuardMessage({
 
 export function getTradingRedeemCompleteSetGuardMessage({
 	accountAddress,
+	completeSetCollateralAmount,
 	hasSelectedPool,
 	isMainnet,
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
+	shareTokenSupply,
 }: {
 	accountAddress: Address | undefined
+	completeSetCollateralAmount: bigint | undefined
 	hasSelectedPool: boolean
 	isMainnet: boolean
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
+	shareTokenSupply: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming complete sets.'
@@ -193,7 +221,12 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return 'Enter a redeem amount greater than zero.'
-	if (redeemAmount > maxRedeemableCompleteSets) return `Max redeemable amount is ${formatCurrencyBalance(maxRedeemableCompleteSets)} complete sets.`
+	const redeemShareAmount = convertCollateralAmountToShareAmount(redeemAmount, completeSetCollateralAmount, shareTokenSupply)
+	if (redeemShareAmount === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
+	if (redeemShareAmount > maxRedeemableCompleteSets) {
+		const maxRedeemableCollateralAmount = convertShareAmountToCollateralAmount(maxRedeemableCompleteSets, completeSetCollateralAmount, shareTokenSupply)
+		return `Max redeemable amount is ${formatCurrencyBalance(maxRedeemableCollateralAmount)} complete sets.`
+	}
 	return undefined
 }
 

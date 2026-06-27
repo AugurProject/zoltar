@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useId, useRef } from 'preact/hooks'
 import type { Address } from 'viem'
 import { AddressInfo } from './AddressInfo.js'
 import { AddressValue } from './AddressValue.js'
@@ -25,6 +25,7 @@ import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
+import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 type LiquidationModalProps = {
@@ -176,44 +177,19 @@ export function LiquidationModal({
 	const chainCurrentTimestamp = useChainTimestamp()
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
-	const onCloseRef = useRef(closeLiquidationModal)
+	const titleId = useId()
 	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolLiquidationError !== undefined
-	useEffect(() => {
-		onCloseRef.current = closeLiquidationModal
-	}, [closeLiquidationModal])
+	useModalFocusIsolation({
+		dialogRef,
+		initialFocusRef: closeButtonRef,
+		isOpen: showLiquidationModal,
+		onClose: closeLiquidationModal,
+	})
 	useEffect(() => {
 		if (!showLiquidationModal) return
 		if (liquidationManagerAddress === undefined || currentPoolOracleManagerDetails !== undefined || loadingPoolOracleManager) return
 		onLoadPoolOracleManager(liquidationManagerAddress)
 	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, loadingPoolOracleManager, onLoadPoolOracleManager, showLiquidationModal])
-	useEffect(() => {
-		if (!showLiquidationModal) return
-		const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
-		closeButtonRef.current?.focus()
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') onCloseRef.current()
-			if (event.key !== 'Tab') return
-			const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")
-			if (focusableElements === undefined || focusableElements.length === 0) return
-			const firstElement = focusableElements[0]
-			const lastElement = focusableElements[focusableElements.length - 1]
-			if (!(document.activeElement instanceof HTMLElement)) return
-			if (event.shiftKey && document.activeElement === firstElement) {
-				event.preventDefault()
-				lastElement?.focus()
-				return
-			}
-			if (!event.shiftKey && document.activeElement === lastElement) {
-				event.preventDefault()
-				firstElement?.focus()
-			}
-		}
-		document.addEventListener('keydown', handleKeyDown)
-		return () => {
-			document.removeEventListener('keydown', handleKeyDown)
-			previouslyFocusedElement?.focus()
-		}
-	}, [showLiquidationModal])
 	if (!showLiquidationModal) return undefined
 	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = tryParseRepAmountInput(liquidationAmount)
@@ -309,10 +285,10 @@ export function LiquidationModal({
 				})()
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
-			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby='liquidation-modal-title' onClick={event => event.stopPropagation()}>
+			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby={titleId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>
-						<h3 id='liquidation-modal-title'>{getLiquidationModalTitle(currentPoolOracleManagerDetails)}</h3>
+						<h3 id={titleId}>{getLiquidationModalTitle(currentPoolOracleManagerDetails)}</h3>
 					</div>
 					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label='Close' title='Close' onClick={closeLiquidationModal}>
 						×

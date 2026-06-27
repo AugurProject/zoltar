@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { CurrencyValue } from './CurrencyValue.js'
@@ -26,6 +26,7 @@ import {
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
+	convertShareAmountToCollateralAmount,
 	getTradingRedeemSharesGuardMessage,
 	hasUndefinedCompleteSetExchangeRate,
 	hasRepBackedPoolWithNoActiveAllowance,
@@ -53,6 +54,7 @@ export function TradingSection({
 	tradingError,
 	tradingForm,
 	tradingForkUniverse,
+	tradingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
@@ -78,9 +80,18 @@ export function TradingSection({
 	const redeemSharesEnabled = resolvedPoolState.actions.redeemShares.enabled
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
+	const displayMaxRedeemableCompleteSets = convertShareAmountToCollateralAmount(maxRedeemableCompleteSets, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const displayShareBalances =
+		shareBalances === undefined
+			? undefined
+			: {
+					invalid: convertShareAmountToCollateralAmount(shareBalances.invalid, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply),
+					no: convertShareAmountToCollateralAmount(shareBalances.no, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply),
+					yes: convertShareAmountToCollateralAmount(shareBalances.yes, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply),
+				}
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
-	const totalShareCount = shareBalances === undefined ? undefined : shareBalances.invalid + shareBalances.no + shareBalances.yes
+	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
@@ -94,11 +105,13 @@ export function TradingSection({
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
+		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
 		hasSelectedPool,
 		isMainnet,
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareBalances,
+		shareTokenSupply: selectedPool?.shareTokenSupply,
 	})
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
 		accountAddress: accountState.address,
@@ -196,6 +209,16 @@ export function TradingSection({
 	const clearTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: '' })
 	}
+	useEffect(() => {
+		if (tradingResult === undefined) return
+		setActiveModal(currentModal => {
+			if (tradingResult.action === 'createCompleteSet' && currentModal === 'mint') return undefined
+			if (tradingResult.action === 'redeemCompleteSet' && currentModal === 'redeem-complete-sets') return undefined
+			if (tradingResult.action === 'migrateShares' && currentModal === 'migrate-shares') return undefined
+			if (tradingResult.action === 'redeemShares' && currentModal === 'redeem-shares') return undefined
+			return currentModal
+		})
+	}, [tradingResult])
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
 		if (selectedTargetOutcomeIndexSet.has(outcomeIndex.toString())) {
 			onTradingFormChange({
@@ -269,7 +292,7 @@ export function TradingSection({
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
 							<span>Total Complete Sets</span>
-							<strong>{renderShareMetricValue(maxRedeemableCompleteSets)}</strong>
+							<strong>{renderShareMetricValue(displayMaxRedeemableCompleteSets)}</strong>
 							<p className='detail'>Wallet composition by outcome.</p>
 						</div>
 						<div className='trading-holdings-layout'>
@@ -280,38 +303,38 @@ export function TradingSection({
 									{
 										key: 'yes',
 										label: 'Yes',
-										valueText: renderShareMetricValue(shareBalances?.yes),
-										...(shareBalances?.yes === undefined ? {} : { value: shareBalances.yes }),
+										valueText: renderShareMetricValue(displayShareBalances?.yes),
+										...(displayShareBalances?.yes === undefined ? {} : { value: displayShareBalances.yes }),
 									},
 									{
 										key: 'no',
 										label: 'No',
-										valueText: renderShareMetricValue(shareBalances?.no),
-										...(shareBalances?.no === undefined ? {} : { value: shareBalances.no }),
+										valueText: renderShareMetricValue(displayShareBalances?.no),
+										...(displayShareBalances?.no === undefined ? {} : { value: displayShareBalances.no }),
 									},
 									{
 										key: 'invalid',
 										label: 'Invalid',
-										valueText: renderShareMetricValue(shareBalances?.invalid),
-										...(shareBalances?.invalid === undefined ? {} : { value: shareBalances.invalid }),
+										valueText: renderShareMetricValue(displayShareBalances?.invalid),
+										...(displayShareBalances?.invalid === undefined ? {} : { value: displayShareBalances.invalid }),
 									},
 								]}
 							/>
 							<div className='trading-share-callouts'>
 								<div>
 									<span>Yes</span>
-									<strong>{renderShareMetricValue(shareBalances?.yes)}</strong>
+									<strong>{renderShareMetricValue(displayShareBalances?.yes)}</strong>
 								</div>
 								<div>
 									<span>No</span>
-									<strong>{renderShareMetricValue(shareBalances?.no)}</strong>
+									<strong>{renderShareMetricValue(displayShareBalances?.no)}</strong>
 								</div>
 								<div>
 									<span>Invalid</span>
-									<strong>{renderShareMetricValue(shareBalances?.invalid)}</strong>
+									<strong>{renderShareMetricValue(displayShareBalances?.invalid)}</strong>
 								</div>
 								<div className='trading-share-callouts-total'>
-									<span>Total Shares</span>
+									<span>Total Collateral Equivalent</span>
 									<strong>{renderShareMetricValue(totalShareCount)}</strong>
 								</div>
 							</div>
@@ -367,10 +390,10 @@ export function TradingSection({
 							className='quiet field-inline-action'
 							type='button'
 							onClick={() => {
-								if (maxRedeemableCompleteSets === undefined) return
-								onTradingFormChange({ redeemAmount: formatCurrencyInputBalance(maxRedeemableCompleteSets) })
+								if (displayMaxRedeemableCompleteSets === undefined) return
+								onTradingFormChange({ redeemAmount: formatCurrencyInputBalance(displayMaxRedeemableCompleteSets) })
 							}}
-							disabled={maxRedeemableCompleteSets === undefined || maxRedeemableCompleteSets <= 0n}
+							disabled={displayMaxRedeemableCompleteSets === undefined || displayMaxRedeemableCompleteSets <= 0n}
 						>
 							Max
 						</button>

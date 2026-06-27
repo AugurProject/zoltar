@@ -130,38 +130,40 @@ describe('LiquidationModal', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	function createLiquidationModalProps(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}): Parameters<typeof LiquidationModal>[0] {
+		return {
+			accountAddress: defaultCallerVaultAddress,
+			closeLiquidationModal: () => undefined,
+			currentPoolOracleManagerDetails: undefined,
+			isMainnet: true,
+			liquidationAmount: '1',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+			liquidationManagerAddress: zeroAddress,
+			liquidationModalOpen: true,
+			liquidationSecurityPoolAddress: zeroAddress,
+			liquidationTargetVault: defaultTargetVaultAddress,
+			liquidationTimeoutMinutes: '5',
+			loadingPoolOracleManager: false,
+			onLoadPoolOracleManager: () => undefined,
+			onLiquidationAmountChange: () => undefined,
+			onLiquidationTimeoutMinutesChange: () => undefined,
+			onQueueLiquidation: () => undefined,
+			onSelectedPoolViewChange: () => undefined,
+			repPerEthPrice: 1n * 10n ** 18n,
+			repPerEthSource: 'mock',
+			repPerEthSourceUrl: undefined,
+			selectedPool: createSelectedPool(),
+			securityPoolOverviewActiveAction: undefined,
+			securityPoolLiquidationError: undefined,
+			securityPoolOverviewResult: undefined,
+			callerVaultSummary: createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress }),
+			targetVaultSummary: createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress }),
+			...overrides,
+		}
+	}
+
 	function renderLiquidationModal(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}) {
-		return renderIntoDocument(
-			<LiquidationModal
-				accountAddress={defaultCallerVaultAddress}
-				closeLiquidationModal={() => undefined}
-				currentPoolOracleManagerDetails={undefined}
-				isMainnet
-				liquidationAmount='1'
-				liquidationMaxAmount={5n * 10n ** 18n}
-				liquidationManagerAddress={zeroAddress}
-				liquidationModalOpen
-				liquidationSecurityPoolAddress={zeroAddress}
-				liquidationTargetVault={defaultTargetVaultAddress}
-				liquidationTimeoutMinutes='5'
-				loadingPoolOracleManager={false}
-				onLoadPoolOracleManager={() => undefined}
-				onLiquidationAmountChange={() => undefined}
-				onLiquidationTimeoutMinutesChange={() => undefined}
-				onQueueLiquidation={() => undefined}
-				onSelectedPoolViewChange={() => undefined}
-				repPerEthPrice={1n * 10n ** 18n}
-				repPerEthSource='mock'
-				repPerEthSourceUrl={undefined}
-				selectedPool={createSelectedPool()}
-				securityPoolOverviewActiveAction={undefined}
-				securityPoolLiquidationError={undefined}
-				securityPoolOverviewResult={undefined}
-				callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
-				targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
-				{...overrides}
-			/>,
-		)
+		return renderIntoDocument(<LiquidationModal {...createLiquidationModalProps(overrides)} />)
 	}
 
 	test('disables execute liquidation when the selected pool has ended', async () => {
@@ -238,17 +240,27 @@ describe('LiquidationModal', () => {
 		let renderedComponent = await renderModal()
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const closeButton = within(document.body).getByRole('button', { name: 'Close' }) as HTMLButtonElement
-		const cancelButton = within(document.body).getByText('Cancel') as HTMLButtonElement
-		expect(document.activeElement).toBe(closeButton)
+		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate Vault' })
+		const closeButton = within(dialog).getByRole('button', { name: 'Close' })
+		const focusableElements = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"))
+		const firstFocusableAfterClose = focusableElements[1]
+		const lastFocusableElement = focusableElements[focusableElements.length - 1]
+		if (firstFocusableAfterClose === undefined || lastFocusableElement === undefined) throw new Error('Expected multiple focusable modal controls')
+		expect(document.activeElement === closeButton).toBe(true)
 
 		await act(() => {
-			fireEvent.keyDown(cancelButton, { key: 'Tab' })
+			fireEvent.keyDown(document, { key: 'Tab' })
 		})
-		expect(document.activeElement).toBe(closeButton)
+		expect(document.activeElement === firstFocusableAfterClose).toBe(true)
+
+		lastFocusableElement.focus()
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Tab' })
+		})
+		expect(document.activeElement === closeButton).toBe(true)
 
 		await act(() => {
-			fireEvent.keyDown(closeButton, { key: 'Escape' })
+			fireEvent.keyDown(document, { key: 'Escape' })
 		})
 
 		await renderedComponent.cleanup()
@@ -257,6 +269,156 @@ describe('LiquidationModal', () => {
 		expect(document.body.querySelector("[role='dialog']")).toBeNull()
 		expect(document.activeElement).toBe(opener)
 		opener.remove()
+	})
+
+	test('hides sibling page content while open and restores it after close', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<LiquidationModal {...createLiquidationModalProps()} />
+				</>,
+				container,
+			)
+		})
+
+		const pageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(pageContent instanceof HTMLElement)) throw new Error('Expected page content')
+		expect(pageContent.getAttribute('aria-hidden')).toBe('true')
+		expect(pageContent.hasAttribute('inert')).toBe(true)
+		expect(within(container).getByRole('dialog', { name: 'Liquidate Vault' })).not.toBeNull()
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<LiquidationModal {...createLiquidationModalProps({ liquidationModalOpen: false })} />
+				</>,
+				container,
+			)
+		})
+
+		const restoredPageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(restoredPageContent instanceof HTMLElement)) throw new Error('Expected restored page content')
+		expect(restoredPageContent.getAttribute('aria-hidden')).toBe('false')
+		expect(restoredPageContent.hasAttribute('inert')).toBe(false)
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('lets only the top stacked liquidation modal handle Escape', async () => {
+		function StackedLiquidationModalHarness() {
+			const [executeOpen, setExecuteOpen] = useState(true)
+			const [queueOpen, setQueueOpen] = useState(true)
+
+			return (
+				<>
+					{executeOpen ? (
+						<LiquidationModal
+							{...createLiquidationModalProps({
+								closeLiquidationModal: () => setExecuteOpen(false),
+								currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }),
+							})}
+						/>
+					) : undefined}
+					{queueOpen ? (
+						<LiquidationModal
+							{...createLiquidationModalProps({
+								closeLiquidationModal: () => setQueueOpen(false),
+								currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+							})}
+						/>
+					) : undefined}
+				</>
+			)
+		}
+
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<StackedLiquidationModalHarness />, container)
+		})
+
+		expect(within(container).getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
+		expect(within(container).getByRole('dialog', { name: 'Queue Vault Liquidation' })).not.toBeNull()
+		const stackedBackdrops = container.querySelectorAll('.modal-backdrop')
+		const executeBackdrop = stackedBackdrops[0]
+		if (!(executeBackdrop instanceof HTMLElement)) throw new Error('Expected execute modal backdrop')
+		expect(executeBackdrop.getAttribute('aria-hidden')).toBe('true')
+		expect(executeBackdrop.hasAttribute('inert')).toBe(true)
+
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Escape' })
+		})
+
+		expect(within(container).getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
+		expect(within(container).queryByRole('dialog', { name: 'Queue Vault Liquidation' })).toBeNull()
+		const restoredExecuteBackdrop = container.querySelector('.modal-backdrop')
+		if (!(restoredExecuteBackdrop instanceof HTMLElement)) throw new Error('Expected restored execute modal backdrop')
+		expect(restoredExecuteBackdrop.getAttribute('aria-hidden')).toBe(null)
+		expect(restoredExecuteBackdrop.hasAttribute('inert')).toBe(false)
+
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Escape' })
+		})
+		expect(within(container).queryByRole('dialog', { name: 'Execute Vault Liquidation' })).toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('cycles Tab through the top stacked liquidation modal controls', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(
+				<>
+					<LiquidationModal
+						{...createLiquidationModalProps({
+							currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }),
+						})}
+					/>
+					<LiquidationModal
+						{...createLiquidationModalProps({
+							currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+						})}
+					/>
+				</>,
+				container,
+			)
+		})
+
+		const executeDialog = within(container).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		const queueDialog = within(container).getByRole('dialog', { name: 'Queue Vault Liquidation' })
+		const executeCloseButton = within(executeDialog).getByRole('button', { name: 'Close' })
+		const queueCloseButton = within(queueDialog).getByRole('button', { name: 'Close' })
+		const queueFocusableElements = Array.from(queueDialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"))
+		const firstQueueFocusableAfterClose = queueFocusableElements[1]
+		if (firstQueueFocusableAfterClose === undefined) throw new Error('Expected multiple queue modal controls')
+
+		expect(document.activeElement === queueCloseButton).toBe(true)
+
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Tab' })
+		})
+
+		expect(document.activeElement === firstQueueFocusableAfterClose).toBe(true)
+		expect(document.activeElement === executeCloseButton).toBe(false)
+
+		render(null, container)
+		container.remove()
 	})
 
 	test('keeps focus on the edited input while the modal rerenders', async () => {
