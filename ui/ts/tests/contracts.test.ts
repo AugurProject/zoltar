@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, getAddress, keccak256, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import {
 	buildForkCarriedEscalationProofs,
+	depositRepToSecurityPool,
 	getOpenOracleAddress,
 	loadAllSecurityPools,
 	loadEscalationDeposits,
@@ -171,6 +172,16 @@ describe('contracts helpers', () => {
 		expect(getForkOutcomeKey(0n, getAddress('0x0000000000000000000000000000000000000000'))).toBe('none')
 		expect(getForkOutcomeKey(0n, securityPoolAddress)).toBe('invalid')
 		expect(getForkOutcomeKey(1n, securityPoolAddress)).toBe('yes')
+	})
+
+	test('depositRepToSecurityPool rejects zero amounts before encoding a transaction', async () => {
+		let sendTransactionCount = 0
+		const client = createMockWriteClient(() => {
+			sendTransactionCount += 1
+		})
+
+		await expect(depositRepToSecurityPool(asWriteClient(client), securityPoolAddress, 0n)).rejects.toThrow('REP deposit amount must be greater than zero')
+		expect(sendTransactionCount).toBe(0)
 	})
 
 	test('loadForkAuctionDetails keeps the default root-pool fork outcome unset and inactive', async () => {

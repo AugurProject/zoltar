@@ -132,7 +132,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 										{hasForked ? 'Already Forked' : 'Use For Fork'}
 									</button>
 									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
-										Use For Create Pool
+										Create Pool From Question
 									</button>
 								</div>
 							}

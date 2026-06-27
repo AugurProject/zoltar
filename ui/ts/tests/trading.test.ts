@@ -7,6 +7,8 @@ import {
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
 	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
+	convertCollateralAmountToShareAmount,
+	convertShareAmountToCollateralAmount,
 	getCollateralizationDisplayState,
 	getCollateralizationTone,
 	getDefaultShareMigrationTargetOutcomeIndexes,
@@ -373,28 +375,33 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isMainnet: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '0',
 				shareBalances,
+				shareTokenSupply: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Enter a redeem amount greater than zero.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isMainnet: true,
 				loadingTradingDetails: true,
 				redeemAmountInput: '1',
 				shareBalances: undefined,
+				shareTokenSupply: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Loading wallet share balances.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isMainnet: true,
 				loadingTradingDetails: false,
@@ -404,41 +411,70 @@ void describe('trading helpers', () => {
 					no: 2n * 10n ** 18n,
 					yes: 2n * 10n ** 18n,
 				},
+				shareTokenSupply: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Need matching Invalid, Yes, and No shares to redeem complete sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isMainnet: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: 'abc',
 				shareBalances,
+				shareTokenSupply: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Enter a valid redeem amount.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isMainnet: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '2.1',
 				shareBalances,
+				shareTokenSupply: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Max redeemable amount is 2 complete sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isMainnet: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '2',
 				shareBalances,
+				shareTokenSupply: 10n * TOKEN_PRECISION,
 			}),
 		).toBeUndefined()
+	})
+
+	void test('converts first-mint share token amounts through the pool exchange rate', () => {
+		const firstMintShareAmount = TOKEN_PRECISION * TOKEN_PRECISION
+		expect(convertShareAmountToCollateralAmount(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
+		expect(convertCollateralAmountToShareAmount(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
+		expect(
+			getTradingRedeemCompleteSetGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: TOKEN_PRECISION,
+				hasSelectedPool: true,
+				isMainnet: true,
+				loadingTradingDetails: false,
+				redeemAmountInput: '1.1',
+				shareBalances: {
+					invalid: firstMintShareAmount,
+					no: firstMintShareAmount,
+					yes: firstMintShareAmount,
+				},
+				shareTokenSupply: firstMintShareAmount,
+			}),
+		).toBe('Max redeemable amount is 1 complete sets.')
 	})
 
 	void test('validates share migration targets and positive balances once migration is available', () => {

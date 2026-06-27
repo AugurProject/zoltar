@@ -62,7 +62,7 @@ export type NoticeItem = {
 	tone: NoticeTone
 }
 
-type GlobalTransactionTone = 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
+type GlobalTransactionTone = 'preparing' | 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
 
 export type GlobalTransactionRow = {
 	label: string
@@ -71,6 +71,7 @@ export type GlobalTransactionRow = {
 
 export type TransactionIntent = {
 	action: string
+	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
 	source: string
 	submittedDetail: ComponentChildren
@@ -446,7 +447,7 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 	showHeader?: boolean
 }
 
-type LiquidationControlsProps = {
+type LiquidationModalStateProps = {
 	closeLiquidationModal: () => void
 	liquidationAmount: string
 	liquidationMaxAmount: bigint | undefined
@@ -462,7 +463,6 @@ type LiquidationControlsProps = {
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 }
@@ -483,43 +483,26 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolPage | undefined
 	securityPools: ListedSecurityPool[]
-} & LiquidationControlsProps &
+} & LiquidationModalStateProps &
 	RepPerEthPriceProps
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
-export type SecurityPoolWorkflowRouteContentProps = {
+export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
 	accountState: AccountState
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined
-	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
-	liquidationAmount: string
-	liquidationMaxAmount: bigint | undefined
-	liquidationManagerAddress: Address | undefined
-	liquidationModalOpen: boolean
-	liquidationSecurityPoolAddress: Address | undefined
-	liquidationTargetVault: string
-	liquidationTimeoutMinutes: string
-	loadingPoolOracleManager: boolean
 	loadingSecurityPools: boolean
-	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTimeoutMinutesChange: (value: string) => void
-	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
 	onRequestPoolPrice: (managerAddress: Address) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number
-	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
-	securityPoolOverviewError: string | undefined
-	securityPoolLiquidationError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
-	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
 	universeForkTime?: bigint | undefined

@@ -4,6 +4,7 @@ import { loadAllSecurityPools, loadOracleManagerDetails, loadSecurityPoolPage, q
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
@@ -47,6 +48,10 @@ export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[
 	}
 }
 
+async function waitForSecurityPoolReadBackend() {
+	await getActiveBackend().waitUntilReady?.()
+}
+
 export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
 	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
@@ -82,6 +87,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				securityPoolOverviewError.value = undefined
 			},
 			load: async () => {
+				await waitForSecurityPoolReadBackend()
 				const loadOptions =
 					nextCheckedAddress === undefined
 						? {
@@ -115,6 +121,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 				securityPoolOverviewError.value = undefined
 			},
 			load: async () => {
+				await waitForSecurityPoolReadBackend()
 				const readClient = createConnectedReadClient()
 				try {
 					return await loadSecurityPoolPage(readClient, pageIndex, pageSize, accountAddress)
