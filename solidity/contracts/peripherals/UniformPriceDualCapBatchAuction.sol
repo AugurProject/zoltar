@@ -59,6 +59,8 @@ contract UniformPriceDualCapBatchAuction {
 	address public immutable owner;
 
 	bool public underfunded;
+	// Carries funded-auction division dust so bid-level withdrawals reconcile to totalRepPurchased.
+	uint256 public clearingRemainder;
 	uint256 public underfundedRemainder;
 	uint256 public underfundedThreshold;
 	uint256 public underfundedWinningEth;
@@ -205,9 +207,7 @@ contract UniformPriceDualCapBatchAuction {
 					totalEthRefund += bid.ethAmount;
 				} else if (tick > clearingTick) {
 					// Fully winning: convert all ETH to REP
-					if (clearingPriceLocal > 0) {
-						totalFilledRep += (bid.ethAmount * PRICE_PRECISION) / clearingPriceLocal;
-					} // else: price is zero, filled REP remains 0
+					totalFilledRep += _allocateRepAtClearingPrice(bid.ethAmount, clearingPriceLocal);
 				} else {
 					// Tick == clearingTick: partial fill
 					uint256 previousCumulativeEth =
@@ -222,9 +222,7 @@ contract UniformPriceDualCapBatchAuction {
 						ethUsed = ethFilledAtClearing - previousCumulativeEth;
 					}
 					if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount;
-					if (clearingPriceLocal > 0) {
-						totalFilledRep += (ethUsed * PRICE_PRECISION) / clearingPriceLocal;
-					}
+					totalFilledRep += _allocateRepAtClearingPrice(ethUsed, clearingPriceLocal);
 					totalEthRefund += bid.ethAmount - ethUsed;
 				}
 			}
@@ -435,6 +433,16 @@ contract UniformPriceDualCapBatchAuction {
 				claimed: bid.claimed,
 				refunded: _isBidRefunded(tick, bidIndex)
 			});
+	}
+
+	function _allocateRepAtClearingPrice(
+		uint256 ethUsed,
+		uint256 clearingPriceLocal
+	) private returns (uint256 repShare) {
+		if (ethUsed == 0 || clearingPriceLocal == 0) return 0;
+		uint256 numerator = ethUsed * PRICE_PRECISION + clearingRemainder;
+		repShare = numerator / clearingPriceLocal;
+		clearingRemainder = numerator % clearingPriceLocal;
 	}
 
 	function _fillActiveTickPage(
