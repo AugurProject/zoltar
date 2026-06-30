@@ -36,6 +36,43 @@ type MockRequestParameters = {
 	params?: unknown
 }
 
+type InjectedWriteClient = ReturnType<ReturnType<typeof createInjectedBackend>['createWriteClient']>
+
+type GuardedWriteOperationCase = {
+	execute: (writeClient: InjectedWriteClient) => Promise<unknown>
+	name: string
+}
+
+const TEST_WRITE_ABI = [
+	{
+		type: 'function',
+		name: 'foo',
+		inputs: [],
+		outputs: [],
+		stateMutability: 'nonpayable',
+	},
+] as const
+
+const guardedWriteOperationCases: GuardedWriteOperationCase[] = [
+	{
+		name: 'sendTransaction',
+		execute: async writeClient => await writeClient.sendTransaction({ to: zeroAddress }),
+	},
+	{
+		name: 'sendRawTransaction',
+		execute: async writeClient => await writeClient.sendRawTransaction({ serializedTransaction: '0x' }),
+	},
+	{
+		name: 'writeContract',
+		execute: async writeClient =>
+			await writeClient.writeContract({
+				address: zeroAddress,
+				abi: TEST_WRITE_ABI,
+				functionName: 'foo',
+			}),
+	},
+]
+
 function createMockInjectedEthereum(requestHandler: (parameters: MockRequestParameters) => Promise<unknown>): InjectedEthereum {
 	return {
 		on: () => undefined,
@@ -225,15 +262,7 @@ describe('injected backend read transport', () => {
 		await writeClient.sendRawTransaction({ serializedTransaction: '0x' })
 		await writeClient.writeContract({
 			address: zeroAddress,
-			abi: [
-				{
-					type: 'function',
-					name: 'foo',
-					inputs: [],
-					outputs: [],
-					stateMutability: 'nonpayable',
-				},
-			] as const,
+			abi: TEST_WRITE_ABI,
 			functionName: 'foo',
 		})
 
@@ -245,7 +274,9 @@ describe('injected backend read transport', () => {
 	})
 
 	test('handles provider call failures in read paths without throwing', async () => {
-		ensureWindowObject().ethereum = createMockInjectedEthereum(async () => {
+		const requestCalls: string[] = []
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			requestCalls.push(method)
 			throw new Error('provider unavailable')
 		})
 
@@ -254,6 +285,7 @@ describe('injected backend read transport', () => {
 		expect(await backend.getAccounts()).toEqual([])
 		expect(await backend.requestAccounts()).toEqual([])
 		await expect(backend.createReadClient().getCode({ address: zeroAddress })).rejects.toThrow('provider unavailable')
+		expect(requestCalls).toEqual(['eth_accounts', 'eth_requestAccounts', 'eth_getCode'])
 	})
 
 	test('rejects chain RPC failures instead of defaulting to mainnet', async () => {
@@ -265,6 +297,49 @@ describe('injected backend read transport', () => {
 		const backend = createInjectedBackend()
 		await expect(backend.getChainId()).rejects.toThrow('Unable to verify wallet network.')
 	})
+
+	for (const operation of guardedWriteOperationCases) {
+		test(`blocks ${operation.name} when the wallet disconnects before send`, async () => {
+			const requestCalls: string[] = []
+			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+				requestCalls.push(method)
+				if (method === 'eth_accounts') return []
+				if (method === 'eth_getTransactionCount') return '0x1'
+				if (method === 'eth_estimateGas') return '0x5208'
+				if (method === 'eth_gasPrice') return '0x1'
+				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
+				if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
+				return '0x'
+			})
+
+			const backend = createInjectedBackend()
+			const writeClient = backend.createWriteClient(zeroAddress)
+
+			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet account is no longer connected.')
+			expect(requestCalls).toEqual(['eth_accounts'])
+		})
+
+		test(`blocks ${operation.name} when the wallet switches networks before send`, async () => {
+			const requestCalls: string[] = []
+			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+				requestCalls.push(method)
+				if (method === 'eth_accounts') return [zeroAddress]
+				if (method === 'eth_chainId') return '0x539'
+				if (method === 'eth_getTransactionCount') return '0x1'
+				if (method === 'eth_estimateGas') return '0x5208'
+				if (method === 'eth_gasPrice') return '0x1'
+				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
+				if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
+				return '0x'
+			})
+
+			const backend = createInjectedBackend()
+			const writeClient = backend.createWriteClient(zeroAddress)
+
+			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet network changed. Switch to Ethereum mainnet and try again.')
+			expect(requestCalls).toEqual(['eth_accounts', 'eth_chainId'])
+		})
+	}
 
 	test('subscribes and unsubscribes event listeners cleanly', async () => {
 		const { calls, ethereum } = createMockInjectedEthereumWithListeners()
