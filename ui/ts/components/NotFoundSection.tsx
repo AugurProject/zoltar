@@ -9,7 +9,7 @@ export function NotFoundSection() {
 	return (
 		<>
 			<RouteHeader eyebrow='Augur PLACEHOLDER' title='404' description='That page is not here.' />
-			<SectionBlock className='not-found-shell' title='Hash route not found' description='Use the main routes below to return to a supported workflow.'>
+			<SectionBlock className='not-found-shell' title='Hash route not found' description='Use the main routes below to return to a supported page.'>
 				<div className='not-found-copy'>
 					<StateHint presentation={presentation} />
 					<div className='hero-status'>

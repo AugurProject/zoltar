@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { concatHex, decodeFunctionData, getAddress, keccak256, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import {
 	buildForkCarriedEscalationProofs,
 	depositRepToSecurityPool,
@@ -40,6 +40,7 @@ const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
+const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
 
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
@@ -104,6 +105,38 @@ function createMockReadClient(readContract: MockReadContractHandler): MockReadCl
 	return {
 		readContract: createReadContractStub(readContract),
 	}
+}
+
+function buildEmptyNullifierRoot() {
+	let currentHash: Hex = zeroBytes32
+	for (let depth = 1; depth < 64; depth += 1) currentHash = keccak256(concatHex([currentHash, currentHash]))
+	return currentHash
+}
+
+function createForkCarriedProofReadClient(readForkContinuation: () => Promise<unknown>) {
+	const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+	const emptyNullifierRoot = buildEmptyNullifierRoot()
+	return {
+		multicall: createMulticallStub(async request => {
+			const firstContract = request.contracts[0]
+			const functionName = getContractFunctionName(firstContract)
+			if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+			throw new Error(`Unexpected multicall contract: ${functionName}`)
+		}),
+		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'escalationGame') return parentEscalationGameAddress
+			if (request.functionName === 'getOutcomeState')
+				return {
+					currentCarryRoot: zeroBytes32,
+					currentLeafCount: 0n,
+					currentNullifierRoot: emptyNullifierRoot,
+				}
+			if (request.functionName === 'forkContinuation') return await readForkContinuation()
+			if (request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
+			if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		}),
+	} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
 }
 
 function createMockLoaderClient({ getBlock, multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {
@@ -767,6 +800,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return escrowedRep
@@ -818,6 +852,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return 9n
@@ -879,6 +914,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return 9n
@@ -1035,6 +1071,22 @@ describe('contracts helpers', () => {
 		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected carry leaf page response')
+	})
+
+	test('buildForkCarriedEscalationProofs treats a missing recursive forkContinuation getter as backward-compatible', async () => {
+		const client = createForkCarriedProofReadClient(async () => {
+			throw new Error('The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".')
+		})
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).resolves.toEqual([])
+	})
+
+	test('buildForkCarriedEscalationProofs rejects recursive forkContinuation RPC failures', async () => {
+		const client = createForkCarriedProofReadClient(async () => {
+			throw new Error('RPC request failed while reading forkContinuation')
+		})
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).rejects.toThrow('RPC request failed while reading forkContinuation')
 	})
 
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {

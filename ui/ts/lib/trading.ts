@@ -67,6 +67,11 @@ export function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances
 	return shareBalances.no
 }
 
+function formatCompleteSetAmount(value: bigint) {
+	const formattedValue = formatCurrencyBalance(value)
+	return `${formattedValue} complete ${formattedValue === '1' ? 'set' : 'sets'}`
+}
+
 function divideRoundedUp(numerator: bigint, denominator: bigint) {
 	if (denominator <= 0n) throw new RangeError('Denominator must be greater than zero')
 	return (numerator + denominator - 1n) / denominator
@@ -225,7 +230,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (redeemShareAmount === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
 	if (redeemShareAmount > maxRedeemableCompleteSets) {
 		const maxRedeemableCollateralAmount = convertShareAmountToCollateralAmount(maxRedeemableCompleteSets, completeSetCollateralAmount, shareTokenSupply)
-		return `Max redeemable amount is ${formatCurrencyBalance(maxRedeemableCollateralAmount)} complete sets.`
+		return `Max redeemable amount is ${formatCompleteSetAmount(maxRedeemableCollateralAmount)}.`
 	}
 	return undefined
 }

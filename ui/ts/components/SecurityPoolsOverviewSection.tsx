@@ -48,6 +48,7 @@ export function SecurityPoolsOverviewSection({
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
 	onLoadSecurityPoolPage,
+	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onSelectSecurityPool,
 	poolOracleManagerDetails,
@@ -138,7 +139,7 @@ export function SecurityPoolsOverviewSection({
 			<SectionBlock
 				density='compact'
 				title='Security Pools'
-				description='Browse deployed pools, inspect their vaults, and open a selected pool workflow.'
+				description='Browse deployed pools, inspect their vaults, and open a selected pool to manage it.'
 				actions={
 					<PaginationControls
 						hasNextPage={hasNextPage}
@@ -222,6 +223,7 @@ export function SecurityPoolsOverviewSection({
 						<div className='entity-card-list'>
 							{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 								const displayState = poolState.lifecycleState
+								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
 								const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
 								const badgeTone = (() => {
@@ -375,8 +377,13 @@ export function SecurityPoolsOverviewSection({
 																						<CurrencyValue value={vault.repDepositShare} suffix='REP' />
 																					</strong>
 																				</div>
-																				<button className='secondary security-pool-browse-vault-row-liquidate' onClick={() => onSelectSecurityPool?.(pool.securityPoolAddress)} disabled={onSelectSecurityPool === undefined} title='Open the selected pool workflow before reviewing liquidation actions.'>
-																					Open Pool to Liquidate
+																				<button
+																					className='secondary security-pool-browse-vault-row-liquidate'
+																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
+																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
+																					title='Review liquidation details for this vault before queueing the action.'
+																				>
+																					Review Liquidation
 																				</button>
 																			</div>
 																		</div>

@@ -36,11 +36,11 @@ export function getSimulationScenarioDescription(scenario: SimulationScenario) {
 		case 'deployed':
 			return 'App contracts are deployed, but no security pools or seeded markets are created. Use it to test setup flows from an empty deployment.'
 		case 'security-pool':
-			return 'One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.'
+			return 'One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':
-			return 'Two seeded markets with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool workflows.'
+			return 'Two seeded markets with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
 		case 'securitypoolx2-auction':
-			return 'Two seeded markets with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test fork-auction bidbook and settlement workflows.'
+			return 'Two seeded markets with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
 		default:
 			return assertNever(scenario)
 	}
