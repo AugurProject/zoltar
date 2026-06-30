@@ -1,7 +1,6 @@
 import { concatHex, encodeAbiParameters, keccak256, parseAbiItem, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from 'viem'
 import { Zoltar_Zoltar, peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { sameAddress } from '../lib/address.js'
-import { isIgnorableLogDecodeError } from '../lib/errors.js'
 import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
@@ -174,9 +173,40 @@ async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, es
 			args: [],
 		})
 	} catch (error) {
-		if (isIgnorableLogDecodeError(error)) return undefined
-		return undefined
+		if (isForkContinuationCompatibilityError(error)) return undefined
+		throw error
 	}
+}
+
+function collectErrorMessages(error: unknown, seen = new Set<object>()): string[] {
+	if (typeof error === 'string') return [error]
+	if (typeof error !== 'object' || error === null) return []
+	if (seen.has(error)) return []
+	seen.add(error)
+
+	const messages: string[] = []
+	for (const key of ['message', 'shortMessage', 'details']) {
+		const value = Reflect.get(error, key)
+		if (typeof value === 'string') messages.push(value)
+	}
+
+	const metaMessages = Reflect.get(error, 'metaMessages')
+	if (Array.isArray(metaMessages)) {
+		for (const message of metaMessages) {
+			if (typeof message === 'string') messages.push(message)
+		}
+	}
+
+	messages.push(...collectErrorMessages(Reflect.get(error, 'cause'), seen))
+	return messages
+}
+
+function isForkContinuationCompatibilityError(error: unknown) {
+	return collectErrorMessages(error).some(message => {
+		const normalizedMessage = message.toLowerCase()
+		if (!normalizedMessage.includes('forkcontinuation')) return false
+		return normalizedMessage.includes('returned no data') || normalizedMessage.includes('does not have the function') || normalizedMessage.includes('function not found') || normalizedMessage.includes('function selector') || normalizedMessage.includes('unknown function')
+	})
 }
 
 async function readEscalationOutcomeState(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {

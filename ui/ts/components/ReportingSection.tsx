@@ -544,8 +544,8 @@ export function ReportingSection({
 								<CurrencyValue copyable={false} value={displayBindingCapital} suffix='REP' />
 							</div>
 						</div>
-						<div className='escalation-sides'>
-							{outcomeSides.map(side => (
+						<div className='escalation-sides' role='radiogroup' aria-label='Report outcome'>
+							{outcomeSides.map((side, index) => (
 								<EscalationSide
 									key={side.key}
 									bindingCapital={displayBindingCapital}
@@ -553,6 +553,7 @@ export function ReportingSection({
 									disabled={showWithdrawOnly ? withdrawControlsLocked : reportControlsLocked}
 									isLeading={leadingOutcome === side.key}
 									isSelected={selectedOutcome !== undefined && selectedOutcome === side.key}
+									isTabStop={selectedOutcome === undefined ? index === 0 : selectedOutcome === side.key}
 									onSelect={() => onReportingFormChange({ selectedOutcome: side.key })}
 									side={side}
 								/>

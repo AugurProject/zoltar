@@ -93,6 +93,26 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
 	})
 
+	test('renders a simulation transaction as preparing without wallet copy', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionTray
+				transaction={{
+					detail: 'Submitting in browser simulation. No wallet confirmation is required.',
+					dismissKey: 'transaction-request-1',
+					title: 'Creating Question',
+					tone: 'preparing',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Preparing')).not.toBeNull()
+		expect(documentQueries.getByText('Submitting in browser simulation. No wallet confirmation is required.')).not.toBeNull()
+		expect(documentQueries.queryByText('Awaiting Wallet')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
+	})
+
 	test('renders a failed pre-submit transaction with the failure reason and dismiss control', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray

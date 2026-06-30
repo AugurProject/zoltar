@@ -116,6 +116,15 @@ export function createDeploymentSuccessPresentation(stepLabel: string, hash: Has
 }
 
 export function createAwaitingWalletPresentation(intent: TransactionIntent, dismissKey: string) {
+	if (intent.requiresWalletConfirmation === false)
+		return buildHashlessPresentation({
+			detail: 'Submitting in browser simulation. No wallet confirmation is required.',
+			dismissKey,
+			title: intent.submittedTitle,
+			tone: 'preparing',
+			...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		})
+
 	return buildHashlessPresentation({
 		detail: 'Confirm the transaction in your wallet.',
 		dismissKey,
@@ -126,12 +135,13 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 }
 
 export function createPreparedWalletPresentation(intent: TransactionIntent, preview: TransactionRequestPreview, dismissKey: string): GlobalTransactionPresentation {
+	const requiresWalletConfirmation = preview.requiresWalletConfirmation ?? intent.requiresWalletConfirmation ?? true
 	return buildHashlessPresentation({
-		detail: preview.requiresWalletConfirmation === false ? 'Review the prepared transaction before it is submitted.' : 'Review the prepared transaction, then confirm it in your wallet.',
+		detail: requiresWalletConfirmation ? 'Review the prepared transaction, then confirm it in your wallet.' : 'Review the prepared transaction before it is submitted.',
 		dismissKey,
 		rows: getPreparedTransactionRows(intent, preview),
 		title: intent.submittedTitle,
-		tone: 'awaiting-wallet',
+		tone: requiresWalletConfirmation ? 'awaiting-wallet' : 'preparing',
 	})
 }
 

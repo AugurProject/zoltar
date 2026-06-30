@@ -322,7 +322,6 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
 		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
 		poolOracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
@@ -509,7 +508,7 @@ void describe('SecurityPoolsSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Pool Workflows' })).toBeNull()
 		expect(documentQueries.queryByText('Mode')).toBeNull()
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
@@ -656,7 +655,7 @@ void describe('SecurityPoolsSection', () => {
 		const contextQueries = within(selectedPoolContext)
 		expect(contextQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
-		expect(contextQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
+		expect(contextQueries.queryByRole('tab', { name: 'Pool Workflows' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(contextQueries.queryByText('Total Security Bond Allowance')).toBeNull()
 		const lookupLabel = contextQueries.getByText('Security Pool Address')

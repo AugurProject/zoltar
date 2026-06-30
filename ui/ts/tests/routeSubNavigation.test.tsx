@@ -29,7 +29,7 @@ describe('RouteSubNavigation', () => {
 				ariaLabel: 'Market views',
 				onChange: () => undefined,
 				options: [
-					{ href: '#/zoltar?zoltarView=questions', label: 'Browse Markets', value: 'questions' },
+					{ href: '#/zoltar?zoltarView=questions', label: 'Questions & Markets', value: 'questions' },
 					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
 					{ disabled: true, label: 'Migrate REP', reason: 'Fork Oracle before migrating REP.', value: 'migrate' },
 				],
@@ -39,12 +39,12 @@ describe('RouteSubNavigation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Zoltar > Browse Markets')).toBeNull()
+		expect(documentQueries.queryByText('Zoltar > Questions & Markets')).toBeNull()
 		expect(document.body.querySelector('.route-subnav-shell')).not.toBeNull()
 		expect(document.body.querySelector('.route-subtab-nav')).not.toBeNull()
 		expect(documentQueries.getByRole('tablist', { name: 'Market views' })).not.toBeNull()
 
-		const questionsTab = documentQueries.getByRole('tab', { name: 'Browse Markets' }) as HTMLAnchorElement
+		const questionsTab = documentQueries.getByRole('tab', { name: 'Questions & Markets' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')
 		expect(questionsTab.getAttribute('href')).toBe('#/zoltar?zoltarView=questions')
 		const migrateRepTab = documentQueries.getByRole('tab', { name: 'Migrate REP' }) as HTMLButtonElement

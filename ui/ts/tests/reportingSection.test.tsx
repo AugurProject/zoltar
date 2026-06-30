@@ -311,7 +311,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Min to change proposed outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
-		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
+		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
 		expect(document.body.textContent?.includes('Settle Escalation Deposits')).toBe(true)
 	})
 
@@ -522,7 +522,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const selectedButton = documentQueries.getByRole('button', { name: /^Yes/ })
+		const selectedButton = documentQueries.getByRole('radio', { name: /^Yes/ })
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(1)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(selectedButton.textContent?.includes('Selected')).toBe(true)
@@ -754,7 +754,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('textbox', { name: /^Contribution Amount \(REP\)/ }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max' }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
@@ -1714,11 +1714,17 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const yesButton = documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
-		const noButton = documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement
+		const outcomeGroup = documentQueries.getByRole('radiogroup', { name: 'Report outcome' })
+		const outcomeQueries = within(outcomeGroup)
+		const invalidButton = outcomeQueries.getByRole('radio', { name: /^Invalid/ }) as HTMLButtonElement
+		const yesButton = outcomeQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement
+		const noButton = outcomeQueries.getByRole('radio', { name: /^No/ }) as HTMLButtonElement
 
-		expect(yesButton.getAttribute('aria-pressed')).toBe('false')
-		expect(noButton.getAttribute('aria-pressed')).toBe('false')
+		expect(yesButton.getAttribute('aria-checked')).toBe('false')
+		expect(noButton.getAttribute('aria-checked')).toBe('false')
+		expect(invalidButton.tabIndex).toBe(0)
+		expect(yesButton.tabIndex).toBe(-1)
+		expect(noButton.tabIndex).toBe(-1)
 		expect(documentQueries.getByRole('button', { name: 'Report On Selected Side' })).not.toBeNull()
 
 		await act(() => {
@@ -1726,9 +1732,27 @@ describe('ReportingSection', () => {
 		})
 
 		expect(updates).toEqual([{ selectedOutcome: 'no' }])
-		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false')
-		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true')
+		expect((outcomeQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('false')
+		expect((outcomeQueries.getByRole('radio', { name: /^No/ }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('true')
+		expect((outcomeQueries.getByRole('radio', { name: /^No/ }) as HTMLButtonElement).tabIndex).toBe(0)
 		expect(documentQueries.getByRole('button', { name: 'Report No' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.keyDown(outcomeQueries.getByRole('radio', { name: /^No/ }), { key: 'ArrowLeft' })
+		})
+		const selectedYesButton = outcomeQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement
+		expect(updates.at(-1)).toEqual({ selectedOutcome: 'yes' })
+		expect(selectedYesButton.getAttribute('aria-checked')).toBe('true')
+		expect(selectedYesButton.tabIndex).toBe(0)
+		expect(document.activeElement === selectedYesButton).toBe(true)
+
+		await act(() => {
+			fireEvent.keyDown(selectedYesButton, { key: 'ArrowRight' })
+		})
+		const selectedNoButton = outcomeQueries.getByRole('radio', { name: /^No/ }) as HTMLButtonElement
+		expect(updates.at(-1)).toEqual({ selectedOutcome: 'no' })
+		expect(selectedNoButton.getAttribute('aria-checked')).toBe('true')
+		expect(document.activeElement === selectedNoButton).toBe(true)
 	})
 
 	test('disables outcome side selection when the reporting workflow is locked', async () => {
@@ -1743,9 +1767,9 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
-		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).disabled).toBe(true)
-		expect((documentQueries.getByRole('button', { name: /^Invalid/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('radio', { name: /^No/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('radio', { name: /^Invalid/ }) as HTMLButtonElement).disabled).toBe(true)
 	})
 
 	test('renders reporting transaction status outside the action rows', async () => {

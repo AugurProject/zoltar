@@ -158,7 +158,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Paste a binary Zoltar question ID, or use "Use For Create Pool" after creating a question.')).not.toBeNull()
+		expect(documentQueries.getByText('Paste a binary Zoltar question ID, or use "Create Pool From Question" after creating a question.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 
