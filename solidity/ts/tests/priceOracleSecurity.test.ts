@@ -64,6 +64,22 @@ const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'ExecutedStagedOperation')
 
+const findExecutedStagedOperationLogs = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.filter(log => log?.eventName === 'ExecutedStagedOperation')
+
 const findPendingOperationRecoveryConsumedLog = (logs: TransactionReceiptLogs) =>
 	logs
 		.map(log => {
@@ -840,6 +856,77 @@ describe('Price Oracle Refund Security Tests', () => {
 		const vaultAfterReduction = await getSecurityVault(client, securityPool, client.account.address)
 		assert.strictEqual(consumedAfterReduction, 1000n * 10n ** 18n, 'allowance reductions should not consume price-round budget')
 		assert.strictEqual(vaultAfterReduction.securityBondAllowance, reducedAllowance, 'allowance reductions should still execute while the price is fresh, even after the budget is exhausted')
+	})
+
+	test('empty-vault withdrawals cannot consume fresh-price budget', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		const consumedBeforeAttack = await getPriceRoundConsumedNotional(client, priceOracle)
+		const remainingBeforeAttack = await getPriceRoundRemainingNotional(client, priceOracle)
+
+		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(attackerClient, priceOracle, OperationType.WithdrawRep, attackerClient.account.address, remainingBeforeAttack, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /withdraw amount has no effect/i)
+
+		const consumedAfterAttack = await getPriceRoundConsumedNotional(client, priceOracle)
+		const remainingAfterAttack = await getPriceRoundRemainingNotional(client, priceOracle)
+		assert.strictEqual(consumedAfterAttack, consumedBeforeAttack, 'failed zero-effect withdrawal must not consume price-round budget')
+		assert.strictEqual(remainingAfterAttack, remainingBeforeAttack, 'failed zero-effect withdrawal must not reduce remaining fresh-price budget')
+	})
+
+	test('empty-vault withdrawals cannot occupy pending oracle settlement slots', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const ethCost = await getRequestPriceEthCost(attackerClient, priceOracle)
+
+		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(attackerClient, priceOracle, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost), /withdraw amount has no effect/i)
+
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		const pendingSettlementOperationCount = await getPendingSettlementOperationCount(client, priceOracle)
+		const activeStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
+		assert.strictEqual(pendingReportId, 0n, 'zero-effect withdrawal must not request an oracle report')
+		assert.strictEqual(pendingSettlementOperationCount, 0n, 'zero-effect withdrawal must not occupy a pending settlement slot')
+		assert.strictEqual(activeStagedOperationCount, 0n, 'zero-effect withdrawal must not remain staged')
+	})
+
+	test('over-requested withdrawals consume budget for actual REP withdrawn', async () => {
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		const oversizedWithdrawal = repDeposit * 10n
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, oversizedWithdrawal, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+
+		const consumedAfterWithdrawal = await getPriceRoundConsumedNotional(client, priceOracle)
+		const remainingAfterWithdrawal = await getPriceRoundRemainingNotional(client, priceOracle)
+		const vaultAfterWithdrawal = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(consumedAfterWithdrawal, repDeposit, 'withdrawal should consume notional for actual REP removed from the pool')
+		assert.strictEqual(remainingAfterWithdrawal, 0n, 'test setup should exactly exhaust the price-round budget')
+		assert.strictEqual(vaultAfterWithdrawal.repDepositShare, 0n, 'over-requested withdrawal should still withdraw the full vault balance')
+	})
+
+	test('pending withdrawals that become zero-effect during execution do not consume extra budget', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+
+		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
+
+		const consumedAfterSettlement = await getPriceRoundConsumedNotional(client, priceOracle)
+		const remainingAfterSettlement = await getPriceRoundRemainingNotional(client, priceOracle)
+		const vaultAfterSettlement = await getSecurityVault(client, securityPool, client.account.address)
+		const firstStagedOperation = await getStagedOperation(client, priceOracle, 1n)
+		const secondStagedOperation = await getStagedOperation(client, priceOracle, 2n)
+		const executionLogs = findExecutedStagedOperationLogs(settleReceipt.logs)
+		const secondExecutionLog = executionLogs.find(log => log?.args.operationId === 2n)
+		if (secondExecutionLog === undefined) throw new Error('missing zero-effect withdrawal execution log')
+
+		assert.strictEqual(secondExecutionLog.args.success, false, 'second pending withdrawal should fail after the first empties the vault')
+		assert.strictEqual(secondExecutionLog.args.errorMessage, 'withdraw amount has no effect', 'second pending withdrawal should expose the zero-effect reason')
+		assert.strictEqual(consumedAfterSettlement, repDeposit, 'only the successful first withdrawal should consume price-round budget')
+		assert.strictEqual(remainingAfterSettlement, 0n, 'test setup should exactly exhaust the price-round budget with the first withdrawal')
+		assert.strictEqual(vaultAfterSettlement.repDepositShare, 0n, 'first pending withdrawal should empty the vault')
+		assert.strictEqual(firstStagedOperation[1], zeroAddress, 'successful pending withdrawal should be consumed')
+		assert.strictEqual(secondStagedOperation[1], zeroAddress, 'zero-effect pending withdrawal should be consumed')
 	})
 
 	test('liquidations too close to the threshold are rejected even when oracle budget remains', async () => {
