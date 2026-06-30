@@ -3594,6 +3594,13 @@
 							pro rata by ETH contribution.
 						</p>
 						<p>
+							Both finalized paths carry division dust across paged withdrawals. Normal
+							clearing carries <code>clearingRemainder</code> through the uniform-price
+							ETH-to-REP division, and underfunded clearing carries
+							<code>underfundedRemainder</code> through the pro-rata winning-ETH division,
+							so bid-level withdrawals reconcile to the aggregate finalized REP.
+						</p>
+						<p>
 							Settlement then turns purchased REP into child-pool vault accounting. The filled
 							REP amount becomes pool ownership through the same ownership converter used by
 							normal REP deposits. Any security-bond allowance left behind by parent vaults is
@@ -3667,7 +3674,7 @@
 						<li>The sweep stops when the ETH raise cap binds or when the ETH collected so far, at that price, would buy all REP being sold.</li>
 						<li>In an underfunded auction, the contract computes <code>underfundedThreshold = ethRaised * PRICE_PRECISION / maxRepBeingSold</code>.</li>
 						<li>Only bids at or above that underfunded threshold count as winners; all winning ETH buys the full REP inventory pro rata.</li>
-						<li>Division dust in the underfunded path is carried through <code>underfundedRemainder</code> as bids are withdrawn.</li>
+						<li>Normal clearing carries division dust through <code>clearingRemainder</code>; underfunded clearing carries division dust through <code>underfundedRemainder</code> as bids are withdrawn.</li>
 						<li>Before finalization, losing bids below the currently found clearing tick can be refunded in paged batches.</li>
 						<li>After finalization, only the owner withdraws bid outcomes from the auction; <code>SecurityPoolForker</code> wraps that call so anyone can settle a vault's bid pages.</li>
 					</ul>

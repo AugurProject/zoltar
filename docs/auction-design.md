@@ -57,6 +57,9 @@ After finalization, paged settlement handles both claim and refund cases:
 
 Zero-effective-price ticks are rejected when bids are submitted, so underfunded
 settlement cannot assign REP to bids whose rounded ETH/REP price is zero.
-The underfunded path carries division dust through `underfundedRemainder` as
-bid pages are withdrawn, so later withdrawals receive the remainder carried from
-earlier integer division.
+Both finalized allocation paths carry division dust across paged withdrawals:
+normal clearing carries `clearingRemainder` through the uniform-price
+ETH-to-REP division, and underfunded clearing carries `underfundedRemainder`
+through the pro-rata winning-ETH division. Later withdrawals may receive the
+remainder carried from earlier integer division so bid-level withdrawals
+reconcile to the aggregate finalized REP.
