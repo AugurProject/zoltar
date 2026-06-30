@@ -29,7 +29,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 	} = fixture
 
 	describe('stage navigation', () => {
-		test('does not offer Open Fork Workflow before the pool has entered its fork workflow', async () => {
+		test('does not offer Open Fork & Migration before the pool has entered its fork workflow', async () => {
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
@@ -92,7 +92,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.queryByRole('button', { name: 'Open Fork Workflow' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Open Fork & Migration' })).toBeNull()
 		})
 
 		test('opens the concrete migration stage when the pool is already inside its fork workflow', async () => {
@@ -365,7 +365,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			expect(triggerZoltarForkCalls).toBe(1)
 		})
 
-		test('hides Trigger Zoltar Fork after the pool has already entered its fork workflow and keeps Open Fork Workflow available', async () => {
+		test('hides Trigger Zoltar Fork after the pool has already entered its fork workflow and keeps Open Fork & Migration available', async () => {
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection

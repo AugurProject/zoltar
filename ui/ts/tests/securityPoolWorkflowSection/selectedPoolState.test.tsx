@@ -32,20 +32,20 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
-		const secondaryGroup = documentQueries.getByRole('group', { name: 'Additional pool workflows' })
+		const secondaryGroup = documentQueries.getByRole('group', { name: 'Additional pool actions' })
 		expect(within(secondaryGroup).getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
 		expect(within(secondaryGroup).getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 
 		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
-			expect(button.title).toBe('Load a pool to open this workflow.')
+			expect(button.title).toBe('Load a pool before using pool actions.')
 		}
 		expect(documentQueries.queryByRole('tab', { name: 'Migration' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Truth Auction' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Settlement' })).toBeNull()
 
-		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Manage Pool' })).not.toBeNull()
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
 		expect(documentQueries.queryByText('Paste a security pool address or browse pools.')).toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
@@ -60,7 +60,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Manage Pool' })).not.toBeNull()
 		expect(documentQueries.getByText('Pool not found.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh this address after the pool is deployed.')).toBeNull()
 	})
