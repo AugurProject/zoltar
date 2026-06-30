@@ -2034,7 +2034,7 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(claimLog.args.transferredRep, true, 'direct winning claims should transfer REP to the depositor')
 	})
 
-	test('claimDepositForWinning treats the region between binding capital and the reward cap as the safety boundary', async () => {
+	test('claimDepositForWinning treats the region between binding capital and the reward cap as the first-come safety boundary', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const firstWinningDepositorAddress = client.account.address
 		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
@@ -2043,6 +2043,9 @@ describe('Escalation Game Test Suite', () => {
 		const secondWinningDeposit = 14n * 10n ** 18n
 		const losingDeposit = 20n * 10n ** 18n
 
+		// Reward eligibility is intentionally append-order dependent on the winning side.
+		// The first 20 REP deposit fills the binding-capital region, so the later 14 REP deposit
+		// only overlaps the final 10 REP safety-boundary slice and earns bonus on that slice alone.
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)

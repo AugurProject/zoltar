@@ -138,6 +138,10 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	) internal view returns (uint256 amountToWithdraw, uint256 burnAmount) {
 		uint256 depositStart = cumulativeAmount - depositAmount;
 		uint256 bindingCapitalAmount = getBindingCapital();
+		// The reward window is intentionally first-come on the winning side. Earlier accepted
+		// deposits consume the reward-eligible depth before later same-side deposits, so reward
+		// depends on the overlap of this deposit's [depositStart, cumulativeAmount) interval with
+		// the fixed window that ends at `rewardEligibleCapAmount`.
 		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
 		uint256 winningOutcomeBalance = outcomeState[outcomeIndex].balance;
 		uint256 rewardEligiblePrincipalAmount =
