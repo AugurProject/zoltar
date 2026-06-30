@@ -1449,6 +1449,42 @@ describe('Peripherals: fork migration', () => {
 	})
 
 	describe('own-fork escalation claims', () => {
+		test('own-fork closes parent escalation withdrawals and preserves escrowed REP', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(attackerClient, repDeposit, questionId)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
+			const originalWinningDeposit = reportBond + 1n
+			const originalLosingDeposit = reportBond
+			const triggerWinningDeposit = forkThreshold - originalWinningDeposit
+			const triggerLosingDeposit = forkThreshold - originalLosingDeposit
+
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, originalWinningDeposit)
+			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, originalLosingDeposit)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, triggerWinningDeposit)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, triggerLosingDeposit)
+
+			const clientVaultBeforeFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const attackerVaultBeforeFork = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+
+			await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+			const clientVaultAfterFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const attackerVaultAfterFork = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+
+			await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Pool not operational/)
+			await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Pool not operational/)
+
+			const clientVaultAfterFailedWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const attackerVaultAfterFailedWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+
+			strictEqualTypeSafe(clientVaultAfterFork.repInEscalationGame, clientVaultBeforeFork.repInEscalationGame, 'the own-fork transition should preserve the fully locked winning-side parent REP before any claim or migration succeeds')
+			strictEqualTypeSafe(attackerVaultAfterFork.repInEscalationGame, attackerVaultBeforeFork.repInEscalationGame, 'the losing-side vault lock should stay in the parent through the own-fork transition')
+			strictEqualTypeSafe(clientVaultAfterFailedWithdrawal.repInEscalationGame, clientVaultAfterFork.repInEscalationGame, 'a blocked parent withdrawal should not release any winning-side REP after the own-fork closes the pool')
+			strictEqualTypeSafe(attackerVaultAfterFailedWithdrawal.repInEscalationGame, attackerVaultAfterFork.repInEscalationGame, 'a blocked parent withdrawal should not release any losing-side REP after the own-fork closes the pool')
+		})
+
 		test('claimForkedEscalationDeposits rejects unresolved deposits after an unrelated external fork', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)

@@ -14,6 +14,7 @@ type UseTradingOperations = typeof import('../hooks/useTradingOperations.js')['u
 type UseTradingOperationsState = ReturnType<UseTradingOperations>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
+const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 
 function createDeploymentStep(id: DeploymentStatus['id']): DeploymentStatus {
@@ -62,7 +63,7 @@ function requireHookState(state: UseTradingOperationsState | undefined) {
 	return state
 }
 
-function createHarness(useTradingOperations: UseTradingOperations, onRender: (state: UseTradingOperationsState) => void, onTransactionFailed: (message: string) => void) {
+function createHarness(useTradingOperations: UseTradingOperations, onRender: (state: UseTradingOperationsState) => void, onTransactionFailed: (message: string) => void, { onTransactionRequested = () => undefined }: { onTransactionRequested?: () => void } = {}) {
 	return function TradingOperationsHarness() {
 		const state = useTradingOperations({
 			accountAddress: WALLET_ADDRESS,
@@ -71,7 +72,7 @@ function createHarness(useTradingOperations: UseTradingOperations, onRender: (st
 			onTransactionFailed,
 			onTransactionFinished: () => undefined,
 			onTransactionPresented: () => undefined,
-			onTransactionRequested: () => undefined,
+			onTransactionRequested,
 			onTransactionSubmitted: () => undefined,
 			refreshState: async () => undefined,
 			selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
@@ -246,5 +247,189 @@ describe('useTradingOperations', () => {
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalled()
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
+	})
+
+	test('does not request a mint transaction when the active wallet account changed', async () => {
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+
+		const createCompleteSetInSecurityPool = mock(async () => {
+			throw new Error('createCompleteSetInSecurityPool should not be called when the active wallet account changed')
+		})
+		const readClient = {
+			getBalance: mock(async () => 2n * 10n ** 18n),
+		}
+		const createConnectedReadClient = mock(() => readClient)
+		const createWalletWriteClient = mock(() => {
+			throw new Error('createWalletWriteClient should not be called before the active wallet guard passes')
+		})
+		const onTransactionFailed = mock(() => undefined)
+		const onTransactionRequested = mock(() => undefined)
+		const loadSecurityPoolMintCapacity = mock(async () => ({
+			completeSetCollateralAmount: 1n * 10n ** 18n,
+			shareTokenSupply: 1n * 10n ** 18n,
+			totalRepDeposit: 20n * 10n ** 18n,
+			totalSecurityBondAllowance: 2n * 10n ** 18n,
+		}))
+		const loadTradingDetails = mock(async () => createTradingDetails())
+		const loadZoltarUniverseSummary = mock(async () => createUniverseSummary())
+
+		mock.module('../contracts.js', () => ({
+			createCompleteSetInSecurityPool,
+			loadSecurityPoolMintCapacity,
+			loadTradingDetails,
+			loadZoltarUniverseSummary,
+			migrateSharesFromUniverse: mock(async () => {
+				throw new Error('migrateSharesFromUniverse should not be called in this test')
+			}),
+			redeemCompleteSetInSecurityPool: mock(async () => {
+				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
+			}),
+			redeemSharesInSecurityPool: mock(async () => {
+				throw new Error('redeemSharesInSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient,
+			createWalletWriteClient,
+		}))
+
+		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseTradingOperationsState | undefined
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+			{ onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		createConnectedReadClient.mockClear()
+		loadTradingDetails.mockClear()
+		loadZoltarUniverseSummary.mockClear()
+		loadSecurityPoolMintCapacity.mockClear()
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({
+				...current,
+				completeSetAmount: '1',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).createCompleteSet()
+		})
+
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
+		expect(createConnectedReadClient).not.toHaveBeenCalled()
+		expect(loadTradingDetails).not.toHaveBeenCalled()
+		expect(loadZoltarUniverseSummary).not.toHaveBeenCalled()
+		expect(loadSecurityPoolMintCapacity).not.toHaveBeenCalled()
+		expect(createWalletWriteClient).not.toHaveBeenCalled()
+		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+	})
+
+	test('does not request a share-migration transaction when the active wallet account changed', async () => {
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+
+		const migrateSharesFromUniverse = mock(async () => {
+			throw new Error('migrateSharesFromUniverse should not be called when the active wallet account changed')
+		})
+		const readClient = {
+			getBalance: mock(async () => 2n * 10n ** 18n),
+		}
+		const createConnectedReadClient = mock(() => readClient)
+		const createWalletWriteClient = mock(() => {
+			throw new Error('createWalletWriteClient should not be called before the active wallet guard passes')
+		})
+		const onTransactionFailed = mock(() => undefined)
+		const onTransactionRequested = mock(() => undefined)
+		const loadTradingDetails = mock(async () =>
+			createTradingDetails({
+				shareBalances: {
+					invalid: 0n,
+					no: 1n * 10n ** 18n,
+					yes: 1n * 10n ** 18n,
+				},
+			}),
+		)
+		const loadZoltarUniverseSummary = mock(async () =>
+			createUniverseSummary({
+				childUniverses: [
+					{
+						exists: true,
+						forkTime: 0n,
+						outcomeIndex: 0n,
+						outcomeLabel: 'Invalid',
+						parentUniverseId: 1n,
+						reputationToken: zeroAddress,
+						universeId: 2n,
+					},
+				],
+				hasForked: true,
+			}),
+		)
+
+		mock.module('../contracts.js', () => ({
+			createCompleteSetInSecurityPool: mock(async () => {
+				throw new Error('createCompleteSetInSecurityPool should not be called in this test')
+			}),
+			loadSecurityPoolMintCapacity: mock(async () => {
+				throw new Error('loadSecurityPoolMintCapacity should not be called when the active wallet account changed')
+			}),
+			loadTradingDetails,
+			loadZoltarUniverseSummary,
+			migrateSharesFromUniverse,
+			redeemCompleteSetInSecurityPool: mock(async () => {
+				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
+			}),
+			redeemSharesInSecurityPool: mock(async () => {
+				throw new Error('redeemSharesInSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient,
+			createWalletWriteClient,
+		}))
+
+		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseTradingOperationsState | undefined
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+			{ onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		createConnectedReadClient.mockClear()
+		loadTradingDetails.mockClear()
+		loadZoltarUniverseSummary.mockClear()
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({
+				...current,
+				selectedShareOutcome: 'yes',
+				targetOutcomeIndexes: '0,1',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).migrateShares()
+		})
+
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
+		expect(createConnectedReadClient).not.toHaveBeenCalled()
+		expect(loadTradingDetails).not.toHaveBeenCalled()
+		expect(loadZoltarUniverseSummary).not.toHaveBeenCalled()
+		expect(createWalletWriteClient).not.toHaveBeenCalled()
+		expect(migrateSharesFromUniverse).not.toHaveBeenCalled()
 	})
 })
