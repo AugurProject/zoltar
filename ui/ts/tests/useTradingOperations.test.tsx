@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress } from 'viem'
+import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { DeploymentStatus, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
@@ -166,5 +166,85 @@ describe('useTradingOperations', () => {
 		expect(onTransactionFailed).toHaveBeenCalledWith('Minting is unavailable because this pool has complete-set shares but no collateral')
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 		expect(createWalletWriteClient).not.toHaveBeenCalled()
+	})
+
+	test('converts redeem complete-set input to share units before submitting', async () => {
+		const firstMintShareAmount = 10n ** 36n
+		let submittedRedeemAmount: bigint | undefined
+		const redeemCompleteSetInSecurityPool = mock(async (_client: unknown, securityPoolAddress: typeof SECURITY_POOL_ADDRESS, amount: bigint) => {
+			submittedRedeemAmount = amount
+			return {
+				action: 'redeemCompleteSet',
+				hash: zeroHash,
+				securityPoolAddress,
+				universeId: 1n,
+			}
+		})
+		const createWalletWriteClient = mock(() => ({}))
+		const onTransactionFailed = mock(() => undefined)
+		const readClient = {
+			getBalance: mock(async () => 2n * 10n ** 18n),
+		}
+
+		mock.module('../contracts.js', () => ({
+			createCompleteSetInSecurityPool: mock(async () => {
+				throw new Error('createCompleteSetInSecurityPool should not be called in this test')
+			}),
+			loadSecurityPoolMintCapacity: mock(async () => ({
+				completeSetCollateralAmount: 1n * 10n ** 18n,
+				shareTokenSupply: firstMintShareAmount,
+				totalRepDeposit: 20n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			})),
+			loadTradingDetails: mock(async () =>
+				createTradingDetails({
+					maxRedeemableCompleteSets: firstMintShareAmount,
+					shareBalances: {
+						invalid: firstMintShareAmount,
+						no: firstMintShareAmount,
+						yes: firstMintShareAmount,
+					},
+				}),
+			),
+			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
+			migrateSharesFromUniverse: mock(async () => {
+				throw new Error('migrateSharesFromUniverse should not be called in this test')
+			}),
+			redeemCompleteSetInSecurityPool,
+			redeemSharesInSecurityPool: mock(async () => {
+				throw new Error('redeemSharesInSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient,
+		}))
+
+		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseTradingOperationsState | undefined
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({
+				...current,
+				redeemAmount: '1',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).redeemCompleteSet()
+		})
+
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalled()
+		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
 	})
 })

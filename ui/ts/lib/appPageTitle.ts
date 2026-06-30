@@ -16,16 +16,16 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 		if (activeZoltarView === 'create') return 'Create Question'
 		if (activeZoltarView === 'fork') return 'Fork Oracle'
 		if (activeZoltarView === 'migrate') return 'Migrate REP'
-		return 'Markets'
+		return 'Questions & Markets'
 	}
 	if (route === 'security-pools') {
 		if (activeSecurityPoolsView === 'create') return 'Create Security Pool'
-		if (activeSecurityPoolsView === 'operate') return 'Operate Security Pool'
+		if (activeSecurityPoolsView === 'operate') return 'Pool Workflows'
 		return 'Security Pools'
 	}
 	if (route === 'open-oracle') {
-		if (activeOpenOracleView === 'create') return 'Advanced Oracle Report Creation'
-		if (activeOpenOracleView === 'selected-report') return 'Selected Oracle Report'
+		if (activeOpenOracleView === 'create') return 'Create Oracle Report'
+		if (activeOpenOracleView === 'selected-report') return 'Oracle Report Details'
 		return 'Oracle Reports'
 	}
 	return 'Page Not Found'

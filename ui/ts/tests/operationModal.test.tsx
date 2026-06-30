@@ -44,6 +44,38 @@ function DismissibleOperationModalHarness() {
 	)
 }
 
+function StackedDismissibleOperationModalHarness() {
+	const [isFirstOpen, setIsFirstOpen] = useState(true)
+	const [isSecondOpen, setIsSecondOpen] = useState(true)
+	return (
+		<>
+			{isFirstOpen ? (
+				<OperationModal
+					isOpen
+					onClose={() => {
+						setIsFirstOpen(false)
+					}}
+					title='First action'
+				>
+					<button type='button'>Confirm first</button>
+				</OperationModal>
+			) : undefined}
+			{isSecondOpen ? (
+				<OperationModal
+					isOpen
+					onClose={() => {
+						setIsSecondOpen(false)
+					}}
+					title='Second action'
+				>
+					<button type='button'>Confirm second</button>
+					<button type='button'>Cancel second</button>
+				</OperationModal>
+			) : undefined}
+		</>
+	)
+}
+
 function FocusRestoreModalHarness({ onOpenSetter }: { onOpenSetter: (setOpen: (open: boolean) => void) => void }) {
 	const [isOpen, setIsOpen] = useState(false)
 	const focusTargetRef = useRef<HTMLButtonElement | null>(null)
@@ -133,6 +165,194 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
+	test('hides sibling page content from the accessibility tree while open and restores it on close', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<OperationModal isOpen onClose={() => undefined} title='Review Action'>
+						<button type='button'>Confirm</button>
+					</OperationModal>
+				</>,
+				container,
+			)
+		})
+
+		const pageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(pageContent instanceof HTMLElement)) throw new Error('Expected page content')
+		expect(pageContent.getAttribute('aria-hidden')).toBe('true')
+		expect(pageContent.hasAttribute('inert')).toBe(true)
+		expect(within(container).getByRole('dialog', { name: 'Review Action' })).not.toBeNull()
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<OperationModal isOpen={false} onClose={() => undefined} title='Review Action'>
+						<button type='button'>Confirm</button>
+					</OperationModal>
+				</>,
+				container,
+			)
+		})
+
+		const restoredPageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(restoredPageContent instanceof HTMLElement)) throw new Error('Expected restored page content')
+		expect(restoredPageContent.getAttribute('aria-hidden')).toBe('false')
+		expect(restoredPageContent.hasAttribute('inert')).toBe(false)
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('hides app shell content outside the local modal parent while open', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		const renderShell = async (isOpen: boolean) => {
+			await act(() => {
+				render(
+					<div data-testid='app-root'>
+						<header aria-hidden='false' data-testid='app-header'>
+							<button type='button'>Global Navigation</button>
+						</header>
+						<main data-testid='app-main'>
+							<aside aria-hidden='false' data-testid='route-sidebar'>
+								<button type='button'>Route Action</button>
+							</aside>
+							<section data-testid='route-content'>
+								<div aria-hidden='false' data-testid='local-content'>
+									<button type='button'>Local Action</button>
+								</div>
+								<OperationModal isOpen={isOpen} onClose={() => undefined} title='Review Action'>
+									<button type='button'>Confirm</button>
+								</OperationModal>
+							</section>
+						</main>
+					</div>,
+					container,
+				)
+			})
+		}
+
+		await renderShell(true)
+
+		for (const testId of ['app-header', 'route-sidebar', 'local-content']) {
+			const element = container.querySelector(`[data-testid="${testId}"]`)
+			if (!(element instanceof HTMLElement)) throw new Error(`Expected ${testId}`)
+			expect(element.getAttribute('aria-hidden')).toBe('true')
+			expect(element.hasAttribute('inert')).toBe(true)
+		}
+
+		await renderShell(false)
+
+		for (const testId of ['app-header', 'route-sidebar', 'local-content']) {
+			const element = container.querySelector(`[data-testid="${testId}"]`)
+			if (!(element instanceof HTMLElement)) throw new Error(`Expected restored ${testId}`)
+			expect(element.getAttribute('aria-hidden')).toBe('false')
+			expect(element.hasAttribute('inert')).toBe(false)
+		}
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('keeps sibling page content hidden until every stacked modal closes', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<OperationModal isOpen onClose={() => undefined} title='First action'>
+						<button type='button'>Confirm first</button>
+					</OperationModal>
+					<OperationModal isOpen onClose={() => undefined} title='Second action'>
+						<button type='button'>Confirm second</button>
+					</OperationModal>
+				</>,
+				container,
+			)
+		})
+
+		const pageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(pageContent instanceof HTMLElement)) throw new Error('Expected page content')
+		expect(pageContent.getAttribute('aria-hidden')).toBe('true')
+		expect(pageContent.hasAttribute('inert')).toBe(true)
+		const stackedBackdrops = container.querySelectorAll('.modal-backdrop')
+		const firstBackdrop = stackedBackdrops[0]
+		if (!(firstBackdrop instanceof HTMLElement)) throw new Error('Expected first modal backdrop')
+		expect(firstBackdrop.getAttribute('aria-hidden')).toBe('true')
+		expect(firstBackdrop.hasAttribute('inert')).toBe(true)
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<OperationModal isOpen={false} onClose={() => undefined} title='First action'>
+						<button type='button'>Confirm first</button>
+					</OperationModal>
+					<OperationModal isOpen onClose={() => undefined} title='Second action'>
+						<button type='button'>Confirm second</button>
+					</OperationModal>
+				</>,
+				container,
+			)
+		})
+
+		const hiddenPageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(hiddenPageContent instanceof HTMLElement)) throw new Error('Expected hidden page content')
+		expect(hiddenPageContent.getAttribute('aria-hidden')).toBe('true')
+		expect(hiddenPageContent.hasAttribute('inert')).toBe(true)
+		expect(within(container).getByRole('dialog', { name: 'Second action' })).not.toBeNull()
+		const restoredFirstBackdrop = container.querySelector('.modal-backdrop')
+		if (!(restoredFirstBackdrop instanceof HTMLElement)) throw new Error('Expected restored first modal backdrop')
+		expect(restoredFirstBackdrop.getAttribute('aria-hidden')).toBe(null)
+		expect(restoredFirstBackdrop.hasAttribute('inert')).toBe(false)
+
+		await act(() => {
+			render(
+				<>
+					<section aria-hidden='false' data-testid='page-content'>
+						<h2>Page content</h2>
+						<button type='button'>Background Action</button>
+					</section>
+					<OperationModal isOpen={false} onClose={() => undefined} title='First action'>
+						<button type='button'>Confirm first</button>
+					</OperationModal>
+					<OperationModal isOpen={false} onClose={() => undefined} title='Second action'>
+						<button type='button'>Confirm second</button>
+					</OperationModal>
+				</>,
+				container,
+			)
+		})
+
+		const restoredPageContent = container.querySelector('[data-testid="page-content"]')
+		if (!(restoredPageContent instanceof HTMLElement)) throw new Error('Expected restored page content')
+		expect(restoredPageContent.getAttribute('aria-hidden')).toBe('false')
+		expect(restoredPageContent.hasAttribute('inert')).toBe(false)
+
+		render(null, container)
+		container.remove()
+	})
+
 	test('uses unique title and description ids for multiple open dialogs', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
@@ -164,6 +384,59 @@ describe('OperationModal', () => {
 		}
 
 		expect(within(container).getByRole('dialog', { name: 'First action' }).getAttribute('aria-describedby')).not.toBe(within(container).getByRole('dialog', { name: 'Second action' }).getAttribute('aria-describedby'))
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('lets only the top stacked modal handle Escape', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<StackedDismissibleOperationModalHarness />, container)
+		})
+
+		expect(within(container).getByRole('dialog', { name: 'First action' })).not.toBeNull()
+		expect(within(container).getByRole('dialog', { name: 'Second action' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Escape' })
+		})
+
+		expect(within(container).getByRole('dialog', { name: 'First action' })).not.toBeNull()
+		expect(within(container).queryByRole('dialog', { name: 'Second action' })).toBeNull()
+
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Escape' })
+		})
+		expect(within(container).queryByRole('dialog', { name: 'First action' })).toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('cycles Tab through the top stacked modal controls', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<StackedDismissibleOperationModalHarness />, container)
+		})
+
+		const firstDialog = within(container).getByRole('dialog', { name: 'First action' })
+		const secondDialog = within(container).getByRole('dialog', { name: 'Second action' })
+		const firstCloseButton = within(firstDialog).getByRole('button', { name: 'Close' })
+		const secondCloseButton = within(secondDialog).getByRole('button', { name: 'Close' })
+		const secondConfirmButton = within(secondDialog).getByRole('button', { name: 'Confirm second' })
+
+		expect(document.activeElement).toBe(secondCloseButton)
+
+		await act(() => {
+			fireEvent.keyDown(document, { key: 'Tab' })
+		})
+		expect(document.activeElement).toBe(secondConfirmButton)
+		expect(document.activeElement).not.toBe(firstCloseButton)
 
 		render(null, container)
 		container.remove()
@@ -284,14 +557,9 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('returns focus to the first control when focus leaves and handles reverse tab navigation', async () => {
+	test('wraps focus forward and backward inside the modal', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
-
-		const documentFocusSentinel = document.createElement('button')
-		documentFocusSentinel.type = 'button'
-		documentFocusSentinel.textContent = 'Sentinel'
-		document.body.appendChild(documentFocusSentinel)
 
 		await act(() => {
 			render(
@@ -308,23 +576,21 @@ describe('OperationModal', () => {
 			throw new Error('Modal close button should be visible')
 		}
 
-		documentFocusSentinel.focus()
+		const firstFocusable = container.querySelector('.operation-modal-body button') as HTMLButtonElement
 		await act(() => {
 			fireEvent.keyDown(document, { key: 'Tab' })
 		})
-		expect(document.activeElement).toBe(closeButton)
+		expect(document.activeElement === firstFocusable).toBe(true)
 
-		const firstFocusable = container.querySelector('.operation-modal-body button') as HTMLButtonElement
 		await act(() => {
 			firstFocusable.focus()
-			fireEvent.keyDown(firstFocusable, { key: 'Tab', shiftKey: true })
+			fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
 		})
-		expect(document.activeElement).toBe(closeButton)
+		expect(document.activeElement === closeButton).toBe(true)
 
 		await act(() => {
 			render(null, container)
 		})
-		document.body.removeChild(documentFocusSentinel)
 		container.remove()
 	})
 

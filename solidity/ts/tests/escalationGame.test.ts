@@ -299,6 +299,17 @@ describe('Escalation Game Test Suite', () => {
 			}),
 		)
 
+	// Solidity bytecode coverage records transaction traces, so view getters need this paired trace after their read assertions.
+	const traceForkedEscrowByVaultAndOutcome = async (escalationGameAddress: Address, vault: Address, outcome: QuestionOutcome) =>
+		await transactWithEscalationGame(
+			escalationGameAddress,
+			encodeFunctionData({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getForkedEscrowByVaultAndOutcome',
+				args: [vault, outcome],
+			}),
+		)
+
 	const assertEscrowAccounting = async (escalationGameAddress: Address, expectedTotalEscrowedRep: bigint) => {
 		assert.strictEqual(await readTotalEscrowedRep(escalationGameAddress), expectedTotalEscrowedRep, 'total escrowed REP should match scenario accounting')
 	}
@@ -1208,6 +1219,49 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(hasUnexportedAfterSecondExport, false, 'second export should exhaust the cursor')
 	})
 
+	test('local unresolved export by deposit index consumes only the selected local deposit', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
+		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await assertEscrowAccounting(escalationGameAddress, 3n * reportBond)
+
+		const preview = await client.simulateContract({
+			abi: escalationGameProofTestPoolArtifact.abi,
+			address: testSecurityPoolAddress,
+			functionName: 'exportLocalUnresolvedDeposit',
+			args: [0n, QuestionOutcome.Yes],
+		})
+		assert.deepStrictEqual(preview.result, [client.account.address, reportBond, 0n], 'local export should return the selected depositor, amount, and stable parent index')
+
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: testSecurityPoolAddress,
+				functionName: 'exportLocalUnresolvedDeposit',
+				args: [0n, QuestionOutcome.Yes],
+			}),
+		)
+		await assertEscrowAccounting(escalationGameAddress, 2n * reportBond)
+		await assertOutcomeCarryTotalsMatchComponents(escalationGameAddress)
+		const [carryPage] = await readCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, 0n, 2n)
+		assert.deepStrictEqual(
+			carryPage.map(leaf => ({
+				depositor: leaf.depositor,
+				amount: leaf.amount,
+				parentDepositIndex: leaf.parentDepositIndex,
+			})),
+			[
+				{
+					depositor: client.account.address,
+					amount: 2n * reportBond,
+					parentDepositIndex: 1n,
+				},
+			],
+			'exporting one local deposit should leave only the unresolved sibling deposit in newest-first paging',
+		)
+	})
+
 	test('stateful local accounting model stays balanced across randomized deposits, exports, and claims', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
 		await startEscalation(escalationGameAddress, reportBond, nonDecisionThreshold)
@@ -1692,6 +1746,7 @@ describe('Escalation Game Test Suite', () => {
 		const receiverBalanceAfter = await getERC20Balance(client, repToken, receiver)
 		const yesEscrow = await readForkedEscrowByVaultAndOutcome(child.escalationGameAddress, client.account.address, QuestionOutcome.Yes)
 		const noEscrow = await readForkedEscrowByVaultAndOutcome(child.escalationGameAddress, client.account.address, QuestionOutcome.No)
+		await traceForkedEscrowByVaultAndOutcome(child.escalationGameAddress, client.account.address, QuestionOutcome.Yes)
 		assert.strictEqual(receiverBalanceAfter - receiverBalanceBefore, yesChildRep + noChildRep, 'export should transfer only child REP backing')
 		assert.deepStrictEqual(yesEscrow, [yesSourcePrincipal, yesSourcePrincipal, yesChildRep, yesChildRep], 'yes forked escrow should be marked fully exported without affecting no')
 		assert.deepStrictEqual(noEscrow, [noSourcePrincipal, noSourcePrincipal, noChildRep, noChildRep], 'no forked escrow should be marked fully exported without affecting yes')

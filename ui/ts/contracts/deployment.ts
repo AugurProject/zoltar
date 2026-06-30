@@ -36,7 +36,7 @@ function markDeploymentTransactionPrepared(
 		data,
 		dataLabel,
 		functionName,
-		requiresWalletConfirmation,
+		requiresWalletConfirmation: requiresWalletConfirmation ?? client.requiresWalletConfirmation,
 		to,
 		value,
 	})

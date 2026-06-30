@@ -10,7 +10,7 @@ import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, tr
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
+import { convertCollateralAmountToShareAmount, getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../lib/transactionPresentations.js'
@@ -168,13 +168,16 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemCompleteSet') {
+						const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
+							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
 							hasSelectedPool: true,
 							isMainnet,
 							loadingTradingDetails: false,
 							redeemAmountInput: currentForm.redeemAmount,
 							shareBalances: latestTradingDetails.shareBalances,
+							shareTokenSupply: latestMintCapacity.shareTokenSupply,
 						})
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
@@ -223,7 +226,14 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 	const redeemCompleteSet = async () =>
 		await runTradingAction(
 			'redeemCompleteSet',
-			async (walletAddress, securityPoolAddress, currentForm) => await redeemCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')),
+			async (walletAddress, securityPoolAddress, currentForm) => {
+				const readClient = createConnectedReadClient()
+				const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
+				const redeemCollateralAmount = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
+				const redeemShareAmount = convertCollateralAmountToShareAmount(redeemCollateralAmount, latestMintCapacity.completeSetCollateralAmount, latestMintCapacity.shareTokenSupply)
+				if (redeemShareAmount === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
+				return await redeemCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, redeemShareAmount)
+			},
 			'Failed to redeem complete sets',
 		)
 

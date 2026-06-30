@@ -48,7 +48,6 @@ export function SecurityPoolsOverviewSection({
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
 	onLoadSecurityPoolPage,
-	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onSelectSecurityPool,
 	poolOracleManagerDetails,
@@ -223,7 +222,6 @@ export function SecurityPoolsOverviewSection({
 						<div className='entity-card-list'>
 							{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 								const displayState = poolState.lifecycleState
-								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
 								const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
 								const badgeTone = (() => {
@@ -377,13 +375,8 @@ export function SecurityPoolsOverviewSection({
 																						<CurrencyValue value={vault.repDepositShare} suffix='REP' />
 																					</strong>
 																				</div>
-																				<button
-																					className='secondary destructive-subtle security-pool-browse-vault-row-liquidate'
-																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
-																					title='Liquidation can move vault collateral. Open the pool workflow for full context before using this action.'
-																				>
-																					Liquidate Vault
+																				<button className='secondary security-pool-browse-vault-row-liquidate' onClick={() => onSelectSecurityPool?.(pool.securityPoolAddress)} disabled={onSelectSecurityPool === undefined} title='Open the selected pool workflow before reviewing liquidation actions.'>
+																					Open Pool to Liquidate
 																				</button>
 																			</div>
 																		</div>
