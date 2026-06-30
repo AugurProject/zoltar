@@ -117,6 +117,13 @@ describe('Auction', () => {
 		}
 	}
 
+	function computeClearingTickEthUsed(bidSize: bigint, activeCumulativeEthBeforeBid: bigint, ethFilledAtClearing: bigint): bigint {
+		const cumulativeEth = activeCumulativeEthBeforeBid + bidSize
+		if (ethFilledAtClearing <= activeCumulativeEthBeforeBid) return 0n
+		if (ethFilledAtClearing >= cumulativeEth) return bidSize
+		return ethFilledAtClearing - activeCumulativeEthBeforeBid
+	}
+
 	async function assertContractEmpty(client: WriteClient, auctionAddress: Address, tolerance: bigint = 1000n): Promise<void> {
 		approximatelyEqual(await getETHBalance(client, auctionAddress), 0n, tolerance, 'contract not empty')
 	}
@@ -127,19 +134,14 @@ describe('Auction', () => {
 
 	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: Address, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
 		const clearingPrice = tickToPrice(clearingTick)
+		const clearing = await computeClearing(auctionCreator, auctionAddress)
+		assert.ok(clearing.hitCap, 'expected finalized auction with clearing price')
+		strictEqualTypeSafe(clearing.foundTick, clearingTick, 'clearing tick mismatch')
 		let totalFilledRep = 0n
 		let totalEthRefund = 0n
 
 		for (const bid of bids) {
 			const amounts = await simulateWithdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
-			const bidPrice = tickToPrice(bid.tick)
-			let minRepBackOnFullBuy: bigint
-			if (bidPrice === 0n) {
-				// Zero price means no REP can be bought; expect 0 filled REP
-				minRepBackOnFullBuy = 0n
-			} else {
-				minRepBackOnFullBuy = (bid.bidSize * ATTOETH_PER_ETH) / bidPrice
-			}
 
 			if (bid.tick < clearingTick) {
 				// Losing bid: full refund, no REP
@@ -148,15 +150,21 @@ describe('Auction', () => {
 				totalEthRefund += amounts.totalEthRefund
 			} else if (bid.tick === clearingTick) {
 				// At-clearing: partial fill, partial refund
-				if (amounts.totalEthRefund !== bid.bidSize) assert.ok(amounts.totalFilledRep > 0n, `Bid ${bid.bidIndex} (clearing): should get some REP`)
-				assert.ok(amounts.totalFilledRep <= minRepBackOnFullBuy, `Bid ${bid.bidIndex} (clearing): filled REP <= demand`)
-				const ethUsed = (amounts.totalFilledRep * clearingPrice) / ATTOETH_PER_ETH
-				approximatelyEqual(amounts.totalEthRefund, bid.bidSize - ethUsed, tolerance, `Bid ${bid.bidIndex} (clearing): correct ETH refund`)
+				const bidView = ensureDefined((await getBidPageAtTick(auctionCreator, auctionAddress, bid.tick, bid.bidIndex, 1n))[0], `Bid ${bid.bidIndex} (clearing): missing bid view`)
+				strictEqualTypeSafe(bidView.ethAmount, bid.bidSize, `Bid ${bid.bidIndex} (clearing): bid size mismatch`)
+				const ethUsed = computeClearingTickEthUsed(bid.bidSize, bidView.activeCumulativeEthBeforeBid, clearing.ethAtClearingTick)
+				const expectedFilledRep = clearingPrice === 0n ? 0n : (ethUsed * ATTOETH_PER_ETH) / clearingPrice
+				if (ethUsed > 0n) assert.ok(amounts.totalFilledRep >= expectedFilledRep, `Bid ${bid.bidIndex} (clearing): filled REP below expected fill`)
+				assert.ok(amounts.totalFilledRep <= expectedFilledRep + 1n, `Bid ${bid.bidIndex} (clearing): filled REP <= fill plus carried dust`)
+				const expectedRefund = bid.bidSize - ethUsed
+				approximatelyEqual(amounts.totalEthRefund, expectedRefund, tolerance, `Bid ${bid.bidIndex} (clearing): correct ETH refund`)
 				totalFilledRep += amounts.totalFilledRep
 				totalEthRefund += amounts.totalEthRefund
 			} else {
 				// Winning bid: full REP demand, no ETH refund
-				assert.ok(amounts.totalFilledRep >= minRepBackOnFullBuy, `Bid ${bid.bidIndex} (winning): REP fill`)
+				const expectedFilledRep = (bid.bidSize * ATTOETH_PER_ETH) / clearingPrice
+				assert.ok(amounts.totalFilledRep >= expectedFilledRep, `Bid ${bid.bidIndex} (winning): REP fill`)
+				assert.ok(amounts.totalFilledRep <= expectedFilledRep + 1n, `Bid ${bid.bidIndex} (winning): REP fill plus carried dust`)
 				assert.strictEqual(amounts.totalEthRefund, 0n, `Bid ${bid.bidIndex} (winning): no ETH refund`)
 				totalFilledRep += amounts.totalFilledRep
 			}
@@ -534,6 +542,34 @@ describe('Auction', () => {
 			const totalFilled = aliceResult.totalFilledRep + bobResult.totalFilledRep
 			const maxRep = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			assert.ok(totalFilled <= maxRep, 'total filled exceeds maxRep')
+		})
+
+		test('normal auction carries clearing-price dust so finalized REP stays claimable', async () => {
+			const alice = createTestClient(1)
+			const bob = createTestClient(2)
+			const clearingDustTick = 1n
+
+			await startAuction(client, auctionAddress, 2n, 100n)
+			await submitBid(alice, auctionAddress, clearingDustTick, 1n)
+			await submitBid(bob, auctionAddress, clearingDustTick, 1n)
+
+			const clearing = await computeClearing(client, auctionAddress)
+			assertClearing(clearing, true, clearingDustTick, 2n)
+
+			await finalizeAndVerify(client, auctionAddress)
+
+			const totalRepPurchased = await getTotalRepPurchased(client, auctionAddress)
+			strictEqualTypeSafe(totalRepPurchased, 1n, 'aggregate auction accounting should purchase one wei REP')
+
+			const aliceWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
+			strictEqualTypeSafe(aliceWithdrawal.totalFilledRep, 0n, 'first dust-sized withdrawal should only carry a remainder')
+			strictEqualTypeSafe(aliceWithdrawal.totalEthRefund, 0n, 'winning dust-sized withdrawal should not refund ETH')
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
+
+			const bobWithdrawal = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 1n }])
+			strictEqualTypeSafe(bobWithdrawal.totalFilledRep, 1n, 'second dust-sized withdrawal should receive the carried REP')
+			strictEqualTypeSafe(bobWithdrawal.totalEthRefund, 0n, 'winning dust-sized withdrawal should not refund ETH')
+			strictEqualTypeSafe(aliceWithdrawal.totalFilledRep + bobWithdrawal.totalFilledRep, totalRepPurchased, 'all finalized REP should be claimable across sequential withdrawals')
 		})
 
 		test('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {

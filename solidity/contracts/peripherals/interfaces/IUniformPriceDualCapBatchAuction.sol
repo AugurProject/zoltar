@@ -45,6 +45,7 @@ interface IUniformPriceDualCapBatchAuction {
 
 	function finalized() external view returns (bool);
 	function clearingTick() external view returns (int256);
+	function clearingRemainder() external view returns (uint256);
 	function ethFilledAtClearing() external view returns (uint256);
 	function ethRaised() external view returns (uint256);
 	function totalRepPurchased() external view returns (uint256);
