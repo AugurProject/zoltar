@@ -99,6 +99,89 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).')).not.toBeNull()
 	})
 
+	test('warns when the read RPC comes from the page URL', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				readBackendMessage: undefined,
+				readBackendStatus: {
+					blockNumber: undefined,
+					blockTimestamp: undefined,
+					rpcSource: 'url',
+					rpcUrl: 'https://query.example/path',
+					transportMode: 'rpc',
+				},
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: undefined,
+				wrongNetworkMessage: undefined,
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('URL-provided read RPC')).not.toBeNull()
+		expect(documentQueries.getByText('Active read RPC came from the page URL: https://query.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
+	})
+
+	test('shows source and URL for a stored read RPC override', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				readBackendMessage: undefined,
+				readBackendStatus: {
+					blockNumber: undefined,
+					blockTimestamp: undefined,
+					rpcSource: 'localStorage',
+					rpcUrl: 'https://storage.example/path',
+					transportMode: 'rpc',
+				},
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: undefined,
+				wrongNetworkMessage: undefined,
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Read RPC override active')).not.toBeNull()
+		expect(documentQueries.getByText('Active read RPC came from local storage: https://storage.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
+	})
+
+	test('warns when a stored read RPC override is ignored', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				readBackendMessage: undefined,
+				readBackendStatus: {
+					blockNumber: undefined,
+					blockTimestamp: undefined,
+					rejectedRpcOverride: {
+						reason: 'RPC URL must use https:// unless it points to local loopback.',
+						source: 'localStorage',
+						url: 'http://storage.example',
+					},
+					rpcSource: 'default',
+					rpcUrl: 'https://ethereum.dark.florist',
+					transportMode: 'provider',
+				},
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: undefined,
+				wrongNetworkMessage: undefined,
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Read RPC override ignored')).not.toBeNull()
+		expect(documentQueries.getByText('Ignored local storage RPC override (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
+	})
+
 	test('shows deployment setup and custom wrong-network guidance together', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
