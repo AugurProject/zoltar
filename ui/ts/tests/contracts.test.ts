@@ -19,6 +19,7 @@ import {
 	loadTruthAuctionTickBidPage,
 	loadTruthAuctionTickPage,
 	loadTruthAuctionTickSummary,
+	migrateEscalationDeposits,
 	migrateVaultWithUnresolvedEscalation,
 	migrateSharesFromUniverse,
 	settleOracleReport,
@@ -39,6 +40,7 @@ const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
+const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
 
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
@@ -766,6 +768,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return escrowedRep
@@ -817,6 +820,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return 9n
@@ -878,6 +882,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return 9n
@@ -928,6 +933,59 @@ describe('contracts helpers', () => {
 		expect(details.questionOutcome).toBe('yes')
 		expect(details.settlementState).toBe('resolved')
 		expect(details.parentWithdrawalEnabled).toBe(false)
+	})
+
+	test('loadReportingDetails skips forkContinuation when escalation game code is missing', async () => {
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		let forkContinuationRead = false
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'forkContinuation') {
+					forkContinuationRead = true
+					throw new Error(missingForkContinuationGetterMessage)
+				}
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+
+		expect(details.status).toBe('not-started')
+		expect(forkContinuationRead).toBe(false)
+	})
+
+	test('loadReportingDetails requires the forkContinuation getter for deployed escalation games', async () => {
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(88n),
+			getCode: async () => '0x1234' as Hex,
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		await expect(loadReportingDetails(client, securityPoolAddress, undefined)).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
 	test('loadReportingDetails keeps a known child outcome locked until the pool becomes operational', async () => {
@@ -1036,6 +1094,34 @@ describe('contracts helpers', () => {
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected carry leaf page response')
 	})
 
+	test('buildForkCarriedEscalationProofs requires the forkContinuation getter', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.functionName === 'getOutcomeState')
+					return {
+						currentCarryRoot: zeroHash,
+						currentLeafCount: 0n,
+						currentNullifierRoot: zeroHash,
+					}
+				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
+				if (request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
+	})
+
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
@@ -1059,6 +1145,36 @@ describe('contracts helpers', () => {
 		expect(decodedArgs[2]).toBe(2n)
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
+			hash: transactionHash,
+			securityPoolAddress,
+			universeId: 9n,
+		})
+	})
+
+	test('migrateEscalationDeposits helper keeps deposit indexes as uint256 values', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(request => {
+			capturedData = request.data
+			capturedTo = request.to
+		})
+
+		const result = await migrateEscalationDeposits(asWriteClient(client), securityPoolAddress, 9n, vaultAddress, 'yes', [0n, 255n, 256n])
+
+		expect(capturedTo).toBeDefined()
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		const decodedArgs = decodedCall.args as readonly [Address, Address, number, bigint[]]
+		expect(decodedCall.functionName).toBe('claimForkedEscalationDeposits')
+		expect(decodedArgs[0]).toBe(securityPoolAddress)
+		expect(decodedArgs[1]).toBe(vaultAddress)
+		expect(decodedArgs[2]).toBe(1)
+		expect(decodedArgs[3]).toEqual([0n, 255n, 256n])
+		expect(result).toEqual({
+			action: 'migrateEscalationDeposits',
 			hash: transactionHash,
 			securityPoolAddress,
 			universeId: 9n,

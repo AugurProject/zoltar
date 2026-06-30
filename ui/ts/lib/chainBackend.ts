@@ -3,7 +3,7 @@ import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.
 import { hasErrorCode, hasErrorMessage } from './errors.js'
 import { tryParseAddressInput } from './inputs.js'
 import { MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
-import { resolveConfiguredRpcConfig, type ConfiguredRpcSource } from './rpcConfig.js'
+import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
@@ -37,6 +37,7 @@ type ReadTransportMode = 'provider' | 'rpc'
 export type ReadBackendStatus = {
 	blockNumber: bigint | undefined
 	blockTimestamp: bigint | undefined
+	rejectedRpcOverride?: RejectedRpcOverride | undefined
 	rpcSource: ConfiguredRpcSource
 	rpcUrl: string
 	transportMode: ReadTransportMode
@@ -70,7 +71,7 @@ export type ChainBackend = {
 function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum) : http(rpcUrl, { batch: { wait: 100 } }),
+		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum, { retryCount: 0 }) : http(rpcUrl, { batch: { wait: 100 } }),
 	})
 }
 
@@ -178,6 +179,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 		getReadBackendStatus: () => ({
 			blockNumber: readBackendBlockNumber,
 			blockTimestamp: readBackendBlockTimestamp,
+			rejectedRpcOverride: configuredRpc.rejectedOverride,
 			rpcSource: configuredRpc.source,
 			rpcUrl: configuredRpc.url,
 			transportMode: readTransportMode,

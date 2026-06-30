@@ -1,7 +1,6 @@
 import { concatHex, encodeAbiParameters, keccak256, parseAbiItem, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from 'viem'
 import { Zoltar_Zoltar, peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { sameAddress } from '../lib/address.js'
-import { isIgnorableLogDecodeError } from '../lib/errors.js'
 import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
@@ -166,17 +165,12 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 }
 
 async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
-	try {
-		return await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'forkContinuation',
-			args: [],
-		})
-	} catch (error) {
-		if (isIgnorableLogDecodeError(error)) return undefined
-		return undefined
-	}
+	return await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		address: escalationGameAddress,
+		functionName: 'forkContinuation',
+		args: [],
+	})
 }
 
 async function readEscalationOutcomeState(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
@@ -546,7 +540,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const { questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress } = requireReportingBootstrapReadResult(await readRequiredMulticall(client, reportingPoolReads))
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
-	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold, forkContinuationSnapshot] = await Promise.all([
+	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),
 		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
@@ -557,7 +551,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			functionName: 'getForkThreshold',
 			args: [universeId],
 		}),
-		escalationGameAddress === zeroAddress ? Promise.resolve(undefined) : readForkContinuation(client, escalationGameAddress),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x')
@@ -578,6 +571,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			parentWithdrawalEnabled: false,
 			...viewerVaultState,
 		}
+	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
 	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,

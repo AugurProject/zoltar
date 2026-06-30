@@ -301,7 +301,7 @@ export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, 
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
 }
 export function getSelectedPoolCardTitle() {
-	return 'Pool Workflows'
+	return 'Manage Pool'
 }
 export function applySelectedPoolWorkflowState(
 	pool: ListedSecurityPool | undefined,
@@ -322,10 +322,10 @@ export function applySelectedPoolWorkflowState(
 	}
 }
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
-	if (selectedPoolUniverseMismatch) return 'Switch to the same universe before using this pool workflow.'
+	if (selectedPoolUniverseMismatch) return 'Switch to the same universe before managing this pool.'
 	if (selectedPoolLookupState === 'loading') return 'Wait for this pool to finish loading.'
-	if (selectedPoolLookupState === 'missing') return 'Load a valid pool to open this workflow.'
-	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool to open this workflow.'
+	if (selectedPoolLookupState === 'missing') return 'Load a valid pool before using pool actions.'
+	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool before using pool actions.'
 	return undefined
 }
 export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
@@ -334,7 +334,7 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, trading, reporting, and fork workflows.',
+			detail: 'Switch to the same universe before using vault, trading, reporting, and fork actions.',
 			key: 'unavailable',
 		}
 	if (selectedPoolLookupState === 'loading')

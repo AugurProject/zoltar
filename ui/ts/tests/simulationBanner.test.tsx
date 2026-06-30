@@ -92,7 +92,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -133,7 +133,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()

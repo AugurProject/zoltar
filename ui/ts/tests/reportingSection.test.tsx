@@ -1304,7 +1304,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('The migration window for these unresolved escalation deposits has closed.')).toBe(true)
-		expect(document.body.textContent?.includes('must migrate in the Fork Workflow')).toBe(false)
+		expect(document.body.textContent?.includes('must migrate in Fork & Migration')).toBe(false)
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
 	})
 
@@ -1334,7 +1334,7 @@ describe('ReportingSection', () => {
 		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
-	test('keeps only Open Fork Workflow visible after a fork-triggered pool has already entered its fork workflow', async () => {
+	test('keeps only Open Fork & Migration visible after a fork-triggered pool has already entered its fork workflow', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1353,8 +1353,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open Fork Workflow' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in the Fork workflow.')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Open Fork & Migration' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
 	})
 
 	test('shows a Trigger Zoltar Fork action when non-decision blocks reporting', async () => {

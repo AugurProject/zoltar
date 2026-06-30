@@ -288,17 +288,17 @@ export function TradingSection({
 			)}
 
 			{selectedPool === undefined ? undefined : (
-				<SectionBlock title='Your Shares' description='Current wallet holdings in the selected pool.'>
+				<SectionBlock title='Your Holdings' description='Balances are shown as complete-set amounts for the selected pool.'>
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
-							<span>Total Complete Sets</span>
+							<span>Redeemable Complete Sets</span>
 							<strong>{renderShareMetricValue(displayMaxRedeemableCompleteSets)}</strong>
-							<p className='detail'>Wallet composition by outcome.</p>
+							<p className='detail'>Limited by your smallest Yes, No, or Invalid balance.</p>
 						</div>
 						<div className='trading-holdings-layout'>
 							<RankedBarList
 								className='trading-share-distribution'
-								emptyMessage='Wallet share balances are not loaded yet.'
+								emptyMessage='Wallet balances are not loaded yet.'
 								items={[
 									{
 										key: 'yes',
@@ -334,7 +334,7 @@ export function TradingSection({
 									<strong>{renderShareMetricValue(displayShareBalances?.invalid)}</strong>
 								</div>
 								<div className='trading-share-callouts-total'>
-									<span>Total Collateral Equivalent</span>
+									<span>Total Across Outcomes</span>
 									<strong>{renderShareMetricValue(totalShareCount)}</strong>
 								</div>
 							</div>
@@ -381,7 +381,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description='Redeeming complete sets requires matching yes, no, and invalid shares. Use the total complete sets metric as the ceiling.' isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title='Redeem Complete Sets'>
+			<OperationModal description='Redeeming complete sets requires matching yes, no, and invalid shares. Use the redeemable complete sets amount as the ceiling.' isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title='Redeem Complete Sets'>
 				<label className='field'>
 					<span>Redeem Complete Sets Amount</span>
 					<div className='field-inline'>

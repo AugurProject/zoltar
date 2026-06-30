@@ -57,8 +57,8 @@ const NO_SELECTED_SIDE_CAPACITY_REASON = 'No remaining contribution capacity is 
 const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = 'Remaining selected-side capacity is below the minimum report bond.'
 const FORK_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
 const FORK_TRIGGERED_SETTLEMENT_REASON = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
-const FORK_ALREADY_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in the Fork workflow.'
-const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = 'Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in the Fork workflow.'
+const FORK_ALREADY_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.'
+const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = 'Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in Fork & Migration.'
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active')
 		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
@@ -280,7 +280,7 @@ export function ReportingSection({
 	if (reportingStageKey === 'forkTriggered') {
 		settlementLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
-		settlementLifecycleReason = forkAlreadyTriggered ? 'Continue in the Fork Workflow to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in the Fork Workflow.'
+		settlementLifecycleReason = forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'
 	} else if (activeReportingDetails?.settlementState === 'migration-expired') {
 		settlementLifecycleReason = 'The migration window for these unresolved escalation deposits has closed.'
 	} else if (reportingStageKey === 'activeLocked') {
@@ -448,7 +448,7 @@ export function ReportingSection({
 				) : undefined}
 				{showForkWorkflowAction ? (
 					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
-						Open Fork Workflow
+						Open Fork & Migration
 					</button>
 				) : undefined}
 			</div>
@@ -642,9 +642,9 @@ export function ReportingSection({
 			{showSettlementSection ? (
 				<SectionBlock title='Settle Escalation Deposits'>
 					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
-					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? 'Continue in the Fork Workflow to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in the Fork Workflow.'}</p> : undefined}
+					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>The migration window for these unresolved escalation deposits has closed.</p> : undefined}
-					{hasImportedForkedDeposits ? <p className='detail'>This pool also has fork-carried escalation positions. Settle those in the Fork Workflow.</p> : undefined}
+					{hasImportedForkedDeposits ? <p className='detail'>This pool also has fork-carried escalation positions. Settle those in Fork & Migration.</p> : undefined}
 					{loadingReportingDetails ? (
 						<p className='detail'>
 							<LoadingText>Loading escalation deposits...</LoadingText>

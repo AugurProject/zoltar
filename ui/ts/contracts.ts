@@ -61,7 +61,6 @@ import {
 	requireOpenOracleReportStatusTuple,
 	requireOpenOracleReportStatusTupleArray,
 	requireSecurityVaultTupleArray,
-	toUint8Array,
 } from './contracts/helpers.js'
 import { type ContractRevertReasonParams, type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
 import { getInfraContractAddresses, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
@@ -1314,7 +1313,7 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 			address: getInfraContractAddresses().securityPoolForker,
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'claimForkedEscalationDeposits',
-			args: [securityPoolAddress, vaultAddress, outcomeIndex, toUint8Array(depositIndexes)],
+			args: [securityPoolAddress, vaultAddress, outcomeIndex, depositIndexes],
 		}))
 	})
 }

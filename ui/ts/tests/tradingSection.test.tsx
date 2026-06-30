@@ -252,12 +252,12 @@ void describe('TradingSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	void test('renames the max complete sets metric to total complete sets', async () => {
+	void test('labels the max complete sets metric as redeemable complete sets', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Total Complete Sets')).not.toBeNull()
+		expect(documentQueries.getByText('Redeemable Complete Sets')).not.toBeNull()
 		expect(documentQueries.queryByText('Max Complete Sets')).toBeNull()
 	})
 
@@ -267,7 +267,7 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Trading Workflow')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Your Shares' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Your Holdings' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Trade' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
@@ -392,7 +392,8 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Total Collateral Equivalent')).not.toBeNull()
+		expect(documentQueries.getByText('Total Across Outcomes')).not.toBeNull()
+		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
 		expect(documentQueries.getAllByText('≈ 1.00').length).toBeGreaterThanOrEqual(4)
 		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1' }).length).toBeGreaterThanOrEqual(4)

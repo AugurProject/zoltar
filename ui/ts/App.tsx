@@ -507,6 +507,7 @@ export function App() {
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
 			onLoadSecurityPools: () => void loadSecurityPools(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
+			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
 			poolOracleManagerDetails,
 			securityPoolBrowseCount,
@@ -716,7 +717,7 @@ export function App() {
 				options={[
 					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse Pools', value: 'browse' },
 					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Pool', value: 'create' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Pool Workflows', value: 'operate' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Manage Pool', value: 'operate' },
 				]}
 			/>
 		)
@@ -743,6 +744,7 @@ export function App() {
 					<AppStatusNotices
 						errorMessage={errorMessage}
 						readBackendMessage={readBackendMessage}
+						readBackendStatus={readBackendStatus}
 						simulationBootstrapError={environmentBootstrapError}
 						showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 						showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}

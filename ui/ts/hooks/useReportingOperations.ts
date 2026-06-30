@@ -176,7 +176,7 @@ export function useReportingOperations({ accountAddress, onTransactionFailed, on
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (latestDetails.settlementState === 'migration-required') throw new Error('Unresolved escalation deposits must migrate in the Fork Workflow.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error('Unresolved escalation deposits must migrate in Fork & Migration.')
 				if (latestDetails.settlementState === 'migration-expired') throw new Error('The migration window for these unresolved escalation deposits has closed.')
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error('Escalation deposits cannot be settled until the question is finalized.')
 
