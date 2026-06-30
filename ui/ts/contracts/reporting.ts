@@ -165,47 +165,11 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 }
 
 async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
-	try {
-		return await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'forkContinuation',
-			args: [],
-		})
-	} catch (error) {
-		if (isForkContinuationCompatibilityError(error)) return undefined
-		throw error
-	}
-}
-
-function collectErrorMessages(error: unknown, seen = new Set<object>()): string[] {
-	if (typeof error === 'string') return [error]
-	if (typeof error !== 'object' || error === null) return []
-	if (seen.has(error)) return []
-	seen.add(error)
-
-	const messages: string[] = []
-	for (const key of ['message', 'shortMessage', 'details']) {
-		const value = Reflect.get(error, key)
-		if (typeof value === 'string') messages.push(value)
-	}
-
-	const metaMessages = Reflect.get(error, 'metaMessages')
-	if (Array.isArray(metaMessages)) {
-		for (const message of metaMessages) {
-			if (typeof message === 'string') messages.push(message)
-		}
-	}
-
-	messages.push(...collectErrorMessages(Reflect.get(error, 'cause'), seen))
-	return messages
-}
-
-function isForkContinuationCompatibilityError(error: unknown) {
-	return collectErrorMessages(error).some(message => {
-		const normalizedMessage = message.toLowerCase()
-		if (!normalizedMessage.includes('forkcontinuation')) return false
-		return normalizedMessage.includes('returned no data') || normalizedMessage.includes('does not have the function') || normalizedMessage.includes('function not found') || normalizedMessage.includes('function selector') || normalizedMessage.includes('unknown function')
+	return await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		address: escalationGameAddress,
+		functionName: 'forkContinuation',
+		args: [],
 	})
 }
 
@@ -576,7 +540,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const { questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress } = requireReportingBootstrapReadResult(await readRequiredMulticall(client, reportingPoolReads))
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
-	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold, forkContinuationSnapshot] = await Promise.all([
+	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),
 		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
@@ -587,7 +551,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			functionName: 'getForkThreshold',
 			args: [universeId],
 		}),
-		escalationGameAddress === zeroAddress ? Promise.resolve(undefined) : readForkContinuation(client, escalationGameAddress),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x')
@@ -608,6 +571,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			parentWithdrawalEnabled: false,
 			...viewerVaultState,
 		}
+	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
 	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
