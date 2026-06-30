@@ -383,8 +383,8 @@ contract SecurityPoolOracleCoordinator {
 		uint256 operationId = stagedOperationCounter;
 		// Capture the target vault state at queue time. Liquidation may still execute if
 		// the target deposits more REP after staging, but allowance changes or ownership
-		// decreases make the snapshot stale. Stale operations are consumed and must be
-		// restaged against current state.
+		// decreases make a liquidation snapshot stale. Allowance operations keep the
+		// snapshot for history/event context and price the live increase at execution.
 		// Liquidation should value the vault's full collateral claim. That means using the
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
@@ -569,8 +569,13 @@ contract SecurityPoolOracleCoordinator {
 			(, uint256 withdrawRepAmount) = _previewWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount);
 			return _repToEthNotional(withdrawRepAmount);
 		}
-		if (stagedOperation.amount <= stagedOperation.snapshotTargetAllowance) return 0;
-		return stagedOperation.amount - stagedOperation.snapshotTargetAllowance;
+		// Allowance operations must price the live increase they would authorize at
+		// execution time, not the queue-time increase. Otherwise a vault can lower its
+		// allowance after staging and replay a stale manual operation to restore more
+		// exposure than the current price-round budget still permits.
+		(, uint256 currentTargetAllowance, , ) = securityPool.securityVaults(stagedOperation.targetVault);
+		if (stagedOperation.amount <= currentTargetAllowance) return 0;
+		return stagedOperation.amount - currentTargetAllowance;
 	}
 
 	function _previewWithdrawRep(
