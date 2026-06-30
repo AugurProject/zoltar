@@ -347,6 +347,8 @@ describe('Peripherals: vault accounting', () => {
 		const expectedWinnerProfit = expectedGrossWinningPayout - totalWinningPrincipal
 		const expectedResidualHaircut = totalPrincipalLocked - expectedGrossWinningPayout
 
+		// The fixed 15 REP reward window is intentionally consumed by the earliest accepted
+		// winning principal. The later 2 REP deposit lands entirely in the principal-only excess.
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, thirdWinningDeposit)
@@ -564,7 +566,7 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(vaultAfterClearingAllowance.securityBondAllowance, 0n, 'setting the security bond allowance to zero should succeed')
 	})
 
-	test('withdrawFromEscalationGame gives safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
+	test('withdrawFromEscalationGame gives later safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -581,6 +583,9 @@ describe('Peripherals: vault accounting', () => {
 		const expectedFirstWinnerPayout = 28n * 10n ** 18n
 		const expectedSecondWinnerPayout = 18n * 10n ** 18n
 
+		// This explicitly documents the intended same-side ordering rule: once the first winner has
+		// filled the binding-capital region, the later deposit only earns bonus on its overlap with
+		// the remaining safety-boundary depth.
 		await depositToEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningDeposit)
 		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositToEscalationGame(losingSide, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)

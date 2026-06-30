@@ -92,6 +92,9 @@ contract EscalationGame is EscalationGameSettlement {
 		Deposit memory deposit;
 		deposit.depositor = depositor;
 		deposit.amount = effectiveDeposit;
+		// `cumulativeAmount` snapshots this outcome's depth immediately after this append.
+		// If this outcome later wins, settlement intentionally uses this append order to determine
+		// which interval of the deposit landed inside the later reward-eligible window.
 		deposit.cumulativeAmount = newBalance;
 		selectedOutcomeState.deposits.push(deposit);
 		uint256 depositIndex = selectedOutcomeState.deposits.length - 1;
