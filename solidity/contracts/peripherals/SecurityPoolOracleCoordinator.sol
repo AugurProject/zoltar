@@ -5,6 +5,7 @@ import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
@@ -374,6 +375,10 @@ contract SecurityPoolOracleCoordinator {
 			!securityPool.isEscalationResolved(),
 			'question already resolved, so staged operations are unavailable'
 		);
+		if (operation == OperationType.WithdrawRep) {
+			(, uint256 withdrawRepAmount) = _previewWithdrawRep(msg.sender, amount);
+			require(withdrawRepAmount > 0, 'Withdraw amount has no effect');
+		}
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
 		// Capture the target vault state at queue time. Liquidation may still execute if
@@ -456,6 +461,16 @@ contract SecurityPoolOracleCoordinator {
 			}
 		}
 		uint256 operationNotional = _getOperationNotional(stagedOperation);
+		if (stagedOperation.operation == OperationType.WithdrawRep && operationNotional == 0) {
+			_consumeStagedOperation(operationId);
+			emit ExecutedStagedOperation(
+				operationId,
+				stagedOperation.operation,
+				false,
+				'withdraw amount has no effect'
+			);
+			return;
+		}
 		if (operationNotional > getPriceRoundRemainingNotional()) {
 			_consumeStagedOperation(operationId);
 			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle budget exceeded');
@@ -551,13 +566,24 @@ contract SecurityPoolOracleCoordinator {
 			return debtToMove > repEthValue ? debtToMove : repEthValue;
 		}
 		if (stagedOperation.operation == OperationType.WithdrawRep) {
-			uint256 price = lastPrice;
-			if (price == 0 || stagedOperation.amount == 0) return 0;
-			uint256 numerator = stagedOperation.amount * PRICE_PRECISION;
-			return (numerator - 1) / price + 1;
+			(, uint256 withdrawRepAmount) = _previewWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount);
+			return _repToEthNotional(withdrawRepAmount);
 		}
 		if (stagedOperation.amount <= stagedOperation.snapshotTargetAllowance) return 0;
 		return stagedOperation.amount - stagedOperation.snapshotTargetAllowance;
+	}
+
+	function _previewWithdrawRep(
+		address vault,
+		uint256 repAmount
+	) private view returns (uint256 withdrawOwnership, uint256 withdrawRepAmount) {
+		if (repAmount == 0) return (0, 0);
+		(uint256 vaultOwnership, , , ) = securityPool.securityVaults(vault);
+		uint256 ownershipToWithdraw = securityPool.repToPoolOwnership(repAmount);
+		uint256 minimumRemainingOwnership = securityPool.repToPoolOwnership(SecurityPoolUtils.MIN_REP_DEPOSIT);
+		withdrawOwnership =
+			ownershipToWithdraw + minimumRemainingOwnership > vaultOwnership ? vaultOwnership : ownershipToWithdraw;
+		withdrawRepAmount = securityPool.poolOwnershipToRep(withdrawOwnership);
 	}
 
 	function _getSnapshotVaultRep(StagedOperation memory stagedOperation) private pure returns (uint256) {
