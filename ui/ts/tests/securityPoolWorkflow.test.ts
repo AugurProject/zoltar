@@ -28,11 +28,11 @@ import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a single stable operate header title', () => {
-		expect(getSelectedPoolCardTitle()).toBe('Pool Workflows')
+		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
 
-		expect(getSelectedPoolCardTitle()).toBe('Pool Workflows')
+		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
 
-		expect(getSelectedPoolCardTitle()).toBe('Pool Workflows')
+		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
 	})
 
 	void test('maps the legacy resolution view alias to the reporting tab', () => {
@@ -416,14 +416,14 @@ void describe('selected pool workflow visibility', () => {
 		expect(isForkWorkflowDisabled('forkTruthAuction')).toBe(false)
 	})
 
-	void test('uses state-specific reasons before unlocking pool workflows', () => {
+	void test('uses state-specific reasons before unlocking pool actions', () => {
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
 				hasSelectedPoolAddress: false,
 				selectedPoolLookupState: 'unknown',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Load a pool to open this workflow.')
+		).toBe('Load a pool before using pool actions.')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -439,7 +439,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'missing',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Load a valid pool to open this workflow.')
+		).toBe('Load a valid pool before using pool actions.')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -447,7 +447,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'ready',
 				selectedPoolUniverseMismatch: true,
 			}),
-		).toBe('Switch to the same universe before using this pool workflow.')
+		).toBe('Switch to the same universe before managing this pool.')
 	})
 
 	void test('keeps a stable locked-workflow presentation before a pool resolves', () => {
@@ -499,7 +499,7 @@ void describe('selected pool workflow visibility', () => {
 			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, trading, reporting, and fork workflows.',
+			detail: 'Switch to the same universe before using vault, trading, reporting, and fork actions.',
 			key: 'unavailable',
 		})
 	})

@@ -474,7 +474,7 @@ void describe('trading helpers', () => {
 				},
 				shareTokenSupply: firstMintShareAmount,
 			}),
-		).toBe('Max redeemable amount is 1 complete sets.')
+		).toBe('Max redeemable amount is 1 complete set.')
 	})
 
 	void test('validates share migration targets and positive balances once migration is available', () => {
