@@ -26,7 +26,6 @@ import {
 	requireOpenOracleReportStatusTupleArray,
 	requireUniverseTupleArray,
 	requireSecurityVaultTupleArray,
-	toUint8Array,
 } from '../contracts/helpers.js'
 
 const questionData = {
@@ -124,13 +123,10 @@ describe('contracts helpers', () => {
 		expect(() => getSecurityPoolSystemState(4)).toThrow('Unhandled security pool system state')
 	})
 
-	test('market and deposit utilities cover binary and boundary paths', () => {
+	test('market utilities cover binary and categorical paths', () => {
 		expect(getMarketType({ ...questionData, numTicks: 100n }, [])).toBe('scalar')
 		expect(getMarketType(questionData, ['Yes', 'No'])).toBe('binary')
 		expect(getMarketType(questionData, ['A', 'B', 'C'])).toBe('categorical')
-		expect(toUint8Array([0n, 1n, 255n])).toEqual([0, 1, 255])
-		expect(() => toUint8Array([-1n])).toThrow('Deposit index out of range')
-		expect(() => toUint8Array([256n])).toThrow('Deposit index out of range')
 	})
 
 	test('getGenesisReputationTokenAddress is wired through helper defaults', () => {

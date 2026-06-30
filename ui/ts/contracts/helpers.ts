@@ -248,16 +248,3 @@ export function getMarketType(questionData: QuestionData, outcomeLabels: string[
 	if (outcomeLabels.length === 2 && outcomeLabels[0] === 'Yes' && outcomeLabels[1] === 'No') return 'binary'
 	return 'categorical'
 }
-
-function toUint8(value: bigint) {
-	if (value < 0n || value > 255n) throw new Error(`Deposit index out of range: ${value.toString()}`)
-
-	const numberValue = Number(value)
-	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) throw new Error(`Deposit index out of range: ${value.toString()}`)
-
-	return numberValue
-}
-
-export function toUint8Array(values: bigint[]) {
-	return values.map(value => toUint8(value))
-}
