@@ -19,6 +19,7 @@ import {
 	loadTruthAuctionTickBidPage,
 	loadTruthAuctionTickPage,
 	loadTruthAuctionTickSummary,
+	migrateEscalationDeposits,
 	migrateVaultWithUnresolvedEscalation,
 	migrateSharesFromUniverse,
 	settleOracleReport,
@@ -1059,6 +1060,36 @@ describe('contracts helpers', () => {
 		expect(decodedArgs[2]).toBe(2n)
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
+			hash: transactionHash,
+			securityPoolAddress,
+			universeId: 9n,
+		})
+	})
+
+	test('migrateEscalationDeposits helper keeps deposit indexes as uint256 values', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(request => {
+			capturedData = request.data
+			capturedTo = request.to
+		})
+
+		const result = await migrateEscalationDeposits(asWriteClient(client), securityPoolAddress, 9n, vaultAddress, 'yes', [0n, 255n, 256n])
+
+		expect(capturedTo).toBeDefined()
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		const decodedArgs = decodedCall.args as readonly [Address, Address, number, bigint[]]
+		expect(decodedCall.functionName).toBe('claimForkedEscalationDeposits')
+		expect(decodedArgs[0]).toBe(securityPoolAddress)
+		expect(decodedArgs[1]).toBe(vaultAddress)
+		expect(decodedArgs[2]).toBe(1)
+		expect(decodedArgs[3]).toEqual([0n, 255n, 256n])
+		expect(result).toEqual({
+			action: 'migrateEscalationDeposits',
 			hash: transactionHash,
 			securityPoolAddress,
 			universeId: 9n,

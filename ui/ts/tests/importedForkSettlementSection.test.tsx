@@ -1,6 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { useState } from 'preact/hooks'
 import { ImportedForkSettlementSection } from '../components/ImportedForkSettlementSection.js'
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -79,5 +80,87 @@ describe('ImportedForkSettlementSection', () => {
 		expect(checkbox.checked).toBe(true)
 		fireEvent.change(checkbox, { target: { checked: false } })
 		expect(selectionChanges).toEqual([{ checked: false, depositIndex: 7n, outcome: 'yes' }])
+	})
+
+	test('paginates imported deposits and keeps selections across pages', async () => {
+		const importedUserDeposits = Array.from({ length: 27 }, (_, index) => {
+			const parentDepositIndex = 250n + BigInt(index)
+			return {
+				amount: parentDepositIndex,
+				cumulativeAmount: parentDepositIndex + 1n,
+				depositor: '0x0000000000000000000000000000000000000001' as const,
+				parentDepositIndex,
+			}
+		})
+
+		function SettlementHarness() {
+			const [selectedDepositIndexesByOutcome, setSelectedDepositIndexesByOutcome] = useState<Record<ReportingOutcomeKey, bigint[]>>({
+				invalid: [],
+				no: [],
+				yes: [256n],
+			})
+			return (
+				<ImportedForkSettlementSection
+					activeReportingDetails={undefined}
+					disabled={false}
+					onDepositSelectionChange={(outcome, depositIndex, checked) => {
+						setSelectedDepositIndexesByOutcome(current => ({
+							...current,
+							[outcome]: checked ? [...current[outcome], depositIndex] : current[outcome].filter(index => index !== depositIndex),
+						}))
+					}}
+					renderSettlementAction={props => (
+						<button disabled={props.guardMessage !== undefined} type='button'>
+							Settle {props.sideLabel}
+						</button>
+					)}
+					resolved={true}
+					selectedDepositIndexesByOutcome={selectedDepositIndexesByOutcome}
+					sides={[
+						{
+							importedUserDeposits,
+							key: 'yes',
+							label: 'Yes',
+						},
+					]}
+				/>
+			)
+		}
+
+		const rendered = await renderIntoDocument(<SettlementHarness />)
+		cleanupRendered = rendered.cleanup
+
+		expect(document.body.textContent).toMatch('Parent deposit #256')
+		expect(document.body.textContent).toMatch('Showing parent deposits 1-25 of 27. Page 1 of 2')
+		expect(document.body.textContent).not.toMatch('Parent deposit #276')
+
+		const firstPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')
+		const deposit256Checkbox = firstPageCheckboxes.item(6) as HTMLInputElement
+		expect(deposit256Checkbox.checked).toBe(true)
+
+		const nextButton = within(document.body).getByRole('button', { name: 'Next Parent Deposits' })
+		fireEvent.click(nextButton)
+
+		expect(document.body.textContent).toMatch('Parent deposit #276')
+		expect(document.body.textContent).toMatch('Showing parent deposits 26-27 of 27. Page 2 of 2')
+		expect(document.body.textContent).not.toMatch('Parent deposit #256')
+
+		const secondPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')
+		const deposit276Checkbox = secondPageCheckboxes.item(1) as HTMLInputElement
+		fireEvent.change(deposit276Checkbox, { target: { checked: true } })
+		expect(deposit276Checkbox.checked).toBe(true)
+
+		const previousButton = within(document.body).getByRole('button', { name: 'Previous Parent Deposits' })
+		fireEvent.click(previousButton)
+
+		const refreshedFirstPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')
+		const refreshedDeposit256Checkbox = refreshedFirstPageCheckboxes.item(6) as HTMLInputElement
+		expect(refreshedDeposit256Checkbox.checked).toBe(true)
+
+		fireEvent.click(nextButton)
+
+		const refreshedSecondPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')
+		const refreshedDeposit276Checkbox = refreshedSecondPageCheckboxes.item(1) as HTMLInputElement
+		expect(refreshedDeposit276Checkbox.checked).toBe(true)
 	})
 })
