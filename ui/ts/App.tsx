@@ -505,7 +505,6 @@ export function App() {
 			onLiquidationAmountChange: setLiquidationAmount,
 			onLiquidationTimeoutMinutesChange: setLiquidationTimeoutMinutes,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
-			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
 			onLoadSecurityPools: () => void loadSecurityPools(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
@@ -696,7 +695,7 @@ export function App() {
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: 'Browse Markets', value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: 'Questions & Markets', value: 'questions' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Question', value: 'create' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: 'Fork Oracle', value: 'fork' },
 					{
@@ -715,9 +714,9 @@ export function App() {
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse Pools', value: 'browse' },
 					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Pool', value: 'create' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Manage Pool', value: 'operate' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Pool Workflows', value: 'operate' },
 				]}
 			/>
 		)
@@ -729,8 +728,8 @@ export function App() {
 				onChange={view => setOpenOracleView(view)}
 				options={[
 					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Advanced Create', value: 'create' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Selected Report', value: 'selected-report' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Report', value: 'create' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Report Details', value: 'selected-report' },
 				]}
 			/>
 		)

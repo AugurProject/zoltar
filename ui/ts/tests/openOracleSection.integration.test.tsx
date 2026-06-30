@@ -89,7 +89,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				options={[
 					{ label: 'Browse', value: 'browse' },
 					{ label: 'Create', value: 'create' },
-					{ label: 'Selected Report', value: 'selected-report' },
+					{ label: 'Report Details', value: 'selected-report' },
 				]}
 			/>
 			<OpenOracleSection
@@ -192,7 +192,7 @@ async function loadSelectedReportInUi() {
 	const reportControlButton = reportIdField.querySelector('button')
 	if (!(reportControlButton instanceof HTMLButtonElement)) throw new Error('Expected report ID control button')
 	await clickElement(reportControlButton)
-	await waitFor(() => getSectionByTitle('Selected Report Actions'))
+	await waitFor(() => getSectionByTitle('Report Actions'))
 }
 
 async function createSubmittedOpenOracleReport(writeClient: WriteClient, readClient: ReturnType<typeof createConnectedReadClient>) {
@@ -281,17 +281,18 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
-		await waitFor(() => getSectionByTitle('Selected Report'))
+		await waitFor(() => getSectionByTitle('Report Details'))
 		await waitFor(() => {
 			expect(within(document.body).getByRole('button', { name: 'Initial Report' })).not.toBeNull()
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Initial Report' }))
+		const initialReportDialog = within(document.body).getByRole('dialog', { name: 'Submit Initial Report' })
 		await waitFor(() => {
-			expect(within(document.body).getByRole('heading', { level: 4, name: 'Initial Report' })).not.toBeNull()
+			expect(within(initialReportDialog).getByRole('heading', { level: 4, name: 'Initial Report' })).not.toBeNull()
 		})
-		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
-		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
-		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
+		expect(within(initialReportDialog).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
+		expect(within(initialReportDialog).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
+		expect(within(initialReportDialog).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
 		await setInputValue(/^Price \(/, initialReportPrice.toString())
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)

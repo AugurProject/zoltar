@@ -11,6 +11,7 @@ export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Accou
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 		patchSimulationGenesisRepToken?: (parameters: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
+		requiresWalletConfirmation?: boolean | undefined
 	}
 
 export type CreateWriteClientCallbacks = {

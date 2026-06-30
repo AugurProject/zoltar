@@ -230,7 +230,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText('Available')).toBeNull()
 		expect(documentQueries.queryByText('Blocked')).toBeNull()
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Selected Report Actions' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Report Actions' })).not.toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute yet.')
 	})

@@ -137,7 +137,7 @@ export function SecurityPoolSection({
 										</button>
 									}
 								/>
-								<p className='field-help'>Paste a binary Zoltar question ID, or use "Use For Create Pool" after creating a question.</p>
+								<p className='field-help'>Paste a binary Zoltar question ID, or use "Create Pool From Question" after creating a question.</p>
 							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>

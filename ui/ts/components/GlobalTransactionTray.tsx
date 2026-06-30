@@ -14,6 +14,7 @@ function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
 }
 
 function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { label: string; tone: BadgeTone } {
+	if (tone === 'preparing') return { tone: 'pending', label: 'Preparing' }
 	if (tone === 'awaiting-wallet') return { tone: 'pending', label: 'Awaiting Wallet' }
 	if (tone === 'pending') return { tone: 'pending', label: 'Pending' }
 	if (tone === 'success') return { tone: 'ok', label: 'Confirmed' }
@@ -45,7 +46,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 	const transactionDismissKey = getDismissKey(transaction)
 	if (transactionDismissKey !== undefined && transactionDismissKey === dismissedKey) return undefined
 	const badge = getTransactionBadge(transaction.tone)
-	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'pending' && transactionDismissKey !== undefined
+	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'pending' && transaction.tone !== 'preparing' && transactionDismissKey !== undefined
 	const transactionHash = transaction.hash
 	const showDetail = transaction.hash === undefined || transaction.tone === 'error'
 	const showHash = transactionHash !== undefined

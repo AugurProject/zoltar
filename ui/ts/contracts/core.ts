@@ -21,6 +21,7 @@ export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'statu
 	ContractCallClient & {
 		chain?: WriteClient['chain']
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
+		requiresWalletConfirmation?: boolean | undefined
 		waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 	}
 
@@ -92,6 +93,7 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 			contractAddress: callParams.address,
 			data,
 			functionName: callParams.functionName,
+			requiresWalletConfirmation: client.requiresWalletConfirmation,
 			value: callParams.value,
 		})
 		hash = await client.sendTransaction({
