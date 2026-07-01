@@ -123,7 +123,26 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Create Pool' description='Choose the exact Yes / No question and security multiplier before deploying the pool.'>
+					<SectionBlock title='Create Pool' description='Choose the exact binary Yes / No question and security multiplier before deploying the pool that will back trading and reporting for that question.'>
+						<div className='workflow-summary-strip workflow-guide'>
+							<div className='workflow-guide-intro'>
+								<strong>Pool creation turns a binary question into a collateralized trading surface.</strong>
+								<p className='detail'>Load the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.</p>
+							</div>
+							<div className='workflow-summary-strip-steps'>
+								<span className='current'>1. Load a binary question</span>
+								<span>2. Choose collateral strength</span>
+								<span>3. Deploy the pool</span>
+							</div>
+						</div>
+
+						<SectionBlock headingLevel={4} title='Before You Deploy' variant='embedded'>
+							<ul className='requirements-checklist'>
+								<li>Make sure the question title and description are strong enough for users to trust how it will resolve.</li>
+								<li>Security pools only work with binary questions.</li>
+								<li>Higher security multipliers require more REP backing per unit of open interest and create a thicker safety buffer.</li>
+							</ul>
+						</SectionBlock>
 						<div className='form-grid'>
 							<div className='field'>
 								<LookupFieldRow
@@ -137,7 +156,7 @@ export function SecurityPoolSection({
 										</button>
 									}
 								/>
-								<p className='field-help'>Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question.</p>
+								<p className='field-help'>Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question. Load the preview before deploying so you can verify the question wording.</p>
 							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>
@@ -150,14 +169,20 @@ export function SecurityPoolSection({
 								</div>
 							)}
 
-							<label className='field'>
-								<span>Security Multiplier</span>
-								<FormInput value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
-							</label>
+							<div className='field'>
+								<label htmlFor='security-pool-security-multiplier'>
+									<span>Security Multiplier</span>
+								</label>
+								<FormInput id='security-pool-security-multiplier' aria-describedby='security-pool-security-multiplier-help' value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
+								<p className='field-help' id='security-pool-security-multiplier-help'>
+									This sets the REP collateral target relative to open interest. Higher values are safer but require more REP backing.
+								</p>
+							</div>
 
 							<div className='field'>
 								<span>Initial Open Interest Fee / Year</span>
 								<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
+								<p className='field-help'>This fee applies to open interest in the new pool and is fixed at deployment.</p>
 							</div>
 
 							<div className='actions'>
