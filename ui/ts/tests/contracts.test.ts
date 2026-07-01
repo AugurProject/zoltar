@@ -469,6 +469,18 @@ describe('contracts helpers', () => {
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
 				}
+				if (getContractFunctionName(firstContract) === 'securityVaults') {
+					return request.contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args)) throw new Error('Expected securityVaults args')
+						const rawVaultAddress = args[0]
+						if (typeof rawVaultAddress !== 'string') throw new Error('Expected vault address argument')
+						const currentVaultAddress = getAddress(rawVaultAddress)
+						loadedVaultAddresses.push(currentVaultAddress)
+						if (currentVaultAddress === viewerVaultAddress) return [1n, 0n, 0n, 0n, 0n]
+						return [2n, 0n, 0n, 0n, 0n]
+					})
+				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
@@ -496,16 +508,6 @@ describe('contracts helpers', () => {
 					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint vault range args')
 					capturedVaultRangeArgs = [startIndex, count]
 					return previewVaultAddresses
-				}
-				if (request.functionName === 'securityVaults') {
-					const args = request.args
-					if (args === undefined) throw new Error('Expected securityVaults args')
-					const rawVaultAddress = args[0]
-					if (typeof rawVaultAddress !== 'string') throw new Error('Expected vault address argument')
-					const currentVaultAddress = getAddress(rawVaultAddress)
-					loadedVaultAddresses.push(currentVaultAddress)
-					if (currentVaultAddress === viewerVaultAddress) return [1n, 0n, 0n, 0n, 0n]
-					return [2n, 0n, 0n, 0n, 0n]
 				}
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalRepBalance') return 100n

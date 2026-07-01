@@ -3,17 +3,20 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
+import { sharedBrowserArtifactRelativePaths } from '../../scripts/sharedBrowserArtifacts.ts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
 const uiRootPath = path.join(repositoryRootPath, 'ui')
 const uiContractsPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts.ts')
 const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'reportingDomain.ts')
 const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'simulation', 'bootstrap.ts')
+const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
 const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
-const sharedBrowserArtifacts = [path.join(repositoryRootPath, 'shared', 'js', 'bigInt.js'), path.join(repositoryRootPath, 'shared', 'js', 'constants.js'), path.join(repositoryRootPath, 'shared', 'js', 'deploymentAddresses.js'), path.join(repositoryRootPath, 'shared', 'js', 'protocolConfig.js')]
+const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	viem: './vendor/viem/index.js',
 	abitype: './vendor/abitype/exports/index.js',
@@ -287,13 +290,17 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(simulationBootstrapSource).toContain("from '@zoltar/shared/constants'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/protocolConfig'")
+	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/shared/escalationMath'")
+	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/shared/truthAuctionTickMath'")
 	expect(contractsSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
 		expect(fs.existsSync(artifactPath)).toBe(true)

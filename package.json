@@ -27,8 +27,8 @@
 	},
 	"scripts": {
 		"preinstall": "bun ./scripts/link-shared-node-modules.mjs",
-		"check:shared-dependencies": "bun ./scripts/ensure-shared-package-fresh.mjs --refresh && cd solidity && bun ../scripts/ensure-shared-package-fresh.mjs --refresh && cd ../ui && bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
 		"refresh:shared-dependencies": "bun ./scripts/ensure-shared-package-fresh.mjs --refresh && cd solidity && bun ../scripts/ensure-shared-package-fresh.mjs --refresh && cd ../ui && bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
+		"check:shared-dependencies": "bun run refresh:shared-dependencies",
 		"install:anvil": "bash -lc 'if ! command -v anvil >/dev/null 2>&1; then curl -L https://foundry.paradigm.xyz | bash && export PATH=\"$HOME/.foundry/bin:$PATH\" && foundryup; fi'",
 		"ensure-shared-build": "bun ./scripts/ensure-contract-artifacts.mts --ensure-shared-only",
 		"ensure-contract-artifacts": "bun ./scripts/ensure-contract-artifacts.mts",
