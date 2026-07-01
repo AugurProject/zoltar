@@ -64,7 +64,7 @@ export function getPoolRegistryPresentation(
 				detail: 'Load security pools to check what is available in this universe.',
 			})
 		return createPresentation('empty', {
-			actionHint: 'Create a pool from a binary question to enable trading, reporting, and vault collateral actions.',
+			actionHint: 'Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.',
 			badgeLabel: 'None yet',
 			badgeTone: 'muted',
 			detail: 'No security pools are available in this universe yet.',

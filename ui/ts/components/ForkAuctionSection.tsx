@@ -1460,6 +1460,7 @@ export function ForkAuctionSection({
 										{loadingReportingDetails ? <p className='detail'>Loading unresolved escalation deposits for the connected wallet…</p> : undefined}
 										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>Unresolved escalation deposit details are unavailable for this pool right now.</p>}
 										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits ? <p className='detail'>No unresolved parent escalation deposits remain for the connected wallet.</p> : undefined}
+										<p className='detail'>All unresolved parent escalation locks on this wallet move together into the selected child universe. They cannot be split across multiple outcomes.</p>
 										{activeReportingDetails === undefined
 											? undefined
 											: unresolvedMigrationSides.map(side => (
@@ -1503,6 +1504,7 @@ export function ForkAuctionSection({
 									</SectionBlock>
 								) : (
 									<SectionBlock density='compact' headingLevel={4} title='Migrate Resolved Escalation Deposits' variant='embedded'>
+										<p className='detail'>Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.</p>
 										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No escrowed REP is currently visible for migratable escalation deposits on the connected wallet.</p> : undefined}
 										{loadingReportingDetails ? <p className='detail'>Loading escalation deposits for the selected wallet…</p> : undefined}
 										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>Escalation deposit details are unavailable for this pool right now.</p>}
@@ -1551,6 +1553,7 @@ export function ForkAuctionSection({
 									</SectionBlock>
 								)}
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Pool To Universe' variant='embedded'>
+									<p className='detail'>This moves pool-level REP shared by the selected outcome into the child universe. It affects the outcome pool, not just your vault.</p>
 									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child universe.</p> : undefined}
 									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
 									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
@@ -1567,6 +1570,7 @@ export function ForkAuctionSection({
 									</div>
 								</SectionBlock>
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Vault' variant='embedded'>
+									<p className='detail'>This moves all remaining REP collateral and security-bond allowance from your parent vault into the selected child pool for this outcome.</p>
 									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>No REP collateral or security bond allowance remains to migrate for the connected wallet.</p> : undefined}
 									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child universe.</p> : undefined}
 									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
@@ -1602,7 +1606,7 @@ export function ForkAuctionSection({
 							{truthAuctionMarketViewSection}
 							{auctionWideBidsSection}
 							{renderSubmitBidSection({
-								description: 'Enter a price and ETH amount.',
+								description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.',
 							})}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
@@ -1619,6 +1623,7 @@ export function ForkAuctionSection({
 						</SectionBlock>
 
 						<SectionBlock title='Start Truth Auction'>
+							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP; losing bids are refunded during settlement.</p>
 							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 							<div className='actions'>
@@ -1634,7 +1639,7 @@ export function ForkAuctionSection({
 							</div>
 						</SectionBlock>
 
-						{renderSubmitBidSection({ description: 'Enter a price and ETH amount.' })}
+						{renderSubmitBidSection({ description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.' })}
 					</fieldset>
 				)
 			}

@@ -273,7 +273,7 @@ export function createSecurityPoolCreationTransactionIntent() {
 
 export function createSecurityPoolCreationSuccessPresentation(result: SecurityPoolCreationResult) {
 	return buildPresentation({
-		detail: 'The new security pool is now available for operation.',
+		detail: 'The new security pool is now available for shares, reporting, and vault operations.',
 		hash: result.deployPoolHash,
 		rows: [
 			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
@@ -329,8 +329,14 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 }
 
 export function createTradingSuccessPresentation(result: TradingActionResult) {
+	const detail = (() => {
+		if (result.action === 'createCompleteSet') return 'A fresh Yes, No, and Invalid share set was minted for the selected pool.'
+		if (result.action === 'redeemCompleteSet') return 'Matching shares were burned and collateral was returned from the selected pool.'
+		if (result.action === 'migrateShares') return 'Selected parent-pool shares were migrated into child universes.'
+		return 'Resolved winning shares were redeemed from the selected pool.'
+	})()
 	return buildPresentation({
-		detail: `${humanizeAction(result.action)} completed successfully.`,
+		detail,
 		hash: result.hash,
 		rows: [
 			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
@@ -357,8 +363,9 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 }
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
+	const detail = result.action === 'reportOutcome' ? 'Your selected REP was committed to the chosen escalation side.' : 'Selected escalation deposits were settled against the current finalized outcome.'
 	return buildPresentation({
-		detail: `${humanizeAction(result.action)} completed successfully.`,
+		detail,
 		hash: result.hash,
 		rows: [
 			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
@@ -471,8 +478,40 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
+	const detail = (() => {
+		switch (result.action) {
+			case 'claimAuctionProceeds':
+				return 'Selected winning truth-auction bids were claimed.'
+			case 'createChildUniverse':
+				return 'The selected child universe was deployed and linked to this fork path.'
+			case 'forkWithOwnEscalation':
+				return 'This pool submitted its own escalation fork and moved into Fork & Migration.'
+			case 'forkUniverse':
+				return 'The selected Zoltar universe fork was submitted on-chain.'
+			case 'initiateFork':
+				return 'This pool entered fork handling and is ready for migration actions.'
+			case 'migrateEscalationDeposits':
+				return 'Selected escalation deposits were migrated into the chosen child universe.'
+			case 'migrateRepToZoltar':
+				return 'Pool-level REP was migrated into the selected child universe.'
+			case 'migrateUnresolvedEscalation':
+				return 'All unresolved parent escalation locks for this wallet were migrated into the chosen child universe.'
+			case 'migrateVault':
+				return 'Vault REP collateral and security-bond allowance were migrated into the selected child universe.'
+			case 'refundLosingBids':
+				return 'Selected losing truth-auction bids were refunded.'
+			case 'settleForkedEscalation':
+				return 'Imported fork-carried escalation deposits were settled.'
+			case 'startTruthAuction':
+				return 'Truth auction state was started for the selected child universe.'
+			case 'submitBid':
+				return 'Truth auction bid submitted. Bid ETH stays committed until settlement.'
+			default:
+				return `${humanizeAction(result.action)} completed successfully.`
+		}
+	})()
 	return buildPresentation({
-		detail: `${humanizeAction(result.action)} completed successfully.`,
+		detail,
 		hash: result.hash,
 		rows: [
 			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
