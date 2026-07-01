@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
 

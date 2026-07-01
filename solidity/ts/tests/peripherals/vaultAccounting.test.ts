@@ -1,6 +1,16 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { parseAbiItem } from 'viem'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
+
+const depositRepEvent = {
+	inputs: [
+		{ name: 'vault', type: 'address' },
+		{ name: 'repAmount', type: 'uint256' },
+		{ name: 'poolOwnership', type: 'uint256' },
+		{ name: 'poolOwnershipDenominator', type: 'uint256' },
+	],
+	name: 'DepositRep',
+	type: 'event',
+} as const
 
 describe('Peripherals: vault accounting', () => {
 	const fixture = usePeripheralsVaultAccountingFixture()
@@ -108,7 +118,7 @@ describe('Peripherals: vault accounting', () => {
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const depositLogs = await client.getLogs({
 			address: securityPoolAddresses.securityPool,
-			event: parseAbiItem('event DepositRep(address vault, uint256 repAmount, uint256 poolOwnership, uint256 poolOwnershipDenominator)'),
+			event: depositRepEvent,
 			fromBlock: receipt.blockNumber,
 			toBlock: receipt.blockNumber,
 		})
@@ -116,13 +126,14 @@ describe('Peripherals: vault accounting', () => {
 			depositLogs.find(log => log.transactionHash === depositHash),
 			'DepositRep log missing from deposit transaction',
 		)
+		const depositArgs = ensureDefined(depositLog.args, 'DepositRep log args missing')
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
 
-		strictEqualTypeSafe(depositLog.args.vault, client.account.address, 'event should identify the updated vault')
-		strictEqualTypeSafe(depositLog.args.repAmount, depositAmount, 'event should include the deposited REP amount')
-		strictEqualTypeSafe(depositLog.args.poolOwnership, vault.repDepositShare, 'event should include updated vault ownership')
-		strictEqualTypeSafe(depositLog.args.poolOwnershipDenominator, poolOwnershipDenominator, 'event should include updated pool ownership denominator')
+		strictEqualTypeSafe(depositArgs.vault, client.account.address, 'event should identify the updated vault')
+		strictEqualTypeSafe(depositArgs.repAmount, depositAmount, 'event should include the deposited REP amount')
+		strictEqualTypeSafe(depositArgs.poolOwnership, vault.repDepositShare, 'event should include updated vault ownership')
+		strictEqualTypeSafe(depositArgs.poolOwnershipDenominator, poolOwnershipDenominator, 'event should include updated pool ownership denominator')
 	})
 
 	test('share token metadata includes the question id', async () => {

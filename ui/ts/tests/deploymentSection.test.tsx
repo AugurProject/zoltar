@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { DeploymentSection } from '../components/DeploymentSection.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'

@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { useEffect } from 'preact/hooks'
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'

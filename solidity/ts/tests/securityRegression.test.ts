@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from '@zoltar/shared/ethereum'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -16,7 +16,7 @@ import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoret
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
@@ -302,7 +302,7 @@ describe('security regression coverage', () => {
 		assert.equal(totalAllowance, 0n)
 		assert.equal(stagedOperation[1], zeroAddress)
 		assert.equal(executionLog.args.operationId, liquidationOperationId)
-		assert.equal(executionLog.args.operation, OperationType.Liquidation)
+		assert.equal(executionLog.args.operation, BigInt(OperationType.Liquidation))
 		assert.equal(executionLog.args.success, false)
 		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
 	})

@@ -1,15 +1,15 @@
 import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
+import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { privateKeyToAccount } from '@zoltar/shared/ethereum'
 import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
 import { collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getKnownSourceMapCoverageGapRuleMatchCountsForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import { applyLibraries } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,

@@ -1,9 +1,9 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
 import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testsuite/simulator/utils/utilities'
@@ -704,7 +704,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFee, 0n, 'PendingReportRecovered should expose the cleared basefee guard')
 		const recoveryConsumedLog = findPendingOperationRecoveryConsumedLog(recoveryReceipt.logs)
 		assert.strictEqual(recoveryConsumedLog?.args.operationId, 1n, 'recovery should emit the consumed operation id')
-		assert.strictEqual(recoveryConsumedLog?.args.operation, OperationType.SetSecurityBondsAllowance, 'recovery should emit the consumed operation type')
+		assert.strictEqual(recoveryConsumedLog?.args.operation, BigInt(OperationType.SetSecurityBondsAllowance), 'recovery should emit the consumed operation type')
 
 		const secondAllowance = repDeposit / 5n
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
@@ -1001,7 +1001,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (executionLog === undefined) throw new Error('missing expired liquidation execution event')
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired liquidation should be consumed after execution attempt')
 		assert.strictEqual(executionLog.args.operationId, manualOperationId)
-		assert.strictEqual(executionLog.args.operation, OperationType.Liquidation)
+		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.Liquidation))
 		assert.strictEqual(executionLog.args.success, false)
 		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
 	})
@@ -1026,7 +1026,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (executionLog === undefined) throw new Error('missing expired self-operation execution event')
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired self operation should be consumed after execution attempt')
 		assert.strictEqual(executionLog.args.operationId, manualOperationId)
-		assert.strictEqual(executionLog.args.operation, OperationType.SetSecurityBondsAllowance)
+		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.SetSecurityBondsAllowance))
 		assert.strictEqual(executionLog.args.success, false)
 		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
 	})

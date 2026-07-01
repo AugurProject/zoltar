@@ -7,8 +7,8 @@
  */
 
 import { describe as baseDescribe, expect, test } from 'bun:test'
-import { createPublicClient, http, zeroAddress } from 'viem'
-import { mainnet } from 'viem/chains'
+import { createPublicClient, http, zeroAddress } from '@zoltar/shared/ethereum'
+import { mainnet } from '@zoltar/shared/ethereum'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEth, quoteRepForEthV3, quoteEthForRep, quoteTokenForEth } from '../lib/uniswapQuoter.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'
@@ -97,26 +97,30 @@ void describe('Uniswap V4 Quoter — integration', () => {
 			expect(ETH_ADDRESS).toBe(zeroAddress)
 		})
 
-		void test('REP_ADDRESS is a valid checksummed address accepted by viem', async () => {
+		void test('REP_ADDRESS is a valid checksummed address accepted by the shared address validator', async () => {
 			// If REP_ADDRESS had a bad checksum, getBlockNumber would still work but this
 			// call would throw an address validation error before any RPC call is made.
-			await expect(
-				client.readContract({
-					address: REP_ADDRESS,
-					abi: [{ name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
-					functionName: 'decimals',
-				}),
-			).resolves.toBe(18)
+			const repDecimals = await client.readContract({
+				address: REP_ADDRESS,
+				abi: [{ name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
+				functionName: 'decimals',
+			})
+			if (typeof repDecimals !== 'bigint') {
+				throw new Error('REP decimals should decode to a bigint')
+			}
+			expect(Number(repDecimals)).toBe(18)
 		})
 
 		void test('USDC_ADDRESS is a valid checksummed address with 6 decimals', async () => {
-			await expect(
-				client.readContract({
-					address: USDC_ADDRESS,
-					abi: [{ name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
-					functionName: 'decimals',
-				}),
-			).resolves.toBe(6)
+			const usdcDecimals = await client.readContract({
+				address: USDC_ADDRESS,
+				abi: [{ name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
+				functionName: 'decimals',
+			})
+			if (typeof usdcDecimals !== 'bigint') {
+				throw new Error('USDC decimals should decode to a bigint')
+			}
+			expect(Number(usdcDecimals)).toBe(6)
 		})
 	})
 })

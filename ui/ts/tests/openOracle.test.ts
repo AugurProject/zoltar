@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address } from 'viem'
+import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, queueOracleManagerOperation, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
 import {
 	addOpenOracleBountyBuffer,
@@ -35,7 +35,7 @@ import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bi
 import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/clients'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'

@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { MarketCreateQuestionSection } from '../components/MarketCreateQuestionSection.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'

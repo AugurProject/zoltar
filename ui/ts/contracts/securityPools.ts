@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, parseAbiItem, zeroAddress, type Address, type TransactionReceipt } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
@@ -14,12 +14,20 @@ import { sameAddress } from '../lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js'
 import { requireForkDataView } from './forkData.js'
-import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityVaultTupleArray } from './helpers.js'
+import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
 import { loadMarketDetails } from './zoltar.js'
 
-const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
+const QUESTION_OUTCOME_ABI = [
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'getQuestionOutcome',
+		outputs: [{ name: 'outcome', type: 'uint8' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 
 const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 3n
 
@@ -187,7 +195,7 @@ async function loadSecurityPoolVaultSummaries(
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
 			const currentEscrowedRep = escrowedRepByVault[index]
 			if (currentEscrowedRep === undefined) throw new Error('Unexpected escrowed REP response')
-			if (!previewVaultAddresses.some(currentPreviewAddress => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscrowedRep === 0n) return []
+			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscrowedRep === 0n) return []
 			const [poolOwnership, securityBondAllowance, unpaidEthFees] = currentVaultData
 			return [
 				{
@@ -250,12 +258,15 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 		}
 	}
 	const count = poolCount - startIndex < BigInt(pageSize) ? poolCount - startIndex : BigInt(pageSize)
-	const deployments: readonly SecurityPoolDeploymentQueryResult[] = await client.readContract({
-		address: getInfraContractAddresses().securityPoolFactory,
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'securityPoolDeploymentsRange',
-		args: [startIndex, count],
-	})
+	const deployments: readonly SecurityPoolDeploymentQueryResult[] = requireSecurityPoolDeploymentTupleArray(
+		await client.readContract({
+			address: getInfraContractAddresses().securityPoolFactory,
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentsRange',
+			args: [startIndex, count],
+		}),
+		'security pool deployments range',
+	)
 	const pools = await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
@@ -397,7 +408,8 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	])
 
 	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData
-	const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator
+	const rawRepDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator
+	const repDepositShare = typeof rawRepDepositShare === 'bigint' ? rawRepDepositShare : BigInt(rawRepDepositShare)
 
 	return {
 		currentRetentionRate,

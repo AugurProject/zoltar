@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
 import { h } from 'preact'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { DeploymentRouteContent } from '../components/DeploymentRouteContent.js'
 import type { DeploymentRouteContentProps } from '../types/components.js'
 import type { DeploymentStatus } from '../types/contracts.js'

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from 'viem'
+import { getAddress } from '@zoltar/shared/ethereum'
 import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 

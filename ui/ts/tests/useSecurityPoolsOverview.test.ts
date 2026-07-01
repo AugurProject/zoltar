@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress, type Address } from 'viem'
+import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage } from '../hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'

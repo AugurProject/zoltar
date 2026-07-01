@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from 'viem'
+import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import type { ReadClient } from './clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from './activeEnvironment.js'
 import { isRecoverableContractReadError, isRecoverableQuoteError } from './errors.js'

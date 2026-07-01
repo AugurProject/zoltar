@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { type Address, zeroAddress } from 'viem'
+import { type Address, zeroAddress } from '@zoltar/shared/ethereum'
 import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../contracts.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'

@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'

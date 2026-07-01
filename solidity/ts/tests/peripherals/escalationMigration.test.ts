@@ -1,6 +1,21 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './fixture'
 
+const localDepositsExportedAbi = [
+	{
+		inputs: [
+			{ name: 'vault', type: 'address' },
+			{ name: 'repReceiver', type: 'address' },
+			{ name: 'principalByOutcome', type: 'uint256[3]' },
+			{ name: 'principalToTransfer', type: 'uint256' },
+			{ name: 'exportCursor', type: 'uint256' },
+			{ name: 'transferredRep', type: 'bool' },
+		],
+		name: 'LocalDepositsExported',
+		type: 'event',
+	},
+] as const
+
 describe('Peripherals: escalation migration', () => {
 	const fixture = usePeripheralsEscalationMigrationFixture()
 	const assert: PeripheralsEscalationMigrationFixture['assert'] = fixture.assert
@@ -193,13 +208,20 @@ describe('Peripherals: escalation migration', () => {
 			return ensureDefined(
 				receipt.logs
 					.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
-					.map(log =>
-						decodeEventLog({
-							abi: peripherals_EscalationGame_EscalationGame.abi,
-							data: log.data,
-							topics: log.topics,
-						}),
-					)
+					.flatMap(log => {
+						try {
+							return [
+								decodeEventLog({
+									abi: localDepositsExportedAbi,
+									data: log.data,
+									topics: log.topics,
+								}),
+							]
+						} catch (error) {
+							if (error instanceof Error && error.name === 'AbiEventSignatureNotFoundError') return []
+							throw error
+						}
+					})
 					.find(log => log.eventName === 'LocalDepositsExported'),
 				missingMessage,
 			)
@@ -514,7 +536,7 @@ describe('Peripherals: escalation migration', () => {
 		}
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child should become operational even before continuation migration')
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the migration deadline should clear the await marker even if another vault never migrates')
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes), /ar/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes), /Fork resumed/)
 	})
 
 	test('large unresolved continuation migration snapshots carry totals without replaying imported deposit indexes', async () => {

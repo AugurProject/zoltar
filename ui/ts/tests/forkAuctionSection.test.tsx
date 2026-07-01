@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
-import { type Address, getAddress, zeroAddress } from 'viem'
+import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { AccountState, ForkAuctionFormState, ReportingFormState } from '../types/app.js'

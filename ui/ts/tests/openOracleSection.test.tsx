@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ErrorNotice } from '../components/ErrorNotice.js'
 import { FormInput } from '../components/FormInput.js'
 import { MetricField } from '../components/MetricField.js'

@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
@@ -11,7 +11,7 @@ import assert from '../testsuite/simulator/utils/assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
-import { decodeEventLog } from 'viem'
+import { decodeEventLog } from '@zoltar/shared/ethereum'
 import {
 	SCALAR_PARITY_ENCODING_FIXTURES,
 	SCALAR_PARITY_LABEL_FIXTURES,
@@ -338,7 +338,7 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 
-		await assert.rejects(createQuestion(client, testScalarQuestion, []), /safe 120-bit unsigned integer range/)
+		await assert.rejects(createQuestion(client, testScalarQuestion, []), /numTicks.*out of unsigned bounds/)
 	})
 
 	// Test for integer overflow in getTradeInterval: maxValue - minValue exceeds int256max
@@ -564,8 +564,8 @@ describe('Question Data', () => {
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [firstQuestionId, 1n, MAX_UINT256],
 		})
-		const questionPage = rawQuestionPage.filter(questionId => questionId !== 0n)
-		const outcomePage = rawOutcomePage.filter(label => label !== '')
+		const questionPage = rawQuestionPage.filter((questionId: bigint) => questionId !== 0n)
+		const outcomePage = rawOutcomePage.filter((label: string) => label !== '')
 
 		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
 		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')

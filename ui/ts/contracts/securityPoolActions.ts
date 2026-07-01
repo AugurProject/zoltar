@@ -1,4 +1,4 @@
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { peripherals_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import type { ForkAuctionAction, ForkAuctionActionResult, ReadClient, WriteClient } from '../types/contracts.js'
 

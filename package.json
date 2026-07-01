@@ -18,8 +18,7 @@
 	"dependencies": {
 		"@preact/signals": "2.0.1",
 		"@zoltar/shared": "file:shared",
-		"tevm": "1.0.0-rc.151",
-		"viem": "2.53.1"
+		"tevm": "1.0.0-rc.151"
 	},
 	"overrides": {
 		"tmp": "0.2.7",
@@ -49,7 +48,7 @@
 		"check:mainnet-deployment:current": "bun ./scripts/check-mainnet-deployment.mts",
 		"tsc:app": "bun x tsc --noEmit",
 		"tsc:scripts": "bun x tsc --project tsconfig.scripts.json --noEmit",
-		"tsc:solidity": "cd solidity && bun ../scripts/ensure-shared-package-fresh.mjs --refresh && bun x tsc --noEmit",
+		"tsc:solidity": "cd solidity && bun ../scripts/ensure-shared-package-fresh.mjs --refresh && bun x tsc --project tsconfig.typecheck.json",
 		"tsc": "bun run ensure-shared-build && bun run check:shared-dependencies && bun run tsc:app && bun run tsc:scripts && bun run tsc:solidity",
 		"ui:setup": "bun install --frozen-lockfile && cd ui && bun install --frozen-lockfile && cd ../solidity && bun install --frozen-lockfile && bun run setup && cd .. && bun run generate && cd ui && bun run build && bun run build:tests",
 		"app:build": "bun run generate && cd ui && bun run build && bun run build:tests",

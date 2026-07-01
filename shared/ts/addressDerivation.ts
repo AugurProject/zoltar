@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, getCreate2Address, getCreateAddress, keccak256, numberToBytes, zeroAddress, type Address, type Hex } from 'viem'
+import { encodeAbiParameters, getAddress, getCreate2Address, getCreateAddress, keccak256, numberToBytes, zeroAddress, type Address, type Hex } from './ethereum.js'
 
 type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address

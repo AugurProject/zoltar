@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import type { MarketDetails } from '../types/contracts.js'
 
 export function getSecurityPoolCreateDisabledReason({

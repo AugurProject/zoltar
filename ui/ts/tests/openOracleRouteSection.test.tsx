@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
 import { h } from 'preact'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '../lib/chainTimestamp.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../lib/marketForm.js'

@@ -2,8 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { waitFor, within } from './testUtils/queries'
-import type { Address } from 'viem'
-import { createPublicClient, http } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
+import { createPublicClient, http } from '@zoltar/shared/ethereum'
 import type { SimulationController } from '../simulation/controller.js'
 import { useRepPrices } from '../hooks/useRepPrices.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'

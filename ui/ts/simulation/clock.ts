@@ -1,5 +1,5 @@
 import { createMemoryClient } from 'tevm'
-import { bytesToHex, hexToBytes, type Hash } from 'viem'
+import { bytesToHex, hexToBytes, type Hash } from '@zoltar/shared/ethereum'
 
 export const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
 export const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n

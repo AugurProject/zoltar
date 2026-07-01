@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { maxUint256 } from 'viem'
+import { maxUint256 } from '@zoltar/shared/ethereum'
 import { APPROVAL_MAX_DISPLAY_THRESHOLD, APPROVAL_MAX_LABEL, getApprovedAmountTone, isApprovalAmountMaxDisplay } from '../components/ApprovedAmountValue.js'
 
 void describe('ApprovedAmountValue helpers', () => {

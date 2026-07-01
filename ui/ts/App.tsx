@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from './components/AppHeaderShell.js'
 import { AppPageHeading } from './components/AppPageHeading.js'
 import { AppRouteContent } from './components/AppRouteContent.js'

@@ -1,4 +1,4 @@
-import type { Address, Hex } from 'viem'
+import type { Address, Hex } from '@zoltar/shared/ethereum'
 
 export function bigintToDecimalString(value: bigint, power: bigint): string {
 	const sign = value < 0n ? '-' : ''

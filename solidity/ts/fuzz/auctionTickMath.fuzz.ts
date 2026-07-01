@@ -1,6 +1,6 @@
 import { beforeAll, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { type Address } from 'viem'
+import { type Address } from '@zoltar/shared/ethereum'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
@@ -10,7 +10,7 @@ import { getUniformPriceDualCapBatchAuctionAddress } from '../testsuite/simulato
 import { deployUniformPriceDualCapBatchAuction } from '../testsuite/simulator/utils/contracts/auction'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 
 const MIN_TICK = -524288n

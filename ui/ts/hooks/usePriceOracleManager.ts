@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { executeOracleManagerStagedOperation, loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'

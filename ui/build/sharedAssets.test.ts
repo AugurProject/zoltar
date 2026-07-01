@@ -13,13 +13,24 @@ const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'sim
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
 const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
-const sharedBrowserArtifacts = [path.join(repositoryRootPath, 'shared', 'js', 'bigInt.js'), path.join(repositoryRootPath, 'shared', 'js', 'constants.js'), path.join(repositoryRootPath, 'shared', 'js', 'deploymentAddresses.js'), path.join(repositoryRootPath, 'shared', 'js', 'protocolConfig.js')]
+const sharedBrowserArtifacts = [
+	path.join(repositoryRootPath, 'shared', 'js', 'bigInt.js'),
+	path.join(repositoryRootPath, 'shared', 'js', 'constants.js'),
+	path.join(repositoryRootPath, 'shared', 'js', 'deploymentAddresses.js'),
+	path.join(repositoryRootPath, 'shared', 'js', 'ethereum.js'),
+	path.join(repositoryRootPath, 'shared', 'js', 'protocolConfig.js'),
+]
 const developmentImportMapRegressionEntries: Record<string, string> = {
-	viem: './vendor/viem/index.js',
+	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
 	abitype: './vendor/abitype/exports/index.js',
+	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
+	'micro-eth-signer/advanced/abi.js': './vendor/micro-eth-signer/advanced/abi.js',
+	'micro-packed': './vendor/micro-packed/index.js',
+	'@scure/base': './vendor/@scure/base/index.js',
 	'@noble/hashes/sha2': './vendor/@noble/hashes/sha2.js',
 	'@noble/hashes/sha3': './vendor/@noble/hashes/sha3.js',
 	'@noble/curves/secp256k1': './vendor/@noble/curves/secp256k1.js',
+	'@noble/curves/utils.js': './vendor/@noble/curves/utils.js',
 	isows: './vendor/isows/native.js',
 	'ox/Ens': './vendor/ox/core/Ens.js',
 	'ox/erc6492': './vendor/ox/erc6492/index.js',
@@ -35,14 +46,10 @@ type NamedModuleReference = {
 	specifier: string
 }
 
-type ResolvedImport =
-	| {
-			filePath: string
-			kind: 'file'
-	  }
-	| {
-			kind: 'mapped-vendor'
-	  }
+type ResolvedImport = {
+	filePath: string
+	kind: 'file' | 'vendor'
+}
 
 function readDevelopmentImportMap(): Record<string, string> {
 	const uiIndexHtml = fs.readFileSync(uiIndexHtmlPath, 'utf8')
@@ -98,7 +105,8 @@ function resolveDevelopmentImport(fromPath: string, specifier: string, imports: 
 	if (mappedSpecifier === undefined) return undefined
 	if (mappedSpecifier.startsWith('./vendor/')) {
 		return {
-			kind: 'mapped-vendor',
+			filePath: path.resolve(uiRootPath, mappedSpecifier),
+			kind: 'vendor',
 		} satisfies ResolvedImport
 	}
 
@@ -243,7 +251,7 @@ function getExportedNames(filePath: string, imports: Record<string, string>, exp
 			const specifier = getModuleSpecifierText(statement)
 			if (specifier === undefined) continue
 			const resolvedPath = resolveDevelopmentImport(filePath, specifier, imports)
-			if (resolvedPath === undefined || resolvedPath.kind === 'mapped-vendor') continue
+			if (resolvedPath === undefined || !fs.existsSync(resolvedPath.filePath)) continue
 			for (const name of getExportedNames(resolvedPath.filePath, imports, exportCache)) {
 				if (name !== 'default') exportedNames.add(name)
 			}
@@ -287,13 +295,16 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(simulationBootstrapSource).toContain("from '@zoltar/shared/constants'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/protocolConfig'")
+	expect(contractsSource).toContain("from '@zoltar/shared/ethereum'")
 	expect(contractsSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+	expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
 		expect(fs.existsSync(artifactPath)).toBe(true)
@@ -335,7 +346,6 @@ test('development import map resolves all static imports reachable from the dev 
 				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports unmapped bare specifier ${specifier}`)
 				continue
 			}
-			if (resolvedPath.kind === 'mapped-vendor') continue
 			if (!fs.existsSync(resolvedPath.filePath)) {
 				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports ${specifier}, but ${path.relative(repositoryRootPath, resolvedPath.filePath)} does not exist`)
 				continue
@@ -349,7 +359,7 @@ test('development import map resolves all static imports reachable from the dev 
 				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports named bindings from unmapped bare specifier ${reference.specifier}`)
 				continue
 			}
-			if (resolvedPath.kind === 'mapped-vendor' || !fs.existsSync(resolvedPath.filePath)) continue
+			if (!fs.existsSync(resolvedPath.filePath)) continue
 			const exportedNames = getExportedNames(resolvedPath.filePath, imports, exportCache)
 			for (const name of reference.names) {
 				if (exportedNames.has(name)) continue

@@ -1,4 +1,4 @@
-import { concatHex, encodeAbiParameters, keccak256, parseAbiItem, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from 'viem'
+import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
 import { Zoltar_Zoltar, peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { sameAddress } from '../lib/address.js'
 import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '../types/contracts.js'
@@ -10,7 +10,15 @@ import { executeForkAuctionAction, readSecurityPoolUniverseId } from './security
 import { loadMarketDetails } from './zoltar.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
-const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
+const QUESTION_OUTCOME_ABI = [
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'getQuestionOutcome',
+		outputs: [{ name: 'outcome', type: 'uint8' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 const CONTRACT_PAGE_SIZE = 30n
 const NULLIFIER_DEPTH = 64
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')

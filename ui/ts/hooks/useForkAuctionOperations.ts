@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import {
 	createChildUniverseFromSecurityPool,
 	buildForkCarriedEscalationProofs,

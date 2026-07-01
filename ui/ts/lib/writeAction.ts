@@ -1,4 +1,4 @@
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
 import { assertActiveWallet, type ActiveWalletContext } from './walletGuards.js'
 import type { WriteOperationsParameters } from '../types/app.js'

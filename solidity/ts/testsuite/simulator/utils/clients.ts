@@ -1,8 +1,7 @@
-import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from 'viem'
-import type { Hash } from 'viem'
-import 'viem/window'
+import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/ethereum'
 import { addressString } from './bigint'
-import { mainnet } from 'viem/chains'
+import { mainnet } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 
 const DEFAULT_HTTP = 'https://ethereum.dark.florist'

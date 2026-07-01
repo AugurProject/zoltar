@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import {
 	ESCALATION_GAME_ACTIVATION_DELAY,
 	calculateEstimatedEscalationReturn,

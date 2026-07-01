@@ -1,7 +1,8 @@
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
-import type { Address, Hex } from 'viem'
+import type { Address, Hex } from '@zoltar/shared/ethereum'
 import { bytes32String } from '../bigint'
-import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 import { getInfraContractAddresses } from './deployPeripherals'
 
 type AuctionTickSummary = {
@@ -23,26 +24,32 @@ type AuctionBidView = {
 	refunded: boolean
 }
 
-function mapAuctionTickSummary(summary: AuctionTickSummary): AuctionTickSummary {
+function getTupleField(value: unknown, index: number, key: string, context: string) {
+	if (Array.isArray(value)) return value[index]
+	if (typeof value !== 'object' || value === null) throw new Error(`${context} must be a tuple`)
+	return Reflect.get(value, key)
+}
+
+function mapAuctionTickSummary(summary: unknown): AuctionTickSummary {
 	return {
-		tick: summary.tick,
-		price: summary.price,
-		currentTotalEth: summary.currentTotalEth,
-		submissionCount: summary.submissionCount,
-		active: summary.active,
+		tick: requireBigInt(getTupleField(summary, 0, 'tick', 'Auction tick summary'), 'Auction tick summary tick'),
+		price: requireBigInt(getTupleField(summary, 1, 'price', 'Auction tick summary'), 'Auction tick summary price'),
+		currentTotalEth: requireBigInt(getTupleField(summary, 2, 'currentTotalEth', 'Auction tick summary'), 'Auction tick summary current total ETH'),
+		submissionCount: requireBigInt(getTupleField(summary, 3, 'submissionCount', 'Auction tick summary'), 'Auction tick summary submission count'),
+		active: requireBoolean(getTupleField(summary, 4, 'active', 'Auction tick summary'), 'Auction tick summary active flag'),
 	}
 }
 
-function mapAuctionBidView(bid: AuctionBidView): AuctionBidView {
+function mapAuctionBidView(bid: unknown): AuctionBidView {
 	return {
-		tick: bid.tick,
-		bidIndex: bid.bidIndex,
-		bidder: bid.bidder,
-		ethAmount: bid.ethAmount,
-		cumulativeEth: bid.cumulativeEth,
-		activeCumulativeEthBeforeBid: bid.activeCumulativeEthBeforeBid,
-		claimed: bid.claimed,
-		refunded: bid.refunded,
+		tick: requireBigInt(getTupleField(bid, 0, 'tick', 'Auction bid view'), 'Auction bid tick'),
+		bidIndex: requireBigInt(getTupleField(bid, 1, 'bidIndex', 'Auction bid view'), 'Auction bid index'),
+		bidder: requireAddress(getTupleField(bid, 2, 'bidder', 'Auction bid view'), 'Auction bidder'),
+		ethAmount: requireBigInt(getTupleField(bid, 3, 'ethAmount', 'Auction bid view'), 'Auction bid ETH amount'),
+		cumulativeEth: requireBigInt(getTupleField(bid, 4, 'cumulativeEth', 'Auction bid view'), 'Auction bid cumulative ETH'),
+		activeCumulativeEthBeforeBid: requireBigInt(getTupleField(bid, 5, 'activeCumulativeEthBeforeBid', 'Auction bid view'), 'Auction bid active cumulative ETH before bid'),
+		claimed: requireBoolean(getTupleField(bid, 6, 'claimed', 'Auction bid view'), 'Auction bid claimed flag'),
+		refunded: requireBoolean(getTupleField(bid, 7, 'refunded', 'Auction bid view'), 'Auction bid refunded flag'),
 	}
 }
 
@@ -78,13 +85,21 @@ export const finalize = async (client: WriteClient, auctionAddress: Address) =>
 	)
 
 export const computeClearing = async (client: ReadClient, auctionAddress: Address) => {
-	const [hitCap, foundTick, accumulatedEth, ethAtClearingTick] = await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'computeClearing',
-		address: auctionAddress,
-		args: [],
-	})
-	return { hitCap, foundTick, accumulatedEth, ethAtClearingTick }
+	const result = requireArray(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'computeClearing',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction clearing result',
+	)
+	return {
+		hitCap: requireBoolean(result[0], 'Auction clearing hitCap'),
+		foundTick: requireBigInt(result[1], 'Auction clearing found tick'),
+		accumulatedEth: requireBigInt(result[2], 'Auction clearing accumulated ETH'),
+		ethAtClearingTick: requireBigInt(result[3], 'Auction clearing ETH at tick'),
+	}
 }
 
 export const refundLosingBids = async (client: WriteClient, auctionAddress: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
@@ -108,24 +123,33 @@ export const withdrawBids = async (client: WriteClient, auctionAddress: Address,
 	)
 
 export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) => {
-	const [totalFilledRep, totalEthRefund] = (
-		await client.simulateContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'withdrawBids',
-			address: auctionAddress,
-			args: [withdrawFor, tickIndex],
-		})
-	).result
-	return { totalFilledRep, totalEthRefund }
+	const result = requireArray(
+		(
+			await client.simulateContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'withdrawBids',
+				address: auctionAddress,
+				args: [withdrawFor, tickIndex],
+			})
+		).result,
+		'Auction withdraw simulation',
+	)
+	return {
+		totalFilledRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
+		totalEthRefund: requireBigInt(result[1], 'Auction withdraw simulation ETH refund'),
+	}
 }
 
-export const isFinalized = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'finalized',
-		address: auctionAddress,
-		args: [],
-	})
+export const isFinalized = async (client: ReadClient, auctionAddress: Address): Promise<boolean> =>
+	requireBoolean(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'finalized',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction finalized flag',
+	)
 
 export const deployUniformPriceDualCapBatchAuction = async (client: WriteClient, owner: Address, salt: Hex = bytes32String(0n)) =>
 	await writeContractAndWait(client, () =>
@@ -137,55 +161,73 @@ export const deployUniformPriceDualCapBatchAuction = async (client: WriteClient,
 		}),
 	)
 
-export const getClearingTick = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'clearingTick',
-		address: auctionAddress,
-		args: [],
-	})
+export const getClearingTick = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'clearingTick',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction clearing tick',
+	)
 
-export const getMinBidSize = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'minBidSize',
-		address: auctionAddress,
-		args: [],
-	})
+export const getMinBidSize = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'minBidSize',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction min bid size',
+	)
 
-export const getEthRaiseCap = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'ethRaiseCap',
-		address: auctionAddress,
-		args: [],
-	})
+export const getEthRaiseCap = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'ethRaiseCap',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction ETH raise cap',
+	)
 
-export const getEthRaised = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'ethRaised',
-		address: auctionAddress,
-		args: [],
-	})
+export const getEthRaised = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'ethRaised',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction ETH raised',
+	)
 
-export const getTotalRepPurchased = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'totalRepPurchased',
-		address: auctionAddress,
-		args: [],
-	})
+export const getTotalRepPurchased = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'totalRepPurchased',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction total REP purchased',
+	)
 
-export const getTickCount = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getTickCount',
-		address: auctionAddress,
-		args: [],
-	})
+export const getTickCount = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'getTickCount',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction tick count',
+	)
 
-export const getTickSummary = async (client: ReadClient, auctionAddress: Address, tick: bigint) =>
+export const getTickSummary = async (client: ReadClient, auctionAddress: Address, tick: bigint): Promise<AuctionTickSummary> =>
 	mapAuctionTickSummary(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
@@ -195,66 +237,79 @@ export const getTickSummary = async (client: ReadClient, auctionAddress: Address
 		}),
 	)
 
-export const getTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint) =>
-	(
+export const getTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint): Promise<AuctionTickSummary[]> =>
+	requireArray(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getTickPage',
 			address: auctionAddress,
 			args: [offset, limit],
-		})
-	).map(summary => mapAuctionTickSummary(summary))
+		}),
+		'Auction tick page',
+	).map((summary: unknown) => mapAuctionTickSummary(summary))
 
-export const activeTickCount = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'activeTickCount',
-		address: auctionAddress,
-		args: [],
-	})
+export const activeTickCount = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'activeTickCount',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Active auction tick count',
+	)
 
-export const getActiveTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint) =>
-	(
+export const getActiveTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint): Promise<AuctionTickSummary[]> =>
+	requireArray(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getActiveTickPage',
 			address: auctionAddress,
 			args: [offset, limit],
-		})
-	).map(summary => mapAuctionTickSummary(summary))
+		}),
+		'Active auction tick page',
+	).map((summary: unknown) => mapAuctionTickSummary(summary))
 
-export const getBidCountAtTick = async (client: ReadClient, auctionAddress: Address, tick: bigint) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getBidCountAtTick',
-		address: auctionAddress,
-		args: [tick],
-	})
+export const getBidCountAtTick = async (client: ReadClient, auctionAddress: Address, tick: bigint): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'getBidCountAtTick',
+			address: auctionAddress,
+			args: [tick],
+		}),
+		'Auction bid count at tick',
+	)
 
-export const getBidPageAtTick = async (client: ReadClient, auctionAddress: Address, tick: bigint, offset: bigint, limit: bigint) =>
-	(
+export const getBidPageAtTick = async (client: ReadClient, auctionAddress: Address, tick: bigint, offset: bigint, limit: bigint): Promise<AuctionBidView[]> =>
+	requireArray(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidPageAtTick',
 			address: auctionAddress,
 			args: [tick, offset, limit],
-		})
-	).map(summary => mapAuctionBidView(summary))
+		}),
+		'Auction bid page at tick',
+	).map((summary: unknown) => mapAuctionBidView(summary))
 
-export const getBidderBidCount = async (client: ReadClient, auctionAddress: Address, bidder: Address) =>
-	await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getBidderBidCount',
-		address: auctionAddress,
-		args: [bidder],
-	})
+export const getBidderBidCount = async (client: ReadClient, auctionAddress: Address, bidder: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'getBidderBidCount',
+			address: auctionAddress,
+			args: [bidder],
+		}),
+		'Auction bidder bid count',
+	)
 
-export const getBidderBidPage = async (client: ReadClient, auctionAddress: Address, bidder: Address, offset: bigint, limit: bigint) =>
-	(
+export const getBidderBidPage = async (client: ReadClient, auctionAddress: Address, bidder: Address, offset: bigint, limit: bigint): Promise<AuctionBidView[]> =>
+	requireArray(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidderBidPage',
 			address: auctionAddress,
 			args: [bidder, offset, limit],
-		})
-	).map(summary => mapAuctionBidView(summary))
+		}),
+		'Auction bidder bid page',
+	).map((summary: unknown) => mapAuctionBidView(summary))

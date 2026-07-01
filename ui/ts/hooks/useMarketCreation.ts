@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useFormState } from './useFormState.js'
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { createMarket as createMarketTransaction } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'

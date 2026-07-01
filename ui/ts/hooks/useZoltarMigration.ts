@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useCallback } from 'preact/hooks'
 import { useFormState } from './useFormState.js'
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'

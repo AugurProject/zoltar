@@ -1,4 +1,4 @@
-import { formatEther, formatUnits } from 'viem'
+import { formatEther, formatUnits } from '@zoltar/shared/ethereum'
 
 const MILLISECONDS_PER_SECOND = 1000
 const SECONDS_PER_MINUTE = 60n

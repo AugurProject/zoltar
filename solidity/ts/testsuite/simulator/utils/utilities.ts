@@ -1,10 +1,9 @@
-import 'viem/window'
-import { encodeAbiParameters, keccak256 } from 'viem'
+import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/shared/ethereum'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { ReadClient, WriteClient, writeContractAndWait } from './viem'
+import { ReadClient, WriteClient, writeContractAndWait } from './clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
-import { Address } from 'viem'
+import { Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '../../../abi/abis'
 import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
@@ -21,6 +20,29 @@ function hexToBytes(value: string) {
 		result[i] = Number.parseInt(value.slice(i * 2 + 2, i * 2 + 4), 16)
 	}
 	return result
+}
+
+export function requireArray(value: unknown, context: string): unknown[] {
+	if (!Array.isArray(value)) throw new Error(`${context} must be an array`)
+	return value
+}
+
+export function requireBigInt(value: unknown, context: string): bigint {
+	if (typeof value === 'bigint') return value
+	if (typeof value === 'number' && Number.isInteger(value)) return BigInt(value)
+	throw new Error(`${context} must be an integer`)
+}
+
+export function requireBoolean(value: unknown, context: string): boolean {
+	if (typeof value === 'boolean') return value
+	if (typeof value === 'bigint') return value !== 0n
+	if (typeof value === 'number') return value !== 0
+	throw new Error(`${context} must be a boolean`)
+}
+
+export function requireAddress(value: unknown, context: string): Address {
+	if (typeof value !== 'string') throw new Error(`${context} must be an address`)
+	return getAddress(value)
 }
 
 const mintETH = async (anvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
@@ -53,15 +75,18 @@ export const approveToken = async (client: WriteClient, tokenAddress: Address, s
 		}),
 	)
 
-export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>
-	await client.readContract({
-		abi: ABIS.mainnet.erc20,
-		functionName: 'balanceOf',
-		address: tokenAddress,
-		args: [ownerAddress],
-	})
+export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: ABIS.mainnet.erc20,
+			functionName: 'balanceOf',
+			address: tokenAddress,
+			args: [ownerAddress],
+		}),
+		'ERC20 balance',
+	)
 
-export const getETHBalance = async (client: ReadClient, address: Address) => await client.getBalance({ address })
+export const getETHBalance = async (client: ReadClient, address: Address): Promise<bigint> => requireBigInt(await client.getBalance({ address }), 'ETH balance')
 
 export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum) => {
 	// Impersonate test accounts so they can send transactions without private keys

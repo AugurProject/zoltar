@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { AddressValue } from './AddressValue.js'
 import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'

@@ -1,4 +1,4 @@
-import type { EIP1193Provider } from 'viem'
+import type { EIP1193Provider } from '@zoltar/shared/ethereum'
 
 type EthereumEventHandler = (...args: unknown[]) => void
 

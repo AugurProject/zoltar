@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from 'viem'
+import { getAddress } from '@zoltar/shared/ethereum'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadSecurityVaultDetails, loadZoltarUniverseSummary } from '../contracts.js'
 import { getDeploymentSteps } from '../contracts/deployment.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'

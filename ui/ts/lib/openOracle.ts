@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from 'viem'
+import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { assertNever } from './assert.js'

@@ -1,13 +1,13 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from 'viem'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)

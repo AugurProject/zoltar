@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, mock, test } from 'bun:test'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '../components/AppHeaderShell.js'
 import type { SimulationController } from '../simulation/controller.js'
 import type { OverviewPanelsProps, TabNavigationProps } from '../types/components.js'

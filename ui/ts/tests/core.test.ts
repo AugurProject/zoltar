@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from 'viem'
+import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getMulticall3Address } from '../contracts/deploymentHelpers.js'
 import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '../contracts/core.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'

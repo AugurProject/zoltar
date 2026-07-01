@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 
 export function useTruthAuctionPaginationState({ accountAddress, truthAuctionAddress }: { accountAddress: Address | undefined; truthAuctionAddress: Address | undefined }) {
 	const [loadedTickPageCount, setLoadedTickPageCount] = useState(1)

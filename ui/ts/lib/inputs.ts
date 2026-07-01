@@ -1,5 +1,5 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
-import { getAddress, isAddress, isHex, type Address, type Hex } from 'viem'
+import { getAddress, isAddress, isHex, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement } from './tokenApproval.js'
 
@@ -27,7 +27,7 @@ export function parseBytes32Input(value: string, label: string): Hex {
 	const trimmed = value.trim()
 	if (!isHex(trimmed, { strict: true }) || trimmed.length !== 66) throw new Error(`${label} must be a 32-byte hex value`)
 
-	return trimmed
+	return trimmed as Hex
 }
 
 export function parseReportIdInput(value: string) {
