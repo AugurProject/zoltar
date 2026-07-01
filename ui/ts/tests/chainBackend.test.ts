@@ -283,9 +283,20 @@ describe('injected backend read transport', () => {
 		const backend = createInjectedBackend()
 
 		expect(await backend.getAccounts()).toEqual([])
-		expect(await backend.requestAccounts()).toEqual([])
+		await expect(backend.requestAccounts()).rejects.toThrow('provider unavailable')
 		await expect(backend.createReadClient().getCode({ address: zeroAddress })).rejects.toThrow('provider unavailable')
 		expect(requestCalls).toEqual(['eth_accounts', 'eth_requestAccounts', 'eth_getCode'])
+	})
+
+	test('surfaces wallet-request rejections from the injected provider', async () => {
+		const providerRejection = Object.assign(new Error('wallet rejected'), { code: 4001 })
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_requestAccounts') throw providerRejection
+			return []
+		})
+
+		const backend = createInjectedBackend()
+		await expect(backend.requestAccounts()).rejects.toBe(providerRejection)
 	})
 
 	test('rejects chain RPC failures instead of defaulting to mainnet', async () => {

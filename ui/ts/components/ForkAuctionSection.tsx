@@ -28,11 +28,11 @@ import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
-import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionOverviewProgress, getTruthAuctionTickAtPrice, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
+import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
-import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
+import { tryParseTruthAuctionAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
@@ -492,8 +492,9 @@ export function ForkAuctionSection({
 	})
 	const selectedStageAheadMessage = getForkWorkflowStageAheadMessage(selectedStage, currentWorkflowStage)
 	const selectedAuctionLabel = selectedOutcomeLabel
-	const enteredBidPrice = tryParseTruthAuctionPriceInput(forkAuctionForm.submitBidPrice)
-	const enteredBidTick = enteredBidPrice === undefined ? undefined : getTruthAuctionTickAtPrice(enteredBidPrice)
+	const enteredBidPreview = getTruthAuctionBidPreview(forkAuctionForm.submitBidPrice)
+	const enteredBidPrice = enteredBidPreview?.price
+	const enteredBidTick = enteredBidPreview?.tick
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, enteredBidPrice)
 	const optimisticTruthAuctionStartedAt =
 		forkAuctionResult?.action === 'startTruthAuction' && auctionSecurityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, auctionSecurityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? selectedAuctionContext?.currentTime ?? 1n) : undefined
@@ -728,12 +729,7 @@ export function ForkAuctionSection({
 		parentCollateralAmount: forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount,
 		auctionableRepAtFork: forkAuctionDetails?.auctionableRepAtFork,
 	})
-	const bidPriceValidationMessage = (() => {
-		if (forkAuctionForm.submitBidPrice.trim() === '') return 'Enter a bid price greater than zero.'
-		if (enteredBidPrice === undefined || enteredBidTick === undefined) return 'Enter a valid bid price.'
-		if (enteredBidPrice <= 0n) return 'Enter a bid price greater than zero.'
-		return undefined
-	})()
+	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.submitBidPrice)
 	const startTruthAuctionAvailabilityMessage = (() => {
 		if (hasStartedTruthAuction) return 'Truth auction already started.'
 		if (isStartTruthAuctionInProgress) return 'Starting truth auction...'
