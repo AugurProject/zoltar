@@ -1,10 +1,32 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type Hex } from 'viem'
+import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 
 type IntegerLike = bigint | number
 
 type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
+export type StagedOperationTuple = {
+	amount: bigint
+	initiatorVault: Address
+	operation: IntegerLike
+	targetVault: Address
+}
+export type SecurityPoolDeploymentTuple = {
+	parent: Address
+	priceOracleManagerAndOperatorQueuer: Address
+	questionId: bigint
+	securityMultiplier: bigint
+	securityPool: Address
+	truthAuction: Address
+	universeId: bigint
+}
+export type DeployedChildUniverseTuple = {
+	forkQuestionId: bigint
+	forkTime: bigint
+	forkingOutcomeIndex: bigint
+	parentUniverseId: bigint
+	reputationToken: Address
+}
 type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, IntegerLike, bigint, boolean]
 type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, IntegerLike, Address, boolean, IntegerLike, IntegerLike, IntegerLike, IntegerLike]
 type OpenOracleReportStatusTuple = readonly [bigint, bigint, Address, IntegerLike, IntegerLike, Address, IntegerLike]
@@ -56,6 +78,42 @@ function isUniverseTuple(value: unknown): value is UniverseTuple {
 
 export function requireUniverseTupleArray(value: unknown, context: string): UniverseTuple[] {
 	if (Array.isArray(value) && value.every(isUniverseTuple)) return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
+function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
+	return isObjectRecord(value) && typeof value['amount'] === 'bigint' && typeof value['initiatorVault'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
+}
+
+export function requireStagedOperationTupleArray(value: unknown, context: string): StagedOperationTuple[] {
+	if (Array.isArray(value) && value.every(isStagedOperationTuple)) return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
+function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDeploymentTuple {
+	return (
+		isObjectRecord(value) &&
+		typeof value['parent'] === 'string' &&
+		typeof value['priceOracleManagerAndOperatorQueuer'] === 'string' &&
+		typeof value['questionId'] === 'bigint' &&
+		typeof value['securityMultiplier'] === 'bigint' &&
+		typeof value['securityPool'] === 'string' &&
+		typeof value['truthAuction'] === 'string' &&
+		typeof value['universeId'] === 'bigint'
+	)
+}
+
+export function requireSecurityPoolDeploymentTupleArray(value: unknown, context: string): SecurityPoolDeploymentTuple[] {
+	if (Array.isArray(value) && value.every(isSecurityPoolDeploymentTuple)) return value
+	throw new Error(`Unexpected ${context} response`)
+}
+
+function isDeployedChildUniverseTuple(value: unknown): value is DeployedChildUniverseTuple {
+	return isObjectRecord(value) && typeof value['forkQuestionId'] === 'bigint' && typeof value['forkTime'] === 'bigint' && typeof value['forkingOutcomeIndex'] === 'bigint' && typeof value['parentUniverseId'] === 'bigint' && typeof value['reputationToken'] === 'string'
+}
+
+export function requireDeployedChildUniverseTupleArray(value: unknown, context: string): DeployedChildUniverseTuple[] {
+	if (Array.isArray(value) && value.every(isDeployedChildUniverseTuple)) return value
 	throw new Error(`Unexpected ${context} response`)
 }
 

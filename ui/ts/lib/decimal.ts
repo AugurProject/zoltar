@@ -1,4 +1,4 @@
-import { parseUnits } from 'viem'
+import { parseUnits } from '@zoltar/shared/ethereum'
 
 const DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
 

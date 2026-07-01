@@ -3,6 +3,10 @@
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
+		"baseUrl": ".",
+		"paths": {
+			"@zoltar/shared/*": ["../shared/ts/*"]
+		},
 		"rootDir": "ts",
 		"outDir": "js",
 		"sourceMap": false,

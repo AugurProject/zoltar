@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
-import { getAddress, zeroAddress, zeroHash } from 'viem'
+import { getAddress, zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { SecurityPoolSection } from '../components/SecurityPoolSection.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import type { AccountState } from '../types/app.js'

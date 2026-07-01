@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { ComponentChildren } from 'preact'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from '../components/TruthAuctionBidsSection.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { fireEvent, within } from './testUtils/queries.js'

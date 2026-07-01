@@ -3,12 +3,12 @@ import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from '../testsuite/simulator/utils/assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { decodeEventLog, encodeDeployData, hexToBytes } from 'viem'
+import { decodeEventLog, encodeDeployData, hexToBytes } from '@zoltar/shared/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -540,7 +540,7 @@ describe('Contract Test Suite', () => {
 		assert.deepStrictEqual(firstPage[0], [0n, 1n], 'first page should include the first two child outcomes')
 		assert.deepStrictEqual(firstPage[1], [getChildUniverseId(genesisUniverse, 0), getChildUniverseId(genesisUniverse, 1)], 'first page child ids should match deployed children')
 		assert.deepStrictEqual(
-			firstPage[2].map(child => child.parentUniverseId),
+			firstPage[2].map((child: { parentUniverseId: bigint }) => child.parentUniverseId),
 			[genesisUniverse, genesisUniverse],
 			'first page child universes should point back to genesis',
 		)
@@ -552,7 +552,7 @@ describe('Contract Test Suite', () => {
 		assert.deepStrictEqual(maxCountPage[0], [1n, 3n], 'max-count paging should clamp to the remaining child outcomes')
 		assert.deepStrictEqual(maxCountPage[1], [getChildUniverseId(genesisUniverse, 1), getChildUniverseId(genesisUniverse, 3)], 'max-count paging should return matching child ids')
 		assert.deepStrictEqual(
-			maxCountPage[2].map(child => child.parentUniverseId),
+			maxCountPage[2].map((child: { parentUniverseId: bigint }) => child.parentUniverseId),
 			[genesisUniverse, genesisUniverse],
 			'max-count child universes should point back to genesis',
 		)

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, test } from 'bun:test'
 import { h } from 'preact'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ZoltarMigrationSection } from '../components/ZoltarMigrationSection.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'

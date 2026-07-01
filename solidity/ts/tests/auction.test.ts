@@ -1,10 +1,10 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { encodeAbiParameters, keccak256, type Address } from 'viem'
+import { encodeAbiParameters, keccak256, type Address } from '@zoltar/shared/ethereum'
 import {
 	computeClearing,
 	deployUniformPriceDualCapBatchAuction,
@@ -993,8 +993,8 @@ describe('Auction', () => {
 			await refundLosingBids(client, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
 
 			const tickPage = await getTickPage(client, auctionAddress, 0n, 100n)
-			const refundedSummary = tickPage.find(summary => summary.tick === losingTick)
-			const activeSummary = tickPage.find(summary => summary.tick === winningTick)
+			const refundedSummary = tickPage.find((summary: { tick: bigint }) => summary.tick === losingTick)
+			const activeSummary = tickPage.find((summary: { tick: bigint }) => summary.tick === winningTick)
 
 			strictEqualTypeSafe(refundedSummary?.currentTotalEth, 0n, 'refunded-away tick should have zero active ETH')
 			strictEqualTypeSafe(refundedSummary?.submissionCount, 1n, 'refunded-away tick should keep historical submission count')
@@ -1018,7 +1018,7 @@ describe('Auction', () => {
 
 			strictEqualTypeSafe(await activeTickCount(client, auctionAddress), 2n, 'active tick count mismatch after refund')
 			assert.deepStrictEqual(
-				(await getActiveTickPage(client, auctionAddress, 0n, 100n)).map(summary => summary.tick),
+				(await getActiveTickPage(client, auctionAddress, 0n, 100n)).map((summary: { tick: bigint }) => summary.tick),
 				[highTick, middleTick],
 			)
 		})
@@ -1123,7 +1123,7 @@ describe('Auction', () => {
 			const aliceBidPage = await getBidderBidPage(client, auctionAddress, alice.account.address, 0n, 100n)
 			assert.strictEqual(aliceBidPage.length, 3, 'alice bid page length mismatch')
 			assert.deepStrictEqual(
-				aliceBidPage.map(bid => ({ tick: bid.tick, bidIndex: bid.bidIndex })),
+				aliceBidPage.map((bid: { tick: bigint; bidIndex: bigint }) => ({ tick: bid.tick, bidIndex: bid.bidIndex })),
 				[
 					{ tick: firstTick, bidIndex: 0n },
 					{ tick: secondTick, bidIndex: 0n },

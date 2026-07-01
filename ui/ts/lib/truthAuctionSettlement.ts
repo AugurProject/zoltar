@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '../types/contracts.js'
 import { sameAddress } from './address.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, type TruthAuctionBidDisposition } from './truthAuctionBook.js'

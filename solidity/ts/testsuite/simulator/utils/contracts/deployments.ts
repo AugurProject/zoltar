@@ -1,7 +1,7 @@
 import { applyLibraries, getInfraContractAddresses } from './deployPeripherals'
 import { addressString, bytes32String } from '../bigint'
 import { getCallerScopedSalt } from '@zoltar/shared/addressDerivation'
-import { Address, encodeDeployData, getCreate2Address } from 'viem'
+import { Address, encodeDeployData, getCreate2Address } from '@zoltar/shared/ethereum'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../../../types/contractArtifact'
 import { TEST_ADDRESSES } from '../constants'
 

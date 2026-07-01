@@ -1,12 +1,12 @@
 import { beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
 import assert from '../../testsuite/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, keccak256 } from 'viem'
-import type { Abi, Address, Hash } from 'viem'
+import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
+import type { Abi, Address, Hash } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testsuite/simulator/utils/utilities'
 import { addressString, rpow } from '../../testsuite/simulator/utils/bigint'
@@ -103,7 +103,7 @@ const getMigrationProxyAddressAbi = [
 		stateMutability: 'view',
 		type: 'function',
 	},
-] satisfies Abi
+] as const satisfies Abi
 
 const migrateVaultWithUnresolvedEscalationReturnAbi = [
 	{
@@ -117,7 +117,7 @@ const migrateVaultWithUnresolvedEscalationReturnAbi = [
 		stateMutability: 'nonpayable',
 		type: 'function',
 	},
-] satisfies Abi
+] as const satisfies Abi
 
 function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`

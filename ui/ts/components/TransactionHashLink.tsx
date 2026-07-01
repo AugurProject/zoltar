@@ -1,4 +1,4 @@
-import type { Hash } from 'viem'
+import type { Hash } from '@zoltar/shared/ethereum'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { buildTransactionExplorerUrl } from '../lib/networkProfile.js'
 

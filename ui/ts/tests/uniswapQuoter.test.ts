@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createPublicClient, getAddress, http, zeroAddress, type Address } from 'viem'
+import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import {
 	DEFAULT_POOL_CONFIG,
 	ETH_ADDRESS,
@@ -353,7 +353,12 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 			return { result: [amountOut, 0n, 0, 0n], request: {} as never } as never
 		}
 		const readContract: ReadClient['readContract'] = async args => {
-			const [tokenA, tokenB, fee] = args.args as [Address, Address, number]
+			const [tokenA, tokenB, fee] = (() => {
+				if (!Array.isArray(args.args) || args.args.length !== 3) throw new Error('Unexpected getPool request')
+				const [currentTokenA, currentTokenB, currentFee] = args.args
+				if (typeof currentTokenA !== 'string' || typeof currentTokenB !== 'string' || typeof currentFee !== 'number') throw new Error('Unexpected getPool request')
+				return [getAddress(currentTokenA), getAddress(currentTokenB), currentFee] as const
+			})()
 			factoryCalls.push({ fee, tokenA, tokenB })
 			return poolAddress as never
 		}

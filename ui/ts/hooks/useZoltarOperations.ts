@@ -1,4 +1,4 @@
-import type { Address, Hash } from 'viem'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { useCallback, useMemo } from 'preact/hooks'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'

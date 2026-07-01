@@ -8,6 +8,8 @@ const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(scriptDirectoryPath, '..')
 const sharedPackagePath = path.join(repositoryRootPath, 'shared')
 const installedSharedPackagePath = path.join(process.cwd(), 'node_modules', '@zoltar', 'shared')
+const installedSharedNodeModulesPath = path.join(installedSharedPackagePath, 'node_modules')
+const sourceSharedNodeModulesPath = path.join(sharedPackagePath, 'node_modules')
 const mode = process.argv.includes('--refresh') ? 'refresh' : 'check'
 
 const readPackageJson = async packagePath => JSON.parse(await fs.readFile(packagePath, 'utf8'))
@@ -81,6 +83,20 @@ const copyCurrentSharedPackageInstall = async () => {
 	}
 }
 
+const linkSharedPackageNodeModules = async () => {
+	if (path.resolve(installedSharedPackagePath) === path.resolve(sharedPackagePath)) return
+	try {
+		const sourceNodeModulesStat = await fs.stat(sourceSharedNodeModulesPath)
+		if (!sourceNodeModulesStat.isDirectory()) return
+	} catch (error) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
+		throw error
+	}
+	await fs.rm(installedSharedNodeModulesPath, { force: true, recursive: true })
+	const relativeNodeModulesPath = path.relative(installedSharedPackagePath, sourceSharedNodeModulesPath)
+	await fs.symlink(relativeNodeModulesPath, installedSharedNodeModulesPath, 'dir')
+}
+
 const refreshSharedPackageInstall = async () => {
 	console.warn(`Refreshing stale @zoltar/shared install in ${process.cwd()}`)
 	const result = spawnSync('bun', ['install', '--frozen-lockfile'], {
@@ -89,6 +105,7 @@ const refreshSharedPackageInstall = async () => {
 	})
 	if (result.status !== 0) process.exit(result.status ?? 1)
 	await copyCurrentSharedPackageInstall()
+	await linkSharedPackageNodeModules()
 }
 
 if (!(await manifestsMatch())) {

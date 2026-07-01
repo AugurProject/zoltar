@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import {
 	getCurrentForkWorkflowSelectionStage,
 	getCurrentSelectedPoolForkAuctionDetails,

@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { waitFor } from './testUtils/queries'
-import { zeroAddress, type Address, type Hash } from 'viem'
+import { zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'

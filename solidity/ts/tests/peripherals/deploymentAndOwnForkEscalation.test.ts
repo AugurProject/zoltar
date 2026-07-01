@@ -1,7 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
-import type { Abi, Address } from 'viem'
-import type { WriteClient } from '../../testsuite/simulator/utils/viem'
+import type { Abi, Address } from '@zoltar/shared/ethereum'
+import type { WriteClient } from '../../testsuite/simulator/utils/clients'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 
 describe('Peripherals: deployment and own-fork escalation', () => {
@@ -598,7 +598,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 				stateMutability: 'view',
 				type: 'function',
 			},
-		] satisfies Abi
+		] as const satisfies Abi
 
 		await client.writeContract({
 			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,

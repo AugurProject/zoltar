@@ -26,12 +26,6 @@ globalThis.global ??= globalThis
 function createBrowserVendorAliasPlugin() {
 	const aliasEntries: Array<[RegExp, string]> = [
 		[/^pino$/, path.join(MODULES_ROOT_PATH, 'pino', 'browser.js')],
-		[/^viem$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'index.js')],
-		[/^viem\/chains$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'chains', 'index.js')],
-		[/^viem\/window$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'window', 'index.js')],
-		[/^viem\/actions$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'actions', 'index.js')],
-		[/^viem\/accounts$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'accounts', 'index.js')],
-		[/^viem\/utils$/, path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'utils', 'index.js')],
 		[/^tevm$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
 		[/^tevm\/common$/, path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
 		[/^@tevm\/memory-client$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],

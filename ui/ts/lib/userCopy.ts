@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { assertNever } from './assert.js'
 import { getWrongNetworkMessage } from './network.js'
 import type { LoadableValueState } from './loadState.js'

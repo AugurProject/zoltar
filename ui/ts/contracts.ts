@@ -1,4 +1,4 @@
-import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { decodeEventLog, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from './lib/assert.js'
@@ -52,6 +52,7 @@ import {
 	hasTimestamp,
 	hasTimestampAndNumber,
 	isBigintTriple,
+	requireStagedOperationTupleArray,
 	requireOpenOracleExtraDataTuple,
 	requireOpenOracleExtraDataTupleArray,
 	requireOpenOracleReportMetaTuple,
@@ -74,7 +75,15 @@ export { readOptionalMulticall } from './contracts/core.js'
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
-const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
+const QUESTION_OUTCOME_ABI = [
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'getQuestionOutcome',
+		outputs: [{ name: 'outcome', type: 'uint8' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 const UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT = 128
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
@@ -304,14 +313,18 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	let token2: Address | undefined
 	if (activeStagedOperationCount > 0n) {
 		const previewCount = activeStagedOperationCount < ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT ? activeStagedOperationCount : ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT
-		const [operationIds, activeOperations] = await client.readContract({
+		const activeStagedOperationsResponse = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'getActiveStagedOperations',
 			address: managerAddress,
 			args: [0n, previewCount],
 		})
+		if (!Array.isArray(activeStagedOperationsResponse) || activeStagedOperationsResponse.length !== 2) throw new Error('Unexpected active staged operations response')
+		const [operationIdsRaw, activeOperationsRaw] = activeStagedOperationsResponse
+		const operationIds = requireBigintArray(operationIdsRaw, 'active staged operation ids')
+		const activeOperations = requireStagedOperationTupleArray(activeOperationsRaw, 'active staged operations')
 		stagedOperations = operationIds
-			.map((operationId, index) => {
+			.map((operationId: bigint, index: number) => {
 				const stagedOperation = activeOperations[index]
 				if (stagedOperation === undefined) throw new Error('Missing staged operation details')
 				return {

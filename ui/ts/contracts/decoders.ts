@@ -1,4 +1,4 @@
-import { isAddress, type Address } from 'viem'
+import { getAddress, isAddress, type Address } from '@zoltar/shared/ethereum'
 
 export function requireArrayValue(value: unknown, context: string): readonly unknown[] {
 	if (Array.isArray(value)) return value
@@ -28,7 +28,7 @@ export function requireBooleanValue(value: unknown, context: string) {
 }
 
 export function requireAddressValue(value: unknown, context: string): Address {
-	if (typeof value === 'string' && isAddress(value)) return value
+	if (typeof value === 'string' && isAddress(value)) return getAddress(value)
 	throw new Error(`Unexpected ${context} response`)
 }
 

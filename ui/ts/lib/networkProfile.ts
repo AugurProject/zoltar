@@ -1,5 +1,5 @@
-import { defineChain, type Address, type Hash } from 'viem'
-import { mainnet, type Chain } from 'viem/chains'
+import { defineChain, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { mainnet, type Chain } from '@zoltar/shared/ethereum'
 
 export type NetworkProfile = {
 	chain: Chain

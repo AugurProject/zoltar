@@ -1,6 +1,6 @@
-import { encodeAbiParameters, keccak256 } from 'viem'
+import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 
@@ -25,7 +25,7 @@ export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) =
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 		})
-		const newLabels = returnedLabels.filter(label => label !== '')
+		const newLabels = returnedLabels.filter((label: string) => label !== '')
 		pages.push(...newLabels)
 		if (BigInt(returnedLabels.length) !== CONTRACT_PAGE_SIZE || BigInt(newLabels.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE

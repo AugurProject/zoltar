@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, keccak256 } from 'viem'
+import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import { sortStringArrayByKeccak } from '../lib/sortStringArrayByKeccak.js'
 
 void describe('sortStringArrayByKeccak', () => {

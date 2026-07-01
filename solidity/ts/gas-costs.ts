@@ -1,5 +1,5 @@
-import { zeroAddress } from 'viem'
-import type { Hash } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/ethereum'
 import { Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testsuite/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
@@ -14,7 +14,7 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './t
 import { addressString } from './testsuite/simulator/utils/bigint'
 import { approveToken, getChildUniverseId, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from './testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from './testsuite/simulator/types/types'
-import { createWriteClient, WriteClient, writeContractAndWait } from './testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient, writeContractAndWait } from './testsuite/simulator/utils/clients'
 
 const genesisUniverse = 0n
 const securityMultiplier = 2n
@@ -23,6 +23,13 @@ const securityBondAllowance = repDepositAmount / 4n
 const openInterestAmount = 100n * 10n ** 18n
 const reportBond = 1n * 10n ** 18n
 const questionOutcomes = ['Yes', 'No']
+
+const isHash = (value: string): value is Hash => value.startsWith('0x')
+
+const requireHash = (value: unknown, context: string): Hash => {
+	if (typeof value !== 'string' || !isHash(value)) throw new Error(`${context} must be a transaction hash`)
+	return value
+}
 
 type QuestionData = {
 	title: string
@@ -90,7 +97,9 @@ const measureActionGas = async (client: WriteClient, action: () => Promise<void>
 	for (let blockNumber = blockBefore + 1n; blockNumber <= blockAfter; blockNumber++) {
 		const block = await client.getBlock({ blockNumber, includeTransactions: true })
 		for (const transaction of block.transactions) {
-			const receipt = await client.getTransactionReceipt({ hash: transaction.hash })
+			if (typeof transaction !== 'object' || transaction === null) throw new Error('Expected block transactions to be expanded objects')
+			const transactionHash = requireHash(Reflect.get(transaction, 'hash'), 'Expanded block transaction hash')
+			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 			totalGas += receipt.gasUsed
 		}
 	}

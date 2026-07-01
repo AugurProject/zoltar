@@ -1,4 +1,4 @@
-import { getCreate2Address, getCreateAddress, type Address, type Hex } from 'viem'
+import { getCreate2Address, getCreateAddress, type Address, type Hex } from './ethereum.js'
 
 type LibraryReplacement = {
 	address: Address

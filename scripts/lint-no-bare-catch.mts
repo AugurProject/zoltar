@@ -18,6 +18,7 @@ const ignoredFiles = new Set(['solidity/ts/testsuite/simulator/types/wire-types.
 
 function shouldIgnore(relativePath: string): boolean {
 	if (ignoredFiles.has(relativePath)) return true
+	if (relativePath.split('/').includes('node_modules')) return true
 	for (const prefix of ignoredPathPrefixes) {
 		if (relativePath === prefix || relativePath.startsWith(`${prefix}/`)) return true
 	}

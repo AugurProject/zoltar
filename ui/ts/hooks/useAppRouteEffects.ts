@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { normalizeAddress } from '../lib/address.js'
 
 type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zoltar'

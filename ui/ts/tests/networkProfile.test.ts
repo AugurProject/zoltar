@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from 'viem'
+import { getAddress } from '@zoltar/shared/ethereum'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, buildTransactionExplorerUrl, createSimulationProfile } from '../lib/networkProfile.js'
 
 describe('network profile helpers', () => {

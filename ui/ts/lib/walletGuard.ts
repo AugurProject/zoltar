@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { getActiveBackend } from './activeEnvironment.js'
 
 /**

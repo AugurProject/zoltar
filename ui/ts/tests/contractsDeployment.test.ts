@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { type Address, type Hash, type TransactionReceipt, getAddress } from 'viem'
+import { type Address, type Hash, type TransactionReceipt, getAddress } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../contracts.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
