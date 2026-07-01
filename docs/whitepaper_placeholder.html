@@ -1531,8 +1531,8 @@
 						<li>Question creators register questions in Zoltar question data, creating the objects around which Placeholder markets can be built.</li>
 						<li>REP vault operators deposit REP into a security pool and provide oracle security capacity. Their deposits back open interest and earn fees extracted from collateral over time.</li>
 						<li>Users mint complete sets with ETH and hold outcome shares.</li>
-						<li>Escalation-game participants stake behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends to settle locally or force a non-decision.</li>
-						<li>Fork migrators move REP, shares, and vault state from a parent universe into child universes after a Zoltar fork.</li>
+						<li>REP vault operators can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends to settle locally or force a non-decision.</li>
+						<li>Anyone can create child pools, while vault owners and share holders move vault state, eligible escalation positions, and shares across child universes after a Zoltar fork; some settlement helpers are permissionless.</li>
 						<li>Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral.</li>
 						<li>Liquidators move undercollateralized bond allowance away from unsafe vaults.</li>
 						<li>Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for bond accounting, not a truth outcome for the question itself.</li>
@@ -2196,10 +2196,11 @@
 						<a class="anchor-link" href="#escalation" aria-label="Link to Escalation">#</a>
 					</div>
 						<p class="lede">
-							Placeholder tries local resolution before asking Zoltar to fork. Participants
-						stake behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>. The
-						required attrition cost rises from the starting bond to the non-decision
-							threshold over seven weeks after a three-day activation delay.
+								Placeholder tries local resolution before asking Zoltar to fork. Vault
+							operators move REP out of their security-pool position and behind
+							<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. The
+							required attrition cost rises from the starting bond to the non-decision
+								threshold over seven weeks after a three-day activation delay.
 						</p>
 						<div class="summary-grid">
 							<div class="summary-card">
@@ -2261,13 +2262,16 @@
 							child pool is not still waiting for continuation processing.
 						</p>
 						<p>
-							The security pool wrapper first previews the accepted amount, then removes the
-							corresponding vault REP ownership with round-up accounting, checks the vault and
-							pool remain solvent, enforces the minimum remaining REP rule, transfers REP into
-							the escalation game, and records the deposit. Inside the game, the proposed amount
-							must be at least <code>startBond</code>. The recorded amount must be positive and
-							either at least <code>startBond</code> or exactly fill the selected outcome to
-							<code>nonDecisionThreshold</code>.
+								The security pool wrapper first previews the accepted amount, then removes the
+								corresponding vault REP ownership with round-up accounting, checks the vault and
+								pool remain solvent, enforces the minimum remaining REP rule, and transfers REP
+								into the escalation game from the caller's existing vault position rather than
+								from free-floating wallet REP. If the pool has any active security-bond
+								allowance, the call also requires a fresh REP/ETH oracle price before the
+								deposit can proceed. Inside the game, the proposed amount must be at least
+								<code>startBond</code>. The recorded amount must be positive and either at least
+								<code>startBond</code> or exactly fill the selected outcome to
+								<code>nonDecisionThreshold</code>.
 						</p>
 							<p>
 								The game rejects invalid targets, full outcomes, and post-non-decision
@@ -2560,26 +2564,37 @@
 									</tbody>
 								</table>
 							</div>
-							<p>
-								Local withdrawals adjust the vault's parent-pool ownership by the gain or loss
-								relative to the original locked REP. Own-fork claims instead convert source REP
-								into child-universe REP and pay it to the vault owner’s wallet, rather than
-								minting child-pool ownership.
-							</p>
-							<p>
-								Continuation withdrawals use Merkle Mountain Range proofs against the inherited
-								carry snapshot. Each accepted proof advances the nullifier root, so a carried
-								parent deposit cannot be replayed in the child.
-							</p>
+								<p>
+									Local withdrawals adjust the vault's parent-pool ownership by the gain or loss
+									relative to the original locked REP. Own-fork claims instead convert source REP
+									into child-universe REP and pay it to the vault owner’s wallet, rather than
+									minting child-pool ownership. In the own-fork path, those claims must still be
+									submitted before the parent migration window closes.
+								</p>
+								<p>
+									Caller permissions are intentionally mixed. <code>withdrawFromEscalationGame</code>
+									and <code>withdrawForkedEscalationDeposits</code> are liveness helpers that any
+									caller can submit so long as every proof or deposit index in the batch belongs to
+									the same beneficiary vault. By contrast,
+									<code>claimForkedEscalationDeposits</code> and
+									<code>migrateVaultWithUnresolvedEscalation</code> require
+									<code>msg.sender</code> to be the affected vault.
+								</p>
+								<p>
+									Continuation withdrawals use Merkle Mountain Range proofs against the inherited
+									carry snapshot. Each accepted proof advances the nullifier root, so a carried
+									parent deposit cannot be replayed in the child.
+								</p>
 							<p>
 								If an unrelated external Zoltar fork interrupts the local escalation game before
-								it resolves, unresolved escalation deposits stop being withdrawable on the parent
-								pool. The vault owner must migrate all remaining unresolved parent locks for the
-								chosen child universe through repeated
-								<code>migrateVaultWithUnresolvedEscalation</code> calls until the function reports
-								no more work. If the vault does not migrate in time, the unresolved position
-								remains locked in the parent escalation game and is no longer withdrawable from
-								the parent pool.
+									it resolves, unresolved escalation deposits stop being withdrawable on the parent
+									pool. The vault owner must migrate all remaining unresolved parent locks for the
+									chosen child universe through repeated
+									<code>migrateVaultWithUnresolvedEscalation</code> calls until the function reports
+									no more work. Each call pages only a bounded chunk of unresolved export data, so
+									large carry sets can require multiple transactions. If the vault does not migrate
+									in time, the unresolved position remains locked in the parent escalation game and
+									is no longer withdrawable from the parent pool.
 							</p>
 				</section>
 
@@ -2588,11 +2603,17 @@
 						<h2>8. Forks and Migration</h2>
 						<a class="anchor-link" href="#migration" aria-label="Link to Forks and Migration">#</a>
 					</div>
-						<p>
-							Fork handling spans both layers. Zoltar creates child universes and handles REP
-							splitting. Placeholder separately moves vault state, eligible escalation-game
-							positions, proportional collateral, and share positions into child pools.
-						</p>
+							<p>
+								Fork handling spans both layers. Zoltar creates child universes and handles REP
+								splitting. Placeholder separately moves vault state, eligible escalation-game
+								positions, proportional collateral, and share positions into child pools.
+							</p>
+							<p>
+								The child-pool selector comes from the universe’s fork question, not from
+								Placeholder’s binary market shape. A binary Placeholder pool can therefore spawn
+								child pools keyed to scalar encodings or multi-way categorical outcomes when some
+								other Zoltar question caused the universe fork.
+							</p>
 						<div class="summary-grid">
 							<div class="summary-card">
 								<span>Core idea</span>
@@ -2683,14 +2704,21 @@
 						<p class="diagram-caption"><span class="figure-label">Fork State Machine</span>The parent stops mutating once forked; child pools do migration, optional auction repair, and then return to operational mode.</p>
 					</figure>
 					<ul>
-						<li>The parent pool enters fork mode.</li>
-						<li>Child security pools are created in child universes.</li>
-						<li>Vaults call <code>migrateVault</code> to move pool ownership and bond allowance when they do not have unresolved external-fork escalation locks.</li>
-						<li>Vaults with unresolved external-fork escalation locks call <code>migrateVaultWithUnresolvedEscalation</code>.</li>
-						<li>Winning own-fork escalation deposits are claimed through <code>claimForkedEscalationDeposits</code>.</li>
-						<li>Parent collateral is partially transferred into child pools in proportion to migrated REP.</li>
-						<li>Shares migrate independently through <code>ShareToken.migrate</code>.</li>
-					</ul>
+							<li>The parent pool enters fork mode.</li>
+							<li>Anyone can call <code>createChildUniverse</code> to deploy a child pool for a valid fork outcome.</li>
+							<li>Vault owners call <code>migrateVault</code> to move their own pool ownership and bond allowance when they do not have unresolved external-fork escalation locks.</li>
+							<li>Vault owners with unresolved external-fork escalation locks call <code>migrateVaultWithUnresolvedEscalation</code>, which can require multiple calls before it returns that migration is complete.</li>
+							<li>Vault owners claim winning own-fork escalation deposits through <code>claimForkedEscalationDeposits</code>; the own-fork path is open only during the parent migration window.</li>
+							<li>Parent collateral is partially transferred into child pools in proportion to migrated REP.</li>
+							<li>Shares migrate independently through <code>ShareToken.migrate</code>.</li>
+						</ul>
+						<p>
+							The migration API is not a single generic “fork migrator” role. Child creation is
+							permissionless, <code>migrateVault</code> always acts on the caller’s own vault,
+							and the unresolved-escalation and own-fork-claim entry points require the affected
+							vault as caller. This matters for off-chain automation because a keeper can help
+							with liveness, but it cannot migrate or claim another vault’s locked REP.
+						</p>
 					<figure class="diagram" id="fig-placeholder-migration-flow">
 						<svg viewBox="0 0 860 330" role="img" aria-labelledby="migration-title migration-desc">
 							<title id="migration-title">Fork migration responsibilities</title>
@@ -3001,11 +3029,11 @@
 						through the <code>awaitingForkContinuation</code> guard.
 					</p>
 					<ol>
-						<li>The parent pool forks and snapshots unresolved escalation state.</li>
-						<li>Each selected child pool is created in a child universe and marks itself as awaiting fork continuation.</li>
-						<li>Each child continuation escalation game is deployed immediately, but remains paused.</li>
-						<li>Affected vaults migrate unresolved parent locks through <code>migrateVaultWithUnresolvedEscalation</code>; large carry sets can require multiple calls.</li>
-						<li>After the migration window and any required truth auction, the child pool becomes operational, clears the wait marker, and resumes the paused continuation game.</li>
+							<li>The parent pool forks and snapshots unresolved escalation state.</li>
+							<li>Each selected child pool is created in a child universe and marks itself as awaiting fork continuation.</li>
+							<li>Each created child initializes a paused continuation escalation game from that snapshot.</li>
+							<li>Affected vaults migrate unresolved parent locks through <code>migrateVaultWithUnresolvedEscalation</code>; large carry sets can require multiple calls.</li>
+							<li>After the migration window and any required truth auction, the child pool becomes operational, clears the wait marker, and resumes the paused continuation game.</li>
 					</ol>
 					<p>
 						A continuation game can later reach non-decision too. When that happens, it
@@ -3289,9 +3317,10 @@
 						<a class="anchor-link" href="#auction" aria-label="Link to Truth Auction">#</a>
 					</div>
 						<p class="lede">
-							After migration, a child pool may still hold less ETH than users need for clean
-							redemption. The truth auction sells child-universe REP for ETH to repair that
-							gap, subject to both an ETH raise cap and a maximum REP sale cap.
+								After the parent migration window ends, a child pool may still hold less ETH
+								than users need for clean redemption. The truth auction sells child-universe
+								REP for ETH to repair that gap, subject to both an ETH raise cap and a
+								maximum REP sale cap.
 						</p>
 						<div class="summary-grid">
 							<div class="summary-card">
@@ -3308,17 +3337,20 @@
 							</div>
 						</div>
 						<p>
-							The repair target is the contract’s direct statement of the collateral gap after
-							proportional REP migration. If all fork REP has migrated, or if the parent fork
-							has no auctionable REP at fork, the child pool can finalize this phase without
-							running the division path or selling REP.
+								The repair target is the contract’s direct statement of the collateral gap after
+								proportional REP migration. The auction start gate is tied to the parent pool’s
+								fork timestamp plus the eight-week migration window, not to any child-universe
+								fork time. If all fork REP has migrated, or if the parent fork has no auctionable
+								REP at fork, the child pool can finalize this phase without running the division
+								path or selling REP.
 						</p>
 						<p>
-							The REP sale cap is deliberately not just “all remaining REP.” The forker computes
-							the auctionable pool REP baseline, subtracts a tiny floor-rounded haircut tied to
-							the REP that already migrated, and gives the auction that maximum inventory. For an
-							own fork, <code>poolAuctionableRepAtFork</code> means the vault REP bucket; for an
-							external fork, it means the parent pool’s full auctionable REP at fork.
+								The REP sale cap is deliberately not just “all remaining REP.” The forker computes
+								the auctionable pool REP baseline, subtracts a tiny floor-rounded haircut tied to
+								the REP that already migrated, and gives the auction that maximum inventory. For an
+								own fork, <code>poolAuctionableRepAtFork</code> means only the vault REP bucket,
+								so the separate own-fork escalation REP bucket is not sold in the truth auction.
+								For an external fork, it means the parent pool’s full auctionable REP at fork.
 						</p>
 						<div class="equation" id="eq-placeholder-auction-rep-sale-cap">
 							<math display="block" aria-label="migrated REP haircut equals migrated REP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least the pool auctionable REP at fork, otherwise pool auctionable REP at fork minus migrated REP haircut" data-source="migratedRepHaircut = migratedRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR; maxRepBeingSold = migratedRepHaircut &gt;= poolAuctionableRepAtFork ? 0 : poolAuctionableRepAtFork - migratedRepHaircut">
@@ -3742,18 +3774,22 @@
 						<h2>10. REP/ETH Price Oracle</h2>
 						<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 					</div>
-					<p>
-						The REP/ETH oracle is narrow in purpose. <code>SecurityPoolOracleCoordinator</code>
-						uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP
-						withdrawal, and bond-allowance updates. It is not the oracle for question truth;
-						that path is handled by escalation and, if necessary, Zoltar forks.
-					</p>
-					<p>
-						If the last price is stale, solvency-sensitive operations can be queued until a
-						valid report is settled. The manager then replays the pending operation against
-						the fresh price. This price path is only for security backing against ETH
-						collateral.
-					</p>
+						<p>
+							The REP/ETH oracle is narrow in purpose. <code>SecurityPoolOracleCoordinator</code>
+							uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP
+							withdrawal, and bond-allowance updates. A stale price also blocks
+							<code>depositToEscalationGame</code> whenever the pool still has active
+							security-bond allowance. It is not the oracle for question truth; that path is
+							handled by escalation and, if necessary, Zoltar forks.
+						</p>
+						<p>
+							If the last price is stale, solvency-sensitive operations can be queued until a
+							valid report is settled. The manager then replays the pending operation against
+							the fresh price. Escalation deposits are the exception: they require a fresh price
+							when bond allowance is outstanding, but they revert instead of entering the staged
+							callback queue. This price path is only for security backing against ETH
+							collateral.
+						</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg viewBox="0 0 940 380" role="img" aria-labelledby="oracle-flow-title oracle-flow-desc">
 							<title id="oracle-flow-title">Queued REP/ETH oracle operation flow</title>
