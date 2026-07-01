@@ -10,6 +10,7 @@ export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Accou
 	PublicActions<Transport, NetworkProfile['chain']> & {
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
+		onTransactionSubmitted?: ((hash: Hash) => void) | undefined
 		patchSimulationGenesisRepToken?: (parameters: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
 		requiresWalletConfirmation?: boolean | undefined
 	}
@@ -100,6 +101,7 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 	return {
 		...baseClient,
 		onTransactionPrepared: callbacks.onTransactionPrepared,
+		onTransactionSubmitted: callbacks.onTransactionSubmitted,
 		sendRawTransaction,
 		sendTransaction,
 		writeContract,

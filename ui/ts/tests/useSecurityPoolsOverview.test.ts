@@ -3,16 +3,27 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress, type Address } from 'viem'
+import { getAddress, zeroAddress, zeroHash, type Address } from 'viem'
 import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage } from '../hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { waitFor } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type UseSecurityPoolsOverview = typeof import('../hooks/useSecurityPoolsOverview.js')['useSecurityPoolsOverview']
 type UseSecurityPoolsOverviewState = ReturnType<UseSecurityPoolsOverview>
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
+}
 
 function createMarketDetails(questionId: string): MarketDetails {
 	return {
@@ -219,5 +230,86 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x01'])
+	})
+
+	void test('queueLiquidation snapshots the submitted modal inputs before async preflight completes', async () => {
+		const managerAddressA = getAddress('0x00000000000000000000000000000000000000a1')
+		const managerAddressB = getAddress('0x00000000000000000000000000000000000000b1')
+		const securityPoolAddressA = getAddress('0x00000000000000000000000000000000000000a2')
+		const securityPoolAddressB = getAddress('0x00000000000000000000000000000000000000b2')
+		const targetVaultA = getAddress('0x00000000000000000000000000000000000000a3')
+		const targetVaultB = getAddress('0x00000000000000000000000000000000000000b3')
+		const walletBalance = createDeferred<bigint>()
+		const readClient = {
+			getBalance: mock(async () => await walletBalance.promise),
+		}
+		const queueSecurityPoolLiquidation = mock(async (_client: unknown, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint) => {
+			expect(managerAddress).toBe(managerAddressA)
+			expect(targetVault).toBe(targetVaultA)
+			expect(amount).toBe(1n * 10n ** 18n)
+			expect(validForSeconds).toBe(120n)
+			return {
+				hash: zeroHash,
+				queuedOperation: undefined,
+				stagedExecution: undefined,
+			}
+		})
+
+		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
+		mock.module('../contracts.js', () => ({
+			loadAllSecurityPools: mock(async () => []),
+			loadOracleManagerDetails: mock(async () => ({
+				requestPriceEthCost: 0n,
+			})),
+			loadSecurityPoolPage: mock(async () => {
+				throw new Error('loadSecurityPoolPage should not be called in this test')
+			}),
+			queueSecurityPoolLiquidation,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(useSecurityPoolsOverview, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).openLiquidationModal(managerAddressA, securityPoolAddressA, targetVaultA, 5n * 10n ** 18n)
+			requireHookState(hookState).setLiquidationAmount('1')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('2')
+		})
+
+		let queuePromise = Promise.resolve()
+		await act(() => {
+			queuePromise = requireHookState(hookState).queueLiquidation(managerAddressA, securityPoolAddressA)
+		})
+
+		await waitFor(() => {
+			expect(readClient.getBalance).toHaveBeenCalledTimes(1)
+		})
+
+		await act(async () => {
+			requireHookState(hookState).openLiquidationModal(managerAddressB, securityPoolAddressB, targetVaultB, 7n * 10n ** 18n)
+			requireHookState(hookState).setLiquidationAmount('3')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+		})
+
+		await act(async () => {
+			walletBalance.resolve(2n * 10n ** 18n)
+			await queuePromise
+		})
+
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).liquidationTargetVault).toBe(targetVaultB)
+		expect(requireHookState(hookState).liquidationAmount).toBe('3')
+		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
 	})
 })

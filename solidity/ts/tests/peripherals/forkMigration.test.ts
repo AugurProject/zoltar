@@ -1,5 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
+import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: fork migration', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
@@ -1241,6 +1242,21 @@ describe('Peripherals: fork migration', () => {
 	})
 
 	describe('vault and REP migration', () => {
+		test('createChildUniverse allows the exact external-fork migration deadline and rejects one second later', async () => {
+			await triggerExternalForkForSecurityPool(undefined, 'external child creation deadline source')
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
+
+			await mockWindow.setTime(migrationDeadline + 1n)
+			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /migration window closed/i)
+		})
+
 		test('migrateRepToZoltar should fund an already-created child pool with the unlocked vault REP in own-fork mode', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -1273,9 +1289,30 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
+			const migrationDeadline = (await mockWindow.getTime()) + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline + 1n)
 
 			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /migration window closed/i)
+		})
+
+		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const childRepToken = getRepTokenAddress(yesUniverse)
+			const poolBalance = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
+			assert.ok(poolBalance > 0n, 'migrateRepToZoltar should still split child REP at the inclusive migration deadline')
 		})
 
 		test('migrateRepToZoltar rejects once the child branch is already priced', async () => {
@@ -1321,6 +1358,45 @@ describe('Peripherals: fork migration', () => {
 
 			assert.ok(vaultAfterVaultMigration.repDepositShare > 0n, 'migrateVault should populate child ownership from the unlocked parent vault state')
 			strictEqualTypeSafe(vaultAfterVaultMigration.securityBondAllowance, securityPoolAllowance, 'migrateVault should preserve the already-migrated parent bond allowance')
+		})
+
+		test('migrateVault allows the exact own-fork migration deadline', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+
+			assert.ok(childVault.repDepositShare > 0n, 'migrateVault should still migrate ownership at the inclusive deadline')
+		})
+
+		test('migrateVault allows the exact external-fork migration deadline and rejects one second later', async () => {
+			const parentVaultBeforeFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			assert.ok(parentVaultBeforeFork.repDepositShare > 0n, 'test setup should leave unlocked parent vault ownership before the external fork')
+			await triggerExternalForkForSecurityPool(undefined, 'external vault migration deadline source')
+
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			assert.ok(childVault.repDepositShare > 0n, 'migrateVault should still move unlocked vault ownership at the inclusive external-fork deadline')
+
+			await mockWindow.setTime(migrationDeadline + 1n)
+			await assert.rejects(migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes), /migration window closed/i)
 		})
 
 		test('migrateVault transfers unlocked REP collateral for non-own forks', async () => {
@@ -1648,12 +1724,39 @@ describe('Peripherals: fork migration', () => {
 			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
 
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			const claimDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(claimDeadline + 1n)
 
 			await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /Claim window closed/)
+		})
+
+		test('claimForkedEscalationDeposits allows the exact own-fork migration deadline', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const winningDeposit = repDeposit / 8n
+			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(attackerClient, repDeposit, questionId)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
+			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
+
+			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			const claimDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(claimDeadline - 1n)
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const walletRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
+
+			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+			const walletRepAfterClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
+			assert.ok(walletRepAfterClaim > walletRepBeforeClaim, 'claiming at the inclusive deadline should still pay child REP')
 		})
 
 		test('claimForkedEscalationDeposits rejects once the child branch is already priced', async () => {

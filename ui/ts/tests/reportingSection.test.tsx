@@ -392,6 +392,24 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Load reporting details to view the escalation state for this pool.')).toBe(true)
 	})
 
+	test('keeps reporting locked at the exact market end timestamp until the next second', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 100n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Open' })).toBeNull()
+		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 100n))).toBe(true)
+	})
+
 	test('shows resolved state for finalized pools even when no escalation game was started', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -654,7 +672,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(formatDuration(300n - 200n))).toBe(true)
 	})
 
-	test('shows Timed Out with zero time left once the escalation end time is reached', async () => {
+	test('keeps escalation active with zero time left at the exact timeout boundary', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -671,17 +689,17 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Timed Out' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.')).toBe(true)
+		expect(documentQueries.getByRole('heading', { name: 'Active' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
-	test('uses the live chain timestamp to flip the escalation phase once the end time is reached', async () => {
+	test('uses the live chain timestamp to flip the escalation phase only after the timeout boundary passes', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					currentTimestamp: 300n,
+					currentTimestamp: 301n,
 					reportingDetails: {
 						...createReportingDetails(),
 						currentTime: 150n,
@@ -788,13 +806,13 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
 	})
 
-	test('auto-refreshes reporting once when the live timestamp reaches an unresolved timeout boundary', async () => {
+	test('auto-refreshes reporting once when the live timestamp passes an unresolved timeout boundary', async () => {
 		const onLoadReportingCalls: string[] = []
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					currentTimestamp: 300n,
+					currentTimestamp: 301n,
 					onLoadReporting: () => {
 						onLoadReportingCalls.push('refresh')
 					},
@@ -815,7 +833,7 @@ describe('ReportingSection', () => {
 				h(
 					ReportingSection,
 					createProps({
-						currentTimestamp: 300n,
+						currentTimestamp: 301n,
 						onLoadReporting: () => {
 							onLoadReportingCalls.push('rerender')
 						},

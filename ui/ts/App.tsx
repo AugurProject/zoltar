@@ -33,7 +33,7 @@ import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
 import { applyReportingFormUpdate } from './lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
-import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from './lib/transactionTray.js'
+import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from './lib/transactionTray.js'
 import type { TransactionTrayState } from './lib/transactionTray.js'
 import type { TransactionRequestPreview } from './lib/chainBackend.js'
 import { ActionSafetyProvider } from './lib/actionSafety/runtime.js'
@@ -61,6 +61,9 @@ export function App() {
 	}
 	const onTransactionFailed = (message: string) => {
 		transactionState.value = markTransactionFailed(transactionState.value, message)
+	}
+	const onTransactionCanceled = () => {
+		transactionState.value = markTransactionCanceled(transactionState.value)
 	}
 	const onTransactionPresented = (presentation: GlobalTransactionPresentation) => {
 		transactionState.value = markTransactionPresented(transactionState.value, presentation)
@@ -93,6 +96,7 @@ export function App() {
 	const canReadOnchainData = environmentReady && readBackendReady
 	const baseHookConfig = {
 		accountAddress: accountState.address,
+		onTransactionCanceled,
 		onTransactionFailed,
 		onTransactionFinished,
 		onTransactionPresented,

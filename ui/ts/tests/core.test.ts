@@ -1,6 +1,6 @@
-/// <reference types="bun-types" />
+/// <reference types='bun-types' />
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from 'viem'
 import { getMulticall3Address } from '../contracts/deploymentHelpers.js'
 import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '../contracts/core.js'
@@ -8,7 +8,7 @@ import type { ReadClient, WriteClient } from '../types/contracts.js'
 
 type MulticallRequest = Parameters<ReadClient['multicall']>[0]
 type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransactionReceipt'> &
-	Partial<Pick<WriteClient, 'onTransactionPrepared'>> & {
+	Partial<Pick<WriteClient, 'onTransactionPrepared' | 'onTransactionSubmitted'>> & {
 		call?: WriteClient['call']
 	}
 
@@ -183,5 +183,89 @@ describe('contract core helpers', () => {
 					}) as never,
 			),
 		).rejects.toThrow('Transaction reverted')
+	})
+
+	test('writeContractAndWaitForReceipt updates the returned hash when a transaction is repriced', async () => {
+		const originalHash = `0x${'1'.repeat(64)}` as Hash
+		const replacementHash = `0x${'2'.repeat(64)}` as Hash
+		const onTransactionSubmitted = mock(() => undefined)
+		const contractCall: WriteContractClient = {
+			onTransactionSubmitted,
+			sendTransaction: async () => originalHash,
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'repriced',
+					replacedTransaction: { hash: originalHash } as never,
+					transaction: { hash: replacementHash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+		}
+
+		const result = await writeContractAndWaitForReceipt(contractCall, () => ({
+			abi: [{ type: 'function', stateMutability: 'payable', name: 'repriced', inputs: [], outputs: [] }] as const,
+			address: getAddress('0x6666666666666666666666666666666666666666'),
+			functionName: 'repriced',
+		}))
+
+		expect(result.hash).toBe(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+	})
+
+	test('writeContractAndWaitForReceipt rejects cancelled replacement transactions', async () => {
+		const originalHash = `0x${'3'.repeat(64)}` as Hash
+		const cancellationHash = `0x${'4'.repeat(64)}` as Hash
+		const onTransactionSubmitted = mock(() => undefined)
+		const contractCall: WriteContractClient = {
+			onTransactionSubmitted,
+			sendTransaction: async () => originalHash,
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'cancelled',
+					replacedTransaction: { hash: originalHash } as never,
+					transaction: { hash: cancellationHash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+		}
+
+		await expect(
+			writeContractAndWaitForReceipt(contractCall, () => ({
+				abi: [{ type: 'function', stateMutability: 'payable', name: 'cancelled', inputs: [], outputs: [] }] as const,
+				address: getAddress('0x7777777777777777777777777777777777777777'),
+				functionName: 'cancelled',
+			})),
+		).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(cancellationHash)
+	})
+
+	test('writeContractAndWaitForReceipt rejects replaced transactions that change the original call', async () => {
+		const originalHash = `0x${'5'.repeat(64)}` as Hash
+		const replacementHash = `0x${'6'.repeat(64)}` as Hash
+		const onTransactionSubmitted = mock(() => undefined)
+		const contractCall: WriteContractClient = {
+			onTransactionSubmitted,
+			sendTransaction: async () => originalHash,
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'replaced',
+					replacedTransaction: { hash: originalHash } as never,
+					transaction: { hash: replacementHash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+		}
+
+		await expect(
+			writeContractAndWaitForReceipt(contractCall, () => ({
+				abi: [{ type: 'function', stateMutability: 'payable', name: 'replaced', inputs: [], outputs: [] }] as const,
+				address: getAddress('0x8888888888888888888888888888888888888888'),
+				functionName: 'replaced',
+			})),
+		).rejects.toThrow('Transaction was replaced in the wallet before confirmation.')
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
 	})
 })

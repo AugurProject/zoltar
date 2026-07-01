@@ -614,6 +614,42 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('surfaces wallet authorization rejections during connectWallet', async () => {
+		const { backend } = createBackend({
+			requestAccounts: async () => {
+				throw new Error('User denied account authorization')
+			},
+		})
+
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurPlaceHolderDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 0n),
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const connectButton = within(document.body).getByRole('button', { name: 'Connect wallet' })
+
+		await act(async () => {
+			fireEvent.click(connectButton)
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Action canceled in wallet.'))
+		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
+		resetEnvironment()
+	})
+
 	test('handles bootstrap wait-success and bootstrap wait-failure paths', async () => {
 		const readySignal = createDeferred<void>()
 		const { backend } = createBackend({
