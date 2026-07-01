@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testsuite/simulator/utils/utilities'
 import { addressString } from '../../testsuite/simulator/utils/bigint'
