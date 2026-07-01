@@ -16,6 +16,7 @@ import {
 	formatOpenOraclePriceInput,
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateGuardMessage,
+	getOpenOracleCreateValidationMessage,
 	getOpenOracleDisputeAvailability,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
@@ -659,6 +660,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 						walletEthBalance,
 					})
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
+					const createValidationMessage = getOpenOracleCreateValidationMessage({ form: openOracleCreateForm.value })
+					if (createValidationMessage !== undefined) throw new Error(createValidationMessage)
 					const token1Address = parseAddressInput(openOracleCreateForm.value.token1Address, 'Token1 address')
 					const token1Decimals = requireTokenDecimals(
 						await readClient.readContract({
@@ -669,6 +672,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 						}),
 						'token1',
 					)
+					const preciseCreateValidationMessage = getOpenOracleCreateValidationMessage({ form: openOracleCreateForm.value, token1Decimals })
+					if (preciseCreateValidationMessage !== undefined) throw new Error(preciseCreateValidationMessage)
 
 					return await createOpenOracleReportInstance(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parseOpenOracleCreateFormSubmission({ form: openOracleCreateForm.value, token1Decimals }))
 				},

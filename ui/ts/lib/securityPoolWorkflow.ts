@@ -22,7 +22,7 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 		case 'vaults':
 			return 'Vaults'
 		case 'trading':
-			return 'Trading'
+			return 'Shares'
 		case 'reporting':
 			return 'Reporting'
 		case 'fork-workflow':
@@ -334,7 +334,7 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, trading, reporting, and fork actions.',
+			detail: 'Switch to the same universe before using vault, share, reporting, and fork actions.',
 			key: 'unavailable',
 		}
 	if (selectedPoolLookupState === 'loading')

@@ -1,13 +1,13 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { ensureRouteHash, getCurrentRoute, getRouteHash } from '../lib/routing.js'
+import { buildRouteHref, ensureRouteHash, getCurrentRoute, getRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { Route } from '../types/app.js'
 
 export function useHashRoute() {
 	const route = useSignal<Route>(getCurrentRoute())
 
 	const navigate = (nextRoute: Exclude<Route, 'not-found'>) => {
-		window.location.hash = getRouteHash(nextRoute)
+		window.location.hash = buildRouteHref(getRouteHash(nextRoute), getRouteHashSearch())
 	}
 
 	useEffect(() => {

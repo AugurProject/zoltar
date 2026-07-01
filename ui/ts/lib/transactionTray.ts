@@ -12,6 +12,8 @@ export type TransactionTrayState = {
 	requestSequence: number
 }
 
+export const TRANSACTION_ACTION_LOCK_REASON = 'Finish the current transaction before starting another transaction.'
+
 export function createInitialTransactionTrayState(): TransactionTrayState {
 	return {
 		active: undefined,
@@ -107,6 +109,10 @@ export function markTransactionPresented(state: TransactionTrayState, active: Gl
 		...state,
 		active,
 	}
+}
+
+export function getTransactionActionLockReason(state: TransactionTrayState): string | undefined {
+	return state.inFlightCount > 0 ? TRANSACTION_ACTION_LOCK_REASON : undefined
 }
 
 export function markTransactionFinished(state: TransactionTrayState): TransactionTrayState {

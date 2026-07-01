@@ -60,7 +60,7 @@ describe('security pool creation guards', () => {
 				securityPoolCreating: false,
 				zoltarUniverseHasForked: false,
 			}),
-		).toBe('Security pools can only be created for binary markets.')
+		).toBe('Security pools can only be created for exact binary Yes / No questions.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({

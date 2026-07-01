@@ -4,7 +4,7 @@ import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationS
 import { sameAddress } from '../lib/address.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { shouldReloadSelectedPoolDetails, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
+import { getCurrentSelectedPoolForkAuctionDetails, shouldReloadSelectedPoolDetails, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -49,6 +49,10 @@ export function useSelectedAuctionReadState({
 	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
 	const selectedAuctionChildPool = selectedOutcomeMigrationChildPool ?? recoveredSelectedAuctionChildPool ?? currentSelectedOutcomePool
 	const selectedAuctionPoolAddress = selectedAuctionChildPool?.securityPoolAddress
+	const currentSelectedAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
+		forkAuctionDetails: selectedAuctionDetails,
+		selectedPool: selectedAuctionChildPool,
+	})
 
 	useEffect(() => {
 		if (selectedStage === 'migration' || securityPoolAddress === undefined) {
@@ -83,13 +87,13 @@ export function useSelectedAuctionReadState({
 			return
 		}
 		const shouldReloadSelectedAuction = shouldReloadSelectedPoolDetails({
-			currentDetailsAvailable: selectedAuctionDetails !== undefined,
+			currentDetailsAvailable: currentSelectedAuctionDetails !== undefined,
 			lastHandledRefreshNonce: lastHandledSelectedAuctionRefreshNonceRef.current,
 			loadedDetailsAddress: selectedAuctionDetails?.securityPoolAddress,
 			refreshNonce: selectedPoolRefreshNonce,
 			selectedPoolAddress: selectedAuctionPoolAddress,
 		})
-		if (!shouldReloadSelectedAuction && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress)) {
+		if (!shouldReloadSelectedAuction && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress) && currentSelectedAuctionDetails !== undefined) {
 			return
 		}
 		const client = fullTruthAuctionReadClient ?? createConnectedReadClient()
@@ -114,7 +118,7 @@ export function useSelectedAuctionReadState({
 		return () => {
 			cancelled = true
 		}
-	}, [fullTruthAuctionReadClient, selectedAuctionDetails?.securityPoolAddress, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
+	}, [currentSelectedAuctionDetails, fullTruthAuctionReadClient, selectedAuctionDetails?.securityPoolAddress, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
 
 	useEffect(() => {
 		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined) {

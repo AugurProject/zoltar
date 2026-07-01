@@ -811,11 +811,12 @@ export function SecurityPoolWorkflowSection({
 																	Select Vault
 																</button>
 																<button
-																	className='destructive'
+																	className='secondary'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || !liquidationEnabled}
+																	title='Review the liquidation quote, timeout, and execution path for this vault.'
 																>
-																	Liquidate Vault
+																	Review Liquidation
 																</button>
 															</div>
 														)
@@ -841,13 +842,13 @@ export function SecurityPoolWorkflowSection({
 														})()
 
 														return {
-															actionLabel: 'Liquidate Vault',
+															actionLabel: 'Review Liquidation',
 															...(liquidationBlocker === undefined ? {} : { blocker: liquidationBlocker }),
-															description: 'Queue a high-risk liquidation against the selected vault.',
+															description: 'Inspect the liquidation quote, timeout, and execution path before queueing liquidation.',
 															key: 'liquidate-vault',
 															readiness: liquidationEnabled ? 'ready' : 'blocked',
 															safetyId: 'security-pool.queueLiquidation',
-															title: 'Liquidate Vault',
+															title: 'Review Liquidation',
 															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled
 																? {}
 																: {

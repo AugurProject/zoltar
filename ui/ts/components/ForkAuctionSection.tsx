@@ -25,11 +25,11 @@ import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
-import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionOverviewProgress, getTruthAuctionTickAtPrice, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
+import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
-import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../lib/marketForm.js'
+import { tryParseTruthAuctionAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
@@ -505,8 +505,9 @@ export function ForkAuctionSection({
 	const hasImportedForkSettlementDeposits = importedForkSettlementSides.length > 0
 	const importedForkSettlementResolved = isPoolQuestionFinalized(activeReportingDetails)
 	const childSecurityPools = securityPoolAddress === undefined ? [] : securityPools.filter(pool => sameAddress(pool.parent, securityPoolAddress))
-	const enteredBidPrice = tryParseTruthAuctionPriceInput(forkAuctionForm.submitBidPrice)
-	const enteredBidTick = enteredBidPrice === undefined ? undefined : getTruthAuctionTickAtPrice(enteredBidPrice)
+	const enteredBidPreview = getTruthAuctionBidPreview(forkAuctionForm.submitBidPrice)
+	const enteredBidPrice = enteredBidPreview?.price
+	const enteredBidTick = enteredBidPreview?.tick
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, enteredBidPrice)
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
@@ -736,12 +737,7 @@ export function ForkAuctionSection({
 		parentCollateralAmount: forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount,
 		auctionableRepAtFork: forkAuctionDetails?.auctionableRepAtFork,
 	})
-	const bidPriceValidationMessage = (() => {
-		if (forkAuctionForm.submitBidPrice.trim() === '') return 'Enter a bid price greater than zero.'
-		if (enteredBidPrice === undefined || enteredBidTick === undefined) return 'Enter a valid bid price.'
-		if (enteredBidPrice <= 0n) return 'Enter a bid price greater than zero.'
-		return undefined
-	})()
+	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.submitBidPrice)
 	const startTruthAuctionAvailabilityMessage = (() => {
 		if (hasStartedTruthAuction) return 'Truth auction already started.'
 		if (isStartTruthAuctionInProgress) return 'Starting truth auction...'
@@ -1303,6 +1299,7 @@ export function ForkAuctionSection({
 										{loadingReportingDetails ? <p className='detail'>Loading unresolved escalation deposits for the connected wallet…</p> : undefined}
 										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>Unresolved escalation deposit details are unavailable for this pool right now.</p>}
 										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits ? <p className='detail'>No unresolved parent escalation deposits remain for the connected wallet.</p> : undefined}
+										<p className='detail'>All unresolved parent escalation locks on this wallet move together into the selected child universe. They cannot be split across multiple outcomes.</p>
 										{activeReportingDetails === undefined
 											? undefined
 											: unresolvedMigrationSides.map(side => (
@@ -1346,6 +1343,7 @@ export function ForkAuctionSection({
 									</SectionBlock>
 								) : (
 									<SectionBlock density='compact' headingLevel={4} title='Migrate Resolved Escalation Deposits' variant='embedded'>
+										<p className='detail'>Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.</p>
 										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>No escrowed REP is currently visible for migratable escalation deposits on the connected wallet.</p> : undefined}
 										{loadingReportingDetails ? <p className='detail'>Loading escalation deposits for the selected wallet…</p> : undefined}
 										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>Escalation deposit details are unavailable for this pool right now.</p>}
@@ -1394,6 +1392,7 @@ export function ForkAuctionSection({
 									</SectionBlock>
 								)}
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Pool To Universe' variant='embedded'>
+									<p className='detail'>This moves pool-level REP shared by the selected outcome into the child universe. It affects the outcome pool, not just your vault.</p>
 									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child universe.</p> : undefined}
 									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
 									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
@@ -1410,6 +1409,7 @@ export function ForkAuctionSection({
 									</div>
 								</SectionBlock>
 								<SectionBlock density='compact' headingLevel={4} title='Migrate Vault' variant='embedded'>
+									<p className='detail'>This moves all remaining REP collateral and security-bond allowance from your parent vault into the selected child pool for this outcome.</p>
 									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>No REP collateral or security bond allowance remains to migrate for the connected wallet.</p> : undefined}
 									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>Checking whether pool REP is already ready for the selected child universe.</p> : undefined}
 									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
@@ -1445,7 +1445,7 @@ export function ForkAuctionSection({
 							{truthAuctionMarketViewSection}
 							{auctionWideBidsSection}
 							{renderSubmitBidSection({
-								description: 'Enter a price and ETH amount.',
+								description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.',
 							})}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
@@ -1462,6 +1462,7 @@ export function ForkAuctionSection({
 						</SectionBlock>
 
 						<SectionBlock title='Start Truth Auction'>
+							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP; losing bids are refunded during settlement.</p>
 							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 							<div className='actions'>
@@ -1477,7 +1478,7 @@ export function ForkAuctionSection({
 							</div>
 						</SectionBlock>
 
-						{renderSubmitBidSection({ description: 'Enter a price and ETH amount.' })}
+						{renderSubmitBidSection({ description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.' })}
 					</fieldset>
 				)
 			}
