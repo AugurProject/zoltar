@@ -30,7 +30,7 @@ describe('GlobalTransactionTray', () => {
 		expect(renderedComponent.container.textContent).toBe('')
 	})
 
-	test('renders a compact global transaction notice with the transaction name and link', async () => {
+	test('renders a completed transaction notice with detail rows and a link', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray
 				transaction={{
@@ -47,14 +47,14 @@ describe('GlobalTransactionTray', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('status')).not.toBeNull()
 		expect(documentQueries.getByText('Question Created')).not.toBeNull()
-		expect(documentQueries.queryByText('The new question is now on-chain.')).toBeNull()
-		expect(documentQueries.queryByText('Question ID')).toBeNull()
-		expect(documentQueries.queryByText('0x0b')).toBeNull()
+		expect(documentQueries.getByText('The new question is now on-chain.')).not.toBeNull()
+		expect(documentQueries.getByText('Question ID')).not.toBeNull()
+		expect(documentQueries.getByText('0x0b')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
-	test('renders a pending transaction with its name and hash but no dismiss control', async () => {
+	test('renders a pending transaction with its explanation and hash but no dismiss control', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray
 				transaction={{
@@ -70,6 +70,7 @@ describe('GlobalTransactionTray', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
+		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 	})
 

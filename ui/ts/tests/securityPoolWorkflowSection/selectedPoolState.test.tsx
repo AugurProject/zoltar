@@ -36,7 +36,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(secondaryGroup).getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
 		expect(within(secondaryGroup).getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
+		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool before using pool actions.')
@@ -430,7 +430,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
-		expectTransactionButtonDisabled(document.body, 'Liquidate Vault')
+		expectTransactionButtonDisabled(document.body, 'Review Liquidation')
 	})
 
 	test('shows Fork Migration in the selected-pool badge once fork migration has started', async () => {

@@ -123,7 +123,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Create Pool' description='Choose the binary question and security multiplier before deploying the pool.'>
+					<SectionBlock title='Create Pool' description='Choose the exact Yes / No question and security multiplier before deploying the pool.'>
 						<div className='form-grid'>
 							<div className='field'>
 								<LookupFieldRow
@@ -137,7 +137,7 @@ export function SecurityPoolSection({
 										</button>
 									}
 								/>
-								<p className='field-help'>Paste a binary Zoltar question ID, or use "Create Pool From Question" after creating a question.</p>
+								<p className='field-help'>Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question.</p>
 							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>
@@ -165,7 +165,7 @@ export function SecurityPoolSection({
 							</div>
 						</div>
 						{!duplicateOriginPoolExists ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
-						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for binary markets. Load a binary market to proceed.</p> : undefined}
+						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for exact binary Yes / No questions. Load an eligible market to proceed.</p> : undefined}
 						{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
 					</SectionBlock>
 

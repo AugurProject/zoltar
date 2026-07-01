@@ -48,8 +48,8 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 	const badge = getTransactionBadge(transaction.tone)
 	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'pending' && transaction.tone !== 'preparing' && transactionDismissKey !== undefined
 	const transactionHash = transaction.hash
-	const showDetail = transaction.hash === undefined || transaction.tone === 'error'
 	const showHash = transactionHash !== undefined
+	const rows = transaction.rows ?? []
 
 	return (
 		<div className='global-transaction-tray'>
@@ -59,7 +59,17 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 						<Badge tone={badge.tone}>{badge.label}</Badge>
 						<strong>{transaction.title}</strong>
 					</div>
-					{!showDetail ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
+					<div className='global-transaction-notice-detail'>{transaction.detail}</div>
+					{rows.length === 0 ? undefined : (
+						<dl className='global-transaction-notice-rows'>
+							{rows.map((row, rowIndex) => (
+								<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
+									<dt>{row.label}</dt>
+									<dd>{row.value}</dd>
+								</div>
+							))}
+						</dl>
+					)}
 					{!showHash ? undefined : <TransactionHashLink hash={transactionHash} />}
 				</div>
 				{!canDismiss ? undefined : (

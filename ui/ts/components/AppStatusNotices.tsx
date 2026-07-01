@@ -29,6 +29,11 @@ function getConfiguredRpcLabel(readBackendStatus: ReadBackendStatus) {
 	return readBackendStatus.transportMode === 'provider' ? 'Configured fallback read RPC' : 'Active read RPC'
 }
 
+function getReadBackendNoticeDetail(readBackendMessage: string) {
+	if (readBackendMessage.includes('stale')) return `${readBackendMessage} Displayed onchain state may be behind the latest chain state. Refresh or switch RPC before acting on balances, settlement, or liquidation.`
+	return `${readBackendMessage} Displayed onchain state may not match the network this interface writes to.`
+}
+
 function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined): NoticeItem | undefined {
 	if (readBackendStatus === undefined) return undefined
 	if (readBackendStatus.rejectedRpcOverride !== undefined) {
@@ -74,12 +79,12 @@ export function AppStatusNotices({ errorMessage, readBackendMessage, readBackend
 	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: 'Finish setup in Deploy before using the app.', id: 'setup-incomplete', tone: 'blocking', title: 'Setup incomplete' })
 	if (wrongNetworkMessage !== undefined)
 		items.push({
-			detail: `This interface only enables contract interactions on Ethereum mainnet. ${wrongNetworkMessage === 'Switch to Ethereum mainnet.' ? 'Switch the connected wallet network to Ethereum mainnet to continue.' : wrongNetworkMessage}`,
+			detail: `This interface only enables contract interactions on Ethereum mainnet. ${wrongNetworkMessage === 'Switch to Ethereum mainnet.' ? 'Switch the connected wallet network to Ethereum mainnet to continue.' : wrongNetworkMessage} Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.`,
 			id: 'wrong-network',
 			tone: 'blocking',
 			title: 'Wrong network',
 		})
-	if (readBackendMessage !== undefined) items.push({ detail: readBackendMessage, id: 'read-backend-mismatch', tone: 'blocking', title: 'Read RPC mismatch' })
+	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: 'Read RPC mismatch' })
 	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: 'Error' })
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)
 

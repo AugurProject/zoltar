@@ -252,7 +252,7 @@ describe('OverviewPanels', () => {
 			},
 		})
 
-		const readSource = documentQueries.getByText('provider: wallet provider @ 100')
+		const readSource = documentQueries.getByText('wallet provider reads @ 100')
 		expect(readSource.getAttribute('title')).toBe('Reads are using the connected wallet provider. Configured fallback RPC: https://ethereum.dark.florist')
 		expect(document.body.textContent?.includes('ethereum.dark.florist')).toBe(false)
 	})
@@ -268,7 +268,7 @@ describe('OverviewPanels', () => {
 			},
 		})
 
-		expect(documentQueries.getByText('provider / default: browser simulation @ 12')).toBeDefined()
+		expect(documentQueries.getByText('browser simulation · provider via default @ 12')).toBeDefined()
 		expect(document.body.textContent?.includes('wallet provider')).toBe(false)
 	})
 
