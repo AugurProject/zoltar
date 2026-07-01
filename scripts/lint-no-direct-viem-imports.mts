@@ -1,3 +1,4 @@
+import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
@@ -10,22 +11,42 @@ type DirectViemImportFinding = {
 }
 
 const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..')
-const formatDiagnosticsHost: ts.FormatDiagnosticsHost = {
-	getCanonicalFileName: fileName => fileName,
-	getCurrentDirectory: () => repositoryRoot,
-	getNewLine: () => ts.sys.newLine,
-}
+const sourceFileExtensions = new Set(['.ts', '.tsx', '.mts', '.cts'])
+const ignoredPathPrefixes = ['.git', 'coverage', 'node_modules', 'shared/js', 'shared/node_modules', 'solidity/artifacts', 'solidity/js', 'solidity/node_modules', 'ui/dist', 'ui/js', 'ui/node_modules', 'ui/vendor']
+const ignoredFiles = new Set(['solidity/ts/types/contractArtifact.ts', 'ui/ts/contractArtifact.ts'])
 
 function toProjectPath(filePath: string): string {
 	return path.relative(repositoryRoot, filePath).replaceAll('\\', '/')
 }
 
-function shouldCheckSourceFile(sourceFile: ts.SourceFile): boolean {
-	if (sourceFile.isDeclarationFile) return false
-	const relativePath = toProjectPath(sourceFile.fileName)
-	if (relativePath.startsWith('node_modules/') || relativePath.includes('/node_modules/')) return false
-	if (relativePath.startsWith('ui/vendor/') || relativePath.startsWith('ui/js/') || relativePath.startsWith('shared/js/') || relativePath.startsWith('solidity/js/')) return false
-	return relativePath.endsWith('.ts') || relativePath.endsWith('.tsx') || relativePath.endsWith('.mts') || relativePath.endsWith('.cts')
+function shouldIgnore(relativePath: string): boolean {
+	if (ignoredFiles.has(relativePath)) return true
+	if (relativePath.split('/').includes('node_modules')) return true
+	for (const prefix of ignoredPathPrefixes) {
+		if (relativePath === prefix || relativePath.startsWith(`${prefix}/`)) return true
+	}
+	return false
+}
+
+function shouldCheck(filePath: string): boolean {
+	if (!sourceFileExtensions.has(path.extname(filePath))) return false
+	const relativePath = toProjectPath(filePath)
+	return !shouldIgnore(relativePath)
+}
+
+async function collectFiles(directory: string, files: string[] = []): Promise<string[]> {
+	const entries = await fs.readdir(directory, { withFileTypes: true })
+	for (const entry of entries) {
+		const fullPath = path.join(directory, entry.name)
+		const relativePath = toProjectPath(fullPath)
+		if (entry.isDirectory()) {
+			if (shouldIgnore(relativePath)) continue
+			await collectFiles(fullPath, files)
+			continue
+		}
+		if (entry.isFile() && shouldCheck(fullPath)) files.push(fullPath)
+	}
+	return files
 }
 
 function findDirectViemImportFindings(sourceFile: ts.SourceFile): DirectViemImportFinding[] {
@@ -49,28 +70,19 @@ function findDirectViemImportFindings(sourceFile: ts.SourceFile): DirectViemImpo
 	return findings
 }
 
-const configPath = ts.findConfigFile(repositoryRoot, ts.sys.fileExists, 'tsconfig.json')
-if (configPath === undefined) {
-	console.log('Unable to find tsconfig.json.')
-	process.exit(1)
-}
+async function main() {
+	const files = await collectFiles(repositoryRoot)
+	const findings: DirectViemImportFinding[] = []
 
-const configFile = ts.readConfigFile(configPath, ts.sys.readFile)
-if (configFile.error !== undefined) {
-	console.log(ts.formatDiagnosticsWithColorAndContext([configFile.error], formatDiagnosticsHost))
-	process.exit(1)
-}
+	for (const filePath of files) {
+		const text = await fs.readFile(filePath, 'utf8')
+		const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, path.extname(filePath).endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+		if (sourceFile.isDeclarationFile) continue
+		findings.push(...findDirectViemImportFindings(sourceFile))
+	}
 
-const parsedConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath), undefined, configPath)
-if (parsedConfig.errors.length > 0) {
-	console.log(ts.formatDiagnosticsWithColorAndContext(parsedConfig.errors, formatDiagnosticsHost))
-	process.exit(1)
-}
+	if (findings.length === 0) return
 
-const program = ts.createProgram(parsedConfig.fileNames, parsedConfig.options)
-const findings = program.getSourceFiles().filter(shouldCheckSourceFile).flatMap(findDirectViemImportFindings)
-
-if (findings.length > 0) {
 	console.log("Direct 'viem' imports are not allowed outside the shared Ethereum wrapper. Import from '@zoltar/shared/ethereum' instead.")
 	for (const finding of findings) {
 		console.log(`${finding.file}:${finding.line}:${finding.column} - ${finding.importText}`)
@@ -78,3 +90,5 @@ if (findings.length > 0) {
 	console.log(`\nFound ${findings.length} direct 'viem' import(s).`)
 	process.exitCode = 1
 }
+
+await main()
