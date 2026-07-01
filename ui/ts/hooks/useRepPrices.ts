@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { isRecoverableQuoteError } from '../lib/errors.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, getRepAddress, isRepPricingEnabled } from '../lib/uniswapQuoter.js'
@@ -42,13 +43,16 @@ export function useRepPrices(): RepPrices {
 	const repUsdcSource = useSignal<PriceSource | undefined>(undefined)
 	const repUsdcSourceUrl = useSignal<string | undefined>(undefined)
 	const repPricesLoad = useLoadController()
+	const nextRepPricesLoad = useRequestGuard()
 
 	const refreshRepPrices = () => {
 		const client = createConnectedReadClient()
+		const isCurrent = nextRepPricesLoad()
 
 		void repPricesLoad
 			.track(async () => {
 				const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
+				if (!isCurrent()) return
 
 				if (repPerEthResult.status === 'fulfilled') {
 					repPerEthPrice.value = repPerEthResult.value.price

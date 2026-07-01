@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address } from 'viem'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import { ABIS } from '../abis.js'
@@ -78,7 +78,7 @@ function toReadError(error: unknown) {
 	return error instanceof Error ? error : new Error('Unknown read error')
 }
 
-export function useOpenOracleOperations({ accountAddress, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
+export function useOpenOracleOperations({ accountAddress, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
 	const loadingOpenOracleCreate = useSignal(false)
 	const oracleReportLoad = useLoadController()
 	const openOracleInitialReportPriceLoad = useLoadController()
@@ -121,6 +121,9 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 	const nextOpenOracleInitialReportPriceLoad = useRequestGuard()
 	const nextOpenOracleInitialReportTokenAccessLoad = useRequestGuard()
 	const nextOracleReportLoad = useRequestGuard()
+	const currentSelectedReportIdInput = openOracleForm.value.reportId.trim()
+	const currentSelectedReportIdRef = useRef(currentSelectedReportIdInput)
+	currentSelectedReportIdRef.current = currentSelectedReportIdInput
 	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
 			case 'approveToken1':
@@ -204,6 +207,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		openOracleInitialReportTokenAccessLoadingInitial.value = mode === 'initial'
 		openOracleInitialReportTokenAccessRefreshing.value = mode === 'background'
 	}
+	const isSelectedReportCurrent = (reportIdInput: string) => currentSelectedReportIdRef.current === reportIdInput.trim()
 
 	const resetOpenOracleInitialReportQuoteState = () => {
 		openOracleInitialReportDefaultPrice.value = undefined
@@ -311,9 +315,11 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			return false
 		}
 
-		const shouldUpdateFormQuote = () => openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString() || (replacePriceInput !== undefined && openOracleForm.value.price.trim() === replacePriceInput)
+		const currentReportIdInput = currentDetails.reportId.toString()
+		const isCurrentSelectedReport = () => isSelectedReportCurrent(currentReportIdInput)
+		const shouldUpdateFormQuote = () => isCurrentSelectedReport() && (openOracleForm.value.price.trim() === '' || (replacePriceInput !== undefined && openOracleForm.value.price.trim() === replacePriceInput))
 		const result = await openOracleInitialReportPriceLoad.run({
-			isCurrent,
+			isCurrent: () => isCurrent() && isCurrentSelectedReport(),
 			onStart: () => {
 				if (!preserveExisting) resetOpenOracleInitialReportQuoteState()
 			},
@@ -377,10 +383,12 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			resetOpenOracleInitialReportTokenAccessState(false)
 			return
 		}
+		const currentReportIdInput = currentDetails.reportId.toString()
+		const isCurrentSelectedReport = () => isSelectedReportCurrent(currentReportIdInput)
 
 		try {
 			await openOracleInitialReportTokenAccessLoad.run({
-				isCurrent,
+				isCurrent: () => isCurrent() && isCurrentSelectedReport(),
 				onStart: () => {
 					setOpenOracleInitialReportTokenAccessMode(preserveExisting ? 'background' : 'initial')
 					if (!preserveExisting) {
@@ -465,14 +473,16 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				onError: () => undefined,
 			})
 		} finally {
-			if (isCurrent()) setOpenOracleInitialReportTokenAccessMode('idle')
+			if (isCurrent() && isCurrentSelectedReport()) setOpenOracleInitialReportTokenAccessMode('idle')
 		}
 	}
 
 	const loadOracleReportById = async (reportId: bigint) => await loadOpenOracleReportDetails(createConnectedReadClient(), getOpenOracleAddress(), reportId)
 
 	const loadOracleReport = async (reportIdInput?: string) => {
-		const isCurrent = nextOracleReportLoad()
+		const requestedReportIdInput = reportIdInput?.trim() ?? currentSelectedReportIdInput
+		if (reportIdInput !== undefined) currentSelectedReportIdRef.current = requestedReportIdInput
+		const isCurrentLoad = nextOracleReportLoad()
 		await oracleReportLoad.run({
 			onStart: () => {
 				openOracleError.value = undefined
@@ -486,15 +496,15 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 						reportId: reportIdValue,
 					}
 				const details = await loadOracleReportById(reportId)
-				if (!isCurrent()) throw new Error('Stale oracle report load')
+				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) throw new Error('Stale oracle report load')
 				return { details, reportId } satisfies LoadedOracleReportResult
 			},
 			onSuccess: ({ details }: LoadedOracleReportResult) => {
-				if (!isCurrent()) return
+				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) return
 				applyLoadedOracleReport(details, { resetPrice: true })
 			},
 			onError: (error: unknown) => {
-				if (!isCurrent()) return
+				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) return
 				openOracleReportDetails.value = undefined
 				loadedOpenOracleReportId.value = undefined
 				resetOpenOracleInitialReportState(false)
@@ -503,17 +513,29 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		})
 	}
 
-	const ensureLoadedSelectedReport = async ({ forceReload = false }: { forceReload?: boolean } = {}) => {
-		const reportId = parseReportIdInput(openOracleForm.value.reportId)
+	const ensureLoadedSelectedReport = async ({ forceReload = false, reportIdInput, requireCurrentSelection = false }: { forceReload?: boolean; reportIdInput?: string; requireCurrentSelection?: boolean } = {}) => {
+		const selectedReportIdInput = reportIdInput?.trim() ?? currentSelectedReportIdInput
+		const reportId = parseReportIdInput(selectedReportIdInput)
 		if (!forceReload && openOracleReportDetails.value !== undefined && loadedOpenOracleReportId.value === reportId) return { reportId, details: openOracleReportDetails.value }
 
 		const details = await loadOracleReportById(reportId)
+		if (requireCurrentSelection && !isSelectedReportCurrent(selectedReportIdInput)) throw new Error('Selected report changed. Review the current report and try again.')
 		applyLoadedOracleReport(details, { resetPrice: false })
 
 		return {
 			details,
 			reportId,
 		}
+	}
+
+	const assertSelectedReportCurrent = (reportIdInput: string) => {
+		if (!isSelectedReportCurrent(reportIdInput)) throw new Error('Selected report changed. Review the current report and try again.')
+	}
+
+	const requireLoadedCurrentSelectedReport = () => {
+		const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
+		assertSelectedReportCurrent(reportDetails.reportId.toString())
+		return reportDetails
 	}
 
 	const getInitialReportSubmission = (reportDetails: OpenOracleReportDetails) =>
@@ -576,11 +598,17 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			refreshInitialReportTokenAccessOnSuccess?: boolean
 		},
 	) => {
+		const actionReportIdInput = currentSelectedReportIdInput
 		try {
 			openOracleFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, openOracleError, 'Connect a wallet before operating open oracle', createOpenOracleTransactionIntent(actionName)),
+					...buildWriteActionConfig(
+						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
+						openOracleError,
+						'Connect a wallet before operating open oracle',
+						createOpenOracleTransactionIntent(actionName),
+					),
 					formatErrorMessage: options?.formatErrorMessage,
 					onRefreshError: (message, hash) => {
 						openOracleFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
@@ -603,8 +631,12 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createOpenOracleSuccessPresentation(result))
 					if (result.action === 'createReportInstance') openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
-					if (result.action !== 'createReportInstance' && openOracleForm.value.reportId.trim() !== '') await ensureLoadedSelectedReport({ forceReload: true })
-					if (options?.refreshInitialReportTokenAccessOnSuccess === true) await refreshOpenOracleInitialReportTokenAccess(openOracleReportDetails.value, { preserveExisting: true })
+					if (result.action !== 'createReportInstance' && actionReportIdInput !== '' && isSelectedReportCurrent(actionReportIdInput)) {
+						await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: actionReportIdInput, requireCurrentSelection: true })
+					}
+					if (options?.refreshInitialReportTokenAccessOnSuccess === true && actionReportIdInput !== '' && isSelectedReportCurrent(actionReportIdInput)) {
+						await refreshOpenOracleInitialReportTokenAccess(openOracleReportDetails.value, { preserveExisting: true })
+					}
 				},
 			)
 		} finally {
@@ -616,7 +648,9 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		await runOracleAction(
 			'approveToken1',
 			async walletAddress => {
-				const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
+				const reportDetails = requireLoadedCurrentSelectedReport()
+				await refreshOpenOracleInitialReportTokenAccess(reportDetails, { preserveExisting: true })
+				assertSelectedReportCurrent(reportDetails.reportId.toString())
 				const selectedActionMode = getOpenOracleSelectedReportActionMode(reportDetails)
 				const initialReportSubmission = selectedActionMode === 'initial-report' ? getInitialReportSubmission(reportDetails) : undefined
 				const disputeSubmission = selectedActionMode === 'dispute' ? getDisputeSubmission(reportDetails) : undefined
@@ -632,7 +666,9 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		await runOracleAction(
 			'approveToken2',
 			async walletAddress => {
-				const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
+				const reportDetails = requireLoadedCurrentSelectedReport()
+				await refreshOpenOracleInitialReportTokenAccess(reportDetails, { preserveExisting: true })
+				assertSelectedReportCurrent(reportDetails.reportId.toString())
 				const selectedActionMode = getOpenOracleSelectedReportActionMode(reportDetails)
 				const initialReportSubmission = selectedActionMode === 'initial-report' ? getInitialReportSubmission(reportDetails) : undefined
 				const disputeSubmission = selectedActionMode === 'dispute' ? getDisputeSubmission(reportDetails) : undefined
@@ -688,7 +724,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		await runOracleAction(
 			'submitInitialReport',
 			async walletAddress => {
-				const { details: reportDetails } = await ensureLoadedSelectedReport({ forceReload: true })
+				const { details: reportDetails } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'initial-report') {
 					const submission = getInitialReportSubmission(reportDetails)
 					throw new Error(submission.blockMessage?.message ?? 'This report already has an initial report.')
@@ -700,6 +736,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 					if (!quoteRefreshCompleted) throw new Error('Automatic price quote is stale and could not be refreshed. Refresh the quote or enter a manual price before submitting.')
 				}
 				await refreshOpenOracleInitialReportTokenAccess(reportDetails, { preserveExisting: true })
+				assertSelectedReportCurrent(reportDetails.reportId.toString())
 				const submission = getInitialReportSubmission(reportDetails)
 				if (!submission.canSubmit || submission.amount1 === undefined || submission.amount2 === undefined) throw new Error(submission.blockMessage?.message ?? 'Invalid price')
 
@@ -718,6 +755,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			async walletAddress => {
 				const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
 				await refreshOpenOracleInitialReportTokenAccess(reportDetails, { preserveExisting: true })
+				assertSelectedReportCurrent(reportDetails.reportId.toString())
 				const submission = getInitialReportSubmission(reportDetails)
 				const wrapAmount = submission.requiredWethWrapAmount
 				if (wrapAmount === undefined || wrapAmount <= 0n || !submission.canWrapRequiredWeth) throw new Error(submission.wrapRequiredWethMessage?.message ?? 'No WETH wrap is required for this report')
@@ -732,7 +770,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		await runOracleAction(
 			'settle',
 			async walletAddress => {
-				const { details } = await ensureLoadedSelectedReport({ forceReload: true })
+				const { details } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				const settleAvailability = getOpenOracleSettleAvailability(details)
 				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? 'This report is not ready to settle yet.')
 
@@ -746,10 +784,11 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		await runOracleAction(
 			'dispute',
 			async walletAddress => {
-				const { details } = await ensureLoadedSelectedReport({ forceReload: true })
+				const { details } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				const disputeAvailability = getOpenOracleDisputeAvailability(details)
 				if (!disputeAvailability.canAct) throw new Error(disputeAvailability.message ?? 'This report is not ready to dispute yet.')
 				await refreshOpenOracleInitialReportTokenAccess(details, { preserveExisting: true })
+				assertSelectedReportCurrent(details.reportId.toString())
 				const disputeSubmission = getDisputeSubmission(details)
 				if (!disputeSubmission.canSubmit || disputeSubmission.expectedNewAmount1 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
 				const form = openOracleForm.value

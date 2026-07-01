@@ -7,6 +7,7 @@ export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'no
 
 export type WriteOperationsParameters = {
 	accountAddress: Address | undefined
+	onTransactionCanceled?: () => void
 	onTransactionFailed?: (message: string) => void
 	onTransactionFinished: () => void
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void

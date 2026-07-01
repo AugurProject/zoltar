@@ -174,16 +174,27 @@ describe('reportingDomain', () => {
 		expect(getEscalationPhase(details)).toBe('Fork Triggered')
 	})
 
-	test('getEscalationPhase treats the exact timeout boundary as Timed Out', () => {
-		const details = createReportingDetails({
-			currentTime: 300n,
-			escalationEndTime: 300n,
-		})
+	test('getEscalationPhase keeps the exact timeout boundary active and times out one second later', () => {
+		expect(
+			getEscalationPhase(
+				createReportingDetails({
+					currentTime: 300n,
+					escalationEndTime: 300n,
+				}),
+			),
+		).toBe('Active')
 
-		expect(getEscalationPhase(details)).toBe('Timed Out')
+		expect(
+			getEscalationPhase(
+				createReportingDetails({
+					currentTime: 301n,
+					escalationEndTime: 300n,
+				}),
+			),
+		).toBe('Timed Out')
 	})
 
-	test('isReportingClosed treats non-decision and the exact timeout boundary as closed', () => {
+	test('isReportingClosed treats non-decision as closed but keeps the exact timeout boundary open', () => {
 		expect(
 			isReportingClosed(
 				createReportingDetails({
@@ -198,6 +209,15 @@ describe('reportingDomain', () => {
 			isReportingClosed(
 				createReportingDetails({
 					currentTime: 300n,
+					escalationEndTime: 300n,
+				}),
+			),
+		).toBe(false)
+
+		expect(
+			isReportingClosed(
+				createReportingDetails({
+					currentTime: 301n,
 					escalationEndTime: 300n,
 				}),
 			),

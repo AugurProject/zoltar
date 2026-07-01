@@ -61,7 +61,7 @@ import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingLockedUntilMessage } from '../lib/reporting.js'
+import { getReportingLockedUntilMessage, hasReportingOpened } from '../lib/reporting.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
@@ -199,7 +199,7 @@ export function SecurityPoolWorkflowSection({
 		systemState: selectedPoolState,
 	})
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
-	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
+	const reportingReady = marketDetails === undefined ? undefined : hasReportingOpened(marketDetails.endTime, currentTimestamp)
 	const selectedPoolReportingStage = deriveSecurityPoolReportingStage({
 		reportingDetails: currentReportingDetails,
 		reportingReady,

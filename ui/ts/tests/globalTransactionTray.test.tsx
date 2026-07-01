@@ -180,4 +180,27 @@ describe('GlobalTransactionTray', () => {
 		cleanupRenderedComponent = rerenderedComponent.cleanup
 		expect(rerenderedComponent.container.textContent).toBe('')
 	})
+
+	test('keeps a pending transaction visible when remounted with the same hash', async () => {
+		const transaction = {
+			detail: 'Waiting for confirmation.',
+			hash: '0x5234000000000000000000000000000000000000000000000000000000000000' as const,
+			title: 'Creating Question',
+			tone: 'pending' as const,
+		}
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Pending')).not.toBeNull()
+		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
+
+		await act(() => {
+			renderedComponent.unmount()
+		})
+
+		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
+		cleanupRenderedComponent = rerenderedComponent.cleanup
+		expect(within(document.body).getByText('Pending')).not.toBeNull()
+		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
+	})
 })

@@ -32,55 +32,65 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
+	const marketSubmissionInProgress = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
 	const marketError = useSignal<string | undefined>(undefined)
 	const marketFeedback = useSignal<ActionFeedback<'createMarket'> | undefined>(undefined)
 
 	const createMarket = async () => {
+		if (marketSubmissionInProgress.value) {
+			marketError.value = 'Question creation already in progress'
+			return
+		}
+		marketSubmissionInProgress.value = true
 		marketResult.value = undefined
 		marketFeedback.value = createPendingActionFeedback('createMarket', 'Creating question')
-		await runWriteAction(
-			{
-				accountAddress,
-				missingWalletMessage: 'Connect a wallet before creating a question',
-				onRefreshError: (message, hash) => {
-					marketFeedback.value = createWarningActionFeedback('createMarket', 'Question created', message, hash)
-					const result = marketResult.value
-					if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message))
+		try {
+			await runWriteAction(
+				{
+					accountAddress,
+					missingWalletMessage: 'Connect a wallet before creating a question',
+					onRefreshError: (message, hash) => {
+						marketFeedback.value = createWarningActionFeedback('createMarket', 'Question created', message, hash)
+						const result = marketResult.value
+						if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message))
+					},
+					onTransactionRequested: () => {
+						marketCreating.value = true
+						onTransactionRequested(createMarketCreationTransactionIntent())
+					},
+					onTransactionFinished: () => {
+						marketCreating.value = false
+						onTransactionFinished()
+					},
+					onTransactionFailed,
+					onWriteError: message => {
+						marketFeedback.value = createErrorActionFeedback('createMarket', 'Question creation failed', message)
+					},
+					refreshState: async () => {
+						await refreshState()
+						await zoltar.loadZoltarQuestions()
+					},
+					setErrorMessage: message => {
+						marketError.value = message
+					},
 				},
-				onTransactionRequested: () => {
-					marketCreating.value = true
-					onTransactionRequested(createMarketCreationTransactionIntent())
+				async walletAddress => {
+					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
+					const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), createMarketParameters(marketForm.value))
+					return { ...result, hash: result.createQuestionHash }
 				},
-				onTransactionFinished: () => {
-					marketCreating.value = false
-					onTransactionFinished()
+				'Failed to create question',
+				result => {
+					marketResult.value = result
+					marketFeedback.value = createSuccessActionFeedback('createMarket', 'Question created', result.hash)
+					onTransactionPresented(createMarketCreationSuccessPresentation(result))
+					zoltar.setZoltarForkQuestionId(result.questionId)
 				},
-				onTransactionFailed,
-				onWriteError: message => {
-					marketFeedback.value = createErrorActionFeedback('createMarket', 'Question creation failed', message)
-				},
-				refreshState: async () => {
-					await refreshState()
-					await zoltar.loadZoltarQuestions()
-				},
-				setErrorMessage: message => {
-					marketError.value = message
-				},
-			},
-			async walletAddress => {
-				if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
-				const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), createMarketParameters(marketForm.value))
-				return { ...result, hash: result.createQuestionHash }
-			},
-			'Failed to create question',
-			result => {
-				marketResult.value = result
-				marketFeedback.value = createSuccessActionFeedback('createMarket', 'Question created', result.hash)
-				onTransactionPresented(createMarketCreationSuccessPresentation(result))
-				zoltar.setZoltarForkQuestionId(result.questionId)
-			},
-		)
+			)
+		} finally {
+			marketSubmissionInProgress.value = false
+		}
 	}
 
 	const resetMarket = () => {

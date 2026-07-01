@@ -222,6 +222,63 @@ describe('useSecurityPoolCreation', () => {
 		expect(requireState(state).securityPoolError).toBe('Failed to load market. Reason: backend offline')
 	})
 
+	test('loadMarketById ignores stale results when market lookups resolve out of order', async () => {
+		const firstLookup = createDeferred<MarketIdLoadResult>()
+		const secondLookup = createDeferred<MarketIdLoadResult>()
+		const loadMarketDetails = mock(async (_client: unknown, questionId: bigint) => {
+			if (questionId === 11n) return await firstLookup.promise
+			if (questionId === 12n) return await secondLookup.promise
+			throw new Error(`Unexpected question ID: ${questionId.toString()}`)
+		})
+		setupContractMocks({
+			loadMarketDetails,
+			originSecurityPoolExists: mock(async () => false),
+		})
+
+		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let firstLoadPromise = Promise.resolve()
+		await act(() => {
+			firstLoadPromise = requireState(state).loadMarketById('11')
+		})
+
+		let secondLoadPromise = Promise.resolve()
+		await act(() => {
+			secondLoadPromise = requireState(state).loadMarketById('12')
+		})
+
+		secondLookup.resolve(createMarketDetails({ questionId: '0x0c', title: 'Question B' }))
+		await secondLoadPromise
+		expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
+
+		firstLookup.resolve(createMarketDetails({ questionId: '0x0b', title: 'Question A' }))
+		await firstLoadPromise
+		expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
+		expect(requireState(state).marketDetails?.title).toBe('Question B')
+		expect(loadMarketDetails).toHaveBeenCalledTimes(2)
+	})
+
 	test('loads duplicate checks for valid input and skips malformed question IDs', async () => {
 		const originSecurityPoolExists = mock(async () => true)
 		setupContractMocks({
@@ -263,6 +320,66 @@ describe('useSecurityPoolCreation', () => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
 		})
 		expect(requireState(state).duplicateOriginPoolExists).toBe(true)
+	})
+
+	test('ignores stale duplicate-origin responses when market inputs change out of order', async () => {
+		const firstDuplicateCheck = createDeferred<boolean>()
+		const secondDuplicateCheck = createDeferred<boolean>()
+		const originSecurityPoolExists = mock(async (_client: unknown, questionId: bigint) => {
+			if (questionId === 11n) return await firstDuplicateCheck.promise
+			if (questionId === 12n) return await secondDuplicateCheck.promise
+			throw new Error(`Unexpected question ID: ${questionId.toString()}`)
+		})
+		setupContractMocks({
+			loadMarketDetails: mock(async () => createMarketDetails()),
+			originSecurityPoolExists,
+		})
+
+		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+		})
+		await waitFor(() => {
+			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
+		})
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', securityMultiplier: '2' }))
+		})
+		await waitFor(() => {
+			expect(originSecurityPoolExists).toHaveBeenCalledTimes(2)
+		})
+
+		secondDuplicateCheck.resolve(true)
+		await waitFor(() => {
+			expect(requireState(state).duplicateOriginPoolExists).toBe(true)
+		})
+
+		firstDuplicateCheck.resolve(false)
+		await waitFor(() => {
+			expect(requireState(state).duplicateOriginPoolExists).toBe(true)
+		})
 	})
 
 	test('createPool blocks when required deployment step is missing', async () => {
@@ -458,5 +575,239 @@ describe('useSecurityPoolCreation', () => {
 		})
 		await firstCreate
 		expect(createdCount).toBe(1)
+	})
+
+	test('createPool blocks repeated submissions before wallet preflight finishes', async () => {
+		const pendingCreate = createDeferred<SecurityPoolCreationResult>()
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }) => {
+			client.onTransactionSubmitted?.('0xabc')
+			return await pendingCreate.promise
+		})
+		const onTransactionRequested = mock(() => undefined)
+		setupContractMocks({
+			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool,
+		})
+
+		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).loadMarketById('11')
+		})
+		await waitFor(() => {
+			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
+		})
+
+		let firstCreate: Promise<void> | undefined
+		let secondCreate: Promise<void> | undefined
+		await act(() => {
+			firstCreate = requireState(state).createPool()
+			secondCreate = requireState(state).createPool()
+		})
+		if (firstCreate === undefined || secondCreate === undefined) {
+			throw new Error('Expected both createPool promises')
+		}
+
+		await waitFor(() => {
+			expect(onTransactionRequested).toHaveBeenCalledTimes(1)
+		})
+		expect(createSecurityPool).toHaveBeenCalledTimes(1)
+		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('pending')
+
+		pendingCreate.resolve({
+			deployPoolHash: '0xabc' as Hash,
+			questionId: '0x0b',
+			securityPoolAddress: '0x1111111111111111111111111111111111111111',
+			securityMultiplier: 2n,
+			universeId: 0n,
+		})
+
+		await firstCreate
+		await secondCreate
+
+		expect(createSecurityPool).toHaveBeenCalledTimes(1)
+		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
+	})
+
+	test('createPool keeps the current loaded market when the selected market changes before success', async () => {
+		const createPoolDeferred = createDeferred<SecurityPoolCreationResult>()
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }) => {
+			client.onTransactionSubmitted?.('0xabc')
+			return await createPoolDeferred.promise
+		})
+		setupContractMocks({
+			loadMarketDetails: mock(async (_client: unknown, questionId: bigint) => {
+				if (questionId === 11n) return createMarketDetails({ questionId: '0x0b', title: 'Question A' })
+				if (questionId === 12n) return createMarketDetails({ questionId: '0x0c', title: 'Question B' })
+				throw new Error(`Unexpected question ID: ${questionId.toString()}`)
+			}),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool,
+		})
+
+		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionPresented: () => undefined,
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).loadMarketById('11')
+		})
+		await waitFor(() => {
+			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
+		})
+
+		let firstCreate: Promise<void> | undefined
+		await act(() => {
+			firstCreate = requireState(state).createPool()
+		})
+		if (firstCreate === undefined) {
+			throw new Error('Expected createPool promise')
+		}
+		await waitFor(() => {
+			expect(requireState(state).securityPoolCreating).toBe(true)
+		})
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12' }))
+		})
+		await waitFor(() => {
+			expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
+		})
+
+		createPoolDeferred.resolve({
+			deployPoolHash: '0xabc',
+			questionId: '0x0b',
+			securityPoolAddress: '0x1111111111111111111111111111111111111111',
+			securityMultiplier: 2n,
+			universeId: 0n,
+		})
+		await firstCreate
+
+		expect(requireState(state).securityPoolResult?.questionId).toBe('0x0b')
+		expect(requireState(state).poolCreationMarketDetails?.questionId).toBe('0x0b')
+		expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
+		expect(requireState(state).marketDetails?.title).toBe('Question B')
+	})
+
+	test('createPool does not get stuck after a pre-request wallet disconnect', async () => {
+		const createSecurityPool = mock(async () => {
+			throw new Error('createSecurityPool should not run before the wallet preflight passes')
+		})
+		setupContractMocks({
+			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool,
+		})
+
+		const onTransactionRequested = mock(() => undefined)
+		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionPresented: () => undefined,
+				onTransactionFinished: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).loadMarketById('11')
+		})
+		await waitFor(() => {
+			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
+		})
+
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+
+		await act(async () => {
+			await requireState(state).createPool()
+		})
+
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(createSecurityPool).not.toHaveBeenCalled()
+		expect(requireState(state).securityPoolCreating).toBe(false)
+		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
+		expect(requireState(state).securityPoolCreationFeedback?.status.detail).toContain('Wallet account is no longer connected')
+
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
+
+		setupContractMocks({
+			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
+			originSecurityPoolExists: mock(async () => false),
+			createSecurityPool: mock(async () => ({
+				deployPoolHash: '0xabc' as Hash,
+				questionId: '0x0b',
+				securityPoolAddress: '0x1111111111111111111111111111111111111111',
+				securityMultiplier: 2n,
+				universeId: 0n,
+			})),
+		})
+
+		await act(async () => {
+			await requireState(state).createPool()
+		})
+
+		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
+		expect(requireState(state).securityPoolCreating).toBe(false)
+		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
 	})
 })

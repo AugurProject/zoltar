@@ -65,7 +65,7 @@ export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 function hasEscalationTimedOut(details: ActiveReportingDetails) {
-	return details.currentTime >= details.escalationEndTime
+	return details.currentTime > details.escalationEndTime
 }
 export function isPoolQuestionFinalized(details: Pick<ReportingDetails, 'questionOutcome' | 'systemState'> | undefined) {
 	return details !== undefined && details.systemState === 'operational' && details.questionOutcome !== 'none'
