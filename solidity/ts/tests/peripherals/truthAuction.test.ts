@@ -1,4 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 
 describe('Peripherals: truth auction', () => {
@@ -25,6 +26,7 @@ describe('Peripherals: truth auction', () => {
 		getETHBalance,
 		addressString,
 		approveAndDepositRep,
+		handleOracleReporting,
 		manipulatePriceOracle,
 		manipulatePriceOracleAndPerformOperation,
 		triggerOwnGameFork,
@@ -37,6 +39,7 @@ describe('Peripherals: truth auction', () => {
 		getQuestionEndDate,
 		OperationType,
 		participateAuction,
+		requestPriceIfNeededAndStageOperation,
 		tickToPrice,
 		QuestionOutcome,
 		SystemState,
@@ -1009,6 +1012,126 @@ describe('Peripherals: truth auction', () => {
 				.filter(log => log?.eventName === 'ClaimAuctionProceeds')
 
 			strictEqualTypeSafe(claimLogs.length, 0, 'refund-only settlements should not emit ClaimAuctionProceeds')
+		})
+
+		test('unclaimed finalized auction proceeds survive partial vault liquidation and remain claimable by the original bidder', async () => {
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const settlementCaller = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+			await approveAndDepositRep(liquidatorClient, repDeposit * 50n, questionId)
+			await approveAndDepositRep(passiveRepHolder, repDeposit * 50n, questionId)
+
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await manipulatePriceOracleAndPerformOperation(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, passiveRepHolder.account.address, securityPoolAllowance / 2n)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+
+			await triggerExternalForkForSecurityPool(undefined, 'liquidated unclaimed auction proceeds fork source')
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			await migrateVault(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
+			const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+			const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+			const winningTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
+			const liquidatorChildRepBalanceSlot = formatStorageSlot(getMappingStorageSlot(liquidatorClient.account.address, 0n))
+			const liquidateClaimableChildVault = async (amount: bigint) => {
+				await mockWindow.addStateOverrides({
+					[childRepToken]: {
+						stateDiff: {
+							[liquidatorChildRepBalanceSlot]: repDeposit,
+						},
+					},
+				})
+				await approveToken(liquidatorClient, childRepToken, getInfraContractAddresses().openOracle)
+				await requestPriceIfNeededAndStageOperation(liquidatorClient, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, amount)
+				await handleOracleReporting(liquidatorClient, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			}
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			await mockWindow.advanceTime(10n * 60n)
+
+			const targetVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
+			const targetRepBeforeLiquidation = await poolOwnershipToRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.repDepositShare)
+			const liquidationThresholdPrice = (targetRepBeforeLiquidation * PRICE_PRECISION) / (targetVaultBeforeLiquidation.securityBondAllowance * securityMultiplier)
+			const forcedPrice = (liquidationThresholdPrice + 1n) * 2n
+			const liquidationChunk = targetVaultBeforeLiquidation.securityBondAllowance / 10n
+
+			strictEqualTypeSafe(targetVaultBeforeLiquidation.securityBondAllowance > 0n, true, 'migrated bidder vault should carry liquidatable allowance before the auction claim')
+			assert.ok(targetRepBeforeLiquidation > 0n, 'migrated bidder vault should carry REP before liquidation')
+			strictEqualTypeSafe(liquidationChunk > 0n, true, 'test setup needs a positive liquidation chunk')
+
+			const liquidationAttemptStartBlock = await client.getBlockNumber()
+			await liquidateClaimableChildVault(liquidationChunk)
+
+			const targetVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
+			const targetRepAfterLiquidation = await poolOwnershipToRep(client, yesSecurityPool.securityPool, targetVaultAfterLiquidation.repDepositShare)
+
+			if (targetVaultAfterLiquidation.securityBondAllowance >= targetVaultBeforeLiquidation.securityBondAllowance) {
+				const coordinatorLogs = await client.getLogs({
+					address: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
+					fromBlock: liquidationAttemptStartBlock,
+					toBlock: 'latest',
+				})
+				const executionReasons = coordinatorLogs
+					.map(log => {
+						try {
+							return decodeEventLog({
+								abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+								data: log.data,
+								topics: log.topics,
+							})
+						} catch (error) {
+							if (!isIgnorableLogDecodeError(error)) throw error
+							return undefined
+						}
+					})
+					.filter(log => log?.eventName === 'ExecutedStagedOperation')
+					.map(log => `${log?.args.success === true ? 'success' : 'failure'}:${log?.args.errorMessage ?? ''}`)
+				throw new Error(`pre-claim liquidation did not reduce allowance; coordinator results=${executionReasons.join('|')}`)
+			}
+
+			strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, targetVaultBeforeLiquidation.securityBondAllowance - liquidationChunk, 'partial liquidation before claim should reduce the migrated vault allowance by the executed chunk')
+			assert.ok(targetRepAfterLiquidation < targetRepBeforeLiquidation, 'partial liquidation before claim should reduce the migrated vault REP')
+			assert.ok(liquidatorVaultAfterLiquidation.repDepositShare > liquidatorVaultBeforeLiquidation.repDepositShare, 'the liquidator should absorb the migrated vault ownership')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, liquidatorVaultBeforeLiquidation.securityBondAllowance + liquidationChunk, 'the liquidator should absorb the liquidated allowance chunk')
+
+			const childCollateralAfterLiquidation = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const childAllowanceAfterLiquidation = await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool)
+			const totalRepPurchased = await getTotalRepPurchased(client, yesSecurityPool.truthAuction)
+			const forkDataBeforeClaim = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+
+			strictEqualTypeSafe(forkDataBeforeClaim.auctionedSecurityBondAllowance > 0n, true, 'test setup should leave auctioned allowance to assign on claim')
+			strictEqualTypeSafe(totalRepPurchased > 0n, true, 'test setup should leave finalized auction REP for the bidder to claim')
+
+			await claimAuctionProceeds(settlementCaller, yesSecurityPool.securityPool, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
+
+			const targetVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			const liquidatorVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
+			const targetRepAfterClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, targetVaultAfterClaim.repDepositShare)
+
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), childCollateralAfterLiquidation, 'claim timing should not change child collateral totals after liquidation')
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), childAllowanceAfterLiquidation, 'claim timing should not change child allowance totals after liquidation')
+			strictEqualTypeSafe(targetRepAfterClaim - targetRepAfterLiquidation, totalRepPurchased, 'the original bidder should still receive the full finalized auction REP after their migrated vault was liquidated')
+			strictEqualTypeSafe(targetVaultAfterClaim.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance, forkDataBeforeClaim.auctionedSecurityBondAllowance, 'the original bidder should still receive the full auctioned allowance after liquidation')
+			strictEqualTypeSafe(liquidatorVaultAfterClaim.repDepositShare, liquidatorVaultAfterLiquidation.repDepositShare, 'unclaimed finalized auction proceeds should not be swept into the liquidator vault')
+			strictEqualTypeSafe(liquidatorVaultAfterClaim.securityBondAllowance, liquidatorVaultAfterLiquidation.securityBondAllowance, 'unclaimed finalized auction allowance should not be swept into the liquidator vault')
 		})
 
 		test('claimAuctionProceeds cannot settle the same finalized losing bid twice', async () => {
