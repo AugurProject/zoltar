@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x3E2D809A09A627D199486325ff90d93c4073dAe9"
+			"address": "0x5c8594ce4d9A3307e6E6e5E16C1473Dd424fDdbf"
 		},
 		{
 			"id": "multicall3",
@@ -53,34 +53,34 @@
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x8e38088707002EebdE043ab424d3b6e3986Fb444"
+			"address": "0x967099046B795125Ab89BCA24da1A1876EFc69BD"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "Price Oracle Manager Factory",
-			"address": "0x9914b438a094c14722929a6a25D10Cfb242Da5ec"
+			"address": "0xBAF4AC7FE959090ab32308e3E9ccD7628645F31c"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xF86eedE62FEb3978a8698a1de820bBd953Dbd853"
+			"address": "0x51fE6A3e8aCcC8d1A3Ed4339496735d763337DEa"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x6C9a748bFAefc9cFF26ba8ad05a83A9B40F15584"
+			"address": "0x4e5119B43741efF8d58824e621B934e4F70DfBC7"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xb455AB4c407eefddfaa325beE4833741E9Cc7899"
+			"address": "0xE61feebDAe6DB6E42d517F4ce7364F56799C4670"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0x060056235FbDE975613FD83cf2a3d89c1cCD187b"
+			"address": "0x6a8Dcb0c794ad8fEAFc94D7c4b8c026DcE108f5f"
 		}
 	]
 }

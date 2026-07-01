@@ -30,6 +30,7 @@ import {
 	getPriceRoundRemainingNotional,
 	getRequestPriceEthCost,
 	getStagedOperation,
+	getStagedOperationCounter,
 	openOracleSettle,
 	openOracleSettleWithGasPrice,
 	openOracleSubmitInitialReport,
@@ -856,6 +857,72 @@ describe('Price Oracle Refund Security Tests', () => {
 		const vaultAfterReduction = await getSecurityVault(client, securityPool, client.account.address)
 		assert.strictEqual(consumedAfterReduction, 1000n * 10n ** 18n, 'allowance reductions should not consume price-round budget')
 		assert.strictEqual(vaultAfterReduction.securityBondAllowance, reducedAllowance, 'allowance reductions should still execute while the price is fresh, even after the budget is exhausted')
+	})
+
+	test('manual overflow allowance operations cannot bypass the shared budget after the live allowance changes', async () => {
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const initialAllowance = 900n * 10n ** 18n
+		const overflowAllowance = 950n * 10n ** 18n
+
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
+
+		const stagedOperationCounterBeforeQueue = await getStagedOperationCounter(client, priceOracle)
+
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+
+		const overflowOperationId = stagedOperationCounterBeforeQueue + 5n
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		const overflowOperationAfterSettlement = await getStagedOperation(client, priceOracle, overflowOperationId)
+		assert.strictEqual(overflowOperationAfterSettlement[1], client.account.address, 'overflow allowance operation should remain manually executable after settlement')
+
+		await requestPriceIfNeededAndStageOperationWithValue(counterpartyClient, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+
+		const consumedAfterCounterpartyIncrease = await getPriceRoundConsumedNotional(client, priceOracle)
+		const remainingAfterCounterpartyIncrease = await getPriceRoundRemainingNotional(client, priceOracle)
+		assert.strictEqual(consumedAfterCounterpartyIncrease, overflowAllowance, 'counterparty increase should consume the fresh-price budget')
+		assert.strictEqual(remainingAfterCounterpartyIncrease, 50n * 10n ** 18n, 'test setup should leave only the stale queue-time delta available')
+
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+
+		const consumedAfterReduction = await getPriceRoundConsumedNotional(client, priceOracle)
+		const vaultAfterReduction = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(consumedAfterReduction, overflowAllowance, 'allowance reduction should not consume any additional budget')
+		assert.strictEqual(vaultAfterReduction.securityBondAllowance, 0n, 'test setup should reduce the live allowance to zero before manual execution')
+
+		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /Not enough ETH was provided to request a fresh oracle price/i)
+
+		const executionHash = await executeStagedOperation(client, priceOracle, overflowOperationId)
+		const executionReceipt = await client.waitForTransactionReceipt({ hash: executionHash })
+		const executionLog = findExecutedStagedOperationLog(executionReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing stale overflow execution log')
+
+		const consumedAfterExecution = await getPriceRoundConsumedNotional(client, priceOracle)
+		const remainingAfterExecution = await getPriceRoundRemainingNotional(client, priceOracle)
+		const overflowOperationAfterExecution = await getStagedOperation(client, priceOracle, overflowOperationId)
+		const vaultAfterExecution = await getSecurityVault(client, securityPool, client.account.address)
+		const counterpartyVaultAfterExecution = await getSecurityVault(client, securityPool, counterpartyClient.account.address)
+
+		assert.strictEqual(executionLog.args.operationId, overflowOperationId, 'manual execution should target the overflow allowance operation')
+		assert.strictEqual(executionLog.args.success, false, 'stale overflow allowance execution must fail once the live increase exceeds the remaining budget')
+		assert.strictEqual(executionLog.args.errorMessage, 'oracle budget exceeded', 'manual overflow execution should fail with the shared-budget guard')
+		assert.strictEqual(consumedAfterExecution, overflowAllowance, 'failed stale overflow execution must not consume any additional budget')
+		assert.strictEqual(remainingAfterExecution, 50n * 10n ** 18n, 'failed stale overflow execution must preserve the remaining budget')
+		assert.strictEqual(overflowOperationAfterExecution[1], zeroAddress, 'failed stale overflow execution should consume the staged operation')
+		assert.strictEqual(vaultAfterExecution.securityBondAllowance, 0n, 'failed stale overflow execution must not restore the reduced allowance')
+		assert.strictEqual(counterpartyVaultAfterExecution.securityBondAllowance, overflowAllowance, 'the counterparty budget-consuming allowance should remain in place')
 	})
 
 	test('empty-vault withdrawals cannot consume fresh-price budget', async () => {
