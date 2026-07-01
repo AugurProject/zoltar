@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { SectionBlock } from './SectionBlock.js'
+import { AUCTIONED_BOND_ALLOWANCE_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {
 	auctionedBondAllowanceDisplay?: ComponentChildren | undefined
@@ -50,7 +51,7 @@ export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, 
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label='Starts'>{startedDisplay}</MetricField>
 					<MetricField label='Clearing Price'>{clearingPriceDisplay}</MetricField>
-					{auctionedBondAllowanceDisplay === undefined ? undefined : <MetricField label='Auctioned Bond Allowance'>{auctionedBondAllowanceDisplay}</MetricField>}
+					{auctionedBondAllowanceDisplay === undefined ? undefined : <MetricField label={AUCTIONED_BOND_ALLOWANCE_LABEL}>{auctionedBondAllowanceDisplay}</MetricField>}
 					<MetricField label='Min Bid'>{<CurrencyValue value={minBidSize} suffix='ETH' />}</MetricField>
 					<MetricField label='Ends'>{endsDisplay}</MetricField>
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label='Winning Threshold'>{winningThresholdPriceDisplay}</MetricField>}

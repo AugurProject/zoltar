@@ -6,6 +6,7 @@ import { getReportingOutcomeLabel } from './reporting.js'
 const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
 
 export const AUCTION_TIME_SECONDS = SECONDS_PER_WEEK
+export const AUCTIONED_BOND_ALLOWANCE_LABEL = 'Auctioned Bond Allowance (OI Debt)'
 
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'
 
@@ -47,7 +48,7 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 		case 'forkMigration':
 			return 'Migration is active. Vaults, escalation deposits, and REP can be moved into a child universe before the truth auction starts.'
 		case 'forkTruthAuction':
-			return 'Truth auction is active. Winning bidders later claim child-pool REP plus a pro-rata share of the auctioned security bond allowance, which is the remaining open-interest debt for this repair path.'
+			return `Truth auction is active. Winning bidders later claim child-pool REP plus a pro-rata share of the ${AUCTIONED_BOND_ALLOWANCE_LABEL}, which is the remaining open-interest debt for this repair path.`
 		default:
 			return assertNever(state)
 	}

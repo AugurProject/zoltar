@@ -7,10 +7,12 @@ import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStage
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import {
 	buildTruthAuctionDepthPoints,
+	getTruthAuctionBidSettlementEstimate,
 	getTruthAuctionBidDisposition,
 	getTruthAuctionBidGuardMessage,
 	getTruthAuctionBidPreview,
 	getTruthAuctionBidPriceValidationMessage,
+	getTruthAuctionWinningThresholdPrice,
 	TRUTH_AUCTION_MIN_SUPPORTED_TICK,
 	TRUTH_AUCTION_MIN_TICK,
 	getTruthAuctionOverviewProgress,
@@ -21,11 +23,13 @@ import {
 	TRUTH_AUCTION_MAX_TICK,
 	TRUTH_AUCTION_PRICE_PRECISION,
 } from '../lib/truthAuctionBook.js'
-import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionState } from '../lib/truthAuctionSettlement.js'
+import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '../lib/truthAuctionSettlement.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
+const ONE_UNIT = 10n ** 18n
+const HALF_UNIT = 5n * 10n ** 17n
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {
@@ -435,11 +439,11 @@ void describe('fork auction helpers', () => {
 		const finalizedAuction = createTruthAuction({
 			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
 			clearingTick: 10n,
-			ethAtClearingTick: 2n * 10n ** 18n,
+			ethAtClearingTick: 2n * ONE_UNIT,
 			finalized: true,
 			hitCap: true,
-			maxRepBeingSold: 100n * 10n ** 18n,
-			totalRepPurchased: 10n * 10n ** 18n,
+			maxRepBeingSold: 100n * ONE_UNIT,
+			totalRepPurchased: 10n * ONE_UNIT,
 		})
 		const refundableBid = createBid({ bidIndex: 1n, tick: 9n })
 		const winningBid = createBid({ bidIndex: 2n, tick: 11n })
@@ -483,6 +487,119 @@ void describe('fork auction helpers', () => {
 				truthAuction: finalizedAuction,
 			}),
 		).toBeUndefined()
+	})
+
+	void test('estimates partial clearing settlement amounts for finalized bids', () => {
+		const finalizedAuction = createTruthAuction({
+			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
+			clearingTick: 10n,
+			ethAtClearingTick: ONE_UNIT + HALF_UNIT,
+			finalized: true,
+			hitCap: true,
+			totalRepPurchased: 4n * ONE_UNIT,
+		})
+		const partialBid = createBid({
+			activeCumulativeEthBeforeBid: ONE_UNIT,
+			bidIndex: 1n,
+			ethAmount: ONE_UNIT,
+			tick: 10n,
+		})
+
+		expect(getTruthAuctionBidSettlementEstimate(partialBid, finalizedAuction)).toEqual({
+			purchasedRepAmount: HALF_UNIT,
+			refundedEthAmount: HALF_UNIT,
+			usedEthAmount: HALF_UNIT,
+		})
+	})
+
+	void test('marks underfunded winning settlement amounts as unknown without the winning-ETH denominator', () => {
+		const underfundedAuction = createTruthAuction({
+			ethRaised: 4n * ONE_UNIT,
+			finalized: true,
+			maxRepBeingSold: 8n * ONE_UNIT,
+			totalRepPurchased: 8n * ONE_UNIT,
+			underfunded: true,
+		})
+		const winningBid = createBid({
+			bidIndex: 1n,
+			ethAmount: ONE_UNIT,
+			tick: 0n,
+		})
+
+		expect(getTruthAuctionBidSettlementEstimate(winningBid, underfundedAuction)).toEqual({
+			purchasedRepAmount: undefined,
+			refundedEthAmount: 0n,
+			usedEthAmount: ONE_UNIT,
+		})
+	})
+
+	void test('returns unknown selected claim estimates for underfunded winners when losing bids remain in the auction', () => {
+		const underfundedAuction = createTruthAuction({
+			ethRaised: 4n * ONE_UNIT,
+			finalized: true,
+			maxRepBeingSold: 8n * ONE_UNIT,
+			totalRepPurchased: 8n * ONE_UNIT,
+			underfunded: true,
+		})
+		const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(underfundedAuction)
+		if (winningThresholdPrice === undefined) throw new Error('Expected an underfunded winning threshold price.')
+		const losingTick = getTruthAuctionTickAtPrice(winningThresholdPrice - 1n)
+		if (losingTick === undefined) throw new Error('Expected a losing tick below the underfunded winning threshold.')
+
+		const settlementRows = getTruthAuctionSettlementBidRows({
+			accountAddress: walletAddress,
+			truthAuction: underfundedAuction,
+			viewerBids: [createBid({ bidIndex: 1n, ethAmount: ONE_UNIT, tick: 0n }), createBid({ bidIndex: 2n, ethAmount: ONE_UNIT, tick: losingTick })],
+		})
+
+		expect(
+			getTruthAuctionSettlementSelectionEstimate({
+				auctionedSecurityBondAllowance: 8n * ONE_UNIT,
+				selectedRows: settlementRows,
+				truthAuction: underfundedAuction,
+			}),
+		).toEqual({
+			estimatedAssignedBondAllowance: undefined,
+			estimatedEthRefunded: ONE_UNIT,
+			estimatedRepClaimed: undefined,
+		})
+	})
+
+	void test('summarizes selected settlement claims and refunds with estimated assigned bond allowance', () => {
+		const finalizedAuction = createTruthAuction({
+			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
+			clearingTick: 10n,
+			ethAtClearingTick: ONE_UNIT + HALF_UNIT,
+			finalized: true,
+			hitCap: true,
+			totalRepPurchased: 4n * ONE_UNIT,
+		})
+		const settlementRows = getTruthAuctionSettlementBidRows({
+			accountAddress: walletAddress,
+			truthAuction: finalizedAuction,
+			viewerBids: [
+				createBid({ bidIndex: 1n, ethAmount: ONE_UNIT, tick: 9n }),
+				createBid({ bidIndex: 2n, ethAmount: ONE_UNIT, tick: 11n }),
+				createBid({
+					activeCumulativeEthBeforeBid: ONE_UNIT,
+					bidIndex: 3n,
+					ethAmount: ONE_UNIT,
+					tick: 10n,
+				}),
+			],
+		})
+
+		expect(
+			getTruthAuctionSettlementSelectionEstimate({
+				auctionedSecurityBondAllowance: 8n * ONE_UNIT,
+				selectedRows: settlementRows,
+				truthAuction: finalizedAuction,
+			}),
+		).toEqual({
+			estimatedAssignedBondAllowance: 3n * ONE_UNIT,
+			estimatedEthRefunded: ONE_UNIT + HALF_UNIT,
+			estimatedRepClaimed: ONE_UNIT + HALF_UNIT,
+		})
 	})
 
 	void test('builds truth auction bid row view models without component state', () => {

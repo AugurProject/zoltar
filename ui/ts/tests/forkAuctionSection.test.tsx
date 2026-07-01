@@ -889,7 +889,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Auctioned Bond Allowance')).not.toBeNull()
+		expect(documentQueries.getByText('Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
 		expect(documentQueries.getByText('Winning bids buy more than REP.')).not.toBeNull()
 		expect(documentQueries.getByText(/remaining open-interest debt being assigned to auction participants/)).not.toBeNull()
 	})
@@ -948,7 +948,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Winning claims add REP and bond allowance.')).not.toBeNull()
+		expect(documentQueries.getByText('Winning claims add REP and Auctioned Bond Allowance (OI Debt).')).not.toBeNull()
 		expect(documentQueries.getByText(/remaining open-interest debt being assigned during settlement/)).not.toBeNull()
 	})
 
