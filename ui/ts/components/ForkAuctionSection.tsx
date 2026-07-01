@@ -1,5 +1,5 @@
 import { Fragment } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
@@ -21,12 +21,9 @@ import { TimestampValue } from './TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
 import { TruthAuctionSummaryCard } from './TruthAuctionSummaryCard.js'
-import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '../contracts.js'
 import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
-import { createConnectedReadClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
 import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
@@ -38,9 +35,11 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '..
 import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
-import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, shouldReloadSelectedPoolDetails, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
+import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
 import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
+import { useForkAuctionInteractionState } from '../hooks/useForkAuctionInteractionState.js'
+import { useSelectedAuctionReadState } from '../hooks/useSelectedAuctionReadState.js'
 import { useTruthAuctionBookData } from '../hooks/useTruthAuctionBookData.js'
 import { useTruthAuctionSettlementActionState } from '../hooks/useTruthAuctionSettlementActionState.js'
 import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics } from '../types/contracts.js'
@@ -70,7 +69,6 @@ type MigrationStateBadge = {
 	tone: 'muted' | 'ok' | 'pending'
 }
 
-type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
 const FORK_MIGRATION_DURATION = 4_838_400n
 const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement']
 const FORK_WORKFLOW_STAGE_LABELS: Record<ForkWorkflowSelectionStage, string> = {
@@ -358,16 +356,36 @@ export function ForkAuctionSection({
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
 	const selectedOutcomeLabel = getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)
+	const selectedAuctionLabel = selectedOutcomeLabel
+	const { currentStage, currentWorkflowStage, selectedStage } = getForkWorkflowStageSelection({
+		currentStageView,
+		forkAuctionDetails,
+		forkOutcome,
+		previewPool,
+		selectedStageView,
+		stageView,
+		systemState,
+	})
+	const selectedStageAheadMessage = getForkWorkflowStageAheadMessage(selectedStage, currentWorkflowStage)
 	const currentSelectedOutcomePool = previewPool !== undefined && previewPool.questionOutcome === forkAuctionForm.selectedOutcome ? previewPool : undefined
 	const connectedWalletVaultSummary = accountState.address === undefined || previewPool === undefined ? undefined : previewPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const selectedOutcomeMigrationChildPool = securityPoolAddress === undefined ? undefined : securityPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
 	const selectedOutcomeMigrationChildVault = selectedOutcomeMigrationChildPool === undefined || accountState.address === undefined ? undefined : selectedOutcomeMigrationChildPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
-	const [selectedAuctionDetails, setSelectedAuctionDetails] = useState<ForkAuctionSectionProps['forkAuctionDetails']>(undefined)
-	const [selectedAuctionError, setSelectedAuctionError] = useState<string | undefined>(undefined)
-	const [loadingSelectedAuctionDetails, setLoadingSelectedAuctionDetails] = useState(false)
-	const [recoveredSelectedAuctionChildPool, setRecoveredSelectedAuctionChildPool] = useState<ListedSecurityPool | undefined>(undefined)
-	const lastHandledSelectedAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
-	const selectedAuctionChildPool = selectedOutcomeMigrationChildPool ?? recoveredSelectedAuctionChildPool ?? currentSelectedOutcomePool
+	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
+	const { loadingSelectedAuctionDetails, loadingSelectedOutcomeMigrationSeedStatus, selectedAuctionChildPool, selectedAuctionDetails, selectedAuctionError, selectedOutcomeMigrationSeedStatus, selectedOutcomeMigrationSeedStatusError } = useSelectedAuctionReadState({
+		accountAddress: accountState.address,
+		currentSelectedOutcomePool,
+		forkAuctionResultHash: forkAuctionResult?.hash,
+		forkMigrationReadClient,
+		fullTruthAuctionReadClient,
+		securityPoolAddress,
+		selectedAuctionLabel,
+		selectedOutcome: forkAuctionForm.selectedOutcome,
+		selectedOutcomeMigrationChildPool,
+		selectedPoolRefreshNonce,
+		selectedStage,
+		universeId,
+	})
 	const selectedAuctionPoolAddress = selectedAuctionChildPool?.securityPoolAddress
 	const currentRootAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails: forkAuctionDetails?.securityPoolAddress !== undefined && selectedAuctionPoolAddress !== undefined && sameAddress(forkAuctionDetails.securityPoolAddress, selectedAuctionPoolAddress) ? forkAuctionDetails : undefined,
@@ -390,6 +408,28 @@ export function ForkAuctionSection({
 	const auctionHasStartedAtValue = selectedAuctionContext?.truthAuctionStartedAt ?? selectedAuctionChildPool?.truthAuctionStartedAt ?? 0n
 	const hasSelectedAuctionChildPool = selectedAuctionChildPool !== undefined
 	const selectedAuctionContextError = selectedAuctionError
+	const optimisticTruthAuctionStartedAt =
+		forkAuctionResult?.action === 'startTruthAuction' && auctionSecurityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, auctionSecurityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? selectedAuctionContext?.currentTime ?? 1n) : undefined
+	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
+	if (auctionHasStartedAtValue > 0n) effectiveTruthAuctionStartedAt = auctionHasStartedAtValue
+	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
+	const { beginStartTruthAuctionProgress, beginVaultMigrationProgress, hasCompletedVaultMigration, isStartTruthAuctionInProgressState, isVaultMigrationPending, optimisticMigratedEscalationRep, setPendingEscalationMigrationSelection } = useForkAuctionInteractionState({
+		accountAddress: accountState.address,
+		connectedWalletEscrowedRep: connectedWalletVaultSummary?.escalationEscrowedRep,
+		forkAuctionActiveAction,
+		forkAuctionError,
+		forkAuctionResult,
+		hasStartedTruthAuction,
+		reportingDetails,
+		securityPoolAddress,
+	})
+	const effectiveEscrowedRepInEscalationGame = (() => {
+		if (connectedWalletVaultSummary === undefined) return undefined
+		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticMigratedEscalationRep) {
+			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticMigratedEscalationRep
+		}
+		return 0n
+	})()
 	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
 	const isMigrationRequired = activeReportingDetails?.settlementState === 'migration-required'
 	const isMigrationExpired = activeReportingDetails?.settlementState === 'migration-expired'
@@ -400,27 +440,11 @@ export function ForkAuctionSection({
 	const showSelectedEscalationMigrationDeposits = !loadingReportingDetails && reportingDetails?.status === 'active'
 	const hasSelectedEscalationMigrationDeposits = selectedEscalationMigrationDeposits.length > 0
 	const unresolvedMigrationSides = activeReportingDetails?.sides ?? []
-	const [selectedOutcomeMigrationSeedStatus, setSelectedOutcomeMigrationSeedStatus] = useState<ForkOutcomeMigrationSeedStatus | undefined>(undefined)
-	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
-	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
-	const [isStartTruthAuctionInProgressState, setIsStartTruthAuctionInProgressState] = useState(false)
-	const [isVaultMigrationPending, setIsVaultMigrationPending] = useState(false)
-	const [hasCompletedVaultMigration, setHasCompletedVaultMigration] = useState(false)
-	const [pendingEscalationMigrationSelection, setPendingEscalationMigrationSelection] = useState<{ depositIndexes: bigint[]; outcome: ReportingOutcomeKey } | undefined>(undefined)
-	const [optimisticMigratedEscalationRep, setOptimisticMigratedEscalationRep] = useState(0n)
 	const [selectedImportedForkDepositIndexesByOutcome, setSelectedImportedForkDepositIndexesByOutcome] = useState<Record<ReportingOutcomeKey, bigint[]>>({
 		invalid: [],
 		yes: [],
 		no: [],
 	})
-	const previousVaultMigrationContextKeyRef = useRef<string | undefined>(undefined)
-	const effectiveEscrowedRepInEscalationGame = (() => {
-		if (connectedWalletVaultSummary === undefined) return undefined
-		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticMigratedEscalationRep) {
-			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticMigratedEscalationRep
-		}
-		return 0n
-	})()
 	function renderSelectedOutcomeChildPoolLink() {
 		if (selectedAuctionChildPool === undefined) return undefined
 
@@ -481,28 +505,12 @@ export function ForkAuctionSection({
 	const hasImportedForkSettlementDeposits = importedForkSettlementSides.length > 0
 	const importedForkSettlementResolved = isPoolQuestionFinalized(activeReportingDetails)
 	const childSecurityPools = securityPoolAddress === undefined ? [] : securityPools.filter(pool => sameAddress(pool.parent, securityPoolAddress))
-	const { currentStage, currentWorkflowStage, selectedStage } = getForkWorkflowStageSelection({
-		currentStageView,
-		forkAuctionDetails,
-		forkOutcome,
-		previewPool,
-		selectedStageView,
-		stageView,
-		systemState,
-	})
-	const selectedStageAheadMessage = getForkWorkflowStageAheadMessage(selectedStage, currentWorkflowStage)
-	const selectedAuctionLabel = selectedOutcomeLabel
 	const enteredBidPreview = getTruthAuctionBidPreview(forkAuctionForm.submitBidPrice)
 	const enteredBidPrice = enteredBidPreview?.price
 	const enteredBidTick = enteredBidPreview?.tick
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, enteredBidPrice)
-	const optimisticTruthAuctionStartedAt =
-		forkAuctionResult?.action === 'startTruthAuction' && auctionSecurityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, auctionSecurityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? selectedAuctionContext?.currentTime ?? 1n) : undefined
-	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
-	if (auctionHasStartedAtValue > 0n) effectiveTruthAuctionStartedAt = auctionHasStartedAtValue
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
-	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
 	const truthAuctionFallback = (() => {
 		if (auctionTruthAuctionStatus !== undefined) return UNKNOWN_VALUE
 		if (hasSelectedAuctionChildPool) return UNKNOWN_VALUE
@@ -791,9 +799,8 @@ export function ForkAuctionSection({
 		migrationEndsAt: forkAuctionDetails?.migrationEndsAt,
 	})
 	const migrationStatusBadge = <Badge tone={migrationStateBadge.tone}>{migrationStateBadge.label}</Badge>
-	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
 	const onStartTruthAuctionSubmit = () => {
-		setIsStartTruthAuctionInProgressState(true)
+		beginStartTruthAuctionProgress()
 		onStartTruthAuction(selectedAuctionPoolAddress)
 	}
 	const onSubmitBidForSelectedAuction = () => {
@@ -822,7 +829,7 @@ export function ForkAuctionSection({
 		submitClaimBidsByKeys(selectedClaimSettlementBidKeys)
 	}
 	const onMigrateVaultSubmit = () => {
-		setIsVaultMigrationPending(true)
+		beginVaultMigrationProgress()
 		onMigrateVault()
 	}
 	const onMigrateSelectedOutcomeRepToZoltar = () => {
@@ -837,7 +844,7 @@ export function ForkAuctionSection({
 	}
 	const onMigrateUnresolvedEscalationSubmit = () => {
 		setPendingEscalationMigrationSelection(undefined)
-		setIsVaultMigrationPending(true)
+		beginVaultMigrationProgress()
 		onMigrateUnresolvedEscalation(forkAuctionForm.selectedOutcome)
 	}
 	const onWithdrawForkedEscalationSubmit = (outcome: ReportingOutcomeKey) => {
@@ -960,109 +967,6 @@ export function ForkAuctionSection({
 		</SectionBlock>
 	)
 	useEffect(() => {
-		if (selectedStage === 'migration' || securityPoolAddress === undefined) {
-			setRecoveredSelectedAuctionChildPool(undefined)
-			return
-		}
-		if (selectedOutcomeMigrationChildPool !== undefined) {
-			setRecoveredSelectedAuctionChildPool(currentPool => (currentPool?.securityPoolAddress === selectedOutcomeMigrationChildPool.securityPoolAddress ? currentPool : selectedOutcomeMigrationChildPool))
-			return
-		}
-		let cancelled = false
-		void loadAllSecurityPools(
-			fullTruthAuctionReadClient ?? createConnectedReadClient(),
-			accountState.address === undefined
-				? {}
-				: {
-						accountAddress: accountState.address,
-					},
-		)
-			.then(allPools => {
-				if (cancelled) return
-				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
-				setRecoveredSelectedAuctionChildPool(recoveredPool)
-			})
-			.catch(() => {
-				if (cancelled) return
-				setRecoveredSelectedAuctionChildPool(undefined)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [accountState.address, embedInCard, forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, fullTruthAuctionReadClient, securityPoolAddress, selectedOutcomeMigrationChildPool, selectedStage])
-	useEffect(() => {
-		if ((selectedStage !== 'auction' && selectedStage !== 'settlement') || selectedAuctionPoolAddress === undefined) {
-			setSelectedAuctionDetails(undefined)
-			setSelectedAuctionError(undefined)
-			setLoadingSelectedAuctionDetails(false)
-			return
-		}
-		const shouldReloadSelectedAuction = shouldReloadSelectedPoolDetails({
-			currentDetailsAvailable: currentSelectedAuctionDetails !== undefined,
-			lastHandledRefreshNonce: lastHandledSelectedAuctionRefreshNonceRef.current,
-			loadedDetailsAddress: selectedAuctionDetails?.securityPoolAddress,
-			refreshNonce: selectedPoolRefreshNonce,
-			selectedPoolAddress: selectedAuctionPoolAddress,
-		})
-		if (!shouldReloadSelectedAuction && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress) && currentSelectedAuctionDetails !== undefined) return
-		const client = fullTruthAuctionReadClient ?? createConnectedReadClient()
-		let cancelled = false
-		setLoadingSelectedAuctionDetails(true)
-		setSelectedAuctionError(undefined)
-		lastHandledSelectedAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
-		void loadForkAuctionDetails(client, selectedAuctionPoolAddress)
-			.then(details => {
-				if (cancelled) return
-				setSelectedAuctionDetails(details)
-			})
-			.catch(error => {
-				if (cancelled) return
-				setSelectedAuctionDetails(undefined)
-				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
-			})
-			.finally(() => {
-				if (cancelled) return
-				setLoadingSelectedAuctionDetails(false)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [currentSelectedAuctionDetails, embedInCard, forkAuctionResult?.hash, fullTruthAuctionReadClient, selectedAuctionDetails?.securityPoolAddress, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
-	useEffect(() => {
-		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined) {
-			setSelectedOutcomeMigrationSeedStatus(undefined)
-			setSelectedOutcomeMigrationSeedStatusError(undefined)
-			setLoadingSelectedOutcomeMigrationSeedStatus(false)
-			return
-		}
-		const client = forkMigrationReadClient ?? createConnectedReadClient()
-		let cancelled = false
-		setLoadingSelectedOutcomeMigrationSeedStatus(true)
-		setSelectedOutcomeMigrationSeedStatusError(undefined)
-		void loadForkOutcomeMigrationSeedStatus(client, {
-			childSecurityPoolAddress: selectedOutcomeMigrationChildPool?.securityPoolAddress,
-			outcome: forkAuctionForm.selectedOutcome,
-			securityPoolAddress,
-			universeId,
-		})
-			.then(status => {
-				if (cancelled) return
-				setSelectedOutcomeMigrationSeedStatus(status)
-			})
-			.catch(error => {
-				if (cancelled) return
-				setSelectedOutcomeMigrationSeedStatus(undefined)
-				setSelectedOutcomeMigrationSeedStatusError(getErrorMessage(error, `Unable to verify whether pool REP is ready for the ${selectedOutcomeLabel} child pool.`))
-			})
-			.finally(() => {
-				if (cancelled) return
-				setLoadingSelectedOutcomeMigrationSeedStatus(false)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [embedInCard, forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, forkMigrationReadClient, securityPoolAddress, selectedOutcomeLabel, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedStage, universeId])
-	useEffect(() => {
 		if (!isMigrationRequired || onReportingFormChange === undefined || reportingForm === undefined || activeReportingDetails === undefined) return
 		const nextSelectedDepositIndexesByOutcome = {
 			invalid: activeReportingDetails.sides.find(side => side.key === 'invalid')?.userDeposits.map(deposit => deposit.depositIndex) ?? [],
@@ -1074,60 +978,6 @@ export function ForkAuctionSection({
 			selectedWithdrawDepositIndexesByOutcome: nextSelectedDepositIndexesByOutcome,
 		})
 	}, [activeReportingDetails, isMigrationRequired, onReportingFormChange, reportingForm])
-	useEffect(() => {
-		const nextContextKey = securityPoolAddress === undefined || accountState.address === undefined ? undefined : `${accountState.address.toLowerCase()}:${securityPoolAddress.toLowerCase()}`
-		if (previousVaultMigrationContextKeyRef.current === nextContextKey) return
-		previousVaultMigrationContextKeyRef.current = nextContextKey
-		setIsVaultMigrationPending(false)
-		setHasCompletedVaultMigration(false)
-		setPendingEscalationMigrationSelection(undefined)
-		setOptimisticMigratedEscalationRep(0n)
-	}, [accountState.address, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateVault' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
-		setHasCompletedVaultMigration(true)
-		setIsVaultMigrationPending(false)
-	}, [forkAuctionResult?.action, forkAuctionResult?.hash, forkAuctionResult?.securityPoolAddress, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateUnresolvedEscalation' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
-		setHasCompletedVaultMigration(true)
-		setIsVaultMigrationPending(false)
-		setPendingEscalationMigrationSelection(undefined)
-		if (connectedWalletVaultSummary?.escalationEscrowedRep !== undefined) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + connectedWalletVaultSummary.escalationEscrowedRep)
-		}
-	}, [connectedWalletVaultSummary?.escalationEscrowedRep, forkAuctionResult, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateEscalationDeposits' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
-		if (pendingEscalationMigrationSelection === undefined) return
-		const migrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingEscalationMigrationSelection.outcome)
-		const migratedRep = migrationSide?.userDeposits.filter(deposit => pendingEscalationMigrationSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amount, 0n)
-		if (migratedRep !== undefined && migratedRep > 0n) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + migratedRep)
-		}
-		setPendingEscalationMigrationSelection(undefined)
-	}, [forkAuctionResult, pendingEscalationMigrationSelection, reportingDetails, securityPoolAddress])
-	useEffect(() => {
-		if (!isStartTruthAuctionInProgressState) return
-		if (hasStartedTruthAuction) {
-			setIsStartTruthAuctionInProgressState(false)
-			return
-		}
-		if (forkAuctionError !== undefined && forkAuctionActiveAction === undefined) {
-			setIsStartTruthAuctionInProgressState(false)
-		}
-	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState, securityPoolAddress])
-	useEffect(() => {
-		if (!isVaultMigrationPending) return
-		if (forkAuctionActiveAction === 'migrateVault') return
-		if (forkAuctionError === undefined || securityPoolAddress === undefined) return
-		if (forkAuctionError !== undefined) setIsVaultMigrationPending(false)
-	}, [forkAuctionActiveAction, forkAuctionError, isVaultMigrationPending, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionActiveAction === 'migrateEscalationDeposits' || forkAuctionActiveAction === 'migrateUnresolvedEscalation') return
-		if (forkAuctionError === undefined) return
-		setPendingEscalationMigrationSelection(undefined)
-	}, [forkAuctionActiveAction, forkAuctionError])
 	useEffect(() => {
 		const nextSelectedImportedDepositIndexesByOutcome = {
 			invalid: importedForkSettlementSides.find(side => side.key === 'invalid')?.importedUserDeposits.map(deposit => deposit.parentDepositIndex) ?? [],
@@ -1144,13 +994,6 @@ export function ForkAuctionSection({
 			return prunedSelections
 		})
 	}, [importedForkSettlementSides])
-	useEffect(() => {
-		setOptimisticMigratedEscalationRep(0n)
-	}, [connectedWalletVaultSummary?.escalationEscrowedRep])
-	useEffect(() => {
-		if (!isStartTruthAuctionInProgressState) return
-		if (accountState.address === undefined || securityPoolAddress === undefined) setIsStartTruthAuctionInProgressState(false)
-	}, [accountState.address, isStartTruthAuctionInProgressState, securityPoolAddress])
 	const migrationStartedAt = (() => {
 		if (universeForkTime !== undefined && universeForkTime > 0n) return universeForkTime
 		if (forkAuctionDetails?.migrationEndsAt !== undefined) return forkAuctionDetails.migrationEndsAt - FORK_MIGRATION_DURATION

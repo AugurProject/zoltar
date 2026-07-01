@@ -19,6 +19,7 @@ const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0
 const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
 const YES_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa1'
 const STALE_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa2'
+const REFRESHED_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa3'
 
 let recoveredPools: ListedSecurityPool[] = []
 let loadAllSecurityPoolsCallAddresses: (Address | undefined)[] = []
@@ -263,7 +264,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		})
 	})
 
-	test('ignores stale loaded child auction details once the recovered child pool is already operational', async () => {
+	test('reloads stale recovered child auction details once the child pool is already operational', async () => {
 		recoveredPools = [
 			createChildPool({
 				hasForkActivity: true,
@@ -272,7 +273,16 @@ describe('ForkAuctionSection child pool recovery', () => {
 				truthAuctionStartedAt: 10n,
 			}),
 		]
-		childAuctionDetailsFactory = securityPoolAddress => createStaleChildAuctionDetails(securityPoolAddress)
+		childAuctionDetailsFactory = (securityPoolAddress: Address): ForkAuctionDetails => {
+			if (loadForkAuctionDetailsCalls === 1) return createStaleChildAuctionDetails(securityPoolAddress)
+
+			return {
+				...createChildAuctionDetails(securityPoolAddress),
+				systemState: 'operational',
+				truthAuctionAddress: REFRESHED_TRUTH_AUCTION_ADDRESS,
+				truthAuctionStartedAt: 10n,
+			}
+		}
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -285,10 +295,12 @@ describe('ForkAuctionSection child pool recovery', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => {
-			expect(within(document.body).queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+			expect(loadForkAuctionDetailsCalls).toBe(2)
+			expect(within(document.body).queryByRole('button', { name: `Copy address ${REFRESHED_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
 		})
 
 		expect(within(document.body).queryByRole('button', { name: `Copy address ${STALE_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
 	})
 
 	test('reloads selected child auction details after a selected-pool refresh', async () => {
