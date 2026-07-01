@@ -1,8 +1,10 @@
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
-import { tryParseTruthAuctionAmountInput } from './marketForm.js'
+import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from './marketForm.js'
 
 export const TRUTH_AUCTION_PRICE_PRECISION = 10n ** 18n
+export const TRUTH_AUCTION_MIN_TICK = -524288n
+export const TRUTH_AUCTION_MAX_TICK = 524288n
 
 const TRUTH_AUCTION_TICK_PRICE_POWERS = [
 	1000100000000000000n,
@@ -302,7 +304,18 @@ export function sortTruthAuctionBidsByPriority(bids: TruthAuctionBidView[]) {
 	})
 }
 
-export function getTruthAuctionPriceAtTick(tick: bigint) {
+function assertTruthAuctionTickInContractDomain(tick: bigint) {
+	if (tick < TRUTH_AUCTION_MIN_TICK || tick > TRUTH_AUCTION_MAX_TICK) throw new Error('Truth auction tick is outside the supported range.')
+}
+
+function normalizeTruthAuctionPriceInput(value: string) {
+	if (value.startsWith('.')) return `0${value}`
+	if (value.endsWith('.')) return `${value}0`
+	return value
+}
+
+function computeTruthAuctionPriceAtTick(tick: bigint) {
+	assertTruthAuctionTickInContractDomain(tick)
 	const absoluteTick = tick < 0n ? -tick : tick
 	let price = TRUTH_AUCTION_PRICE_PRECISION
 	for (let bitIndex = 0; bitIndex < TRUTH_AUCTION_TICK_PRICE_POWERS.length; bitIndex += 1) {
@@ -314,20 +327,69 @@ export function getTruthAuctionPriceAtTick(tick: bigint) {
 	return tick < 0n ? (TRUTH_AUCTION_PRICE_PRECISION * TRUTH_AUCTION_PRICE_PRECISION) / price : price
 }
 
+function findTruthAuctionMinSupportedTick() {
+	let lowerTick = TRUTH_AUCTION_MIN_TICK
+	let upperTick = 0n
+	while (upperTick - lowerTick > 1n) {
+		const midTick = (lowerTick + upperTick) / 2n
+		if (computeTruthAuctionPriceAtTick(midTick) > 0n) {
+			upperTick = midTick
+			continue
+		}
+		lowerTick = midTick
+	}
+	return computeTruthAuctionPriceAtTick(lowerTick) > 0n ? lowerTick : upperTick
+}
+
+export const TRUTH_AUCTION_MIN_SUPPORTED_TICK = findTruthAuctionMinSupportedTick()
+
+function assertTruthAuctionTickInRange(tick: bigint) {
+	if (tick < TRUTH_AUCTION_MIN_SUPPORTED_TICK || tick > TRUTH_AUCTION_MAX_TICK) throw new Error('Truth auction tick is outside the supported range.')
+}
+
+export function getTruthAuctionPriceAtTick(tick: bigint) {
+	assertTruthAuctionTickInRange(tick)
+	return computeTruthAuctionPriceAtTick(tick)
+}
+
+const TRUTH_AUCTION_MAX_PRICE = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK)
+const TRUTH_AUCTION_MIN_PRICE = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MIN_SUPPORTED_TICK)
+
+function formatTruthAuctionValidationPrice(price: bigint) {
+	const wholePart = (price / TRUTH_AUCTION_PRICE_PRECISION).toString()
+	const fractionalDigits = (price % TRUTH_AUCTION_PRICE_PRECISION).toString().padStart(18, '0').replace(/0+$/, '')
+	return fractionalDigits === '' ? wholePart : `${wholePart}.${fractionalDigits}`
+}
+
+const TRUTH_AUCTION_MAX_PRICE_INPUT = formatTruthAuctionValidationPrice(TRUTH_AUCTION_MAX_PRICE)
+const truthAuctionMaxPriceParts = TRUTH_AUCTION_MAX_PRICE_INPUT.split('.')
+const TRUTH_AUCTION_MAX_PRICE_WHOLE = truthAuctionMaxPriceParts[0] ?? '0'
+const rawTruthAuctionMaxPriceFraction = truthAuctionMaxPriceParts[1] ?? ''
+const TRUTH_AUCTION_MAX_PRICE_FRACTION = rawTruthAuctionMaxPriceFraction.padEnd(18, '0')
+
+function isTruthAuctionPriceInputDefinitelyOutOfRange(input: string) {
+	const normalized = normalizeTruthAuctionPriceInput(input.trim())
+	if (normalized === '' || normalized.startsWith('-')) return false
+	const match = normalized.match(/^(\d+)(?:\.(\d+))?$/)
+	if (match === null) return false
+	const wholePart = match[1]?.replace(/^0+/, '') || '0'
+	const fractionalPart = match[2] ?? ''
+	if (fractionalPart.length > 18) return false
+	if (wholePart.length !== TRUTH_AUCTION_MAX_PRICE_WHOLE.length) return wholePart.length > TRUTH_AUCTION_MAX_PRICE_WHOLE.length
+	if (wholePart !== TRUTH_AUCTION_MAX_PRICE_WHOLE) return wholePart > TRUTH_AUCTION_MAX_PRICE_WHOLE
+	return fractionalPart.padEnd(18, '0') > TRUTH_AUCTION_MAX_PRICE_FRACTION
+}
+
 export function getTruthAuctionTickAtPrice(price: bigint): bigint | undefined {
 	if (price <= 0n) return undefined
+	if (price < TRUTH_AUCTION_MIN_PRICE) return undefined
 	if (price === TRUTH_AUCTION_PRICE_PRECISION) return 0n
-
-	let lowerTick = 0n
-	let upperTick = 1n
-	let upperPrice = getTruthAuctionPriceAtTick(upperTick)
+	if (price > TRUTH_AUCTION_MAX_PRICE) return undefined
+	if (price === TRUTH_AUCTION_MAX_PRICE) return TRUTH_AUCTION_MAX_TICK
 
 	if (price >= TRUTH_AUCTION_PRICE_PRECISION) {
-		while (upperPrice <= price) {
-			lowerTick = upperTick
-			upperTick *= 2n
-			upperPrice = getTruthAuctionPriceAtTick(upperTick)
-		}
+		let lowerTick = 0n
+		let upperTick = TRUTH_AUCTION_MAX_TICK
 		while (upperTick - lowerTick > 1n) {
 			const midTick = (lowerTick + upperTick) / 2n
 			const midPrice = getTruthAuctionPriceAtTick(midTick)
@@ -340,14 +402,8 @@ export function getTruthAuctionTickAtPrice(price: bigint): bigint | undefined {
 		return lowerTick
 	}
 
-	lowerTick = -1n
-	upperTick = 0n
-	let lowerPrice = getTruthAuctionPriceAtTick(lowerTick)
-	while (lowerPrice > price) {
-		upperTick = lowerTick
-		lowerTick *= 2n
-		lowerPrice = getTruthAuctionPriceAtTick(lowerTick)
-	}
+	let lowerTick = TRUTH_AUCTION_MIN_SUPPORTED_TICK
+	let upperTick = 0n
 	while (upperTick - lowerTick > 1n) {
 		const midTick = (lowerTick + upperTick) / 2n
 		const midPrice = getTruthAuctionPriceAtTick(midTick)
@@ -358,6 +414,29 @@ export function getTruthAuctionTickAtPrice(price: bigint): bigint | undefined {
 		upperTick = midTick
 	}
 	return lowerTick
+}
+
+export function getTruthAuctionBidPreview(submitBidPriceInput: string) {
+	if (submitBidPriceInput.trim() === '') return undefined
+	if (isTruthAuctionPriceInputDefinitelyOutOfRange(submitBidPriceInput)) return undefined
+	const enteredBidPrice = tryParseTruthAuctionPriceInput(submitBidPriceInput)
+	if (enteredBidPrice === undefined || enteredBidPrice <= 0n) return undefined
+	const enteredBidTick = getTruthAuctionTickAtPrice(enteredBidPrice)
+	if (enteredBidTick === undefined) return undefined
+	return {
+		price: enteredBidPrice,
+		tick: enteredBidTick,
+	}
+}
+
+export function getTruthAuctionBidPriceValidationMessage(submitBidPriceInput: string) {
+	if (submitBidPriceInput.trim() === '') return 'Enter a bid price greater than zero.'
+	if (isTruthAuctionPriceInputDefinitelyOutOfRange(submitBidPriceInput)) return 'Bid price is outside the supported auction range.'
+	const enteredBidPrice = tryParseTruthAuctionPriceInput(submitBidPriceInput)
+	if (enteredBidPrice === undefined) return 'Enter a valid bid price.'
+	if (enteredBidPrice <= 0n) return 'Enter a bid price greater than zero.'
+	if (getTruthAuctionTickAtPrice(enteredBidPrice) === undefined) return 'Bid price is outside the supported auction range.'
+	return undefined
 }
 
 export function getTruthAuctionBidGuardMessage({

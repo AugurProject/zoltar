@@ -79,6 +79,10 @@
 	--font-body: 0.96rem;
 	--font-base: 1rem;
 	--font-card-title: 1.08rem;
+	--font-small: 0.78rem;
+	--font-detail: 0.84rem;
+	--font-h4: 0.96rem;
+	--font-section-title: 1.08rem;
 
 	/* type scale — responsive */
 	--font-h1: clamp(2.6rem, 6vw, 4.85rem);
@@ -106,8 +110,10 @@
 	--surface-modal: rgba(7, 17, 31, 0.96);
 	--radius-shell: 1.25rem;
 	--radius-section: 1rem;
+	--radius-panel: 1rem;
 	--radius-record: 1.1rem;
 	--radius-control: 0.75rem;
+	--text-primary: var(--text);
 }
 
 html {
@@ -3241,6 +3247,39 @@ strong.metric-value-danger {
 	opacity: 0.9;
 }
 
+.global-transaction-notice-rows {
+	display: grid;
+	gap: 0.38rem;
+	margin: 0;
+	padding: 0;
+}
+
+.global-transaction-notice-row {
+	display: grid;
+	grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+	gap: 0.45rem 0.8rem;
+	align-items: start;
+}
+
+.global-transaction-notice-row dt,
+.global-transaction-notice-row dd {
+	margin: 0;
+}
+
+.global-transaction-notice-row dt {
+	color: var(--muted);
+	font-size: var(--font-label);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.global-transaction-notice-row dd {
+	min-width: 0;
+	color: var(--text);
+	font-size: 0.82rem;
+	line-height: 1.35;
+}
+
 .global-transaction-notice .transaction-hash-link {
 	font-size: 0.8rem;
 	line-height: 1.2;
@@ -3249,6 +3288,44 @@ strong.metric-value-danger {
 
 .global-transaction-dismiss {
 	flex: 0 0 auto;
+}
+
+.action-safety-modal-stack {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.action-safety-header {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.action-safety-checklist {
+	display: grid;
+	gap: 0.55rem;
+	margin: 0;
+	padding-left: 1.15rem;
+	color: var(--text-secondary);
+}
+
+.action-safety-checklist li {
+	line-height: 1.45;
+}
+
+.action-safety-acknowledgement {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 0.65rem;
+	align-items: start;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-control);
+	background: rgba(10, 20, 36, 0.24);
+}
+
+.action-safety-acknowledgement input {
+	margin-top: 0.14rem;
 }
 
 .workflow-status-item {

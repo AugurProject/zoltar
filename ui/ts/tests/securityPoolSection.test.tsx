@@ -114,7 +114,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = blockedRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Security pools can only be created for binary markets.')
+		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Security pools can only be created for exact binary Yes / No questions.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -158,7 +158,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Paste a binary Zoltar question ID, or use "Create Pool From Question" after creating a question.')).not.toBeNull()
+		expect(documentQueries.getByText('Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 
