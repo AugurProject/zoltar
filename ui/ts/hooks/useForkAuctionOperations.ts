@@ -34,7 +34,7 @@ import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey, TruthAuctionSettlementMode } from '../types/contracts.js'
 import type { SettlementSelectedBid } from '../types/components.js'
 
 type UseForkAuctionOperationsParameters = WriteOperationsParameters & {
@@ -58,14 +58,20 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 	const currentForkAuctionSelectionKey = normalizeAddress(effectiveForkAuctionSecurityPoolAddressInput) ?? ''
 	const currentForkAuctionSelectionKeyRef = useRef(currentForkAuctionSelectionKey)
 	currentForkAuctionSelectionKeyRef.current = currentForkAuctionSelectionKey
-	const getPendingTitle = (actionName: ForkAuctionActionResult['action']) => {
+	const getPendingTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => {
+		if (displayTitleOverride !== undefined) return displayTitleOverride
 		if (actionName === 'claimAuctionProceeds') return 'Settle Finalized Bid'
 		return actionName.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
 	}
-	const getSuccessTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} submitted`
-	const getFailureTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} failed`
+	const getSuccessTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} submitted`
+	const getFailureTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} failed`
 	const isForkAuctionSelectionCurrent = (selectionKey: string) => currentForkAuctionSelectionKeyRef.current === selectionKey
 	const resolveForkAuctionSecurityPoolAddress = () => parseAddressInput(effectiveForkAuctionSecurityPoolAddressInput, 'Security pool address')
+	const getTruthAuctionSettlementMode = (claimBids: readonly SettlementSelectedBid[], refundBids: readonly SettlementSelectedBid[]): TruthAuctionSettlementMode => {
+		if (claimBids.length === 0) return 'refund'
+		if (refundBids.length === 0) return 'claim'
+		return 'mixed'
+	}
 
 	const loadForkAuction = async (securityPoolAddressOverride?: Address) => {
 		const selectionKey = currentForkAuctionSelectionKey
@@ -89,7 +95,13 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 		})
 	}
 
-	const runForkAuctionAction = async (actionName: ForkAuctionActionResult['action'], action: (walletAddress: Address, details: ForkAuctionDetails, isCurrentSelection: () => boolean) => Promise<ForkAuctionActionResult | undefined>, errorFallback: string, securityPoolAddressOverride?: Address) => {
+	const runForkAuctionAction = async (
+		actionName: ForkAuctionActionResult['action'],
+		action: (walletAddress: Address, details: ForkAuctionDetails, isCurrentSelection: () => boolean) => Promise<ForkAuctionActionResult | undefined>,
+		errorFallback: string,
+		securityPoolAddressOverride?: Address,
+		{ displayTitleOverride }: { displayTitleOverride?: string } = {},
+	) => {
 		const actionSelectionKey = currentForkAuctionSelectionKey
 		const overrideSelectionKey = securityPoolAddressOverride === undefined ? undefined : (normalizeAddress(securityPoolAddressOverride) ?? '')
 		const shouldRefreshCurrentSelection = securityPoolAddressOverride === undefined
@@ -97,17 +109,17 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 		const shouldApplyCurrentSelection = () => (securityPoolAddressOverride === undefined ? isForkAuctionSelectionCurrent(actionSelectionKey) : overrideSelectionKey !== undefined && isForkAuctionSelectionCurrent(overrideSelectionKey))
 		try {
 			forkAuctionActiveAction.value = actionName
-			forkAuctionFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
+			forkAuctionFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName, displayTitleOverride))
 			await runWriteAction(
 				{
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						forkAuctionError,
 						'Connect a wallet before using fork or truth auction actions',
-						createForkAuctionTransactionIntent(actionName),
+						createForkAuctionTransactionIntent(actionName, displayTitleOverride === undefined ? undefined : { submittedTitle: displayTitleOverride }),
 					),
 					onRefreshError: (message, hash) => {
-						forkAuctionFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						forkAuctionFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName, displayTitleOverride), message, hash)
 						const result = forkAuctionResult.value
 						if (result !== undefined) onTransactionPresented(createForkAuctionWarningPresentation(result, message))
 					},
@@ -115,7 +127,7 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 						forkAuctionFeedback.value = undefined
 					},
 					onWriteError: message => {
-						forkAuctionFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+						forkAuctionFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName, displayTitleOverride), message)
 					},
 				},
 				async walletAddress => {
@@ -129,7 +141,7 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 				errorFallback,
 				async result => {
 					forkAuctionResult.value = result
-					forkAuctionFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					forkAuctionFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName, displayTitleOverride), result.hash)
 					onTransactionPresented(createForkAuctionSuccessPresentation(result))
 					if (!shouldApplyCurrentSelection()) return
 					const details = await loadForkAuctionDetails(createConnectedReadClient(), result.securityPoolAddress)
@@ -173,42 +185,53 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 		)
 
 	const migrateRepToZoltar = async (outcomesOverride?: ReportingOutcomeKey[]) =>
-		await runForkAuctionAction(
-			'migrateRepToZoltar',
-			async (walletAddress, details, isCurrentSelection) => {
-				if (!isCurrentSelection()) return undefined
-				return await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, outcomesOverride ?? parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes'))
-			},
-			'Failed to migrate REP to Zoltar',
-		)
+		await (() => {
+			const submittedRepMigrationOutcomes = forkAuctionForm.value.repMigrationOutcomes
+			return runForkAuctionAction(
+				'migrateRepToZoltar',
+				async (walletAddress, details, isCurrentSelection) => {
+					if (!isCurrentSelection()) return undefined
+					return await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, outcomesOverride ?? parseReportingOutcomeListInput(submittedRepMigrationOutcomes, 'REP migration outcomes'))
+				},
+				'Failed to migrate REP to Zoltar',
+			)
+		})()
 
 	const migrateVault = async () =>
-		await runForkAuctionAction(
-			'migrateVault',
-			async (walletAddress, details, isCurrentSelection) => {
-				if (!isCurrentSelection()) return undefined
-				return await migrateSecurityVault(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome))
-			},
-			'Failed to migrate vault',
-		)
+		await (() => {
+			const submittedSelectedOutcome = forkAuctionForm.value.selectedOutcome
+			return runForkAuctionAction(
+				'migrateVault',
+				async (walletAddress, details, isCurrentSelection) => {
+					if (!isCurrentSelection()) return undefined
+					return await migrateSecurityVault(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(submittedSelectedOutcome))
+				},
+				'Failed to migrate vault',
+			)
+		})()
 
 	const migrateEscalation = async ({ depositIndexes, outcome, vaultAddress }: { depositIndexes?: bigint[]; outcome?: ReportingOutcomeKey; vaultAddress?: Address } = {}) =>
-		await runForkAuctionAction(
-			'migrateEscalationDeposits',
-			async (walletAddress, details, isCurrentSelection) => {
-				const resolvedVaultAddress = vaultAddress ?? resolveOptionalAddressInput(forkAuctionForm.value.vaultAddress, walletAddress, 'Vault address')
-				if (!isCurrentSelection()) return undefined
-				return await migrateEscalationDeposits(
-					createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
-					details.securityPoolAddress,
-					details.universeId,
-					resolvedVaultAddress,
-					outcome ?? parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome),
-					depositIndexes ?? parseBigIntListInput(forkAuctionForm.value.depositIndexes, 'Deposit indexes'),
-				)
-			},
-			'Failed to migrate escalation deposits',
-		)
+		await (() => {
+			const submittedVaultAddress = forkAuctionForm.value.vaultAddress
+			const submittedSelectedOutcome = forkAuctionForm.value.selectedOutcome
+			const submittedDepositIndexes = forkAuctionForm.value.depositIndexes
+			return runForkAuctionAction(
+				'migrateEscalationDeposits',
+				async (walletAddress, details, isCurrentSelection) => {
+					const resolvedVaultAddress = vaultAddress ?? resolveOptionalAddressInput(submittedVaultAddress, walletAddress, 'Vault address')
+					if (!isCurrentSelection()) return undefined
+					return await migrateEscalationDeposits(
+						createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
+						details.securityPoolAddress,
+						details.universeId,
+						resolvedVaultAddress,
+						outcome ?? parseReportingOutcomeInput(submittedSelectedOutcome),
+						depositIndexes ?? parseBigIntListInput(submittedDepositIndexes, 'Deposit indexes'),
+					)
+				},
+				'Failed to migrate escalation deposits',
+			)
+		})()
 
 	const migrateUnresolvedEscalation = async (selectedChildOutcome: ReportingOutcomeKey) =>
 		await runForkAuctionAction(
@@ -263,20 +286,24 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 		})()
 
 	const refundLosingBids = async (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) =>
-		await runForkAuctionAction(
-			'refundLosingBids',
-			async (walletAddress, details, isCurrentSelection) => {
-				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
-				const normalizedBids = selectedBids === undefined ? [{ tick: parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'), bidIndex: parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index') }] : filterSelectedSettlementBids(selectedBids)
-				if (normalizedBids.length === 0) throw new Error('Pick one or more bids to refund first.')
-				const selectedBid = normalizedBids[0]
-				if (selectedBid === undefined) throw new Error('Pick one or more bids to refund first.')
-				if (!isCurrentSelection()) return undefined
-				return await refundTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, selectedBid.tick, selectedBid.bidIndex, normalizedBids)
-			},
-			'Failed to refund losing bids',
-			securityPoolAddressOverride,
-		)
+		await (() => {
+			const submittedRefundTick = forkAuctionForm.value.refundTick
+			const submittedRefundBidIndex = forkAuctionForm.value.refundBidIndex
+			return runForkAuctionAction(
+				'refundLosingBids',
+				async (walletAddress, details, isCurrentSelection) => {
+					const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
+					const normalizedBids = selectedBids === undefined ? [{ tick: parseBigIntInput(submittedRefundTick, 'Refund tick'), bidIndex: parseBigIntInput(submittedRefundBidIndex, 'Refund bid index') }] : filterSelectedSettlementBids(selectedBids)
+					if (normalizedBids.length === 0) throw new Error('Pick one or more bids to refund first.')
+					const selectedBid = normalizedBids[0]
+					if (selectedBid === undefined) throw new Error('Pick one or more bids to refund first.')
+					if (!isCurrentSelection()) return undefined
+					return await refundTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, selectedBid.tick, selectedBid.bidIndex, normalizedBids)
+				},
+				'Failed to refund losing bids',
+				securityPoolAddressOverride,
+			)
+		})()
 
 	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address) =>
 		await runForkAuctionAction(
@@ -289,22 +316,35 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 			securityPoolAddressOverride,
 		)
 
-	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) =>
-		await runForkAuctionAction(
-			'claimAuctionProceeds',
-			async (walletAddress, details, isCurrentSelection) => {
-				const bidderAddress = resolveOptionalAddressInput(forkAuctionForm.value.settlementAddress, walletAddress, 'Bidder address')
-				const normalizedClaimBids = selectedClaimBids === undefined ? [{ tick: parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Settlement bid index') }] : filterSelectedSettlementBids(selectedClaimBids)
-				const normalizedRefundBids = selectedRefundBids === undefined ? [] : filterSelectedSettlementBids(selectedRefundBids)
-				if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Pick one or more bids to settle first.')
-				const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
-				if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
-				if (!isCurrentSelection()) return undefined
-				return await settleTruthAuctionBids(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, bidderAddress, normalizedClaimBids, normalizedRefundBids)
-			},
-			'Failed to settle finalized bid',
-			securityPoolAddressOverride,
-		)
+	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) => {
+		const displayTitleOverride = selectedClaimBids !== undefined && selectedRefundBids !== undefined && selectedClaimBids.length === 0 && selectedRefundBids.length > 0 ? 'Settle Finalized Refunds' : undefined
+
+		return await (() => {
+			const submittedSettlementAddress = forkAuctionForm.value.settlementAddress
+			const submittedClaimBidTick = forkAuctionForm.value.claimBidTick
+			const submittedClaimBidIndex = forkAuctionForm.value.claimBidIndex
+			return runForkAuctionAction(
+				'claimAuctionProceeds',
+				async (walletAddress, details, isCurrentSelection) => {
+					const bidderAddress = resolveOptionalAddressInput(submittedSettlementAddress, walletAddress, 'Bidder address')
+					const normalizedClaimBids = selectedClaimBids === undefined ? [{ tick: parseBigIntInput(submittedClaimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(submittedClaimBidIndex, 'Settlement bid index') }] : filterSelectedSettlementBids(selectedClaimBids)
+					const normalizedRefundBids = selectedRefundBids === undefined ? [] : filterSelectedSettlementBids(selectedRefundBids)
+					if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Pick one or more bids to settle first.')
+					const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
+					if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
+					if (!isCurrentSelection()) return undefined
+					const result = await settleTruthAuctionBids(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, bidderAddress, normalizedClaimBids, normalizedRefundBids)
+					return {
+						...result,
+						settlementMode: getTruthAuctionSettlementMode(normalizedClaimBids, normalizedRefundBids),
+					}
+				},
+				'Failed to settle finalized bid',
+				securityPoolAddressOverride,
+				displayTitleOverride === undefined ? {} : { displayTitleOverride },
+			)
+		})()
+	}
 
 	const settleForkedEscalation = async (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) =>
 		await runForkAuctionAction(
@@ -318,19 +358,23 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 		)
 
 	const forkUniverse = async () =>
-		await runForkAuctionAction(
-			'forkUniverse',
-			async (walletAddress, details, isCurrentSelection) => {
-				if (!isCurrentSelection()) return undefined
-				return await forkUniverseDirectly(
-					createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
-					parseBigIntInput(forkAuctionForm.value.directForkUniverseId, 'Fork universe ID'),
-					parseBigIntInput(forkAuctionForm.value.directForkQuestionId, 'Fork question ID'),
-					details.securityPoolAddress,
-				)
-			},
-			'Failed to fork universe directly',
-		)
+		await (() => {
+			const submittedDirectForkUniverseId = forkAuctionForm.value.directForkUniverseId
+			const submittedDirectForkQuestionId = forkAuctionForm.value.directForkQuestionId
+			return runForkAuctionAction(
+				'forkUniverse',
+				async (walletAddress, details, isCurrentSelection) => {
+					if (!isCurrentSelection()) return undefined
+					return await forkUniverseDirectly(
+						createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
+						parseBigIntInput(submittedDirectForkUniverseId, 'Fork universe ID'),
+						parseBigIntInput(submittedDirectForkQuestionId, 'Fork question ID'),
+						details.securityPoolAddress,
+					)
+				},
+				'Failed to fork universe directly',
+			)
+		})()
 
 	return {
 		claimAuctionProceeds,

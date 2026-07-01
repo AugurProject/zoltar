@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { sameAddress } from '../lib/address.js'
-import { createTruthAuctionSettlementActionState, reduceTruthAuctionSettlementActionState, type TruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
+import { createTruthAuctionSettlementActionState, getTruthAuctionSettlementAction, reduceTruthAuctionSettlementActionState } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '../lib/truthAuctionSettlement.js'
 import type { ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
 import type { ForkAuctionActionResult } from '../types/contracts.js'
@@ -18,6 +18,7 @@ type UseTruthAuctionSettlementActionStateParams = {
 	selectedAuctionPoolAddress: Address | undefined
 	selectedStage: ForkWorkflowSelectionStage
 	settlementBidRows: TruthAuctionSettlementBidRow[]
+	truthAuctionFinalized: boolean
 }
 
 function getSettlementBidsFromKeys(settlementBidRows: TruthAuctionSettlementBidRow[], selectedBidKeys: string[]) {
@@ -25,18 +26,12 @@ function getSettlementBidsFromKeys(settlementBidRows: TruthAuctionSettlementBidR
 	return settlementBidRows.filter(({ bid }) => selectedBidKeySet.has(getTruthAuctionSettlementBidKey(bid))).map(({ bid }) => ({ bidIndex: bid.bidIndex, tick: bid.tick }))
 }
 
-function getSettlementAction(claimKeys: string[], refundKeys: string[]): TruthAuctionSettlementAction | undefined {
-	if (claimKeys.length > 0) return 'claimAuctionProceeds'
-	if (refundKeys.length > 0) return 'refundLosingBids'
-	return undefined
-}
-
 function resolveSettlementBidKeyUpdate(currentKeys: string[], update: SettlementBidKeyUpdater) {
 	if (typeof update === 'function') return update(currentKeys)
 	return update
 }
 
-export function useTruthAuctionSettlementActionState({ accountAddress, forkAuctionError, forkAuctionResult, onClaimAuctionProceeds, onRefundLosingBids, selectedAuctionPoolAddress, selectedStage, settlementBidRows }: UseTruthAuctionSettlementActionStateParams) {
+export function useTruthAuctionSettlementActionState({ accountAddress, forkAuctionError, forkAuctionResult, onClaimAuctionProceeds, onRefundLosingBids, selectedAuctionPoolAddress, selectedStage, settlementBidRows, truthAuctionFinalized }: UseTruthAuctionSettlementActionStateParams) {
 	const [settlementActionState, setSettlementActionState] = useState(createTruthAuctionSettlementActionState)
 	const settlementSelectionState = getTruthAuctionSettlementSelectionState({
 		selectedBidKeys: settlementActionState.selectedBidKeys,
@@ -73,13 +68,23 @@ export function useTruthAuctionSettlementActionState({ accountAddress, forkAucti
 		if (selectedAuctionPoolAddress === undefined || isSettleSelectedBidsInProgress) return
 		const refundBids = getSettlementBidsFromKeys(settlementBidRows, refundBidKeys)
 		if (refundBids.length === 0) return
+		const settlementAction = getTruthAuctionSettlementAction({
+			selectionHasClaims: false,
+			selectionHasRefunds: true,
+			truthAuctionFinalized,
+		})
+		if (settlementAction === undefined) return
 		dispatchSettlementActionState({
-			action: 'refundLosingBids',
+			action: settlementAction,
 			claimKeys: [],
 			ignoredResultHash: forkAuctionResult?.hash,
 			refundKeys: refundBidKeys,
 			type: 'submit',
 		})
+		if (settlementAction === 'claimAuctionProceeds') {
+			onClaimAuctionProceeds(selectedAuctionPoolAddress, [], refundBids)
+			return
+		}
 		onRefundLosingBids(selectedAuctionPoolAddress, refundBids)
 	}
 	const submitSelectedSettlementBids = () => {
@@ -88,7 +93,11 @@ export function useTruthAuctionSettlementActionState({ accountAddress, forkAucti
 		if (selectedAuctionPoolAddress === undefined) return
 		const selectedClaimSettlementBids = getSettlementBidsFromKeys(settlementBidRows, settlementSelectionState.selectedClaimKeys)
 		const selectedRefundSettlementBids = getSettlementBidsFromKeys(settlementBidRows, settlementSelectionState.selectedRefundKeys)
-		const settlementAction = getSettlementAction(settlementSelectionState.selectedClaimKeys, settlementSelectionState.selectedRefundKeys)
+		const settlementAction = getTruthAuctionSettlementAction({
+			selectionHasClaims: settlementSelectionState.selectedClaimKeys.length > 0,
+			selectionHasRefunds: settlementSelectionState.selectedRefundKeys.length > 0,
+			truthAuctionFinalized,
+		})
 		if (settlementAction === undefined) return
 
 		dispatchSettlementActionState({
