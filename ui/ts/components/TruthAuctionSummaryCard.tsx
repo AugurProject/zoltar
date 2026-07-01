@@ -4,6 +4,7 @@ import { MetricField } from './MetricField.js'
 import { SectionBlock } from './SectionBlock.js'
 
 type TruthAuctionSummaryCardProps = {
+	auctionedBondAllowanceDisplay?: ComponentChildren | undefined
 	badge: ComponentChildren
 	clearingPriceDisplay: ComponentChildren
 	displayedEthRaised: bigint
@@ -18,7 +19,7 @@ type TruthAuctionSummaryCardProps = {
 	winningThresholdPriceDisplay?: ComponentChildren | undefined
 }
 
-export function TruthAuctionSummaryCard({ badge, clearingPriceDisplay, displayedEthRaised, displayedRepSold, endsDisplay, ethRaiseCap, ethRaisedProgress, maxRepBeingSold, minBidSize, repSoldProgress, startedDisplay, winningThresholdPriceDisplay }: TruthAuctionSummaryCardProps) {
+export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, clearingPriceDisplay, displayedEthRaised, displayedRepSold, endsDisplay, ethRaiseCap, ethRaisedProgress, maxRepBeingSold, minBidSize, repSoldProgress, startedDisplay, winningThresholdPriceDisplay }: TruthAuctionSummaryCardProps) {
 	return (
 		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title='Truth Auction'>
 			<div className='fork-workflow-summary'>
@@ -49,6 +50,7 @@ export function TruthAuctionSummaryCard({ badge, clearingPriceDisplay, displayed
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label='Starts'>{startedDisplay}</MetricField>
 					<MetricField label='Clearing Price'>{clearingPriceDisplay}</MetricField>
+					{auctionedBondAllowanceDisplay === undefined ? undefined : <MetricField label='Auctioned Bond Allowance'>{auctionedBondAllowanceDisplay}</MetricField>}
 					<MetricField label='Min Bid'>{<CurrencyValue value={minBidSize} suffix='ETH' />}</MetricField>
 					<MetricField label='Ends'>{endsDisplay}</MetricField>
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label='Winning Threshold'>{winningThresholdPriceDisplay}</MetricField>}

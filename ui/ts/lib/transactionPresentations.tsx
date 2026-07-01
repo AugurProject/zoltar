@@ -481,7 +481,7 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 	const detail = (() => {
 		switch (result.action) {
 			case 'claimAuctionProceeds':
-				return 'Selected winning truth-auction bids were claimed.'
+				return 'Selected truth-auction bids were settled. Winning bids received child-pool REP plus auctioned bond allowance, assigning the remaining open-interest debt; refund-only rows returned locked ETH.'
 			case 'createChildUniverse':
 				return 'The selected child universe was deployed and linked to this fork path.'
 			case 'forkWithOwnEscalation':

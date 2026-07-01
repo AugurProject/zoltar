@@ -84,6 +84,7 @@ void describe('fork auction helpers', () => {
 		expect(getForkStageDescriptionForState('poolForked')).toContain('Child universes')
 		expect(getForkStageDescriptionForState('forkMigration')).toContain('Migration is active')
 		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('Truth auction is active')
+		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('open-interest debt')
 	})
 
 	void test('detects whether preview pool data reflects actual fork activity', () => {

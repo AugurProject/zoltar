@@ -835,6 +835,123 @@ describe('ForkAuctionSection', () => {
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 	})
 
+	test('makes the auctioned bond allowance and debt transfer explicit during bidding', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress('0x00000000000000000000000000000000000000aa'),
+						ethBalance: 10n ** 18n,
+					}),
+					currentStageView: 'auction',
+					currentTimestamp: 5n,
+					forkAuctionDetails: createForkAuctionDetails({
+						auctionedSecurityBondAllowance: 7n,
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Auctioned Bond Allowance')).not.toBeNull()
+		expect(documentQueries.getByText('Winning bids buy more than REP.')).not.toBeNull()
+		expect(documentQueries.getByText(/remaining open-interest debt being assigned to auction participants/)).not.toBeNull()
+	})
+
+	test('makes the winning-claim debt transfer explicit during settlement', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'operational',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress('0x00000000000000000000000000000000000000aa'),
+					}),
+					currentStageView: 'settlement',
+					currentTimestamp: 700_000n,
+					forkAuctionDetails: createForkAuctionDetails({
+						auctionedSecurityBondAllowance: 7n,
+						claimingAvailable: true,
+						currentTime: 700_000n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'operational',
+						truthAuction: {
+							accumulatedEth: 1n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 1n,
+							ethRaiseCap: 1n,
+							ethRaised: 1n,
+							finalized: true,
+							hitCap: true,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 0n,
+							totalRepPurchased: 1n,
+							underfunded: false,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'settlement',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Winning claims add REP and bond allowance.')).not.toBeNull()
+		expect(documentQueries.getByText(/remaining open-interest debt being assigned during settlement/)).not.toBeNull()
+	})
+
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',

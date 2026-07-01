@@ -143,6 +143,34 @@ describe('TransactionActionButton', () => {
 		}
 	})
 
+	test('requires confirmation for auction claims before calling onClick', async () => {
+		let callCount = 0
+		const renderedComponent = await renderIntoDocument(
+			<ActionSafetyProvider>
+				<TransactionActionButton idleLabel='Settle Selected Bids' onClick={() => callCount++} pendingLabel='Submitting...' safetyId={getForkAuctionActionSafetyId('claimAuctionProceeds')} />
+			</ActionSafetyProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
+		})
+
+		expect(callCount).toBe(0)
+		expect(documentQueries.getByRole('dialog', { name: 'Review Auction Claim' })).not.toBeNull()
+		expect(documentQueries.getByText('Review the selected winning bids before assigning their REP and underwriting load to the bidder vault.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('checkbox'))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Claim Auction Proceeds' }))
+		})
+
+		expect(callCount).toBe(1)
+	})
+
 	test('blocks new actions while another transaction is still in flight', async () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(
