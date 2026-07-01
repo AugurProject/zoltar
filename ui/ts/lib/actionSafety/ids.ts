@@ -30,6 +30,7 @@ export const ACTION_SAFETY_IDS = [
 	'fork-auction.migrateUnresolvedEscalation',
 	'fork-auction.migrateVault',
 	'fork-auction.refundLosingBids',
+	'fork-auction.settleAuctionRefunds',
 	'fork-auction.settleForkedEscalation',
 	'fork-auction.startTruthAuction',
 	'fork-auction.submitBid',

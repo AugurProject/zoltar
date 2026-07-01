@@ -21,13 +21,16 @@ import { TimestampValue } from './TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
 import { TruthAuctionSummaryCard } from './TruthAuctionSummaryCard.js'
+import { WarningSurface } from './WarningSurface.js'
+import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
-import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
+import { AUCTIONED_BOND_ALLOWANCE_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
-import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows } from '../lib/truthAuctionSettlement.js'
+import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
+import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { tryParseTruthAuctionAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -131,6 +134,93 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
+function renderTruthAuctionDebtNotice(mode: 'bid' | 'settlement', showRefundOnlySettlementCopy = false) {
+	if (mode === 'bid') {
+		return (
+			<WarningSurface as='section' variant='compact'>
+				<p className='detail'>
+					<strong>Winning bids buy more than REP.</strong> When you later claim a filled bid, the vault also receives a pro-rata share of the {AUCTIONED_BOND_ALLOWANCE_LABEL}. That allowance is the remaining open-interest debt being assigned to auction participants.
+				</p>
+			</WarningSurface>
+		)
+	}
+
+	if (showRefundOnlySettlementCopy) {
+		return (
+			<WarningSurface as='section' variant='compact'>
+				<p className='detail'>
+					<strong>Refund-only settlement returns locked ETH.</strong> Finalized refund-only settlement uses the child-pool settlement path to unlock ETH, and it does not assign child-pool REP or {AUCTIONED_BOND_ALLOWANCE_LABEL}.
+				</p>
+			</WarningSurface>
+		)
+	}
+
+	return (
+		<WarningSurface as='section' variant='compact'>
+			<p className='detail'>
+				<strong>Winning claims add REP and {AUCTIONED_BOND_ALLOWANCE_LABEL}.</strong> Claiming a winning bid adds child-pool REP and a pro-rata share of the {AUCTIONED_BOND_ALLOWANCE_LABEL} to the bidder vault. That allowance is the remaining open-interest debt being assigned during settlement. Refund-only bids just
+				return locked ETH.
+			</p>
+		</WarningSurface>
+	)
+}
+
+function renderTruthAuctionSettlementSelectionSummary({
+	estimatedAssignedBondAllowance,
+	estimatedEthRefunded,
+	estimatedRepClaimed,
+	selectedClaimCount,
+	selectedRefundCount,
+	selectedRowCount,
+}: {
+	estimatedAssignedBondAllowance: bigint | undefined
+	estimatedEthRefunded: bigint
+	estimatedRepClaimed: bigint | undefined
+	selectedClaimCount: number
+	selectedRefundCount: number
+	selectedRowCount: number
+}) {
+	if (selectedRowCount === 0) return undefined
+
+	const summaryDescription = (() => {
+		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
+			return `Winning rows receive estimated child-pool REP plus estimated ${AUCTIONED_BOND_ALLOWANCE_LABEL}, while refund rows return locked ETH.`
+		}
+		if (selectedClaimCount > 0) {
+			return `Winning rows receive estimated child-pool REP plus estimated ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+		}
+		return `Refund-only settlement returns locked ETH and does not assign ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+	})()
+
+	const refundDescription = estimatedEthRefunded > 0n ? 'Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.' : undefined
+	let roundingDescription: string | undefined
+	if (selectedClaimCount > 0) {
+		if (estimatedRepClaimed === undefined) {
+			roundingDescription = 'Claim preview is unavailable for underfunded winning bids because the required winning-ETH denominator is not exposed in current UI data.'
+		} else {
+			roundingDescription = 'These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.'
+		}
+	}
+
+	return (
+		<WarningSurface as='section' variant='compact'>
+			<p className='detail'>
+				<strong>Selected-bid settlement preview.</strong> {summaryDescription}
+			</p>
+			{renderWorkflowMetricGrid([
+				{ label: 'Selected Bids', value: selectedRowCount.toString() },
+				{ label: 'Selected Winning Bids', value: selectedClaimCount.toString() },
+				{ label: 'Selected Refund Rows', value: selectedRefundCount.toString() },
+				{ label: 'Estimated REP Claimed', value: estimatedRepClaimed === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRepClaimed} suffix='REP' /> },
+				{ label: `Estimated ${AUCTIONED_BOND_ALLOWANCE_LABEL}`, value: estimatedAssignedBondAllowance === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedAssignedBondAllowance} suffix='ETH' /> },
+				{ label: 'Estimated ETH Refunded', value: <CurrencyValue value={estimatedEthRefunded} suffix='ETH' /> },
+			])}
+			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}
+			{refundDescription === undefined ? undefined : <p className='detail'>{refundDescription}</p>}
+		</WarningSurface>
+	)
+}
+
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
 	return hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK
 }
@@ -623,6 +713,7 @@ export function ForkAuctionSection({
 		selectedAuctionPoolAddress,
 		selectedStage,
 		settlementBidRows,
+		truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 	})
 	const selectedSettlementBidRows = settlementSelectionState.selectedRows
 	const selectedRefundSettlementBidRows = settlementSelectionState.selectedRefundRows
@@ -632,12 +723,27 @@ export function ForkAuctionSection({
 	const settlementSelectionMode = settlementSelectionState.selectionMode
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
-	const settlementAction = settlementSelectionHasClaims ? 'claimAuctionProceeds' : 'refundLosingBids'
+	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
+		auctionedSecurityBondAllowance: selectedAuctionContext?.auctionedSecurityBondAllowance,
+		selectedRows: selectedSettlementBidRows,
+		truthAuction: truthAuctionStatus,
+	})
+	const settlementAction =
+		getTruthAuctionSettlementAction({
+			selectionHasClaims: settlementSelectionHasClaims,
+			selectionHasRefunds: settlementSelectionHasRefunds,
+			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
+		}) ?? 'refundLosingBids'
+	const settlementActionSafetyId: ActionSafetyId = truthAuctionStatus?.finalized === true && settlementSelectionMode === 'refund' ? 'fork-auction.settleAuctionRefunds' : getForkAuctionActionSafetyId(settlementAction)
+	const showRefundOnlySettlementDebtNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
 	const settlementActionLabel = 'Settle Selected Bids'
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return 'Select winning bids and settle them together.'
-		if (settlementSelectionMode === 'refund') return 'Select refundable bids and claim them together.'
-		return 'Select winning and refundable bids and settle them together.'
+		if (settlementSelectionMode === 'claim') return `Select winning bids and settle them together. Winning claims add child-pool REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+		if (settlementSelectionMode === 'refund') {
+			if (truthAuctionStatus?.finalized === true) return `Select finalized refund rows and settle them together. These rows return locked ETH without adding ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+			return `Select refundable bids and settle them together. Refund-only settlement returns locked ETH without adding ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+		}
+		return `Select winning and refundable bids and settle them together. Winning selections add REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, while refundable selections return locked ETH.`
 	})()
 	const settlementActionPendingLabel = 'Submitting settlement transaction...'
 	const auctionBidRows = buildTruthAuctionBidRows({
@@ -704,7 +810,8 @@ export function ForkAuctionSection({
 		return (
 			<div className='notice success'>
 				<p>
-					<strong>Truth auction has ended.</strong> {truthAuctionStatus.finalized ? 'Bidding is closed and finalized settlement paths are now in effect.' : 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'}{' '}
+					<strong>Truth auction has ended.</strong>{' '}
+					{truthAuctionStatus.finalized ? `Bidding is closed and finalized settlement paths are now in effect. Winning claims receive REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, while losing bids are refunded.` : 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'}{' '}
 					{truthAuctionEndsAt === undefined ? undefined : (
 						<Fragment>
 							Ended at: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={truthAuctionEndsAt} />
@@ -860,6 +967,7 @@ export function ForkAuctionSection({
 		onClick,
 		pendingLabel,
 		pending,
+		safetyId,
 		tone = 'secondary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -872,6 +980,7 @@ export function ForkAuctionSection({
 		onClick: () => void
 		pendingLabel: string
 		pending?: boolean
+		safetyId?: ActionSafetyId
 		tone?: 'primary' | 'secondary'
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
@@ -880,7 +989,7 @@ export function ForkAuctionSection({
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
-				safetyId={getForkAuctionActionSafetyId(action)}
+				safetyId={safetyId ?? getForkAuctionActionSafetyId(action)}
 				idleLabel={idleLabel}
 				pendingLabel={pendingLabel}
 				onClick={onClick}
@@ -916,6 +1025,7 @@ export function ForkAuctionSection({
 					</label>
 				</div>
 				{enteredBidPrice === undefined ? undefined : <p className='detail'>At the entered price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if fully filled.</p>}
+				{renderTruthAuctionDebtNotice('bid')}
 				<div className='actions'>
 					{renderStageActionButton({
 						action: 'submitBid',
@@ -935,9 +1045,11 @@ export function ForkAuctionSection({
 		idleLabel,
 		pendingLabel,
 		pending = false,
+		selectionSummary,
 		title,
 		availabilityMessage,
 		onClick,
+		safetyId,
 		tone = 'primary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -945,13 +1057,17 @@ export function ForkAuctionSection({
 		idleLabel: string
 		pendingLabel: string
 		pending?: boolean
+		selectionSummary?: ComponentChildren
 		title?: ComponentChildren
 		availabilityMessage: string | undefined
 		onClick?: () => void
+		safetyId?: ActionSafetyId
 		tone?: 'primary' | 'secondary'
 	}) => (
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
 			{description === undefined ? undefined : <p className='detail'>{description}</p>}
+			{selectionSummary}
+			{renderTruthAuctionDebtNotice('settlement', showRefundOnlySettlementDebtNotice)}
 			<div className='actions'>
 				{renderStageActionButton({
 					action,
@@ -962,6 +1078,7 @@ export function ForkAuctionSection({
 					pendingLabel,
 					pending,
 					tone,
+					...(safetyId === undefined ? {} : { safetyId }),
 				})}
 			</div>
 		</SectionBlock>
@@ -1020,11 +1137,12 @@ export function ForkAuctionSection({
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix='REP' /> },
 		{ label: 'Clearing Price', value: clearingPriceDisplay },
+		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' /> },
 		{ label: 'Min Bid Size', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSize} suffix='ETH' /> },
 		{ label: 'Max REP Being Sold', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxRepBeingSold} suffix='REP' /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
-		{ label: 'Auctioned Allowance', value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' /> },
+		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' /> },
 		{ label: 'Settlement Available', value: settlementAvailableDisplay },
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix='REP' /> },
@@ -1050,6 +1168,7 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
 			<TruthAuctionSummaryCard
+				auctionedBondAllowanceDisplay={selectedAuctionContext === undefined ? UNKNOWN_VALUE : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)}
 				displayedEthRaised={displayedEthRaised}
@@ -1168,6 +1287,15 @@ export function ForkAuctionSection({
 			description: settlementActionDescription,
 			idleLabel: settlementActionLabel,
 			pendingLabel: settlementActionPendingLabel,
+			selectionSummary: renderTruthAuctionSettlementSelectionSummary({
+				estimatedAssignedBondAllowance: settlementSelectionEstimate.estimatedAssignedBondAllowance,
+				estimatedEthRefunded: settlementSelectionEstimate.estimatedEthRefunded,
+				estimatedRepClaimed: settlementSelectionEstimate.estimatedRepClaimed,
+				selectedClaimCount: selectedClaimSettlementBidRows.length,
+				selectedRefundCount: selectedRefundSettlementBidRows.length,
+				selectedRowCount: selectedSettlementBidRows.length,
+			}),
+			safetyId: settlementActionSafetyId,
 			title: settlementActionLabel,
 			onClick: onSettleSelectedBidsForSelectedAuction,
 			tone: 'primary',
@@ -1445,7 +1573,7 @@ export function ForkAuctionSection({
 							{truthAuctionMarketViewSection}
 							{auctionWideBidsSection}
 							{renderSubmitBidSection({
-								description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.',
+								description: 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.',
 							})}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
@@ -1462,7 +1590,7 @@ export function ForkAuctionSection({
 						</SectionBlock>
 
 						<SectionBlock title='Start Truth Auction'>
-							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP; losing bids are refunded during settlement.</p>
+							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP plus {AUCTIONED_BOND_ALLOWANCE_LABEL}, while losing bids are refunded during settlement.</p>
 							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 							<div className='actions'>
@@ -1478,7 +1606,7 @@ export function ForkAuctionSection({
 							</div>
 						</SectionBlock>
 
-						{renderSubmitBidSection({ description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.' })}
+						{renderSubmitBidSection({ description: 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.' })}
 					</fieldset>
 				)
 			}

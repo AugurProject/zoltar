@@ -1,7 +1,7 @@
 import type { Address } from 'viem'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '../types/contracts.js'
 import { sameAddress } from './address.js'
-import { getTruthAuctionBidDisposition, type TruthAuctionBidDisposition } from './truthAuctionBook.js'
+import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, type TruthAuctionBidDisposition } from './truthAuctionBook.js'
 
 export type TruthAuctionSettlementBidRow = {
 	bid: TruthAuctionBidView
@@ -23,6 +23,12 @@ export type TruthAuctionSettlementSelectionState = {
 	selectionMode: TruthAuctionSettlementSelectionMode
 	selectionHasClaims: boolean
 	selectionHasRefunds: boolean
+}
+
+export type TruthAuctionSettlementSelectionEstimate = {
+	estimatedAssignedBondAllowance: bigint | undefined
+	estimatedEthRefunded: bigint
+	estimatedRepClaimed: bigint | undefined
 }
 
 export function getTruthAuctionSettlementBidKey(bid: Pick<TruthAuctionBidView, 'bidIndex' | 'tick'>) {
@@ -73,6 +79,39 @@ export function getTruthAuctionSettlementSelectionState({ selectedBidKeys, settl
 		selectionMode,
 		selectionHasClaims: selectedClaimRows.length > 0,
 		selectionHasRefunds: selectedRefundRows.length > 0,
+	}
+}
+
+export function getTruthAuctionSettlementSelectionEstimate({ auctionedSecurityBondAllowance, selectedRows, truthAuction }: { auctionedSecurityBondAllowance: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
+	let estimatedEthRefunded = 0n
+	let estimatedRepClaimed: bigint | undefined = 0n
+
+	for (const row of selectedRows) {
+		const estimate = getTruthAuctionBidSettlementEstimate(row.bid, truthAuction)
+		estimatedEthRefunded += estimate.refundedEthAmount
+		if (estimate.purchasedRepAmount === undefined) {
+			estimatedRepClaimed = undefined
+			continue
+		}
+		if (estimatedRepClaimed === undefined) continue
+		estimatedRepClaimed += estimate.purchasedRepAmount
+	}
+
+	let estimatedAssignedBondAllowance: bigint | undefined = 0n
+	if (estimatedRepClaimed === undefined) {
+		estimatedAssignedBondAllowance = undefined
+	} else if (estimatedRepClaimed > 0n) {
+		if (truthAuction === undefined || truthAuction.totalRepPurchased === 0n || auctionedSecurityBondAllowance === undefined) {
+			estimatedAssignedBondAllowance = undefined
+		} else {
+			estimatedAssignedBondAllowance = (auctionedSecurityBondAllowance * estimatedRepClaimed) / truthAuction.totalRepPurchased
+		}
+	}
+
+	return {
+		estimatedAssignedBondAllowance,
+		estimatedEthRefunded,
+		estimatedRepClaimed,
 	}
 }
 

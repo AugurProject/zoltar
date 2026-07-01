@@ -2,6 +2,7 @@ import { createContext } from 'preact'
 import { useContext, useMemo, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { ActionSafetyModal } from '../../components/ActionSafetyModal.js'
+import { AUCTIONED_BOND_ALLOWANCE_LABEL } from '../forkAuction.js'
 import type { ActionSafetyId } from './ids.js'
 
 type ActionSafetyPrompt = {
@@ -49,6 +50,8 @@ export const REQUIRES_CONFIRMATION_ACTION_IDS = [
 	'fork-auction.migrateRepToZoltar',
 	'fork-auction.migrateUnresolvedEscalation',
 	'fork-auction.migrateVault',
+	'fork-auction.claimAuctionProceeds',
+	'fork-auction.settleAuctionRefunds',
 	'fork-auction.startTruthAuction',
 	'fork-auction.submitBid',
 	'market.createQuestion',
@@ -115,12 +118,41 @@ const ACTION_SAFETY_PROMPTS: Record<ConfirmationActionSafetyId, ActionSafetyProm
 		summary: 'Starting the truth auction changes the recovery phase for this child pool.',
 		title: 'Start Truth Auction',
 	},
+	'fork-auction.claimAuctionProceeds': {
+		acknowledgeLabel: `I understand a winning claim assigns both REP and ${AUCTIONED_BOND_ALLOWANCE_LABEL} to the bidder vault.`,
+		checklist: [
+			`Claiming a winning bid adds child-pool REP and a pro-rata share of the ${AUCTIONED_BOND_ALLOWANCE_LABEL} to the bidder vault.`,
+			`That ${AUCTIONED_BOND_ALLOWANCE_LABEL} is the remaining open-interest debt being assigned during auction settlement.`,
+			`If the same settlement call includes losing bids, those rows are refunded while winning rows still add REP and ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`,
+		],
+		confirmLabel: 'Claim Auction Proceeds',
+		severity: 'danger',
+		summary: `Review the selected winning bids before assigning their REP and ${AUCTIONED_BOND_ALLOWANCE_LABEL} to the bidder vault.`,
+		title: 'Review Auction Claim',
+	},
+	'fork-auction.settleAuctionRefunds': {
+		acknowledgeLabel: `I understand this finalized refund-only settlement returns locked ETH and does not assign child-pool REP or ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`,
+		checklist: [
+			'This uses the finalized auction settlement path because the selected rows are already in the child-pool settlement phase.',
+			`The selected rows should return locked ETH only and should not assign child-pool REP or ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`,
+			'If any winning rows are selected, use the claim settlement flow instead so the debt-assignment warning matches the actual outcome.',
+		],
+		confirmLabel: 'Settle Finalized Refunds',
+		severity: 'warning',
+		summary: 'Review the selected finalized refund rows before settling them through the child-pool settlement path.',
+		title: 'Review Finalized Refund Settlement',
+	},
 	'fork-auction.submitBid': {
-		acknowledgeLabel: 'I understand this bid can lock ETH until the auction settles or refunds are available.',
-		checklist: ['Your ETH may remain committed until the truth auction settles or losing bids are refunded.', 'Clearing can fill partially, clear at a uniform price, or leave you waiting for follow-up settlement actions.'],
+		acknowledgeLabel: `I understand a winning bid can later claim both REP and ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`,
+		checklist: [
+			`Winning settlement does not only buy REP. It also assigns a pro-rata share of the ${AUCTIONED_BOND_ALLOWANCE_LABEL} to the bidder vault.`,
+			`That ${AUCTIONED_BOND_ALLOWANCE_LABEL} is the remaining open-interest debt being assigned to auction participants.`,
+			'Your ETH may remain committed until the truth auction settles or losing bids are refunded.',
+			'Clearing can fill partially, clear at a uniform price, or leave you waiting for follow-up settlement actions.',
+		],
 		confirmLabel: 'Submit Bid',
 		severity: 'danger',
-		summary: 'Review the auction price and amount carefully before submitting a truth-auction bid.',
+		summary: 'Review the auction price, amount, and resulting underwriting exposure before submitting a truth-auction bid.',
 		title: 'Review Truth Auction Bid',
 	},
 	'market.createQuestion': {
