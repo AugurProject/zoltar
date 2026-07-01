@@ -116,6 +116,9 @@ contract UniformPriceDualCapBatchAuction {
 		require(msg.value >= minBidSize, 'Auction bid is smaller than the minimum bid size');
 		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
 		require(tickToPrice(tick) > 0, 'Auction tick price rounds down to zero');
+		// Same-price rationing is intentionally time-priority, not pro-rata. Bids at
+		// one tick append in submission order, and any marginal clearing-tick fill
+		// consumes earlier same-tick ETH before later same-tick ETH.
 		root = _insert(root, tick, msg.sender, msg.value);
 		emit SubmitBid(msg.sender, tick, msg.value);
 	}
@@ -209,7 +212,7 @@ contract UniformPriceDualCapBatchAuction {
 					// Fully winning: convert all ETH to REP
 					totalFilledRep += _allocateRepAtClearingPrice(bid.ethAmount, clearingPriceLocal);
 				} else {
-					// Tick == clearingTick: partial fill
+					// Tick == clearingTick: partial fill using FIFO within this price level.
 					uint256 previousCumulativeEth =
 						bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, index);
 					uint256 ethUsed;

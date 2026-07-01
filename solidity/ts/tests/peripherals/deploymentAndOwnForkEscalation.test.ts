@@ -426,6 +426,73 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		assert.ok(migratedEscrow > 0n, 'remaining unresolved own-fork escrow should still migrate after an earlier own-fork claim')
 	})
 
+	test('own-fork claim plus unresolved migration partitions the source escrow without replaying the claimed side', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		let vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		const vaultRepNeeded = vaultRep < 4n * forkThreshold ? 4n * forkThreshold - vaultRep : 0n
+		if (vaultRepNeeded > 0n) {
+			await approveAndDepositRep(client, vaultRepNeeded, questionId)
+			vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		}
+		assert.ok(vaultRep > 2n * forkThreshold, 'test setup needs unlocked REP alongside the controlled own-fork deposits')
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+
+		const claimHash = await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+		const claimReceipt = await client.getTransactionReceipt({ hash: claimHash })
+		const claimLog = claimReceipt.logs
+			.filter(log => log.address.toLowerCase() === getInfraContractAddresses().securityPoolForker.toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+			.find(log => log.eventName === 'ClaimForkedEscalationDepositsToWallet')
+		if (claimLog === undefined) throw new Error('ClaimForkedEscalationDepositsToWallet log missing')
+
+		const migrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const migrationReceipt = await client.getTransactionReceipt({ hash: migrationHash })
+		const exportLog = migrationReceipt.logs
+			.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+			.find(log => log.eventName === 'LocalDepositsExported')
+		if (exportLog === undefined) throw new Error('LocalDepositsExported log missing after own-fork unresolved migration')
+
+		const childYesEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
+		const childNoEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.No, client.account.address)
+		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+
+		strictEqualTypeSafe(claimLog.args.walletRepPaid + childNoEscrow + childYesEscrow, ownForkRepBuckets.unallocatedEscrowChildRep, 'mixed own-fork claim and migration should partition the fixed child REP escrow bucket without creating extra child REP')
+		assert.deepStrictEqual([...exportLog.args.principalByOutcome], [0n, 0n, forkThreshold], 'unresolved migration should export only the remaining no-side source principal after the yes-side claim')
+		strictEqualTypeSafe(exportLog.args.principalToTransfer, forkThreshold, 'unresolved migration should consume only the remaining no-side source principal')
+		strictEqualTypeSafe(exportLog.args.repReceiver.toLowerCase(), addressString(0n).toLowerCase(), 'own-fork unresolved migration should not transfer parent REP to a receiver')
+		strictEqualTypeSafe(exportLog.args.transferredRep, false, 'own-fork unresolved migration should keep the parent REP in place')
+		assert.ok(claimLog.args.sourceRepClaimed > forkThreshold, 'the winning claim should pay out more than principal when it consumes the losing-side escrow')
+		strictEqualTypeSafe(childYesEscrow, 0n, 'the claimed yes-side deposit should not reappear as child escrow after unresolved migration')
+		assert.ok(childNoEscrow > 0n, 'the remaining no-side deposit should still migrate into child escrow')
+		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'mixed own-fork claim and unresolved migration should clear the parent vault escalation lock')
+	})
+
 	test('direct own-fork unresolved migration allows arbitrary vault order without preparation', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const endTime = await getQuestionEndDate(client, questionId)
