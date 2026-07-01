@@ -34,6 +34,10 @@ function shouldCheck(filePath: string): boolean {
 	return !shouldIgnore(relativePath)
 }
 
+function isBlockedViemSpecifier(specifier: string): boolean {
+	return specifier === 'viem' || specifier.startsWith('viem/')
+}
+
 async function collectFiles(directory: string, files: string[] = []): Promise<string[]> {
 	const entries = await fs.readdir(directory, { withFileTypes: true })
 	for (const entry of entries) {
@@ -53,8 +57,41 @@ function findDirectViemImportFindings(sourceFile: ts.SourceFile): DirectViemImpo
 	const findings: DirectViemImportFinding[] = []
 
 	function visit(node: ts.Node): void {
-		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === 'viem') {
+		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && isBlockedViemSpecifier(node.moduleSpecifier.text)) {
 			const position = sourceFile.getLineAndCharacterOfPosition(node.moduleSpecifier.getStart(sourceFile))
+			findings.push({
+				file: toProjectPath(sourceFile.fileName),
+				importText: node.getText(sourceFile),
+				line: position.line + 1,
+				column: position.character + 1,
+			})
+		}
+
+		if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier) && isBlockedViemSpecifier(node.moduleSpecifier.text)) {
+			const position = sourceFile.getLineAndCharacterOfPosition(node.moduleSpecifier.getStart(sourceFile))
+			findings.push({
+				file: toProjectPath(sourceFile.fileName),
+				importText: node.getText(sourceFile),
+				line: position.line + 1,
+				column: position.character + 1,
+			})
+		}
+
+		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+			const [firstArgument] = node.arguments
+			if (firstArgument !== undefined && ts.isStringLiteral(firstArgument) && isBlockedViemSpecifier(firstArgument.text)) {
+				const position = sourceFile.getLineAndCharacterOfPosition(firstArgument.getStart(sourceFile))
+				findings.push({
+					file: toProjectPath(sourceFile.fileName),
+					importText: node.getText(sourceFile),
+					line: position.line + 1,
+					column: position.character + 1,
+				})
+			}
+		}
+
+		if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal) && isBlockedViemSpecifier(node.argument.literal.text)) {
+			const position = sourceFile.getLineAndCharacterOfPosition(node.argument.literal.getStart(sourceFile))
 			findings.push({
 				file: toProjectPath(sourceFile.fileName),
 				importText: node.getText(sourceFile),
