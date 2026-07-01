@@ -22,7 +22,7 @@ import {
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { getTruthAuctionBidGuardMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
+import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
 import { sameAddress } from '../lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
@@ -186,10 +186,12 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 					walletEthBalance,
 				})
 				if (bidGuardMessage !== undefined) throw new Error(bidGuardMessage)
+				const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.value.submitBidPrice)
+				if (bidPriceValidationMessage !== undefined) throw new Error(bidPriceValidationMessage)
 				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 				const bidPrice = parseTruthAuctionPriceInput(forkAuctionForm.value.submitBidPrice, 'Bid price')
 				const bidTick = getTruthAuctionTickAtPrice(bidPrice)
-				if (bidTick === undefined) throw new Error('Enter a valid bid price.')
+				if (bidTick === undefined) throw new Error('Bid price is outside the supported auction range.')
 				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, bidTick, parseTruthAuctionAmountInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 			},
 			'Failed to submit truth auction bid',
