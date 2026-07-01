@@ -16,6 +16,7 @@ import {
 	formatOpenOracleInitialReportWriteErrorMessage,
 	formatOpenOracleMultiplier,
 	formatOpenOracleSettleWriteErrorMessage,
+	getOpenOracleCreateValidationMessage,
 	getOpenOracleDisputeAvailability,
 	getOpenOracleReportStatus,
 	getOpenOracleSelectedReportActionMode,
@@ -291,6 +292,32 @@ describe('Open Oracle helpers', () => {
 				token2Address: WETH_ADDRESS,
 			}),
 		).rejects.toThrow('Dispute delay exceeds the maximum safe integer range')
+	})
+
+	test('createOpenOracleReportInstance rejects invalid direct configs before preparing a wallet write', async () => {
+		let preparedCount = 0
+		const writeClientWithPrepareSpy = createWalletWriteClient(addressString(TEST_ADDRESSES[0]), {
+			onTransactionPrepared: () => {
+				preparedCount += 1
+			},
+		})
+
+		await expect(
+			createOpenOracleReportInstance(writeClientWithPrepareSpy, {
+				disputeDelay: 10,
+				escalationHalt: 0n,
+				exactToken1Report: 1n,
+				ethValue: 1_100n,
+				feePercentage: 100,
+				multiplier: 65_536,
+				protocolFee: 100,
+				settlementTime: 60,
+				settlerReward: 1_000n,
+				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+				token2Address: WETH_ADDRESS,
+			}),
+		).rejects.toThrow('Multiplier exceeds the contract maximum.')
+		expect(preparedCount).toBe(0)
 	})
 
 	test('initial report price helpers derive a Uniswap default price and preserve quote failure metadata', async () => {
@@ -881,6 +908,103 @@ describe('Open Oracle helpers', () => {
 			token1Address: getAddress(token1Address),
 			token2Address: getAddress(WETH_ADDRESS),
 		})
+	})
+
+	test('open oracle create validation blocks contract-reverting configurations before submission', () => {
+		const token1Address = addressString(GENESIS_REPUTATION_TOKEN)
+		const highPrecisionToken1Amount = '0.000000000000000000000000000000000001'
+		const baseForm = {
+			...getDefaultOpenOracleCreateFormState(),
+			disputeDelay: '10',
+			exactToken1Report: '1',
+			ethValue: '1',
+			feePercentage: '1',
+			multiplier: '100',
+			protocolFee: '1',
+			settlementTime: '60',
+			settlerReward: '0.1',
+			token1Address,
+			token2Address: WETH_ADDRESS,
+		}
+
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '0' } })).toBe('Exact token1 report must be greater than zero.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, token2Address: token1Address } })).toBe('Token1 and token2 must be different addresses.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than or equal to dispute delay.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } })).toBe('Fee percentage plus protocol fee must not exceed 100%.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '99' } })).toBe('Multiplier must be at least 1.00x.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' } })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: (1n << 16n).toString() } })).toBe('Multiplier exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } })).toBe('Dispute delay exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } })).toBe('Settlement time exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Exact token1 report exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Escalation halt exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerReward: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, ethValue: (1n << 96n).toString() } })).toBe('ETH value to send exceeds the contract maximum.')
+	})
+
+	test('open oracle create parser accepts high-decimal token1 amounts once token decimals are known', () => {
+		const parsed = parseOpenOracleCreateFormSubmission({
+			form: {
+				...getDefaultOpenOracleCreateFormState(),
+				disputeDelay: '10',
+				escalationHalt: '0.000000000000000000000000000000000001',
+				exactToken1Report: '0.000000000000000000000000000000000001',
+				ethValue: '1',
+				feePercentage: '1',
+				multiplier: '100',
+				protocolFee: '1',
+				settlementTime: '60',
+				settlerReward: '0.1',
+				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+				token2Address: WETH_ADDRESS,
+			},
+			token1Decimals: 36,
+		})
+
+		expect(parsed.exactToken1Report).toBe(1n)
+		expect(parsed.escalationHalt).toBe(1n)
+	})
+
+	test('open oracle create parser throws invariant validation messages before preparing a write', () => {
+		expect(() =>
+			parseOpenOracleCreateFormSubmission({
+				form: {
+					...getDefaultOpenOracleCreateFormState(),
+					disputeDelay: '10',
+					exactToken1Report: '1',
+					ethValue: '1',
+					feePercentage: '60',
+					multiplier: '100',
+					protocolFee: '50.00001',
+					settlementTime: '60',
+					settlerReward: '0.1',
+					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+					token2Address: WETH_ADDRESS,
+				},
+				token1Decimals: 18,
+			}),
+		).toThrow('Fee percentage plus protocol fee must not exceed 100%.')
+		expect(() =>
+			parseOpenOracleCreateFormSubmission({
+				form: {
+					...getDefaultOpenOracleCreateFormState(),
+					disputeDelay: '10',
+					exactToken1Report: '1',
+					ethValue: '1',
+					feePercentage: '1',
+					multiplier: (1n << 16n).toString(),
+					protocolFee: '1',
+					settlementTime: '60',
+					settlerReward: '0.1',
+					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+					token2Address: WETH_ADDRESS,
+				},
+				token1Decimals: 18,
+			}),
+		).toThrow('Multiplier exceeds the contract maximum.')
 	})
 
 	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {

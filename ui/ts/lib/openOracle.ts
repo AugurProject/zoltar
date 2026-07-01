@@ -1,11 +1,12 @@
 import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleCreateFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
+import { sameAddress } from './address.js'
 import { assertNever } from './assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
-import { parseAddressInput } from './inputs.js'
+import { parseAddressInput, tryParseAddressInput } from './inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
@@ -14,6 +15,25 @@ const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
 const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 const OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n
 const OPEN_ORACLE_MULTIPLIER_PRECISION = 100n
+const OPEN_ORACLE_UINT16_MAX = (1n << 16n) - 1n
+const OPEN_ORACLE_UINT24_MAX = (1n << 24n) - 1n
+const OPEN_ORACLE_UINT48_MAX = (1n << 48n) - 1n
+const OPEN_ORACLE_UINT96_MAX = (1n << 96n) - 1n
+const OPEN_ORACLE_UINT128_MAX = (1n << 128n) - 1n
+const OPEN_ORACLE_DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
+type OpenOracleCreateValidationParameters = {
+	disputeDelay: bigint
+	escalationHalt: bigint
+	exactToken1Report: bigint
+	ethValue: bigint
+	feePercentage: bigint
+	multiplier: bigint
+	protocolFee: bigint
+	settlementTime: bigint
+	settlerReward: bigint
+	token1Address: Address
+	token2Address: Address
+}
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'settle' | 'read-only'
 export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
@@ -145,6 +165,132 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, sett
 	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
 	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected standalone Open Oracle game.`
 	return undefined
+}
+
+export function getOpenOracleCreateParameterValidationMessage(
+	{ disputeDelay, escalationHalt, exactToken1Report, ethValue, feePercentage, multiplier, protocolFee, settlementTime, settlerReward, token1Address, token2Address }: OpenOracleCreateValidationParameters,
+	{ skipToken1MagnitudeValidation = false }: { skipToken1MagnitudeValidation?: boolean } = {},
+) {
+	if (sameAddress(token1Address, token2Address)) return 'Token1 and token2 must be different addresses.'
+	if (exactToken1Report <= 0n) return 'Exact token1 report must be greater than zero.'
+	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return 'Exact token1 report exceeds the contract maximum.'
+	if (escalationHalt < 0n) return 'Escalation halt must be non-negative.'
+	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return 'Escalation halt exceeds the contract maximum.'
+	if (ethValue < 0n) return 'ETH value to send must be non-negative.'
+	if (ethValue > OPEN_ORACLE_UINT96_MAX) return 'ETH value to send exceeds the contract maximum.'
+	if (settlerReward < 0n) return 'Settler reward must be non-negative.'
+	if (settlerReward > OPEN_ORACLE_UINT96_MAX) return 'Settler reward exceeds the contract maximum.'
+	if (ethValue < settlerReward) return 'ETH value to send must be at least the settler reward.'
+	if (settlementTime < 0n) return 'Enter a valid settlement time.'
+	if (settlementTime > OPEN_ORACLE_UINT48_MAX) return 'Settlement time exceeds the contract maximum.'
+	if (disputeDelay < 0n) return 'Enter a valid dispute delay.'
+	if (disputeDelay > OPEN_ORACLE_UINT24_MAX) return 'Dispute delay exceeds the contract maximum.'
+	if (settlementTime < disputeDelay) return 'Settlement time must be greater than or equal to dispute delay.'
+	if (multiplier < OPEN_ORACLE_MULTIPLIER_PRECISION) return 'Multiplier must be at least 1.00x.'
+	if (multiplier > OPEN_ORACLE_UINT16_MAX) return 'Multiplier exceeds the contract maximum.'
+	if (feePercentage < 0n) return 'Fee percentage must be non-negative.'
+	if (feePercentage > OPEN_ORACLE_UINT24_MAX) return 'Fee percentage exceeds the contract maximum.'
+	if (protocolFee < 0n) return 'Protocol fee must be non-negative.'
+	if (protocolFee > OPEN_ORACLE_UINT24_MAX) return 'Protocol fee exceeds the contract maximum.'
+	if (feePercentage + protocolFee > OPEN_ORACLE_PERCENTAGE_PRECISION) return 'Fee percentage plus protocol fee must not exceed 100%.'
+	return undefined
+}
+
+function normalizeOpenOracleUnknownScaleDecimalInput(value: string) {
+	const trimmed = value.trim()
+	if (trimmed === '') return trimmed
+	if (trimmed.startsWith('.')) return `0${trimmed}`
+	if (trimmed.endsWith('.')) return `${trimmed}0`
+	return trimmed
+}
+
+function isZeroOpenOracleDecimalInput(value: string) {
+	return value
+		.replace('-', '')
+		.replace('.', '')
+		.split('')
+		.every(digit => digit === '0')
+}
+
+function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, input, invalidMessage, negativeMessage, zeroMessage }: { allowZero?: boolean; input: string; invalidMessage: string; negativeMessage: string; zeroMessage?: string }) {
+	const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
+	if (normalized === '' || !OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized)) return invalidMessage
+	if (normalized.startsWith('-')) return negativeMessage
+	if (!allowZero && isZeroOpenOracleDecimalInput(normalized)) return zeroMessage ?? negativeMessage
+	return undefined
+}
+
+export function getOpenOracleCreateValidationMessage({ form, token1Decimals }: { form: OpenOracleCreateFormState; token1Decimals?: number }) {
+	const token1Address = tryParseAddressInput(form.token1Address)
+	if (token1Address === undefined) return 'Enter a valid token1 address.'
+	const token2Address = tryParseAddressInput(form.token2Address)
+	if (token2Address === undefined) return 'Enter a valid token2 address.'
+	const exactToken1Report =
+		token1Decimals === undefined
+			? (() => {
+					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
+						allowZero: false,
+						input: form.exactToken1Report,
+						invalidMessage: 'Enter a valid exact token1 report.',
+						negativeMessage: 'Exact token1 report must be greater than zero.',
+						zeroMessage: 'Exact token1 report must be greater than zero.',
+					})
+					if (validationMessage !== undefined) return validationMessage
+					return 1n
+				})()
+			: tryParseDecimalInput(form.exactToken1Report, token1Decimals)
+	if (typeof exactToken1Report === 'string') return exactToken1Report
+	if (exactToken1Report === undefined) return 'Enter a valid exact token1 report.'
+
+	const escalationHalt =
+		token1Decimals === undefined
+			? (() => {
+					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
+						input: form.escalationHalt,
+						invalidMessage: 'Enter a valid escalation halt.',
+						negativeMessage: 'Escalation halt must be non-negative.',
+					})
+					if (validationMessage !== undefined) return validationMessage
+					return 0n
+				})()
+			: tryParseDecimalInput(form.escalationHalt, token1Decimals)
+	if (typeof escalationHalt === 'string') return escalationHalt
+	if (escalationHalt === undefined) return 'Enter a valid escalation halt.'
+
+	const ethValue = tryParseDecimalInput(form.ethValue)
+	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
+	const settlerReward = tryParseDecimalInput(form.settlerReward)
+	if (settlerReward === undefined) return 'Enter a valid settler reward.'
+
+	const settlementTime = tryParseBigIntInput(form.settlementTime)
+	if (settlementTime === undefined) return 'Enter a valid settlement time.'
+	const disputeDelay = tryParseBigIntInput(form.disputeDelay)
+	if (disputeDelay === undefined) return 'Enter a valid dispute delay.'
+
+	const multiplier = tryParseBigIntInput(form.multiplier)
+	if (multiplier === undefined || multiplier < 0n) return 'Enter a valid multiplier.'
+
+	const feePercentage = tryParseDecimalInput(form.feePercentage, 5)
+	if (feePercentage === undefined) return 'Enter a valid fee percentage.'
+	const protocolFee = tryParseDecimalInput(form.protocolFee, 5)
+	if (protocolFee === undefined) return 'Enter a valid protocol fee.'
+
+	return getOpenOracleCreateParameterValidationMessage(
+		{
+			disputeDelay,
+			escalationHalt,
+			exactToken1Report,
+			ethValue,
+			feePercentage,
+			multiplier,
+			protocolFee,
+			settlementTime,
+			settlerReward,
+			token1Address,
+			token2Address,
+		},
+		{ skipToken1MagnitudeValidation: token1Decimals === undefined },
+	)
 }
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
 	return { kind: 'hidden-loading', message }
@@ -301,6 +447,8 @@ export function parseOpenOracleFeePercentageInput(value: string, label: string) 
 	return Number(parsed)
 }
 export function parseOpenOracleCreateFormSubmission({ form, token1Decimals }: { form: OpenOracleCreateFormState; token1Decimals: number }) {
+	const validationMessage = getOpenOracleCreateValidationMessage({ form, token1Decimals })
+	if (validationMessage !== undefined) throw new Error(validationMessage)
 	return {
 		disputeDelay: Number(parseBigIntInput(form.disputeDelay, 'Dispute delay')),
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),

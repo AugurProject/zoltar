@@ -835,6 +835,69 @@ describe('ForkAuctionSection', () => {
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 	})
 
+	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress('0x00000000000000000000000000000000000000aa'),
+						ethBalance: 10n ** 18n,
+					}),
+					currentStageView: 'auction',
+					currentTimestamp: 5n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					forkAuctionForm: createForkAuctionForm({
+						submitBidAmount: '1',
+						submitBidPrice: '9'.repeat(2_048),
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		expect(submitBidButton.getAttribute('title')).toBe('Bid price is outside the supported auction range.')
+		expect(submitBidButton.disabled).toBe(true)
+	})
+
 	test('shows a missing-universe notice without a creation button', async () => {
 		const onCreateChildUniverse = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(

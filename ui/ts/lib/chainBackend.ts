@@ -190,13 +190,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 		requestAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
-			let result: unknown
-			try {
-				result = await ethereum.request({ method: 'eth_requestAccounts' })
-			} catch (error) {
-				if (!isProviderRequestError(error)) throw error
-				return []
-			}
+			const result = await ethereum.request({ method: 'eth_requestAccounts' })
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 		},
