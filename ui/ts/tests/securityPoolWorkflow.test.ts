@@ -499,7 +499,7 @@ void describe('selected pool workflow visibility', () => {
 			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, trading, reporting, and fork actions.',
+			detail: 'Switch to the same universe before using vault, share, reporting, and fork actions.',
 			key: 'unavailable',
 		})
 	})

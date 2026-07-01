@@ -165,8 +165,8 @@ export function SecurityPoolsOverviewSection({
 				)}
 				<div className='filter-toolbar'>
 					<label className='field'>
-						<span>Search Pools</span>
-						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder='Search by pool address, question ID, or question text' />
+						<span>Search Loaded Page</span>
+						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder='Filter this page by pool address, question ID, or question text' />
 					</label>
 					<label className='field'>
 						<span>System State</span>
@@ -188,6 +188,7 @@ export function SecurityPoolsOverviewSection({
 						</select>
 					</label>
 				</div>
+				{pagedSecurityPools.length > 0 ? <p className='detail'>Filters apply only to the currently loaded page. Use pagination to inspect other pools.</p> : undefined}
 				{pagedSecurityPools.length > 0 ? (
 					<p className='detail'>
 						{filteredSecurityPools.length.toString()} of {pagedSecurityPools.length.toString()} pools shown on this page.

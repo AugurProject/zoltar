@@ -13,7 +13,7 @@ import type { OpenOracleSectionProps } from '../types/components.js'
 import type { OpenOracleReportDetails } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
 const ETH = 10n ** 18n
 
@@ -252,6 +252,61 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle game.')
+	})
+
+	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					openOracleCreateForm: {
+						...getDefaultOpenOracleCreateFormState(),
+						disputeDelay: '10',
+						exactToken1Report: '1000000000',
+						ethValue: '1',
+						feePercentage: '1',
+						multiplier: '100',
+						protocolFee: '1',
+						settlementTime: '60',
+						settlerReward: '0.1',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Game')
+	})
+
+	test('does not disable create before token decimals are loaded for high-decimal token1 amounts', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					openOracleCreateForm: {
+						...getDefaultOpenOracleCreateFormState(),
+						disputeDelay: '10',
+						escalationHalt: '0.000000000000000000000000000000000001',
+						exactToken1Report: '0.000000000000000000000000000000000001',
+						ethValue: '1',
+						feePercentage: '1',
+						multiplier: '100',
+						protocolFee: '1',
+						settlementTime: '60',
+						settlerReward: '0.1',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Game')
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {

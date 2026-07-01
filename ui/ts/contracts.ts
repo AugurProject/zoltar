@@ -6,7 +6,7 @@ import { sameAddress } from './lib/address.js'
 import { isIgnorableLogDecodeError } from './lib/errors.js'
 import { deriveHasForkActivity } from './lib/forkAuction.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
-import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
+import { addOpenOracleBountyBuffer, getOpenOracleCreateParameterValidationMessage } from './lib/openOracle.js'
 import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
@@ -829,6 +829,20 @@ export async function createOpenOracleReportInstance(
 	assertSafeInteger(parameters.multiplier, 'Multiplier')
 	assertSafeInteger(parameters.protocolFee, 'Protocol fee')
 	assertSafeInteger(parameters.settlementTime, 'Settlement time')
+	const validationMessage = getOpenOracleCreateParameterValidationMessage({
+		disputeDelay: BigInt(parameters.disputeDelay),
+		escalationHalt: parameters.escalationHalt,
+		exactToken1Report: parameters.exactToken1Report,
+		ethValue: parameters.ethValue,
+		feePercentage: BigInt(parameters.feePercentage),
+		multiplier: BigInt(parameters.multiplier),
+		protocolFee: BigInt(parameters.protocolFee),
+		settlementTime: BigInt(parameters.settlementTime),
+		settlerReward: parameters.settlerReward,
+		token1Address: parameters.token1Address,
+		token2Address: parameters.token2Address,
+	})
+	if (validationMessage !== undefined) throw new Error(validationMessage)
 	const callParams = {
 		address: getOpenOracleAddress(),
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,

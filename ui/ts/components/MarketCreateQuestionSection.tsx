@@ -48,6 +48,12 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 	}
 }
 
+function getPoolEligibilityMessage(marketType: MarketFormState['marketType']) {
+	if (marketType === 'binary') return 'Placeholder origin security pools support this exact Yes / No question shape.'
+	if (marketType === 'categorical') return 'This question is valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
+	return 'This scalar question is valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
+}
+
 function getFieldErrorId(field: MarketFormFieldName) {
 	return `market-create-${field}-error`
 }
@@ -154,6 +160,7 @@ export function MarketCreateQuestionSection({
 						<MetricField label='Creation transaction hash'>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>
+						<p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>
 					</div>
 				</EntityCard>
 			)}
@@ -207,7 +214,8 @@ export function MarketCreateQuestionSection({
 								{renderFieldError('endTime', marketFormValidation.fieldErrors.endTime)}
 							</div>
 						</div>
-						<p className='field-help'>Times use your browser timezone. Reporting and trading settlement depend on the end time.</p>
+						<p className='field-help'>Times use your browser timezone. Reporting, settlement, and pool workflows depend on the end time.</p>
+						<p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>
 
 						{marketForm.marketType === 'categorical' ? (
 							<div className='field'>

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
+import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
@@ -40,6 +40,26 @@ describe('transactionTray', () => {
 		expect(submitted.pendingIntent).toBeUndefined()
 		expect(presented.active?.tone).toBe('success')
 		expect(presented.active?.title).toBe('Question Created')
+		expect(finished.inFlightCount).toBe(0)
+	})
+
+	test('keeps transaction actions locked until the current transaction finishes', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const submitted = markTransactionSubmitted(requested, transactionHash)
+		const finished = markTransactionFinished(submitted)
+
+		expect(getTransactionActionLockReason(requested)).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(requested.inFlightCount).toBe(1)
+		expect(requested.pendingIntent).toBeDefined()
+		expect(getTransactionActionLockReason(submitted)).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(submitted.inFlightCount).toBe(1)
+		expect(submitted.pendingIntent).toBeUndefined()
+		expect(getTransactionActionLockReason(finished)).toBeUndefined()
 		expect(finished.inFlightCount).toBe(0)
 	})
 

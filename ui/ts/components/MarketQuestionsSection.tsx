@@ -98,7 +98,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 									key: 'empty',
 									badgeLabel: 'None yet',
 									badgeTone: 'muted',
-									detail: 'No questions are available in this universe yet. Create a question first, then use it to create a security pool for trading and reporting.',
+									detail: 'No questions are available in this universe yet. Create a question first, then use it to create a security pool for shares, reporting, and vaults.',
 								}}
 								title='No questions'
 								actions={
@@ -138,6 +138,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 							}
 						>
 							<Question question={question} showTitle={false} />
+							{question.marketType !== 'binary' ? <p className='detail'>This question is valid in Zoltar, but Placeholder origin pools currently require an exact binary Yes / No question.</p> : undefined}
 						</EntityCard>
 					))}
 				</div>

@@ -237,7 +237,7 @@ export function TradingSection({
 	const tradingLaunchers: ReadinessAction[] = [
 		{
 			actionLabel: 'Mint complete sets',
-			description: 'Review mint capacity, available backing, and the collateral amount before minting complete sets.',
+			description: 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this pool.',
 			key: 'mint-complete-sets',
 			readiness: mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('createCompleteSet'),
@@ -247,7 +247,7 @@ export function TradingSection({
 		},
 		{
 			actionLabel: 'Redeem complete sets',
-			description: 'Redeem matching yes, no, and invalid shares back into collateral using the available complete-set balance.',
+			description: 'Burn matching Yes, No, and Invalid shares to recover collateral from the current pool.',
 			key: 'redeem-complete-sets',
 			readiness: redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('redeemCompleteSet'),
@@ -257,7 +257,7 @@ export function TradingSection({
 		},
 		{
 			actionLabel: 'Migrate forked shares',
-			description: 'Select the source outcome and target child universes before migrating forked shares.',
+			description: 'Burn parent-pool shares for one outcome and recreate them across selected child universes.',
 			key: 'migrate-shares',
 			readiness: migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('migrateShares'),
@@ -267,7 +267,7 @@ export function TradingSection({
 		},
 		{
 			actionLabel: 'Redeem resolved shares',
-			description: 'Redeem finalized winning shares once the selected pool has resolved.',
+			description: 'Redeem final winning shares after the selected pool fully resolves.',
 			key: 'redeem-shares',
 			readiness: redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('redeemShares'),
@@ -343,7 +343,7 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			<SectionBlock title='Trade' description='Mint, redeem, or migrate shares after reviewing balances and pool capacity.'>
+			<SectionBlock title='Shares' description='Placeholder does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />
@@ -413,7 +413,12 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description='Select the share outcome and target child universes before migrating forked shares.' isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title='Migrate Forked Shares'>
+			<OperationModal
+				description='Migrating burns the selected parent-pool share balance and recreates it across the chosen child universes. Review the source outcome and target universes carefully before submitting.'
+				isOpen={activeModal === 'migrate-shares'}
+				onClose={() => setActiveModal(undefined)}
+				title='Migrate Forked Shares'
+			>
 				<label className='field'>
 					<span>Share Outcome To Migrate</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -459,7 +464,7 @@ export function TradingSection({
 	)
 	if (embedInCard) return sections
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title='Trading'>
+		<RouteWorkflowPanel showHeader={showHeader} title='Shares'>
 			{sections}
 		</RouteWorkflowPanel>
 	)

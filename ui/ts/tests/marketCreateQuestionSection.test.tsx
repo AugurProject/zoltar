@@ -142,7 +142,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title')
-		expect(documentQueries.getByText('Times use your browser timezone. Reporting and trading settlement depend on the end time.')).not.toBeNull()
+		expect(documentQueries.getByText('Times use your browser timezone. Reporting, settlement, and pool workflows depend on the end time.')).not.toBeNull()
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
 		expect(documentQueries.getAllByText('Missing required fields: Title')).toHaveLength(1)

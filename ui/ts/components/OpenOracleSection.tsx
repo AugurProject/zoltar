@@ -30,6 +30,7 @@ import { createConnectedReadClient } from '../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	getOpenOracleCreateGuardMessage,
+	getOpenOracleCreateValidationMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	getOpenOracleDisputeAvailability,
@@ -833,6 +834,8 @@ export function OpenOracleSection({
 		walletConnected: isConnected,
 		walletEthBalance: accountState.ethBalance,
 	})
+	const createValidationMessage = getOpenOracleCreateValidationMessage({ form: openOracleCreateForm })
+	const createAvailabilityMessage = createGuardMessage ?? createValidationMessage
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	useEffect(() => {
 		let cancelled = false
@@ -1058,7 +1061,7 @@ export function OpenOracleSection({
 									pendingLabel='Creating...'
 									onClick={onCreateOpenOracleGame}
 									pending={loadingOpenOracleCreate}
-									availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }}
+									availability={{ disabled: createAvailabilityMessage !== undefined, reason: createAvailabilityMessage }}
 								/>
 							</div>
 						</div>

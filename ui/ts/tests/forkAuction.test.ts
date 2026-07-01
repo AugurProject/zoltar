@@ -9,11 +9,16 @@ import {
 	buildTruthAuctionDepthPoints,
 	getTruthAuctionBidDisposition,
 	getTruthAuctionBidGuardMessage,
+	getTruthAuctionBidPreview,
+	getTruthAuctionBidPriceValidationMessage,
+	TRUTH_AUCTION_MIN_SUPPORTED_TICK,
+	TRUTH_AUCTION_MIN_TICK,
 	getTruthAuctionOverviewProgress,
 	getTruthAuctionPriceAtTick,
 	getTruthAuctionTickAtPrice,
 	sortTruthAuctionBidsByPriority,
 	sortTruthAuctionTickSummariesDescending,
+	TRUTH_AUCTION_MAX_TICK,
 	TRUTH_AUCTION_PRICE_PRECISION,
 } from '../lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionState } from '../lib/truthAuctionSettlement.js'
@@ -181,6 +186,27 @@ void describe('fork auction helpers', () => {
 
 		expect(getTruthAuctionTickAtPrice(betweenPositiveTicksPrice)).toBe(12n)
 		expect(getTruthAuctionTickAtPrice(0n)).toBeUndefined()
+	})
+
+	void test('rejects prices outside the contract-supported truth auction range', () => {
+		const maxSupportedPrice = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK)
+		const smallestSupportedPositiveTick = getTruthAuctionTickAtPrice(1n)
+
+		expect(smallestSupportedPositiveTick).not.toBeUndefined()
+		expect(getTruthAuctionTickAtPrice(maxSupportedPrice)).toBe(TRUTH_AUCTION_MAX_TICK)
+		expect(getTruthAuctionTickAtPrice(maxSupportedPrice + 1n)).toBeUndefined()
+		expect(getTruthAuctionBidPriceValidationMessage((maxSupportedPrice + 1n).toString())).toBe('Bid price is outside the supported auction range.')
+		expect(getTruthAuctionBidPriceValidationMessage('9'.repeat(2_048))).toBe('Bid price is outside the supported auction range.')
+		expect(getTruthAuctionBidPreview('9'.repeat(2_048))).toBeUndefined()
+	})
+
+	void test('rejects ticks outside the contract-supported truth auction range', () => {
+		expect(TRUTH_AUCTION_MIN_SUPPORTED_TICK).toBeGreaterThan(TRUTH_AUCTION_MIN_TICK)
+		expect(getTruthAuctionPriceAtTick(TRUTH_AUCTION_MIN_SUPPORTED_TICK)).toBeGreaterThan(0n)
+		expect(() => getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK + 1n)).toThrow('Truth auction tick is outside the supported range.')
+		expect(() => getTruthAuctionPriceAtTick(TRUTH_AUCTION_MIN_SUPPORTED_TICK - 1n)).toThrow('Truth auction tick is outside the supported range.')
+		expect(() => getTruthAuctionPriceAtTick(TRUTH_AUCTION_MIN_TICK)).toThrow('Truth auction tick is outside the supported range.')
+		expect(() => getTruthAuctionPriceAtTick(1_048_576n)).toThrow('Truth auction tick is outside the supported range.')
 	})
 
 	void test('uses settlement after finalized auction and after active fork flags in settled-like states', () => {
