@@ -359,16 +359,9 @@ contract SecurityPool is ISecurityPool {
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
 		require(oldRep >= withdrawRepAmount, 'Withdraw amount exceeds vault REP');
-		require(
-			(oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >=
-				securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(),
-			'Vault bond undercollateralized'
-		);
-		require(
-			(totalRepBalance - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >=
-				totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(),
-			'Pool bond undercollateralized'
-		);
+		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		_requireVaultBondCoverage(oldRep - withdrawRepAmount, securityVaults[vault].securityBondAllowance, repEthPrice);
+		_requirePoolBondCoverage(totalRepBalance - withdrawRepAmount, totalSecurityBondAllowance, repEthPrice);
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
@@ -405,6 +398,73 @@ contract SecurityPool is ISecurityPool {
 		return repToken.balanceOf(address(this));
 	}
 
+	function _requireVaultBondCoverage(
+		uint256 vaultRepAmount,
+		uint256 securityBondAllowance,
+		uint256 repEthPrice
+	) private pure {
+		require(
+			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * repEthPrice,
+			'Vault bond undercollateralized'
+		);
+	}
+
+	function _requirePoolBondCoverage(
+		uint256 totalRepBalanceValue,
+		uint256 totalSecurityBondAllowanceValue,
+		uint256 repEthPrice
+	) private pure {
+		require(
+			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowanceValue * repEthPrice,
+			'Pool bond undercollateralized'
+		);
+	}
+
+	function _requireVaultAllowanceBackedByRep(
+		uint256 vaultRepAmount,
+		uint256 securityBondAllowance,
+		uint256 repEthPrice
+	) private pure {
+		require(
+			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION > securityBondAllowance * repEthPrice,
+			'Vault allowance exceeds REP backing'
+		);
+	}
+
+	function _requirePoolAllowanceBackedByRep(
+		uint256 totalRepBalanceValue,
+		uint256 totalSecurityBondAllowanceValue,
+		uint256 repEthPrice
+	) private pure {
+		require(
+			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowanceValue * repEthPrice,
+			'Pool allowance exceeds REP backing'
+		);
+	}
+
+	function _requireMinimumVaultRep(
+		uint256 repAmount,
+		bool allowZeroBalance,
+		string memory errorMessage
+	) private pure {
+		require(repAmount >= SecurityPoolUtils.MIN_REP_DEPOSIT || (allowZeroBalance && repAmount == 0), errorMessage);
+	}
+
+	function _requireMinimumSecurityBondAllowance(
+		uint256 amount,
+		bool allowZeroBalance,
+		string memory errorMessage
+	) private pure {
+		require(amount >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || (allowZeroBalance && amount == 0), errorMessage);
+	}
+
+	function _requireCapacityNotExceeded(
+		uint256 totalSecurityBondAllowanceValue,
+		uint256 collateralAmount
+	) private pure {
+		require(totalSecurityBondAllowanceValue >= collateralAmount, 'Capacity exceeded');
+	}
+
 	function sharesToCash(uint256 completeSetAmount) public view returns (uint256) {
 		if (completeSetAmount == 0) return 0;
 		if (shareTokenSupply == 0) return 0;
@@ -426,8 +486,9 @@ contract SecurityPool is ISecurityPool {
 		_trackVault(msg.sender);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
 		poolOwnershipDenominator += poolOwnership;
-		require(
-			poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT,
+		_requireMinimumVaultRep(
+			poolOwnershipToRep(securityVaults[msg.sender].poolOwnership),
+			false,
 			'Vault REP below minimum'
 		);
 		_syncActiveVault(msg.sender);
@@ -487,22 +548,24 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[callerVault].poolOwnership += ownershipToMove;
 
 		// target vault needs to be above thresholds after liquidation
-		require(
-			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT ||
-				securityVaults[targetVaultAddress].poolOwnership == 0,
+		_requireMinimumVaultRep(
+			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership),
+			securityVaults[targetVaultAddress].poolOwnership == 0,
 			'Target vault REP below minimum'
 		);
-		require(
-			securityVaults[targetVaultAddress].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT ||
-				securityVaults[targetVaultAddress].securityBondAllowance == 0,
+		_requireMinimumSecurityBondAllowance(
+			securityVaults[targetVaultAddress].securityBondAllowance,
+			securityVaults[targetVaultAddress].securityBondAllowance == 0,
 			'Target vault debt below minimum'
 		);
-		require(
-			poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT,
+		_requireMinimumVaultRep(
+			poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
+			false,
 			'Caller vault REP below minimum'
 		);
-		require(
-			securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
+		_requireMinimumSecurityBondAllowance(
+			securityVaults[callerVault].securityBondAllowance,
+			false,
 			'Caller vault debt below minimum'
 		);
 		_syncActiveVault(targetVaultAddress);
@@ -537,22 +600,15 @@ contract SecurityPool is ISecurityPool {
 		totalSecurityBondAllowance -= oldAllowance;
 		securityVaults[callerVault].securityBondAllowance = amount;
 
-		require(
-			poolOwnershipToRep(securityVaults[callerVault].poolOwnership) * SecurityPoolUtils.PRICE_PRECISION >
-				amount * priceOracleManagerAndOperatorQueuer.lastPrice(),
-			'Vault allowance exceeds REP backing'
+		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		_requireVaultAllowanceBackedByRep(
+			poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
+			amount,
+			repEthPrice
 		);
-		require(
-			getTotalRepBalance() * SecurityPoolUtils.PRICE_PRECISION >
-				totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(),
-			'Pool allowance exceeds REP backing'
-		);
-		require(totalSecurityBondAllowance >= completeSetCollateralAmount, 'Capacity exceeded');
-		require(
-			securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT ||
-				securityVaults[callerVault].securityBondAllowance == 0,
-			'Security bond below minimum'
-		);
+		_requirePoolAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice);
+		_requireCapacityNotExceeded(totalSecurityBondAllowance, completeSetCollateralAmount);
+		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Security bond below minimum');
 		_syncActiveVault(callerVault);
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount, totalSecurityBondAllowance);
 		updateRetentionRate();
@@ -569,7 +625,7 @@ contract SecurityPool is ISecurityPool {
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
-		require(totalSecurityBondAllowance >= nextCompleteSetCollateralAmount, 'Capacity exceeded');
+		_requireCapacityNotExceeded(totalSecurityBondAllowance, nextCompleteSetCollateralAmount);
 		shareTokenSupply += completeSetsToMint;
 		completeSetCollateralAmount = nextCompleteSetCollateralAmount;
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMint);
@@ -685,19 +741,9 @@ contract SecurityPool is ISecurityPool {
 			updatedPoolOwnership == 0
 				? 0
 				: (updatedPoolOwnership * postTransferRepBalance) / postTransferPoolOwnershipDenominator;
-		require(
-			remainingRep * SecurityPoolUtils.PRICE_PRECISION >=
-				securityVaults[msg.sender].securityBondAllowance * repEthPrice,
-			'Vault bond undercollateralized'
-		);
-		require(
-			postTransferRepBalance * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowance * repEthPrice,
-			'Pool bond undercollateralized'
-		);
-		require(
-			remainingRep >= SecurityPoolUtils.MIN_REP_DEPOSIT || updatedPoolOwnership == 0,
-			'Vault REP below minimum'
-		);
+		_requireVaultBondCoverage(remainingRep, securityVaults[msg.sender].securityBondAllowance, repEthPrice);
+		_requirePoolBondCoverage(postTransferRepBalance, totalSecurityBondAllowance, repEthPrice);
+		_requireMinimumVaultRep(remainingRep, updatedPoolOwnership == 0, 'Vault REP below minimum');
 
 		securityVaults[msg.sender].poolOwnership = updatedPoolOwnership;
 		poolOwnershipDenominator = postTransferPoolOwnershipDenominator;
