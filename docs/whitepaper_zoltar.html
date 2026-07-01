@@ -1658,11 +1658,18 @@
 						non-malformed outcome indices. Supplying no outcome indices is accepted as a
 						no-op at the Zoltar layer.
 					</p>
-					<p>
-						For categorical questions, <code>Invalid</code> and any in-range categorical
-						outcome are allowed, while out-of-range values are rejected. For scalar
-						questions, only well-formed scalar encodings are allowed.
-					</p>
+						<p>
+							For categorical questions, <code>Invalid</code> and any in-range categorical
+							outcome are allowed, while out-of-range values are rejected. For scalar
+							questions, only well-formed scalar encodings are allowed.
+						</p>
+						<p>
+							The fork question defines the child-branch shape for the whole universe. A child
+							branch may therefore be keyed by <code>Invalid</code>, a categorical outcome
+							index, or a scalar encoding depending on which parent-universe question caused the
+							fork. Downstream applications should treat that branch selector as universe-level
+							metadata rather than assume every child branch is binary.
+						</p>
 					<div class="implementation-grid">
 						<div class="implementation-note">
 							<b>Implementation entry points</b>
