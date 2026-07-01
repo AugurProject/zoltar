@@ -131,8 +131,8 @@ export const TRADING_ACTION_SAFETY_IDS: Record<TradingActionResult['action'], Ac
 export const FORK_AUCTION_ACTION_SAFETY_IDS: Record<ForkAuctionAction, ActionSafetyId> = {
 	createChildUniverse: 'child-universe.deploy',
 	finalizeTruthAuction: 'fork-auction.finalizeTruthAuction',
-	forkUniverse: 'fork-auction.forkZoltar',
-	forkWithOwnEscalation: 'reporting.triggerZoltarFork',
+	forkUniverse: 'fork-auction.forkUniverse',
+	forkWithOwnEscalation: 'fork-auction.forkWithOwnEscalation',
 	claimAuctionProceeds: 'fork-auction.claimAuctionProceeds',
 	initiateFork: 'fork-auction.initiateFork',
 	migrateEscalationDeposits: 'fork-auction.migrateEscalationDeposits',

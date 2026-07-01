@@ -266,9 +266,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Trading Workflow')).toBeNull()
+		expect(documentQueries.queryByText('Share Workflow')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Your Holdings' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Trade' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Shares' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
@@ -299,7 +299,7 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(poolAddress).toBe('0x00000000000000000000000000000000000000ab')
-		expect(documentQueries.queryByRole('heading', { name: 'Latest Trading Action' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Share Action' })).toBeNull()
 		expect(documentQueries.queryByText('Complete Sets Minted')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: `Copy address ${poolAddress}` })).toBeNull()
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
@@ -626,7 +626,7 @@ void describe('TradingSection', () => {
 			cleanupRenderedComponent = renderedComponent.cleanup
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.queryByText('Latest Trading Action')).toBeNull()
+			expect(documentQueries.queryByText('Latest Share Action')).toBeNull()
 			expect(documentQueries.queryByText(scenario.title)).toBeNull()
 			expect(documentQueries.queryByRole('button', { name: `Copy address ${zeroAddress}` })).toBeNull()
 			expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()

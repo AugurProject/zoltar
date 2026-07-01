@@ -7,6 +7,7 @@ import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
+import { ActionSafetyProvider } from '../lib/actionSafety/runtime.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital, getSelectedOutcomeRewardWindowFillTimestamp } from '../lib/reportingDomain.js'
@@ -308,7 +309,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Active' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Min to change proposed outcome' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Min to take the lead' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
@@ -444,13 +445,13 @@ describe('ReportingSection', () => {
 		const metricsSection = getEscalationMetricsSection()
 		const metricsQueries = within(metricsSection)
 		expect(metricsQueries.queryByText('Current Bond')).toBeNull()
-		expect(metricsQueries.getByText('Threshold')).not.toBeNull()
+		expect(metricsQueries.getByText('Non-decision threshold')).not.toBeNull()
 		expect(metricsQueries.getByText('Time Left')).not.toBeNull()
-		expect(metricsQueries.getByText('Game Start')).not.toBeNull()
+		expect(metricsQueries.getByText('Escalation started')).not.toBeNull()
 		expect(metricsQueries.getByText('Start Bond')).not.toBeNull()
 	})
 
-	test('shows Game Start as activation time minus the initial delay', async () => {
+	test('shows escalation started time as activation time minus the initial delay', async () => {
 		const gameStartTimestamp = 120n
 		const activationTime = ESCALATION_GAME_ACTIVATION_DELAY + gameStartTimestamp
 		const renderedComponent = await renderIntoDocument(
@@ -484,8 +485,8 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
-		expect(reportOutcomeSection.textContent?.includes('Total stake')).toBe(true)
-		expect(reportOutcomeSection.textContent?.includes('Your stake')).toBe(true)
+		expect(reportOutcomeSection.textContent?.includes('Total side stake')).toBe(true)
+		expect(reportOutcomeSection.textContent?.includes('Your side stake')).toBe(true)
 		expect(firstSide.compareDocumentPosition(amountInput) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 
@@ -757,7 +758,7 @@ describe('ReportingSection', () => {
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('textbox', { name: /^Contribution Amount \(REP\)/ }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max' }) as HTMLButtonElement).disabled).toBe(true)
-		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: 'Min to take the lead' }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Report Yes')
 	})
@@ -1076,7 +1077,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to take the lead' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
@@ -1189,7 +1190,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to take the lead' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
@@ -1388,6 +1389,48 @@ describe('ReportingSection', () => {
 		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
+	test('requires confirmation before triggering Zoltar fork from reporting', async () => {
+		let triggerZoltarForkCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			<ActionSafetyProvider>
+				{h(
+					ReportingSection,
+					createProps({
+						onTriggerZoltarFork: () => {
+							triggerZoltarForkCalls += 1
+						},
+						reportingDetails: createReportingDetails({
+							hasReachedNonDecision: true,
+						}),
+						triggerZoltarForkAvailability: {
+							disabled: false,
+							reason: undefined,
+						},
+					}),
+				)}
+			</ActionSafetyProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
+		})
+
+		expect(triggerZoltarForkCalls).toBe(0)
+		const dialog = documentQueries.getByRole('dialog', { name: 'Trigger Zoltar Fork' })
+		const dialogQueries = within(dialog)
+
+		await act(() => {
+			fireEvent.click(dialogQueries.getByRole('checkbox'))
+		})
+		await act(() => {
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Trigger Fork' }))
+		})
+
+		expect(triggerZoltarForkCalls).toBe(1)
+	})
+
 	test('disables preset buttons when reporting details are missing without showing the load reason inline', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1403,7 +1446,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: 'Min to take the lead' }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
@@ -1433,7 +1476,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		const amountInput = documentQueries.getByLabelText('Contribution Amount (REP)') as HTMLInputElement
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Min to take the lead' }))
 		})
 		expect(amountInput.value).toBe('1')
 	})
@@ -1610,7 +1653,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to take the lead' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
@@ -1668,7 +1711,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const minButton = within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement
+		const minButton = within(document.body).getByRole('button', { name: 'Min to take the lead' }) as HTMLButtonElement
 		expect(minButton.disabled).toBe(true)
 		expect(minButton.title).toBe('Selected side already leads.')
 		expect(document.body.textContent?.includes('Selected side already leads.')).toBe(false)

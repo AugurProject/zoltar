@@ -8,6 +8,7 @@ import { LoadingText } from './LoadingText.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
+import { isMainnetChain } from '../lib/network.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 export function OverviewPanels({
@@ -48,6 +49,8 @@ export function OverviewPanels({
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
 	const isProviderReadBackend = effectiveReadBackendStatus.transportMode === 'provider' && !isBrowserSimulationReadBackend
+	const walletOnMainnet = isMainnetChain(accountState.chainId)
+	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
 	const readBackendHost = (() => {
 		if (isBrowserSimulationReadBackend) return 'browser simulation'
 		if (isProviderReadBackend) return 'wallet provider'
@@ -58,15 +61,24 @@ export function OverviewPanels({
 			return effectiveReadBackendStatus.rpcUrl
 		}
 	})()
-	const readBackendLabel = isProviderReadBackend ? 'provider' : `${effectiveReadBackendStatus.transportMode} / ${effectiveReadBackendStatus.rpcSource}`
+	const readBackendLabel = isProviderReadBackend ? 'wallet provider reads' : `${effectiveReadBackendStatus.transportMode} via ${effectiveReadBackendStatus.rpcSource}`
 	const readBackendTitle = isProviderReadBackend ? `Reads are using the connected wallet provider. Configured fallback RPC: ${effectiveReadBackendStatus.rpcUrl}` : effectiveReadBackendStatus.rpcUrl
+	const readBackendSummary = isProviderReadBackend ? readBackendLabel : `${readBackendHost} · ${readBackendLabel}`
+	const writeNetworkLabel = (() => {
+		if (isBrowserSimulationReadBackend) return 'Browser simulation'
+		if (accountState.address === undefined) return 'No wallet connected'
+		if (walletOnMainnet) return 'Ethereum mainnet'
+		return `Wallet chain ${accountState.chainId ?? 'unknown'}`
+	})()
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>Simulation</Badge>
+		if (hasWrongWalletNetwork) return <Badge tone='danger'>Wrong Network</Badge>
 		if (accountState.address === undefined) return <Badge tone='pending'>Read-only</Badge>
 		return <Badge tone='ok'>Connected</Badge>
 	})()
 	const environmentDescription = (() => {
 		if (isBrowserSimulationReadBackend) return 'Simulation mode uses browser-local contract state. Transactions do not affect a public network.'
+		if (hasWrongWalletNetwork) return 'Wallet is connected to a non-mainnet chain. You can inspect configured read state, but transaction controls stay disabled until the wallet switches to Ethereum mainnet.'
 		if (accountState.address === undefined) return 'Read-only mode shows contract state. Connect a wallet before submitting transactions.'
 		return undefined
 	})()
@@ -153,9 +165,10 @@ export function OverviewPanels({
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>
-					<MetricField label='Read RPC'>
+					<MetricField label='Write Network'>{writeNetworkLabel}</MetricField>
+					<MetricField label='Read Source'>
 						<span title={readBackendTitle}>
-							{readBackendLabel}: {readBackendHost}
+							{readBackendSummary}
 							{effectiveReadBackendStatus.blockNumber === undefined ? '' : ` @ ${effectiveReadBackendStatus.blockNumber.toString()}`}
 						</span>
 					</MetricField>

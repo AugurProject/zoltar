@@ -511,12 +511,13 @@ export function ReportingSection({
 
 			{showFullReporting ? (
 				<SectionBlock title='Escalation Metrics'>
+					<p className='detail'>Binding capital is the REP currently holding one side in the lead. The non-decision threshold is the amount that pushes the market into fork handling instead of normal finalization.</p>
 					<div className='escalation-metrics'>
-						<MetricField label='Threshold'>
+						<MetricField label='Non-decision threshold'>
 							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
 						</MetricField>
 						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
-						<MetricField label='Game Start'>
+						<MetricField label='Escalation started'>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 						</MetricField>
 						<MetricField label='Start Bond'>
@@ -532,15 +533,15 @@ export function ReportingSection({
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>Total stake</span>
+								<span className='panel-label'>Total side stake</span>
 							</div>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>Your stake</span>
+								<span className='panel-label'>Your side stake</span>
 							</div>
 							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
 								<span aria-hidden='true' className='escalation-sides-legend-marker' />
-								<span className='panel-label'>Binding capital</span>
+								<span className='panel-label'>Lead-holding capital</span>
 								<CurrencyValue copyable={false} value={displayBindingCapital} suffix='REP' />
 							</div>
 						</div>
@@ -598,7 +599,7 @@ export function ReportingSection({
 							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amount === undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 						>
-							Min to change proposed outcome
+							Min to take the lead
 						</button>
 						<button
 							className='secondary'
@@ -641,6 +642,7 @@ export function ReportingSection({
 
 			{showSettlementSection ? (
 				<SectionBlock title='Settle Escalation Deposits'>
+					<p className='detail'>Settling returns finalized winnings or clears losing deposits once escalation is resolved for this pool.</p>
 					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>The migration window for these unresolved escalation deposits has closed.</p> : undefined}
