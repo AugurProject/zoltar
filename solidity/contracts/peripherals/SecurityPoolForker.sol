@@ -20,6 +20,8 @@ import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 	using SafeERC20Ops for IERC20;
+	// These delegates keep fork/migration behavior under the EVM bytecode-size limit while
+	// sharing the same storage layout via `SecurityPoolForkerVaultMigrationBase`.
 	address private immutable vaultMigrationDelegate;
 	address private immutable escalationGameForkerDelegate;
 
@@ -329,8 +331,8 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		}
 	}
 
-	function _delegateMigrationCall(address delegate) private returns (bytes memory returnData) {
-		(bool success, bytes memory data) = delegate.delegatecall(msg.data);
+	function _delegateMigrationCall(address delegate, bytes memory callData) private returns (bytes memory returnData) {
+		(bool success, bytes memory data) = delegate.delegatecall(callData);
 		if (!success) {
 			assembly {
 				revert(add(data, 0x20), mload(data))
@@ -339,41 +341,55 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		return data;
 	}
 
-	function createChildUniverse(ISecurityPool, uint256) public {
-		_delegateVaultMigration();
+	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) public {
+		_delegateVaultMigrationCall(
+			abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.createChildUniverse, (securityPool, outcomeIndex))
+		);
 	}
 
 	function claimForkedEscalationDeposits(
-		ISecurityPool,
+		ISecurityPool securityPool,
 		address vault,
-		BinaryOutcomes.BinaryOutcome,
-		uint256[] calldata
+		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		uint256[] calldata depositIndexes
 	) external {
 		require(msg.sender == vault, 'Only vault owner');
-		_delegateEscalationGameForker();
+		_delegateEscalationGameForkerCall(
+			abi.encodeCall(
+				EscalationGameForker.claimForkedEscalationDeposits,
+				(securityPool, vault, outcomeIndex, depositIndexes)
+			)
+		);
 	}
 
 	// migrates vault into outcome universe after fork
-	function migrateVault(ISecurityPool, uint256) public {
-		_delegateVaultMigration();
+	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) public {
+		_delegateVaultMigrationCall(
+			abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.migrateVault, (securityPool, outcomeIndex))
+		);
 	}
 
 	function migrateVaultWithUnresolvedEscalation(
-		ISecurityPool,
+		ISecurityPool securityPool,
 		address vault,
-		uint256
+		uint256 childOutcomeIndex
 	) public returns (bool moreToMigrate) {
 		require(msg.sender == vault, 'Only vault owner');
-		bytes memory returnData = _delegateEscalationGameForker();
+		bytes memory returnData = _delegateEscalationGameForkerCall(
+			abi.encodeCall(
+				EscalationGameForker.migrateVaultWithUnresolvedEscalation,
+				(securityPool, vault, childOutcomeIndex)
+			)
+		);
 		return abi.decode(returnData, (bool));
 	}
 
-	function _delegateVaultMigration() private returns (bytes memory returnData) {
-		return _delegateMigrationCall(vaultMigrationDelegate);
+	function _delegateVaultMigrationCall(bytes memory callData) private returns (bytes memory returnData) {
+		return _delegateMigrationCall(vaultMigrationDelegate, callData);
 	}
 
-	function _delegateEscalationGameForker() private returns (bytes memory returnData) {
-		return _delegateMigrationCall(escalationGameForkerDelegate);
+	function _delegateEscalationGameForkerCall(bytes memory callData) private returns (bytes memory returnData) {
+		return _delegateMigrationCall(escalationGameForkerDelegate, callData);
 	}
 
 	function startTruthAuction(ISecurityPool securityPool) public {
@@ -703,12 +719,12 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		(uint256 amount, ) = data.truthAuction.withdrawBids(vault, tickIndices);
 		if (amount == 0) return;
 		uint256 auctionPoolOwnershipPerRep = data.auctionPoolOwnershipPerRep;
-		require(auctionPoolOwnershipPerRep > 0, 'f10');
+		require(auctionPoolOwnershipPerRep > 0, 'Auction ownership rate missing');
 		uint256 poolOwnershipAmount = amount * auctionPoolOwnershipPerRep;
 		uint256 nextClaimedAuctionPoolOwnership = data.claimedAuctionPoolOwnership + poolOwnershipAmount;
 		require(
 			nextClaimedAuctionPoolOwnership <= data.truthAuction.totalRepPurchased() * auctionPoolOwnershipPerRep,
-			'f11'
+			'Auction ownership claim exceeds purchased REP'
 		);
 		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
 			.securityVaults(vault);

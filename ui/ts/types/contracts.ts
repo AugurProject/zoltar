@@ -36,6 +36,7 @@ export type ForkAuctionAction =
 	| 'claimAuctionProceeds'
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
+export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
 export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 export type StagedOracleOperation = {
 	amount: bigint
@@ -521,5 +522,6 @@ export type ForkAuctionDetails = {
 export type ForkAuctionActionResult = ActionResult & {
 	action: ForkAuctionAction
 	securityPoolAddress: Address
+	settlementMode?: TruthAuctionSettlementMode
 	universeId: bigint
 }

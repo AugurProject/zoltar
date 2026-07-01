@@ -455,6 +455,132 @@ describe('contracts helpers', () => {
 		expect(parentPool.universeHasForked).toBe(true)
 	})
 
+	test('loadAllSecurityPools infers parent fork activity when a loaded child points to it', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000e1')
+		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000e2')
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+					const contractAddress = Reflect.get(firstContract, 'address')
+					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
+				}
+				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
+				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 2n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: parentSecurityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+						{
+							completeSetCollateralAmount: 0n,
+							currentRetentionRate: 0n,
+							parent: parentSecurityPoolAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: childSecurityPoolAddress,
+							shareToken: shareTokenAddress,
+							truthAuction: zeroAddress,
+							universeId: 2n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const pools = await loadAllSecurityPools(client)
+		const parentPool = pools.find(pool => pool.securityPoolAddress === parentSecurityPoolAddress)
+		if (parentPool === undefined) throw new Error('Expected parent security pool in the loaded list')
+
+		expect(parentPool.hasForkActivity).toBe(true)
+		expect(parentPool.universeHasForked).toBe(true)
+	})
+
+	test('loadAllSecurityPools batches vault summary tuple reads through multicall', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2')] as const
+		const loadedVaultAddresses: Address[] = []
+		let securityVaultSummaryBatchCount = 0
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'completeSetCollateralAmount') {
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
+				}
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'securityVaults') {
+					securityVaultSummaryBatchCount += 1
+					return contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected securityVaults args')
+						const currentVaultAddress = getAddress(args[0])
+						loadedVaultAddresses.push(currentVaultAddress)
+						return [2n, 0n, 0n, 0n, 0n]
+					})
+				}
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							securityMultiplier: 2n,
+							securityPool: securityPoolAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getActiveVaultCount') return 2n
+				if (request.functionName === 'getActiveVaults') return previewVaultAddresses
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'getTotalRepBalance') return 100n
+				if (request.functionName === 'poolOwnershipDenominator') return 10n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const pools = await loadAllSecurityPools(client)
+		const [pool] = pools
+		if (pool === undefined) throw new Error('Expected one security pool')
+
+		expect(securityVaultSummaryBatchCount).toBe(1)
+		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
+	})
+
 	test('loadSecurityPoolPage caps active vault previews and appends the connected wallet vault when needed', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
@@ -465,12 +591,24 @@ describe('contracts helpers', () => {
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
-				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'completeSetCollateralAmount') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
 				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'securityVaults') {
+					return contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected securityVaults args')
+						const currentVaultAddress = getAddress(args[0])
+						loadedVaultAddresses.push(currentVaultAddress)
+						if (currentVaultAddress === viewerVaultAddress) return [1n, 0n, 0n, 0n, 0n]
+						return [2n, 0n, 0n, 0n, 0n]
+					})
+				}
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
@@ -497,16 +635,7 @@ describe('contracts helpers', () => {
 					capturedVaultRangeArgs = [startIndex, count]
 					return previewVaultAddresses
 				}
-				if (request.functionName === 'securityVaults') {
-					const args = request.args
-					if (args === undefined) throw new Error('Expected securityVaults args')
-					const rawVaultAddress = args[0]
-					if (typeof rawVaultAddress !== 'string') throw new Error('Expected vault address argument')
-					const currentVaultAddress = getAddress(rawVaultAddress)
-					loadedVaultAddresses.push(currentVaultAddress)
-					if (currentVaultAddress === viewerVaultAddress) return [1n, 0n, 0n, 0n, 0n]
-					return [2n, 0n, 0n, 0n, 0n]
-				}
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalRepBalance') return 100n
 				if (request.functionName === 'poolOwnershipDenominator') return 10n
@@ -530,24 +659,25 @@ describe('contracts helpers', () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const getVaultCalls: Address[] = []
-		const securityVaultCalls: Address[] = []
+		const vaultSummaryCalls: Address[] = []
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
-				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'completeSetCollateralAmount') {
 					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, 0n, 0n]
 				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				if (getContractFunctionName(firstContract) === 'securityVaults') {
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'poolOwnershipToRep') return [5n]
+				if (functionName === 'securityVaults') {
 					const address = Reflect.get(firstContract, 'address')
-					if (typeof address !== 'string') throw new Error('Expected vault security pool address')
-					securityVaultCalls.push(getAddress(address))
-					return [[1n, 3n, 0n, 0n, 0n]]
+					if (typeof address !== 'string') throw new Error('Expected security pool address')
+					vaultSummaryCalls.push(getAddress(address))
+					return contracts.map(() => [1n, 3n, 0n, 0n, 0n])
 				}
-				if (getContractFunctionName(firstContract) === 'poolOwnershipToRep') return [5n]
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
 				if (request.functionName === 'securityPoolDeploymentCount') return 2n
@@ -592,6 +722,7 @@ describe('contracts helpers', () => {
 					if (normalizedAddress === alternateSecurityPoolAddress) throw new Error('Unexpected vault load for unselected pool')
 					return [vaultAddress]
 				}
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalRepBalance') return 5n
 				if (request.functionName === 'poolOwnershipDenominator') return 1n
@@ -610,7 +741,7 @@ describe('contracts helpers', () => {
 		if (selectedPool === undefined || deferredPool === undefined) throw new Error('Expected both security pools')
 
 		expect(getVaultCalls).toEqual([securityPoolAddress])
-		expect(securityVaultCalls).toEqual([securityPoolAddress])
+		expect(vaultSummaryCalls).toEqual([securityPoolAddress])
 		expect(selectedPool.hasLoadedVaults).toBe(true)
 		expect(selectedPool.vaults).toHaveLength(1)
 		expect(selectedPool.totalRepDeposit).toBe(5n)

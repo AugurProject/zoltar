@@ -34,6 +34,14 @@ struct StagedOperation {
 
 contract SecurityPoolOracleCoordinator {
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
+	string private constant STAGED_OPERATION_EXECUTION_OK = '';
+	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'staged operation expired';
+	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'stale liquidation';
+	string private constant STAGED_OPERATION_ERROR_ZERO_WITHDRAW = 'withdraw amount has no effect';
+	string private constant STAGED_OPERATION_ERROR_ORACLE_BUDGET = 'oracle budget exceeded';
+	string private constant STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE = 'liquidation too close to threshold';
+	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
+	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
 	uint256 public pendingReportId;
 	uint256 public pendingOperationSlotId;
 	uint256 public lastSettlementTimestamp;
@@ -383,8 +391,8 @@ contract SecurityPoolOracleCoordinator {
 		uint256 operationId = stagedOperationCounter;
 		// Capture the target vault state at queue time. Liquidation may still execute if
 		// the target deposits more REP after staging, but allowance changes or ownership
-		// decreases make the snapshot stale. Stale operations are consumed and must be
-		// restaged against current state.
+		// decreases make a liquidation snapshot stale. Allowance operations keep the
+		// snapshot for history/event context and price the live increase at execution.
 		// Liquidation should value the vault's full collateral claim. That means using the
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
@@ -443,8 +451,12 @@ contract SecurityPoolOracleCoordinator {
 		);
 		require(isPriceValid(), 'A valid oracle price is required before executing staged operations');
 		if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
-			_consumeStagedOperation(operationId);
-			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'staged operation expired');
+			_consumeAndEmitExecutedStagedOperation(
+				operationId,
+				stagedOperation.operation,
+				false,
+				STAGED_OPERATION_ERROR_EXPIRED
+			);
 			return;
 		}
 		if (stagedOperation.operation == OperationType.Liquidation) {
@@ -455,83 +467,146 @@ contract SecurityPoolOracleCoordinator {
 				currentTargetOwnership < stagedOperation.snapshotTargetOwnership ||
 				currentTargetAllowance != stagedOperation.snapshotTargetAllowance
 			) {
-				_consumeStagedOperation(operationId);
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'stale liquidation');
+				_consumeAndEmitExecutedStagedOperation(
+					operationId,
+					stagedOperation.operation,
+					false,
+					STAGED_OPERATION_ERROR_STALE_LIQUIDATION
+				);
 				return;
 			}
 		}
 		uint256 operationNotional = _getOperationNotional(stagedOperation);
 		if (stagedOperation.operation == OperationType.WithdrawRep && operationNotional == 0) {
-			_consumeStagedOperation(operationId);
-			emit ExecutedStagedOperation(
+			_consumeAndEmitExecutedStagedOperation(
 				operationId,
 				stagedOperation.operation,
 				false,
-				'withdraw amount has no effect'
+				STAGED_OPERATION_ERROR_ZERO_WITHDRAW
 			);
 			return;
 		}
 		if (operationNotional > getPriceRoundRemainingNotional()) {
-			_consumeStagedOperation(operationId);
-			emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'oracle budget exceeded');
+			_consumeAndEmitExecutedStagedOperation(
+				operationId,
+				stagedOperation.operation,
+				false,
+				STAGED_OPERATION_ERROR_ORACLE_BUDGET
+			);
 			return;
 		}
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			if (!_isLiquidationBeyondMinPriceDistance(stagedOperation)) {
-				_consumeStagedOperation(operationId);
-				emit ExecutedStagedOperation(
+				_consumeAndEmitExecutedStagedOperation(
 					operationId,
 					stagedOperation.operation,
 					false,
-					'liquidation too close to threshold'
+					STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE
 				);
 				return;
 			}
-			_consumeStagedOperation(operationId);
-			try
-				securityPool.performLiquidation(
-					stagedOperation.initiatorVault,
-					stagedOperation.targetVault,
-					stagedOperation.amount,
-					stagedOperation.snapshotTargetOwnership,
-					stagedOperation.snapshotTargetAllowance,
-					stagedOperation.snapshotTotalRep,
-					stagedOperation.snapshotDenominator
-				)
-			{
-				_consumePriceRoundNotional(operationNotional);
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
-			} catch Error(string memory reason) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch Panic(uint256) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
-			} catch (bytes memory) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
-			}
+			_executeLiquidationStagedOperation(operationId, stagedOperation, operationNotional);
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
-			_consumeStagedOperation(operationId);
-			try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
-				_consumePriceRoundNotional(operationNotional);
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
-			} catch Error(string memory reason) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch Panic(uint256) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
-			} catch (bytes memory) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
-			}
+			_executeWithdrawRepStagedOperation(operationId, stagedOperation, operationNotional);
 		} else {
-			_consumeStagedOperation(operationId);
-			try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
-				_consumePriceRoundNotional(operationNotional);
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
-			} catch Error(string memory reason) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
-			} catch Panic(uint256) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Panic');
-			} catch (bytes memory) {
-				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
-			}
+			_executeSetSecurityBondAllowanceStagedOperation(operationId, stagedOperation, operationNotional);
+		}
+	}
+
+	function _emitExecutedStagedOperation(
+		uint256 operationId,
+		OperationType operation,
+		bool success,
+		string memory errorMessage
+	) private {
+		emit ExecutedStagedOperation(operationId, operation, success, errorMessage);
+	}
+
+	function _consumeAndEmitExecutedStagedOperation(
+		uint256 operationId,
+		OperationType operation,
+		bool success,
+		string memory errorMessage
+	) private {
+		_consumeStagedOperation(operationId);
+		_emitExecutedStagedOperation(operationId, operation, success, errorMessage);
+	}
+
+	function _completeExecutedStagedOperation(
+		uint256 operationId,
+		OperationType operation,
+		uint256 operationNotional
+	) private {
+		_consumePriceRoundNotional(operationNotional);
+		_emitExecutedStagedOperation(operationId, operation, true, STAGED_OPERATION_EXECUTION_OK);
+	}
+
+	function _emitExecutedStagedOperationFailure(
+		uint256 operationId,
+		OperationType operation,
+		string memory reason
+	) private {
+		_emitExecutedStagedOperation(operationId, operation, false, reason);
+	}
+
+	function _executeLiquidationStagedOperation(
+		uint256 operationId,
+		StagedOperation memory stagedOperation,
+		uint256 operationNotional
+	) private {
+		_consumeStagedOperation(operationId);
+		try
+			securityPool.performLiquidation(
+				stagedOperation.initiatorVault,
+				stagedOperation.targetVault,
+				stagedOperation.amount,
+				stagedOperation.snapshotTargetOwnership,
+				stagedOperation.snapshotTargetAllowance,
+				stagedOperation.snapshotTotalRep,
+				stagedOperation.snapshotDenominator
+			)
+		{
+			_completeExecutedStagedOperation(operationId, stagedOperation.operation, operationNotional);
+		} catch Error(string memory reason) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
+		} catch Panic(uint256) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_PANIC);
+		} catch (bytes memory) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_UNKNOWN);
+		}
+	}
+
+	function _executeWithdrawRepStagedOperation(
+		uint256 operationId,
+		StagedOperation memory stagedOperation,
+		uint256 operationNotional
+	) private {
+		_consumeStagedOperation(operationId);
+		try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
+			_completeExecutedStagedOperation(operationId, stagedOperation.operation, operationNotional);
+		} catch Error(string memory reason) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
+		} catch Panic(uint256) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_PANIC);
+		} catch (bytes memory) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_UNKNOWN);
+		}
+	}
+
+	function _executeSetSecurityBondAllowanceStagedOperation(
+		uint256 operationId,
+		StagedOperation memory stagedOperation,
+		uint256 operationNotional
+	) private {
+		_consumeStagedOperation(operationId);
+		try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
+			_completeExecutedStagedOperation(operationId, stagedOperation.operation, operationNotional);
+		} catch Error(string memory reason) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
+		} catch Panic(uint256) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_PANIC);
+		} catch (bytes memory) {
+			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_UNKNOWN);
 		}
 	}
 
@@ -569,8 +644,13 @@ contract SecurityPoolOracleCoordinator {
 			(, uint256 withdrawRepAmount) = _previewWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount);
 			return _repToEthNotional(withdrawRepAmount);
 		}
-		if (stagedOperation.amount <= stagedOperation.snapshotTargetAllowance) return 0;
-		return stagedOperation.amount - stagedOperation.snapshotTargetAllowance;
+		// Allowance operations must price the live increase they would authorize at
+		// execution time, not the queue-time increase. Otherwise a vault can lower its
+		// allowance after staging and replay a stale manual operation to restore more
+		// exposure than the current price-round budget still permits.
+		(, uint256 currentTargetAllowance, , ) = securityPool.securityVaults(stagedOperation.targetVault);
+		if (stagedOperation.amount <= currentTargetAllowance) return 0;
+		return stagedOperation.amount - currentTargetAllowance;
 	}
 
 	function _previewWithdrawRep(

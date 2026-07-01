@@ -1,5 +1,5 @@
 import { Fragment } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { AddressValue } from './AddressValue.js'
@@ -21,16 +21,16 @@ import { TimestampValue } from './TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
 import { TruthAuctionSummaryCard } from './TruthAuctionSummaryCard.js'
-import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '../contracts.js'
+import { WarningSurface } from './WarningSurface.js'
+import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
-import { createConnectedReadClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
-import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
+import { AUCTIONED_BOND_ALLOWANCE_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, estimateRepPurchased, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
-import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows } from '../lib/truthAuctionSettlement.js'
+import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
+import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { tryParseTruthAuctionAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -38,9 +38,11 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '..
 import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
-import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, shouldReloadSelectedPoolDetails, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
+import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
 import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
+import { useForkAuctionInteractionState } from '../hooks/useForkAuctionInteractionState.js'
+import { useSelectedAuctionReadState } from '../hooks/useSelectedAuctionReadState.js'
 import { useTruthAuctionBookData } from '../hooks/useTruthAuctionBookData.js'
 import { useTruthAuctionSettlementActionState } from '../hooks/useTruthAuctionSettlementActionState.js'
 import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics } from '../types/contracts.js'
@@ -70,7 +72,6 @@ type MigrationStateBadge = {
 	tone: 'muted' | 'ok' | 'pending'
 }
 
-type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
 const FORK_MIGRATION_DURATION = 4_838_400n
 const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement']
 const FORK_WORKFLOW_STAGE_LABELS: Record<ForkWorkflowSelectionStage, string> = {
@@ -133,6 +134,93 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
+function renderTruthAuctionDebtNotice(mode: 'bid' | 'settlement', showRefundOnlySettlementCopy = false) {
+	if (mode === 'bid') {
+		return (
+			<WarningSurface as='section' variant='compact'>
+				<p className='detail'>
+					<strong>Winning bids buy more than REP.</strong> When you later claim a filled bid, the vault also receives a pro-rata share of the {AUCTIONED_BOND_ALLOWANCE_LABEL}. That allowance is the remaining open-interest debt being assigned to auction participants.
+				</p>
+			</WarningSurface>
+		)
+	}
+
+	if (showRefundOnlySettlementCopy) {
+		return (
+			<WarningSurface as='section' variant='compact'>
+				<p className='detail'>
+					<strong>Refund-only settlement returns locked ETH.</strong> Finalized refund-only settlement uses the child-pool settlement path to unlock ETH, and it does not assign child-pool REP or {AUCTIONED_BOND_ALLOWANCE_LABEL}.
+				</p>
+			</WarningSurface>
+		)
+	}
+
+	return (
+		<WarningSurface as='section' variant='compact'>
+			<p className='detail'>
+				<strong>Winning claims add REP and {AUCTIONED_BOND_ALLOWANCE_LABEL}.</strong> Claiming a winning bid adds child-pool REP and a pro-rata share of the {AUCTIONED_BOND_ALLOWANCE_LABEL} to the bidder vault. That allowance is the remaining open-interest debt being assigned during settlement. Refund-only bids just
+				return locked ETH.
+			</p>
+		</WarningSurface>
+	)
+}
+
+function renderTruthAuctionSettlementSelectionSummary({
+	estimatedAssignedBondAllowance,
+	estimatedEthRefunded,
+	estimatedRepClaimed,
+	selectedClaimCount,
+	selectedRefundCount,
+	selectedRowCount,
+}: {
+	estimatedAssignedBondAllowance: bigint | undefined
+	estimatedEthRefunded: bigint
+	estimatedRepClaimed: bigint | undefined
+	selectedClaimCount: number
+	selectedRefundCount: number
+	selectedRowCount: number
+}) {
+	if (selectedRowCount === 0) return undefined
+
+	const summaryDescription = (() => {
+		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
+			return `Winning rows receive estimated child-pool REP plus estimated ${AUCTIONED_BOND_ALLOWANCE_LABEL}, while refund rows return locked ETH.`
+		}
+		if (selectedClaimCount > 0) {
+			return `Winning rows receive estimated child-pool REP plus estimated ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+		}
+		return `Refund-only settlement returns locked ETH and does not assign ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+	})()
+
+	const refundDescription = estimatedEthRefunded > 0n ? 'Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.' : undefined
+	let roundingDescription: string | undefined
+	if (selectedClaimCount > 0) {
+		if (estimatedRepClaimed === undefined) {
+			roundingDescription = 'Claim preview is unavailable for underfunded winning bids because the required winning-ETH denominator is not exposed in current UI data.'
+		} else {
+			roundingDescription = 'These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.'
+		}
+	}
+
+	return (
+		<WarningSurface as='section' variant='compact'>
+			<p className='detail'>
+				<strong>Selected-bid settlement preview.</strong> {summaryDescription}
+			</p>
+			{renderWorkflowMetricGrid([
+				{ label: 'Selected Bids', value: selectedRowCount.toString() },
+				{ label: 'Selected Winning Bids', value: selectedClaimCount.toString() },
+				{ label: 'Selected Refund Rows', value: selectedRefundCount.toString() },
+				{ label: 'Estimated REP Claimed', value: estimatedRepClaimed === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRepClaimed} suffix='REP' /> },
+				{ label: `Estimated ${AUCTIONED_BOND_ALLOWANCE_LABEL}`, value: estimatedAssignedBondAllowance === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedAssignedBondAllowance} suffix='ETH' /> },
+				{ label: 'Estimated ETH Refunded', value: <CurrencyValue value={estimatedEthRefunded} suffix='ETH' /> },
+			])}
+			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}
+			{refundDescription === undefined ? undefined : <p className='detail'>{refundDescription}</p>}
+		</WarningSurface>
+	)
+}
+
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
 	return hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK
 }
@@ -358,16 +446,36 @@ export function ForkAuctionSection({
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
 	const selectedOutcomeLabel = getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)
+	const selectedAuctionLabel = selectedOutcomeLabel
+	const { currentStage, currentWorkflowStage, selectedStage } = getForkWorkflowStageSelection({
+		currentStageView,
+		forkAuctionDetails,
+		forkOutcome,
+		previewPool,
+		selectedStageView,
+		stageView,
+		systemState,
+	})
+	const selectedStageAheadMessage = getForkWorkflowStageAheadMessage(selectedStage, currentWorkflowStage)
 	const currentSelectedOutcomePool = previewPool !== undefined && previewPool.questionOutcome === forkAuctionForm.selectedOutcome ? previewPool : undefined
 	const connectedWalletVaultSummary = accountState.address === undefined || previewPool === undefined ? undefined : previewPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const selectedOutcomeMigrationChildPool = securityPoolAddress === undefined ? undefined : securityPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
 	const selectedOutcomeMigrationChildVault = selectedOutcomeMigrationChildPool === undefined || accountState.address === undefined ? undefined : selectedOutcomeMigrationChildPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
-	const [selectedAuctionDetails, setSelectedAuctionDetails] = useState<ForkAuctionSectionProps['forkAuctionDetails']>(undefined)
-	const [selectedAuctionError, setSelectedAuctionError] = useState<string | undefined>(undefined)
-	const [loadingSelectedAuctionDetails, setLoadingSelectedAuctionDetails] = useState(false)
-	const [recoveredSelectedAuctionChildPool, setRecoveredSelectedAuctionChildPool] = useState<ListedSecurityPool | undefined>(undefined)
-	const lastHandledSelectedAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
-	const selectedAuctionChildPool = selectedOutcomeMigrationChildPool ?? recoveredSelectedAuctionChildPool ?? currentSelectedOutcomePool
+	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
+	const { loadingSelectedAuctionDetails, loadingSelectedOutcomeMigrationSeedStatus, selectedAuctionChildPool, selectedAuctionDetails, selectedAuctionError, selectedOutcomeMigrationSeedStatus, selectedOutcomeMigrationSeedStatusError } = useSelectedAuctionReadState({
+		accountAddress: accountState.address,
+		currentSelectedOutcomePool,
+		forkAuctionResultHash: forkAuctionResult?.hash,
+		forkMigrationReadClient,
+		fullTruthAuctionReadClient,
+		securityPoolAddress,
+		selectedAuctionLabel,
+		selectedOutcome: forkAuctionForm.selectedOutcome,
+		selectedOutcomeMigrationChildPool,
+		selectedPoolRefreshNonce,
+		selectedStage,
+		universeId,
+	})
 	const selectedAuctionPoolAddress = selectedAuctionChildPool?.securityPoolAddress
 	const currentRootAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails: forkAuctionDetails?.securityPoolAddress !== undefined && selectedAuctionPoolAddress !== undefined && sameAddress(forkAuctionDetails.securityPoolAddress, selectedAuctionPoolAddress) ? forkAuctionDetails : undefined,
@@ -390,6 +498,28 @@ export function ForkAuctionSection({
 	const auctionHasStartedAtValue = selectedAuctionContext?.truthAuctionStartedAt ?? selectedAuctionChildPool?.truthAuctionStartedAt ?? 0n
 	const hasSelectedAuctionChildPool = selectedAuctionChildPool !== undefined
 	const selectedAuctionContextError = selectedAuctionError
+	const optimisticTruthAuctionStartedAt =
+		forkAuctionResult?.action === 'startTruthAuction' && auctionSecurityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, auctionSecurityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? selectedAuctionContext?.currentTime ?? 1n) : undefined
+	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
+	if (auctionHasStartedAtValue > 0n) effectiveTruthAuctionStartedAt = auctionHasStartedAtValue
+	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
+	const { beginStartTruthAuctionProgress, beginVaultMigrationProgress, hasCompletedVaultMigration, isStartTruthAuctionInProgressState, isVaultMigrationPending, optimisticMigratedEscalationRep, setPendingEscalationMigrationSelection } = useForkAuctionInteractionState({
+		accountAddress: accountState.address,
+		connectedWalletEscrowedRep: connectedWalletVaultSummary?.escalationEscrowedRep,
+		forkAuctionActiveAction,
+		forkAuctionError,
+		forkAuctionResult,
+		hasStartedTruthAuction,
+		reportingDetails,
+		securityPoolAddress,
+	})
+	const effectiveEscrowedRepInEscalationGame = (() => {
+		if (connectedWalletVaultSummary === undefined) return undefined
+		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticMigratedEscalationRep) {
+			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticMigratedEscalationRep
+		}
+		return 0n
+	})()
 	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
 	const isMigrationRequired = activeReportingDetails?.settlementState === 'migration-required'
 	const isMigrationExpired = activeReportingDetails?.settlementState === 'migration-expired'
@@ -400,27 +530,11 @@ export function ForkAuctionSection({
 	const showSelectedEscalationMigrationDeposits = !loadingReportingDetails && reportingDetails?.status === 'active'
 	const hasSelectedEscalationMigrationDeposits = selectedEscalationMigrationDeposits.length > 0
 	const unresolvedMigrationSides = activeReportingDetails?.sides ?? []
-	const [selectedOutcomeMigrationSeedStatus, setSelectedOutcomeMigrationSeedStatus] = useState<ForkOutcomeMigrationSeedStatus | undefined>(undefined)
-	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
-	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
-	const [isStartTruthAuctionInProgressState, setIsStartTruthAuctionInProgressState] = useState(false)
-	const [isVaultMigrationPending, setIsVaultMigrationPending] = useState(false)
-	const [hasCompletedVaultMigration, setHasCompletedVaultMigration] = useState(false)
-	const [pendingEscalationMigrationSelection, setPendingEscalationMigrationSelection] = useState<{ depositIndexes: bigint[]; outcome: ReportingOutcomeKey } | undefined>(undefined)
-	const [optimisticMigratedEscalationRep, setOptimisticMigratedEscalationRep] = useState(0n)
 	const [selectedImportedForkDepositIndexesByOutcome, setSelectedImportedForkDepositIndexesByOutcome] = useState<Record<ReportingOutcomeKey, bigint[]>>({
 		invalid: [],
 		yes: [],
 		no: [],
 	})
-	const previousVaultMigrationContextKeyRef = useRef<string | undefined>(undefined)
-	const effectiveEscrowedRepInEscalationGame = (() => {
-		if (connectedWalletVaultSummary === undefined) return undefined
-		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticMigratedEscalationRep) {
-			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticMigratedEscalationRep
-		}
-		return 0n
-	})()
 	function renderSelectedOutcomeChildPoolLink() {
 		if (selectedAuctionChildPool === undefined) return undefined
 
@@ -481,28 +595,12 @@ export function ForkAuctionSection({
 	const hasImportedForkSettlementDeposits = importedForkSettlementSides.length > 0
 	const importedForkSettlementResolved = isPoolQuestionFinalized(activeReportingDetails)
 	const childSecurityPools = securityPoolAddress === undefined ? [] : securityPools.filter(pool => sameAddress(pool.parent, securityPoolAddress))
-	const { currentStage, currentWorkflowStage, selectedStage } = getForkWorkflowStageSelection({
-		currentStageView,
-		forkAuctionDetails,
-		forkOutcome,
-		previewPool,
-		selectedStageView,
-		stageView,
-		systemState,
-	})
-	const selectedStageAheadMessage = getForkWorkflowStageAheadMessage(selectedStage, currentWorkflowStage)
-	const selectedAuctionLabel = selectedOutcomeLabel
 	const enteredBidPreview = getTruthAuctionBidPreview(forkAuctionForm.submitBidPrice)
 	const enteredBidPrice = enteredBidPreview?.price
 	const enteredBidTick = enteredBidPreview?.tick
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, enteredBidPrice)
-	const optimisticTruthAuctionStartedAt =
-		forkAuctionResult?.action === 'startTruthAuction' && auctionSecurityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, auctionSecurityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? selectedAuctionContext?.currentTime ?? 1n) : undefined
-	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
-	if (auctionHasStartedAtValue > 0n) effectiveTruthAuctionStartedAt = auctionHasStartedAtValue
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
-	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
 	const truthAuctionFallback = (() => {
 		if (auctionTruthAuctionStatus !== undefined) return UNKNOWN_VALUE
 		if (hasSelectedAuctionChildPool) return UNKNOWN_VALUE
@@ -615,6 +713,7 @@ export function ForkAuctionSection({
 		selectedAuctionPoolAddress,
 		selectedStage,
 		settlementBidRows,
+		truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 	})
 	const selectedSettlementBidRows = settlementSelectionState.selectedRows
 	const selectedRefundSettlementBidRows = settlementSelectionState.selectedRefundRows
@@ -624,12 +723,27 @@ export function ForkAuctionSection({
 	const settlementSelectionMode = settlementSelectionState.selectionMode
 	const settlementSelectionHasClaims = settlementSelectionState.selectionHasClaims
 	const settlementSelectionHasRefunds = settlementSelectionState.selectionHasRefunds
-	const settlementAction = settlementSelectionHasClaims ? 'claimAuctionProceeds' : 'refundLosingBids'
+	const settlementSelectionEstimate = getTruthAuctionSettlementSelectionEstimate({
+		auctionedSecurityBondAllowance: selectedAuctionContext?.auctionedSecurityBondAllowance,
+		selectedRows: selectedSettlementBidRows,
+		truthAuction: truthAuctionStatus,
+	})
+	const settlementAction =
+		getTruthAuctionSettlementAction({
+			selectionHasClaims: settlementSelectionHasClaims,
+			selectionHasRefunds: settlementSelectionHasRefunds,
+			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
+		}) ?? 'refundLosingBids'
+	const settlementActionSafetyId: ActionSafetyId = truthAuctionStatus?.finalized === true && settlementSelectionMode === 'refund' ? 'fork-auction.settleAuctionRefunds' : getForkAuctionActionSafetyId(settlementAction)
+	const showRefundOnlySettlementDebtNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
 	const settlementActionLabel = 'Settle Selected Bids'
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return 'Select winning bids and settle them together.'
-		if (settlementSelectionMode === 'refund') return 'Select refundable bids and claim them together.'
-		return 'Select winning and refundable bids and settle them together.'
+		if (settlementSelectionMode === 'claim') return `Select winning bids and settle them together. Winning claims add child-pool REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+		if (settlementSelectionMode === 'refund') {
+			if (truthAuctionStatus?.finalized === true) return `Select finalized refund rows and settle them together. These rows return locked ETH without adding ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+			return `Select refundable bids and settle them together. Refund-only settlement returns locked ETH without adding ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+		}
+		return `Select winning and refundable bids and settle them together. Winning selections add REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, while refundable selections return locked ETH.`
 	})()
 	const settlementActionPendingLabel = 'Submitting settlement transaction...'
 	const auctionBidRows = buildTruthAuctionBidRows({
@@ -696,7 +810,8 @@ export function ForkAuctionSection({
 		return (
 			<div className='notice success'>
 				<p>
-					<strong>Truth auction has ended.</strong> {truthAuctionStatus.finalized ? 'Bidding is closed and finalized settlement paths are now in effect.' : 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'}{' '}
+					<strong>Truth auction has ended.</strong>{' '}
+					{truthAuctionStatus.finalized ? `Bidding is closed and finalized settlement paths are now in effect. Winning claims receive REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, while losing bids are refunded.` : 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'}{' '}
 					{truthAuctionEndsAt === undefined ? undefined : (
 						<Fragment>
 							Ended at: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={truthAuctionEndsAt} />
@@ -791,9 +906,8 @@ export function ForkAuctionSection({
 		migrationEndsAt: forkAuctionDetails?.migrationEndsAt,
 	})
 	const migrationStatusBadge = <Badge tone={migrationStateBadge.tone}>{migrationStateBadge.label}</Badge>
-	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
 	const onStartTruthAuctionSubmit = () => {
-		setIsStartTruthAuctionInProgressState(true)
+		beginStartTruthAuctionProgress()
 		onStartTruthAuction(selectedAuctionPoolAddress)
 	}
 	const onSubmitBidForSelectedAuction = () => {
@@ -822,7 +936,7 @@ export function ForkAuctionSection({
 		submitClaimBidsByKeys(selectedClaimSettlementBidKeys)
 	}
 	const onMigrateVaultSubmit = () => {
-		setIsVaultMigrationPending(true)
+		beginVaultMigrationProgress()
 		onMigrateVault()
 	}
 	const onMigrateSelectedOutcomeRepToZoltar = () => {
@@ -837,7 +951,7 @@ export function ForkAuctionSection({
 	}
 	const onMigrateUnresolvedEscalationSubmit = () => {
 		setPendingEscalationMigrationSelection(undefined)
-		setIsVaultMigrationPending(true)
+		beginVaultMigrationProgress()
 		onMigrateUnresolvedEscalation(forkAuctionForm.selectedOutcome)
 	}
 	const onWithdrawForkedEscalationSubmit = (outcome: ReportingOutcomeKey) => {
@@ -853,6 +967,7 @@ export function ForkAuctionSection({
 		onClick,
 		pendingLabel,
 		pending,
+		safetyId,
 		tone = 'secondary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -865,6 +980,7 @@ export function ForkAuctionSection({
 		onClick: () => void
 		pendingLabel: string
 		pending?: boolean
+		safetyId?: ActionSafetyId
 		tone?: 'primary' | 'secondary'
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
@@ -873,7 +989,7 @@ export function ForkAuctionSection({
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
-				safetyId={getForkAuctionActionSafetyId(action)}
+				safetyId={safetyId ?? getForkAuctionActionSafetyId(action)}
 				idleLabel={idleLabel}
 				pendingLabel={pendingLabel}
 				onClick={onClick}
@@ -909,6 +1025,7 @@ export function ForkAuctionSection({
 					</label>
 				</div>
 				{enteredBidPrice === undefined ? undefined : <p className='detail'>At the entered price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if fully filled.</p>}
+				{renderTruthAuctionDebtNotice('bid')}
 				<div className='actions'>
 					{renderStageActionButton({
 						action: 'submitBid',
@@ -928,9 +1045,11 @@ export function ForkAuctionSection({
 		idleLabel,
 		pendingLabel,
 		pending = false,
+		selectionSummary,
 		title,
 		availabilityMessage,
 		onClick,
+		safetyId,
 		tone = 'primary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -938,13 +1057,17 @@ export function ForkAuctionSection({
 		idleLabel: string
 		pendingLabel: string
 		pending?: boolean
+		selectionSummary?: ComponentChildren
 		title?: ComponentChildren
 		availabilityMessage: string | undefined
 		onClick?: () => void
+		safetyId?: ActionSafetyId
 		tone?: 'primary' | 'secondary'
 	}) => (
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
 			{description === undefined ? undefined : <p className='detail'>{description}</p>}
+			{selectionSummary}
+			{renderTruthAuctionDebtNotice('settlement', showRefundOnlySettlementDebtNotice)}
 			<div className='actions'>
 				{renderStageActionButton({
 					action,
@@ -955,113 +1078,11 @@ export function ForkAuctionSection({
 					pendingLabel,
 					pending,
 					tone,
+					...(safetyId === undefined ? {} : { safetyId }),
 				})}
 			</div>
 		</SectionBlock>
 	)
-	useEffect(() => {
-		if (selectedStage === 'migration' || securityPoolAddress === undefined) {
-			setRecoveredSelectedAuctionChildPool(undefined)
-			return
-		}
-		if (selectedOutcomeMigrationChildPool !== undefined) {
-			setRecoveredSelectedAuctionChildPool(currentPool => (currentPool?.securityPoolAddress === selectedOutcomeMigrationChildPool.securityPoolAddress ? currentPool : selectedOutcomeMigrationChildPool))
-			return
-		}
-		let cancelled = false
-		void loadAllSecurityPools(
-			fullTruthAuctionReadClient ?? createConnectedReadClient(),
-			accountState.address === undefined
-				? {}
-				: {
-						accountAddress: accountState.address,
-					},
-		)
-			.then(allPools => {
-				if (cancelled) return
-				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
-				setRecoveredSelectedAuctionChildPool(recoveredPool)
-			})
-			.catch(() => {
-				if (cancelled) return
-				setRecoveredSelectedAuctionChildPool(undefined)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [accountState.address, embedInCard, forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, fullTruthAuctionReadClient, securityPoolAddress, selectedOutcomeMigrationChildPool, selectedStage])
-	useEffect(() => {
-		if ((selectedStage !== 'auction' && selectedStage !== 'settlement') || selectedAuctionPoolAddress === undefined) {
-			setSelectedAuctionDetails(undefined)
-			setSelectedAuctionError(undefined)
-			setLoadingSelectedAuctionDetails(false)
-			return
-		}
-		const shouldReloadSelectedAuction = shouldReloadSelectedPoolDetails({
-			currentDetailsAvailable: currentSelectedAuctionDetails !== undefined,
-			lastHandledRefreshNonce: lastHandledSelectedAuctionRefreshNonceRef.current,
-			loadedDetailsAddress: selectedAuctionDetails?.securityPoolAddress,
-			refreshNonce: selectedPoolRefreshNonce,
-			selectedPoolAddress: selectedAuctionPoolAddress,
-		})
-		if (!shouldReloadSelectedAuction && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress) && currentSelectedAuctionDetails !== undefined) return
-		const client = fullTruthAuctionReadClient ?? createConnectedReadClient()
-		let cancelled = false
-		setLoadingSelectedAuctionDetails(true)
-		setSelectedAuctionError(undefined)
-		lastHandledSelectedAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
-		void loadForkAuctionDetails(client, selectedAuctionPoolAddress)
-			.then(details => {
-				if (cancelled) return
-				setSelectedAuctionDetails(details)
-			})
-			.catch(error => {
-				if (cancelled) return
-				setSelectedAuctionDetails(undefined)
-				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
-			})
-			.finally(() => {
-				if (cancelled) return
-				setLoadingSelectedAuctionDetails(false)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [currentSelectedAuctionDetails, embedInCard, forkAuctionResult?.hash, fullTruthAuctionReadClient, selectedAuctionDetails?.securityPoolAddress, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
-	useEffect(() => {
-		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined) {
-			setSelectedOutcomeMigrationSeedStatus(undefined)
-			setSelectedOutcomeMigrationSeedStatusError(undefined)
-			setLoadingSelectedOutcomeMigrationSeedStatus(false)
-			return
-		}
-		const client = forkMigrationReadClient ?? createConnectedReadClient()
-		let cancelled = false
-		setLoadingSelectedOutcomeMigrationSeedStatus(true)
-		setSelectedOutcomeMigrationSeedStatusError(undefined)
-		void loadForkOutcomeMigrationSeedStatus(client, {
-			childSecurityPoolAddress: selectedOutcomeMigrationChildPool?.securityPoolAddress,
-			outcome: forkAuctionForm.selectedOutcome,
-			securityPoolAddress,
-			universeId,
-		})
-			.then(status => {
-				if (cancelled) return
-				setSelectedOutcomeMigrationSeedStatus(status)
-			})
-			.catch(error => {
-				if (cancelled) return
-				setSelectedOutcomeMigrationSeedStatus(undefined)
-				setSelectedOutcomeMigrationSeedStatusError(getErrorMessage(error, `Unable to verify whether pool REP is ready for the ${selectedOutcomeLabel} child pool.`))
-			})
-			.finally(() => {
-				if (cancelled) return
-				setLoadingSelectedOutcomeMigrationSeedStatus(false)
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [embedInCard, forkAuctionForm.selectedOutcome, forkAuctionResult?.hash, forkMigrationReadClient, securityPoolAddress, selectedOutcomeLabel, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedStage, universeId])
 	useEffect(() => {
 		if (!isMigrationRequired || onReportingFormChange === undefined || reportingForm === undefined || activeReportingDetails === undefined) return
 		const nextSelectedDepositIndexesByOutcome = {
@@ -1074,60 +1095,6 @@ export function ForkAuctionSection({
 			selectedWithdrawDepositIndexesByOutcome: nextSelectedDepositIndexesByOutcome,
 		})
 	}, [activeReportingDetails, isMigrationRequired, onReportingFormChange, reportingForm])
-	useEffect(() => {
-		const nextContextKey = securityPoolAddress === undefined || accountState.address === undefined ? undefined : `${accountState.address.toLowerCase()}:${securityPoolAddress.toLowerCase()}`
-		if (previousVaultMigrationContextKeyRef.current === nextContextKey) return
-		previousVaultMigrationContextKeyRef.current = nextContextKey
-		setIsVaultMigrationPending(false)
-		setHasCompletedVaultMigration(false)
-		setPendingEscalationMigrationSelection(undefined)
-		setOptimisticMigratedEscalationRep(0n)
-	}, [accountState.address, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateVault' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
-		setHasCompletedVaultMigration(true)
-		setIsVaultMigrationPending(false)
-	}, [forkAuctionResult?.action, forkAuctionResult?.hash, forkAuctionResult?.securityPoolAddress, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateUnresolvedEscalation' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
-		setHasCompletedVaultMigration(true)
-		setIsVaultMigrationPending(false)
-		setPendingEscalationMigrationSelection(undefined)
-		if (connectedWalletVaultSummary?.escalationEscrowedRep !== undefined) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + connectedWalletVaultSummary.escalationEscrowedRep)
-		}
-	}, [connectedWalletVaultSummary?.escalationEscrowedRep, forkAuctionResult, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateEscalationDeposits' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) return
-		if (pendingEscalationMigrationSelection === undefined) return
-		const migrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingEscalationMigrationSelection.outcome)
-		const migratedRep = migrationSide?.userDeposits.filter(deposit => pendingEscalationMigrationSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amount, 0n)
-		if (migratedRep !== undefined && migratedRep > 0n) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + migratedRep)
-		}
-		setPendingEscalationMigrationSelection(undefined)
-	}, [forkAuctionResult, pendingEscalationMigrationSelection, reportingDetails, securityPoolAddress])
-	useEffect(() => {
-		if (!isStartTruthAuctionInProgressState) return
-		if (hasStartedTruthAuction) {
-			setIsStartTruthAuctionInProgressState(false)
-			return
-		}
-		if (forkAuctionError !== undefined && forkAuctionActiveAction === undefined) {
-			setIsStartTruthAuctionInProgressState(false)
-		}
-	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState, securityPoolAddress])
-	useEffect(() => {
-		if (!isVaultMigrationPending) return
-		if (forkAuctionActiveAction === 'migrateVault') return
-		if (forkAuctionError === undefined || securityPoolAddress === undefined) return
-		if (forkAuctionError !== undefined) setIsVaultMigrationPending(false)
-	}, [forkAuctionActiveAction, forkAuctionError, isVaultMigrationPending, securityPoolAddress])
-	useEffect(() => {
-		if (forkAuctionActiveAction === 'migrateEscalationDeposits' || forkAuctionActiveAction === 'migrateUnresolvedEscalation') return
-		if (forkAuctionError === undefined) return
-		setPendingEscalationMigrationSelection(undefined)
-	}, [forkAuctionActiveAction, forkAuctionError])
 	useEffect(() => {
 		const nextSelectedImportedDepositIndexesByOutcome = {
 			invalid: importedForkSettlementSides.find(side => side.key === 'invalid')?.importedUserDeposits.map(deposit => deposit.parentDepositIndex) ?? [],
@@ -1144,13 +1111,6 @@ export function ForkAuctionSection({
 			return prunedSelections
 		})
 	}, [importedForkSettlementSides])
-	useEffect(() => {
-		setOptimisticMigratedEscalationRep(0n)
-	}, [connectedWalletVaultSummary?.escalationEscrowedRep])
-	useEffect(() => {
-		if (!isStartTruthAuctionInProgressState) return
-		if (accountState.address === undefined || securityPoolAddress === undefined) setIsStartTruthAuctionInProgressState(false)
-	}, [accountState.address, isStartTruthAuctionInProgressState, securityPoolAddress])
 	const migrationStartedAt = (() => {
 		if (universeForkTime !== undefined && universeForkTime > 0n) return universeForkTime
 		if (forkAuctionDetails?.migrationEndsAt !== undefined) return forkAuctionDetails.migrationEndsAt - FORK_MIGRATION_DURATION
@@ -1177,11 +1137,12 @@ export function ForkAuctionSection({
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix='REP' /> },
 		{ label: 'Clearing Price', value: clearingPriceDisplay },
+		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' /> },
 		{ label: 'Min Bid Size', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSize} suffix='ETH' /> },
 		{ label: 'Max REP Being Sold', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxRepBeingSold} suffix='REP' /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
-		{ label: 'Auctioned Allowance', value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' /> },
+		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' /> },
 		{ label: 'Settlement Available', value: settlementAvailableDisplay },
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix='REP' /> },
@@ -1207,6 +1168,7 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
 			<TruthAuctionSummaryCard
+				auctionedBondAllowanceDisplay={selectedAuctionContext === undefined ? UNKNOWN_VALUE : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix='ETH' />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)}
 				displayedEthRaised={displayedEthRaised}
@@ -1325,6 +1287,15 @@ export function ForkAuctionSection({
 			description: settlementActionDescription,
 			idleLabel: settlementActionLabel,
 			pendingLabel: settlementActionPendingLabel,
+			selectionSummary: renderTruthAuctionSettlementSelectionSummary({
+				estimatedAssignedBondAllowance: settlementSelectionEstimate.estimatedAssignedBondAllowance,
+				estimatedEthRefunded: settlementSelectionEstimate.estimatedEthRefunded,
+				estimatedRepClaimed: settlementSelectionEstimate.estimatedRepClaimed,
+				selectedClaimCount: selectedClaimSettlementBidRows.length,
+				selectedRefundCount: selectedRefundSettlementBidRows.length,
+				selectedRowCount: selectedSettlementBidRows.length,
+			}),
+			safetyId: settlementActionSafetyId,
 			title: settlementActionLabel,
 			onClick: onSettleSelectedBidsForSelectedAuction,
 			tone: 'primary',
@@ -1602,7 +1573,7 @@ export function ForkAuctionSection({
 							{truthAuctionMarketViewSection}
 							{auctionWideBidsSection}
 							{renderSubmitBidSection({
-								description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.',
+								description: 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.',
 							})}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
@@ -1619,7 +1590,7 @@ export function ForkAuctionSection({
 						</SectionBlock>
 
 						<SectionBlock title='Start Truth Auction'>
-							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP; losing bids are refunded during settlement.</p>
+							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP plus {AUCTIONED_BOND_ALLOWANCE_LABEL}, while losing bids are refunded during settlement.</p>
 							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 							<div className='actions'>
@@ -1635,7 +1606,7 @@ export function ForkAuctionSection({
 							</div>
 						</SectionBlock>
 
-						{renderSubmitBidSection({ description: 'Submitting a bid locks ETH until settlement. Winning bids later claim REP and losing bids are refunded.' })}
+						{renderSubmitBidSection({ description: 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.' })}
 					</fieldset>
 				)
 			}

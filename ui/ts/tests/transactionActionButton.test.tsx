@@ -143,6 +143,63 @@ describe('TransactionActionButton', () => {
 		}
 	})
 
+	test('requires confirmation for auction claims before calling onClick', async () => {
+		let callCount = 0
+		const renderedComponent = await renderIntoDocument(
+			<ActionSafetyProvider>
+				<TransactionActionButton idleLabel='Settle Selected Bids' onClick={() => callCount++} pendingLabel='Submitting...' safetyId={getForkAuctionActionSafetyId('claimAuctionProceeds')} />
+			</ActionSafetyProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
+		})
+
+		expect(callCount).toBe(0)
+		expect(documentQueries.getByRole('dialog', { name: 'Review Auction Claim' })).not.toBeNull()
+		expect(documentQueries.getByText('Review the selected winning bids before assigning their REP and Auctioned Bond Allowance (OI Debt) to the bidder vault.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('checkbox'))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Claim Auction Proceeds' }))
+		})
+
+		expect(callCount).toBe(1)
+	})
+
+	test('requires the refund-only finalized settlement confirmation before calling onClick', async () => {
+		let callCount = 0
+		const renderedComponent = await renderIntoDocument(
+			<ActionSafetyProvider>
+				<TransactionActionButton idleLabel='Settle Finalized Refunds' onClick={() => callCount++} pendingLabel='Submitting...' safetyId='fork-auction.settleAuctionRefunds' />
+			</ActionSafetyProvider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Finalized Refunds' }))
+		})
+
+		expect(callCount).toBe(0)
+		const dialog = documentQueries.getByRole('dialog', { name: 'Review Finalized Refund Settlement' })
+		expect(dialog).not.toBeNull()
+		expect(documentQueries.getByText('Review the selected finalized refund rows before settling them through the child-pool settlement path.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('checkbox'))
+		})
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Settle Finalized Refunds' }))
+		})
+
+		expect(callCount).toBe(1)
+	})
+
 	test('blocks new actions while another transaction is still in flight', async () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(
