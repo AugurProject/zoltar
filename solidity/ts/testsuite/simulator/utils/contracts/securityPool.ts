@@ -237,6 +237,7 @@ export const updateVaultFees = async (client: WriteClient, securityPoolAddress: 
 			functionName: 'updateVaultFees',
 			address: securityPoolAddress,
 			args: [vault],
+			gas: 5_000_000n,
 		}),
 	)
 
