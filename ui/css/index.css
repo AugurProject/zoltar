@@ -845,6 +845,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	align-items: center;
 	min-height: 2rem;
 	max-width: 100%;
+	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
 	margin: -0.2rem -0.25rem;
@@ -4750,6 +4751,26 @@ button:focus-visible {
 	letter-spacing: 0.02em;
 }
 
+.collateralization-gauge.has-external-value {
+	grid-template-rows: auto auto;
+	align-items: center;
+}
+
+.collateralization-gauge.has-external-value .collateralization-gauge-ring {
+	grid-area: 1 / 1 / span 2 / 2;
+}
+
+.collateralization-gauge.has-external-value .collateralization-gauge-value {
+	grid-area: 1 / 2;
+	width: auto;
+	height: auto;
+	justify-self: start;
+	align-self: end;
+	padding: 0;
+	overflow: visible;
+	text-overflow: clip;
+}
+
 .collateralization-gauge-label {
 	grid-area: 1 / 2;
 	font-size: var(--font-caption);
@@ -4757,6 +4778,11 @@ button:focus-visible {
 	text-transform: uppercase;
 	color: var(--muted);
 	white-space: nowrap;
+}
+
+.collateralization-gauge.has-external-value .collateralization-gauge-label {
+	grid-area: 2 / 2;
+	align-self: start;
 }
 
 .collateralization-gauge.tone-success {
@@ -5408,6 +5434,11 @@ button:focus-visible {
 	overflow-wrap: anywhere;
 }
 
+.security-pool-browse-vault-row-id strong {
+	display: block;
+	min-width: 0;
+}
+
 .security-pool-browse-vault-row-liquidate {
 	justify-self: end;
 	min-width: 0;
@@ -5638,12 +5669,14 @@ button:focus-visible {
 	flex-direction: row;
 	align-items: flex-start;
 	gap: 0.45rem;
+	flex: 1 1 auto;
 	min-width: 0;
 }
 
 .vault-position-title-copy {
 	display: grid;
 	gap: 0.1rem;
+	flex: 1 1 auto;
 	min-width: 0;
 	align-self: center;
 }
@@ -5652,10 +5685,18 @@ button:focus-visible {
 	display: flex;
 	gap: 0.3rem;
 	align-items: center;
+	min-width: 0;
 }
 
 .security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
 	align-self: center;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.vault-position-title-copy .address-value.copyable,
+.security-pool-browse-vault-row-id .address-value.copyable {
+	width: 100%;
 }
 
 .vault-position-strip-title,

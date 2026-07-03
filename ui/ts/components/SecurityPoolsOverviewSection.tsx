@@ -421,7 +421,7 @@ export function SecurityPoolsOverviewSection({
 																					<CollateralizationCircle collateralizationPercent={vaultCollateralizationPercent} className='security-pool-browse-vault-row-collateralization' size='small' targetCollateralizationPercent={vaultCollateralizationTarget} />
 																					<div className='security-pool-browse-vault-row-id'>
 																						<strong>
-																							<AddressValue address={vault.vaultAddress} />
+																							<AddressValue address={vault.vaultAddress} shorten />
 																						</strong>
 																					</div>
 																				</div>

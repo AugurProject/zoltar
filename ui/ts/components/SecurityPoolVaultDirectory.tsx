@@ -36,7 +36,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 						<div className='vault-position-strip-head'>
 							<div className='vault-position-strip-title'>
 								<CollateralizationCircle collateralizationPercent={collateralizationPercent} className='vault-position-title-collateralization' size='small' targetCollateralizationPercent={collateralizationTarget} />
-								<div className='vault-position-title-copy'>{renderTitle === undefined ? <AddressValue address={vault.vaultAddress} /> : renderTitle(vault)}</div>
+								<div className='vault-position-title-copy'>{renderTitle === undefined ? <AddressValue address={vault.vaultAddress} shorten /> : renderTitle(vault)}</div>
 							</div>
 							<div className='vault-position-strip-meta'>{renderBadge === undefined ? null : renderBadge(vault)}</div>
 						</div>

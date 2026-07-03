@@ -27,9 +27,22 @@ describe('CollateralizationCircle', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		const gauge = document.querySelector('.collateralization-gauge')
 		const gaugeValue = documentQueries.getByText('140%')
 
+		expect(gauge?.className).not.toContain('has-external-value')
 		expect(gaugeValue).not.toBeNull()
+		expect(gaugeValue.className).toBe('collateralization-gauge-value')
+	})
+
+	test('moves long collateralization percentages outside the ring', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={3667n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const gauge = document.querySelector('.collateralization-gauge')
+		const gaugeValue = within(document.body).getByText('3 667%')
+
+		expect(gauge?.className).toContain('has-external-value')
 		expect(gaugeValue.className).toBe('collateralization-gauge-value')
 	})
 
