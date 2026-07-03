@@ -27,7 +27,6 @@ import { copyProjectArtifacts } from './projectArtifacts.mts'
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const VENDOR_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'vendor')
-const MODULES_ROOT_PATH = path.join(UI_ROOT_PATH, 'node_modules')
 
 type Dependency = { packageName: string; packageToVendor?: string; subfolderToVendor: string; mainEntrypointFile: string; alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [
@@ -57,8 +56,13 @@ async function vendorDependencies() {
 		if (fileType === 'directory') return true
 		return false
 	}
-	for (const { packageName, packageToVendor, subfolderToVendor } of dependencyPaths) {
-		const sourceDirectoryPath = path.join(MODULES_ROOT_PATH, packageToVendor || packageName, subfolderToVendor)
+	for (const { packageName, packageToVendor, mainEntrypointFile } of dependencyPaths) {
+		const resolvedEntrypointPath = resolveBundlerSpecifierPath(packageName)
+		let sourceDirectoryPath = path.dirname(resolvedEntrypointPath)
+		const mainEntrypointSegments = mainEntrypointFile.split('/').length
+		for (let segmentIndex = 1; segmentIndex < mainEntrypointSegments; segmentIndex++) {
+			sourceDirectoryPath = path.dirname(sourceDirectoryPath)
+		}
 		const destinationDirectoryPath = path.join(VENDOR_OUTPUT_PATH, packageToVendor || packageName)
 		await recursiveDirectoryCopy(sourceDirectoryPath, destinationDirectoryPath, inclusionPredicate, rewriteSourceMapSourcePath.bind(undefined, packageName))
 	}

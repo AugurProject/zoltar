@@ -365,7 +365,7 @@ export function SecurityPoolWorkflowSection({
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
 		isMainnet,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
-		requestPriceEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
+		requiredEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n

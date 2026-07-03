@@ -133,6 +133,11 @@ function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint,
 	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n
 }
 
+export function getRepDepositShareFromPoolOwnership({ poolOwnership, poolOwnershipDenominator, totalRepBalance }: { poolOwnership: bigint; poolOwnershipDenominator: bigint; totalRepBalance: bigint }) {
+	if (poolOwnership === 0n || poolOwnershipDenominator === 0n) return 0n
+	return (poolOwnership * totalRepBalance) / poolOwnershipDenominator
+}
+
 async function loadSecurityPoolVaultSummaries(
 	client: ReadClient,
 	securityPoolAddress: Address,
@@ -195,7 +200,11 @@ async function loadSecurityPoolVaultSummaries(
 			return [
 				{
 					escalationEscrowedRep: currentEscrowedRep,
-					repDepositShare: poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator,
+					repDepositShare: getRepDepositShareFromPoolOwnership({
+						poolOwnership,
+						poolOwnershipDenominator,
+						totalRepBalance,
+					}),
 					securityBondAllowance,
 					unpaidEthFees,
 					vaultAddress,
@@ -481,7 +490,11 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	])
 
 	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData
-	const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : (poolOwnership * totalRepBalance) / poolOwnershipDenominator
+	const repDepositShare = getRepDepositShareFromPoolOwnership({
+		poolOwnership,
+		poolOwnershipDenominator,
+		totalRepBalance,
+	})
 
 	return {
 		currentRetentionRate,

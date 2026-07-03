@@ -43,6 +43,7 @@ contract SecurityPoolOracleCoordinator {
 	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
 	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
 	uint256 public pendingReportId;
+	address public pendingReportSponsor;
 	uint256 public pendingOperationSlotId;
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
@@ -124,6 +125,8 @@ contract SecurityPoolOracleCoordinator {
 		bool isPendingSlot
 	);
 	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
+	event OracleFeeCreditAdded(address sponsor, address payer, uint256 amount, uint256 oracleFeeCredit);
+	event OracleFeeCreditWithdrawn(address sponsor, uint256 amount);
 
 	// This is not a FIFO queue. We keep append-only operation records plus a bounded
 	// pending settlement list that auto-executes once a fresh oracle price arrives.
@@ -137,6 +140,7 @@ contract SecurityPoolOracleCoordinator {
 	mapping(uint256 => uint256) private newerActiveStagedOperationIds;
 	mapping(uint256 => bool) private isActiveStagedOperation;
 	uint256[] private pendingSettlementOperationIds;
+	mapping(address => uint256) public oracleFeeCredits;
 
 	constructor(
 		OpenOracle _openOracle,
@@ -206,6 +210,10 @@ contract SecurityPoolOracleCoordinator {
 		return ethCost;
 	}
 
+	function getQueuedOperationEthCost() public view returns (uint256) {
+		return block.basefee * 4 * uint256(gasConsumedSettlement) + 1;
+	}
+
 	function getSettlementCallbackGasLimit() public view returns (uint32) {
 		uint256 callbackGasLimit = uint256(gasConsumedSettlement) * MAX_PENDING_SETTLEMENT_OPERATIONS;
 		require(callbackGasLimit <= type(uint32).max, 'Settlement callback gas limit exceeds uint32 maximum');
@@ -213,9 +221,28 @@ contract SecurityPoolOracleCoordinator {
 	}
 
 	function requestPrice() public payable {
-		require(pendingReportId == 0, 'Oracle price request is already pending');
 		uint256 ethCost = getRequestPriceEthCost();
 		require(msg.value >= ethCost, 'ETH bounty is too small to request a fresh oracle price');
+		_requestPrice(msg.sender, ethCost);
+
+		uint256 excess = msg.value - ethCost;
+		if (excess > 0) {
+			(bool sent, ) = payable(msg.sender).call{ value: excess }('');
+			require(sent, 'Oracle coordinator failed to refund excess ETH bounty');
+		}
+	}
+
+	function withdrawOracleFeeCredits() public {
+		uint256 credit = oracleFeeCredits[msg.sender];
+		require(credit > 0, 'No oracle fee credits available');
+		oracleFeeCredits[msg.sender] = 0;
+		(bool sent, ) = payable(msg.sender).call{ value: credit }('');
+		require(sent, 'Oracle coordinator failed to withdraw oracle fee credits');
+		emit OracleFeeCreditWithdrawn(msg.sender, credit);
+	}
+
+	function _requestPrice(address sponsor, uint256 ethCost) private {
+		require(pendingReportId == 0, 'Oracle price request is already pending');
 		uint256 escalationHalt = (exactToken1Report * escalationHaltMultiplierBps) / ORACLE_BUDGET_BPS;
 		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
 		require(exactToken1Report <= type(uint128).max, 'Oracle exact token1 report amount exceeds uint128 maximum');
@@ -241,15 +268,9 @@ contract SecurityPoolOracleCoordinator {
 			protocolFeeRecipient: protocolFeeRecipient
 		});
 
+		pendingReportSponsor = sponsor;
 		pendingReportId = openOracle.createReportInstance{ value: ethCost }(reportparams);
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
-
-		// Refund any excess Ether sent by the caller
-		uint256 excess = msg.value - ethCost;
-		if (excess > 0) {
-			(bool sent, ) = payable(msg.sender).call{ value: excess }('');
-			require(sent, 'Oracle coordinator failed to refund excess ETH bounty');
-		}
 	}
 
 	function recoverSettledPendingReport() public {
@@ -257,6 +278,7 @@ contract SecurityPoolOracleCoordinator {
 		require(reportId != 0, 'No pending oracle price request can be recovered');
 		(, uint256 settlementTimestamp) = openOracle.getSettlementData(reportId);
 		pendingReportId = 0;
+		pendingReportSponsor = address(0);
 		pendingReportMaxSettlementBaseFee = 0;
 		_consumeRecoveredPendingOperation();
 		emit PendingReportRecovered(
@@ -293,6 +315,7 @@ contract SecurityPoolOracleCoordinator {
 		require(msg.sender == address(openOracle), 'Only OpenOracle can call the security pool oracle callback');
 		require(reportId == pendingReportId, 'Oracle callback report id does not match the pending request');
 		pendingReportId = 0;
+		pendingReportSponsor = address(0);
 		if (block.basefee > pendingReportMaxSettlementBaseFee) {
 			pendingReportMaxSettlementBaseFee = 0;
 			_emitPriceReportRejected(reportId, 'Base fee too high');
@@ -430,8 +453,15 @@ contract SecurityPoolOracleCoordinator {
 				uint256 ethCost = getRequestPriceEthCost();
 				require(msg.value >= ethCost, 'Not enough ETH was provided to request a fresh oracle price');
 				retained += ethCost;
-				// Forward exactly ethCost to requestPrice to create the report
-				this.requestPrice{ value: ethCost }();
+				_requestPrice(msg.sender, ethCost);
+			} else if (pendingReportId != 0 && isPendingSettlementOperationId) {
+				uint256 queuedOperationEthCost = getQueuedOperationEthCost();
+				require(
+					msg.value >= queuedOperationEthCost,
+					'Not enough ETH was provided to join the pending oracle settlement queue'
+				);
+				retained += queuedOperationEthCost;
+				_creditPendingReportSponsor(msg.sender, queuedOperationEthCost);
 			}
 		}
 
@@ -613,6 +643,14 @@ contract SecurityPoolOracleCoordinator {
 	function _consumePriceRoundNotional(uint256 notional) private {
 		priceRoundConsumedNotional += notional;
 		emit PriceRoundNotionalConsumed(priceRoundId, notional, priceRoundConsumedNotional);
+	}
+
+	function _creditPendingReportSponsor(address payer, uint256 amount) private {
+		address sponsor = pendingReportSponsor;
+		require(sponsor != address(0), 'Pending report sponsor missing');
+		uint256 nextCredit = oracleFeeCredits[sponsor] + amount;
+		oracleFeeCredits[sponsor] = nextCredit;
+		emit OracleFeeCreditAdded(sponsor, payer, amount, nextCredit);
 	}
 
 	function _emitStagedOperationQueued(uint256 operationId, bool isPendingSlot) private {
