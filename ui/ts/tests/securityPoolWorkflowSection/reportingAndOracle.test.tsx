@@ -188,6 +188,28 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
 	})
 
+	test('keeps reporting disabled at the exact market end timestamp', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 100n }) })],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
+		expect(reportButton.disabled).toBe(true)
+		expect(reportButton.title).toBe(getReportingLockedUntilMessage(100n, 100n))
+	})
+
 	test('renders staged operations management inside the staged operations tab instead of a standalone section', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection

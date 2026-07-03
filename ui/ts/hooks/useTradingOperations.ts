@@ -4,6 +4,7 @@ import type { Address } from 'viem'
 import { createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity, loadTradingDetails as loadTradingDetailsForPool, loadZoltarUniverseSummary, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { assertNever } from '../lib/assert.js'
+import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, tryParseAddressInput } from '../lib/inputs.js'
@@ -25,7 +26,20 @@ type UseTradingOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
 }
 
-export function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseTradingOperationsParameters) {
+export function useTradingOperations({
+	accountAddress,
+	deploymentStatuses,
+	enabled,
+	onTransactionCanceled,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionPrepared,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+	selectedSecurityPoolAddress,
+}: UseTradingOperationsParameters) {
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
@@ -37,6 +51,10 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
 	const targetOutcomeDefaultsKey = useRef<string | undefined>(undefined)
 	const tradingSystemDeployed = isTradingSystemDeployed(deploymentStatuses)
+	const effectiveTradingPoolAddressInput = selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? tradingForm.value.securityPoolAddress : selectedSecurityPoolAddress
+	const currentTradingSelectionKey = normalizeAddress(effectiveTradingPoolAddressInput) ?? ''
+	const currentTradingSelectionKeyRef = useRef(currentTradingSelectionKey)
+	currentTradingSelectionKeyRef.current = currentTradingSelectionKey
 	const getPendingTitle = (actionName: TradingActionResult['action']) => {
 		switch (actionName) {
 			case 'createCompleteSet':
@@ -85,7 +103,8 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 		if (!trimmed.startsWith('0x') || trimmed.length !== 42) return undefined
 		return tryParseAddressInput(trimmed)
 	}
-	const resolveEffectiveTradingPoolAddressInput = () => (selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? tradingForm.value.securityPoolAddress : selectedSecurityPoolAddress)
+	const resolveEffectiveTradingPoolAddressInput = () => effectiveTradingPoolAddressInput
+	const isTradingSelectionCurrent = (selectionKey: string) => currentTradingSelectionKeyRef.current === selectionKey
 
 	const refreshTradingDetails = async (securityPoolAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {
 		if (!tradingSystemDeployed) {
@@ -126,18 +145,23 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 		await tradingDetailsLoad.run(isCurrent === undefined ? loadOptions : { ...loadOptions, isCurrent })
 	}
 
-	const runTradingAction = async (actionName: TradingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: TradingFormState) => Promise<TradingActionResult>, errorFallback: string) => {
+	const runTradingAction = async (actionName: TradingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: TradingFormState, isCurrentSelection: () => boolean) => Promise<TradingActionResult | undefined>, errorFallback: string) => {
 		const currentForm = tradingForm.value
+		const actionSelectionKey = currentTradingSelectionKey
+		const isActionSelectionCurrent = () => isTradingSelectionCurrent(actionSelectionKey)
 		try {
 			tradingActiveAction.value = actionName
 			tradingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading', createTradingTransactionIntent(actionName)),
+					...buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading', createTradingTransactionIntent(actionName)),
 					onRefreshError: (message, hash) => {
 						tradingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = tradingResult.value
 						if (result !== undefined) onTransactionPresented(createTradingWarningPresentation(result, message))
+					},
+					onWriteCanceled: () => {
+						tradingFeedback.value = undefined
 					},
 					onWriteError: message => {
 						tradingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -153,8 +177,10 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 					const isMainnet = isMainnetChain(activeWallet.chainId)
 					const latestTradingDetails = await loadTradingDetailsForPool(readClient, securityPoolAddress, walletAddress)
 					const latestForkUniverse = await loadZoltarUniverseSummary(readClient, latestTradingDetails.universeId)
-					tradingDetails.value = latestTradingDetails
-					tradingForkUniverse.value = latestForkUniverse
+					if (isActionSelectionCurrent()) {
+						tradingDetails.value = latestTradingDetails
+						tradingForkUniverse.value = latestForkUniverse
+					}
 					if (actionName === 'createCompleteSet') {
 						const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
 						const walletEthBalance = await readClient.getBalance({ address: walletAddress })
@@ -203,7 +229,8 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 						const guardMessage = getTradingRedeemSharesGuardMessage({ accountAddress: walletAddress, hasSelectedPool: true, isMainnet })
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
-					const result = await action(walletAddress, securityPoolAddress, currentForm)
+					if (!isActionSelectionCurrent()) return undefined
+					const result = await action(walletAddress, securityPoolAddress, currentForm, isActionSelectionCurrent)
 					return result
 				},
 				errorFallback,
@@ -211,8 +238,9 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 					tradingResult.value = result
 					tradingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createTradingSuccessPresentation(result))
+					if (!isActionSelectionCurrent()) return
 					const isCurrent = nextTradingDetailsLoad()
-					await refreshTradingDetails(result.securityPoolAddress, walletAddress, isCurrent)
+					await refreshTradingDetails(result.securityPoolAddress, walletAddress, () => isCurrent() && isActionSelectionCurrent())
 				},
 			)
 		} finally {
@@ -223,16 +251,20 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 	const createCompleteSet = async () =>
 		await runTradingAction(
 			'createCompleteSet',
-			async (walletAddress, securityPoolAddress, currentForm) => await createCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount')),
+			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+				if (!isCurrentSelection()) return undefined
+				return await createCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount'))
+			},
 			'Failed to mint complete sets',
 		)
 
 	const redeemCompleteSet = async () =>
 		await runTradingAction(
 			'redeemCompleteSet',
-			async (walletAddress, securityPoolAddress, currentForm) => {
+			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
 				const readClient = createConnectedReadClient()
 				const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
+				if (!isCurrentSelection()) return undefined
 				const redeemCollateralAmount = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
 				const redeemShareAmount = convertCollateralAmountToShareAmount(redeemCollateralAmount, latestMintCapacity.completeSetCollateralAmount, latestMintCapacity.shareTokenSupply)
 				if (redeemShareAmount === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
@@ -241,13 +273,23 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 			'Failed to redeem complete sets',
 		)
 
-	const redeemShares = async () => await runTradingAction('redeemShares', async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress), 'Failed to redeem shares')
+	const redeemShares = async () =>
+		await runTradingAction(
+			'redeemShares',
+			async (walletAddress, securityPoolAddress, _currentForm, isCurrentSelection) => {
+				if (!isCurrentSelection()) return undefined
+				return await redeemSharesInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress)
+			},
+			'Failed to redeem shares',
+		)
 
 	const migrateShares = async () =>
 		await runTradingAction(
 			'migrateShares',
-			async (walletAddress, securityPoolAddress, currentForm) =>
-				await migrateSharesFromUniverse(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseReportingOutcomeInput(currentForm.selectedShareOutcome), parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes')),
+			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+				if (!isCurrentSelection()) return undefined
+				return await migrateSharesFromUniverse(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseReportingOutcomeInput(currentForm.selectedShareOutcome), parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'))
+			},
 			'Failed to migrate shares',
 		)
 
