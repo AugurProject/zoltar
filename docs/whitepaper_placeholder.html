@@ -213,8 +213,8 @@
 			.site-shell {
 				display: grid;
 				grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
-				gap: clamp(1.5rem, 4vw, 4rem);
-				width: min(1220px, calc(100% - 2rem));
+				gap: clamp(1rem, 3vw, 2.25rem);
+				width: min(1280px, calc(100% - 1rem));
 				margin: 0 auto;
 				padding: 2rem 0 4rem;
 			}
@@ -549,7 +549,7 @@
 
 			.paper-section {
 				margin-top: 1.25rem;
-				padding: clamp(1.35rem, 4vw, 2.7rem);
+				padding: clamp(1rem, 3vw, 2rem);
 			}
 
 			.paper-section:target {
@@ -638,7 +638,7 @@
 			.equation {
 				counter-increment: equation;
 				margin: 1.1rem 0;
-				padding: 1rem;
+				padding: 0.5rem;
 				background: var(--code-bg);
 			}
 
@@ -671,7 +671,7 @@
 				counter-increment: figure;
 				position: relative;
 				margin: 1.45rem 0;
-				padding: 1rem;
+				padding: 0.5rem;
 				border-top: 3px solid var(--accent);
 				box-shadow: inset 0 -1.5rem 1.8rem -2rem rgb(var(--accent-rgb) / 34%);
 			}
@@ -927,6 +927,20 @@
 				color: var(--muted);
 			}
 
+			.term {
+				border-bottom: 1px dotted currentColor;
+				cursor: help;
+				font-weight: 650;
+				text-decoration: none;
+				text-underline-offset: 0.18em;
+			}
+
+			.term:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 0.12rem;
+				border-radius: 0.15rem;
+			}
+
 			.implementation-note {
 				border-left: 0.3rem solid var(--blue);
 			}
@@ -984,7 +998,7 @@
 			@media (max-width: 1000px) {
 				.site-shell {
 					display: block;
-					width: min(100% - 1.25rem, 820px);
+					width: min(100% - 0.75rem, 860px);
 					padding-top: 0.75rem;
 				}
 
@@ -1010,7 +1024,7 @@
 
 			@media (max-width: 640px) {
 				.site-shell {
-					width: min(100% - 1rem, 820px);
+					width: min(100% - 0.5rem, 860px);
 					padding-bottom: 2rem;
 				}
 
@@ -1029,7 +1043,7 @@
 				}
 
 				.paper-section {
-					padding: 1.05rem;
+					padding: 0.7rem;
 				}
 
 				.paper-brand {
@@ -1049,7 +1063,7 @@
 				.diagram {
 					margin-right: -0.2rem;
 					margin-left: -0.2rem;
-					padding: 0.75rem;
+					padding: 0.4rem;
 				}
 
 				.diagram svg {
@@ -1483,40 +1497,56 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>universe</code></td>
+								<td><span class="term" tabindex="0"><code>universe</code></span></td>
 								<td>A Zoltar fork domain. A parent universe can split into multiple child universes after a fork.</td>
 							</tr>
 							<tr>
-								<td><code>pool</code></td>
+								<td><span class="term" tabindex="0"><code>pool</code></span></td>
 								<td>An Augur Placeholder <code>SecurityPool</code> for one question in one universe.</td>
 							</tr>
 							<tr>
-								<td><code>vault</code></td>
+								<td><span class="term" tabindex="0"><code>vault</code></span></td>
 								<td>A pool-specific REP account whose owner provides underwriting capacity.</td>
 							</tr>
 							<tr>
-								<td><code>complete set</code></td>
+								<td><span class="term" tabindex="0"><code>complete set</code></span></td>
 								<td>One <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share minted together against ETH collateral.</td>
 							</tr>
 							<tr>
-								<td><code>escalation game</code></td>
+								<td><span class="term" tabindex="0"><code>escalation game</code></span></td>
 								<td>The local dispute process that tries to pick a single winning outcome before a fork.</td>
 							</tr>
 							<tr>
-								<td><code>non-decision</code></td>
+								<td><span class="term" tabindex="0"><code>non-decision</code></span></td>
 								<td>The unresolved escalation state that opens the Zoltar fork path.</td>
 							</tr>
 							<tr>
-								<td><code>migration</code></td>
+								<td><span class="term" tabindex="0"><code>migration</code></span></td>
 								<td>The process that moves REP, shares, collateral accounting, and eligible escalation positions from a parent pool into child pools.</td>
 							</tr>
 							<tr>
-								<td><code>truth auction</code></td>
+								<td><span class="term" tabindex="0"><code>truth auction</code></span></td>
 								<td>The batch auction that lets a child pool sell child-universe REP for ETH when migrated collateral is incomplete.</td>
 							</tr>
 							<tr>
-								<td><code>migrated REP</code></td>
+								<td><span class="term" tabindex="0"><code>migrated REP</code></span></td>
 								<td>REP backing carried from a parent universe into a child universe and made available to support the child pool.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>price round</code></span></td>
+								<td>The lifetime of one settled REP/ETH oracle price inside the coordinator.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>price-round budget</code></span></td>
+								<td>The ETH-notional operation cap for a single settled oracle price. Each successful oracle-gated operation consumes some of this budget.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>ETH-notional</code></span></td>
+								<td>An operation's exposure expressed as ETH value, used to compare withdrawals, liquidations, and allowance updates against one budget.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>staged operation</code></span></td>
+								<td>A solvency-sensitive operation queued behind the coordinator until it can execute with a fresh REP/ETH price.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -3790,6 +3820,17 @@
 							callback queue. This price path is only for security backing against ETH
 							collateral.
 						</p>
+						<p>
+							A <span class="term" tabindex="0">price round</span>
+							starts when the coordinator accepts a settled REP/ETH price. Its
+							<span class="term" tabindex="0">price-round budget</span>
+							is the remaining ETH-denominated operation volume that price may authorize.
+							The budget is measured in
+							<span class="term" tabindex="0">ETH-notional</span>
+							terms so withdrawals, liquidations, and allowance increases can all spend the
+							same cap. Once the remaining budget is too small, the operation needs a later
+							price round instead of reusing the current price indefinitely.
+						</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg viewBox="0 0 940 380" role="img" aria-labelledby="oracle-flow-title oracle-flow-desc">
 							<title id="oracle-flow-title">Queued REP/ETH oracle operation flow</title>
@@ -3862,7 +3903,7 @@
 						<figure class="diagram" id="fig-placeholder-oracle-budget-gates">
 							<svg viewBox="0 0 940 330" role="img" aria-labelledby="oracle-budget-title oracle-budget-desc">
 								<title id="oracle-budget-title">Oracle execution gates</title>
-								<desc id="oracle-budget-desc">A staged operation needs a valid price, remaining round notional, and liquidation-specific distance from the threshold before execution.</desc>
+								<desc id="oracle-budget-desc">A staged operation needs a valid price, remaining price-round budget, and liquidation-specific distance from the threshold before execution.</desc>
 								<defs>
 									<marker id="arrow-oracle-budget" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 										<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -3873,8 +3914,9 @@
 								<text class="svg-small" x="147" y="116" text-anchor="middle">5-minute cache</text>
 								<path class="svg-line" marker-end="url(#arrow-oracle-budget)" d="M 242 100 H 324"></path>
 								<rect class="svg-gold" x="324" y="62" width="246" height="76" rx="10"></rect>
-								<text class="svg-label" x="447" y="92" text-anchor="middle">Round Notional Budget</text>
-								<text class="svg-small" x="447" y="116" text-anchor="middle">operation must fit remaining room</text>
+								<text class="svg-label" x="447" y="86" text-anchor="middle">Price-Round</text>
+								<text class="svg-label" x="447" y="110" text-anchor="middle">Budget</text>
+								<text class="svg-small" x="447" y="130" text-anchor="middle">operation must fit remaining room</text>
 								<path class="svg-line" marker-end="url(#arrow-oracle-budget)" d="M 570 100 H 654"></path>
 								<rect class="svg-green" x="654" y="62" width="220" height="76" rx="10"></rect>
 								<text class="svg-label" x="764" y="92" text-anchor="middle">Execute Operation</text>
@@ -3885,10 +3927,17 @@
 								<text class="svg-small" x="447" y="260" text-anchor="middle">current price must be far enough past threshold</text>
 								<path class="svg-line" marker-end="url(#arrow-oracle-budget)" d="M 598 244 H 694 V 138"></path>
 							</svg>
-							<p class="diagram-caption"><span class="figure-label">Oracle Execution Gates</span>Oracle-gated operations execute only when the price is fresh, the price round has enough remaining notional budget, and liquidations are sufficiently far beyond their threshold.</p>
+							<p class="diagram-caption"><span class="figure-label">Oracle Execution Gates</span>Oracle-gated operations execute only when the price is fresh, the price round has enough remaining budget, and liquidations are sufficiently far beyond their threshold.</p>
 						</figure>
+						<p>
+							The budget equation below names the maximum budget
+							<code>priceRoundMaxNotional</code> and the still-available budget
+							<code>remainingNotional</code>. The coordinator subtracts
+							<code>consumedNotional</code> as successful operations use the current price
+							round.
+						</p>
 						<div class="equation" id="eq-placeholder-oracle-round-budget">
-							<math display="block" aria-label="price round max notional equals exact token one report times price precision times price round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining notional equals max price round max notional minus consumed notional and zero" data-source="priceRoundMaxNotional = exactToken1Report * pricePrecision * priceRoundBudgetMultiplierBps / repPerEthPrice / oracleBudgetBps; remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
+							<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = exactToken1Report * pricePrecision * priceRoundBudgetMultiplierBps / repPerEthPrice / oracleBudgetBps; remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -3934,8 +3983,50 @@
 									</mtr>
 								</mtable>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Oracle Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required.</p>
+							<p class="equation-caption"><span class="equation-label">Oracle Price-Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required.</p>
 						</div>
+						<table>
+							<thead>
+								<tr>
+									<th>Variable</th>
+									<th>Meaning at first use</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td><code>priceRoundMaxNotional</code></td>
+									<td>The maximum ETH-notional operation volume one settled REP/ETH price can authorize.</td>
+								</tr>
+								<tr>
+									<td><code>remainingNotional</code></td>
+									<td>The unused part of the current price-round budget.</td>
+								</tr>
+								<tr>
+									<td><code>consumedNotional</code></td>
+									<td>The amount of price-round budget already spent by successful operations.</td>
+								</tr>
+								<tr>
+									<td><code>exactToken1Report</code></td>
+									<td>The initial REP amount used in the OpenOracle report.</td>
+								</tr>
+								<tr>
+									<td><code>pricePrecision</code></td>
+									<td>The fixed <code>1e18</code> scale factor used for REP/ETH price math.</td>
+								</tr>
+								<tr>
+									<td><code>priceRoundBudgetMultiplierBps</code></td>
+									<td>The configured multiplier, in basis points, that expands the report's ETH-notional budget.</td>
+								</tr>
+								<tr>
+									<td><code>repPerEthPrice</code></td>
+									<td>The settled REP per ETH price.</td>
+								</tr>
+								<tr>
+									<td><code>oracleBudgetBps</code></td>
+									<td>The basis-point denominator used by the budget multiplier.</td>
+								</tr>
+							</tbody>
+						</table>
 						<div class="equation" id="eq-placeholder-liquidation-price-distance">
 							<math display="block" aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times oracle budget basis points divided by current price and must be at least the minimum liquidation price distance basis points" data-source="thresholdPrice = vaultRep * pricePrecision / (snapshotTargetAllowance * securityMultiplier); distanceBps = (currentPrice - thresholdPrice) * oracleBudgetBps / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps">
 								<mtable>
@@ -4270,7 +4361,7 @@
 							<tr><td>OpenOracle <code>timeType</code></td><td><code>true</code></td><td>OpenOracle uses block timestamps rather than block numbers.</td></tr>
 							<tr><td>OpenOracle <code>trackDisputes</code></td><td><code>true</code></td><td>Dispute history is stored for these reports.</td></tr>
 							<tr><td>OpenOracle <code>protocolFeeRecipient</code></td><td><code>0x000000000000000000000000000000000000dEaD</code></td><td>Fee sink configured for protocol fees.</td></tr>
-							<tr><td><code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Oracle price round notional budget multiplier, equal to <code>4x</code>.</td></tr>
+							<tr><td><code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Oracle price-round budget multiplier, equal to <code>4x</code>.</td></tr>
 							<tr><td><code>escalationHaltMultiplierBps</code></td><td><code>100000</code></td><td>Multiplier used to derive the OpenOracle escalation halt from <code>exactToken1Report</code>, equal to <code>10x</code>.</td></tr>
 							<tr><td><code>maxSettlementBaseFeeMultiplierBps</code></td><td><code>30000</code></td><td>Maximum settlement base-fee multiplier accepted by the coordinator, equal to <code>3x</code>.</td></tr>
 							<tr><td><code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum distance from the liquidation threshold required before executing a staged liquidation, equal to <code>10%</code>.</td></tr>
@@ -4370,5 +4461,6 @@
 				window.addEventListener('hashchange', scheduleCurrentSectionUpdate)
 			}
 		</script>
+		<script src="./termTooltips.js"></script>
 	</body>
 </html>

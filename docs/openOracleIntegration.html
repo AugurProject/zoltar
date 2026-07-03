@@ -57,7 +57,7 @@
 			}
 
 			main {
-				width: min(66rem, calc(100% - 2rem));
+				width: min(66rem, calc(100% - 1rem));
 				margin: 0 auto;
 				padding: 3rem 0 4rem;
 			}
@@ -65,7 +65,7 @@
 			header,
 			section {
 				margin-bottom: 1.25rem;
-				padding: 1.35rem;
+				padding: 1rem;
 				border: 1px solid var(--line);
 				border-radius: var(--radius);
 				background: var(--paper);
@@ -133,7 +133,7 @@
 			.diagram,
 			.equation {
 				margin: 1.25rem 0;
-				padding: 1rem;
+				padding: 0.5rem;
 				border: 1px solid var(--line);
 				border-radius: var(--radius);
 				background: var(--soft);
@@ -206,6 +206,20 @@
 				font-weight: 700;
 			}
 
+			.term {
+				border-bottom: 1px dotted currentColor;
+				cursor: help;
+				font-weight: 650;
+				text-decoration: none;
+				text-underline-offset: 0.18em;
+			}
+
+			.term:focus-visible {
+				outline: 2px solid var(--blue);
+				outline-offset: 0.12rem;
+				border-radius: 0.15rem;
+			}
+
 			math {
 				width: 100%;
 				overflow-x: auto;
@@ -244,7 +258,8 @@
 				</p>
 				<p>
 					Relevant references: <a href="https://docs.openoracle.org">OpenOracle
-					documentation</a>, the local <a href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol">OpenOracle
+					documentation</a>, the <a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle
+					paper</a>, the local <a href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol">OpenOracle
 					contract</a>, the <a href="../solidity/contracts/peripherals/SecurityPoolOracleCoordinator.sol">SecurityPoolOracleCoordinator
 					integration</a>, and the Placeholder whitepaper's
 					<a href="./whitepaper_placeholder.html#oracle">REP/ETH Price Oracle</a> section.
@@ -260,14 +275,93 @@
 				<p>
 					OpenOracle creates report instances for a token pair. Reporters submit token
 					amounts, later reporters can dispute by posting a larger report, and a report
-					can settle after its timing window. When a callback contract is configured,
+					can settle after its timing window. When a
+					<span class="term" tabindex="0">callback</span>
+					contract is configured,
 					settlement calls that contract with the settled amounts.
 				</p>
 				<p>
 					In this repository the pair is REP as <code>token1</code> and WETH as
 					<code>token2</code>. The coordinator converts the callback amounts into
-					<code>lastPrice = amount1 * 1e18 / amount2</code>, interpreted as REP per ETH.
+					the following REP per ETH price:
 				</p>
+				<figure class="equation" id="eq-rep-eth-price">
+					<math display="block" aria-label="last price equals amount one times ten to the eighteenth divided by amount two" data-source="lastPrice = amount1 * 1e18 / amount2">
+						<mrow>
+							<mi>lastPrice</mi>
+							<mo>=</mo>
+							<mfrac>
+								<mrow>
+									<mi>amount1</mi>
+									<mo>&#x2062;</mo>
+									<mn>1e18</mn>
+								</mrow>
+								<mi>amount2</mi>
+							</mfrac>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span>The settled REP amount is scaled by 1e18 and divided by the settled WETH amount.</p>
+				</figure>
+			</section>
+
+			<section id="integration-terms">
+				<h2>Integration Terms</h2>
+				<p>
+					The OpenOracle integration uses a few protocol-specific words. A
+					<span class="term" tabindex="0">price round</span>
+					is the lifetime of one settled REP/WETH price inside the coordinator. The
+					<span class="term" tabindex="0">price-round budget</span>
+					is the coordinator's cap on how much ETH-denominated operation volume that
+					single settled price may authorize. Each successful oracle-gated operation
+					uses part of the budget; once the remaining room is too small, another
+					OpenOracle report is required.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Term</th>
+							<th>Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><span class="term" tabindex="0">staged operation</span></td>
+							<td>A liquidation, REP withdrawal, or allowance update queued behind the coordinator until it can use a fresh price.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">ETH-notional</span></td>
+							<td>An operation's exposure expressed as ETH value, so debt movement, REP movement, and allowance increases can be compared against one budget.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">fresh price</span></td>
+							<td>A settled coordinator price still inside <code>PRICE_VALID_FOR_SECONDS</code>, currently a five-minute cache window.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">liquidation threshold</span></td>
+							<td>The computed REP/ETH price boundary where a vault becomes liquidatable.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">liquidation distance</span></td>
+							<td>The extra configured margin past the threshold, currently <code>minLiquidationPriceDistanceBps</code>, required before executing a staged liquidation.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">report liquidity</span></td>
+							<td>The REP/WETH report size that determines the economic scale of OpenOracle disputes.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">escalation halt</span></td>
+							<td>The cap on multiplicative report-size growth during OpenOracle disputes.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">request bounty</span></td>
+							<td>The caller-funded ETH amount forwarded when the coordinator creates a new OpenOracle report.</td>
+						</tr>
+						<tr>
+							<td><span class="term" tabindex="0">soft rejection</span></td>
+							<td>A settlement callback outcome that rejects the price locally without undoing the OpenOracle settlement.</td>
+						</tr>
+					</tbody>
+				</table>
 			</section>
 
 			<section id="placeholder-integration">
@@ -300,7 +394,8 @@
 						</defs>
 						<rect class="svg-blue" x="40" y="72" width="205" height="86" rx="8"></rect>
 						<text class="svg-label" x="142" y="105" text-anchor="middle">User Operation</text>
-						<text class="svg-small" x="142" y="132" text-anchor="middle">liquidate, withdraw REP, allowance</text>
+						<text class="svg-small" x="142" y="128" text-anchor="middle">liquidate, withdraw REP,</text>
+						<text class="svg-small" x="142" y="145" text-anchor="middle">allowance</text>
 						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 245 115 H 315"></path>
 						<rect class="svg-gold" x="315" y="72" width="205" height="86" rx="8"></rect>
 						<text class="svg-label" x="418" y="105" text-anchor="middle">Coordinator</text>
@@ -314,15 +409,18 @@
 						<text class="svg-label" x="890" y="105" text-anchor="middle">Settle</text>
 						<text class="svg-small" x="890" y="132" text-anchor="middle">callback</text>
 						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 890 158 C 820 250 540 260 440 158"></path>
-						<rect class="svg-red" x="284" y="210" width="410" height="64" rx="8"></rect>
-						<text class="svg-label" x="489" y="236" text-anchor="middle">Execute only if fresh, in budget, and still safe</text>
-						<text class="svg-small" x="489" y="259" text-anchor="middle">expired, stale, over-budget, or too-close liquidations are consumed as failures</text>
+						<rect class="svg-red" x="284" y="204" width="410" height="108" rx="8"></rect>
+						<text class="svg-label" x="489" y="230" text-anchor="middle">Execute only if fresh,</text>
+						<text class="svg-label" x="489" y="252" text-anchor="middle">in budget, and still safe</text>
+						<text class="svg-small" x="489" y="279" text-anchor="middle">Expired, stale, over-budget, or too-close liquidations</text>
+						<text class="svg-small" x="489" y="296" text-anchor="middle">are consumed as failures.</text>
 					</svg>
 					<p class="diagram-caption"><span class="figure-label">Integration Flow</span>The coordinator is the trust boundary between Placeholder operations and OpenOracle reports: it requests, caches, validates, and budgets each settled price before using it.</p>
 				</figure>
 				<p>
-					If the cached price is valid and the operation fits the remaining price-round
-					budget, the coordinator attempts immediate execution after staging the operation
+					If the cached price is valid and the operation fits the remaining
+					<span class="term" tabindex="0">price-round budget</span>,
+					the coordinator attempts immediate execution after staging the operation
 					record. Liquidation-specific gates, snapshot staleness, or downstream pool checks
 					can still consume the operation as a failed staged operation. Otherwise the
 					coordinator can create one OpenOracle report and attach up to four staged
@@ -332,7 +430,8 @@
 					<code>executeStagedOperation</code> call.
 				</p>
 				<p>
-					Staged operation inputs are constrained before any oracle report is requested.
+					<span class="term" tabindex="0">Staged operation</span>
+					inputs are constrained before any oracle report is requested.
 					Liquidation and withdrawal amounts must be non-zero, allowance updates may set
 					zero, <code>validForSeconds</code> must be positive and no more than five minutes,
 					non-liquidation operations must target the caller's own vault, and staging is
@@ -344,7 +443,9 @@
 					gasConsumedOpenOracleReportPrice) + 101</code>. If a cached price is usable, the
 					staged operation pays no oracle request cost and unused ETH is refunded. If a new
 					report is needed, only the first pending settlement slot retains the request
-					cost; <code>requestPrice</code> forwards exactly that bounty to OpenOracle and
+					cost; <code>requestPrice</code> forwards exactly that
+					<span class="term" tabindex="0">bounty</span>
+					to OpenOracle and
 					refunds any excess. That call creates an OpenOracle report instance; external
 					reporters still submit the initial REP/WETH amounts, disputes can replace those
 					amounts, and settlement returns the final amounts through the callback.
@@ -369,14 +470,21 @@
 				</p>
 				<ul>
 					<li><code>PRICE_VALID_FOR_SECONDS</code> limits accepted prices to a five-minute cache window.</li>
-					<li>Each settled price creates a bounded notional budget, so one report cannot authorize unlimited operation volume.</li>
+					<li>Each settled price creates a bounded <span class="term" tabindex="0">ETH-notional</span> budget, so one report cannot authorize unlimited operation volume.</li>
 					<li>Pool execution functions reject direct user calls: withdrawals, liquidations, and allowance changes can be performed only by the configured coordinator while its price is still valid.</li>
 					<li>Liquidations use a queue-time snapshot and fail if target allowance changes or ownership decreases before execution.</li>
-					<li>Liquidations must remain at least <code>minLiquidationPriceDistanceBps</code> beyond the computed threshold.</li>
+					<li>Liquidations must remain at least <code>minLiquidationPriceDistanceBps</code> beyond the computed <span class="term" tabindex="0">liquidation threshold</span>.</li>
 					<li>The callback rejects zero reports, computed zero prices, unexpected report ids, and settlements during excessive base fee.</li>
 				</ul>
+				<p>
+					The next equation names the maximum budget as
+					<code>priceRoundMaxNotional</code>. In plain English,
+					<code>priceRoundMaxNotional</code> is the largest ETH-notional operation volume
+					that one settled REP/ETH price may authorize before the coordinator needs a new
+					OpenOracle report.
+				</p>
 				<div class="equation" id="eq-openoracle-round-budget">
-					<math display="block" aria-label="price round max notional equals exact token one report times price precision times price round budget multiplier basis points divided by REP per ETH price and oracle budget basis points" data-source="priceRoundMaxNotional = exactToken1Report * PRICE_PRECISION * priceRoundBudgetMultiplierBps / repPerEthPrice / ORACLE_BUDGET_BPS">
+					<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points" data-source="priceRoundMaxNotional = exactToken1Report * PRICE_PRECISION * priceRoundBudgetMultiplierBps / repPerEthPrice / ORACLE_BUDGET_BPS">
 						<mrow>
 							<mi>priceRoundMaxNotional</mi>
 							<mo>=</mo>
@@ -396,8 +504,72 @@
 							</mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Round Budget</span>The initial REP report size and the configured multiplier cap how much ETH-notional activity one settled price can authorize.</p>
+					<p class="equation-caption"><span class="equation-label">Price-Round Budget</span>The initial REP report size and the configured multiplier cap how much <span class="term" tabindex="0">ETH-notional</span> activity one settled price can authorize.</p>
 				</div>
+				<table>
+					<thead>
+						<tr>
+							<th>Variable</th>
+							<th>Meaning at first use</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>priceRoundMaxNotional</code></td>
+							<td>The maximum ETH-notional operation volume one settled REP/ETH price can authorize.</td>
+						</tr>
+						<tr>
+							<td><code>exactToken1Report</code></td>
+							<td>The initial REP amount used in the OpenOracle report; larger report liquidity creates a larger budget.</td>
+						</tr>
+						<tr>
+							<td><code>PRICE_PRECISION</code></td>
+							<td>The fixed <code>1e18</code> scale factor used for REP/ETH price math.</td>
+						</tr>
+						<tr>
+							<td><code>priceRoundBudgetMultiplierBps</code></td>
+							<td>The configured multiplier, in basis points, that expands the report's ETH-notional budget.</td>
+						</tr>
+						<tr>
+							<td><code>repPerEthPrice</code></td>
+							<td>The settled REP per ETH price from the coordinator.</td>
+						</tr>
+						<tr>
+							<td><code>ORACLE_BUDGET_BPS</code></td>
+							<td>The <code>10000</code> basis-point denominator used by the budget multiplier.</td>
+						</tr>
+					</tbody>
+				</table>
+				<figure class="diagram" id="fig-openoracle-budget-consumption">
+					<svg viewBox="0 0 980 310" role="img" aria-labelledby="budget-consumption-title budget-consumption-desc">
+						<title id="budget-consumption-title">Price-round budget consumption</title>
+						<desc id="budget-consumption-desc">One settled OpenOracle report creates a maximum price-round budget. Successful operations consume that budget until the remaining room is too small and a new report is required.</desc>
+						<defs>
+							<marker id="arrow-budget-consumption" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-green" x="42" y="62" width="220" height="84" rx="8"></rect>
+						<text class="svg-label" x="152" y="96" text-anchor="middle">Settled Report</text>
+						<text class="svg-small" x="152" y="123" text-anchor="middle">accepted REP/ETH price</text>
+						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 262 104 H 338"></path>
+						<rect class="svg-gold" x="338" y="50" width="260" height="108" rx="8"></rect>
+						<text class="svg-label" x="468" y="84" text-anchor="middle">Max Budget</text>
+						<text class="svg-small" x="468" y="111" text-anchor="middle">priceRoundMaxNotional</text>
+						<text class="svg-small" x="468" y="134" text-anchor="middle">ETH-notional cap for this price</text>
+						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 598 104 H 674"></path>
+						<rect class="svg-blue" x="674" y="50" width="250" height="108" rx="8"></rect>
+						<text class="svg-label" x="799" y="84" text-anchor="middle">Operations Consume</text>
+						<text class="svg-small" x="799" y="111" text-anchor="middle">withdraw, allowance, liquidation</text>
+						<text class="svg-small" x="799" y="134" text-anchor="middle">budget spent only on success</text>
+						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 799 158 V 214"></path>
+						<rect class="svg-red" x="610" y="214" width="378" height="72" rx="8"></rect>
+						<text class="svg-label" x="799" y="244" text-anchor="middle">Remaining Room Too Small</text>
+						<text class="svg-small" x="799" y="267" text-anchor="middle">stage for a later OpenOracle report</text>
+						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 610 250 H 468 V 158"></path>
+					</svg>
+					<p class="diagram-caption"><span class="figure-label">Budget Consumption</span>The coordinator treats the settled price as a bounded resource: successful operations subtract from the price-round budget, and operations that no longer fit must wait for another settled report.</p>
+				</figure>
 				<p>
 					Each operation consumes budget according to the exposure it adds or moves.
 					Liquidations consume the larger of moved debt and the ETH-notional value of REP
@@ -587,14 +759,15 @@
 				<p>
 					Placeholder defends this model by bounding
 					<code>externalPayoffNotional</code>, forcing liquidations to be meaningfully past
-					threshold, and rejecting bad settlement environments. The price-round budget
+					threshold, and rejecting bad settlement environments. The
+					<span class="term" tabindex="0">price-round budget</span>
 					limits the total ETH-notional operation volume one settled report can authorize.
 					With the current <code>priceRoundBudgetMultiplierBps = 40000</code>, one price
 					round can authorize at most about <code>4x</code> the initial report's
 					ETH-notional size before another report is needed.
 				</p>
 				<div class="equation" id="eq-openoracle-placeholder-liquidity-ratio">
-					<math display="block" aria-label="placeholder minimum liquidity ratio from round budget is at least one divided by price round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity * priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
+					<math display="block" aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity * priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
 						<mtable>
 							<mtr>
 								<mtd>
@@ -635,13 +808,13 @@
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Budgeted Liquidity Ratio</span>The notional budget keeps parasitic or repeated operation volume from attaching unlimited payoff to a single OpenOracle report.</p>
+					<p class="equation-caption"><span class="equation-label">Budgeted Liquidity Ratio</span>The <span class="term" tabindex="0">ETH-notional</span> budget keeps parasitic or repeated operation volume from attaching unlimited payoff to a single OpenOracle report.</p>
 				</div>
 				<ul>
-					<li><strong>Censorship and delay:</strong> <code>settlementTime</code> gives reporters time to dispute, while the round budget keeps <code>oracleLiquidityRatio</code> from collapsing as more operations use the same price.</li>
+					<li><strong>Censorship and delay:</strong> <code>settlementTime</code> gives reporters time to dispute, while the price-round budget keeps <code>oracleLiquidityRatio</code> from collapsing as more operations use the same price.</li>
 					<li><strong>Binary threshold attacks:</strong> staged liquidations must satisfy <code>minLiquidationPriceDistanceBps = 1000</code>, so the execution price must be at least <code>10%</code> beyond the threshold rather than barely crossing it.</li>
 					<li><strong>Block stuffing:</strong> the coordinator records a request-time max settlement base fee and rejects the callback if settlement base fee exceeds <code>maxSettlementBaseFeeMultiplierBps = 30000</code>, currently <code>3x</code>.</li>
-					<li><strong>Parasitic notional:</strong> each successful operation consumes round notional, and only up to four operations are auto-executed from one settlement callback.</li>
+					<li><strong>Parasitic notional:</strong> each successful operation consumes price-round budget, and only up to four operations are auto-executed from one settlement callback.</li>
 					<li><strong>Freshness:</strong> prices expire after <code>PRICE_VALID_FOR_SECONDS = 5 minutes</code>, so delayed operations cannot reuse old reports indefinitely.</li>
 				</ul>
 				<p>
@@ -766,7 +939,7 @@
 						<tr>
 							<td><code>exactToken1Report</code></td>
 							<td><code>250 * 10^18</code> REP</td>
-							<td>Sets the initial report size and feeds the price-round notional budget.</td>
+							<td>Sets the initial report size and feeds the price-round budget.</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
@@ -817,5 +990,6 @@
 				</table>
 			</section>
 		</main>
+		<script src="./termTooltips.js"></script>
 	</body>
 </html>
