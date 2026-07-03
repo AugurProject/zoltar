@@ -46,30 +46,26 @@
 					the following REP per ETH price:
 				</p>
 				<figure class="equation" id="eq-rep-eth-price">
-					<math display="block" aria-label="last price equals amount one times ten to the eighteenth divided by amount two" data-source="lastPrice = amount1 * 1e18 / amount2">
+					<math display="block" aria-label="last price equals amount one times ten to the eighteenth divided by amount two" data-source="lastPrice = amount1 \cdot 10^18 / amount2">
 						<mrow>
 							<mi>lastPrice</mi>
 							<mo>=</mo>
 							<mfrac>
 								<mrow>
 									<mi>amount1</mi>
-									<mo>&#x2062;</mo>
-									<mn>1e18</mn>
+									<mo>&#x22C5;</mo>
+									<msup><mn>10</mn><mn>18</mn></msup>
 								</mrow>
 								<mi>amount2</mi>
 							</mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span>The settled REP amount is scaled by <code>1e18</code> and divided by the settled WETH amount.</p>
+					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span>The settled REP amount is scaled by <math><msup><mn>10</mn><mn>18</mn></msup></math> and divided by the settled WETH amount.</p>
 				</figure>
-			</section>
-
-			<section id="integration-terms">
-				<h2>Integration Terms</h2>
 				<p>
-					The OpenOracle integration uses a few protocol-specific words. A
-					<span class="term" tabindex="0">price round</span>
-					is the lifetime of one settled REP/WETH price inside the coordinator, and the
+					After the coordinator accepts a settlement, that accepted price starts a
+					<span class="term" tabindex="0">price round</span>: the lifetime of one settled
+					REP/WETH price inside the coordinator. The
 					<span class="term" tabindex="0">price-round budget</span>
 					is the ETH-denominated operation volume that single settled price may authorize
 					before the coordinator needs another report.
@@ -147,8 +143,8 @@
 						<text class="svg-small" x="890" y="132" text-anchor="middle">callback</text>
 						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 890 158 C 820 250 540 260 440 158"></path>
 						<rect class="svg-red" x="284" y="204" width="410" height="108" rx="8"></rect>
-						<text class="svg-label" x="489" y="230" text-anchor="middle">Execute only if fresh,</text>
-						<text class="svg-label" x="489" y="252" text-anchor="middle">in budget, and still safe</text>
+						<text class="svg-label" x="489" y="230" text-anchor="middle">Execution Guardrails</text>
+						<text class="svg-small" x="489" y="252" text-anchor="middle">fresh price, budget room, and local safety checks</text>
 						<text class="svg-small" x="489" y="279" text-anchor="middle">Expired, stale, over-budget, or too-close liquidations</text>
 						<text class="svg-small" x="489" y="296" text-anchor="middle">are consumed as failures.</text>
 					</svg>
@@ -182,14 +178,14 @@
 					<code>openOracleReportPrice</code>:
 				</p>
 				<figure class="equation" id="eq-openoracle-request-price-cost">
-					<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee * 4 * (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
+					<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
 						<mrow>
 							<mi>requestPriceEthCost</mi>
 							<mo>=</mo>
 							<mi>block.basefee</mi>
-							<mo>×</mo>
+							<mo>&#x22C5;</mo>
 							<mn>4</mn>
-							<mo>×</mo>
+							<mo>&#x22C5;</mo>
 							<mo>(</mo>
 							<mi>callbackGasLimit</mi>
 							<mo>+</mo>
@@ -242,27 +238,28 @@
 					<code>priceRoundMaxNotional</code> is the largest ETH-notional operation volume
 					that one settled REP/ETH price may authorize before the coordinator needs a new
 					OpenOracle report. Here <code>exactToken1Report</code> is the initial REP report
-					size, <code>PRICE_PRECISION</code> is the fixed <code>1e18</code> price scale,
+					size, <code>PRICE_PRECISION</code> is the fixed
+					<math><msup><mn>10</mn><mn>18</mn></msup></math> price scale,
 					<code>priceRoundBudgetMultiplierBps</code> is the configured multiplier in basis
 					points, <code>repPerEthPrice</code> is the settled coordinator price, and
 					<code>ORACLE_BUDGET_BPS</code> is the <code>10000</code> basis-point denominator.
 				</p>
 				<div class="equation" id="eq-openoracle-round-budget">
-					<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points" data-source="priceRoundMaxNotional = exactToken1Report * PRICE_PRECISION * priceRoundBudgetMultiplierBps / repPerEthPrice / ORACLE_BUDGET_BPS">
+					<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points" data-source="priceRoundMaxNotional = exactToken1Report \cdot PRICE_PRECISION \cdot priceRoundBudgetMultiplierBps / (repPerEthPrice \cdot ORACLE_BUDGET_BPS)">
 						<mrow>
 							<mi>priceRoundMaxNotional</mi>
 							<mo>=</mo>
 							<mfrac>
 								<mrow>
 									<mi>exactToken1Report</mi>
-									<mo>×</mo>
+									<mo>&#x22C5;</mo>
 									<mi>PRICE_PRECISION</mi>
-									<mo>×</mo>
+									<mo>&#x22C5;</mo>
 									<mi>priceRoundBudgetMultiplierBps</mi>
 								</mrow>
 								<mrow>
 									<mi>repPerEthPrice</mi>
-									<mo>×</mo>
+									<mo>&#x22C5;</mo>
 									<mi>ORACLE_BUDGET_BPS</mi>
 								</mrow>
 							</mfrac>
@@ -350,7 +347,7 @@
 					<code>externalPayoffNotional</code>, while keeping the same censorship-spend term.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-censorship">
-					<math display="block" aria-label="binary censorship safety time equals target grief ratio plus one divided by manipulated price error minus honest dispute barrier times oracle liquidity ratio" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / ORACLE_BUDGET_BPS; discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = abs(manipulatedPrice - honestPrice) / honestPrice; attackerProfit = externalPayoffNotional when manipulatedPriceError >= executionErrorThreshold, otherwise 0; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)">
+					<math display="block" aria-label="binary censorship safety time equals target grief ratio plus one divided by manipulated price error minus honest dispute barrier times oracle liquidity ratio" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / ORACLE_BUDGET_BPS; discountedHonestPrice = honestPrice \cdot (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = abs(manipulatedPrice - honestPrice) / honestPrice; attackerProfit = { externalPayoffNotional, manipulatedPriceError >= executionErrorThreshold; 0, manipulatedPriceError < executionErrorThreshold }; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio)">
 						<mtable>
 							<mtr>
 								<mtd><mi>liquidationDistanceFraction</mi></mtd>
@@ -360,7 +357,7 @@
 							<mtr>
 								<mtd><mi>discountedHonestPrice</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>honestPrice</mi><mo>×</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd>
+								<mtd><mi>honestPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>executionErrorThreshold</mi></mtd>
@@ -376,15 +373,17 @@
 								<mtd><mi>attackerProfit</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
+									<mo>{</mo>
 									<mtable>
 										<mtr>
 											<mtd><mi>externalPayoffNotional</mi></mtd>
-											<mtd><mtext>if</mtext></mtd>
+											<mtd><mo>,</mo></mtd>
 											<mtd><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi></mtd>
 										</mtr>
 										<mtr>
 											<mtd><mn>0</mn></mtd>
-											<mtd><mtext>otherwise</mtext></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mi>manipulatedPriceError</mi><mo>&lt;</mo><mi>executionErrorThreshold</mi></mtd>
 										</mtr>
 									</mtable>
 								</mtd>
@@ -397,12 +396,12 @@
 							<mtr>
 								<mtd><mi>censorshipCost</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>censorshipDuration</mi><mo>×</mo><mi>censorshipRate</mi><mo>×</mo><mi>oracleReportLiquidity</mi></mtd>
+								<mtd><mi>censorshipDuration</mi><mo>&#x22C5;</mo><mi>censorshipRate</mi><mo>&#x22C5;</mo><mi>oracleReportLiquidity</mi></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>safeCensorshipDuration</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mfrac><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>censorshipRate</mi><mo>×</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac></mtd>
+								<mtd><mfrac><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>censorshipRate</mi><mo>&#x22C5;</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac></mtd>
 							</mtr>
 						</mtable>
 					</math>
@@ -419,12 +418,12 @@
 					ETH-notional size before another report is needed.
 				</p>
 				<div class="equation" id="eq-openoracle-placeholder-liquidity-ratio">
-					<math display="block" aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity * priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
+					<math display="block" aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity \cdot priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
 						<mtable>
 							<mtr>
 								<mtd><mi>externalPayoffNotional</mi></mtd>
 								<mtd><mo>&le;</mo></mtd>
-								<mtd><mfrac><mrow><mi>oracleReportLiquidity</mi><mo>×</mo><mi>priceRoundBudgetMultiplierBps</mi></mrow><mi>ORACLE_BUDGET_BPS</mi></mfrac></mtd>
+								<mtd><mfrac><mrow><mi>oracleReportLiquidity</mi><mo>&#x22C5;</mo><mi>priceRoundBudgetMultiplierBps</mi></mrow><mi>ORACLE_BUDGET_BPS</mi></mfrac></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>oracleLiquidityRatio</mi></mtd>
@@ -455,21 +454,23 @@
 					<code>reportEscalationMultiplier</code>.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-dp-terminal">
-					<math display="block" aria-label="binary dynamic programming terminal payoff equals external payoff notional when manipulated price error is at least execution error threshold and otherwise zero, per block bribe equals max zero manipulated price error minus honest dispute barrier fraction times report size, and report size is capped by escalation halt before advancing by one" data-source="binarySettlePayoff(manipulatedPriceError) = externalPayoffNotional when manipulatedPriceError >= executionErrorThreshold, otherwise 0; censorshipBribeAtStep(manipulatedPriceError) = max(0, manipulatedPriceError - honestDisputeBarrierFraction) * reportSizeAtStep; nextReportSize = min(escalationHalt, reportEscalationMultiplier * reportSizeAtStep) before halt; nextReportSize = reportSizeAtStep + 1 after halt">
+					<math display="block" aria-label="binary dynamic programming terminal payoff equals external payoff notional when manipulated price error is at least execution error threshold and zero when it is below the threshold, per block bribe equals max zero manipulated price error minus honest dispute barrier fraction times report size, and report size is capped by escalation halt before advancing by one" data-source="binarySettlePayoff(manipulatedPriceError) = { externalPayoffNotional, manipulatedPriceError >= executionErrorThreshold; 0, manipulatedPriceError < executionErrorThreshold }; censorshipBribeAtStep(manipulatedPriceError) = max(0, manipulatedPriceError - honestDisputeBarrierFraction) \cdot reportSizeAtStep; nextReportSize = min(escalationHalt, reportEscalationMultiplier \cdot reportSizeAtStep) before halt; nextReportSize = reportSizeAtStep + 1 after halt">
 						<mtable>
 							<mtr>
 								<mtd><mi>binarySettlePayoff</mi><mo>(</mo><mi>manipulatedPriceError</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
+									<mo>{</mo>
 									<mtable>
 										<mtr>
 											<mtd><mi>externalPayoffNotional</mi></mtd>
-											<mtd><mtext>if</mtext></mtd>
+											<mtd><mo>,</mo></mtd>
 											<mtd><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi></mtd>
 										</mtr>
 										<mtr>
 											<mtd><mn>0</mn></mtd>
-											<mtd><mtext>otherwise</mtext></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mi>manipulatedPriceError</mi><mo>&lt;</mo><mi>executionErrorThreshold</mi></mtd>
 										</mtr>
 									</mtable>
 								</mtd>
@@ -477,12 +478,12 @@
 							<mtr>
 								<mtd><mi>censorshipBribeAtStep</mi><mo>(</mo><mi>manipulatedPriceError</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo><mo>×</mo><mi>reportSizeAtStep</mi></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo><mo>&#x22C5;</mo><mi>reportSizeAtStep</mi></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>nextReportSize</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo><mi>reportEscalationMultiplier</mi><mo>×</mo><mi>reportSizeAtStep</mi><mo>)</mo><mtext> before halt</mtext></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo><mi>reportEscalationMultiplier</mi><mo>&#x22C5;</mo><mi>reportSizeAtStep</mi><mo>)</mo><mtext> before halt</mtext></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>nextReportSize</mi></mtd>
@@ -519,17 +520,17 @@
 						</tr>
 						<tr>
 							<td><code>exactToken1Report</code></td>
-							<td><code>250 * 10^18</code> REP</td>
+							<td><math><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> REP</td>
 							<td>Sets the initial report size and feeds the price-round budget.</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
-							<td><code>exactToken1Report * 100000 / 10000</code></td>
+							<td><math><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mn>100000</mn><mo>/</mo><mn>10000</mn></math></td>
 							<td>Stops required report-size escalation at <code>10x</code> the initial REP report amount.</td>
 						</tr>
 						<tr>
 							<td><code>settlerReward</code></td>
-							<td><code>block.basefee * 2 * gasConsumedOpenOracleReportPrice</code></td>
+							<td><math><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td>
 							<td>Pays the account that settles the report and triggers the callback.</td>
 						</tr>
 						<tr>
@@ -539,7 +540,7 @@
 						</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
-							<td><code>gasConsumedSettlement * 4</code></td>
+							<td><math><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo><mn>4</mn></math></td>
 							<td>Sets the callback gas limit for up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> staged operations; settlement still needs enough surrounding gas to satisfy OpenOracle's callback headroom check.</td>
 						</tr>
 						<tr>

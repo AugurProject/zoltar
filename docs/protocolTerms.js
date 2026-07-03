@@ -134,7 +134,7 @@ window.protocolTermDefinitions = Object.freeze({
 	'price cache': 'The coordinator storage holding the latest accepted REP/ETH price and validity metadata.',
 	'price oracle': 'The OpenOracle-based mechanism that supplies REP/ETH prices to Placeholder.',
 	'price precision': 'The fixed scaling factor used for REP/ETH price math.',
-	PRICE_PRECISION: 'The fixed 1e18 scale used for REP/ETH price math.',
+	PRICE_PRECISION: 'The fixed 10^18 scale used for REP/ETH price math.',
 	'price round': 'One settled REP/ETH price plus the operation volume it is allowed to authorize.',
 	'price-round budget': 'The remaining ETH-denominated operation volume one settled oracle price may authorize.',
 	PRICE_VALID_FOR_SECONDS: 'The configured time window during which a settled coordinator price remains fresh.',
