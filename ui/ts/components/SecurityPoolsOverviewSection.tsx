@@ -108,12 +108,9 @@ export function SecurityPoolsOverviewSection({
 	const requestedPoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
 	const requestedPoolPageCount = getPaginationPageCount(requestedPoolCount, SECURITY_POOL_PAGE_SIZE)
 	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, requestedPoolPageCount)
-	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
-	const acceptedPageRequestRef = useRef<{ page: typeof securityPoolPage; requestKey: string } | undefined>(undefined)
-	if (acceptedPageRequestRef.current === undefined || acceptedPageRequestRef.current.page !== securityPoolPage) {
-		acceptedPageRequestRef.current = { page: securityPoolPage, requestKey: currentPageRequestKey }
-	}
-	const hasCurrentPageData = acceptedPageRequestRef.current.requestKey === currentPageRequestKey && securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
+	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}:${accountRequestKey}`
+	const hasCurrentPageData = securityPoolPage?.requestKey === currentPageRequestKey && securityPoolPage.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
 	const currentPoolCount = hasCurrentPageData ? securityPoolPage.poolCount : undefined
 	const poolPageCount = getPaginationPageCount(currentPoolCount, SECURITY_POOL_PAGE_SIZE)
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
@@ -149,7 +146,7 @@ export function SecurityPoolsOverviewSection({
 	const hasPreviousPage = resolvedPageIndex > 0
 	const hasNextPage = hasCurrentPageData && getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
 	const retryPoolRegistryLoad = () => {
-		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE)
+		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey)
 	}
 	useEffect(() => {
 		if (resolvedPageIndex === pageIndex) return
@@ -158,7 +155,7 @@ export function SecurityPoolsOverviewSection({
 	useEffect(() => {
 		let cancelled = false
 		setActivePageRequestKey(currentPageRequestKey)
-		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE))
+		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
 			.catch(() => undefined)
 			.finally(() => {
 				if (cancelled) return
