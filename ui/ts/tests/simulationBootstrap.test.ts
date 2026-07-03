@@ -288,6 +288,21 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				hash: '0x01',
 			} as never
 		}),
+		executeOracleManagerStagedOperation: mock(
+			async (client: { writeContract: (request: { address: Address; args?: unknown[]; functionName: string; gas?: bigint }) => Promise<`0x${string}`>; waitForTransactionReceipt: (request: { hash: `0x${string}` }) => Promise<unknown> }, managerAddress: Address, operationId: bigint) => {
+				const hash = await client.writeContract({
+					address: managerAddress,
+					functionName: 'executeStagedOperation',
+					args: [operationId],
+					gas: 5_000_000n,
+				})
+				await client.waitForTransactionReceipt({ hash })
+				return {
+					action: 'executeStagedOperation',
+					hash,
+				} as never
+			},
+		),
 		forkZoltarWithOwnEscalation: mock(
 			async () =>
 				({
@@ -528,6 +543,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		tevmReady: async () => undefined,
 	} as never
 
+	const contractWriteCalls: Array<{ account: Address; address: Address; args: unknown[] | undefined; functionName: string; gas: bigint | undefined }> = []
 	const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
 	const createWriteClient = (accountAddress: Address) =>
 		({
@@ -554,7 +570,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			},
 			waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
 			getCode: async () => '0x01',
-			writeContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
+			writeContract: async ({ address, args, functionName, gas }: { address: Address; args?: unknown[]; functionName: string; gas?: bigint }) => {
 				if (address.toLowerCase() === profile.genesisRepTokenAddress.toLowerCase()) {
 					if (accountAddress.toLowerCase() !== zoltarAddress.toLowerCase()) throw new Error(`Expected REP writes from Zoltar, got ${accountAddress}`)
 					if (functionName === 'mint') {
@@ -574,6 +590,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					}
 					throw new Error(`Unexpected REP write function ${functionName}`)
 				}
+				contractWriteCalls.push({ account: accountAddress, address, args, functionName, gas })
 				state.callLog.writeContract += 1
 				const pending = pendingOperations[address]
 				if (pending !== undefined) {
@@ -583,7 +600,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			},
 		}) as never
 
-	return { createWriteClient, memoryClient, state, writeCalls }
+	return { contractWriteCalls, createWriteClient, memoryClient, state, writeCalls }
 }
 
 function createBootstrapMemoryClient(
@@ -957,7 +974,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the security-pool simulation path with seeded pool construction and oracle report settling', async () => {
 		const profile = createBaselineProfile()
-		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { contractWriteCalls, createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT],
 			scenario: 'security-pool',
 			profile,
@@ -987,6 +1004,12 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.settleOracleReport).toBe(1)
 		expect(state.callLog.submitInitialOracleReport).toBe(1)
 		expect(state.callLog.writeContract).toBe(1)
+		expect(contractWriteCalls).toContainEqual(
+			expect.objectContaining({
+				functionName: 'executeStagedOperation',
+				gas: 5_000_000n,
+			}),
+		)
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 

@@ -716,12 +716,13 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		hash,
 	} satisfies OpenOracleActionResult
 }
-export async function executeOracleManagerStagedOperation(client: WriteClient, managerAddress: Address, operationId: bigint) {
+export async function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint) {
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'executeStagedOperation',
 		args: [operationId],
+		gas: 5_000_000n,
 	}))
 	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation') ?? getStagedOracleExecutionResult(receipt, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, 'setSecurityBondsAllowance')
 	return {

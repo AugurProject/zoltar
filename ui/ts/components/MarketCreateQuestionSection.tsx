@@ -220,7 +220,7 @@ export function MarketCreateQuestionSection({
 			)}
 
 			{marketResult === undefined ? (
-				<SectionBlock title='Create Question' description='Define the market type, timing, and outcomes for a new Zoltar question.'>
+				<SectionBlock title='Create Question' variant='plain' description='Define the market type, timing, and outcomes for a new Zoltar question.'>
 					<div className='workflow-summary-strip workflow-guide'>
 						<div className='workflow-guide-intro'>
 							<strong>Write the question the way a resolver will read it.</strong>

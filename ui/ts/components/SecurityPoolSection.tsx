@@ -122,7 +122,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Create Pool' description='Choose the exact binary Yes / No question and security multiplier before deploying the pool that will back trading and reporting for that question.'>
+					<SectionBlock title='Create Pool' variant='plain' description='Choose the exact binary Yes / No question and security multiplier before deploying the pool that will back trading and reporting for that question.'>
 						<div className='workflow-summary-strip workflow-guide'>
 							<div className='workflow-guide-intro'>
 								<strong>Pool creation turns a binary question into a collateralized trading surface.</strong>
