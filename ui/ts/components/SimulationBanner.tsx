@@ -1,7 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
-import { formatAddress } from '../lib/addresses.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
@@ -66,7 +65,7 @@ function hasSavedSimulationStateRoute() {
 }
 
 function getSimulationAccountOptionLabel(account: string) {
-	return `QA ${formatAddress(account)}`
+	return `QA ${account}`
 }
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
