@@ -337,6 +337,7 @@ export type OverviewPanelsProps = {
 	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
+	isRefreshingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefreshRepPrices: () => void
