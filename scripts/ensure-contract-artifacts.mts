@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { getSharedPackageGeneratedOutputs } from './check-generated-artifacts.mts'
 import { sharedBrowserArtifactRelativePaths } from './sharedBrowserArtifacts.ts'
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
@@ -16,8 +17,6 @@ const contractFreshnessCachePath = path.join(solidityRoot, 'artifacts', '.freshn
 const sharedFreshnessCachePath = path.join(sharedRoot, 'js', '.freshness-hash')
 
 const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(solidityRoot, 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
-const requiredSharedOutputs = [path.join(sharedRoot, 'js', 'addressDerivation.js'), ...sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))]
-
 const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'ui', 'build', 'projectArtifacts.mts')]
 const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
 
@@ -137,8 +136,13 @@ async function runBunScript(args: string[], label: string): Promise<void> {
 	})
 }
 
+export async function getRequiredSharedOutputRelativePaths(): Promise<string[]> {
+	return [...new Set([...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...sharedBrowserArtifactRelativePaths])]
+}
+
 async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
-	for (const outputPath of requiredSharedOutputs) {
+	for (const relativePath of await getRequiredSharedOutputRelativePaths()) {
+		const outputPath = path.join(repositoryRoot, relativePath)
 		if (!(await exists(outputPath))) return `missing shared build output: ${path.relative(repositoryRoot, outputPath)}`
 	}
 
