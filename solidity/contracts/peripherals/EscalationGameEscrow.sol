@@ -25,10 +25,12 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		if (sourcePrincipal == 0 && childRepAmount == 0) return;
 		require(sourcePrincipal > 0, 'Escrow principal missing');
 		ForkedEscrowState storage state = _recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
-		uint256 outcomeBalance = outcomeState[uint8(outcome)].balance;
+		OutcomeState storage outcomeStateForEscrow = outcomeState[uint8(outcome)];
+		uint256 outcomeBalance = outcomeStateForEscrow.balance;
 		if (forkCarrySnapshotRequiresForkedEscrow) {
+			outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal += sourcePrincipal;
 			outcomeBalance += childRepAmount;
-			outcomeState[uint8(outcome)].balance = outcomeBalance;
+			outcomeStateForEscrow.balance = outcomeBalance;
 		}
 		emit ForkedEscrowRecorded(
 			depositor,

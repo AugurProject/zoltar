@@ -157,6 +157,29 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 		emit ChildRepSwept(parent, outcomeIndex, child, pendingChildRep);
 	}
 
+	function _finalizeAwaitingForkContinuationIfReady(
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) internal {
+		if (
+			address(childEscalationGame) == address(0x0) ||
+			child.systemState() != SystemState.Operational ||
+			childEscalationGame.forkResumedAt() != 0
+		) return;
+		if (child.awaitingForkContinuation()) {
+			ISecurityPool parent = child.parent();
+			if (
+				address(parent) != address(0x0) &&
+				!forkDataByPool[parent].ownFork &&
+				!childEscalationGame.isForkCarryFundingComplete()
+			) {
+				return;
+			}
+			child.setAwaitingForkContinuation(false);
+		}
+		child.resumeForkedEscalationGame();
+	}
+
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal virtual {
 		EscalationGame parentEscalationGame = parent.escalationGame();
 		EscalationGame childEscalationGame = child.escalationGame();
@@ -172,13 +195,16 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerStor
 				uint256[3] memory inheritedCarryTotals,
 				bytes32[3] memory inheritedNullifierRoots
 			) = parentEscalationGame.getForkCarrySnapshot();
-			child.initializeForkCarrySnapshot(
+			uint256[3] memory inheritedResolutionBalances;
+			child.initializeForkCarrySnapshotWithResolutionBalances(
 				inheritedCarryPeaks,
 				inheritedCarryLeafCounts,
 				inheritedCarryTotals,
+				inheritedResolutionBalances,
 				inheritedNullifierRoots
 			);
 		}
+		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 	}
 
 	function _initializeOwnForkRepBuckets(

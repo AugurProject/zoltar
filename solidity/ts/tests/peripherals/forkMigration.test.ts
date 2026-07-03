@@ -1291,7 +1291,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child migration closed/)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child migration over/)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {
