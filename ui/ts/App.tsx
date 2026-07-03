@@ -89,7 +89,7 @@ export function App() {
 		refreshState,
 		setDeploymentStatuses,
 		walletBootstrapComplete,
-	} = useOnchainState({ activeEnvironmentNonce })
+	} = useOnchainState({ activeEnvironmentNonce, enableChainClock: route !== 'deploy' })
 	const readBackendReady = readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady
 	const baseHookConfig = {
@@ -148,13 +148,12 @@ export function App() {
 		zoltarUniverseMissing,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
-	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
-		useSecurityPoolCreation({
-			...baseHookConfig,
-			deploymentStatuses,
-			enabled: route === 'security-pools' && canReadOnchainData,
-			zoltarUniverseHasForked,
-		})
+	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
+		...baseHookConfig,
+		deploymentStatuses,
+		enabled: route === 'security-pools' && canReadOnchainData,
+		zoltarUniverseHasForked,
+	})
 	const {
 		approveRep,
 		depositRep,
@@ -261,7 +260,7 @@ export function App() {
 		startTruthAuction,
 		submitBid,
 	} = useForkAuctionOperations({ ...baseHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
-	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, refreshRepPrices } = useRepPrices()
+	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices({ enabled: route !== 'deploy' })
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
@@ -298,6 +297,7 @@ export function App() {
 		accountState,
 		isConnectingWallet,
 		isLoadingRepPrices,
+		isRefreshingRepPrices,
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
 		onConnect: () => void connectWallet(),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
@@ -479,8 +479,6 @@ export function App() {
 			duplicateOriginPoolExists,
 			poolCreationMarketDetails,
 			onCreateSecurityPool: () => void createPool(),
-			onLoadMarket: () => void loadMarket(),
-			onLoadMarketById: loadMarketById,
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,

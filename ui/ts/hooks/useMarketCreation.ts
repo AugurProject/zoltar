@@ -6,6 +6,7 @@ import { createWalletWriteClient } from '../lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createMarketCreationWarningPresentation } from '../lib/transactionPresentations.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
@@ -26,7 +27,7 @@ type UseMarketCreationParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
 export function useMarketCreation({
@@ -76,7 +77,7 @@ export function useMarketCreation({
 					marketFeedback.value = createErrorActionFeedback('createMarket', 'Question creation failed', message)
 				},
 				refreshState: async () => {
-					await refreshState()
+					await refreshWalletStateOnly(refreshState)
 					await zoltar.loadZoltarQuestions()
 				},
 				setErrorMessage: message => {

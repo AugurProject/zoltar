@@ -19,7 +19,7 @@ type UseZoltarOperationsParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
 export function useZoltarOperations({

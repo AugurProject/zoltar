@@ -31,6 +31,7 @@ import { requireDefined } from '../lib/required.js'
 import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createForkAuctionWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../lib/marketForm.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey, TruthAuctionSettlementMode } from '../types/contracts.js'
 import type { SettlementSelectedBid } from '../types/components.js'
@@ -99,6 +100,9 @@ export function useForkAuctionOperations({ accountAddress, onTransactionFailed, 
 					},
 					onWriteError: message => {
 						forkAuctionFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName, displayTitleOverride), message)
+					},
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
 					},
 				},
 				async walletAddress => {

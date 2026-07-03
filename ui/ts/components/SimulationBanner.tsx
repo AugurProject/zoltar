@@ -488,7 +488,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							</div>
 							<div className='simulation-control-group'>
 								<span className='simulation-control-group-label'>Time travel</span>
-								<div className='button-row simulation-button-row'>
+								<div className='button-row simulation-button-row simulation-time-travel-row'>
 									{SIMULATION_TIME_PRESETS.map(preset => (
 										<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
 											{preset.label}

@@ -10,6 +10,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
@@ -26,7 +27,7 @@ type UseSecurityPoolsOverviewParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
 const SECURITY_POOL_PAGE_FALLBACK_DETAILS = ['no contract data was returned', 'returned no data']
@@ -194,6 +195,9 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						liquidationModalOpen.value = true
 						securityPoolLiquidationError.value = message
 						securityPoolOverviewFeedback.value = createErrorActionFeedback('queueLiquidation', 'Liquidation failed', message)
+					},
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
 					},
 				},
 				async walletAddress => {

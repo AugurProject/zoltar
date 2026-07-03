@@ -141,8 +141,8 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 								</div>
 							}
 						>
-							<Question question={question} showTitle={false} />
-							{question.marketType !== 'binary' ? <p className='detail'>This question is valid in Zoltar, but Placeholder origin pools currently require an exact binary Yes / No question.</p> : undefined}
+							<Question question={question} showMissingContextNote={false} showTitle={false} />
+							{question.marketType !== 'binary' ? <p className='detail'>Non-binary questions are valid in Zoltar, but Placeholder origin pools currently require an exact binary Yes / No question.</p> : undefined}
 						</EntityCard>
 					))}
 				</div>

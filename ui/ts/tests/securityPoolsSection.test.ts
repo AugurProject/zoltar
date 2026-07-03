@@ -348,8 +348,6 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		loadingMarketDetails: false,
 		marketDetails: undefined,
 		onCreateSecurityPool: () => undefined,
-		onLoadMarket: () => undefined,
-		onLoadMarketById: async () => undefined,
 		onResetSecurityPoolCreation: () => undefined,
 		onSecurityPoolFormChange: () => undefined,
 		poolCreationMarketDetails: undefined,
