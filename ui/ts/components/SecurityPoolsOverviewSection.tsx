@@ -67,6 +67,7 @@ function getSecurityPoolGuidance({ hasKnownForkActivity, lifecycleState, questio
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
+	environmentRefreshKey,
 	hasLoadedSecurityPoolPage,
 	liquidationAmount,
 	liquidationMaxAmount,
@@ -107,7 +108,7 @@ export function SecurityPoolsOverviewSection({
 	const effectivePoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
 	const poolPageCount = getPaginationPageCount(effectivePoolCount, SECURITY_POOL_PAGE_SIZE)
 	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, poolPageCount)
-	const currentPageRequestKey = `${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
+	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
 	const hasCurrentPageData = securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
 	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
@@ -159,7 +160,7 @@ export function SecurityPoolsOverviewSection({
 		return () => {
 			cancelled = true
 		}
-	}, [currentPageRequestKey, resolvedPageIndex])
+	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false

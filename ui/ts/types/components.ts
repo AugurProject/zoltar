@@ -375,6 +375,7 @@ export type MarketRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
 	activeView: ZoltarView
+	environmentRefreshKey: number
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
@@ -469,6 +470,7 @@ type LiquidationModalStateProps = {
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
 	checkedSecurityPoolAddress: string | undefined
+	environmentRefreshKey: number
 	hasLoadedSecurityPools: boolean
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean

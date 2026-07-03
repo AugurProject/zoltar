@@ -153,10 +153,11 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 }
 
 type UseOnchainStateOptions = {
+	activeEnvironmentNonce?: number
 	enableChainClock?: boolean
 }
 
-export function useOnchainState({ enableChainClock = true }: UseOnchainStateOptions = {}) {
+export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true }: UseOnchainStateOptions = {}) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -361,7 +362,7 @@ export function useOnchainState({ enableChainClock = true }: UseOnchainStateOpti
 
 	useEffect(() => {
 		void refreshState()
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -396,7 +397,7 @@ export function useOnchainState({ enableChainClock = true }: UseOnchainStateOpti
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -418,7 +419,7 @@ export function useOnchainState({ enableChainClock = true }: UseOnchainStateOpti
 			unsubscribeAccounts()
 			unsubscribeState?.()
 		}
-	}, [enableChainClock])
+	}, [activeEnvironmentNonce, enableChainClock])
 
 	useEffect(() => {
 		if (!enableChainClock) {
@@ -438,7 +439,7 @@ export function useOnchainState({ enableChainClock = true }: UseOnchainStateOpti
 		return () => {
 			window.clearInterval(intervalId)
 		}
-	}, [enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
+	}, [activeEnvironmentNonce, enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
 	return {
 		accountState: accountState.value,
