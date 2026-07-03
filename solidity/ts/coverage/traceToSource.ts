@@ -33,6 +33,12 @@ type CachedAddressProfiles = {
 	readonly profiles: CoverageProfile[] | undefined
 }
 
+type CallCoverageContext = {
+	readonly blockNumberOrHash?: unknown
+	readonly stateOverrides?: unknown
+	readonly blockOverrides?: unknown
+}
+
 type ResolvedTraceStep = {
 	readonly rawStep: Record<string, unknown>
 	readonly stepAddress?: string
@@ -244,6 +250,39 @@ const traceStepAddress = (step: Record<string, unknown>): string | undefined => 
 }
 
 const normalizeAddress = (address: string): string => (address.startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`)
+
+const serializeCoverageContextValue = (value: unknown): string => {
+	if (value === undefined) return 'undefined'
+	if (value === null) return 'null'
+	if (typeof value === 'string') return `string:${value}`
+	if (typeof value === 'number') return `number:${value}`
+	if (typeof value === 'bigint') return `bigint:${value.toString(10)}`
+	if (typeof value === 'boolean') return `boolean:${String(value)}`
+	try {
+		return `json:${JSON.stringify(value)}`
+	} catch (error) {
+		if (!(error instanceof Error)) return `string:${String(value)}`
+		return `string:${String(value)}`
+	}
+}
+
+const parseStateOverrideCodeByAddress = (stateOverrides: unknown): Map<string, string> => {
+	const result = new Map<string, string>()
+	if (!isRecord(stateOverrides)) return result
+	for (const [address, overrideValue] of Object.entries(stateOverrides)) {
+		if (!isRecord(overrideValue)) continue
+		const code = overrideValue['code']
+		if (typeof code !== 'string') continue
+		result.set(normalizeAddress(address), code)
+	}
+	return result
+}
+
+const getAddressProfileCacheKey = (options: { readonly address: string; readonly blockNumberOrHash?: unknown; readonly overrideCode?: string }): string => {
+	const blockSelectorKey = options.blockNumberOrHash === undefined ? 'latest' : serializeCoverageContextValue(options.blockNumberOrHash)
+	const overrideKey = options.overrideCode === undefined ? 'no-override' : `override:${normalizeBytecode(options.overrideCode)}`
+	return `${normalizeAddress(options.address)}|${blockSelectorKey}|${overrideKey}`
+}
 
 const parsePcValue = (value: unknown): number | undefined => {
 	if (typeof value === 'number') return value
@@ -506,37 +545,50 @@ const resolveTraceSteps = (rawSteps: readonly unknown[]): ResolvedTraceStep[] =>
 	return resolvedSteps
 }
 
-const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CachedAddressProfiles>): Promise<Map<string, CoverageProfile[]>> => {
+const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CachedAddressProfiles>, callContext?: CallCoverageContext): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
-	const addressesNeedingCode: string[] = []
+	const stateOverrideCodeByAddress = parseStateOverrideCodeByAddress(callContext?.stateOverrides)
+	const addressesNeedingCode: Array<{ readonly address: string; readonly cacheKey: string; readonly overrideCode?: string }> = []
 	for (const address of addresses) {
-		const cachedProfiles = addressProfileCache.get(address)
+		const overrideCode = stateOverrideCodeByAddress.get(address)
+		const cacheKey = getAddressProfileCacheKey({
+			address,
+			blockNumberOrHash: callContext?.blockNumberOrHash,
+			...(overrideCode === undefined ? {} : { overrideCode }),
+		})
+		const cachedProfiles = addressProfileCache.get(cacheKey)
 		if (cachedProfiles?.profiles !== undefined && cachedProfiles.profiles.length > 0) {
 			result.set(address, cachedProfiles.profiles)
 			continue
 		}
-		addressesNeedingCode.push(address)
+		addressesNeedingCode.push({ address, cacheKey, ...(overrideCode === undefined ? {} : { overrideCode }) })
 	}
 
 	const onChainCodeByAddress = await Promise.all(
-		addressesNeedingCode.map(async address => ({
+		addressesNeedingCode.map(async ({ address, cacheKey, overrideCode }) => ({
 			address,
-			onChainCode: await request({ method: 'eth_getCode', params: [address, 'latest'] }),
+			cacheKey,
+			onChainCode:
+				overrideCode ??
+				(await request({
+					method: 'eth_getCode',
+					params: [address, callContext?.blockNumberOrHash ?? 'latest'],
+				})),
 		})),
 	)
-	for (const { address, onChainCode } of onChainCodeByAddress) {
+	for (const { address, cacheKey, onChainCode } of onChainCodeByAddress) {
 		if (typeof onChainCode !== 'string') {
-			addressProfileCache.set(address, { normalizedCode: '', profiles: undefined })
+			addressProfileCache.set(cacheKey, { normalizedCode: '', profiles: undefined })
 			continue
 		}
 		const normalizedCode = normalizeBytecode(onChainCode)
-		const existingProfiles = addressProfileCache.get(address)
+		const existingProfiles = addressProfileCache.get(cacheKey)
 		if (existingProfiles !== undefined && existingProfiles.normalizedCode === normalizedCode) {
 			if (existingProfiles.profiles !== undefined && existingProfiles.profiles.length > 0) result.set(address, existingProfiles.profiles)
 			continue
 		}
 		const matchedProfiles = findCompatibleProfilesForBytecode(profileByBytecode, normalizedCode)
-		addressProfileCache.set(address, { normalizedCode, profiles: matchedProfiles })
+		addressProfileCache.set(cacheKey, { normalizedCode, profiles: matchedProfiles })
 		if (matchedProfiles !== undefined && matchedProfiles.length > 0) result.set(address, matchedProfiles)
 	}
 	return result
@@ -708,11 +760,18 @@ const requestTrace = async (request: RpcRequest, transactionHash: string): Promi
 	}
 }
 
-const requestTraceCall = async (request: RpcRequest, transaction: RpcTransactionRequest): Promise<unknown[]> => {
+const requestTraceCall = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest; readonly blockNumberOrHash?: unknown; readonly stateOverrides?: unknown; readonly blockOverrides?: unknown }): Promise<unknown[]> => {
 	try {
-		const trace = await request({
+		const traceCallConfig: Record<string, unknown> = {
+			disableStack: false,
+			disableMemory: true,
+			disableStorage: true,
+		}
+		if (options.stateOverrides !== undefined) traceCallConfig['stateOverrides'] = options.stateOverrides
+		if (options.blockOverrides !== undefined) traceCallConfig['blockOverrides'] = options.blockOverrides
+		const trace = await options.request({
 			method: 'debug_traceCall',
-			params: [transaction, 'latest', { disableStack: false, disableMemory: true, disableStorage: true }],
+			params: [options.transaction, options.blockNumberOrHash ?? 'latest', traceCallConfig],
 		})
 		return parseTraceSteps(trace)
 	} catch (error) {
@@ -726,10 +785,13 @@ export const resetSolidityBytecodeCoverageAddressCache = (): void => {
 }
 
 export const invalidateSolidityBytecodeCoverageAddressCache = (address: string): void => {
-	addressProfileCache.delete(normalizeAddress(address))
+	const normalizedAddressPrefix = `${normalizeAddress(address)}|`
+	for (const cacheKey of addressProfileCache.keys()) {
+		if (cacheKey.startsWith(normalizedAddressPrefix)) addressProfileCache.delete(cacheKey)
+	}
 }
 
-const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest; readonly structLogs: readonly unknown[]; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
+const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest; readonly structLogs: readonly unknown[]; readonly receipt?: RpcTransactionReceiptData; readonly blockNumberOrHash?: unknown; readonly stateOverrides?: unknown }): Promise<void> => {
 	if (!isSolidityBytecodeCoverageEnabled()) return
 	if (options.structLogs.length === 0) return
 
@@ -753,7 +815,10 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 		if (step.codeAddress !== undefined) addresses.add(step.codeAddress)
 	}
 
-	const profilesByAddress = await collectProfilesForAddresses([...addresses], options.request, profileMaps.deployed, addressProfileCache)
+	const profilesByAddress = await collectProfilesForAddresses([...addresses], options.request, profileMaps.deployed, addressProfileCache, {
+		blockNumberOrHash: options.blockNumberOrHash,
+		stateOverrides: options.stateOverrides,
+	})
 	const creationCode = options.transaction.data === undefined ? undefined : normalizeBytecode(options.transaction.data)
 	const creationProfiles = creationCode === undefined ? undefined : findProfilesForCreationBytecode(profileMaps.creation, creationCode)
 	for (const contractAddress of receiptContractAddresses) {
@@ -794,11 +859,13 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 }
 
 export const collectBytecodeCoverageForTransaction = async (options: { readonly request: RpcRequest; readonly transactionHash: string; readonly transaction: RpcTransactionRequest; readonly receipt?: RpcTransactionReceiptData }): Promise<void> => {
+	if (!isSolidityBytecodeCoverageEnabled()) return
 	const structLogs = await requestTrace(options.request, options.transactionHash)
 	await collectBytecodeCoverageForTrace({ ...options, structLogs })
 }
 
-export const collectBytecodeCoverageForCall = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest }): Promise<void> => {
-	const structLogs = await requestTraceCall(options.request, options.transaction)
+export const collectBytecodeCoverageForCall = async (options: { readonly request: RpcRequest; readonly transaction: RpcTransactionRequest; readonly blockNumberOrHash?: unknown; readonly stateOverrides?: unknown; readonly blockOverrides?: unknown }): Promise<void> => {
+	if (!isSolidityBytecodeCoverageEnabled()) return
+	const structLogs = await requestTraceCall(options)
 	await collectBytecodeCoverageForTrace({ ...options, structLogs })
 }

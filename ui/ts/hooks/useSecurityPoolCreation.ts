@@ -117,8 +117,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 		})
 	}
 
-	const loadMarket = async () => await loadMarketById(securityPoolForm.value.marketId)
-
 	const createPool = async () => {
 		if (securityPoolCreating.value) {
 			securityPoolError.value = 'Security pool creation already in progress'
@@ -217,7 +215,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 		checkingDuplicateOriginPool: duplicateOriginPoolCheckLoad.isLoading.value,
 		duplicateOriginPoolExists: duplicateOriginPoolExists.value,
 		loadMarketById,
-		loadMarket,
 		loadingMarketDetails: marketDetailsLoad.isLoading.value,
 		marketDetails: marketDetails.value,
 		securityPoolCreationFeedback: securityPoolCreationFeedback.value,

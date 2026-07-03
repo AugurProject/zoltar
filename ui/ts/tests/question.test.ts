@@ -29,11 +29,20 @@ void describe('question helpers', () => {
 		expect(getQuestionTitle(questionBase)).toBe('Question title')
 	})
 
-	void test('builds binary question summary fields without a type label', () => {
+	void test('builds binary question summary fields with clarity labels', () => {
 		const fields = getQuestionSummaryFields(questionBase)
 
-		expect(fields.map(field => field.label)).toEqual(['Question ID', 'Created', 'End Time', 'Outcomes'])
-		expect(fields.some(field => field.label === 'Type')).toBe(false)
+		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Context', 'Question ID', 'Created', 'End Time', 'Outcomes'])
+		expect(fields.find(field => field.label === 'Question Type')).toEqual({
+			kind: 'text',
+			label: 'Question Type',
+			value: 'Binary',
+		})
+		expect(fields.find(field => field.label === 'Context')).toEqual({
+			kind: 'text',
+			label: 'Context',
+			value: 'Context provided',
+		})
 		expect(fields.find(field => field.label === 'Outcomes')).toEqual({
 			kind: 'text',
 			label: 'Outcomes',
@@ -52,8 +61,12 @@ void describe('question helpers', () => {
 			outcomeLabels: [],
 		})
 
-		expect(fields.map(field => field.label)).toEqual(['Question ID', 'Created', 'End Time', 'Outcomes', 'Ticks', 'Display Range', 'Answer Unit'])
-		expect(fields.some(field => field.label === 'Type')).toBe(false)
+		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Context', 'Question ID', 'Created', 'End Time', 'Outcomes', 'Ticks', 'Display Range', 'Answer Unit'])
+		expect(fields.find(field => field.label === 'Question Type')).toEqual({
+			kind: 'text',
+			label: 'Question Type',
+			value: 'Scalar',
+		})
 		expect(fields.find(field => field.label === 'Outcomes')).toEqual({
 			kind: 'text',
 			label: 'Outcomes',

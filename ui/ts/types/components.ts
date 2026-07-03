@@ -426,8 +426,6 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	onLoadMarket: () => void
-	onLoadMarketById: (marketId: string) => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined

@@ -36,6 +36,7 @@ describe('EnumDropdown', () => {
 	test('renders an explicit placeholder without silently selecting the first option', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<EnumDropdown
+				ariaLabel='Outcome'
 				options={[
 					{ label: 'Yes', value: 'yes' },
 					{ label: 'No', value: 'no' },
@@ -48,7 +49,7 @@ describe('EnumDropdown', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const trigger = documentQueries.getByRole('button', { name: 'Select outcome side' })
+		const trigger = documentQueries.getByRole('button', { name: 'Outcome: Select outcome side' })
 		expect(trigger).not.toBeNull()
 
 		await act(() => {
@@ -66,6 +67,7 @@ describe('EnumDropdown', () => {
 		let changedValue: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<EnumDropdown
+				ariaLabel='Outcome'
 				options={[
 					{ label: 'Yes', value: 'yes' },
 					{ label: 'No', value: 'no' },
@@ -79,7 +81,7 @@ describe('EnumDropdown', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		const trigger = documentQueries.getByRole('button', { name: 'Select outcome side' })
+		const trigger = documentQueries.getByRole('button', { name: 'Outcome: Select outcome side' })
 
 		await act(() => {
 			fireEvent.keyDown(trigger, { key: 'Enter' })
@@ -117,6 +119,23 @@ describe('EnumDropdown', () => {
 		})
 		expect(document.body.querySelectorAll('.enum-dropdown-option').length).toBe(0)
 		expect(changedValue).toBe('no')
+	})
+
+	test('includes the selected value in the trigger accessible name when labeled', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<EnumDropdown
+				ariaLabel='Question Type'
+				options={[
+					{ label: 'Binary', value: 'binary' },
+					{ label: 'Categorical', value: 'categorical' },
+				]}
+				value='binary'
+				onChange={() => undefined}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('button', { name: 'Question Type: Binary' })).not.toBeNull()
 	})
 
 	test('handles Escape and reverse-arrow navigation across dropdown options', async () => {

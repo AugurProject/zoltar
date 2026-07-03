@@ -147,13 +147,12 @@ export function App() {
 		zoltarUniverseMissing,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
-	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
-		useSecurityPoolCreation({
-			...baseHookConfig,
-			deploymentStatuses,
-			enabled: route === 'security-pools' && canReadOnchainData,
-			zoltarUniverseHasForked,
-		})
+	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
+		...baseHookConfig,
+		deploymentStatuses,
+		enabled: route === 'security-pools' && canReadOnchainData,
+		zoltarUniverseHasForked,
+	})
 	const {
 		approveRep,
 		depositRep,
@@ -471,8 +470,6 @@ export function App() {
 			duplicateOriginPoolExists,
 			poolCreationMarketDetails,
 			onCreateSecurityPool: () => void createPool(),
-			onLoadMarket: () => void loadMarket(),
-			onLoadMarketById: loadMarketById,
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,

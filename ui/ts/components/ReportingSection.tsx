@@ -110,10 +110,12 @@ function getWithdrawPendingLabel(sideLabel: string) {
 
 function getReportingStagePresentation({
 	effectiveCurrentTimestamp,
+	forkAlreadyTriggered,
 	marketDetails,
 	reportingDetails,
 }: {
 	effectiveCurrentTimestamp: bigint | undefined
+	forkAlreadyTriggered: boolean
 	marketDetails: ReportingDetails['marketDetails'] | ReportingSectionProps['previewMarketDetails']
 	reportingDetails: ReportingDetails | undefined
 }): LifecycleStagePresentation | undefined {
@@ -121,7 +123,7 @@ function getReportingStagePresentation({
 	if (marketDetails.endTime > effectiveCurrentTimestamp)
 		return {
 			availableActions: [],
-			blockedActions: ['report'],
+			blockedActions: ['Report outcome', 'Settle escalation deposits'],
 			detail: getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp),
 			key: 'reporting-not-enabled',
 			label: 'Reporting Not Enabled',
@@ -129,7 +131,7 @@ function getReportingStagePresentation({
 		}
 	if (reportingDetails === undefined)
 		return {
-			availableActions: [],
+			availableActions: ['Refresh reporting'],
 			blockedActions: [],
 			detail: 'Load reporting details to view the escalation state for this pool.',
 			key: 'reporting-open',
@@ -138,7 +140,7 @@ function getReportingStagePresentation({
 		}
 	if (isPoolQuestionFinalized(reportingDetails))
 		return {
-			availableActions: [],
+			availableActions: ['Settle escalation deposits'],
 			blockedActions: [],
 			detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}.`,
 			key: 'escalation-resolved',
@@ -152,8 +154,8 @@ function getReportingStagePresentation({
 			return undefined
 		case 'Active':
 			return {
-				availableActions: [],
-				blockedActions: [],
+				availableActions: ['Report outcome'],
+				blockedActions: ['Settle escalation deposits until finalization'],
 				detail: 'Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.',
 				key: 'escalation-active',
 				label: 'Active',
@@ -161,16 +163,16 @@ function getReportingStagePresentation({
 			}
 		case 'Fork Triggered':
 			return {
-				availableActions: [],
-				blockedActions: [],
-				detail: FORK_TRIGGERED_REPORT_REASON,
+				availableActions: [forkAlreadyTriggered ? 'Continue in Fork & Migration' : 'Trigger Zoltar Fork'],
+				blockedActions: ['Settle escalation deposits on the parent pool'],
+				detail: forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON,
 				key: 'escalation-fork-triggered',
 				label: 'Fork Triggered',
 				tone: 'default',
 			}
 		case 'Timed Out':
 			return {
-				availableActions: [],
+				availableActions: ['Refresh reporting'],
 				blockedActions: [],
 				detail: 'Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.',
 				key: 'escalation-timed-out',
@@ -179,7 +181,7 @@ function getReportingStagePresentation({
 			}
 		case 'Resolved':
 			return {
-				availableActions: [],
+				availableActions: ['Settle escalation deposits'],
 				blockedActions: [],
 				detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}.`,
 				key: 'escalation-resolved',
@@ -476,20 +478,31 @@ export function ReportingSection({
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
 				effectiveCurrentTimestamp,
+				forkAlreadyTriggered,
 				marketDetails,
 				reportingDetails: effectiveReportingDetails,
 			})
 		: undefined
-	const resolvedReportingStage =
-		reportingStage?.key === 'escalation-fork-triggered' && forkAlreadyTriggered
-			? {
-					...reportingStage,
-					detail: FORK_ALREADY_TRIGGERED_REPORT_REASON,
-				}
-			: reportingStage
+	const reportingWorkflowSummary = reportingStage?.detail ?? 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.'
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
 		<>
+			{showFullReporting ? (
+				<SectionBlock title='Reporting Workflow' density='compact' variant='embedded' description='Reporting is the dispute game that locks vault REP behind an outcome until the market finalizes or forks.'>
+					<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
+						<div className='workflow-guide-intro'>
+							<strong>Current guidance</strong>
+							<p className='detail'>{reportingWorkflowSummary}</p>
+						</div>
+						<div className='workflow-summary-strip-steps'>
+							<span className='current'>1. Choose an outcome</span>
+							<span>2. Lock REP behind it</span>
+							<span>3. Return to settle</span>
+						</div>
+					</div>
+				</SectionBlock>
+			) : undefined}
+
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
@@ -505,13 +518,12 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={resolvedReportingStage} /> : <p className='notice success'>{reportingOpenNotice}</p>}
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStage} /> : <p className='notice success'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock title='Escalation Metrics'>
-					<p className='detail'>Binding capital is the REP currently holding one side in the lead. The non-decision threshold is the amount that pushes the market into fork handling instead of normal finalization.</p>
+				<SectionBlock title='Escalation Metrics' description='These values show how much stake is required, how long the current dispute window lasts, and whether the question is close to finalization.'>
 					<div className='escalation-metrics'>
 						<MetricField label='Non-decision threshold'>
 							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
@@ -528,7 +540,7 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock title='Report Outcome'>
+				<SectionBlock title='Report Outcome' description='Choose the side you believe should become final. Reporting locks REP behind that outcome until the question finalizes or moves into fork migration.'>
 					<div className='escalation-sides-shell'>
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
@@ -586,6 +598,7 @@ export function ReportingSection({
 								Max
 							</button>
 						</div>
+						<p className='field-help'>This is the REP you are willing to lock on the selected side. Larger amounts can change the proposed outcome or extend the escalation timer.</p>
 					</div>
 
 					<div className='actions'>
@@ -641,8 +654,7 @@ export function ReportingSection({
 			) : undefined}
 
 			{showSettlementSection ? (
-				<SectionBlock title='Settle Escalation Deposits'>
-					<p className='detail'>Settling returns finalized winnings or clears losing deposits once escalation is resolved for this pool.</p>
+				<SectionBlock title='Settle Escalation Deposits' description='After finalization, settle your deposits to unlock balances or claim the final payout for the winning side.'>
 					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>The migration window for these unresolved escalation deposits has closed.</p> : undefined}
