@@ -3187,6 +3187,18 @@ strong.metric-value-danger {
 	gap: 0.9rem;
 }
 
+.sticky-object-context.context-strip {
+	position: static;
+	top: auto;
+	z-index: auto;
+	padding: 0 0 var(--space-3);
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
 .sticky-object-context.static {
 	position: static;
 	top: auto;
@@ -3390,6 +3402,10 @@ strong.metric-value-danger {
 	gap: 0.9rem;
 	padding-top: 0.15rem;
 	border-top: 1px solid var(--border-subtle);
+}
+
+.sticky-object-context.context-strip .sticky-object-context-body {
+	border-top-color: var(--divider-subtle);
 }
 
 .sticky-object-context-items {
@@ -3638,6 +3654,14 @@ strong.metric-value-danger {
 	display: grid;
 	gap: 0.9rem;
 	padding: 1rem 1.1rem;
+}
+
+.section-block.plain > .section-block-body > .workflow-guide {
+	padding: 0 0 var(--space-3);
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .workflow-guide-compact {
@@ -4404,6 +4428,59 @@ button:focus-visible {
 		gap: 0.7rem;
 	}
 
+	.reporting-workflow-section .workflow-summary-strip {
+		gap: var(--space-2);
+	}
+
+	.reporting-workflow-section .workflow-summary-strip-steps {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--space-1);
+	}
+
+	.reporting-workflow-section .workflow-summary-strip-steps span {
+		padding: 0.38rem 0.45rem;
+		font-size: var(--font-caption);
+		white-space: nowrap;
+	}
+
+	.reporting-metrics-section .escalation-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-2);
+	}
+
+	.reporting-metrics-section .escalation-metrics > div {
+		padding-top: var(--space-2);
+	}
+
+	.reporting-outcome-section .section-block-body {
+		gap: var(--space-2);
+	}
+
+	.reporting-outcome-section .escalation-sides-shell {
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+	}
+
+	.reporting-outcome-section .escalation-sides-legend {
+		gap: var(--space-2);
+		padding: 0;
+		border: 0;
+		background: transparent;
+	}
+
+	.reporting-outcome-section .escalation-side {
+		padding: var(--space-3);
+	}
+
+	.reporting-outcome-section .escalation-side-row {
+		gap: var(--space-2);
+	}
+
+	.reporting-outcome-section .escalation-side-values {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-2);
+	}
+
 	.tab-nav {
 		top: 0.5rem;
 		padding: 0 0.75rem;
@@ -4517,11 +4594,24 @@ button:focus-visible {
 .section-block {
 	display: grid;
 	gap: var(--space-4);
+}
+
+.section-block.default,
+.section-block.surface {
 	padding: var(--space-5);
 	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-section);
 	background: rgba(10, 20, 36, 0.72);
 	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+}
+
+.section-block.plain {
+	gap: var(--space-3);
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .section-block.embedded {
@@ -4549,8 +4639,16 @@ button:focus-visible {
 	gap: var(--space-3);
 }
 
+.section-block.plain .section-block-body {
+	gap: var(--space-3);
+}
+
 .section-block.density-compact {
 	padding: var(--space-4);
+}
+
+.section-block.plain.density-compact {
+	padding: 0;
 }
 
 .section-block.density-compact .section-block-body {
@@ -5801,6 +5899,10 @@ button:focus-visible {
 	.vault-preview-side-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
+
+	.security-pool-browse-vault-row-top-compact {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 @media (max-width: 640px) {
@@ -6658,6 +6760,10 @@ button:focus-visible {
 	.section-block,
 	.overview-panel {
 		padding: var(--space-4);
+	}
+
+	.section-block.plain {
+		padding: 0;
 	}
 
 	.route-subnav-shell {
