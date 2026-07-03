@@ -47,6 +47,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const poolCreationMarketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
+	const securityPoolSubmissionInProgress = useSignal(false)
 	const securityPoolError = useSignal<string | undefined>(undefined)
 	const securityPoolForm = useSignal<SecurityPoolFormState>(getDefaultSecurityPoolFormState())
 	const securityPoolCreationFeedback = useSignal<ActionFeedback<'createSecurityPool'> | undefined>(undefined)
@@ -54,6 +55,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	const duplicateOriginPoolExists = useSignal(false)
 	const nextMarketDetailsLoad = useRequestGuard()
 	const nextDuplicateCheck = useRequestGuard()
+	const isCurrentSubmittedQuestion = (questionId: bigint) => tryParseBigIntInput(securityPoolForm.value.marketId) === questionId
 
 	const loadDuplicateOriginPoolState = async () => {
 		const isCurrent = nextDuplicateCheck()
@@ -118,73 +120,87 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	}
 
 	const createPool = async () => {
-		if (securityPoolCreating.value) {
+		if (securityPoolSubmissionInProgress.value) {
 			securityPoolError.value = 'Security pool creation already in progress'
 			return
 		}
+		const submittedSecurityPoolForm = securityPoolForm.value
+		securityPoolSubmissionInProgress.value = true
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
 		securityPoolCreationFeedback.value = createPendingActionFeedback('createSecurityPool', 'Creating security pool')
 
 		let capturedDetails: MarketDetails | undefined
+		let capturedQuestionId: bigint | undefined
 
-		await runWriteAction(
-			{
-				accountAddress,
-				missingWalletMessage: 'Connect a wallet before creating a security pool',
-				onRefreshError: (message, hash) => {
-					securityPoolCreationFeedback.value = createWarningActionFeedback('createSecurityPool', 'Security pool created', message, hash)
-					const result = securityPoolResult.value
-					if (result !== undefined) onTransactionPresented(createSecurityPoolCreationWarningPresentation(result, message))
+		try {
+			await runWriteAction(
+				{
+					accountAddress,
+					missingWalletMessage: 'Connect a wallet before creating a security pool',
+					onRefreshError: (message, hash) => {
+						securityPoolCreationFeedback.value = createWarningActionFeedback('createSecurityPool', 'Security pool created', message, hash)
+						const result = securityPoolResult.value
+						if (result !== undefined) onTransactionPresented(createSecurityPoolCreationWarningPresentation(result, message))
+					},
+					onTransactionRequested: () => {
+						securityPoolCreating.value = true
+						onTransactionRequested(createSecurityPoolCreationTransactionIntent())
+					},
+					onTransactionFinished: () => {
+						securityPoolCreating.value = false
+						onTransactionFinished()
+					},
+					onTransactionFailed,
+					onWriteError: message => {
+						securityPoolCreationFeedback.value = createErrorActionFeedback('createSecurityPool', 'Security pool creation failed', message)
+					},
+					refreshState,
+					setErrorMessage: message => {
+						securityPoolError.value = message
+					},
 				},
-				onTransactionRequested: () => {
-					securityPoolCreating.value = true
-					onTransactionRequested(createSecurityPoolCreationTransactionIntent())
-				},
-				onTransactionFinished: () => {
-					securityPoolCreating.value = false
-					onTransactionFinished()
-				},
-				onTransactionFailed,
-				onWriteError: message => {
-					securityPoolCreationFeedback.value = createErrorActionFeedback('createSecurityPool', 'Security pool creation failed', message)
-				},
-				refreshState,
-				setErrorMessage: message => {
-					securityPoolError.value = message
-				},
-			},
-			async walletAddress => {
-				if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool')
-				if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
+				async walletAddress => {
+					if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool')
+					if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
 
-				const parameters = createSecurityPoolParameters(securityPoolForm.value)
-				const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
-				if (!details.exists) throw new Error('No market found for that ID')
-				if (details.marketType !== 'binary') {
-					marketDetails.value = details
-					throw new Error('Security pools can only be deployed for binary markets')
-				}
-				if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
-					marketDetails.value = details
-					throw new Error('A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.')
-				}
+					const parameters = createSecurityPoolParameters(submittedSecurityPoolForm)
+					capturedQuestionId = parameters.questionId
+					const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
+					if (!details.exists) throw new Error('No market found for that ID')
+					if (details.marketType !== 'binary') {
+						if (isCurrentSubmittedQuestion(parameters.questionId)) {
+							marketDetails.value = details
+						}
+						throw new Error('Security pools can only be deployed for binary markets')
+					}
+					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
+						if (isCurrentSubmittedQuestion(parameters.questionId)) {
+							marketDetails.value = details
+						}
+						throw new Error('A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.')
+					}
 
-				capturedDetails = details
-				const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters)
-				return { ...result, hash: result.deployPoolHash }
-			},
-			'Failed to create security pool',
-			result => {
-				if (capturedDetails !== undefined) {
-					marketDetails.value = capturedDetails
-					poolCreationMarketDetails.value = capturedDetails
-				}
-				securityPoolResult.value = result
-				securityPoolCreationFeedback.value = createSuccessActionFeedback('createSecurityPool', 'Security pool created', result.hash)
-				onTransactionPresented(createSecurityPoolCreationSuccessPresentation(result))
-			},
-		)
+					capturedDetails = details
+					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters)
+					return { ...result, hash: result.deployPoolHash }
+				},
+				'Failed to create security pool',
+				result => {
+					if (capturedDetails !== undefined) {
+						poolCreationMarketDetails.value = capturedDetails
+						if (capturedQuestionId !== undefined && isCurrentSubmittedQuestion(capturedQuestionId)) {
+							marketDetails.value = capturedDetails
+						}
+					}
+					securityPoolResult.value = result
+					securityPoolCreationFeedback.value = createSuccessActionFeedback('createSecurityPool', 'Security pool created', result.hash)
+					onTransactionPresented(createSecurityPoolCreationSuccessPresentation(result))
+				},
+			)
+		} finally {
+			securityPoolSubmissionInProgress.value = false
+		}
 	}
 
 	const resetSecurityPoolCreation = () => {

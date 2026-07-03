@@ -214,7 +214,7 @@ function usePeripheralsTestFixture() {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
 		return await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
 	}
-	const { finalizeQuestionAsYesWithoutFork, setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, triggerExternalForkForSecurityPool } = createPeripheralsTruthAuctionScenarioHelpers({
+	const { finalizeQuestionAsYesWithoutFork, setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, setupStartedTruthAuction, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, triggerExternalForkForSecurityPool } = createPeripheralsTruthAuctionScenarioHelpers({
 		genesisUniverse,
 		getClient: () => client,
 		getMockWindow: () => mockWindow,
@@ -423,6 +423,7 @@ function usePeripheralsTestFixture() {
 		getVaultRepClaim,
 		finalizeQuestionAsYesWithoutFork,
 		triggerExternalForkForSecurityPool,
+		setupStartedTruthAuction,
 		setupOwnForkWithEscrow,
 		setupTruthAuctionWithMixedBids,
 		setupTruthAuctionWithTwoWinningBids,
@@ -820,6 +821,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		'MAX_RETENTION_RATE',
 		'outcomes',
 		'triggerExternalForkForSecurityPool',
+		'setupStartedTruthAuction',
 		'setupTruthAuctionWithMixedBids',
 		'setupTruthAuctionWithTwoWinningBids',
 		'setupFinalizedTruthAuctionWithMixedBids',

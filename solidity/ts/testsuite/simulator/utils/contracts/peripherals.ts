@@ -13,6 +13,7 @@ import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { threeShareArrayToCash } from './securityPool'
 import { priceToClosestTick } from '../tickMath'
+import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 
 export enum OperationType {
 	Liquidation = 0,
@@ -30,7 +31,7 @@ export const requestPriceIfNeededAndStageOperationWithValue = async (client: Wri
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operation, targetVault, amount, validForSeconds],
 			value,
-			gas: 5_000_000n,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -46,7 +47,7 @@ export const executeStagedOperation = async (client: WriteClient, priceOracleMan
 			functionName: 'executeStagedOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operationId],
-			gas: 5_000_000n,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -59,6 +60,7 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
 			value: ethCost,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 }
@@ -71,6 +73,7 @@ export const requestPriceWithValue = async (client: WriteClient, priceOracleMana
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
 			value,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -81,6 +84,7 @@ export const recoverSettledPendingReport = async (client: WriteClient, priceOrac
 			functionName: 'recoverSettledPendingReport',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -222,6 +226,7 @@ export const openOracleSubmitInitialReport = async (client: WriteClient, reportI
 			functionName: 'submitInitialReport',
 			address: getInfraContractAddresses().openOracle,
 			args: [reportId, amount1, amount2, stateHash],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -231,7 +236,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			address: getInfraContractAddresses().openOracle,
-			gas: 5_000_000n, //needed because of gas() opcode being used
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 			args: [reportId],
 		}),
 	)
@@ -242,7 +247,7 @@ export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			address: getInfraContractAddresses().openOracle,
-			gas: 5_000_000n,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 			gasPrice,
 			args: [reportId],
 		}),
@@ -337,6 +342,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: Ad
 			address: auctionAddress,
 			args: [tick],
 			value: ethToInvest,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 	return tick
@@ -379,6 +385,7 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: Addr
 			functionName: 'migrate',
 			address: shareTokenAddress,
 			args: [getTokenId(fromUniverseId, outcome), targetOutcomeIndexes.map(value => BigInt(value))],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
