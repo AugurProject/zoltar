@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { concatHex, decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from 'viem'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -16,14 +16,15 @@ import {
 	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	ReputationToken_ReputationToken,
 	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
+	test_peripherals_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
 	test_peripherals_FalseReturningERC20_FalseReturningERC20,
 	test_peripherals_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
 } from '../types/contractArtifact'
 import { getERC20Balance } from '../testsuite/simulator/utils/utilities'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
+import { createCarryProof as createCarryProofFromHelpers, hashCarryLeaf, hashParent, readCarryLeafHash as readCarryLeafHashFromHelpers, SparseNullifierTree } from './carryProofHelpers'
 
 const ESCALATION_TIME_LENGTH = 4233600n
-const NULLIFIER_DEPTH = 64
 const MAX_UINT256 = 2n ** 256n - 1n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -79,8 +80,8 @@ describe('Escalation Game Test Suite', () => {
 		return deployment
 	}
 
-	async function deployEscalationGameWithProofPool(repTokenAddress: Address = getRepTokenAddress(0n)) {
-		const testSecurityPoolAddress = await deployProofTestSecurityPool()
+	async function deployEscalationGameWithProofPool(repTokenAddress: Address = getRepTokenAddress(0n), forkerAddress: Address = client.account.address) {
+		const testSecurityPoolAddress = await deployProofTestSecurityPool(forkerAddress)
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -121,13 +122,24 @@ describe('Escalation Game Test Suite', () => {
 		return { escalationGameAddress, testSecurityPoolAddress }
 	}
 
-	async function deployProofTestSecurityPool() {
+	async function deployEscalationGameForkerHarness() {
+		const deploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: escalationGameForkerHarnessArtifact.abi,
+				bytecode: `0x${escalationGameForkerHarnessArtifact.evm.bytecode.object}`,
+			}),
+		})
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		return requireContractAddress(deploymentReceipt.contractAddress, 'escalation game forker harness deployment address')
+	}
+
+	async function deployProofTestSecurityPool(forkerAddress: Address = client.account.address) {
 		const zoltarAddress = getZoltarAddress()
 		const testSecurityPoolDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: escalationGameProofTestPoolArtifact.abi,
 				bytecode: `0x${escalationGameProofTestPoolArtifact.evm.bytecode.object}`,
-				args: [zoltarAddress, 0n, client.account.address],
+				args: [zoltarAddress, 0n, forkerAddress],
 			}),
 		})
 		const testSecurityPoolDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testSecurityPoolDeploymentHash })
@@ -228,6 +240,14 @@ describe('Escalation Game Test Suite', () => {
 	const readCarryRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryRoot
 	const readCarryLeafCount = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentLeafCount
 	const readCarryTotal = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryTotal
+
+	const readIsForkCarryFundingComplete = async (escalationGameAddress: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'isForkCarryFundingComplete',
+			args: [],
+		})
 	const readNullifierRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentNullifierRoot
 	const readTotalEscrowedRep = async (escalationGameAddress: Address) =>
 		await client.readContract({
@@ -483,89 +503,16 @@ describe('Escalation Game Test Suite', () => {
 	const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
 	const oneHash = () => `0x${'0'.repeat(63)}1` as Hex
 
-	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
-		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+	const readCarryLeafHash = async (escalationGameAddress: Address, nodeId: bigint) => await readCarryLeafHashFromHelpers(client, escalationGameAddress, nodeId)
 
-	const readCarryLeafHash = async (escalationGameAddress: Address, nodeId: bigint) => {
-		const node = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'nodes',
-			args: [nodeId],
-		})
-		return hashCarryLeaf(node[1], node[2], node[3], node[4], node[5], nodeId)
-	}
-
-	const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
-
-	const buildZeroHashes = () => {
-		const zeroHashes: Hex[] = [zeroHash()]
-		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-			zeroHashes.push(hashParent(zeroHashes[depth], zeroHashes[depth]))
-		}
-		return zeroHashes
-	}
-
-	class SparseNullifierTree {
-		private readonly zeroHashes = buildZeroHashes()
-		private readonly nodes = new Map<string, Hex>()
-		private readonly pathMask = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
-		root: Hex = this.zeroHashes[NULLIFIER_DEPTH]
-
-		private getPath(parentDepositIndex: bigint) {
-			return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & this.pathMask
-		}
-
-		getProof(parentDepositIndex: bigint) {
-			const path = this.getPath(parentDepositIndex)
-			const siblings: Hex[] = []
-			let nodeIndex = path
-			for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-				const siblingIndex = nodeIndex ^ 1n
-				const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
-				siblings.push(siblingHash)
-				nodeIndex >>= 1n
-			}
-			return siblings
-		}
-
-		consume(parentDepositIndex: bigint) {
-			const path = this.getPath(parentDepositIndex)
-			let nodeIndex = path
-			let nodeHash = `0x${'0'.repeat(63)}1` as Hex
-			this.nodes.set(`0:${nodeIndex}`, nodeHash)
-			for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-				const isRightNode = (nodeIndex & 1n) === 1n
-				const siblingIndex = nodeIndex ^ 1n
-				const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
-				const parentHash = isRightNode ? hashParent(siblingHash, nodeHash) : hashParent(nodeHash, siblingHash)
-				nodeIndex >>= 1n
-				nodeHash = parentHash
-				this.nodes.set(`${depth + 1}:${nodeIndex}`, nodeHash)
-			}
-			this.root = nodeHash
-		}
-	}
-
-	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
-		const node = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'nodes',
-			args: [leafIndex + 1n],
-		})
-		return {
-			depositor: node[1],
-			amount: node[3],
+	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) =>
+		await createCarryProofFromHelpers(client, escalationGameAddress, {
 			parentDepositIndex,
-			cumulativeAmount: node[5],
-			sourceNodeId: leafIndex + 1n,
 			leafIndex,
-			merkleMountainRangeSiblings,
 			merkleMountainRangePeakIndex,
+			merkleMountainRangeSiblings,
 			nullifierSiblings,
-		}
-	}
+		})
 
 	const depositOnOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
 		await writeContractAndWait(
@@ -808,7 +755,7 @@ describe('Escalation Game Test Suite', () => {
 
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n)
-		const expectedTwoLeafRoot = keccak256(concatHex([firstLeafHash, secondLeafHash]))
+		const expectedTwoLeafRoot = hashParent(firstLeafHash, secondLeafHash)
 		const rootAfterSecondDeposit = await readCarryRoot(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected Merkle Mountain Range root')
 	})
@@ -1084,7 +1031,7 @@ describe('Escalation Game Test Suite', () => {
 		const remainingCarryTotal = await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(remainingCarryTotal, reportBond, 'only the child-local unresolved carry should remain after settling the inherited parent leaf')
 		const grandchildRoot = await readCarryRoot(grandchild.escalationGameAddress, QuestionOutcome.Yes)
-		assert.strictEqual(grandchildRoot, keccak256(concatHex([parentLeafHash, childLocalLeafHash])), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
+		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, childLocalLeafHash), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
 	})
 
 	test('fork carry grandchild instances reject child-local leaves that were already settled before the recursive fork', async () => {
@@ -1489,6 +1436,38 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(vaultEscrowLog.args.totalEscrowedRep, totalEscrowAfterExport, 'vault escrow log should expose the updated total escrow')
 	})
 
+	test('fork carry funding completeness tracks migrated source principal even when child REP backing is smaller', async () => {
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 0n], [0n, 3n * reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+
+		assert.strictEqual(await readIsForkCarryFundingComplete(child.escalationGameAddress), false, 'a fork continuation should start incomplete before any carried escrow is recorded')
+
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: child.testSecurityPoolAddress,
+				functionName: 'recordForkedEscrowForOutcome',
+				args: [client.account.address, QuestionOutcome.Yes, reportBond, 1n],
+			}),
+		)
+		assert.strictEqual(await readIsForkCarryFundingComplete(child.escalationGameAddress), false, 'partial carried-principal funding should keep the continuation incomplete')
+
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: child.testSecurityPoolAddress,
+				functionName: 'recordForkedEscrowForOutcome',
+				args: [client.account.address, QuestionOutcome.Yes, 2n * reportBond, 2n],
+			}),
+		)
+
+		const yesState = await readOutcomeState(child.escalationGameAddress, QuestionOutcome.Yes)
+		assert.strictEqual(yesState.balance, 3n, 'scaled recursive carry should keep outcome balance in child-REP units')
+		assert.strictEqual(yesState.inheritedUnresolvedTotal, 3n * reportBond, 'test setup should preserve the inherited carried principal in source units')
+		assert.strictEqual(await readIsForkCarryFundingComplete(child.escalationGameAddress), true, 'full carried-principal migration should mark the continuation complete even when child REP backing stays smaller')
+	})
+
 	test('forked carried proof cannot withdraw from another vaults escrow backing', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
@@ -1762,6 +1741,35 @@ describe('Escalation Game Test Suite', () => {
 		)
 		const receiverBalanceAfterSecondExport = await getERC20Balance(client, repToken, receiver)
 		assert.strictEqual(receiverBalanceAfterSecondExport, receiverBalanceAfter, 'already-exported forked escrow should not transfer twice')
+	})
+
+	test('source-only forked escrow can migrate into the next continuation without child REP backing', async () => {
+		const forkerHarnessAddress = await deployEscalationGameForkerHarness()
+		const parent = await deployEscalationGameWithProofPool(getRepTokenAddress(0n), forkerHarnessAddress)
+		const child = await deployEscalationGameWithProofPool(getRepTokenAddress(0n), forkerHarnessAddress)
+		await startEscalationFromFork(parent.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: parent.testSecurityPoolAddress,
+				functionName: 'recordForkedEscrowForOutcome',
+				args: [client.account.address, QuestionOutcome.Yes, reportBond, 0n],
+			}),
+		)
+
+		const exportResult = await client.simulateContract({
+			abi: escalationGameForkerHarnessArtifact.abi,
+			address: forkerHarnessAddress,
+			functionName: 'migrateForkedEscrowWithoutTransferForTest',
+			args: [parent.escalationGameAddress, child.escalationGameAddress, client.account.address],
+		})
+		await writeContractAndWait(client, async () => client.writeContract(exportResult.request))
+
+		assert.deepStrictEqual(exportResult.result[0], [0n, reportBond, 0n], 'source-only forked escrow should still export its original principal bucket')
+		assert.deepStrictEqual(exportResult.result[1], [0n, 0n, 0n], 'source-only forked escrow should not fabricate child REP backing during export')
+		assert.deepStrictEqual(await readForkedEscrowByVaultAndOutcome(child.escalationGameAddress, client.account.address, QuestionOutcome.Yes), [reportBond, 0n, 0n, 0n], 'the next continuation should retain the migrated source-only escrow instead of dropping it')
+		assert.strictEqual(await readEscrowedRepByVault(child.escalationGameAddress, client.account.address), 0n, 'source-only migration should not create a new child REP escrow lock')
 	})
 
 	// =================== Attrition Cost Function Tests ===================
