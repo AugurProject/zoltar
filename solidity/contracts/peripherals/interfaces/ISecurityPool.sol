@@ -44,6 +44,7 @@ interface ISecurityPool {
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
+	function awaitingForkContinuation() external view returns (bool);
 	function securityVaults(
 		address vault
 	)

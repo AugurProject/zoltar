@@ -9,7 +9,7 @@ import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDual
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { ESCALATION_TIME_LENGTH, MERKLE_MOUNTAIN_RANGE_MAX_PEAKS } from './EscalationGameTypes.sol';
+import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
@@ -248,40 +248,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 				parentForkData.escalationElapsedAtFork
 			);
 		}
-		EscalationGame parentEscalationGame = parent.escalationGame();
-		EscalationGame childEscalationGame = child.escalationGame();
-		if (
-			address(parentEscalationGame) != address(0x0) &&
-			address(childEscalationGame) != address(0x0) &&
-			!childEscalationGame.forkCarrySnapshotInitialized()
-		) {
-			(
-				bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory inheritedCarryPeaks,
-				uint256[3] memory inheritedCarryLeafCounts,
-				uint256[3] memory inheritedCarryTotals,
-				bytes32[3] memory inheritedNullifierRoots
-			) = parentEscalationGame.getForkCarrySnapshot();
-			if (parentForkData.ownFork) {
-				uint256[3] memory inheritedResolutionBalances;
-				child.initializeForkCarrySnapshotWithResolutionBalances(
-					inheritedCarryPeaks,
-					inheritedCarryLeafCounts,
-					inheritedCarryTotals,
-					inheritedResolutionBalances,
-					inheritedNullifierRoots
-				);
-			} else {
-				child.initializeForkCarrySnapshot(
-					inheritedCarryPeaks,
-					inheritedCarryLeafCounts,
-					inheritedCarryTotals,
-					inheritedNullifierRoots
-				);
-			}
-		}
-		if (child.systemState() == SystemState.Operational) {
-			child.resumeForkedEscalationGame();
-		}
+		super._initializeChildForkedEscalationGameIfNeeded(parent, child);
 	}
 
 	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) external {
@@ -320,7 +287,7 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 				uint256 outcomeIndex = outcomeIndices[index];
 				ISecurityPool child = childrenByPoolAndOutcome[securityPool][outcomeIndex];
 				if (address(child) != address(0x0)) {
-					require(child.systemState() == SystemState.ForkMigration, 'Child migration closed');
+					require(child.systemState() == SystemState.ForkMigration, 'Child migration over');
 				}
 				require(
 					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
@@ -585,15 +552,9 @@ contract SecurityPoolForker is SecurityPoolForkerVaultMigrationBase {
 		SecurityPoolForkerForkData storage parentData
 	) private {
 		if (!parentData.unresolvedEscalationAtFork) return;
-		securityPool.setAwaitingForkContinuation(false);
 		EscalationGame childEscalationGame = securityPool.escalationGame();
-		if (
-			address(childEscalationGame) != address(0x0) &&
-			childEscalationGame.forkContinuation() &&
-			childEscalationGame.forkResumedAt() == 0
-		) {
-			securityPool.resumeForkedEscalationGame();
-		}
+		if (address(childEscalationGame) == address(0x0)) return;
+		_finalizeAwaitingForkContinuationIfReady(securityPool, childEscalationGame);
 	}
 
 	function _emitFinalizeAuctionEvent(

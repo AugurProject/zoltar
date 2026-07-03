@@ -30,6 +30,7 @@ export const requestPriceIfNeededAndStageOperationWithValue = async (client: Wri
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operation, targetVault, amount, validForSeconds],
 			value,
+			gas: 5_000_000n,
 		}),
 	)
 
@@ -45,6 +46,7 @@ export const executeStagedOperation = async (client: WriteClient, priceOracleMan
 			functionName: 'executeStagedOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operationId],
+			gas: 5_000_000n,
 		}),
 	)
 
