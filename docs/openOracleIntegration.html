@@ -4,6 +4,7 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>OpenOracle Integration</title>
+		<link rel="stylesheet" href="./shared-docs.css">
 		<style>
 			:root {
 				color-scheme: light dark;
@@ -22,8 +23,7 @@
 				--red: #99453f;
 				--red-soft: #f2d9d6;
 				--radius: 0.5rem;
-				--page-width: 88rem;
-				font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				font-family: var(--docs-font-sans);
 			}
 
 			@media (prefers-color-scheme: dark) {
@@ -58,9 +58,21 @@
 			}
 
 			main {
-				width: min(var(--page-width), calc(100% - 2rem));
+				width: min(var(--docs-page-width), calc(100% - var(--docs-page-inline-gutter-desktop)));
 				margin: 0 auto;
 				padding: 3rem 0 4rem;
+			}
+
+			@media (max-width: 1000px) {
+				main {
+					width: min(var(--docs-page-tablet-width), calc(100% - var(--docs-page-inline-gutter-tablet)));
+				}
+			}
+
+			@media (max-width: 640px) {
+				main {
+					width: min(var(--docs-page-tablet-width), calc(100% - var(--docs-page-inline-gutter-mobile)));
+				}
 			}
 
 			header,
@@ -242,7 +254,6 @@
 
 			@media (max-width: 42rem) {
 				main {
-					width: min(100% - 1rem, var(--page-width));
 					padding-top: 1rem;
 				}
 
@@ -448,9 +459,9 @@
 							<mi>requestPriceEthCost</mi>
 							<mo>=</mo>
 							<mi>block.basefee</mi>
-							<mo>*</mo>
+							<mo>×</mo>
 							<mn>4</mn>
-							<mo>*</mo>
+							<mo>×</mo>
 							<mo>(</mo>
 							<mi>callbackGasLimit</mi>
 							<mo>+</mo>
@@ -516,14 +527,14 @@
 							<mfrac>
 								<mrow>
 									<mi>exactToken1Report</mi>
-									<mo>*</mo>
+									<mo>×</mo>
 									<mi>PRICE_PRECISION</mi>
-									<mo>*</mo>
+									<mo>×</mo>
 									<mi>priceRoundBudgetMultiplierBps</mi>
 								</mrow>
 								<mrow>
 									<mi>repPerEthPrice</mi>
-									<mo>*</mo>
+									<mo>×</mo>
 									<mi>ORACLE_BUDGET_BPS</mi>
 								</mrow>
 							</mfrac>
@@ -611,7 +622,7 @@
 					<code>externalPayoffNotional</code>, while keeping the same censorship-spend term.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-censorship">
-					<math display="block" aria-label="binary censorship safety time equals target grief ratio plus one divided by manipulated price error minus honest dispute barrier times oracle liquidity ratio" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / ORACLE_BUDGET_BPS; discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = abs(manipulatedPrice - honestPrice) / honestPrice; attackerProfit = externalPayoffNotional * 1{manipulatedPriceError >= executionErrorThreshold}; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)">
+					<math display="block" aria-label="binary censorship safety time equals target grief ratio plus one divided by manipulated price error minus honest dispute barrier times oracle liquidity ratio" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / ORACLE_BUDGET_BPS; discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = abs(manipulatedPrice - honestPrice) / honestPrice; attackerProfit = externalPayoffNotional when manipulatedPriceError >= executionErrorThreshold, otherwise 0; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)">
 						<mtable>
 							<mtr>
 								<mtd><mi>liquidationDistanceFraction</mi></mtd>
@@ -621,7 +632,7 @@
 							<mtr>
 								<mtd><mi>discountedHonestPrice</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>honestPrice</mi><mo>*</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd>
+								<mtd><mi>honestPrice</mi><mo>×</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>executionErrorThreshold</mi></mtd>
@@ -636,7 +647,19 @@
 							<mtr>
 								<mtd><mi>attackerProfit</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>externalPayoffNotional</mi><mo>*</mo><mtext>1{</mtext><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi><mtext>}</mtext></mtd>
+								<mtd>
+									<mtable>
+										<mtr>
+											<mtd><mi>externalPayoffNotional</mi></mtd>
+											<mtd><mtext>if</mtext></mtd>
+											<mtd><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi></mtd>
+										</mtr>
+										<mtr>
+											<mtd><mn>0</mn></mtd>
+											<mtd><mtext>otherwise</mtext></mtd>
+										</mtr>
+									</mtable>
+								</mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>censorshipRate</mi></mtd>
@@ -646,12 +669,12 @@
 							<mtr>
 								<mtd><mi>censorshipCost</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>censorshipDuration</mi><mo>*</mo><mi>censorshipRate</mi><mo>*</mo><mi>oracleReportLiquidity</mi></mtd>
+								<mtd><mi>censorshipDuration</mi><mo>×</mo><mi>censorshipRate</mi><mo>×</mo><mi>oracleReportLiquidity</mi></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>safeCensorshipDuration</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mfrac><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>censorshipRate</mi><mo>*</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac></mtd>
+								<mtd><mfrac><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>censorshipRate</mi><mo>×</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac></mtd>
 							</mtr>
 						</mtable>
 					</math>
@@ -673,7 +696,7 @@
 							<mtr>
 								<mtd><mi>externalPayoffNotional</mi></mtd>
 								<mtd><mo>&le;</mo></mtd>
-								<mtd><mfrac><mrow><mi>oracleReportLiquidity</mi><mo>*</mo><mi>priceRoundBudgetMultiplierBps</mi></mrow><mi>ORACLE_BUDGET_BPS</mi></mfrac></mtd>
+								<mtd><mfrac><mrow><mi>oracleReportLiquidity</mi><mo>×</mo><mi>priceRoundBudgetMultiplierBps</mi></mrow><mi>ORACLE_BUDGET_BPS</mi></mfrac></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>oracleLiquidityRatio</mi></mtd>
@@ -704,22 +727,34 @@
 					<code>reportEscalationMultiplier</code>.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-dp-terminal">
-					<math display="block" aria-label="binary dynamic program terminal payoff equals external payoff notional times the indicator that manipulated price error is at least execution error threshold, per block bribe equals max zero manipulated price error minus honest dispute barrier fraction times report size, and report size is capped by escalation halt before advancing by one" data-source="binarySettlePayoff(manipulatedPriceError) = externalPayoffNotional * 1{manipulatedPriceError >= executionErrorThreshold}; censorshipBribeAtStep(manipulatedPriceError) = max(0, manipulatedPriceError - honestDisputeBarrierFraction) * reportSizeAtStep; nextReportSize = min(escalationHalt, reportEscalationMultiplier * reportSizeAtStep) before halt; nextReportSize = reportSizeAtStep + 1 after halt">
+					<math display="block" aria-label="binary dynamic programming terminal payoff equals external payoff notional when manipulated price error is at least execution error threshold and otherwise zero, per block bribe equals max zero manipulated price error minus honest dispute barrier fraction times report size, and report size is capped by escalation halt before advancing by one" data-source="binarySettlePayoff(manipulatedPriceError) = externalPayoffNotional when manipulatedPriceError >= executionErrorThreshold, otherwise 0; censorshipBribeAtStep(manipulatedPriceError) = max(0, manipulatedPriceError - honestDisputeBarrierFraction) * reportSizeAtStep; nextReportSize = min(escalationHalt, reportEscalationMultiplier * reportSizeAtStep) before halt; nextReportSize = reportSizeAtStep + 1 after halt">
 						<mtable>
 							<mtr>
 								<mtd><mi>binarySettlePayoff</mi><mo>(</mo><mi>manipulatedPriceError</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>externalPayoffNotional</mi><mo>*</mo><mtext>1{</mtext><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi><mtext>}</mtext></mtd>
+								<mtd>
+									<mtable>
+										<mtr>
+											<mtd><mi>externalPayoffNotional</mi></mtd>
+											<mtd><mtext>if</mtext></mtd>
+											<mtd><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi></mtd>
+										</mtr>
+										<mtr>
+											<mtd><mn>0</mn></mtd>
+											<mtd><mtext>otherwise</mtext></mtd>
+										</mtr>
+									</mtable>
+								</mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>censorshipBribeAtStep</mi><mo>(</mo><mi>manipulatedPriceError</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo><mo>*</mo><mi>reportSizeAtStep</mi></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo><mo>×</mo><mi>reportSizeAtStep</mi></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>nextReportSize</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo><mi>reportEscalationMultiplier</mi><mo>*</mo><mi>reportSizeAtStep</mi><mo>)</mo><mtext> before halt</mtext></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo><mi>reportEscalationMultiplier</mi><mo>×</mo><mi>reportSizeAtStep</mi><mo>)</mo><mtext> before halt</mtext></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>nextReportSize</mi></mtd>
@@ -728,7 +763,7 @@
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Binary DP Terminal</span>The simplified terminal payoff pays only after the reported error crosses the threshold distance. The censorship bribe still scales with report size, but local report-size growth is capped by <code>escalationHalt</code> before continuing linearly.</p>
+					<p class="equation-caption"><span class="equation-label">Binary Dynamic Programming Terminal</span>The simplified terminal payoff pays only after the reported error crosses the threshold distance. The censorship bribe still scales with report size, but local report-size growth is capped by <code>escalationHalt</code> before continuing linearly.</p>
 				</div>
 			</section>
 
