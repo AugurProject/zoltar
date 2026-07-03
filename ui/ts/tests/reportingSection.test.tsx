@@ -283,9 +283,10 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
-		expect(documentQueries.queryByText('Available')).toBeNull()
-		expect(documentQueries.queryByText('Blocked')).toBeNull()
-		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Workflow' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Current guidance')).toBe(true)
+		expect(document.body.textContent?.includes('Available now')).toBe(true)
+		expect(document.body.textContent?.includes('Blocked')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
@@ -801,9 +802,36 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
+		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
+		expect(lifecycleBannerQueries.getByText('Trigger Zoltar Fork')).not.toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
+	})
+
+	test('shows Continue in Fork & Migration in the lifecycle banner after the fork has already been triggered', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					forkAlreadyTriggered: true,
+					onOpenForkWorkflow: () => undefined,
+					reportingDetails: createReportingDetails({
+						hasReachedNonDecision: true,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
+		const lifecycleBannerQueries = within(lifecycleBanner)
+		expect(document.body.textContent?.includes('Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
+		expect(lifecycleBannerQueries.getByText('Continue in Fork & Migration')).not.toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
 	})
 
 	test('auto-refreshes reporting once when the live timestamp passes an unresolved timeout boundary', async () => {

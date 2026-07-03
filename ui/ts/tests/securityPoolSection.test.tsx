@@ -137,6 +137,17 @@ describe('SecurityPoolSection', () => {
 		expect(documentQueries.getByText('Initial Open Interest Fee / Year')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Before You Deploy' })).not.toBeNull()
+	})
+
+	test('keeps the security multiplier field label concise while associating helper text', async () => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const securityMultiplierInput = documentQueries.getByRole('textbox', { name: 'Security Multiplier' })
+		expect(securityMultiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
+		expect(documentQueries.getByText('This sets the REP collateral target relative to open interest. Higher values are safer but require more REP backing.')).not.toBeNull()
 	})
 
 	test('loads and previews the pasted question before pool creation', async () => {
@@ -158,13 +169,32 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question.')).not.toBeNull()
+		expect(documentQueries.getByText('Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question. Load the preview before deploying so you can verify the question wording.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Load Question' }))
 
 		expect(loadMarketCount).toBe(1)
+	})
+
+	test('shows only the shared missing-context warning when a loaded question lacks description details', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketDetails: createMarketDetails({
+						description: '',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('No resolution notes or supporting context provided.')).not.toBeNull()
+		expect(documentQueries.getAllByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toHaveLength(1)
+		expect(documentQueries.queryByText('This question needs more context before users can trust a pool built on top of it. Add resolution notes or recreate it with a stronger description.')).toBeNull()
 	})
 
 	test('renders the created pool banner detail with the shared address value component', async () => {

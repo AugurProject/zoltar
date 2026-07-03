@@ -3,7 +3,8 @@ import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from './TimestampValue.js'
-import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
+import { assertNever } from '../lib/assert.js'
+import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type QuestionProps = {
@@ -30,14 +31,36 @@ export function getQuestionTitle(question: MarketDetails) {
 	return question.title.trim() === '' ? 'Untitled question' : question.title
 }
 
+const missingQuestionContextNote = 'Add resolution notes, evidence sources, and edge-case handling before users rely on this question.'
+
 function getQuestionDescription(question: MarketDetails) {
-	return question.description.trim() === '' ? 'No description provided.' : question.description
+	return question.description.trim() === '' ? 'No resolution notes or supporting context provided.' : question.description
+}
+
+function hasQuestionContext(question: MarketDetails) {
+	return question.description.trim() !== ''
+}
+
+function getQuestionTypeLabel(question: MarketDetails) {
+	switch (question.marketType) {
+		case 'binary':
+			return 'Binary'
+		case 'categorical':
+			return 'Categorical'
+		case 'scalar':
+			return 'Scalar'
+		default:
+			return assertNever(question.marketType)
+	}
+}
+
+function getQuestionContextLabel(question: MarketDetails) {
+	return hasQuestionContext(question) ? 'Context provided' : 'Needs context'
 }
 
 function getDisplayedOutcomes(question: MarketDetails) {
 	const outcomes = question.outcomeLabels.length === 0 ? ['Scalar'] : question.outcomeLabels
-	if (outcomes.some(outcome => sameCaseInsensitiveText(outcome, 'invalid'))) return outcomes
-	return [...outcomes, 'Invalid']
+	return appendInvalidOutcomeLabelIfMissing(outcomes)
 }
 
 function getDisplayRange(question: MarketDetails) {
@@ -46,6 +69,8 @@ function getDisplayRange(question: MarketDetails) {
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
+		{ kind: 'text', label: 'Question Type', value: getQuestionTypeLabel(question) },
+		{ kind: 'text', label: 'Context', value: getQuestionContextLabel(question) },
 		{ kind: 'text', label: 'Question ID', value: question.questionId },
 		{ kind: 'timestamp', label: 'Created', value: question.createdAt },
 		{ kind: 'timestamp', label: 'End Time', value: question.endTime },
@@ -84,11 +109,12 @@ export function Question({ className = '', loading = false, question, showTitle 
 
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)
+	const missingContext = !hasQuestionContext(question)
 	const summaryFields = getQuestionSummaryFields(question)
 	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
 		key: outcome,
 		label: outcome,
-		tone: sameCaseInsensitiveText(outcome, 'invalid') ? ('warning' as const) : ('default' as const),
+		tone: isInvalidOutcomeLabel(outcome) ? ('warning' as const) : ('default' as const),
 	}))
 	const scalarFields =
 		question.marketType !== 'scalar'
@@ -111,6 +137,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 					{showTitle ? <strong>{title}</strong> : null}
 					<p className='detail'>{description}</p>
 				</div>
+				{missingContext ? <p className='question-context-note'>{missingQuestionContextNote}</p> : null}
 				<OutcomeChipRow items={outcomeItems} />
 				<div className='question-preview-timeline' role='list' aria-label='Question timeline'>
 					<div className='question-preview-timeline-item' role='listitem'>
@@ -151,6 +178,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 			) : (
 				<p className='detail'>{description}</p>
 			)}
+			{missingContext ? <p className='question-context-note'>{missingQuestionContextNote}</p> : null}
 			<MetricGrid variant='question'>{summaryFields.map(renderQuestionSummaryField)}</MetricGrid>
 		</div>
 	)
