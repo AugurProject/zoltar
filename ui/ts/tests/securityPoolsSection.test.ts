@@ -9,7 +9,7 @@ import { getAddress, zeroAddress, zeroHash, type Address } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolPage } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -289,13 +289,21 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 	}
 }
 
-function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteContentProps> = {}): SecurityPoolsOverviewRouteContentProps {
+type SecurityPoolsOverviewRouteTestOverrides = Omit<Partial<SecurityPoolsOverviewRouteContentProps>, 'securityPoolPage'> & {
+	securityPoolPage?: SecurityPoolPage | SecurityPoolBrowsePage | undefined
+}
+
+function getSecurityPoolPageRequestKey(page: SecurityPoolPage | SecurityPoolBrowsePage): string | undefined {
+	return 'requestKey' in page ? page.requestKey : undefined
+}
+
+function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides = {}): SecurityPoolsOverviewRouteContentProps {
 	const accountState = overrides.accountState ?? createAccountState()
 	const securityPools = overrides.securityPools ?? []
 	const environmentRefreshKey = overrides.environmentRefreshKey ?? 0
 	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
 	const hasSecurityPoolPageOverride = Object.hasOwn(overrides, 'securityPoolPage')
-	const defaultSecurityPoolPage: SecurityPoolPage | undefined =
+	const defaultSecurityPoolPage: SecurityPoolBrowsePage | undefined =
 		securityPools.length === 0
 			? undefined
 			: {
@@ -311,7 +319,7 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 			? undefined
 			: {
 					...overrideSecurityPoolPage,
-					requestKey: overrideSecurityPoolPage.requestKey ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
+					requestKey: getSecurityPoolPageRequestKey(overrideSecurityPoolPage) ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
 				}
 	return {
 		accountState,

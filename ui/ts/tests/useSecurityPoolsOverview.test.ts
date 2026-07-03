@@ -217,7 +217,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireHookState(hookState).loadBrowseSecurityPoolPage(0, 2)
+			await requireHookState(hookState).loadBrowseSecurityPoolPage(0, 2, 'ready-request')
 		})
 
 		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)

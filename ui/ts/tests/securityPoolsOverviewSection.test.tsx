@@ -6,7 +6,7 @@ import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, SecurityPoolPage } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -88,13 +88,21 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
-function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {}): SecurityPoolsOverviewSectionProps {
+type SecurityPoolsOverviewSectionTestOverrides = Omit<Partial<SecurityPoolsOverviewSectionProps>, 'securityPoolPage'> & {
+	securityPoolPage?: SecurityPoolPage | SecurityPoolBrowsePage | undefined
+}
+
+function getSecurityPoolPageRequestKey(page: SecurityPoolPage | SecurityPoolBrowsePage): string | undefined {
+	return 'requestKey' in page ? page.requestKey : undefined
+}
+
+function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}): SecurityPoolsOverviewSectionProps {
 	const accountState = overrides.accountState ?? createAccountState()
 	const defaultPools = [createSecurityPool()]
 	const securityPools = overrides.securityPools ?? defaultPools
 	const environmentRefreshKey = overrides.environmentRefreshKey ?? 0
 	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
-	const defaultPage: SecurityPoolPage = {
+	const defaultPage: SecurityPoolBrowsePage = {
 		pageIndex: 0,
 		pageSize: 6,
 		poolCount: BigInt(securityPools.length),
@@ -108,7 +116,7 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 			? undefined
 			: {
 					...overrideSecurityPoolPage,
-					requestKey: overrideSecurityPoolPage.requestKey ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
+					requestKey: getSecurityPoolPageRequestKey(overrideSecurityPoolPage) ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
 				}
 	return {
 		accountState,
@@ -283,7 +291,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 
-		const staleResolvedPage: SecurityPoolPage = {
+		const staleResolvedPage: SecurityPoolBrowsePage = {
 			...securityPoolPage,
 			pools: [
 				createSecurityPool({
@@ -320,7 +328,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const accountA = '0x00000000000000000000000000000000000000a1'
 		const accountB = '0x00000000000000000000000000000000000000b2'
 		const onLoadSecurityPoolPage = mock(() => undefined)
-		const securityPoolPage: SecurityPoolPage = {
+		const securityPoolPage: SecurityPoolBrowsePage = {
 			pageIndex: 0,
 			pageSize: 6,
 			poolCount: 12n,

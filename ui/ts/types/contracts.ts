@@ -311,7 +311,10 @@ export type SecurityPoolPage = {
 	pageSize: number
 	poolCount: bigint
 	pools: ListedSecurityPool[]
-	requestKey?: string
+}
+
+export type SecurityPoolBrowsePage = SecurityPoolPage & {
+	requestKey: string
 }
 
 export type SecurityPoolVaultSummary = {

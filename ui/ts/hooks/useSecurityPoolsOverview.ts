@@ -17,7 +17,7 @@ import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { WriteOperationsParameters } from '../types/app.js'
-import type { ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
 	accountAddress: Address | undefined
@@ -39,14 +39,13 @@ export function shouldFallbackToAllSecurityPoolsPage(error: unknown) {
 	return SECURITY_POOL_PAGE_FALLBACK_DETAILS.some(fallbackDetail => normalizedDetail.includes(fallbackDetail))
 }
 
-export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number, requestKey?: string): SecurityPoolPage {
+export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
 	const startIndex = pageIndex * pageSize
 	return {
 		pageIndex,
 		pageSize,
 		poolCount: BigInt(pools.length),
 		pools: pools.slice(startIndex, startIndex + pageSize),
-		...(requestKey === undefined ? {} : { requestKey }),
 	}
 }
 
@@ -63,7 +62,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
 	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
-	const securityPoolPage = useSignal<SecurityPoolPage | undefined>(undefined)
+	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
 	const securityPoolPageLoad = useLoadController()
 	const hasLoadedSecurityPools = useSignal(false)
@@ -114,7 +113,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		})
 	}
 
-	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number, requestKey?: string) => {
+	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number, requestKey: string) => {
 		const isCurrent = nextSecurityPoolPageLoad()
 		await securityPoolPageLoad.run({
 			isCurrent,
@@ -133,13 +132,13 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						...(accountAddress === undefined ? {} : { accountAddress }),
 						vaultDetailMode: 'selected',
 					})
-					return createSecurityPoolPageFromLoadedPools(pools, pageIndex, pageSize, requestKey)
+					return createSecurityPoolPageFromLoadedPools(pools, pageIndex, pageSize)
 				}
 			},
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true
 				securityPoolBrowseCount.value = page.poolCount
-				securityPoolPage.value = requestKey === undefined ? page : { ...page, requestKey }
+				securityPoolPage.value = { ...page, requestKey }
 			},
 			onError: error => {
 				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
