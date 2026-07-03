@@ -34,38 +34,6 @@ function normalizeTermKey(value) {
 	return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
-function ensureTooltipStyles() {
-	if (document.getElementById('term-tooltip-styles') !== null) return
-
-	const style = document.createElement('style')
-	style.id = 'term-tooltip-styles'
-	style.textContent = `
-		.term-tooltip {
-			position: fixed;
-			z-index: 1000;
-			max-width: min(22rem, calc(100vw - 1.5rem));
-			padding: 0.65rem 0.8rem;
-			border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
-			border-radius: 0.5rem;
-			background: color-mix(in srgb, var(--paper, #fff) 96%, var(--bg, #f5f7f8));
-			box-shadow: 0 0.9rem 2.2rem rgba(15, 23, 31, 0.14);
-			color: var(--ink, #1f2529);
-			font-size: 0.92rem;
-			line-height: 1.45;
-			pointer-events: none;
-			opacity: 0;
-			transform: translateY(0.2rem);
-			transition: opacity 80ms ease, transform 80ms ease;
-		}
-
-		.term-tooltip[data-visible='true'] {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	`
-	document.head.append(style)
-}
-
 function ensureTooltipElement() {
 	let tooltip = document.getElementById(tooltipId)
 	if (tooltip instanceof HTMLDivElement) return tooltip
@@ -108,7 +76,6 @@ function updateTooltipPosition(tooltip, targetRect, pointerX, pointerY) {
 }
 
 function applyTermTooltips() {
-	ensureTooltipStyles()
 	const tooltip = ensureTooltipElement()
 
 	let activeElement
