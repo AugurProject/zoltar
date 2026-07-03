@@ -7,10 +7,9 @@ import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 type AddressValueProps = {
 	address: string | undefined
 	className?: string
-	shorten?: boolean
 }
 
-export function AddressValue({ address, className = '', shorten = false }: AddressValueProps) {
+export function AddressValue({ address, className = '' }: AddressValueProps) {
 	const { copied, copyText } = useCopyToClipboard()
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const measureRef = useRef<HTMLSpanElement>(null)
@@ -60,7 +59,7 @@ export function AddressValue({ address, className = '', shorten = false }: Addre
 		)
 	}
 
-	const displayValue = shorten || shouldShorten ? formatAddress(address) : address
+	const displayValue = shouldShorten ? formatAddress(address) : address
 
 	return (
 		<button ref={buttonRef} type='button' className={`address-value copyable ${className}`} title={address} aria-label={`Copy address ${address}`} onClick={() => copyText(address)}>

@@ -73,7 +73,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 						<CollateralizationCircle className='security-pool-browse-vault-row-collateralization' collateralizationPercent={collateralizationPercent} size='small' targetCollateralizationPercent={collateralizationTarget} />
 						<div className='security-pool-browse-vault-row-id'>
 							<strong>
-								<AddressValue address={securityVaultDetails.vaultAddress} shorten />
+								<AddressValue address={securityVaultDetails.vaultAddress} />
 							</strong>
 						</div>
 					</div>

@@ -100,16 +100,4 @@ describe('AddressValue', () => {
 		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
 		expect(copyButton.childNodes[0]?.textContent).toBe('0x1234…5678')
 	})
-
-	test('shortens the displayed address when requested', async () => {
-		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		setClientWidth(300)
-		setMeasureWidth(160)
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} shorten />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
-
-		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
-		expect(copyButton.childNodes[0]?.textContent).toBe('0x1234…5678')
-	})
 })
