@@ -4772,26 +4772,6 @@ button:focus-visible {
 	letter-spacing: 0.02em;
 }
 
-.collateralization-gauge.has-external-value {
-	grid-template-rows: auto auto;
-	align-items: center;
-}
-
-.collateralization-gauge.has-external-value .collateralization-gauge-ring {
-	grid-area: 1 / 1 / span 2 / 2;
-}
-
-.collateralization-gauge.has-external-value .collateralization-gauge-value {
-	grid-area: 1 / 2;
-	width: auto;
-	height: auto;
-	justify-self: start;
-	align-self: end;
-	padding: 0;
-	overflow: visible;
-	text-overflow: clip;
-}
-
 .collateralization-gauge-label {
 	grid-area: 1 / 2;
 	font-size: var(--font-caption);
@@ -4799,11 +4779,6 @@ button:focus-visible {
 	text-transform: uppercase;
 	color: var(--muted);
 	white-space: nowrap;
-}
-
-.collateralization-gauge.has-external-value .collateralization-gauge-label {
-	grid-area: 2 / 2;
-	align-self: start;
 }
 
 .collateralization-gauge.tone-success {
