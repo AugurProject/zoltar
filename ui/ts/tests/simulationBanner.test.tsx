@@ -119,7 +119,7 @@ describe('SimulationBanner', () => {
 			const accountOption = accountSelect.querySelector('option')
 			if (accountOption === null) throw new Error('Expected QA account option')
 			expect(accountOption.getAttribute('value')).toBe(controller.selectedAccount)
-			expect(accountOption.textContent).toBe('QA 0x0000…00a1')
+			expect(accountOption.textContent).toBe(`QA ${controller.selectedAccount}`)
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

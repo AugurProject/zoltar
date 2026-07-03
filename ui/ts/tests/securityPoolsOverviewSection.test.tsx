@@ -225,6 +225,57 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 	})
 
+	test('hides stale pool page data while an environment refresh reload is pending', async () => {
+		const deferredPageLoad = createDeferred<void>()
+		let pageLoadCount = 0
+		const onLoadSecurityPoolPage = mock(() => {
+			pageLoadCount += 1
+			return pageLoadCount === 2 ? deferredPageLoad.promise : undefined
+		})
+		const securityPoolPage: SecurityPoolPage = {
+			pageIndex: 0,
+			pageSize: 6,
+			poolCount: 12n,
+			pools: [
+				createSecurityPool({
+					marketDetails: createMarketDetails({ title: 'Previous environment pool' }),
+					securityPoolAddress: '0x0000000000000000000000000000000000000100',
+				}),
+			],
+		}
+		const initialProps = createProps({
+			environmentRefreshKey: 0,
+			onLoadSecurityPoolPage,
+			securityPoolPage,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		})
+		expect(within(document.body).getByText('Previous environment pool')).not.toBeNull()
+		expect(within(document.body).getByText('Page 1 of 2')).not.toBeNull()
+
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...initialProps} environmentRefreshKey={1} />, renderedComponent.container)
+		})
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
+		})
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Previous environment pool')).toBeNull()
+		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
+
+		deferredPageLoad.resolve()
+		await act(async () => {
+			await deferredPageLoad.promise
+		})
+	})
+
 	test('keeps pool-list load errors inline instead of opening liquidation', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -597,11 +648,15 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
+		})
 		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
-		expect(documentQueries.getByText('Page 2 of 2')).not.toBeNull()
+		expect(documentQueries.queryByText('Page 2 of 2')).toBeNull()
+		expect(loadPageCalls.some(call => call.pageIndex === 1)).toBe(true)
 
 		const shrunkProps = createProps({
 			onLoadSecurityPoolPage: initialProps.onLoadSecurityPoolPage,
@@ -627,10 +682,12 @@ describe('SecurityPoolsOverviewSection', () => {
 
 	test('stops showing a loading state when a requested pool page fails to load', async () => {
 		const failedPageLoad = createDeferred<void>()
+		const loadPageCalls: number[] = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
 					onLoadSecurityPoolPage: async pageIndex => {
+						loadPageCalls.push(pageIndex)
 						if (pageIndex === 1) return await failedPageLoad.promise
 					},
 					securityPoolPage: {
@@ -650,6 +707,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(loadPageCalls.includes(0)).toBe(true)
+		})
 		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
