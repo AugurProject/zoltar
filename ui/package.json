@@ -32,7 +32,7 @@
 		"generate:contract-artifact": "cd .. && bun run generate:ui-contract-artifact",
 		"generate:vendor": "bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts",
 		"generate": "bun run generate:shared-js && bun run generate:contract-artifact && bun run generate:vendor",
-		"setup": "bun ../scripts/install-frozen.mjs . && bun run contracts && bun run build",
+		"setup": "bun ../scripts/install-frozen.mjs . && bun run contracts && bun run refresh:shared-dependency && tsc && bun run build:workers",
 		"shared": "bun run generate:shared-js",
 		"build:workers": "bun ./build/workers.mts",
 		"build": "bun run shared && bun run refresh:shared-dependency && tsc && bun run build:workers",
