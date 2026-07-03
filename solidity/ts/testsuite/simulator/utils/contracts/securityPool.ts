@@ -21,6 +21,7 @@ export const depositToEscalationGame = async (client: WriteClient, securityPoolA
 			functionName: 'depositToEscalationGame',
 			address: securityPoolAddress,
 			args: [outcome, amount],
+			gas: 20_000_000n,
 		}),
 	)
 
@@ -54,6 +55,7 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 			address: securityPoolAddress,
 			args: [],
 			value: completeSetsToCreate,
+			gas: 5_000_000n,
 		}),
 	)
 
@@ -64,6 +66,7 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 			functionName: 'redeemCompleteSet',
 			address: securityPoolAddress,
 			args: [completeSetsToRedeem],
+			gas: 5_000_000n,
 		}),
 	)
 
