@@ -305,6 +305,7 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		accountState: createAccountState(),
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
+		environmentRefreshKey: 0,
 		hasLoadedSecurityPools: false,
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		liquidationAmount: '',

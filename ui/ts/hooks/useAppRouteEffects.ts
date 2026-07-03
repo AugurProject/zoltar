@@ -7,6 +7,7 @@ type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zol
 type Props = {
 	accountAddress: Address | undefined
 	augurPlaceHolderDeploymentMissing: boolean
+	activeEnvironmentNonce: number
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<void>
@@ -64,6 +65,7 @@ export function getSelectedVaultAddressForRoutePoolChange({ accountAddress, last
 export function useAppRouteEffects({
 	accountAddress,
 	augurPlaceHolderDeploymentMissing,
+	activeEnvironmentNonce,
 	environmentReady,
 	loadOracleReport,
 	loadSecurityPools,
@@ -89,6 +91,7 @@ export function useAppRouteEffects({
 	const navigateRef = useRef(navigate)
 	const lastRequestedOpenOracleReportId = useRef<string | undefined>(undefined)
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
+	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
 
 	loadOracleReportRef.current = loadOracleReport
@@ -101,10 +104,11 @@ export function useAppRouteEffects({
 			lastRequestedOpenOracleReportId.current = undefined
 			return
 		}
-		if (lastRequestedOpenOracleReportId.current === urlOpenOracleReportId) return
-		lastRequestedOpenOracleReportId.current = urlOpenOracleReportId
+		const requestKey = `${activeEnvironmentNonce}:${urlOpenOracleReportId}`
+		if (lastRequestedOpenOracleReportId.current === requestKey) return
+		lastRequestedOpenOracleReportId.current = requestKey
 		void loadOracleReportRef.current(urlOpenOracleReportId)
-	}, [environmentReady, route, urlOpenOracleReportId])
+	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
 		if (openOracleReportDetailsReportId !== undefined) {
@@ -142,7 +146,11 @@ export function useAppRouteEffects({
 	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultAddress])
 
 	useEffect(() => {
+		const previousEnvironmentNonce = lastSelectedPoolEnvironmentNonce.current
+		if (previousEnvironmentNonce === undefined) lastSelectedPoolEnvironmentNonce.current = activeEnvironmentNonce
+		const selectedPoolEnvironmentChanged = previousEnvironmentNonce !== undefined && previousEnvironmentNonce !== activeEnvironmentNonce
 		if (
+			!selectedPoolEnvironmentChanged &&
 			!shouldRefreshSelectedPoolForRoute({
 				environmentReady,
 				route,
@@ -154,10 +162,13 @@ export function useAppRouteEffects({
 			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
 			return
 		}
-		if (lastRequestedSecurityPoolAddress.current === securityPoolAddress) return
-		lastRequestedSecurityPoolAddress.current = securityPoolAddress
+		if (!environmentReady || route !== 'security-pools' || securityPoolAddress === '' || !walletBootstrapComplete) return
+		const requestKey = `${activeEnvironmentNonce}:${securityPoolAddress}`
+		if (lastRequestedSecurityPoolAddress.current === requestKey) return
+		lastRequestedSecurityPoolAddress.current = requestKey
+		lastSelectedPoolEnvironmentNonce.current = activeEnvironmentNonce
 		void loadSecurityPoolsRef.current(securityPoolAddress)
-	}, [environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
+	}, [activeEnvironmentNonce, environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
 
 	useEffect(() => {
 		if (!environmentReady) return

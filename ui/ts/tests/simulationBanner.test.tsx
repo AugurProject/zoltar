@@ -83,6 +83,12 @@ function openAdvancedControls(container: Element): HTMLElement {
 	return details
 }
 
+function getElementValue(element: Element) {
+	if (!('value' in element)) return undefined
+	const value = element.value
+	return typeof value === 'string' ? value : undefined
+}
+
 describe('SimulationBanner', () => {
 	test('shows the selected scenario description', async () => {
 		const domEnvironment = installDomEnvironment()
@@ -372,8 +378,9 @@ describe('SimulationBanner', () => {
 			]),
 		)
 		const onRefresh = mock(async () => undefined)
+		const onEnvironmentChanged = mock(async () => undefined)
 		const controller = createSimulationController()
-		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
 
 		try {
 			const documentQueries = within(renderedComponent.container)
@@ -386,6 +393,7 @@ describe('SimulationBanner', () => {
 				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('{bad json')
 				expect(domEnvironment.window.location.hash).toContain('simScenario=baseline')
 				expect(domEnvironment.window.location.hash).not.toContain('simState=')
+				expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
 			})
 		} finally {
 			await renderedComponent.cleanup()
@@ -396,8 +404,9 @@ describe('SimulationBanner', () => {
 	test('imports a saved state and navigates to its saved-state URL', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
+		const onEnvironmentChanged = mock(async () => undefined)
 		const controller = createSimulationController()
-		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
 		const importedState = serializeSavedSimulationStateEnvelope({
 			baseScenario: 'baseline',
 			name: 'Imported state',
@@ -431,6 +440,37 @@ describe('SimulationBanner', () => {
 
 			await waitFor(() => {
 				expect(domEnvironment.window.location.hash).toContain('simState=imported-state-20260602123456')
+				expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('saves a simulation state and refreshes the loaded saved-state environment', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const onEnvironmentChanged = mock(async () => undefined)
+		const controller = createSimulationController()
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Save state' }))
+			const saveDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			const dialogQueries = within(saveDialog)
+			const nameInput = dialogQueries.getByLabelText('State name') as HTMLInputElement
+			fireEvent.input(nameInput, {
+				currentTarget: { value: 'Saved via test' },
+				target: { value: 'Saved via test' },
+			})
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Save' }))
+
+			await waitFor(() => {
+				expect(domEnvironment.window.location.hash).toContain('simState=saved-via-test-20260602123456')
+				expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
 			})
 		} finally {
 			await renderedComponent.cleanup()
@@ -441,23 +481,41 @@ describe('SimulationBanner', () => {
 	test('switches scenarios through route-state navigation without a full-page reload', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
 		const onRefresh = mock(async () => undefined)
-		const controller = createSimulationController()
+		const subscribers = new Set<() => void>()
+		const controller = createSimulationController({
+			subscribe: handler => {
+				subscribers.add(handler)
+				return () => {
+					subscribers.delete(handler)
+				}
+			},
+		})
+		const onEnvironmentChanged = mock(async () => {
+			controller.currentScenario = 'securitypoolx2'
+			controller.simulationSource = {
+				kind: 'scenario',
+				scenario: 'securitypoolx2',
+			}
+			for (const subscriber of subscribers) subscriber()
+		})
 		const pushState = mock(domEnvironment.window.history.pushState.bind(domEnvironment.window.history))
 		domEnvironment.window.history.pushState = pushState as typeof domEnvironment.window.history.pushState
-		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
 
 		try {
 			const documentQueries = within(renderedComponent.container)
 			const picker = documentQueries.getAllByRole('combobox')[0]
 			if (picker === undefined || picker.tagName !== 'SELECT') throw new Error('Expected the scenario picker')
 			fireEvent.change(picker, {
-				currentTarget: { value: 'scenario:deployed' },
-				target: { value: 'scenario:deployed' },
+				currentTarget: { value: 'scenario:securitypoolx2' },
+				target: { value: 'scenario:securitypoolx2' },
 			})
 
 			await waitFor(() => {
 				expect(pushState).toHaveBeenCalledTimes(1)
-				expect(domEnvironment.window.location.hash).toContain('simScenario=deployed')
+				expect(domEnvironment.window.location.hash).toContain('simScenario=securitypoolx2')
+				expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
+				expect(getElementValue(picker)).toBe('scenario:securitypoolx2')
 			})
 		} finally {
 			await renderedComponent.cleanup()
@@ -517,6 +575,68 @@ describe('SimulationBanner', () => {
 		} finally {
 			await builtInRendered.cleanup()
 			await customRendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('deletes a saved simulation state and refreshes the fallback scenario environment', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simState=saved-baseline-20260602123456')
+		domEnvironment.window.localStorage.setItem(
+			'zoltar.simulation.savedStates',
+			JSON.stringify([
+				{
+					baseScenario: 'baseline',
+					id: 'saved-baseline-20260602123456',
+					name: 'Saved baseline',
+					savedAt: '2026-06-02T12:34:56.000Z',
+					serialized: serializeSavedSimulationStateEnvelope({
+						baseScenario: 'baseline',
+						name: 'Saved baseline',
+						savedAt: '2026-06-02T12:34:56.000Z',
+						state: {
+							blockCountSinceReset: 0n,
+							currentTimestamp: 1n,
+							queryDelayMilliseconds: 0,
+							repPerEthPrice: 10n ** 18n,
+							repPerUsdcPrice: 10n ** 6n,
+							selectedAccount: '0x00000000000000000000000000000000000000a1',
+							snapshot: {},
+							transactionCountSinceReset: 0n,
+							transactionDelayMilliseconds: 0,
+						},
+						version: 1,
+					}),
+				},
+			]),
+		)
+		const onRefresh = mock(async () => undefined)
+		const onEnvironmentChanged = mock(async () => undefined)
+		const controller = createSimulationController({
+			simulationSource: {
+				baseScenario: 'baseline',
+				kind: 'saved-state',
+				name: 'Saved baseline',
+				savedAt: '2026-06-02T12:34:56.000Z',
+				stateId: 'saved-baseline-20260602123456',
+			},
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete save' }))
+			const deleteDialog = await waitFor(() => documentQueries.getByRole('dialog'))
+			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete save' }))
+
+			await waitFor(() => {
+				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('saved-baseline-20260602123456')
+				expect(domEnvironment.window.location.hash).toContain('simScenario=baseline')
+				expect(domEnvironment.window.location.hash).not.toContain('simState=')
+				expect(onEnvironmentChanged).toHaveBeenCalledTimes(1)
+			})
+		} finally {
+			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
 		}
 	})

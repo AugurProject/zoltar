@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { h } from 'preact'
 import { render } from 'preact'
@@ -74,6 +74,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		accountState: createAccountState(),
 		activeUniverseId: 1n,
 		activeView: 'questions',
+		environmentRefreshKey: 0,
 		hasLoadedZoltarQuestions: false,
 		loadingZoltarForkAccess: false,
 		zoltarForkActiveAction: undefined,
@@ -280,6 +281,33 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(calls).toEqual([])
+	})
+
+	test('reloads loaded questions when the environment refresh key changes', async () => {
+		const onLoadZoltarQuestionPage = mock(async () => undefined)
+		const initialProps = createMarketSectionProps({
+			onLoadZoltarQuestionPage,
+			zoltarQuestionCount: 1n,
+			zoltarQuestionPage: {
+				pageIndex: 0,
+				pageSize: 10,
+				questionCount: 1n,
+				questions: [createBinaryForkQuestion()],
+			},
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadZoltarQuestionPage).not.toHaveBeenCalled()
+
+		await act(() => {
+			render(h(MarketSection, { ...initialProps, environmentRefreshKey: 1 }), renderedComponent.container)
+		})
+
+		await waitFor(() => {
+			expect(onLoadZoltarQuestionPage).toHaveBeenCalledTimes(1)
+			expect(onLoadZoltarQuestionPage).toHaveBeenCalledWith(0, 10)
+		})
 	})
 
 	test('auto-loads questions once after the count resolves above zero even when the universe is unresolved', async () => {

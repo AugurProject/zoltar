@@ -16,6 +16,10 @@ type RefreshStateOptions = {
 	loadWalletState?: boolean
 }
 
+type UseOnchainStateOptions = {
+	activeEnvironmentNonce?: number
+}
+
 type ChainClock = {
 	currentBlockNumber: bigint | undefined
 	currentTimestamp: bigint | undefined
@@ -156,7 +160,7 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 	}
 }
 
-export function useOnchainState() {
+export function useOnchainState({ activeEnvironmentNonce = 0 }: UseOnchainStateOptions = {}) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -359,7 +363,7 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		void refreshState()
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -394,7 +398,7 @@ export function useOnchainState() {
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -416,7 +420,7 @@ export function useOnchainState() {
 			unsubscribeAccounts()
 			unsubscribeState?.()
 		}
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -432,7 +436,7 @@ export function useOnchainState() {
 		return () => {
 			window.clearInterval(intervalId)
 		}
-	}, [environmentReady.value, readBackendMessage.value, readBackendValidated.value])
+	}, [activeEnvironmentNonce, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
 	return {
 		accountState: accountState.value,

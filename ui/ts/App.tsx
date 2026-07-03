@@ -24,7 +24,7 @@ import { useRepPrices } from './hooks/useRepPrices.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
-import { getActiveSimulationController } from './lib/activeEnvironment.js'
+import { getActiveSimulationController, initializeActiveEnvironment } from './lib/activeEnvironment.js'
 import { getAppPageTitle } from './lib/appPageTitle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from './lib/chainTimestamp.js'
 import { getDeploymentSections } from './lib/deployment.js'
@@ -47,6 +47,7 @@ import type { DeploymentRouteContentProps, GlobalTransactionPresentation, Market
 export function App() {
 	const transactionState = useSignal<TransactionTrayState>(createInitialTransactionTrayState())
 	const deployNextMissingPending = useSignal(false)
+	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolsView, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
@@ -88,7 +89,7 @@ export function App() {
 		refreshState,
 		setDeploymentStatuses,
 		walletBootstrapComplete,
-	} = useOnchainState()
+	} = useOnchainState({ activeEnvironmentNonce })
 	const readBackendReady = readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady
 	const baseHookConfig = {
@@ -145,7 +146,7 @@ export function App() {
 		zoltarQuestions,
 		zoltarUniverse,
 		zoltarUniverseMissing,
-	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses })
+	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
 		useSecurityPoolCreation({
@@ -266,6 +267,12 @@ export function App() {
 		await refreshState()
 		refreshRepPrices()
 	}
+	const refreshActiveEnvironment = async () => {
+		await initializeActiveEnvironment()
+		setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
+		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
+		await refreshSimulationView()
+	}
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
@@ -383,6 +390,7 @@ export function App() {
 		accountAddress: accountState.address,
 		augurPlaceHolderDeploymentMissing,
 		environmentReady: canReadOnchainData,
+		activeEnvironmentNonce,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,
@@ -417,6 +425,7 @@ export function App() {
 		accountState,
 		activeUniverseId,
 		activeView: activeZoltarView,
+		environmentRefreshKey: activeEnvironmentNonce,
 		hasLoadedZoltarQuestions,
 		loadingZoltarForkAccess,
 		zoltarForkActiveAction,
@@ -491,6 +500,7 @@ export function App() {
 			accountState,
 			checkedSecurityPoolAddress,
 			closeLiquidationModal: () => closeLiquidationModal(),
+			environmentRefreshKey: activeEnvironmentNonce,
 			hasLoadedSecurityPools,
 			hasLoadedSecurityPoolPage,
 			liquidationAmount,
@@ -754,7 +764,7 @@ export function App() {
 							wrongNetworkMessage={wrongNetworkMessage}
 							zoltarUniverse={zoltarUniverse}
 						/>
-						<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
+						<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 						<GlobalTransactionTray transaction={transactionState.value.active} />
 
 						<div id='app-content' tabIndex={-1}>
