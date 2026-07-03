@@ -191,7 +191,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const parentPoolLink = documentQueries.getByRole('link', { name: '0x0000…0200' })
+		const parentPoolLink = documentQueries.getByRole('link', { name: parentPoolAddress })
 		expect(parentPoolLink).not.toBeNull()
 		expect(document.body.textContent?.includes('Parent Pool')).toBe(true)
 		expect(parentPoolLink.getAttribute('title')).toBe(parentPoolAddress)
