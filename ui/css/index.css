@@ -1169,9 +1169,9 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .simulation-banner-controls {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
 	gap: 1rem;
-	align-items: center;
+	align-items: start;
 	padding: 1rem;
 	border: 1px dashed rgba(255, 227, 145, 0.42);
 	border-radius: 1rem;
@@ -1186,8 +1186,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-banner-controls .button-row {
-	flex-wrap: wrap;
-	justify-content: flex-end;
+	justify-content: stretch;
 }
 
 .simulation-control-groups {
@@ -1214,7 +1213,23 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-button-row {
-	justify-content: flex-end;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.5rem;
+	width: 100%;
+	justify-content: stretch;
+}
+
+.simulation-time-travel-row {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.simulation-button-row > button {
+	width: 100%;
+	min-height: 2.45rem;
+	padding: 0.52rem 0.62rem;
+	font-size: var(--font-caption);
+	line-height: 1.15;
 }
 
 .simulation-delay-field {
@@ -6607,6 +6622,10 @@ button:focus-visible {
 
 	.simulation-button-row > button {
 		width: 100%;
+	}
+
+	.simulation-time-travel-row {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	.simulation-advanced-controls > summary {
