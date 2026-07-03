@@ -12,6 +12,7 @@ const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'contr
 const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'simulation', 'bootstrap.ts')
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
+const uiWatchBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'watch.mts')
 const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
 const sharedBrowserArtifacts = [path.join(repositoryRootPath, 'shared', 'js', 'bigInt.js'), path.join(repositoryRootPath, 'shared', 'js', 'constants.js'), path.join(repositoryRootPath, 'shared', 'js', 'deploymentAddresses.js'), path.join(repositoryRootPath, 'shared', 'js', 'protocolConfig.js')]
 const developmentImportMapRegressionEntries: Record<string, string> = {
@@ -303,11 +304,14 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 test('development import map maps browser dependency subpaths', () => {
 	const imports = readDevelopmentImportMap()
 	const vendorBuildSource = fs.readFileSync(uiVendorBuildPath, 'utf8')
+	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
 
 	for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
 		expect(imports[specifier]).toBe(mappedPath)
 	}
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
+	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
+	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
 })
 
 test('development import map resolves all static imports reachable from the dev entrypoint', () => {
