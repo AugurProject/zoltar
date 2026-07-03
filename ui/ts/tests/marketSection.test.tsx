@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { h } from 'preact'
 import { render } from 'preact'
@@ -74,6 +74,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		accountState: createAccountState(),
 		activeUniverseId: 1n,
 		activeView: 'questions',
+		environmentRefreshKey: 0,
 		hasLoadedZoltarQuestions: false,
 		loadingZoltarForkAccess: false,
 		zoltarForkActiveAction: undefined,
@@ -280,6 +281,33 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(calls).toEqual([])
+	})
+
+	test('reloads loaded questions when the environment refresh key changes', async () => {
+		const onLoadZoltarQuestionPage = mock(async () => undefined)
+		const initialProps = createMarketSectionProps({
+			onLoadZoltarQuestionPage,
+			zoltarQuestionCount: 1n,
+			zoltarQuestionPage: {
+				pageIndex: 0,
+				pageSize: 10,
+				questionCount: 1n,
+				questions: [createBinaryForkQuestion()],
+			},
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadZoltarQuestionPage).not.toHaveBeenCalled()
+
+		await act(() => {
+			render(h(MarketSection, { ...initialProps, environmentRefreshKey: 1 }), renderedComponent.container)
+		})
+
+		await waitFor(() => {
+			expect(onLoadZoltarQuestionPage).toHaveBeenCalledTimes(1)
+			expect(onLoadZoltarQuestionPage).toHaveBeenCalledWith(0, 10)
+		})
 	})
 
 	test('auto-loads questions once after the count resolves above zero even when the universe is unresolved', async () => {
@@ -607,6 +635,30 @@ describe('MarketSection', () => {
 
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(selectedViews).toEqual(['fork'])
+	})
+
+	test('shows immutable questions without an edit-style missing context notice', async () => {
+		const question = createBinaryForkQuestion()
+		question.description = ''
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					zoltarQuestionCount: 1n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 1n,
+						questions: [question],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('No resolution notes or supporting context provided.')).not.toBeNull()
+		expect(documentQueries.queryByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBeNull()
 	})
 
 	test('does not render redundant universe summary cards for questions view', async () => {

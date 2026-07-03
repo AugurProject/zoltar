@@ -8,13 +8,9 @@ import { getErrorMessage, hasErrorCode, hasErrorMessage, isRecoverableContractRe
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getWethAddress } from '../lib/uniswapQuoter.js'
-import type { AccountState } from '../types/app.js'
+import type { AccountState, RefreshStateOptions } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 import { useLoadController } from './useLoadController.js'
-
-type RefreshStateOptions = {
-	loadWalletState?: boolean
-}
 
 type ChainClock = {
 	currentBlockNumber: bigint | undefined
@@ -156,7 +152,12 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 	}
 }
 
-export function useOnchainState() {
+type UseOnchainStateOptions = {
+	activeEnvironmentNonce?: number
+	enableChainClock?: boolean
+}
+
+export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true }: UseOnchainStateOptions = {}) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -216,6 +217,8 @@ export function useOnchainState() {
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
+		const shouldLoadChainClock = enableChainClock && (options.loadChainClock ?? true)
+		const shouldLoadDeploymentState = options.loadDeploymentState ?? true
 		const shouldLoadWalletState = options.loadWalletState ?? true
 		const backend = getActiveBackend()
 		updateReadBackendStatus(backend)
@@ -268,7 +271,7 @@ export function useOnchainState() {
 			readBackendValidated.value = true
 			updateReadBackendStatus(backend)
 		}
-		if (isReadBackendReady()) void refreshChainClock(backend)
+		if (shouldLoadChainClock && isReadBackendReady()) void refreshChainClock(backend)
 
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
@@ -279,7 +282,7 @@ export function useOnchainState() {
 			environmentBootstrapError.value = undefined
 		}
 
-		if (backend.isBootstrapped !== false && readBackendMessage.value === undefined)
+		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && readBackendMessage.value === undefined)
 			void deploymentStatusLoad.track(async () => {
 				try {
 					const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
@@ -359,7 +362,7 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		void refreshState()
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -394,7 +397,7 @@ export function useOnchainState() {
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [activeEnvironmentNonce])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -403,7 +406,7 @@ export function useOnchainState() {
 			environmentBootstrapLabel.value = backend.bootstrapLabel
 			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = backend.isBootstrapped ?? true
-			if (isReadBackendReady()) void refreshChainClock(backend)
+			if (enableChainClock && isReadBackendReady()) void refreshChainClock(backend)
 		})
 		const handleWalletChange = () => {
 			void refreshState()
@@ -416,9 +419,13 @@ export function useOnchainState() {
 			unsubscribeAccounts()
 			unsubscribeState?.()
 		}
-	}, [])
+	}, [activeEnvironmentNonce, enableChainClock])
 
 	useEffect(() => {
+		if (!enableChainClock) {
+			clearChainClock()
+			return
+		}
 		const backend = getActiveBackend()
 		if (backend.isBootstrapped === false) return
 		if (!isReadBackendReady()) return
@@ -432,7 +439,7 @@ export function useOnchainState() {
 		return () => {
 			window.clearInterval(intervalId)
 		}
-	}, [environmentReady.value, readBackendMessage.value, readBackendValidated.value])
+	}, [activeEnvironmentNonce, enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
 	return {
 		accountState: accountState.value,

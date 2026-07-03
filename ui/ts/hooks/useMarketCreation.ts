@@ -6,6 +6,7 @@ import { createWalletWriteClient } from '../lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createMarketCreationWarningPresentation } from '../lib/transactionPresentations.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
@@ -19,17 +20,32 @@ type UseMarketCreationParameters = {
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
+	environmentRefreshKey: number
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
-export function useMarketCreation({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
+export function useMarketCreation({
+	accountAddress,
+	activeUniverseId,
+	activeZoltarView,
+	autoLoadInitialData,
+	deploymentStatuses,
+	environmentRefreshKey,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionPrepared,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+}: UseMarketCreationParameters) {
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
@@ -61,7 +77,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 					marketFeedback.value = createErrorActionFeedback('createMarket', 'Question creation failed', message)
 				},
 				refreshState: async () => {
-					await refreshState()
+					await refreshWalletStateOnly(refreshState)
 					await zoltar.loadZoltarQuestions()
 				},
 				setErrorMessage: message => {

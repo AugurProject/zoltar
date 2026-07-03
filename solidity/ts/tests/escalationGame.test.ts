@@ -318,8 +318,6 @@ describe('Escalation Game Test Suite', () => {
 				args: [outcome, startIndex, numberOfEntries],
 			}),
 		)
-
-	// Solidity bytecode coverage records transaction traces, so view getters need this paired trace after their read assertions.
 	const traceForkedEscrowByVaultAndOutcome = async (escalationGameAddress: Address, vault: Address, outcome: QuestionOutcome) =>
 		await transactWithEscalationGame(
 			escalationGameAddress,
@@ -672,6 +670,12 @@ describe('Escalation Game Test Suite', () => {
 			functionName: 'getDepositsByOutcome',
 			args: [QuestionOutcome.Yes, 1n, MAX_UINT256],
 		})
+		const noneOutcomeDepositPage = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGame,
+			functionName: 'getDepositsByOutcome',
+			args: [QuestionOutcome.None, 0n, 1n],
+		})
 
 		assert.strictEqual(depositPage.length, 1, 'deposit paging should return only the remaining entries')
 		assert.strictEqual(depositPage[0]?.amount, reportBond * 2n, 'paged deposit should retain its amount')
@@ -680,6 +684,7 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(maxCountDepositPage.length, 1, 'max-count deposit paging should return only the remaining entries')
 		assert.strictEqual(maxCountDepositPage[0]?.amount, reportBond * 2n, 'max-count paged deposit should retain its amount')
 		assert.strictEqual(maxCountDepositPage[0]?.depositor, client.account.address, 'max-count paged deposit should retain its depositor')
+		assert.strictEqual(noneOutcomeDepositPage.length, 0, 'none-outcome deposit paging should always return an empty page')
 	})
 
 	test('claimDepositForWinning reverts when outcome is None', async () => {

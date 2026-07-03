@@ -217,8 +217,8 @@
 			.site-shell {
 				display: grid;
 				grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
-				gap: clamp(1.5rem, 4vw, 4rem);
-				width: min(1220px, calc(100% - 2rem));
+				gap: clamp(1rem, 3vw, 2.25rem);
+				width: min(1280px, calc(100% - 1rem));
 				margin: 0 auto;
 				padding: 2rem 0 4rem;
 			}
@@ -535,7 +535,7 @@
 
 			.paper-section {
 				margin-top: 1.25rem;
-				padding: clamp(1.35rem, 4vw, 2.7rem);
+				padding: clamp(1rem, 3vw, 2rem);
 			}
 
 			.paper-section:target {
@@ -600,7 +600,7 @@
 				counter-increment: equation;
 				scroll-margin-top: 1rem;
 				margin: 1.1rem 0;
-				padding: 1rem;
+				padding: 0.5rem;
 				border: 1px solid var(--line);
 				border-radius: var(--radius);
 				background: var(--code-bg);
@@ -698,7 +698,7 @@
 				counter-increment: figure;
 				scroll-margin-top: 1rem;
 				margin: 1.45rem 0;
-				padding: 1rem;
+				padding: 0.5rem;
 				border: 1px solid var(--line);
 				border-top: 3px solid var(--accent);
 				border-radius: var(--radius);
@@ -847,6 +847,20 @@
 				color: var(--muted);
 			}
 
+			.term {
+				border-bottom: 1px dotted currentColor;
+				cursor: help;
+				font-weight: 650;
+				text-decoration: none;
+				text-underline-offset: 0.18em;
+			}
+
+			.term:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 0.12rem;
+				border-radius: 0.15rem;
+			}
+
 			.implementation-note {
 				border-left: 0.3rem solid var(--blue);
 			}
@@ -958,7 +972,7 @@
 			@media (max-width: 1000px) {
 				.site-shell {
 					display: block;
-					width: min(100% - 1.25rem, 820px);
+					width: min(100% - 0.75rem, 860px);
 					padding-top: 0.75rem;
 				}
 
@@ -984,7 +998,7 @@
 
 			@media (max-width: 640px) {
 				.site-shell {
-					width: min(100% - 1rem, 820px);
+					width: min(100% - 0.5rem, 860px);
 					padding-bottom: 2rem;
 				}
 
@@ -1003,7 +1017,7 @@
 				}
 
 				.paper-section {
-					padding: 1.05rem;
+					padding: 0.7rem;
 				}
 
 				.paper-brand {
@@ -1023,7 +1037,7 @@
 				.diagram {
 					margin-right: -0.2rem;
 					margin-left: -0.2rem;
-					padding: 0.75rem;
+					padding: 0.4rem;
 				}
 
 				.diagram svg {
@@ -1250,27 +1264,27 @@
 					</div>
 					<div class="glossary-grid">
 						<div class="glossary-card">
-							<b>Universe</b>
+							<b><span class="term" tabindex="0">Universe</span></b>
 							<p>A branch of oracle state with its own REP token and optional parent universe.</p>
 						</div>
 						<div class="glossary-card">
-							<b>Migration balance</b>
+							<b><span class="term" tabindex="0">Migration balance</span></b>
 							<p>REP value held after a fork that can be split into one or more child universes.</p>
 						</div>
 						<div class="glossary-card">
-							<b>Invalid</b>
+							<b><span class="term" tabindex="0">Invalid</span></b>
 							<p>A valid answer state representing an unresolvable or invalid market outcome.</p>
 							</div>
 							<div class="glossary-card">
-								<b>Malformed</b>
+								<b><span class="term" tabindex="0">Malformed</span></b>
 								<p>An answer encoding the question definition does not permit.</p>
 							</div>
 							<div class="glossary-card">
-								<b>Child REP</b>
+								<b><span class="term" tabindex="0">Child REP</span></b>
 								<p>Reputation minted inside a child universe from migration balance.</p>
 							</div>
 							<div class="glossary-card">
-								<b>Colored Coins model</b>
+								<b><span class="term" tabindex="0">Colored Coins model</span></b>
 								<p>A branch-aware claim model for post-fork coordination.</p>
 							</div>
 					</div>
@@ -2095,5 +2109,6 @@
 				window.addEventListener('hashchange', scheduleCurrentSectionUpdate)
 			}
 		</script>
+		<script src="./termTooltips.js"></script>
 	</body>
 </html>

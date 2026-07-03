@@ -5,6 +5,14 @@ import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 
 export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
 
+export type RefreshStateOptions = {
+	loadChainClock?: boolean
+	loadDeploymentState?: boolean
+	loadWalletState?: boolean
+}
+
+type RefreshState = (options?: RefreshStateOptions) => Promise<void>
+
 export type WriteOperationsParameters = {
 	accountAddress: Address | undefined
 	onTransactionFailed?: (message: string) => void
@@ -13,7 +21,7 @@ export type WriteOperationsParameters = {
 	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
 	onTransactionRequested: (intent: TransactionIntent) => void
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: RefreshState
 }
 
 export type AccountState = {

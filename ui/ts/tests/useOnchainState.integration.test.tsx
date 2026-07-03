@@ -3,6 +3,7 @@
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
+import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address } from 'viem'
 import { getAddress } from 'viem'
@@ -15,6 +16,7 @@ import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type UseOnchainState = typeof import('../hooks/useOnchainState.js')['useOnchainState']
 type UseOnchainStateState = ReturnType<UseOnchainState>
+type UseOnchainStateOptions = Parameters<UseOnchainState>[0]
 
 type UnsubCounter = {
 	subscribe: number
@@ -131,9 +133,9 @@ function createBackend({
 	return { backend, subscriptionState }
 }
 
-function createHarness(useOnchainState: UseOnchainState, onRender: (state: UseOnchainStateState) => void) {
+function createHarness(useOnchainState: UseOnchainState, onRender: (state: UseOnchainStateState) => void, options?: UseOnchainStateOptions) {
 	return function OnchainStateHarness() {
-		const state = useOnchainState()
+		const state = useOnchainState(options)
 		onRender(state)
 
 		return h('div', {}, [
@@ -249,6 +251,153 @@ describe('useOnchainState (integration)', () => {
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
 
 		resetEnvironment()
+	})
+
+	test('resubscribes and refreshes against a replacement active environment when the nonce changes', async () => {
+		const accountA = getAddress('0x00000000000000000000000000000000000000a1')
+		const accountB = getAddress('0x00000000000000000000000000000000000000b2')
+		const { backend: backendA, subscriptionState: subscriptionsA } = createBackend({
+			accountAddress: accountA,
+			readClient: createReadClient({ blockNumber: 100n, blockTimestamp: 200n }),
+		})
+		const { backend: backendB, subscriptionState: subscriptionsB } = createBackend({
+			accountAddress: accountB,
+			readClient: createReadClient({ blockNumber: 300n, blockTimestamp: 400n }),
+		})
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses,
+		}))
+		const loadErc20Balance = mock(async () => 0n)
+
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot,
+			loadErc20Balance,
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		let resetEnvironment = installActiveEnvironmentForTesting(backendA)
+		let hookState: UseOnchainStateState | undefined
+		function Harness() {
+			const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
+			const state = useOnchainState({ activeEnvironmentNonce })
+			hookState = state
+			return h(
+				'button',
+				{
+					onClick: () => {
+						setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
+					},
+					type: 'button',
+				},
+				'Refresh environment',
+			)
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).accountState.address).toBe(accountA))
+		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
+		expect(subscriptionsA.stateHandler).not.toBeUndefined()
+		expect(subscriptionsA.accountHandler).not.toBeUndefined()
+		expect(subscriptionsA.chainHandler).not.toBeUndefined()
+
+		resetEnvironment = installActiveEnvironmentForTesting(backendB)
+		fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Refresh environment' }))
+
+		await waitFor(() => expect(requireHookState(hookState).accountState.address).toBe(accountB))
+		expect(requireHookState(hookState).currentBlockNumber).toBe(300n)
+		expect(subscriptionsA.unsub).toEqual({ accounts: 1, chain: 1, subscribe: 1 })
+		expect(subscriptionsB.stateHandler).not.toBeUndefined()
+		expect(subscriptionsB.accountHandler).not.toBeUndefined()
+		expect(subscriptionsB.chainHandler).not.toBeUndefined()
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(2)
+		resetEnvironment()
+	})
+
+	test('replaces chain-clock polling when the active environment nonce changes', async () => {
+		const intervalHandlers: TimerHandler[] = []
+		const clearedIntervals: number[] = []
+		const originalSetInterval = window.setInterval
+		const originalClearInterval = window.clearInterval
+		Object.defineProperty(window, 'setInterval', {
+			configurable: true,
+			value: (handler: TimerHandler) => {
+				intervalHandlers.push(handler)
+				return intervalHandlers.length
+			},
+		})
+		Object.defineProperty(window, 'clearInterval', {
+			configurable: true,
+			value: (handle: number | undefined) => {
+				if (handle !== undefined) clearedIntervals.push(handle)
+			},
+		})
+		const accountA = getAddress('0x00000000000000000000000000000000000000a1')
+		const accountB = getAddress('0x00000000000000000000000000000000000000b2')
+		const { backend: backendA } = createBackend({
+			accountAddress: accountA,
+			readClient: createReadClient({ blockNumber: 100n, blockTimestamp: 200n }),
+		})
+		const { backend: backendB } = createBackend({
+			accountAddress: accountB,
+			readClient: createReadClient({ blockNumber: 300n, blockTimestamp: 400n }),
+		})
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				augurPlaceHolderDeployed: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 0n),
+		}))
+
+		try {
+			const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+			let resetEnvironment = installActiveEnvironmentForTesting(backendA)
+			let hookState: UseOnchainStateState | undefined
+			function Harness() {
+				const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
+				const state = useOnchainState({ activeEnvironmentNonce })
+				hookState = state
+				return h(
+					'button',
+					{
+						onClick: () => {
+							setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
+						},
+						type: 'button',
+					},
+					'Refresh environment',
+				)
+			}
+
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+			await waitFor(() => {
+				requireHookState(hookState)
+				expect(intervalHandlers.length).toBe(1)
+			})
+			expect(intervalHandlers.length).toBe(1)
+
+			resetEnvironment = installActiveEnvironmentForTesting(backendB)
+			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Refresh environment' }))
+
+			await waitFor(() => expect(intervalHandlers.length).toBe(2))
+			expect(clearedIntervals).toEqual([1])
+			expect(intervalHandlers.length).toBe(2)
+			resetEnvironment()
+		} finally {
+			Object.defineProperty(window, 'setInterval', {
+				configurable: true,
+				value: originalSetInterval,
+			})
+			Object.defineProperty(window, 'clearInterval', {
+				configurable: true,
+				value: originalClearInterval,
+			})
+		}
 	})
 
 	test('surfaces a blocking error when the configured read RPC is on the wrong chain', async () => {
@@ -737,6 +886,80 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('wallet-only refresh updates balances without rereading deployment status or chain clock', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a6')
+		let ethBalance = 123n
+		let wethBalance = 555n
+		let blockNumber = 100n
+		let blockTimestamp = 200n
+		let getBlockCalls = 0
+		const readClient = {
+			getBalance: async () => ethBalance,
+			getBlock: async () => {
+				getBlockCalls += 1
+				return { number: blockNumber, timestamp: blockTimestamp }
+			},
+			getChainId: async () => 1,
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({
+			accountAddress: account,
+			readClient,
+		})
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses,
+		}))
+		const loadErc20Balance = mock(async () => wethBalance)
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot,
+			loadErc20Balance,
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(useOnchainState, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+		expect(requireHookState(hookState).accountState.ethBalance).toBe(123n)
+		expect(requireHookState(hookState).accountState.wethBalance).toBe(555n)
+		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
+		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
+		const initialGetBlockCalls = getBlockCalls
+
+		ethBalance = 999n
+		wethBalance = 777n
+		blockNumber = 999n
+		blockTimestamp = 888n
+
+		await act(async () => {
+			await requireHookState(hookState).refreshState({
+				loadChainClock: false,
+				loadDeploymentState: false,
+			})
+		})
+
+		await waitFor(() => {
+			expect(requireHookState(hookState).accountState.ethBalance).toBe(999n)
+			expect(requireHookState(hookState).accountState.wethBalance).toBe(777n)
+		})
+		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
+		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+		expect(loadErc20Balance).toHaveBeenCalledTimes(2)
+		expect(getBlockCalls).toBe(initialGetBlockCalls)
+		resetEnvironment()
+	})
+
 	test('executes backend subscriptions and unsubscribes on cleanup', async () => {
 		const { backend, subscriptionState } = createBackend({
 			readClient: createReadClient({ ethBalance: 3n }),
@@ -839,6 +1062,63 @@ describe('useOnchainState (integration)', () => {
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
 		expect(clearIntervalMock).toHaveBeenCalledTimes(1)
+		resetEnvironment()
+	})
+
+	test('can disable chain-clock polling while still loading deployment statuses and balances', async () => {
+		const setIntervalMock = mock((_callback: () => void, _ms: number) => 42)
+		window.setInterval = setIntervalMock as unknown as typeof window.setInterval
+		const account = getAddress('0x00000000000000000000000000000000000000a7')
+		let getBlockCalls = 0
+		const readClient = {
+			getBalance: async () => 321n,
+			getBlock: async () => {
+				getBlockCalls += 1
+				return { number: 44n, timestamp: 55n }
+			},
+			getChainId: async () => 1,
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({
+			accountAddress: account,
+			isBootstrapped: true,
+			readClient,
+		})
+		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses,
+		}))
+		const loadErc20Balance = mock(async () => 654n)
+		mock.module('../contracts.js', () => ({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot,
+			loadErc20Balance,
+		}))
+
+		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(
+			useOnchainState,
+			state => {
+				hookState = state
+			},
+			{ enableChainClock: false },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+		expect(requireHookState(hookState).accountState.ethBalance).toBe(321n)
+		expect(requireHookState(hookState).accountState.wethBalance).toBe(654n)
+		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
+		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
+		expect(getBlockCalls).toBe(0)
+		expect(setIntervalMock).toHaveBeenCalledTimes(0)
 		resetEnvironment()
 	})
 })

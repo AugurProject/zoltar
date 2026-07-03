@@ -20,6 +20,7 @@ function createOverviewProps(): OverviewPanelsProps {
 		activeUniverseId: 0n,
 		isConnectingWallet: false,
 		isLoadingRepPrices: false,
+		isRefreshingRepPrices: false,
 		isLoadingUniverseRepBalance: false,
 		isRefreshing: false,
 		onConnect: () => undefined,

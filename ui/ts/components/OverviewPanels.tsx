@@ -16,6 +16,7 @@ export function OverviewPanels({
 	accountState,
 	isConnectingWallet,
 	isLoadingRepPrices,
+	isRefreshingRepPrices,
 	isLoadingUniverseRepBalance,
 	onConnect,
 	onGoToGenesisUniverse,
@@ -153,7 +154,7 @@ export function OverviewPanels({
 						label={
 							<span className='metric-label-with-action'>
 								<span>REP/ETH {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isLoadingRepPrices} aria-label='Refresh REP prices' title={isLoadingRepPrices ? 'Refreshing REP prices...' : 'Refresh REP prices'}>
+								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label='Refresh REP prices' title={isRefreshingRepPrices ? 'Refreshing REP prices...' : 'Refresh REP prices'}>
 									↻
 								</button>
 							</span>

@@ -15,6 +15,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { TradingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -142,6 +143,9 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 						tradingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
 					refreshErrorFallback: 'Trading transaction succeeded, but refreshing trading details failed',
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
+					},
 				},
 				async (walletAddress, activeWallet) => {
 					const securityPoolAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Security pool address')

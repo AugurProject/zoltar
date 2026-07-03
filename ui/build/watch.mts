@@ -16,12 +16,15 @@ const SOLIDITY_ABI_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts'
 const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'compile.ts')
 const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
 const PROJECT_ARTIFACT_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'projectArtifacts.mts')
+const BUNDLER_PATHS_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'bundlerPaths.mts')
 const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
 const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
 const VENDOR_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'vendor.mts')
-const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
+const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
 const WORKER_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'workers.mts')
+const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
 const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
+const BUN_EXECUTABLE_PATH = process.execPath
 
 type ManagedProcess = ReturnType<typeof spawn>
 
@@ -167,7 +170,7 @@ const sendLiveReload = async (reason: string) => {
 const spawnServer = () => {
 	console.log('[ui:watch] Starting ui:serve')
 	try {
-		serverProcess = spawn('bun', [DEV_SERVER_PATH], {
+		serverProcess = spawn(BUN_EXECUTABLE_PATH, [DEV_SERVER_PATH], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -454,7 +457,7 @@ const runVendorBuild = async (reason: string) => {
 	vendorBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	try {
-		vendorBuildProcess = spawn('bun', [VENDOR_BUILD_PATH], {
+		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -503,7 +506,7 @@ const runWorkerBuild = async (reason: string) => {
 	workerBuildRunning = true
 	console.log(`[ui:watch] Rebuilding simulation worker because ${reason} changed`)
 	try {
-		workerBuildProcess = spawn('bun', [WORKER_BUILD_PATH], {
+		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -550,7 +553,7 @@ const runSharedBuild = async (reason: string) => {
 	}
 	sharedBuildRunning = true
 	console.log(`[ui:watch] Rebuilding shared package outputs because ${reason} changed`)
-	const builtSharedOutputs = await runSharedBuildStep(['bun', 'run', 'shared:build'], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
+	const builtSharedOutputs = await runSharedBuildStep([BUN_EXECUTABLE_PATH, 'run', 'shared:build'], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
 	if (!builtSharedOutputs) return
 	sharedBuildRunning = false
 	if (sharedBuildQueued) {
@@ -570,7 +573,7 @@ const runProjectArtifactBuild = async (reason: string) => {
 	projectArtifactBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI contract artifacts because ${reason} changed`)
 	try {
-		projectArtifactBuildProcess = spawn('bun', ['run', 'generate:ui-contract-artifact'], {
+		projectArtifactBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:ui-contract-artifact'], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -620,7 +623,7 @@ const runContractBuild = async (reason: string) => {
 	contractBuildRunning = true
 	console.log(`[ui:watch] Rebuilding Solidity contracts and UI artifacts because ${reason} changed`)
 	try {
-		contractBuildProcess = spawn('bun', ['run', 'generate:contracts'], {
+		contractBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:contracts'], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -690,7 +693,7 @@ const shutdown = async (exitCode: number) => {
 const main = () => {
 	console.log('[ui:watch] Watching UI TypeScript output and serving static assets')
 	try {
-		typeScriptWatchProcess = spawn('bun', ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
+		typeScriptWatchProcess = spawn(BUN_EXECUTABLE_PATH, ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
 			cwd: UI_ROOT_PATH,
 			stdio: ['inherit', 'pipe', 'pipe'],
 		})
@@ -727,9 +730,11 @@ const main = () => {
 			void runVendorBuild(relativePath)
 		})
 	}
-	watchFile(WORKER_BUILD_PATH, relativePath => {
-		void runWorkerBuild(relativePath)
-	})
+	for (const inputPath of WORKER_INPUT_PATHS) {
+		watchFile(inputPath, relativePath => {
+			void runWorkerBuild(relativePath)
+		})
+	}
 	watchFile(PROJECT_ARTIFACT_BUILD_PATH, relativePath => {
 		void runProjectArtifactBuild(relativePath)
 	})

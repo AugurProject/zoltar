@@ -6,6 +6,7 @@ export type EnumDropdownOption<T extends string> = {
 }
 
 type EnumDropdownProps<T extends string> = {
+	ariaLabel?: string
 	disabled?: boolean
 	onChange: (value: T) => void
 	options: ReadonlyArray<EnumDropdownOption<T>>
@@ -13,10 +14,12 @@ type EnumDropdownProps<T extends string> = {
 	value: T | undefined
 }
 
-export function EnumDropdown<T extends string>({ disabled = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
+export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
 	const [open, setOpen] = useState(false)
 	const rootRef = useRef<HTMLDivElement | null>(null)
 	const selectedOption = value === undefined ? undefined : options.find(option => option.value === value)
+	const triggerLabel = selectedOption?.label ?? value ?? placeholder ?? ''
+	const accessibleTriggerLabel = ariaLabel === undefined || triggerLabel === '' ? ariaLabel : `${ariaLabel}: ${triggerLabel}`
 
 	const focusMenuOptionAt = (currentTarget: HTMLButtonElement | null, direction: -1 | 1) => {
 		if (rootRef.current === null || currentTarget === null) return
@@ -53,6 +56,7 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 				className={`enum-dropdown-trigger ${open ? 'open' : ''}`}
 				type='button'
 				disabled={disabled}
+				aria-label={accessibleTriggerLabel}
 				aria-haspopup='listbox'
 				aria-expanded={open}
 				onKeyDown={event => {
@@ -72,7 +76,7 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 					setOpen(current => !current)
 				}}
 			>
-				<span className='enum-dropdown-label'>{selectedOption?.label ?? value ?? placeholder ?? ''}</span>
+				<span className='enum-dropdown-label'>{triggerLabel}</span>
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
 			{open ? (

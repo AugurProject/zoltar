@@ -12,17 +12,44 @@ type UseZoltarOperationsParameters = {
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
+	environmentRefreshKey: number
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
-export function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
-	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted })
+export function useZoltarOperations({
+	accountAddress,
+	activeUniverseId,
+	activeZoltarView,
+	autoLoadInitialData,
+	deploymentStatuses,
+	environmentRefreshKey,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionPrepared,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+}: UseZoltarOperationsParameters) {
+	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({
+		accountAddress,
+		activeUniverseId,
+		autoLoadInitialData,
+		deploymentStatuses,
+		environmentRefreshKey,
+		onTransactionFailed,
+		onTransactionFinished,
+		onTransactionPresented,
+		onTransactionPrepared,
+		onTransactionRequested,
+		onTransactionSubmitted,
+	})
 	const refreshZoltarUniverse = useCallback(async () => {
 		await universe.refreshZoltarUniverse()
 	}, [universe.refreshZoltarUniverse])

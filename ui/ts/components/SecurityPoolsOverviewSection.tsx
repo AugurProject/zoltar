@@ -30,9 +30,44 @@ import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
+function getSecurityPoolGuidance({ hasKnownForkActivity, lifecycleState, questionOutcome, vaultCount }: { hasKnownForkActivity: boolean; lifecycleState: SecurityPoolLifecycleState | undefined; questionOutcome: string | undefined; vaultCount: bigint }) {
+	if (lifecycleState === 'forkTruthAuction')
+		return {
+			nextStep: 'Open the pool to review auction state and any child-universe follow-up actions.',
+			summary: 'Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.',
+		}
+	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration')
+		return {
+			nextStep: 'Open the pool to continue REP or deposit migration before the fork window closes.',
+			summary: 'This pool is in fork migration. Parent balances and unresolved deposits may need to move into a child universe.',
+		}
+	if (lifecycleState === 'ended') {
+		if (questionOutcome === undefined || questionOutcome === 'none')
+			return {
+				nextStep: 'Open the pool to review reporting, stake balances, and escalation timing.',
+				summary: 'The question has ended, but the final outcome is still being disputed or finalized.',
+			}
+
+		return {
+			nextStep: vaultCount > 0n ? 'Open the pool to review vault exits, withdrawals, or any remaining settlement actions.' : 'Open the pool to review the finalized outcome and any post-resolution state.',
+			summary: 'The question is finalized. Remaining actions are now about settlement, vault exits, or historical review.',
+		}
+	}
+	if (lifecycleState === 'operational' && hasKnownForkActivity)
+		return {
+			nextStep: 'Open the pool to review final child-universe state and any remaining balances.',
+			summary: 'This pool has already gone through a fork lifecycle and now acts as a historical reference point.',
+		}
+	return {
+		nextStep: vaultCount > 0n ? 'Open the pool to inspect vault health, price context, or reporting readiness.' : 'Open the pool to add the first vault or review how this pool is collateralized.',
+		summary: 'This pool is active and can back trading, vault collateral, and reporting for its question.',
+	}
+}
+
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
+	environmentRefreshKey,
 	hasLoadedSecurityPoolPage,
 	liquidationAmount,
 	liquidationMaxAmount,
@@ -70,17 +105,21 @@ export function SecurityPoolsOverviewSection({
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
 	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
 	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
-	const effectivePoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
-	const poolPageCount = getPaginationPageCount(effectivePoolCount, SECURITY_POOL_PAGE_SIZE)
-	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, poolPageCount)
-	const currentPageRequestKey = `${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
-	const hasCurrentPageData = securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
+	const requestedPoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
+	const requestedPoolPageCount = getPaginationPageCount(requestedPoolCount, SECURITY_POOL_PAGE_SIZE)
+	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, requestedPoolPageCount)
+	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}:${accountRequestKey}`
+	const hasCurrentPageData = securityPoolPage?.requestKey === currentPageRequestKey && securityPoolPage.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
+	const currentPoolCount = hasCurrentPageData ? securityPoolPage.poolCount : undefined
+	const poolPageCount = getPaginationPageCount(currentPoolCount, SECURITY_POOL_PAGE_SIZE)
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
 	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
+	const loadingCurrentPage = loadingSecurityPoolPage || isWaitingForPageData
 	const hasLoadedCurrentPage = hasLoadedSecurityPoolPage && hasCurrentPageData
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedCurrentPage,
-		isLoading: (loadingSecurityPoolPage || isWaitingForPageData) && !hasLoadedCurrentPage,
+		isLoading: loadingCurrentPage && !hasLoadedCurrentPage,
 		mode: 'collection',
 		poolCount: pagedSecurityPools.length,
 	})
@@ -105,9 +144,9 @@ export function SecurityPoolsOverviewSection({
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const hasPreviousPage = resolvedPageIndex > 0
-	const hasNextPage = getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
+	const hasNextPage = hasCurrentPageData && getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
 	const retryPoolRegistryLoad = () => {
-		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE)
+		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey)
 	}
 	useEffect(() => {
 		if (resolvedPageIndex === pageIndex) return
@@ -116,7 +155,7 @@ export function SecurityPoolsOverviewSection({
 	useEffect(() => {
 		let cancelled = false
 		setActivePageRequestKey(currentPageRequestKey)
-		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE))
+		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
 			.catch(() => undefined)
 			.finally(() => {
 				if (cancelled) return
@@ -125,7 +164,7 @@ export function SecurityPoolsOverviewSection({
 		return () => {
 			cancelled = true
 		}
-	}, [currentPageRequestKey, resolvedPageIndex])
+	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
@@ -139,22 +178,34 @@ export function SecurityPoolsOverviewSection({
 			<SectionBlock
 				density='compact'
 				title='Security Pools'
-				description='Browse deployed pools, inspect their vaults, and open a selected pool to manage it.'
+				description='Browse the pools that back binary questions, compare their health, and open one to manage vaults, reporting, or fork actions.'
 				actions={
 					<PaginationControls
 						hasNextPage={hasNextPage}
 						hasPreviousPage={hasPreviousPage}
-						loading={loadingSecurityPoolPage}
+						loading={loadingCurrentPage}
 						onNextPage={() => {
 							setPageIndex(current => current + 1)
 						}}
 						onPreviousPage={() => {
 							setPageIndex(current => Math.max(0, current - 1))
 						}}
-						summary={securityPoolPage === undefined ? undefined : formatPaginationSummary(resolvedPageIndex, poolPageCount)}
+						summary={hasCurrentPageData ? formatPaginationSummary(resolvedPageIndex, poolPageCount) : undefined}
 					/>
 				}
 			>
+				<div className='workflow-summary-strip workflow-guide'>
+					<div className='workflow-guide-intro'>
+						<strong>Each pool backs one binary question with REP security.</strong>
+						<p className='detail'>Use the state badge and the guidance line on each card to decide whether you are browsing an active pool, a reporting state, or a fork workflow.</p>
+					</div>
+					<div className='workflow-summary-strip-steps'>
+						<span className='current'>1. Find the question</span>
+						<span>2. Check pool health</span>
+						<span>3. Open the next workflow</span>
+					</div>
+				</div>
+
 				<ErrorNotice message={securityPoolOverviewError} />
 				{securityPoolOverviewError === undefined ? undefined : (
 					<div className='actions pool-registry-recovery-actions'>
@@ -227,6 +278,12 @@ export function SecurityPoolsOverviewSection({
 								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
 								const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
+								const poolGuidance = getSecurityPoolGuidance({
+									hasKnownForkActivity,
+									lifecycleState: displayState,
+									questionOutcome: pool.questionOutcome,
+									vaultCount: pool.vaultCount,
+								})
 								const badgeTone = (() => {
 									if (displayState === 'operational') return 'ok'
 									if (displayState === undefined) return 'muted'
@@ -263,6 +320,13 @@ export function SecurityPoolsOverviewSection({
 											<div className='security-pool-strip'>
 												<div className='security-pool-strip-story'>
 													<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
+													<div className='security-pool-card-guidance'>
+														<p className='security-pool-card-guidance-summary'>{poolGuidance.summary}</p>
+														<p className='security-pool-card-guidance-next'>
+															<span className='panel-label'>Next step</span>
+															<strong>{poolGuidance.nextStep}</strong>
+														</p>
+													</div>
 													<div className='security-pool-strip-stats'>
 														<div>
 															<span>Vaults</span>
