@@ -609,6 +609,30 @@ describe('MarketSection', () => {
 		expect(selectedViews).toEqual(['fork'])
 	})
 
+	test('shows immutable questions without an edit-style missing context notice', async () => {
+		const question = createBinaryForkQuestion()
+		question.description = ''
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					zoltarQuestionCount: 1n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 1n,
+						questions: [question],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('No resolution notes or supporting context provided.')).not.toBeNull()
+		expect(documentQueries.queryByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBeNull()
+	})
+
 	test('does not render redundant universe summary cards for questions view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

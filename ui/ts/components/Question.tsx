@@ -11,6 +11,7 @@ type QuestionProps = {
 	className?: string
 	loading?: boolean
 	question: MarketDetails | undefined
+	showMissingContextNote?: boolean
 	showTitle?: boolean
 	variant?: 'full' | 'preview'
 }
@@ -97,7 +98,7 @@ function renderQuestionSummaryField(field: QuestionSummaryField) {
 	)
 }
 
-export function Question({ className = '', loading = false, question, showTitle = true, variant = 'full' }: QuestionProps) {
+export function Question({ className = '', loading = false, question, showMissingContextNote = true, showTitle = true, variant = 'full' }: QuestionProps) {
 	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
@@ -109,7 +110,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)
-	const missingContext = !hasQuestionContext(question)
+	const missingContext = showMissingContextNote && !hasQuestionContext(question)
 	const summaryFields = getQuestionSummaryFields(question)
 	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
 		key: outcome,
