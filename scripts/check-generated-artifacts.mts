@@ -63,7 +63,7 @@ function normalizeRepositoryRelativePath(baseDirectory: string, relativePath: st
 	return path.posix.normalize(path.posix.join(baseDirectory, relativePath))
 }
 
-async function getSharedPackageGeneratedOutputs(repositoryRoot: string) {
+export async function getSharedPackageGeneratedOutputs(repositoryRoot: string) {
 	const packageJson = await readJsonObject(repositoryRoot, 'shared/package.json')
 	const exportsValue = packageJson['exports']
 	if (!isRecord(exportsValue)) throw new Error('shared/package.json exports must be an object')

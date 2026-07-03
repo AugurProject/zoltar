@@ -1,33 +1,9 @@
+import { findTruthAuctionMinSupportedTick, tickToPrice, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/truthAuctionTickMath'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from './marketForm.js'
 
-export const TRUTH_AUCTION_PRICE_PRECISION = 10n ** 18n
-export const TRUTH_AUCTION_MIN_TICK = -524288n
-export const TRUTH_AUCTION_MAX_TICK = 524288n
-
-const TRUTH_AUCTION_TICK_PRICE_POWERS = [
-	1000100000000000000n,
-	1000200010000000000n,
-	1000400060004000100n,
-	1000800280056007000n,
-	1001601200560182043n,
-	1003204964963598014n,
-	1006420201727613920n,
-	1012881622445451097n,
-	1025929181087729343n,
-	1052530684607338948n,
-	1107820842039993613n,
-	1227267018058200482n,
-	1506184333613467388n,
-	2268591246822644826n,
-	5146506245160322222n,
-	26486526531474198664n,
-	701536087702486644953n,
-	492152882348911033633683n,
-	242214459604341065650571799093n,
-	58667844441422969901301586347865591163491n,
-] as const
+export { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION }
 
 export type TruthAuctionDisposition = {
 	label: string
@@ -389,10 +365,6 @@ export function sortTruthAuctionBidsByPriority(bids: TruthAuctionBidView[]) {
 	})
 }
 
-function assertTruthAuctionTickInContractDomain(tick: bigint) {
-	if (tick < TRUTH_AUCTION_MIN_TICK || tick > TRUTH_AUCTION_MAX_TICK) throw new Error('Truth auction tick is outside the supported range.')
-}
-
 function normalizeTruthAuctionPriceInput(value: string) {
 	if (value.startsWith('.')) return `0${value}`
 	if (value.endsWith('.')) return `${value}0`
@@ -400,30 +372,7 @@ function normalizeTruthAuctionPriceInput(value: string) {
 }
 
 function computeTruthAuctionPriceAtTick(tick: bigint) {
-	assertTruthAuctionTickInContractDomain(tick)
-	const absoluteTick = tick < 0n ? -tick : tick
-	let price = TRUTH_AUCTION_PRICE_PRECISION
-	for (let bitIndex = 0; bitIndex < TRUTH_AUCTION_TICK_PRICE_POWERS.length; bitIndex += 1) {
-		const bitMask = 1n << BigInt(bitIndex)
-		const pricePower = TRUTH_AUCTION_TICK_PRICE_POWERS[bitIndex]
-		if (pricePower === undefined) throw new Error(`Missing truth auction tick price power for bit ${bitIndex}`)
-		if ((absoluteTick & bitMask) !== 0n) price = (price * pricePower) / TRUTH_AUCTION_PRICE_PRECISION
-	}
-	return tick < 0n ? (TRUTH_AUCTION_PRICE_PRECISION * TRUTH_AUCTION_PRICE_PRECISION) / price : price
-}
-
-function findTruthAuctionMinSupportedTick() {
-	let lowerTick = TRUTH_AUCTION_MIN_TICK
-	let upperTick = 0n
-	while (upperTick - lowerTick > 1n) {
-		const midTick = (lowerTick + upperTick) / 2n
-		if (computeTruthAuctionPriceAtTick(midTick) > 0n) {
-			upperTick = midTick
-			continue
-		}
-		lowerTick = midTick
-	}
-	return computeTruthAuctionPriceAtTick(lowerTick) > 0n ? lowerTick : upperTick
+	return tickToPrice(tick)
 }
 
 export const TRUTH_AUCTION_MIN_SUPPORTED_TICK = findTruthAuctionMinSupportedTick()

@@ -273,7 +273,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(badgeTexts).toContain('Fork Migration')
 	})
 
-	test('shows Fork Finalized for child pools with completed fork history', async () => {
+	test('describes Fork Finalized auction-state guidance without implying the truth auction is already complete', async () => {
+		const auctionPoolTitle = 'Truth auction pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -281,6 +282,36 @@ describe('SecurityPoolsOverviewSection', () => {
 						createSecurityPool({
 							forkOutcome: 'yes',
 							hasForkActivity: true,
+							marketDetails: createMarketDetails({ title: auctionPoolTitle }),
+							migratedRep: 1n,
+							parent: '0x0000000000000000000000000000000000000100',
+							systemState: 'forkTruthAuction',
+							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+							truthAuctionStartedAt: 10n,
+							universeHasForked: true,
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const auctionPoolCard = getSecurityPoolCard(auctionPoolTitle)
+		const auctionPoolCardQueries = within(auctionPoolCard)
+		expect(auctionPoolCardQueries.getByText('Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.')).not.toBeNull()
+		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where the child universe is finalized.')).toBeNull()
+	})
+
+	test('shows Fork Finalized for child pools with completed fork history', async () => {
+		const childPoolTitle = 'Finalized child pool'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							forkOutcome: 'yes',
+							hasForkActivity: true,
+							marketDetails: createMarketDetails({ title: childPoolTitle }),
 							migratedRep: 1n,
 							parent: '0x0000000000000000000000000000000000000100',
 							systemState: 'operational',
@@ -296,6 +327,10 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Finalized')
+		const childPoolCard = getSecurityPoolCard(childPoolTitle)
+		const childPoolCardQueries = within(childPoolCard)
+		expect(childPoolCardQueries.getByText('This pool has already gone through a fork lifecycle and now acts as a historical reference point.')).not.toBeNull()
+		expect(childPoolCardQueries.queryByText('This parent pool has already gone through a fork lifecycle and now acts as a historical reference point.')).toBeNull()
 	})
 
 	test('shows Fork Migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
