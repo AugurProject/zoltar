@@ -28,18 +28,162 @@ const termDefinitions = {
 	vault: 'A pool-specific REP account whose owner supplies underwriting capacity.',
 }
 
+const tooltipId = 'term-tooltip'
+
 function normalizeTermKey(value) {
 	return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+function ensureTooltipStyles() {
+	if (document.getElementById('term-tooltip-styles') !== null) return
+
+	const style = document.createElement('style')
+	style.id = 'term-tooltip-styles'
+	style.textContent = `
+		.term-tooltip {
+			position: fixed;
+			z-index: 1000;
+			max-width: min(22rem, calc(100vw - 1.5rem));
+			padding: 0.65rem 0.8rem;
+			border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
+			border-radius: 0.5rem;
+			background: color-mix(in srgb, var(--paper, #fff) 96%, var(--bg, #f5f7f8));
+			box-shadow: 0 0.9rem 2.2rem rgba(15, 23, 31, 0.14);
+			color: var(--ink, #1f2529);
+			font-size: 0.92rem;
+			line-height: 1.45;
+			pointer-events: none;
+			opacity: 0;
+			transform: translateY(0.2rem);
+			transition: opacity 80ms ease, transform 80ms ease;
+		}
+
+		.term-tooltip[data-visible='true'] {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	`
+	document.head.append(style)
+}
+
+function ensureTooltipElement() {
+	let tooltip = document.getElementById(tooltipId)
+	if (tooltip instanceof HTMLDivElement) return tooltip
+
+	tooltip = document.createElement('div')
+	tooltip.id = tooltipId
+	tooltip.className = 'term-tooltip'
+	tooltip.setAttribute('role', 'tooltip')
+	tooltip.hidden = true
+	tooltip.setAttribute('aria-hidden', 'true')
+	document.body.append(tooltip)
+	return tooltip
+}
+
+function updateTooltipPosition(tooltip, targetRect, pointerX, pointerY) {
+	const margin = 12
+	const viewportWidth = document.documentElement.clientWidth
+	const viewportHeight = document.documentElement.clientHeight
+
+	let left = pointerX ?? targetRect.left + targetRect.width / 2
+	let top = pointerY ?? targetRect.top - margin
+
+	const tooltipWidth = tooltip.offsetWidth
+	const tooltipHeight = tooltip.offsetHeight
+
+	left = Math.max(margin, Math.min(left - tooltipWidth / 2, viewportWidth - tooltipWidth - margin))
+
+	if (pointerY === undefined) {
+		top = targetRect.top - tooltipHeight - margin
+	}
+	if (top + tooltipHeight > viewportHeight - margin) {
+		top = targetRect.top - tooltipHeight - margin
+	}
+	if (top < margin) {
+		top = Math.min(viewportHeight - tooltipHeight - margin, targetRect.bottom + margin)
+	}
+
+	tooltip.style.left = `${left}px`
+	tooltip.style.top = `${top}px`
+}
+
 function applyTermTooltips() {
+	ensureTooltipStyles()
+	const tooltip = ensureTooltipElement()
+
+	let activeElement
+
+	function hideTooltip() {
+		if (activeElement instanceof HTMLElement) {
+			activeElement.removeAttribute('aria-describedby')
+		}
+		activeElement = undefined
+		tooltip.hidden = true
+		tooltip.setAttribute('aria-hidden', 'true')
+		tooltip.dataset.visible = 'false'
+		tooltip.textContent = ''
+	}
+
+	function showTooltip(element, pointerX, pointerY) {
+		const definition = element.dataset.termDefinition
+		if (definition === undefined) return
+
+		if (activeElement instanceof HTMLElement && activeElement !== element) {
+			activeElement.removeAttribute('aria-describedby')
+		}
+		activeElement = element
+		element.setAttribute('aria-describedby', tooltipId)
+		tooltip.textContent = definition
+		tooltip.hidden = false
+		tooltip.setAttribute('aria-hidden', 'false')
+		tooltip.dataset.visible = 'true'
+		updateTooltipPosition(tooltip, element.getBoundingClientRect(), pointerX, pointerY)
+	}
+
 	for (const element of document.querySelectorAll('.term')) {
+		if (!(element instanceof HTMLElement)) continue
+
 		const rawKey = element.getAttribute('data-term') ?? element.textContent ?? ''
 		const definition = termDefinitions[normalizeTermKey(rawKey)]
 		if (definition === undefined) continue
-		element.setAttribute('title', definition)
+
+		element.dataset.termDefinition = definition
+		element.dataset.hasTooltip = 'true'
 		if (!element.hasAttribute('tabindex')) element.setAttribute('tabindex', '0')
+
+		element.addEventListener('mouseenter', event => {
+			showTooltip(element, event.clientX, event.clientY + 18)
+		})
+		element.addEventListener('mousemove', event => {
+			if (activeElement !== element) return
+			updateTooltipPosition(tooltip, element.getBoundingClientRect(), event.clientX, event.clientY + 18)
+		})
+		element.addEventListener('mouseleave', () => {
+			if (activeElement !== element) return
+			hideTooltip()
+		})
+		element.addEventListener('focus', () => {
+			showTooltip(element)
+		})
+		element.addEventListener('blur', () => {
+			if (activeElement !== element) return
+			hideTooltip()
+		})
 	}
+
+	document.addEventListener(
+		'scroll',
+		() => {
+			if (!(activeElement instanceof HTMLElement)) return
+			updateTooltipPosition(tooltip, activeElement.getBoundingClientRect())
+		},
+		{ passive: true },
+	)
+
+	window.addEventListener('resize', () => {
+		if (!(activeElement instanceof HTMLElement)) return
+		updateTooltipPosition(tooltip, activeElement.getBoundingClientRect())
+	})
 }
 
 applyTermTooltips()
