@@ -337,6 +337,7 @@ export type OverviewPanelsProps = {
 	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
+	isRefreshingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefreshRepPrices: () => void
@@ -425,8 +426,6 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	onLoadMarket: () => void
-	onLoadMarketById: (marketId: string) => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
