@@ -33,3 +33,8 @@ export function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp
 
 	return `Reporting opens when this pool's market ends: ${formatTimestamp(endTime)} (${formatRelativeTimestamp(endTime, currentTimestamp)}).`
 }
+
+export function hasReportingOpened(endTime: bigint, currentTimestamp: bigint | undefined) {
+	if (currentTimestamp === undefined) return undefined
+	return currentTimestamp > endTime
+}

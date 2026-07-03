@@ -35,7 +35,7 @@ import {
 	previewReportingContribution,
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
-import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from '../lib/reporting.js'
 import { deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
@@ -120,7 +120,7 @@ function getReportingStagePresentation({
 	reportingDetails: ReportingDetails | undefined
 }): LifecycleStagePresentation | undefined {
 	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined) return undefined
-	if (marketDetails.endTime > effectiveCurrentTimestamp)
+	if (!hasReportingOpened(marketDetails.endTime, effectiveCurrentTimestamp))
 		return {
 			availableActions: [],
 			blockedActions: ['Report outcome', 'Settle escalation deposits'],
@@ -256,7 +256,7 @@ export function ReportingSection({
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
 	const showSettlementSection = showFullReporting || showWithdrawOnly
-	const reportingReady = marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? marketDetails.endTime <= effectiveCurrentTimestamp : undefined
+	const reportingReady = marketDetails === undefined ? undefined : hasReportingOpened(marketDetails.endTime, effectiveCurrentTimestamp)
 	const preOpenLockedReason = lockedReason ?? (reportingReady === false && marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp) : undefined)
 	const reportingStageKey = deriveSecurityPoolReportingStage({
 		reportingDetails: effectiveReportingDetails,

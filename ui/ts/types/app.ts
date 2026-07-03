@@ -15,6 +15,7 @@ type RefreshState = (options?: RefreshStateOptions) => Promise<void>
 
 export type WriteOperationsParameters = {
 	accountAddress: Address | undefined
+	onTransactionCanceled?: () => void
 	onTransactionFailed?: (message: string) => void
 	onTransactionFinished: () => void
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void

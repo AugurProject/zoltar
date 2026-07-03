@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
+import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
@@ -73,6 +73,23 @@ describe('transactionTray', () => {
 		const submitted = markTransactionSubmitted(createInitialTransactionTrayState(), transactionHash)
 
 		expect(submitted.active).toBeUndefined()
+	})
+
+	test('updates the pending hash when a submitted transaction is repriced', () => {
+		const replacementHash = '0x5678000000000000000000000000000000000000000000000000000000000000'
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const submitted = markTransactionSubmitted(requested, transactionHash)
+		const replaced = markTransactionSubmitted(submitted, replacementHash)
+
+		expect(replaced.active?.tone).toBe('pending')
+		expect(replaced.active?.hash).toBe(replacementHash)
+		expect(replaced.active?.dismissKey).toBe(replacementHash)
+		expect(replaced.active?.title).toBe('Creating Question')
 	})
 
 	test('adds prepared transaction call details before submission', () => {
@@ -191,6 +208,25 @@ describe('transactionTray', () => {
 		expect(failed.active?.hash).toBeUndefined()
 		expect(failed.active?.dismissKey).toBe('transaction-request-1')
 		expect(failed.pendingIntent).toBeUndefined()
+	})
+
+	test('clears requested transaction state when a write is canceled before submission', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+		const canceled = markTransactionCanceled(requested)
+		const finished = markTransactionFinished(canceled)
+
+		expect(canceled.active).toBeUndefined()
+		expect(canceled.pendingIntent).toBeUndefined()
+		expect(canceled.pendingRequestKey).toBeUndefined()
+		expect(canceled.inFlightCount).toBe(1)
+		expect(getTransactionActionLockReason(canceled)).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(finished.inFlightCount).toBe(0)
+		expect(getTransactionActionLockReason(finished)).toBeUndefined()
 	})
 
 	test('turns a submitted pending transaction into a failed transaction while preserving the hash', () => {

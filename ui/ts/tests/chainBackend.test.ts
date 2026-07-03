@@ -258,6 +258,8 @@ describe('injected backend read transport', () => {
 		const onTransactionSubmitted = mock(() => undefined)
 		const writeClient = backend.createWriteClient(zeroAddress, { onTransactionSubmitted })
 
+		expect(writeClient.onTransactionSubmitted).toBe(onTransactionSubmitted)
+
 		await writeClient.sendTransaction({ to: zeroAddress })
 		await writeClient.sendRawTransaction({ serializedTransaction: '0x' })
 		await writeClient.writeContract({
@@ -273,7 +275,7 @@ describe('injected backend read transport', () => {
 		expect(callbacks.length).toBe(2)
 	})
 
-	test('handles provider call failures in read paths without throwing', async () => {
+	test('handles provider call failures in read paths while surfacing wallet-connect failures', async () => {
 		const requestCalls: string[] = []
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
 			requestCalls.push(method)

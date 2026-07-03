@@ -5,7 +5,7 @@ import { getAddress } from 'viem'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
-import { createInitialTransactionTrayState, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -126,6 +126,58 @@ describe('runWriteAction', () => {
 		expect(errorMessage).toBe('Wallet account changed. Review the action with the connected account and try again')
 	})
 
+	test('fails before requesting a transaction when the wallet disconnects', async () => {
+		let errorMessage: string | undefined
+		let transactionRequested = false
+		installWalletBackend({ accounts: [] })
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => {
+					transactionRequested = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					errorMessage = message
+				},
+			},
+			async () => ({ hash: transactionHash }),
+			'Failed to report on outcome',
+		)
+
+		expect(transactionRequested).toBe(false)
+		expect(errorMessage).toBe('Wallet account is no longer connected. Reconnect your wallet and try again')
+	})
+
+	test('fails before requesting a transaction when the wallet network changes', async () => {
+		let errorMessage: string | undefined
+		let transactionRequested = false
+		installWalletBackend({ chainId: '0x5' })
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => {
+					transactionRequested = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					errorMessage = message
+				},
+			},
+			async () => ({ hash: transactionHash }),
+			'Failed to report on outcome',
+		)
+
+		expect(transactionRequested).toBe(false)
+		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+	})
+
 	test('passes the validated active chain to the write action', async () => {
 		let activeChainId: string | undefined
 
@@ -156,6 +208,9 @@ describe('runWriteAction', () => {
 		const writeActionConfig = buildWriteActionConfig(
 			{
 				accountAddress: walletAddress,
+				onTransactionCanceled: () => {
+					transactionState = markTransactionCanceled(transactionState)
+				},
 				onTransactionFailed: undefined,
 				onTransactionFinished: () => {
 					transactionState = markTransactionFinished(transactionState)
@@ -184,6 +239,44 @@ describe('runWriteAction', () => {
 		expect(transactionState.pendingIntent?.requiresWalletConfirmation).toBe(false)
 		expect(transactionState.inFlightCount).toBe(0)
 		expect(errorSignal.value).toBeUndefined()
+	})
+
+	test('clears pending transaction state when the write action cancels before submission', async () => {
+		let transactionState = createInitialTransactionTrayState()
+		let writeCanceled = false
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionCanceled: () => {
+					transactionState = markTransactionCanceled(transactionState)
+				},
+				onTransactionFinished: () => {
+					transactionState = markTransactionFinished(transactionState)
+				},
+				onTransactionRequested: () => {
+					transactionState = markTransactionRequested(transactionState, {
+						action: 'createMarket',
+						source: 'zoltar',
+						submittedDetail: 'Question creation transaction submitted.',
+						submittedTitle: 'Creating Question',
+					})
+				},
+				onWriteCanceled: () => {
+					writeCanceled = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: () => undefined,
+			},
+			async () => undefined,
+			'Failed to create question',
+		)
+
+		expect(writeCanceled).toBe(true)
+		expect(transactionState.active).toBeUndefined()
+		expect(transactionState.pendingIntent).toBeUndefined()
+		expect(transactionState.inFlightCount).toBe(0)
 	})
 
 	test('delegates missing-wallet errors to onWriteError when provided', async () => {
