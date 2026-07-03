@@ -55,11 +55,30 @@ jobs:
           (cd ui && bun install --frozen-lockfile)
           (cd solidity && bun install --frozen-lockfile)
 
+      - name: Cache generated artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            shared/js
+            solidity/artifacts
+            solidity/.contract-hash.json
+            solidity/ts/types/contractArtifact.ts
+            solidity/types/contractArtifact.ts
+            ui/ts/abis.ts
+            ui/ts/contractArtifact.ts
+            ui/vendor
+          key: ${{ runner.os }}-generated-${{ hashFiles('bun.lock', 'ui/bun.lock', 'solidity/bun.lock', 'shared/package.json', 'shared/tsconfig.json', 'shared/ts/**', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/build/projectArtifacts.mts', 'ui/index.html') }}
+          restore-keys: |
+            ${{ runner.os }}-generated-
+
       - name: Verify Anvil
         run: anvil --version
 
       - name: Generate and verify generated artifacts
         run: bun run check:generated-clean
+
+      - name: Refresh generated shared package installs
+        run: bun run refresh:shared-dependencies
 
       - name: Format
         run: bun run format
@@ -80,10 +99,10 @@ jobs:
           git diff --check
 
       - name: TypeScript type checking
-        run: bun run tsc
+        run: bun run tsc:ci:current
 
       - name: Production UI build and mainnet deployment validation
-        run: bun run ui:build:prod:optimized
+        run: bun run ui:build:prod:current
 
       - name: Tests, checks, dead code analysis, and audits
         shell: bash
@@ -197,10 +216,10 @@ jobs:
           }
 
           if ((test_shards == 1)); then
-            start_task "Tests" "bun run test:run:shard -- --bail=1 --parallel=${test_parallel}"
+            start_task "Tests" "bun run test:run:balanced-shard -- --bail=1 --parallel=${test_parallel} --shard=1/1"
           else
             for shard in $(seq 1 "$test_shards"); do
-              start_task "Tests shard ${shard}/${test_shards}" "bun run test:run:shard -- --bail=1 --parallel=${test_parallel} --shard=${shard}/${test_shards}"
+              start_task "Tests shard ${shard}/${test_shards}" "bun run test:run:balanced-shard -- --bail=1 --parallel=${test_parallel} --shard=${shard}/${test_shards}"
             done
           fi
 
