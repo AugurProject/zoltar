@@ -23,7 +23,6 @@ export function SecurityPoolSection({
 	loadingMarketDetails,
 	marketDetails,
 	onCreateSecurityPool,
-	onLoadMarket,
 	onOpenCreatedPool,
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
@@ -127,10 +126,10 @@ export function SecurityPoolSection({
 						<div className='workflow-summary-strip workflow-guide'>
 							<div className='workflow-guide-intro'>
 								<strong>Pool creation turns a binary question into a collateralized trading surface.</strong>
-								<p className='detail'>Load the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.</p>
+								<p className='detail'>Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.</p>
 							</div>
 							<div className='workflow-summary-strip-steps'>
-								<span className='current'>1. Load a binary question</span>
+								<span className='current'>1. Enter a binary question</span>
 								<span>2. Choose collateral strength</span>
 								<span>3. Deploy the pool</span>
 							</div>
@@ -145,18 +144,8 @@ export function SecurityPoolSection({
 						</SectionBlock>
 						<div className='form-grid'>
 							<div className='field'>
-								<LookupFieldRow
-									label='Question ID'
-									value={securityPoolForm.marketId}
-									onInput={marketId => onSecurityPoolFormChange({ marketId })}
-									placeholder='0x...'
-									action={
-										<button className='secondary' type='button' onClick={onLoadMarket} disabled={loadingMarketDetails || securityPoolForm.marketId.trim() === ''}>
-											{loadingMarketDetails ? <LoadingText>Loading...</LoadingText> : 'Load Question'}
-										</button>
-									}
-								/>
-								<p className='field-help'>Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question. Load the preview before deploying so you can verify the question wording.</p>
+								<LookupFieldRow label='Question ID' value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder='0x...' />
+								<p className='field-help'>Paste an exact binary Yes / No Zoltar question ID.</p>
 							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>
@@ -175,14 +164,14 @@ export function SecurityPoolSection({
 								</label>
 								<FormInput id='security-pool-security-multiplier' aria-describedby='security-pool-security-multiplier-help' value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
 								<p className='field-help' id='security-pool-security-multiplier-help'>
-									This sets the REP collateral target relative to open interest. Higher values are safer but require more REP backing.
+									Security Multiplier sets the REP collateral target relative to open interest. Higher values require more REP backing and create a thicker safety buffer.
 								</p>
 							</div>
 
 							<div className='field'>
 								<span>Initial Open Interest Fee / Year</span>
 								<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
-								<p className='field-help'>This fee applies to open interest in the new pool and is fixed at deployment.</p>
+								<p className='field-help'>Initial Open Interest Fee / Year is the starting annualized fee charged against open interest. The rate follows pool utilization after deployment.</p>
 							</div>
 
 							<div className='actions'>
@@ -190,7 +179,7 @@ export function SecurityPoolSection({
 							</div>
 						</div>
 						{!duplicateOriginPoolExists ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
-						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for exact binary Yes / No questions. Load an eligible market to proceed.</p> : undefined}
+						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.</p> : undefined}
 						{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
 					</SectionBlock>
 
