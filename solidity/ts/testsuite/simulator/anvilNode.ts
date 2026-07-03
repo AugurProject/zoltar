@@ -7,6 +7,7 @@ import type { AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, validateLocalAnvilRpcUrl } from './AnvilWindowEthereum'
 
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
+const ANVIL_MAX_PERSISTED_STATES = '0'
 const RPC_READY_TIMEOUT_MS = 30_000
 const RPC_PROBE_TIMEOUT_MS = 3_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
@@ -189,11 +190,16 @@ export const connectToExistingAnvilNode = async (rpcUrl: string, context: string
 	}
 }
 
+export const getIsolatedAnvilArgs = ({ port, printTraces = false }: { port: number; printTraces?: boolean }): string[] => {
+	const anvilArgs = ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee', '--max-persisted-states', ANVIL_MAX_PERSISTED_STATES]
+	if (printTraces) anvilArgs.push('--print-traces')
+	return anvilArgs
+}
+
 const createIsolatedAnvilNode = async ({ context, printTraces = false, startTimestamp }: { context: string; printTraces?: boolean; startTimestamp?: bigint }): Promise<AnvilNode> => {
 	const port = await getFreePort()
 	const rpcUrl = `http://${DEFAULT_ANVIL_HOST}:${port}`
-	const anvilArgs = ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee']
-	if (printTraces) anvilArgs.push('--print-traces')
+	const anvilArgs = getIsolatedAnvilArgs({ port, printTraces })
 
 	const childProcess = spawn(DEFAULT_ANVIL_BIN, anvilArgs, {
 		windowsHide: true,

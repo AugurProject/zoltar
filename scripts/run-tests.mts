@@ -1,7 +1,18 @@
 import { availableParallelism } from 'node:os'
+import { cleanupFoundryAnvilState } from './cleanup-foundry-anvil-state.mts'
 
 const maximumParallelism = 12
 const defaultParallelism = Math.max(1, Math.min(maximumParallelism, availableParallelism()))
+const cleanupStaleAnvilState = async (phase: 'before' | 'after') => {
+	try {
+		const result = await cleanupFoundryAnvilState()
+		if (result.deletedCount > 0) console.warn(`Deleted ${result.deletedCount} stale Anvil state director${result.deletedCount === 1 ? 'y' : 'ies'} ${phase} tests`)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		console.warn(`Failed to clean stale Anvil state directories ${phase} tests: ${message}`)
+	}
+}
+
 const normalizeOptionValueArgs = (args: string[]) => {
 	const normalizedArgs: string[] = []
 	for (let index = 0; index < args.length; index += 1) {
@@ -26,6 +37,8 @@ if (!hasArg('--timeout')) args.push('--timeout', '300000')
 
 args.push(...passthroughArgs)
 
+await cleanupStaleAnvilState('before')
+
 const child = Bun.spawn({
 	cmd: [process.execPath, ...args],
 	stderr: 'inherit',
@@ -33,4 +46,5 @@ const child = Bun.spawn({
 	stdout: 'inherit',
 })
 const exitCode = await child.exited
+await cleanupStaleAnvilState('after')
 process.exit(exitCode)

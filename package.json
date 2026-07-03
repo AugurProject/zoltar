@@ -62,6 +62,7 @@
 		"app:serve": "bun run app:build && bun ./ui/dev-server.ts",
 		"ui:serve": "bun run app:serve",
 		"ui:vendor": "cd ui && bun ./build/vendor.mts",
+		"cleanup:foundry-anvil-state": "bun ./scripts/cleanup-foundry-anvil-state.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun run test:run",
 		"test:run": "bun ./scripts/run-tests.mts",
