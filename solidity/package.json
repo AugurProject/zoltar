@@ -8,7 +8,7 @@
 		"refresh:shared-dependency": "bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
 		"shared": "cd .. && bun run shared:build",
 		"ensure-contract-artifacts": "bun ../scripts/ensure-contract-artifacts.mts",
-		"setup": "bun install --frozen-lockfile && bun run compile-contracts",
+		"setup": "bun ../scripts/install-frozen.mjs . && bun run compile-contracts",
 		"generate:contract-artifacts": "bun run compile-contracts",
 		"compile-contracts": "bun run shared && bun run refresh:shared-dependency && bun tsc --project tsconfig-compile.json && bun ./js/compile.js && cd .. && bun run generate:ui-contract-artifact && bun ./scripts/ensure-contract-artifacts.mts --sync-contract-freshness",
 		"gas-costs": "cd .. && bun run ensure-shared-build && cd solidity && bun run check:shared-dependency && bun tsc && bun run ./js/gas-costs.js",
