@@ -4651,6 +4651,10 @@ button:focus-visible {
 	padding: 0;
 }
 
+.section-block.embedded.density-compact {
+	padding: var(--space-3) 0 0;
+}
+
 .section-block.density-compact .section-block-body {
 	gap: var(--space-3);
 }
@@ -6764,6 +6768,10 @@ button:focus-visible {
 
 	.section-block.plain {
 		padding: 0;
+	}
+
+	.section-block.embedded {
+		padding: var(--space-3) 0 0;
 	}
 
 	.route-subnav-shell {
