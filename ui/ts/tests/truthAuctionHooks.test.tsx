@@ -160,6 +160,7 @@ describe('truth auction hooks', () => {
 			selectedAuctionPoolAddress: poolAddress,
 			selectedStage: 'settlement',
 			settlementBidRows: [refundRow],
+			truthAuctionFinalized: false,
 		}
 
 		function Harness() {
@@ -215,6 +216,7 @@ describe('truth auction hooks', () => {
 			selectedAuctionPoolAddress: poolAddress,
 			selectedStage: 'settlement',
 			settlementBidRows: [claimRow, refundRow],
+			truthAuctionFinalized: true,
 		}
 
 		function Harness() {
@@ -268,6 +270,7 @@ describe('truth auction hooks', () => {
 			selectedAuctionPoolAddress: poolAddress,
 			selectedStage: 'settlement',
 			settlementBidRows: [claimRow],
+			truthAuctionFinalized: true,
 		}
 
 		function Harness() {
@@ -317,6 +320,7 @@ describe('truth auction hooks', () => {
 			selectedAuctionPoolAddress: poolAddress,
 			selectedStage: 'settlement',
 			settlementBidRows: [claimRow, refundRow],
+			truthAuctionFinalized: true,
 		}
 
 		function Harness() {
@@ -349,5 +353,135 @@ describe('truth auction hooks', () => {
 		})
 
 		expect(requireHookState(hookState).selectedSettlementBidKeys).toEqual([])
+	})
+
+	test('routes finalized refund-only settlement through the finalized settlement action and reconciles the result', async () => {
+		const refundRow = createSettlementRow({ bidIndex: 4n, disposition: refundDisposition, tick: 7n })
+		const refundKey = getTruthAuctionSettlementBidKey(refundRow.bid)
+		const claimCalls: Array<{
+			claimBids: readonly SettlementSelectedBid[] | undefined
+			pool: Address | undefined
+			refundBids: readonly SettlementSelectedBid[] | undefined
+		}> = []
+		const refundCalls: Array<{ bids: readonly SettlementSelectedBid[] | undefined; pool: Address | undefined }> = []
+		let hookState: SettlementState | undefined
+		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
+		const initialProps: SettlementProps = {
+			accountAddress: walletAddress,
+			forkAuctionError: undefined,
+			forkAuctionResult: undefined,
+			onClaimAuctionProceeds: (pool, claimBids, refundBids) => {
+				claimCalls.push({ claimBids, pool, refundBids })
+			},
+			onRefundLosingBids: (pool, bids) => {
+				refundCalls.push({ bids, pool })
+			},
+			selectedAuctionPoolAddress: poolAddress,
+			selectedStage: 'settlement',
+			settlementBidRows: [refundRow],
+			truthAuctionFinalized: true,
+		}
+
+		function Harness() {
+			const [props, setProps] = useState(initialProps)
+			setHarnessProps = setProps
+			hookState = useTruthAuctionSettlementActionState(props)
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setSelectedSettlementBidKeys([refundKey])
+		})
+		await act(() => {
+			requireHookState(hookState).submitSelectedSettlementBids()
+		})
+
+		expect(claimCalls).toEqual([
+			{
+				claimBids: [],
+				pool: poolAddress,
+				refundBids: [{ bidIndex: 4n, tick: 7n }],
+			},
+		])
+		expect(refundCalls).toHaveLength(0)
+		expect(requireHookState(hookState).isSettleSelectedBidsInProgress).toBe(true)
+
+		await act(() => {
+			requireHarnessSetter(setHarnessProps)(currentProps => ({
+				...currentProps,
+				forkAuctionResult: createForkAuctionResult('claimAuctionProceeds', '0xffff'),
+			}))
+		})
+
+		expect(requireHookState(hookState).isSettleSelectedBidsInProgress).toBe(false)
+		expect(requireHookState(hookState).selectedSettlementBidKeys).toEqual([])
+		expect(requireHookState(hookState).settlementBidResultByKey[refundKey]).toBe('refunded')
+		expect(requireHookState(hookState).settlementBidResultRefreshToken).toBe(1)
+	})
+
+	test('routes finalized refund helper submissions through the finalized settlement action', async () => {
+		const refundRow = createSettlementRow({ bidIndex: 5n, disposition: refundDisposition, tick: 6n })
+		const refundKey = getTruthAuctionSettlementBidKey(refundRow.bid)
+		const claimCalls: Array<{
+			claimBids: readonly SettlementSelectedBid[] | undefined
+			pool: Address | undefined
+			refundBids: readonly SettlementSelectedBid[] | undefined
+		}> = []
+		const refundCalls: Array<{ bids: readonly SettlementSelectedBid[] | undefined; pool: Address | undefined }> = []
+		let hookState: SettlementState | undefined
+		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
+		const initialProps: SettlementProps = {
+			accountAddress: walletAddress,
+			forkAuctionError: undefined,
+			forkAuctionResult: undefined,
+			onClaimAuctionProceeds: (pool, claimBids, refundBids) => {
+				claimCalls.push({ claimBids, pool, refundBids })
+			},
+			onRefundLosingBids: (pool, bids) => {
+				refundCalls.push({ bids, pool })
+			},
+			selectedAuctionPoolAddress: poolAddress,
+			selectedStage: 'settlement',
+			settlementBidRows: [refundRow],
+			truthAuctionFinalized: true,
+		}
+
+		function Harness() {
+			const [props, setProps] = useState(initialProps)
+			setHarnessProps = setProps
+			hookState = useTruthAuctionSettlementActionState(props)
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+
+		await act(() => {
+			requireHookState(hookState).submitRefundBidsByKeys([refundKey])
+		})
+
+		expect(claimCalls).toEqual([
+			{
+				claimBids: [],
+				pool: poolAddress,
+				refundBids: [{ bidIndex: 5n, tick: 6n }],
+			},
+		])
+		expect(refundCalls).toHaveLength(0)
+		expect(requireHookState(hookState).isSettleSelectedBidsInProgress).toBe(true)
+
+		await act(() => {
+			requireHarnessSetter(setHarnessProps)(currentProps => ({
+				...currentProps,
+				forkAuctionResult: createForkAuctionResult('claimAuctionProceeds', '0x1111'),
+			}))
+		})
+
+		expect(requireHookState(hookState).isSettleSelectedBidsInProgress).toBe(false)
+		expect(requireHookState(hookState).settlementBidResultByKey[refundKey]).toBe('refunded')
+		expect(requireHookState(hookState).settlementBidResultRefreshToken).toBe(1)
 	})
 })

@@ -13,6 +13,7 @@ export const FORK_AUCTION_ACTION_SAFETY_ENTRIES = [
 	createReasonedActionSafetyEntry('fork-auction.migrateUnresolvedEscalation', 'Migrate Unresolved Escalation', createReasonedActionSafetyFixtures('Migrate Unresolved Escalation')),
 	createReasonedActionSafetyEntry('fork-auction.migrateVault', 'Migrate Vault', createReasonedActionSafetyFixtures('Migrate Vault')),
 	createReasonedActionSafetyEntry('fork-auction.refundLosingBids', 'Refund Losing Bids', createReasonedActionSafetyFixtures('Refund Losing Bids')),
+	createReasonedActionSafetyEntry('fork-auction.settleAuctionRefunds', 'Settle Finalized Refunds', createReasonedActionSafetyFixtures('Settle Finalized Refunds')),
 	createReasonedActionSafetyEntry('fork-auction.settleForkedEscalation', 'Settle Forked Escalation', createReasonedActionSafetyFixtures('Settle Forked Escalation')),
 	createReasonedActionSafetyEntry('fork-auction.startTruthAuction', 'Start Truth Auction', createReasonedActionSafetyFixtures('Start Truth Auction')),
 	createReasonedActionSafetyEntry('fork-auction.submitBid', 'Submit Bid', createReasonedActionSafetyFixtures('Submit Bid')),

@@ -68,7 +68,7 @@ import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardM
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
-import { useForkWorkflowSelectionStage } from '../hooks/useForkWorkflowSelectionStage.js'
+import { useForkWorkflowSelectionState } from '../hooks/useForkWorkflowSelectionState.js'
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '../types/contracts.js'
@@ -274,7 +274,7 @@ export function SecurityPoolWorkflowSection({
 		systemState: currentForkAuctionDetails?.systemState ?? selectedPoolForkWorkflowSystemState,
 		truthAuctionFinalized: currentForkAuctionDetails?.truthAuction?.finalized ?? false,
 	})
-	const { forkWorkflowSelectionStage, onSelectedStageViewChange } = useForkWorkflowSelectionStage({
+	const { forkWorkflowSelectionStage, onForkWorkflowSelectionStageChange } = useForkWorkflowSelectionState({
 		currentForkWorkflowSelectionStage,
 		legacyForkWorkflowSelectionStage,
 		selectedPoolAddress: selectedPool?.securityPoolAddress,
@@ -904,7 +904,7 @@ export function SecurityPoolWorkflowSection({
 										selectedPoolRefreshNonce={selectedPoolRefreshNonce}
 										securityPools={securityPools}
 										universeForkTime={universeForkTime}
-										onSelectedStageViewChange={onSelectedStageViewChange}
+										onSelectedStageViewChange={onForkWorkflowSelectionStageChange}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}
 									/>

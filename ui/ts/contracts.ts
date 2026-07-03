@@ -7,6 +7,7 @@ import { isIgnorableLogDecodeError } from './lib/errors.js'
 import { deriveHasForkActivity } from './lib/forkAuction.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer, getOpenOracleCreateParameterValidationMessage } from './lib/openOracle.js'
+import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './lib/oracleQueueOperation.js'
 import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
@@ -15,7 +16,6 @@ import {
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_tokens_ShareToken_ShareToken,
 } from './contractArtifact.js'
@@ -23,7 +23,6 @@ import type {
 	DeploymentStepId,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
-	ListedSecurityPool,
 	OpenOracleActionResult,
 	OracleManagerDetails,
 	OracleQueueOperation,
@@ -63,18 +62,16 @@ import {
 import { type ContractRevertReasonParams, type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
 import { getInfraContractAddresses, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 import { requireForkDataView } from './contracts/forkData.js'
-import { loadListedSecurityPool, loadSecurityPoolDeployments } from './contracts/securityPoolSummaries.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from './contracts/securityPoolActions.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
-export { createSecurityPool, loadSecurityPoolPage, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
+export { createSecurityPool, loadAllSecurityPools, loadSecurityPoolPage, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
 export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from './contracts/zoltar.js'
 import { loadMarketDetails } from './contracts/zoltar.js'
 export { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool, withdrawForkedEscalationDeposits } from './contracts/reporting.js'
 export { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from './contracts/truthAuctions.js'
 export { readOptionalMulticall } from './contracts/core.js'
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
-const LIQUIDATION_OPERATION_TYPE = 0
 const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
@@ -82,31 +79,13 @@ const UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT = 128
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
-type LoadAllSecurityPoolsOptions = {
-	accountAddress?: Address
-	selectedSecurityPoolAddress?: Address | string
-	vaultDetailMode?: 'all' | 'selected'
-}
 type SecurityPoolMintCapacity = {
 	completeSetCollateralAmount: bigint
 	shareTokenSupply: bigint
 	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint
 }
-const ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT = 50n
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
-function getOracleQueueOperationFromEventOperation(operation: bigint) {
-	switch (operation) {
-		case 0n:
-			return 'liquidation'
-		case 1n:
-			return 'withdrawRep'
-		case 2n:
-			return 'setSecurityBondsAllowance'
-		default:
-			throw new Error(`Unexpected staged oracle operation: ${operation.toString()}`)
-	}
-}
 function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
 		try {
@@ -116,7 +95,7 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 				topics: log.topics,
 			})
 			if (decodedLog.eventName !== 'ExecutedStagedOperation') continue
-			const operation = getOracleQueueOperationFromEventOperation(BigInt(decodedLog.args.operation))
+			const operation = decodeOracleQueueOperation(BigInt(decodedLog.args.operation))
 			if (operation !== expectedOperation) continue
 			const errorMessage = decodedLog.args.errorMessage.trim() === '' ? undefined : decodedLog.args.errorMessage
 			return {
@@ -142,7 +121,7 @@ function getStagedOracleQueuedResult(receipt: TransactionReceipt, expectedOperat
 				topics: log.topics,
 			})
 			if (decodedLog.eventName !== 'StagedOperationQueued') continue
-			const operation = getOracleQueueOperationFromEventOperation(BigInt(decodedLog.args.operation))
+			const operation = decodeOracleQueueOperation(BigInt(decodedLog.args.operation))
 			if (operation !== expectedOperation) continue
 			return {
 				isPendingSlot: decodedLog.args.isPendingSlot,
@@ -337,7 +316,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				return {
 					amount: stagedOperation.amount,
 					initiatorVault: stagedOperation.initiatorVault,
-					operation: resolveOracleQueueOperation(stagedOperation.operation),
+					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId,
 					targetVault: stagedOperation.targetVault,
 				}
@@ -355,7 +334,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				pendingOperation = {
 					amount: stagedOperation.amount,
 					initiatorVault: stagedOperation.initiatorVault,
-					operation: resolveOracleQueueOperation(stagedOperation.operation),
+					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId: pendingOperationSlotId,
 					targetVault: stagedOperation.targetVault,
 				}
@@ -409,20 +388,6 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		token2,
 	}
 }
-function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOperation {
-	const operationValue = typeof operation === 'bigint' ? operation : BigInt(operation)
-	switch (operationValue) {
-		case 0n:
-			return 'liquidation'
-		case 1n:
-			return 'withdrawRep'
-		case 2n:
-			return 'setSecurityBondsAllowance'
-		default:
-			throw new Error(`Unknown oracle operation: ${operation}`)
-	}
-}
-
 function compareStagedOperationIdsDescending(left: { operationId: bigint }, right: { operationId: bigint }) {
 	if (left.operationId > right.operationId) return -1
 	if (left.operationId < right.operationId) return 1
@@ -1335,33 +1300,6 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 			})),
 	)
 }
-export async function loadAllSecurityPools(client: ReadClient, options: LoadAllSecurityPoolsOptions = {}): Promise<ListedSecurityPool[]> {
-	const accountAddress = options.accountAddress
-	const vaultDetailMode = options.vaultDetailMode ?? 'all'
-	const selectedSecurityPoolAddress = options.selectedSecurityPoolAddress
-	const deploymentCount = await client.readContract({
-		address: getInfraContractAddresses().securityPoolFactory,
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'securityPoolDeploymentCount',
-		args: [],
-	})
-	const deployments = await loadSecurityPoolDeployments(client, 0n, deploymentCount)
-	const loadedPools = await Promise.all(
-		deployments.map(async deployment => {
-			const { parent, securityPool: securityPoolAddress } = deployment
-			const shouldLoadVaults = vaultDetailMode === 'all' || (selectedSecurityPoolAddress !== undefined && (sameAddress(securityPoolAddress, selectedSecurityPoolAddress) || sameAddress(parent, selectedSecurityPoolAddress)))
-			return await loadListedSecurityPool(client, deployment, {
-				...(accountAddress === undefined ? {} : { accountAddress }),
-				loadVaults: shouldLoadVaults,
-				vaultPreviewLimit: ACTIVE_SECURITY_POOL_VAULT_PREVIEW_LIMIT,
-			})
-		}),
-	)
-	return loadedPools.map(pool => ({
-		...pool,
-		hasForkActivity: pool.hasForkActivity || loadedPools.some(candidate => sameAddress(candidate.parent, pool.securityPoolAddress)),
-	}))
-}
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
 	const [completeSetCollateralAmount, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance] = await readRequiredMulticall(client, [
 		{
@@ -1442,7 +1380,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount, validForSeconds],
+		args: [encodeOracleQueueOperation('liquidation'), targetVault, amount, validForSeconds],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
@@ -1452,18 +1390,6 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		hash,
 		...(queuedOperation === undefined ? {} : { queuedOperation }),
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
-	}
-}
-function getOracleOperationType(operation: OracleQueueOperation) {
-	switch (operation) {
-		case 'liquidation':
-			return 0
-		case 'withdrawRep':
-			return 1
-		case 'setSecurityBondsAllowance':
-			return 2
-		default:
-			return assertNever(operation)
 	}
 }
 function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
@@ -1487,7 +1413,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [getOracleOperationType(operation), targetVault, amount, validForSeconds],
+		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)

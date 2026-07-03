@@ -3,6 +3,7 @@ import type { Account, Hash } from 'viem'
 import { AddressValue } from '../components/AddressValue.js'
 import { UniverseLink } from '../components/UniverseLink.js'
 import { formatCurrencyBalance } from './formatters.js'
+import { AUCTIONED_BOND_ALLOWANCE_LABEL } from './forkAuction.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
@@ -468,20 +469,28 @@ export function createOpenOracleWarningPresentation(result: OpenOracleActionResu
 	return withWarning(createOpenOracleSuccessPresentation(result), message)
 }
 
-export function createForkAuctionTransactionIntent(actionName: ForkAuctionActionResult['action']) {
+export function createForkAuctionTransactionIntent(actionName: ForkAuctionActionResult['action'], { submittedTitle }: { submittedTitle?: TransactionIntent['submittedTitle'] } = {}) {
+	const resolvedSubmittedTitle = submittedTitle ?? humanizeAction(actionName)
 	return buildIntent({
 		action: actionName,
 		source: 'fork-auction',
-		submittedTitle: humanizeAction(actionName),
-		submittedDetail: `${humanizeAction(actionName)} transaction submitted.`,
+		submittedTitle: resolvedSubmittedTitle,
+		submittedDetail: `${resolvedSubmittedTitle} transaction submitted.`,
 	})
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
+	const title = result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund' ? 'Settle Finalized Refunds' : humanizeAction(result.action)
 	const detail = (() => {
 		switch (result.action) {
 			case 'claimAuctionProceeds':
-				return 'Selected winning truth-auction bids were claimed.'
+				if (result.settlementMode === 'refund') {
+					return `Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning child-pool REP or ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+				}
+				if (result.settlementMode === 'claim') {
+					return `Selected truth-auction winning bids were settled. The selected bids received child-pool REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, assigning the remaining open-interest debt.`
+				}
+				return `Selected truth-auction bids were settled. Winning bids received child-pool REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, assigning the remaining open-interest debt; refund-only rows returned locked ETH.`
 			case 'createChildUniverse':
 				return 'The selected child universe was deployed and linked to this fork path.'
 			case 'forkWithOwnEscalation':
@@ -517,7 +526,7 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
 		],
-		title: humanizeAction(result.action),
+		title,
 		tone: 'success',
 	})
 }

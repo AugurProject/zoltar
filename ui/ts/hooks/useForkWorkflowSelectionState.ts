@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { normalizeAddress } from '../lib/address.js'
 import type { ForkWorkflowSelectionStage, SelectedPoolView } from '../lib/securityPoolWorkflow.js'
 
-type UseForkWorkflowSelectionStageParams = {
+type UseForkWorkflowSelectionStateParameters = {
 	currentForkWorkflowSelectionStage: ForkWorkflowSelectionStage
 	legacyForkWorkflowSelectionStage: ForkWorkflowSelectionStage | undefined
 	selectedPoolAddress: string | undefined
 	view: SelectedPoolView
 }
 
-export function useForkWorkflowSelectionStage({ currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, selectedPoolAddress, view }: UseForkWorkflowSelectionStageParams) {
+export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, selectedPoolAddress, view }: UseForkWorkflowSelectionStateParameters) {
 	const previousSelectedPoolViewRef = useRef<SelectedPoolView | undefined>(undefined)
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
@@ -59,7 +59,7 @@ export function useForkWorkflowSelectionStage({ currentForkWorkflowSelectionStag
 
 	return {
 		forkWorkflowSelectionStage,
-		onSelectedStageViewChange: (stage: ForkWorkflowSelectionStage) => {
+		onForkWorkflowSelectionStageChange: (stage: ForkWorkflowSelectionStage) => {
 			hasManualForkWorkflowSelectionRef.current = true
 			setForkWorkflowSelectionStage(stage)
 		},

@@ -32,6 +32,12 @@ export type TruthAuctionDepthPoint = {
 	submissionCount: bigint
 }
 
+export type TruthAuctionBidSettlementEstimate = {
+	purchasedRepAmount: bigint | undefined
+	refundedEthAmount: bigint
+	usedEthAmount: bigint
+}
+
 export function estimateRepPurchased(ethAmount: bigint, price: bigint) {
 	if (ethAmount <= 0n || price <= 0n) return 0n
 	return (ethAmount * TRUTH_AUCTION_PRICE_PRECISION) / price
@@ -175,6 +181,85 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 		canPrefillSettle: false,
 		settlementKind: 'none',
 		summaryKind: 'neutral',
+	}
+}
+
+export function getTruthAuctionBidSettlementEstimate(bid: TruthAuctionBidView, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionBidSettlementEstimate {
+	if (truthAuction === undefined) {
+		return {
+			purchasedRepAmount: 0n,
+			refundedEthAmount: 0n,
+			usedEthAmount: 0n,
+		}
+	}
+
+	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
+	const bidPrice = getTruthAuctionPriceAtTick(bid.tick)
+
+	if (winningThresholdPrice !== undefined) {
+		if (bidPrice < winningThresholdPrice) {
+			return {
+				purchasedRepAmount: 0n,
+				refundedEthAmount: bid.ethAmount,
+				usedEthAmount: 0n,
+			}
+		}
+
+		return {
+			purchasedRepAmount: undefined,
+			refundedEthAmount: 0n,
+			usedEthAmount: bid.ethAmount,
+		}
+	}
+
+	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
+		return {
+			purchasedRepAmount: estimateRepPurchased(bid.ethAmount, bidPrice),
+			refundedEthAmount: 0n,
+			usedEthAmount: bid.ethAmount,
+		}
+	}
+
+	if (bid.tick > truthAuction.clearingTick) {
+		return {
+			purchasedRepAmount: estimateRepPurchased(bid.ethAmount, truthAuction.clearingPrice),
+			refundedEthAmount: 0n,
+			usedEthAmount: bid.ethAmount,
+		}
+	}
+
+	if (bid.tick < truthAuction.clearingTick) {
+		return {
+			purchasedRepAmount: 0n,
+			refundedEthAmount: bid.ethAmount,
+			usedEthAmount: 0n,
+		}
+	}
+
+	const previousCumulativeEth = bid.activeCumulativeEthBeforeBid
+	const activeCumulativeEth = previousCumulativeEth + bid.ethAmount
+
+	if (truthAuction.ethAtClearingTick <= previousCumulativeEth) {
+		return {
+			purchasedRepAmount: 0n,
+			refundedEthAmount: bid.ethAmount,
+			usedEthAmount: 0n,
+		}
+	}
+
+	if (truthAuction.ethAtClearingTick >= activeCumulativeEth) {
+		return {
+			purchasedRepAmount: estimateRepPurchased(bid.ethAmount, truthAuction.clearingPrice),
+			refundedEthAmount: 0n,
+			usedEthAmount: bid.ethAmount,
+		}
+	}
+
+	const usedEthAmount = truthAuction.ethAtClearingTick - previousCumulativeEth
+	return {
+		purchasedRepAmount: estimateRepPurchased(usedEthAmount, truthAuction.clearingPrice),
+		refundedEthAmount: bid.ethAmount - usedEthAmount,
+		usedEthAmount,
 	}
 }
 

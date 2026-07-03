@@ -6,7 +6,7 @@ import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthere
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { pickFixtureProperties } from '@zoltar/shared/testing/pickFixtureProperties'
+import { pickFixtureProperties } from '../../../../shared/js/testing/pickFixtureProperties.js'
 import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testsuite/simulator/utils/utilities'
@@ -44,6 +44,7 @@ import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalation
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../../testsuite/simulator/utils/contracts/auction'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
+import { createPeripheralsTruthAuctionScenarioHelpers } from './truthAuctionScenarioHelpers'
 import {
 	createCompleteSet,
 	depositRep,
@@ -211,154 +212,19 @@ function usePeripheralsTestFixture() {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
 		return await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
 	}
-
-	const finalizeQuestionAsYesWithoutFork = async () => {
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		if ((await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool)) > 0n) {
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-		}
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
-		await mockWindow.advanceTime(10n * DAY)
-		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should finalize as yes')
-	}
-
-	const triggerExternalForkForSecurityPool = async (forkingClient: WriteClient | undefined = undefined, titlePrefix = 'external fork source') => {
-		const effectiveForkingClient = forkingClient ?? createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
-		const forkSourceQuestionData = {
-			...questionData,
-			title: `${titlePrefix} ${await mockWindow.getTime()}`,
-			endTime: (await mockWindow.getTime()) + DAY,
-		}
-		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
-		await createQuestion(effectiveForkingClient, forkSourceQuestionData, outcomes)
-		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
-		await approveToken(effectiveForkingClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(effectiveForkingClient, genesisUniverse, forkSourceQuestionId)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-	}
-
-	const setupStartedTruthAuction = async (titlePrefix: string) => {
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
-		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-		await approveAndDepositRep(passiveRepHolder, 2n * forkThreshold, questionId)
-		const securityPoolAllowance = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
-
-		const openInterestAmount = 10n * 10n ** 18n
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
-
-		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, yesSecurityPool.securityPool)
-
-		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
-		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
-		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
-
-		return {
-			yesSecurityPool,
-			repAtFork,
-			expectedEthToBuy,
-		}
-	}
-
-	const setupTruthAuctionWithMixedBids = async (finalizeAuction: boolean) => {
-		const { yesSecurityPool, repAtFork, expectedEthToBuy } = await setupStartedTruthAuction('mixed bids fork source')
-		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const losingEth = expectedEthToBuy / 10n
-		strictEqualTypeSafe(losingEth > 0n, true, 'losing bid should invest a positive amount')
-		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
-		const winningTick = await participateAuction(winningBidder, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
-
-		if (finalizeAuction) {
-			await mockWindow.advanceTime(7n * DAY + DAY)
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		}
-
-		return {
-			yesSecurityPool,
-			repAtFork,
-			expectedEthToBuy,
-			losingBidder,
-			winningBidder,
-			losingEth,
-			losingTick,
-			winningTick,
-		}
-	}
-
-	const setupTruthAuctionWithTwoWinningBids = async (finalizeAuction: boolean) => {
-		const { yesSecurityPool, repAtFork, expectedEthToBuy } = await setupStartedTruthAuction('two winning bids fork source')
-		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const winningBidderA = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const winningBidderB = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
-		const losingEth = expectedEthToBuy / 10n
-		const winningEthA = expectedEthToBuy / 2n
-		const winningEthB = expectedEthToBuy - winningEthA
-		strictEqualTypeSafe(losingEth > 0n, true, 'losing bid should invest a positive amount')
-		strictEqualTypeSafe(winningEthA > 0n, true, 'first winning bid should invest a positive amount')
-		strictEqualTypeSafe(winningEthB > 0n, true, 'second winning bid should invest a positive amount')
-		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
-		const winningRepA = repAtFork / 8n
-		const winningRepB = (winningEthB * winningRepA) / winningEthA
-		const winningTickA = await participateAuction(winningBidderA, yesSecurityPool.truthAuction, winningRepA, winningEthA)
-		const winningTickB = await participateAuction(winningBidderB, yesSecurityPool.truthAuction, winningRepB, winningEthB)
-		const winningBidIndexB = winningTickA === winningTickB ? 1n : 0n
-
-		if (finalizeAuction) {
-			await mockWindow.advanceTime(7n * DAY + DAY)
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		}
-
-		return {
-			yesSecurityPool,
-			repAtFork,
-			expectedEthToBuy,
-			losingBidder,
-			winningBidderA,
-			winningBidderB,
-			losingEth,
-			winningEthA,
-			winningEthB,
-			losingTick,
-			winningTickA,
-			winningTickB,
-			winningBidIndexB,
-		}
-	}
-
-	const setupFinalizedTruthAuctionWithMixedBids = async () => await setupTruthAuctionWithMixedBids(true)
-
-	const setupOwnForkWithEscrow = async (strayRepBeforeFork: bigint = 0n) => {
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
-		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
-		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
-		if (strayRepBeforeFork > 0n) await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRepBeforeFork)
-		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		return {
-			forkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),
-			forkThreshold,
-			ownForkRepBuckets: await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool),
-			repBalance,
-		}
-	}
+	const { finalizeQuestionAsYesWithoutFork, setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, triggerExternalForkForSecurityPool } = createPeripheralsTruthAuctionScenarioHelpers({
+		genesisUniverse,
+		getClient: () => client,
+		getMockWindow: () => mockWindow,
+		getOutcomes: () => outcomes,
+		getQuestionData: () => questionData,
+		getQuestionId: () => questionId,
+		getSecurityPoolAddresses: () => securityPoolAddresses,
+		repDeposit,
+		reportBond,
+		securityMultiplier,
+		transferRepToAddress,
+	})
 
 	const initializePeripheralsBaseline = async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -890,6 +756,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		'getETHBalance',
 		'addressString',
 		'approveAndDepositRep',
+		'handleOracleReporting',
 		'manipulatePriceOracle',
 		'manipulatePriceOracleAndPerformOperation',
 		'triggerOwnGameFork',
@@ -902,6 +769,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		'getQuestionEndDate',
 		'OperationType',
 		'participateAuction',
+		'requestPriceIfNeededAndStageOperation',
 		'tickToPrice',
 		'QuestionOutcome',
 		'SystemState',
