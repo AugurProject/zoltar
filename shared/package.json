@@ -15,6 +15,10 @@
 			"types": "./ts/constants.ts",
 			"default": "./js/constants.js"
 		},
+		"./escalationMath": {
+			"types": "./ts/escalationMath.ts",
+			"default": "./js/escalationMath.js"
+		},
 		"./deploymentAddresses": {
 			"types": "./ts/deploymentAddresses.ts",
 			"default": "./js/deploymentAddresses.js"
@@ -23,9 +27,17 @@
 			"types": "./ts/protocolConfig.ts",
 			"default": "./js/protocolConfig.js"
 		},
+		"./truthAuctionTickMath": {
+			"types": "./ts/truthAuctionTickMath.ts",
+			"default": "./js/truthAuctionTickMath.js"
+		},
 		"./testing/scalarOutcomeParityFixtures": {
 			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
 			"default": "./js/testing/scalarOutcomeParityFixtures.js"
+		},
+		"./testing/pickFixtureProperties": {
+			"types": "./ts/testing/pickFixtureProperties.ts",
+			"default": "./js/testing/pickFixtureProperties.js"
 		}
 	},
 	"files": [

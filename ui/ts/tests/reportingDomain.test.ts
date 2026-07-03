@@ -350,6 +350,34 @@ describe('reportingDomain', () => {
 		).toBeUndefined()
 	})
 
+	test('getImportedEscalationDepositClaimAmount treats imported cumulative depth as the post-deposit boundary', () => {
+		const details = createReportingDetails({
+			bindingCapital: rep(20n),
+			questionOutcome: 'yes',
+			sides: [
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{
+					balance: rep(34n),
+					deposits: [],
+					importedUserDeposits: [],
+					key: 'yes',
+					label: 'Yes',
+					userDeposits: [],
+				},
+				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+		})
+
+		expect(
+			getImportedEscalationDepositClaimAmount(details, 'yes', {
+				amount: rep(14n),
+				cumulativeAmount: rep(34n),
+				depositor: zeroAddress,
+				parentDepositIndex: 1n,
+			}),
+		).toBe(rep(18n))
+	})
+
 	test('getReportingMinimumOutcomeChangeContribution disables the preset when the selected side already leads', () => {
 		const details = createReportingDetails({
 			sides: [
