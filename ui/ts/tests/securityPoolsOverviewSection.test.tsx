@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
@@ -100,6 +100,7 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 	return {
 		accountState: createAccountState(),
 		checkedSecurityPoolAddress: undefined,
+		environmentRefreshKey: 0,
 		closeLiquidationModal: () => undefined,
 		hasLoadedSecurityPools: true,
 		hasLoadedSecurityPoolPage: true,
@@ -188,6 +189,40 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Submitted' })).toBeNull()
 		expect(documentQueries.queryByText('Check State')).toBeNull()
 		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
+	})
+
+	test('reloads the current browse page when the environment refresh key changes', async () => {
+		const onLoadSecurityPoolPage = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					environmentRefreshKey: 0,
+					onLoadSecurityPoolPage,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		})
+
+		await act(() => {
+			render(
+				<SecurityPoolsOverviewSection
+					{...createProps({
+						environmentRefreshKey: 1,
+						onLoadSecurityPoolPage,
+					})}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
+			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6)
+		})
 	})
 
 	test('keeps pool-list load errors inline instead of opening liquidation', async () => {

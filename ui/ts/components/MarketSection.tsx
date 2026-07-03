@@ -13,6 +13,7 @@ import type { MarketSectionProps } from '../types/components.js'
 export function MarketSection({
 	accountState,
 	activeView,
+	environmentRefreshKey,
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
 	zoltarForkActiveAction,
@@ -114,6 +115,7 @@ export function MarketSection({
 							</SectionBlock>
 						) : undefined}
 						<MarketQuestionsSection
+							environmentRefreshKey={environmentRefreshKey}
 							hasForked={hasForked}
 							onCreateQuestion={() => onActiveViewChange('create')}
 							onLoadZoltarQuestionPage={onLoadZoltarQuestionPage}

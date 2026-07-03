@@ -13,6 +13,7 @@ function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: n
 }
 
 type MarketQuestionsSectionProps = {
+	environmentRefreshKey: number
 	hasForked: boolean
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
@@ -24,13 +25,14 @@ type MarketQuestionsSectionProps = {
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
 }
-export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onCreateQuestion, onLoadZoltarQuestionPage, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestionPage }: MarketQuestionsSectionProps) {
+export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onCreateQuestion, onLoadZoltarQuestionPage, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestionPage }: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
 	const [lastFailedPageRequestKey, setLastFailedPageRequestKey] = useState<string | undefined>(undefined)
+	const lastSeenEnvironmentRefreshKeyRef = useRef(environmentRefreshKey)
 	const lastRequestedPageKeyRef = useRef<string | undefined>(undefined)
-	const currentPageRequestKey = `${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount?.toString() ?? 'unknown'}`
+	const currentPageRequestKey = `${environmentRefreshKey}:${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount?.toString() ?? 'unknown'}`
 	const hasCurrentPageData = isCurrentQuestionPage(zoltarQuestionPage, pageIndex, zoltarQuestionCount)
 	const effectiveQuestionCount = zoltarQuestionPage?.questionCount ?? zoltarQuestionCount
 	const questionPageCount = getPaginationPageCount(effectiveQuestionCount, QUESTION_PAGE_SIZE)
@@ -46,9 +48,10 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 	useEffect(() => {
 		if (loadingZoltarQuestionCount) return
 		if (zoltarQuestionCount === undefined || zoltarQuestionCount === 0n) return
-		const pageRequestKey = `${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount.toString()}`
+		const pageRequestKey = `${environmentRefreshKey}:${pageIndex}:${QUESTION_PAGE_SIZE}:${zoltarQuestionCount.toString()}`
+		const environmentChanged = lastSeenEnvironmentRefreshKeyRef.current !== environmentRefreshKey
 		const hasCurrentPageData = isCurrentQuestionPage(zoltarQuestionPage, pageIndex, zoltarQuestionCount)
-		if (hasCurrentPageData) {
+		if (hasCurrentPageData && !environmentChanged) {
 			if (lastFailedPageRequestKey === pageRequestKey) setLastFailedPageRequestKey(undefined)
 			if (activePageRequestKey === pageRequestKey) setActivePageRequestKey(undefined)
 			return
@@ -57,6 +60,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 		if (activePageRequestKey === pageRequestKey) return
 		if (lastRequestedPageKeyRef.current === pageRequestKey) return
 		lastRequestedPageKeyRef.current = pageRequestKey
+		lastSeenEnvironmentRefreshKeyRef.current = environmentRefreshKey
 		setActivePageRequestKey(pageRequestKey)
 		void Promise.resolve(onLoadZoltarQuestionPage(pageIndex, QUESTION_PAGE_SIZE))
 			.catch(() => {
@@ -65,7 +69,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 			.finally(() => {
 				setActivePageRequestKey(current => (current === pageRequestKey ? undefined : current))
 			})
-	}, [activePageRequestKey, lastFailedPageRequestKey, loadingZoltarQuestionCount, onLoadZoltarQuestionPage, pageIndex, zoltarQuestionCount, zoltarQuestionPage])
+	}, [activePageRequestKey, environmentRefreshKey, lastFailedPageRequestKey, loadingZoltarQuestionCount, onLoadZoltarQuestionPage, pageIndex, zoltarQuestionCount, zoltarQuestionPage])
 	const hasPreviousPage = pageIndex > 0
 	const hasNextPage = getHasNextPaginationPage(pageIndex, questionPageCount)
 	return (

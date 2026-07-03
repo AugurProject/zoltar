@@ -20,6 +20,7 @@ type UseMarketCreationParameters = {
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
+	environmentRefreshKey: number
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
@@ -29,8 +30,22 @@ type UseMarketCreationParameters = {
 	refreshState: WriteOperationsParameters['refreshState']
 }
 
-export function useMarketCreation({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
+export function useMarketCreation({
+	accountAddress,
+	activeUniverseId,
+	activeZoltarView,
+	autoLoadInitialData,
+	deploymentStatuses,
+	environmentRefreshKey,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionPrepared,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+}: UseMarketCreationParameters) {
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
