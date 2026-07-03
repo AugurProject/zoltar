@@ -313,6 +313,10 @@ export type SecurityPoolPage = {
 	pools: ListedSecurityPool[]
 }
 
+export type SecurityPoolBrowsePage = SecurityPoolPage & {
+	requestKey: string
+}
+
 export type SecurityPoolVaultSummary = {
 	escalationEscrowedRep: bigint
 	repDepositShare: bigint

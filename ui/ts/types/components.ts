@@ -17,8 +17,8 @@ import type {
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
+	SecurityPoolBrowsePage,
 	SecurityPoolCreationResult,
-	SecurityPoolPage,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
 	SecurityVaultActionResult,
@@ -476,14 +476,14 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	loadingSecurityPoolPage: boolean
 	loadingSecurityPools: boolean
 	onCreateSecurityPool?: () => void
-	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number) => void
+	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPoolBrowseCount: bigint | undefined
-	securityPoolPage: SecurityPoolPage | undefined
+	securityPoolPage: SecurityPoolBrowsePage | undefined
 	securityPools: ListedSecurityPool[]
 } & LiquidationModalStateProps &
 	RepPerEthPriceProps
