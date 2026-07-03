@@ -101,6 +101,15 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 	}
 
+	function isForkCarryFundingComplete() external view returns (bool) {
+		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
+		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			OutcomeState storage state = outcomeState[outcomeIndex];
+			if (state.forkedEscrowSourcePrincipalTotal < state.inheritedUnresolvedTotal) return false;
+		}
+		return true;
+	}
+
 	// Pages unresolved local carry leaves only, in newest-first local linked-list order.
 	// Inherited snapshot leaves are exposed through getForkCarrySnapshot().
 	function getCarryLeafPageByOutcome(
