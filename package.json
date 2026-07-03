@@ -57,7 +57,6 @@
 		"app:build": "bun run generate && cd ui && bun run build && bun run build:tests",
 		"ui:build": "bun run app:build",
 		"ui:build:prod": "bun run check:mainnet-deployment && cd ui && bun run build:prod",
-		"ui:build:prod:optimized": "bun run check:mainnet-deployment:current && cd ui && bun run build:prod",
 		"ui:build:prod:current": "bun run check:mainnet-deployment:current && cd ui && bun ./build/production.mts",
 		"ui:workers": "cd ui && bun ./build/workers.mts",
 		"app:watch": "bun run app:build && bun ./ui/build/watch.mts",
