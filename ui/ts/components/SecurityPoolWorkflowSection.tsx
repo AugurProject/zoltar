@@ -69,9 +69,9 @@ import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelec
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { useForkWorkflowSelectionState } from '../hooks/useForkWorkflowSelectionState.js'
+import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '../types/contracts.js'
-type SelectedVaultView = 'browse-vaults' | 'selected-vault'
 
 function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
 	if (selectedPool === undefined) return undefined
@@ -168,7 +168,6 @@ export function SecurityPoolWorkflowSection({
 	const legacyForkWorkflowSelectionStage = resolveForkWorkflowSelectionStage(selectedPoolView)
 	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
-	const [vaultView, setVaultView] = useState<SelectedVaultView>(initialVaultView ?? 'browse-vaults')
 	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastHandledForkAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -318,9 +317,21 @@ export function SecurityPoolWorkflowSection({
 		? securityVault.securityVaultDetails
 		: undefined
 	const currentSecurityVaultResult = selectedVaultDetails === undefined ? undefined : securityVault.securityVaultResult
-	const selectedVaultAutoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
-	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
+	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
+		accountAddress: accountState.address,
+		hasLoadedCurrentVault,
+		initialVaultView,
+		loadingSecurityVault: securityVault.loadingSecurityVault,
+		onLoadSecurityVault: securityVault.onLoadSecurityVault,
+		onSecurityVaultFormChange: securityVault.onSecurityVaultFormChange,
+		selectedPoolAddress: selectedPool?.securityPoolAddress,
+		selectedVaultAddress,
+		selectedVaultAddressInput: securityVault.securityVaultForm.selectedVaultAddress,
+		selectedVaultSecurityPoolAddress,
+		showSelectedPoolWorkflowDetails,
+		view,
+	})
 	const lastReportingAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingOutcomeRefreshHash = useRef<string | undefined>(undefined)
 	const lastVaultStatusRefreshHash = useRef<string | undefined>(undefined)
@@ -469,7 +480,6 @@ export function SecurityPoolWorkflowSection({
 			</div>
 		)
 	}
-	const selectedPoolVaultDefaultKey = `${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}:${normalizeAddress(accountState.address) ?? ''}`
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return
@@ -493,24 +503,6 @@ export function SecurityPoolWorkflowSection({
 		lastQueuedOperationRefreshHash.current = queuedOperationHash
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
 	}, [loadingPoolOracleManager, onLoadPoolOracleManager, securityPoolOverviewResult, securityVault.securityVaultResult, selectedPoolManagerAddress])
-	useEffect(() => {
-		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
-		if (normalizedSelectedPoolAddress === undefined) return
-		setVaultView('selected-vault')
-		if (accountState.address === undefined) return
-		if (isSelectedVaultOwnedByAccountHelper(securityVault.securityVaultForm.selectedVaultAddress, accountState.address)) return
-		securityVault.onSecurityVaultFormChange({ selectedVaultAddress: accountState.address.toString() })
-	}, [accountState.address, securityVault.onSecurityVaultFormChange, securityVault.securityVaultForm.selectedVaultAddress, selectedPoolVaultDefaultKey])
-	useEffect(() => {
-		if (!showSelectedPoolWorkflowDetails || view !== 'vaults') return
-		if (accountState.address === undefined) return
-		if (selectedPool?.securityPoolAddress === undefined || selectedVaultAddress === '') return
-		if (!sameAddress(selectedVaultSecurityPoolAddress, selectedPool.securityPoolAddress)) return
-		if (hasLoadedCurrentVault || securityVault.loadingSecurityVault) return
-		if (lastSelectedVaultAutoLoadKey.current === selectedVaultAutoLoadKey) return
-		lastSelectedVaultAutoLoadKey.current = selectedVaultAutoLoadKey
-		void securityVault.onLoadSecurityVault()
-	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		const shouldAutoloadReportingForFork = view === 'fork-workflow'
 		const shouldAutoloadReportingForCurrentView = view === 'reporting' || shouldAutoloadReportingForFork

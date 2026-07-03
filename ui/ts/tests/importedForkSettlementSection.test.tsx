@@ -68,6 +68,8 @@ describe('ImportedForkSettlementSection', () => {
 		expect(within(document.body).getByRole('heading', { name: 'Settle Fork-Carried Escalation Deposits' })).not.toBeNull()
 		expect(within(document.body).getByText('Parent deposit #7')).not.toBeNull()
 		expect(within(document.body).getByText('Worth now: Pending final settlement')).not.toBeNull()
+		expect(within(document.body).getByText(/Imported entry depth:/)).not.toBeNull()
+		expect(within(document.body).queryByText(/Imported ordering start:/)).toBeNull()
 		expect(renderedActions).toEqual([
 			{
 				guardMessage: 'Fork-carried escalation deposits can be settled after this child pool finalizes.',
