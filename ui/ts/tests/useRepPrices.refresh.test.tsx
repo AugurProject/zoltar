@@ -137,5 +137,15 @@ describe('useRepPrices refresh races', () => {
 
 		expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('3')
 		expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('30')
+
+		await cleanupRenderedComponent?.()
+		const remountedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = remountedComponent.cleanup
+		const remountedQueries = within(document.body)
+
+		await waitFor(() => {
+			expect(remountedQueries.getByTestId('rep-per-eth').textContent).toBe('3')
+			expect(remountedQueries.getByTestId('rep-per-usdc').textContent).toBe('30')
+		})
 	})
 })

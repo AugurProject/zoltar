@@ -41,6 +41,7 @@ type UseRepPricesOptions = {
 
 const repPriceCacheByBackend = new Map<ChainBackend, CachedRepPrices>()
 const repPriceRefreshByBackend = new Map<ChainBackend, Promise<CachedRepPrices | undefined>>()
+const repPriceRefreshGenerationByBackend = new Map<ChainBackend, number>()
 
 function getCachedRepPrices(backend: ChainBackend) {
 	return repPriceCacheByBackend.get(backend)
@@ -56,6 +57,7 @@ function getFreshCachedRepPrices(backend: ChainBackend) {
 export function resetRepPriceCacheForTesting() {
 	repPriceCacheByBackend.clear()
 	repPriceRefreshByBackend.clear()
+	repPriceRefreshGenerationByBackend.clear()
 }
 
 async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadClient']>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
@@ -78,6 +80,8 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	const pendingRefresh = repPriceRefreshByBackend.get(backend)
 	if (!forceRefresh && pendingRefresh !== undefined) return await pendingRefresh
 
+	const refreshGeneration = (repPriceRefreshGenerationByBackend.get(backend) ?? 0) + 1
+	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
 		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
@@ -112,6 +116,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 		}
 
 		if (!hasNextCachedRepPrices) return getCachedRepPrices(backend)
+		if (repPriceRefreshGenerationByBackend.get(backend) !== refreshGeneration) return getCachedRepPrices(backend)
 		repPriceCacheByBackend.set(backend, nextCachedRepPrices)
 		return nextCachedRepPrices
 	})()
