@@ -323,7 +323,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		const yesTokenId = await readTokenId(shareTokenAddress, 1)
 		const noTokenId = await readTokenId(shareTokenAddress, 2)
 
-		// Solidity bytecode coverage is transaction-trace based; readContract calls are not mapped.
+		// Keep direct transaction-backed calls here so the coverage harness still exercises the same helper paths explicitly.
 		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'supportsInterface', args: ['0xd9b67a26'] }))
 		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOf', args: [client.account.address, yesTokenId] }))
 		await transactWithShareToken(shareTokenAddress, encodeFunctionData({ abi: peripherals_tokens_ShareToken_ShareToken.abi, functionName: 'totalSupply', args: [yesTokenId] }))

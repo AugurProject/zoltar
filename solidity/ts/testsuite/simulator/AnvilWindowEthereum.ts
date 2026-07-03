@@ -49,6 +49,13 @@ type RpcTransactionRequest = {
 	readonly type?: string
 }
 
+type EthCallCoverageRequest = {
+	readonly transaction: RpcTransactionRequest
+	readonly blockNumberOrHash?: unknown
+	readonly stateOverrides?: unknown
+	readonly blockOverrides?: unknown
+}
+
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 const parseTransactionReceipt = (value: unknown): RpcTransactionReceipt | undefined => {
@@ -71,6 +78,17 @@ function isJsonRpcError(value: unknown): value is { code: number; message: strin
 
 function isRpcTransactionRequest(value: unknown): value is RpcTransactionRequest {
 	return typeof value === 'object' && value !== null
+}
+
+function parseEthCallCoverageRequest(params: readonly unknown[]): EthCallCoverageRequest | undefined {
+	const [transaction, blockNumberOrHash, stateOverrides, blockOverrides] = params
+	if (!isRpcTransactionRequest(transaction)) return undefined
+	return {
+		transaction,
+		...(blockNumberOrHash !== undefined ? { blockNumberOrHash } : {}),
+		...(stateOverrides !== undefined ? { stateOverrides } : {}),
+		...(blockOverrides !== undefined ? { blockOverrides } : {}),
+	}
 }
 
 export function normalizeAnvilTransactionParams(params: unknown[]) {
@@ -173,9 +191,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
-	const request = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
+	const request = async (args: { method: string; params?: unknown[] | unknown | undefined; skipCoverage?: boolean }): Promise<unknown> => {
 		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
 		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
+		const ethCallCoverageRequest = args.skipCoverage || args.method !== 'eth_call' ? undefined : parseEthCallCoverageRequest(params)
 		let nextBlockTimestamp: bigint | undefined
 		// Avoid preflight eth_call here. Recent Anvil versions can leak state when a
 		// mutating call reverts after intermediate writes, which corrupts subsequent
@@ -212,6 +231,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
 
 		if (json.error !== undefined) {
+			if (ethCallCoverageRequest !== undefined) {
+				await collectBytecodeCoverageForCall({
+					request,
+					...ethCallCoverageRequest,
+				})
+			}
 			if (isSendTransactionMethod && params[0] !== undefined && isRpcTransactionRequest(params[0])) {
 				await collectBytecodeCoverageForCall({ request, transaction: params[0] })
 			}
@@ -247,6 +272,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
 		ensureDefined(json.result, 'json.result is undefined')
+		if (ethCallCoverageRequest !== undefined) {
+			await collectBytecodeCoverageForCall({
+				request,
+				...ethCallCoverageRequest,
+			})
+		}
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
 			const receiptResult = await waitForReceiptStatus(json.result)
 			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
@@ -282,7 +313,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			}
 			if (receiptResult?.status === '0x0') {
 				try {
-					await request({ method: 'eth_call', params: [params[0], 'latest'] })
+					await request({ method: 'eth_call', params: [params[0], 'latest'], skipCoverage: true })
 				} catch (error) {
 					throw error
 				}
