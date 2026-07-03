@@ -511,7 +511,7 @@ export function App() {
 			loadingPoolOracleManager,
 			loadingSecurityPoolPage,
 			loadingSecurityPools,
-			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number) => void loadBrowseSecurityPoolPage(pageIndex, pageSize),
+			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey?: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
 			onLiquidationAmountChange: setLiquidationAmount,
 			onLiquidationTimeoutMinutesChange: setLiquidationTimeoutMinutes,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),

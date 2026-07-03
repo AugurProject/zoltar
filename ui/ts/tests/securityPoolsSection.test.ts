@@ -290,22 +290,33 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 }
 
 function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteContentProps> = {}): SecurityPoolsOverviewRouteContentProps {
+	const accountState = overrides.accountState ?? createAccountState()
 	const securityPools = overrides.securityPools ?? []
-	const securityPoolPage: SecurityPoolPage | undefined =
-		overrides.securityPoolPage ??
-		(securityPools.length === 0
+	const environmentRefreshKey = overrides.environmentRefreshKey ?? 0
+	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const hasSecurityPoolPageOverride = Object.hasOwn(overrides, 'securityPoolPage')
+	const defaultSecurityPoolPage: SecurityPoolPage | undefined =
+		securityPools.length === 0
 			? undefined
 			: {
 					pageIndex: 0,
 					pageSize: 6,
 					poolCount: BigInt(securityPools.length),
 					pools: securityPools,
-				})
+					requestKey: `${environmentRefreshKey}:0:6:${accountRequestKey}`,
+				}
+	const overrideSecurityPoolPage = hasSecurityPoolPageOverride ? overrides.securityPoolPage : defaultSecurityPoolPage
+	const securityPoolPage =
+		overrideSecurityPoolPage === undefined
+			? undefined
+			: {
+					...overrideSecurityPoolPage,
+					requestKey: overrideSecurityPoolPage.requestKey ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
+				}
 	return {
-		accountState: createAccountState(),
+		accountState,
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
-		environmentRefreshKey: 0,
 		hasLoadedSecurityPools: false,
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		liquidationAmount: '',
@@ -329,14 +340,15 @@ function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteConten
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
-		securityPoolBrowseCount: securityPoolPage?.poolCount,
-		securityPoolPage,
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
 		securityPoolLiquidationError: undefined,
 		securityPoolOverviewResult: undefined,
-		securityPools,
 		...overrides,
+		environmentRefreshKey,
+		securityPoolBrowseCount: securityPoolPage?.poolCount,
+		securityPoolPage,
+		securityPools,
 	}
 }
 

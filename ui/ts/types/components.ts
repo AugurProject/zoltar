@@ -476,7 +476,7 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	loadingSecurityPoolPage: boolean
 	loadingSecurityPools: boolean
 	onCreateSecurityPool?: () => void
-	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number) => void
+	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey?: string) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void

@@ -113,13 +113,13 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(page.pools.map(pool => pool.questionId)).toEqual(['0x03'])
 	})
 
-	void test('recovers registry page no-data reads from already loaded pools without rereading the registry', async () => {
-		const loadedPools = [createListedSecurityPool('0x01', '0x0000000000000000000000000000000000000001'), createListedSecurityPool('0x02', '0x0000000000000000000000000000000000000002'), createListedSecurityPool('0x03', '0x0000000000000000000000000000000000000003')]
+	void test('recovers registry page no-data reads by rereading current registry context', async () => {
+		const initialPools = [createListedSecurityPool('0x01', '0x0000000000000000000000000000000000000001')]
+		const currentPools = [createListedSecurityPool('0x02', '0x0000000000000000000000000000000000000002'), createListedSecurityPool('0x03', '0x0000000000000000000000000000000000000003'), createListedSecurityPool('0x04', '0x0000000000000000000000000000000000000004')]
 		let allPoolsLoadCount = 0
 		const loadAllSecurityPools = mock(async () => {
 			allPoolsLoadCount += 1
-			if (allPoolsLoadCount > 1) throw new Error('loadAllSecurityPools should not be called for cached registry page fallback')
-			return loadedPools
+			return allPoolsLoadCount === 1 ? initialPools : currentPools
 		})
 		const loadSecurityPoolPage = mock(async () => {
 			throw new Error('Contract function returned no data for registry page')
@@ -156,15 +156,19 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			await requireHookState(hookState).loadSecurityPools()
 		})
 
+		expect(allPoolsLoadCount).toBe(1)
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
+
 		await act(async () => {
-			await requireHookState(hookState).loadBrowseSecurityPoolPage(1, 2)
+			await requireHookState(hookState).loadBrowseSecurityPoolPage(1, 2, 'current-request')
 		})
 
-		expect(allPoolsLoadCount).toBe(1)
+		expect(allPoolsLoadCount).toBe(2)
 		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolBrowseCount).toBe(3n)
-		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x03'])
+		expect(requireHookState(hookState).securityPoolPage?.requestKey).toBe('current-request')
+		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x04'])
 	})
 
 	void test('waits for active backend readiness before loading the registry page', async () => {

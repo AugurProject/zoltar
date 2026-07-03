@@ -39,13 +39,14 @@ export function shouldFallbackToAllSecurityPoolsPage(error: unknown) {
 	return SECURITY_POOL_PAGE_FALLBACK_DETAILS.some(fallbackDetail => normalizedDetail.includes(fallbackDetail))
 }
 
-export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
+export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number, requestKey?: string): SecurityPoolPage {
 	const startIndex = pageIndex * pageSize
 	return {
 		pageIndex,
 		pageSize,
 		poolCount: BigInt(pools.length),
 		pools: pools.slice(startIndex, startIndex + pageSize),
+		...(requestKey === undefined ? {} : { requestKey }),
 	}
 }
 
@@ -113,7 +114,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		})
 	}
 
-	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number) => {
+	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number, requestKey?: string) => {
 		const isCurrent = nextSecurityPoolPageLoad()
 		await securityPoolPageLoad.run({
 			isCurrent,
@@ -128,18 +129,17 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 					return await loadSecurityPoolPage(readClient, pageIndex, pageSize, accountAddress)
 				} catch (error) {
 					if (!shouldFallbackToAllSecurityPoolsPage(error)) throw error
-					if (hasLoadedSecurityPools.value) return createSecurityPoolPageFromLoadedPools(securityPools.value, pageIndex, pageSize)
 					const pools = await loadAllSecurityPools(readClient, {
 						...(accountAddress === undefined ? {} : { accountAddress }),
 						vaultDetailMode: 'selected',
 					})
-					return createSecurityPoolPageFromLoadedPools(pools, pageIndex, pageSize)
+					return createSecurityPoolPageFromLoadedPools(pools, pageIndex, pageSize, requestKey)
 				}
 			},
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true
 				securityPoolBrowseCount.value = page.poolCount
-				securityPoolPage.value = page
+				securityPoolPage.value = requestKey === undefined ? page : { ...page, requestKey }
 			},
 			onError: error => {
 				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
