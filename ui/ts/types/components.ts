@@ -147,7 +147,7 @@ export type SectionBlockProps = {
 	headingLevel?: 2 | 3 | 4
 	title?: ComponentChildren
 	tone?: 'critical' | 'default' | 'muted'
-	variant?: 'default' | 'embedded'
+	variant?: 'default' | 'embedded' | 'plain' | 'surface'
 }
 
 export type RouteWorkflowPanelProps = {

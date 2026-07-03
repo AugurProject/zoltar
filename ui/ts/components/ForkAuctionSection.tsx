@@ -1010,7 +1010,7 @@ export function ForkAuctionSection({
 			</div>
 		)
 	}
-	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = 'Submit Bid', variant = 'default' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
+	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = 'Submit Bid', variant = 'embedded' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
 		<SectionBlock {...(description === undefined ? {} : { description })} density={density} headingLevel={headingLevel} title={title} variant={variant}>
 			<div className='form-grid'>
 				{submitBidPreviewTickSummary === undefined ? undefined : <p className='detail'>Selected ladder price: {renderTruthAuctionPriceValue(submitBidPreviewTickSummary.price)}</p>}
@@ -1396,7 +1396,7 @@ export function ForkAuctionSection({
 		if (selectedStage === 'fork-triggered')
 			return (
 				<fieldset aria-labelledby='fork-workflow-stage-fork-triggered' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-fork-triggered' role='tabpanel'>
-					<SectionBlock title='Fork Triggered'>
+					<SectionBlock title='Fork Triggered' variant='embedded'>
 						{hasTriggeredFork ? (
 							renderWorkflowMetricGrid([
 								{ label: 'Status', value: 'System is forking' },
@@ -1417,7 +1417,7 @@ export function ForkAuctionSection({
 					{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 					{migrationSummaryCard}
 
-					<SectionBlock title='Your Migration Balances' description='Wallet-level balances in the parent pool that may still need migration.'>
+					<SectionBlock title='Your Migration Balances' variant='embedded' description='Wallet-level balances in the parent pool that may still need migration.'>
 						{migrationBalancesContent}
 						{accountState.address === undefined ? undefined : (
 							<>
@@ -1585,11 +1585,11 @@ export function ForkAuctionSection({
 						{renderSelectedOutcomeChildPoolNotice()}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
-						<SectionBlock badge={truthAuctionStateBadgeElement} title='Truth Auction Status'>
+						<SectionBlock badge={truthAuctionStateBadgeElement} title='Truth Auction Status' variant='embedded'>
 							{renderWorkflowMetricGrid(auctionStatusMetrics)}
 						</SectionBlock>
 
-						<SectionBlock title='Start Truth Auction'>
+						<SectionBlock title='Start Truth Auction' variant='embedded'>
 							<p className='detail'>Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP plus {AUCTIONED_BOND_ALLOWANCE_LABEL}, while losing bids are refunded during settlement.</p>
 							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
@@ -1633,7 +1633,7 @@ export function ForkAuctionSection({
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
-						<SectionBlock badge={truthAuctionStateBadgeElement} title='Settlement Status'>
+						<SectionBlock badge={truthAuctionStateBadgeElement} title='Settlement Status' variant='embedded'>
 							{renderWorkflowMetricGrid(settlementStatusMetrics)}
 						</SectionBlock>
 						{truthAuctionSettlementSection}
