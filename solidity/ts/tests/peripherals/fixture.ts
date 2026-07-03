@@ -6,6 +6,8 @@ import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthere
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
+// The solidity worktree can temporarily see a stale @zoltar/shared package through the shared node_modules link during refreshes.
+// Import the generated shared helper directly so this fixture stays stable across merge-validation runs.
 import { pickFixtureProperties } from '../../../../shared/js/testing/pickFixtureProperties.js'
 import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
