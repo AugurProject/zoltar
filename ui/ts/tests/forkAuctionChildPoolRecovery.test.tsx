@@ -22,11 +22,11 @@ const STALE_TRUTH_AUCTION_ADDRESS: Address = '0x00000000000000000000000000000000
 const REFRESHED_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa3'
 
 let recoveredPools: ListedSecurityPool[] = []
-let loadAllSecurityPoolsCallAddresses: (Address | undefined)[] = []
+let loadAllSecurityPoolsCallOptions: ({ accountAddress?: Address; selectedSecurityPoolAddress?: Address; vaultDetailMode?: 'all' | 'selected' } | undefined)[] = []
 let loadForkAuctionDetailsCalls = 0
 let childAuctionDetailsFactory = (securityPoolAddress: Address) => createChildAuctionDetails(securityPoolAddress)
-const loadAllSecurityPoolsMock = mock(async (_client: unknown, options?: { accountAddress?: Address }) => {
-	loadAllSecurityPoolsCallAddresses.push(options?.accountAddress)
+const loadAllSecurityPoolsMock = mock(async (_client: unknown, options?: { accountAddress?: Address; selectedSecurityPoolAddress?: Address; vaultDetailMode?: 'all' | 'selected' }) => {
+	loadAllSecurityPoolsCallOptions.push(options)
 	return recoveredPools
 })
 
@@ -239,7 +239,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 
 	beforeEach(() => {
 		recoveredPools = []
-		loadAllSecurityPoolsCallAddresses = []
+		loadAllSecurityPoolsCallOptions = []
 		loadAllSecurityPoolsMock.mockClear()
 		loadForkAuctionDetailsCalls = 0
 		childAuctionDetailsFactory = securityPoolAddress => createChildAuctionDetails(securityPoolAddress)
@@ -262,6 +262,13 @@ describe('ForkAuctionSection child pool recovery', () => {
 			expect(within(document.body).queryByText('Yes universe does not exist.')).toBeNull()
 			expectTransactionButtonEnabled(document.body, 'Start Truth Auction')
 		})
+		expect(loadAllSecurityPoolsCallOptions).toEqual([
+			{
+				accountAddress: zeroAddress,
+				selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
+				vaultDetailMode: 'selected',
+			},
+		])
 	})
 
 	test('reloads stale recovered child auction details once the child pool is already operational', async () => {
@@ -364,7 +371,13 @@ describe('ForkAuctionSection child pool recovery', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => {
-			expect(loadAllSecurityPoolsCallAddresses).toEqual([firstWallet])
+			expect(loadAllSecurityPoolsCallOptions).toEqual([
+				{
+					accountAddress: firstWallet,
+					selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
+					vaultDetailMode: 'selected',
+				},
+			])
 		})
 
 		await act(() => {
@@ -382,7 +395,18 @@ describe('ForkAuctionSection child pool recovery', () => {
 		})
 
 		await waitFor(() => {
-			expect(loadAllSecurityPoolsCallAddresses).toEqual([firstWallet, secondWallet])
+			expect(loadAllSecurityPoolsCallOptions).toEqual([
+				{
+					accountAddress: firstWallet,
+					selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
+					vaultDetailMode: 'selected',
+				},
+				{
+					accountAddress: secondWallet,
+					selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
+					vaultDetailMode: 'selected',
+				},
+			])
 		})
 	})
 })

@@ -4,1159 +4,7 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Augur Placeholder White Paper</title>
-		<style>
-			:root {
-				color-scheme: light dark;
-				--bg: #f4f7f6;
-				--paper: #fffefd;
-				--ink: #202427;
-				--muted: #58646a;
-				--line: #d4ddda;
-				--soft-line: #e8eeec;
-				--card-bg: #fbfcfb;
-				--section-bg: #f8faf9;
-				--code-bg: #f8f2e7;
-				--table-head: #eef5f2;
-				--green: #1c7659;
-				--green-soft: #d9eee7;
-				--blue: #285f9f;
-				--blue-soft: #dce9f8;
-				--gold: #8a5c14;
-				--gold-soft: #f3dfb8;
-				--red: #9f463d;
-				--red-soft: #f2d6d0;
-				--accent: var(--green);
-				--accent-soft: var(--green-soft);
-				--accent-2: var(--gold);
-				--accent-2-soft: var(--gold-soft);
-				--accent-rgb: 28 118 89;
-				--accent-2-rgb: 138 92 20;
-				--diagram-line: #59615f;
-				--focus: #174f9d;
-				--radius: 0.5rem;
-				--radius-sm: 0.35rem;
-				--shadow: 0 18px 48px rgb(22 50 45 / 9%);
-				--section-shadow: 0 12px 34px rgb(22 50 45 / 6%);
-				font-family:
-					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-					sans-serif;
-			}
-
-			body.paper-placeholder {
-				--accent: var(--green);
-				--accent-soft: var(--green-soft);
-				--accent-2: var(--gold);
-				--accent-2-soft: var(--gold-soft);
-				--accent-rgb: 28 118 89;
-				--accent-2-rgb: 138 92 20;
-			}
-
-			body.paper-zoltar {
-				--accent: var(--blue);
-				--accent-soft: var(--blue-soft);
-				--accent-2: var(--green);
-				--accent-2-soft: var(--green-soft);
-				--accent-rgb: 40 95 159;
-				--accent-2-rgb: 28 118 89;
-			}
-
-			@media (prefers-color-scheme: dark) {
-				:root {
-					--bg: #111516;
-					--paper: #191d1e;
-					--ink: #f1f4f2;
-					--muted: #b4bfbb;
-					--line: #3b4744;
-					--soft-line: #2b3331;
-					--card-bg: #1d2322;
-					--section-bg: #1d2221;
-					--code-bg: #27231c;
-					--table-head: #232b29;
-					--green: #72cba9;
-					--green-soft: #14372c;
-					--blue: #8bb9f0;
-					--blue-soft: #15283f;
-					--gold: #e6b65d;
-					--gold-soft: #3a2d15;
-					--red: #ef9185;
-					--red-soft: #3d211d;
-					--diagram-line: #aeb9b5;
-					--focus: #acd0ff;
-					--shadow: 0 18px 48px rgb(0 0 0 / 32%);
-					--section-shadow: 0 12px 34px rgb(0 0 0 / 22%);
-				}
-
-				body.paper-placeholder {
-					--accent: var(--green);
-					--accent-soft: var(--green-soft);
-					--accent-2: var(--gold);
-					--accent-2-soft: var(--gold-soft);
-					--accent-rgb: 114 203 169;
-					--accent-2-rgb: 230 182 93;
-				}
-
-				body.paper-zoltar {
-					--accent: var(--blue);
-					--accent-soft: var(--blue-soft);
-					--accent-2: var(--green);
-					--accent-2-soft: var(--green-soft);
-					--accent-rgb: 139 185 240;
-					--accent-2-rgb: 114 203 169;
-				}
-			}
-
-			* {
-				box-sizing: border-box;
-			}
-
-			html {
-				scroll-behavior: smooth;
-				scroll-padding-top: 1.5rem;
-			}
-
-			@media (prefers-reduced-motion: reduce) {
-				*,
-				*::before,
-				*::after {
-					transition-duration: 0.01ms !important;
-					animation-duration: 0.01ms !important;
-					animation-iteration-count: 1 !important;
-				}
-
-				html {
-					scroll-behavior: auto;
-				}
-			}
-
-			body {
-				counter-reset: figure equation;
-				margin: 0;
-				background:
-					linear-gradient(120deg, rgb(var(--accent-rgb) / 9%), transparent 32rem),
-					linear-gradient(300deg, rgb(var(--accent-2-rgb) / 8%), transparent 34rem),
-					var(--bg);
-				color: var(--ink);
-				font-size: 1rem;
-				line-height: 1.64;
-				text-rendering: optimizeLegibility;
-			}
-
-			body::before {
-				position: fixed;
-				z-index: 2;
-				top: 0;
-				right: 0;
-				left: 0;
-				height: 0.22rem;
-				background: linear-gradient(90deg, var(--accent), var(--accent-2));
-				content: "";
-				pointer-events: none;
-			}
-
-			a {
-				color: var(--blue);
-				text-decoration-thickness: 0.08em;
-				text-underline-offset: 0.18em;
-			}
-
-			a:hover {
-				color: var(--ink);
-			}
-
-			a:focus-visible,
-			button:focus-visible,
-			[tabindex]:focus-visible {
-				outline: 2px solid var(--focus);
-				outline-offset: 3px;
-				border-radius: var(--radius-sm);
-			}
-
-			p {
-				margin: 0 0 1rem;
-			}
-
-			figure {
-				margin-right: 0;
-				margin-left: 0;
-			}
-
-			code {
-				padding: 0.1rem 0.32rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius-sm);
-				background: var(--code-bg);
-				font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-				font-size: 0.92em;
-				overflow-wrap: anywhere;
-			}
-
-			.skip-link {
-				position: fixed;
-				z-index: 3;
-				top: 0.55rem;
-				left: 0.75rem;
-				transform: translateY(-150%);
-				padding: 0.55rem 0.75rem;
-				border: 1px solid var(--line);
-				border-radius: var(--radius-sm);
-				background: var(--paper);
-				box-shadow: var(--section-shadow);
-				color: var(--ink);
-				font-weight: 800;
-				text-decoration: none;
-			}
-
-			.skip-link:focus-visible {
-				transform: translateY(0);
-			}
-
-			.site-shell {
-				display: grid;
-				grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
-				gap: clamp(1.5rem, 4vw, 4rem);
-				width: min(1220px, calc(100% - 2rem));
-				margin: 0 auto;
-				padding: 2rem 0 4rem;
-			}
-
-			.sidebar {
-				position: sticky;
-				top: 1.5rem;
-				align-self: start;
-				max-height: calc(100vh - 3rem);
-				overflow: auto;
-				padding: 0.85rem;
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: color-mix(in srgb, var(--paper) 92%, transparent);
-				box-shadow: 0 10px 34px rgb(22 50 45 / 7%);
-				backdrop-filter: blur(12px);
-			}
-
-			.sidebar-header {
-				padding: 0.2rem 0.25rem 0.75rem;
-				border-bottom: 1px solid var(--soft-line);
-			}
-
-			.sidebar-series {
-				display: block;
-				color: var(--muted);
-				font-size: 0.75rem;
-				font-weight: 800;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.sidebar strong {
-				display: block;
-				margin-top: 0.15rem;
-				color: var(--accent);
-				font-size: 0.98rem;
-				font-weight: 850;
-			}
-
-			.sidebar-header p {
-				margin: 0.2rem 0 0;
-				color: var(--muted);
-				font-size: 0.86rem;
-				line-height: 1.35;
-			}
-
-			.sidebar-companion,
-			.companion-link {
-				text-decoration: none;
-			}
-
-			.sidebar-companion {
-				display: block;
-				margin: 0.8rem 0;
-				padding: 0.65rem 0.72rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius-sm);
-				background: color-mix(in srgb, var(--accent-soft) 54%, var(--paper));
-				color: var(--ink);
-			}
-
-			.sidebar-companion span,
-			.companion-link span {
-				display: block;
-				color: var(--muted);
-				font-size: 0.72rem;
-				font-weight: 850;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.sidebar-companion b,
-			.companion-link b {
-				display: block;
-				margin-top: 0.16rem;
-				font-size: 0.92rem;
-				line-height: 1.25;
-			}
-
-			.sidebar nav {
-				display: grid;
-				gap: 0.12rem;
-			}
-
-			.sidebar nav a {
-				display: block;
-				min-height: 2rem;
-				padding: 0.36rem 0.65rem 0.36rem 0.75rem;
-				border: 1px solid transparent;
-				border-radius: var(--radius-sm);
-				color: var(--muted);
-				font-size: 0.91rem;
-				line-height: 1.35;
-				text-decoration: none;
-			}
-
-			.sidebar nav a:hover {
-				border-color: var(--soft-line);
-				background: color-mix(in srgb, var(--accent-soft) 36%, transparent);
-				color: var(--ink);
-			}
-
-			.sidebar nav a[aria-current="location"] {
-				border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-				background: color-mix(in srgb, var(--accent-soft) 68%, var(--paper));
-				box-shadow: inset 0.22rem 0 0 var(--accent);
-				color: var(--ink);
-				font-weight: 800;
-			}
-
-			main {
-				min-width: 0;
-			}
-
-			.hero,
-			.paper-section {
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: var(--paper);
-				box-shadow: var(--section-shadow);
-			}
-
-			.hero {
-				position: relative;
-				overflow: hidden;
-				padding: clamp(2rem, 5vw, 4rem);
-				background:
-					radial-gradient(circle at 85% 15%, rgb(var(--accent-2-rgb) / 14%), transparent 15rem),
-					linear-gradient(145deg, var(--paper), var(--section-bg));
-				box-shadow: var(--shadow);
-			}
-
-			.hero::after {
-				position: absolute;
-				inset: 0;
-				background: linear-gradient(90deg, rgb(var(--accent-rgb) / 9%), transparent 28rem);
-				content: "";
-				pointer-events: none;
-			}
-
-			.hero > * {
-				position: relative;
-				z-index: 1;
-			}
-
-			.paper-brand {
-				display: flex;
-				align-items: flex-start;
-				justify-content: space-between;
-				gap: 1rem;
-				margin-bottom: clamp(1.5rem, 4vw, 2.4rem);
-			}
-
-			.brand-lockup {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.72rem;
-				min-width: 0;
-			}
-
-			.brand-mark {
-				display: grid;
-				flex: 0 0 auto;
-				grid-template-columns: repeat(2, 0.55rem);
-				grid-template-rows: repeat(2, 0.55rem);
-				gap: 0.22rem;
-				place-content: center;
-				width: 2.35rem;
-				height: 2.35rem;
-				border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
-				border-radius: var(--radius);
-				background: color-mix(in srgb, var(--accent-soft) 56%, var(--paper));
-			}
-
-			.brand-mark span {
-				border-radius: 999px;
-				background: var(--accent);
-			}
-
-			.brand-mark span:nth-child(2) {
-				background: var(--accent-2);
-			}
-
-			.brand-mark span:nth-child(3) {
-				grid-column: 1 / 3;
-				width: 1.32rem;
-				border-radius: 0.2rem;
-				background: linear-gradient(90deg, var(--accent), var(--accent-2));
-				justify-self: center;
-			}
-
-			.brand-name,
-			.brand-subtitle {
-				display: block;
-				line-height: 1.2;
-			}
-
-			.brand-name {
-				font-size: 0.92rem;
-				font-weight: 850;
-			}
-
-			.brand-subtitle {
-				margin-top: 0.12rem;
-				color: var(--muted);
-				font-size: 0.78rem;
-			}
-
-			.companion-link {
-				max-width: 15.5rem;
-				padding: 0.62rem 0.75rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius-sm);
-				background: color-mix(in srgb, var(--paper) 78%, transparent);
-				color: var(--ink);
-			}
-
-			.hero-label-row {
-				display: flex;
-				flex-wrap: wrap;
-				align-items: center;
-				gap: 0.7rem 1rem;
-				margin-bottom: 0.8rem;
-			}
-
-			.kicker {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.42rem;
-				margin: 0;
-				color: var(--accent);
-				font-size: 0.8rem;
-				font-weight: 850;
-				letter-spacing: 0.1em;
-				text-transform: uppercase;
-			}
-
-			.layer-dot {
-				width: 0.52rem;
-				height: 0.52rem;
-				border-radius: 999px;
-				background: var(--accent);
-				box-shadow: 0 0 0 0.22rem rgb(var(--accent-rgb) / 14%);
-			}
-
-			.paper-status {
-				margin: 0;
-				color: var(--muted);
-				font-size: 0.9rem;
-				font-weight: 650;
-			}
-
-			h1,
-			h2,
-			h3 {
-				line-height: 1.15;
-			}
-
-			h1 {
-				max-width: 18ch;
-				margin: 0;
-				font-size: clamp(2.5rem, 6vw, 4.6rem);
-				letter-spacing: 0;
-			}
-
-			.subtitle {
-				max-width: 74ch;
-				margin: 1.1rem 0 0;
-				color: var(--muted);
-				font-size: 1.12rem;
-			}
-
-			.meta-grid,
-			.summary-grid,
-			.role-grid,
-			.parameter-grid {
-				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-				gap: 0.9rem;
-			}
-
-			.meta-grid {
-				margin-top: 1.8rem;
-			}
-
-			.summary-grid,
-			.role-grid,
-			.parameter-grid {
-				margin: 1.35rem 0 0;
-			}
-
-			.meta-card,
-			.summary-card,
-			.role-card,
-			.parameter-card,
-			.glossary-card,
-			.timeline-card,
-			.implementation-note {
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius);
-				background: var(--card-bg);
-				padding: 0.95rem 1rem;
-			}
-
-			.meta-card,
-			.summary-card {
-				border-top: 2px solid color-mix(in srgb, var(--accent) 52%, var(--line));
-			}
-
-			.meta-card span,
-			.summary-card span,
-			.role-card span,
-			.parameter-card span {
-				display: block;
-				color: var(--muted);
-				font-size: 0.76rem;
-				font-weight: 850;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.meta-card b,
-			.summary-card b,
-			.role-card b,
-			.parameter-card b {
-				display: block;
-				margin-top: 0.28rem;
-				font-size: 1rem;
-				line-height: 1.34;
-			}
-
-			.paper-section {
-				margin-top: 1.25rem;
-				padding: clamp(1.35rem, 4vw, 2.7rem);
-			}
-
-			.paper-section:target {
-				border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-				box-shadow:
-					0 0 0 3px rgb(var(--accent-rgb) / 10%),
-					var(--section-shadow);
-			}
-
-			.section-heading {
-				display: flex;
-				align-items: baseline;
-				justify-content: space-between;
-				gap: 1rem;
-				margin-bottom: 1rem;
-				border-bottom: 1px solid var(--soft-line);
-			}
-
-			.section-heading h2,
-			.paper-section > h2 {
-				margin: 0 0 0.85rem;
-				font-size: clamp(1.65rem, 4vw, 2.55rem);
-			}
-
-			.paper-section h3 {
-				max-width: 76ch;
-				margin: 1.8rem 0 0.65rem;
-				font-size: 1.25rem;
-			}
-
-			.anchor-link {
-				flex: none;
-				color: var(--muted);
-				font-weight: 850;
-				text-decoration: none;
-			}
-
-			.anchor-link:hover {
-				color: var(--ink);
-			}
-
-			.paper-section > p,
-			.paper-section > ol,
-			.paper-section > ul {
-				max-width: 76ch;
-			}
-
-			.paper-section > p + p {
-				margin-top: 0.2rem;
-			}
-
-			.lede {
-				max-width: 76ch;
-				color: color-mix(in srgb, var(--ink) 82%, var(--muted));
-				font-size: 1.08rem;
-				line-height: 1.68;
-			}
-
-			.callout {
-				max-width: 76ch;
-				margin: 1.25rem 0;
-				padding: 1rem 1.1rem;
-				border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-				border-left: 0.35rem solid var(--accent);
-				border-radius: var(--radius);
-				background: color-mix(in srgb, var(--accent-soft) 62%, var(--paper));
-			}
-
-			.callout strong {
-				display: block;
-				margin-bottom: 0.25rem;
-			}
-
-			.equation,
-			.diagram {
-				scroll-margin-top: 1rem;
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: var(--section-bg);
-				overflow-x: auto;
-				overscroll-behavior-x: contain;
-				scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
-				scrollbar-width: thin;
-			}
-
-			.equation {
-				counter-increment: equation;
-				margin: 1.1rem 0;
-				padding: 1rem;
-				background: var(--code-bg);
-			}
-
-			.equation math {
-				display: block;
-				min-width: max-content;
-				font-size: 1.02rem;
-			}
-
-			.equation-caption {
-				margin: 0.7rem 0 0;
-				color: var(--muted);
-				font-size: 0.92rem;
-			}
-
-			.equation-label {
-				color: var(--ink);
-				font-weight: 850;
-			}
-
-			.equation-label::before {
-				content: "Equation " counter(equation) ": ";
-			}
-
-			.equation-label::after {
-				content: ". ";
-			}
-
-			.diagram {
-				counter-increment: figure;
-				position: relative;
-				margin: 1.45rem 0;
-				padding: 1rem;
-				border-top: 3px solid var(--accent);
-				box-shadow: inset 0 -1.5rem 1.8rem -2rem rgb(var(--accent-rgb) / 34%);
-			}
-
-			.diagram:nth-of-type(even) {
-				border-top-color: var(--accent-2);
-			}
-
-			.diagram svg {
-				display: block;
-				width: 100%;
-				min-width: 42rem;
-				height: auto;
-				color: var(--diagram-line);
-			}
-
-			.diagram-title {
-				margin: 0 0 0.75rem;
-				color: var(--muted);
-				font-size: 0.8rem;
-				font-weight: 850;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.diagram-caption {
-				margin: 0.8rem 0 0;
-				color: var(--muted);
-				font-size: 0.94rem;
-				line-height: 1.5;
-			}
-
-			.figure-label {
-				color: var(--ink);
-				font-weight: 850;
-			}
-
-			.figure-label::before {
-				content: "Figure " counter(figure) ": ";
-			}
-
-			.figure-label::after {
-				content: ". ";
-			}
-
-			.legend {
-				display: flex;
-				flex-wrap: wrap;
-				gap: 0.55rem 1rem;
-				margin-top: 0.8rem;
-				color: var(--muted);
-				font-size: 0.86rem;
-			}
-
-			.legend-item {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.4rem;
-			}
-
-			.legend-swatch {
-				width: 0.9rem;
-				height: 0.9rem;
-				border: 1px solid currentColor;
-				border-radius: 0.2rem;
-			}
-
-			.legend-swatch.teal,
-			.legend-swatch.green {
-				background: var(--green-soft);
-				color: var(--green);
-			}
-
-			.legend-swatch.gold {
-				background: var(--gold-soft);
-				color: var(--gold);
-			}
-
-			.legend-swatch.red {
-				background: var(--red-soft);
-				color: var(--red);
-			}
-
-			.legend-swatch.blue {
-				background: var(--blue-soft);
-				color: var(--blue);
-			}
-
-			.svg-box {
-				fill: var(--paper);
-				stroke: var(--line);
-				stroke-width: 2;
-			}
-
-			.svg-green,
-			.svg-teal {
-				fill: var(--green-soft);
-				stroke: var(--green);
-				stroke-width: 2;
-			}
-
-			.svg-blue {
-				fill: var(--blue-soft);
-				stroke: var(--blue);
-				stroke-width: 2;
-			}
-
-			.svg-gold {
-				fill: var(--gold-soft);
-				stroke: var(--gold);
-				stroke-width: 2;
-			}
-
-			.svg-red {
-				fill: var(--red-soft);
-				stroke: var(--red);
-				stroke-width: 2;
-			}
-
-			.svg-line {
-				fill: none;
-				stroke: var(--diagram-line);
-				stroke-linecap: round;
-				stroke-linejoin: round;
-				stroke-width: 2.35;
-			}
-
-			.svg-label {
-				fill: var(--ink);
-				font-family:
-					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-					sans-serif;
-				font-size: 17px;
-				font-weight: 800;
-			}
-
-			.svg-small {
-				fill: var(--muted);
-				font-size: 13px;
-				font-weight: 650;
-			}
-
-			.svg-micro {
-				fill: var(--muted);
-				font-size: 11px;
-				font-weight: 650;
-			}
-
-			.table-wrap {
-				overflow-x: auto;
-				margin: 1.2rem 0;
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: var(--section-bg);
-				scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
-				scrollbar-width: thin;
-			}
-
-			table {
-				width: 100%;
-				margin: 1.2rem 0;
-				border-collapse: separate;
-				border-spacing: 0;
-				background: var(--section-bg);
-				font-size: 0.94rem;
-			}
-
-			.table-wrap table {
-				margin: 0;
-			}
-
-			.wide-table {
-				min-width: 44rem;
-			}
-
-			.invalid-table {
-				min-width: 42rem;
-			}
-
-			.invalid-table th:first-child,
-			.invalid-table td:first-child {
-				width: 10rem;
-				white-space: nowrap;
-			}
-
-			th,
-			td {
-				padding: 0.78rem 0.9rem;
-				border-bottom: 1px solid var(--soft-line);
-				text-align: left;
-				vertical-align: top;
-			}
-
-			th + th,
-			td + td {
-				border-left: 1px solid var(--soft-line);
-			}
-
-			th {
-				background: var(--table-head);
-				color: var(--accent);
-				font-size: 0.78rem;
-				font-weight: 850;
-				letter-spacing: 0.06em;
-				text-transform: uppercase;
-			}
-
-			tr:last-child td {
-				border-bottom: 0;
-			}
-
-			ul,
-			ol {
-				padding-left: 1.35rem;
-			}
-
-			li + li {
-				margin-top: 0.42rem;
-			}
-
-			.contract-list,
-			.clean-list {
-				display: grid;
-				gap: 0.55rem;
-				padding-left: 1.1rem;
-			}
-
-			.contract-list li,
-			.clean-list li {
-				padding-left: 0.2rem;
-			}
-
-			.glossary-grid,
-			.timeline-grid,
-			.implementation-grid {
-				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-				gap: 0.85rem;
-				margin: 1.2rem 0;
-			}
-
-			.glossary-card b,
-			.timeline-card b,
-			.implementation-note b {
-				display: block;
-				margin-bottom: 0.25rem;
-			}
-
-			.glossary-card p,
-			.timeline-card p,
-			.implementation-note p {
-				margin: 0;
-				color: var(--muted);
-			}
-
-			.implementation-note {
-				border-left: 0.3rem solid var(--blue);
-			}
-
-			.step-list {
-				display: grid;
-				gap: 0.8rem;
-				max-width: none;
-				counter-reset: steps;
-				list-style: none;
-				padding: 0;
-			}
-
-			.paper-section > .step-list {
-				max-width: none;
-			}
-
-			.step-list li {
-				display: flex;
-				gap: 0.75rem;
-				align-items: start;
-				min-width: 0;
-				padding: 0.85rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius);
-				background: var(--section-bg);
-				counter-increment: steps;
-			}
-
-			.step-list li::before {
-				display: grid;
-				flex: 0 0 auto;
-				width: 2rem;
-				height: 2rem;
-				place-items: center;
-				border-radius: 999px;
-				background: var(--ink);
-				color: var(--paper);
-				content: counter(steps);
-				font-size: 0.9rem;
-				font-weight: 850;
-			}
-
-			.step-content {
-				min-width: 0;
-				overflow-wrap: anywhere;
-			}
-
-			.footer-note {
-				margin: 1.5rem 0 0;
-				color: var(--muted);
-				font-size: 0.92rem;
-			}
-
-			@media (max-width: 1000px) {
-				.site-shell {
-					display: block;
-					width: min(100% - 1.25rem, 820px);
-					padding-top: 0.75rem;
-				}
-
-				.sidebar {
-					position: static;
-					max-height: none;
-					margin: 0.5rem 0 1rem;
-				}
-
-				.sidebar nav {
-					grid-template-columns: repeat(2, minmax(0, 1fr));
-					column-gap: 0.35rem;
-				}
-
-				.paper-brand {
-					align-items: stretch;
-				}
-
-				.companion-link {
-					max-width: none;
-				}
-			}
-
-			@media (max-width: 640px) {
-				.site-shell {
-					width: min(100% - 1rem, 820px);
-					padding-bottom: 2rem;
-				}
-
-				.sidebar nav {
-					grid-template-columns: repeat(2, minmax(0, 1fr));
-					column-gap: 0.25rem;
-				}
-
-				.hero,
-				.paper-section {
-					border-radius: var(--radius);
-				}
-
-				.hero {
-					padding: 1.2rem;
-				}
-
-				.paper-section {
-					padding: 1.05rem;
-				}
-
-				.paper-brand {
-					flex-direction: column;
-					margin-bottom: 1.4rem;
-				}
-
-				h1 {
-					max-width: 100%;
-					font-size: clamp(2.15rem, 10.5vw, 3rem);
-				}
-
-				.subtitle {
-					font-size: 1rem;
-				}
-
-				.diagram {
-					margin-right: -0.2rem;
-					margin-left: -0.2rem;
-					padding: 0.75rem;
-				}
-
-				.diagram svg {
-					width: 42rem;
-					max-width: none;
-					min-width: 42rem;
-				}
-
-				th,
-				td {
-					padding: 0.65rem 0.72rem;
-				}
-			}
-
-			@media (max-width: 360px) {
-				.sidebar nav {
-					grid-template-columns: 1fr;
-				}
-			}
-
-			@page {
-				margin: 0.65in;
-			}
-
-			@media print {
-				:root {
-					color-scheme: light;
-					--bg: #fff;
-					--paper: #fff;
-					--ink: #111;
-					--muted: #444;
-					--line: #bbb;
-					--soft-line: #ddd;
-					--card-bg: #fff;
-					--section-bg: #fff;
-					--code-bg: #f6f6f6;
-					--table-head: #f1f1f1;
-					--shadow: none;
-					--section-shadow: none;
-				}
-
-				body {
-					background: #fff;
-				}
-
-				body::before,
-				.skip-link,
-				.sidebar,
-				.anchor-link {
-					display: none;
-				}
-
-				.site-shell {
-					display: block;
-					width: 100%;
-					padding: 0;
-				}
-
-				.hero,
-				.paper-section {
-					border: 0;
-					box-shadow: none;
-					break-inside: auto;
-				}
-
-				.hero {
-					padding: 0 0 1rem;
-				}
-
-				.paper-section {
-					margin-top: 1rem;
-					padding: 1rem 0 0;
-					border-top: 1px solid #ddd;
-				}
-
-				.companion-link {
-					border: 0;
-					padding: 0;
-				}
-
-				.diagram,
-				.table-wrap,
-				table,
-				.step-list li,
-				.glossary-card,
-				.timeline-card,
-				.implementation-note {
-					break-inside: avoid;
-				}
-
-				.diagram,
-				.table-wrap,
-				.equation {
-					overflow: visible;
-				}
-
-				.diagram svg {
-					max-width: 100%;
-					min-width: 0;
-				}
-
-				a {
-					color: #111;
-					text-decoration: none;
-				}
-			}
-		</style>
+		<link rel="stylesheet" href="./shared-docs.css">
 	</head>
 	<body class="paper-page paper-placeholder">
 		<a class="skip-link" href="#main-content">Skip to document</a>
@@ -1426,7 +274,7 @@
 						</div>
 						<div class="role-card">
 							<span>EscalationGame</span>
-							<b>Local dispute game for Invalid, Yes, and No.</b>
+							<b>Local dispute game for Invalid, <span class="term" tabindex="0">Yes</span>, and <span class="term" tabindex="0">No</span>.</b>
 						</div>
 						<div class="role-card">
 							<span>SecurityPoolForker</span>
@@ -1483,40 +331,56 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>universe</code></td>
+								<td><span class="term" tabindex="0"><code>universe</code></span></td>
 								<td>A Zoltar fork domain. A parent universe can split into multiple child universes after a fork.</td>
 							</tr>
 							<tr>
-								<td><code>pool</code></td>
+								<td><span class="term" tabindex="0"><code>pool</code></span></td>
 								<td>An Augur Placeholder <code>SecurityPool</code> for one question in one universe.</td>
 							</tr>
 							<tr>
-								<td><code>vault</code></td>
+								<td><span class="term" tabindex="0"><code>vault</code></span></td>
 								<td>A pool-specific REP account whose owner provides underwriting capacity.</td>
 							</tr>
 							<tr>
-								<td><code>complete set</code></td>
+								<td><span class="term" tabindex="0"><code>complete set</code></span></td>
 								<td>One <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share minted together against ETH collateral.</td>
 							</tr>
 							<tr>
-								<td><code>escalation game</code></td>
+								<td><span class="term" tabindex="0"><code>escalation game</code></span></td>
 								<td>The local dispute process that tries to pick a single winning outcome before a fork.</td>
 							</tr>
 							<tr>
-								<td><code>non-decision</code></td>
+								<td><span class="term" tabindex="0"><code>non-decision</code></span></td>
 								<td>The unresolved escalation state that opens the Zoltar fork path.</td>
 							</tr>
 							<tr>
-								<td><code>migration</code></td>
+								<td><span class="term" tabindex="0"><code>migration</code></span></td>
 								<td>The process that moves REP, shares, collateral accounting, and eligible escalation positions from a parent pool into child pools.</td>
 							</tr>
 							<tr>
-								<td><code>truth auction</code></td>
+								<td><span class="term" tabindex="0"><code>truth auction</code></span></td>
 								<td>The batch auction that lets a child pool sell child-universe REP for ETH when migrated collateral is incomplete.</td>
 							</tr>
 							<tr>
-								<td><code>migrated REP</code></td>
+								<td><span class="term" tabindex="0"><code>migrated REP</code></span></td>
 								<td>REP backing carried from a parent universe into a child universe and made available to support the child pool.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>price round</code></span></td>
+								<td>The lifetime of one settled REP/ETH oracle price inside the coordinator.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>price-round budget</code></span></td>
+								<td>The ETH-notional operation cap for a single settled oracle price. Each successful oracle-gated operation consumes some of this budget.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>ETH-notional</code></span></td>
+								<td>An operation's exposure expressed as ETH value, used to compare withdrawals, liquidations, and allowance updates against one budget.</td>
+							</tr>
+							<tr>
+								<td><span class="term" tabindex="0"><code>staged operation</code></span></td>
+								<td>A solvency-sensitive operation queued behind the coordinator until it can execute with a fresh REP/ETH price.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -3790,6 +2654,17 @@
 							callback queue. This price path is only for security backing against ETH
 							collateral.
 						</p>
+						<p>
+							A <span class="term" tabindex="0">price round</span>
+							starts when the coordinator accepts a settled REP/ETH price. Its
+							<span class="term" tabindex="0">price-round budget</span>
+							is the remaining ETH-denominated operation volume that price may authorize.
+							The budget is measured in
+							<span class="term" tabindex="0">ETH-notional</span>
+							terms so withdrawals, liquidations, and allowance increases can all spend the
+							same cap. Once the remaining budget is too small, the operation needs a later
+							price round instead of reusing the current price indefinitely.
+						</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg viewBox="0 0 940 380" role="img" aria-labelledby="oracle-flow-title oracle-flow-desc">
 							<title id="oracle-flow-title">Queued REP/ETH oracle operation flow</title>
@@ -3862,7 +2737,7 @@
 						<figure class="diagram" id="fig-placeholder-oracle-budget-gates">
 							<svg viewBox="0 0 940 330" role="img" aria-labelledby="oracle-budget-title oracle-budget-desc">
 								<title id="oracle-budget-title">Oracle execution gates</title>
-								<desc id="oracle-budget-desc">A staged operation needs a valid price, remaining round notional, and liquidation-specific distance from the threshold before execution.</desc>
+								<desc id="oracle-budget-desc">A staged operation needs a valid price, remaining price-round budget, and liquidation-specific distance from the threshold before execution.</desc>
 								<defs>
 									<marker id="arrow-oracle-budget" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 										<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -3873,8 +2748,9 @@
 								<text class="svg-small" x="147" y="116" text-anchor="middle">5-minute cache</text>
 								<path class="svg-line" marker-end="url(#arrow-oracle-budget)" d="M 242 100 H 324"></path>
 								<rect class="svg-gold" x="324" y="62" width="246" height="76" rx="10"></rect>
-								<text class="svg-label" x="447" y="92" text-anchor="middle">Round Notional Budget</text>
-								<text class="svg-small" x="447" y="116" text-anchor="middle">operation must fit remaining room</text>
+								<text class="svg-label" x="447" y="86" text-anchor="middle">Price-Round</text>
+								<text class="svg-label" x="447" y="110" text-anchor="middle">Budget</text>
+								<text class="svg-small" x="447" y="130" text-anchor="middle">operation must fit remaining room</text>
 								<path class="svg-line" marker-end="url(#arrow-oracle-budget)" d="M 570 100 H 654"></path>
 								<rect class="svg-green" x="654" y="62" width="220" height="76" rx="10"></rect>
 								<text class="svg-label" x="764" y="92" text-anchor="middle">Execute Operation</text>
@@ -3885,10 +2761,17 @@
 								<text class="svg-small" x="447" y="260" text-anchor="middle">current price must be far enough past threshold</text>
 								<path class="svg-line" marker-end="url(#arrow-oracle-budget)" d="M 598 244 H 694 V 138"></path>
 							</svg>
-							<p class="diagram-caption"><span class="figure-label">Oracle Execution Gates</span>Oracle-gated operations execute only when the price is fresh, the price round has enough remaining notional budget, and liquidations are sufficiently far beyond their threshold.</p>
+							<p class="diagram-caption"><span class="figure-label">Oracle Execution Gates</span>Oracle-gated operations execute only when the price is fresh, the price round has enough remaining budget, and liquidations are sufficiently far beyond their threshold.</p>
 						</figure>
+						<p>
+							The budget equation below names the maximum budget
+							<code>priceRoundMaxNotional</code> and the still-available budget
+							<code>remainingNotional</code>. The coordinator subtracts
+							<code>consumedNotional</code> as successful operations use the current price
+							round.
+						</p>
 						<div class="equation" id="eq-placeholder-oracle-round-budget">
-							<math display="block" aria-label="price round max notional equals exact token one report times price precision times price round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining notional equals max price round max notional minus consumed notional and zero" data-source="priceRoundMaxNotional = exactToken1Report * pricePrecision * priceRoundBudgetMultiplierBps / repPerEthPrice / oracleBudgetBps; remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
+							<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = exactToken1Report * pricePrecision * priceRoundBudgetMultiplierBps / repPerEthPrice / oracleBudgetBps; remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -3934,8 +2817,50 @@
 									</mtr>
 								</mtable>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Oracle Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required.</p>
+							<p class="equation-caption"><span class="equation-label">Oracle Price-Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required.</p>
 						</div>
+						<table>
+							<thead>
+								<tr>
+									<th>Variable</th>
+									<th>Meaning at first use</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td><code>priceRoundMaxNotional</code></td>
+									<td>The maximum ETH-notional operation volume one settled REP/ETH price can authorize.</td>
+								</tr>
+								<tr>
+									<td><code>remainingNotional</code></td>
+									<td>The unused part of the current price-round budget.</td>
+								</tr>
+								<tr>
+									<td><code>consumedNotional</code></td>
+									<td>The amount of price-round budget already spent by successful operations.</td>
+								</tr>
+								<tr>
+									<td><code>exactToken1Report</code></td>
+									<td>The initial REP amount used in the OpenOracle report.</td>
+								</tr>
+								<tr>
+									<td><code>pricePrecision</code></td>
+									<td>The fixed <code>1e18</code> scale factor used for REP/ETH price math.</td>
+								</tr>
+								<tr>
+									<td><code>priceRoundBudgetMultiplierBps</code></td>
+									<td>The configured multiplier, in basis points, that expands the report's ETH-notional budget.</td>
+								</tr>
+								<tr>
+									<td><code>repPerEthPrice</code></td>
+									<td>The settled REP per ETH price.</td>
+								</tr>
+								<tr>
+									<td><code>oracleBudgetBps</code></td>
+									<td>The basis-point denominator used by the budget multiplier.</td>
+								</tr>
+							</tbody>
+						</table>
 						<div class="equation" id="eq-placeholder-liquidation-price-distance">
 							<math display="block" aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times oracle budget basis points divided by current price and must be at least the minimum liquidation price distance basis points" data-source="thresholdPrice = vaultRep * pricePrecision / (snapshotTargetAllowance * securityMultiplier); distanceBps = (currentPrice - thresholdPrice) * oracleBudgetBps / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps">
 								<mtable>
@@ -4270,7 +3195,7 @@
 							<tr><td>OpenOracle <code>timeType</code></td><td><code>true</code></td><td>OpenOracle uses block timestamps rather than block numbers.</td></tr>
 							<tr><td>OpenOracle <code>trackDisputes</code></td><td><code>true</code></td><td>Dispute history is stored for these reports.</td></tr>
 							<tr><td>OpenOracle <code>protocolFeeRecipient</code></td><td><code>0x000000000000000000000000000000000000dEaD</code></td><td>Fee sink configured for protocol fees.</td></tr>
-							<tr><td><code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Oracle price round notional budget multiplier, equal to <code>4x</code>.</td></tr>
+							<tr><td><code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Oracle price-round budget multiplier, equal to <code>4x</code>.</td></tr>
 							<tr><td><code>escalationHaltMultiplierBps</code></td><td><code>100000</code></td><td>Multiplier used to derive the OpenOracle escalation halt from <code>exactToken1Report</code>, equal to <code>10x</code>.</td></tr>
 							<tr><td><code>maxSettlementBaseFeeMultiplierBps</code></td><td><code>30000</code></td><td>Maximum settlement base-fee multiplier accepted by the coordinator, equal to <code>3x</code>.</td></tr>
 							<tr><td><code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum distance from the liquidation threshold required before executing a staged liquidation, equal to <code>10%</code>.</td></tr>
@@ -4370,5 +3295,7 @@
 				window.addEventListener('hashchange', scheduleCurrentSectionUpdate)
 			}
 		</script>
+		<script src="./protocolTerms.js"></script>
+		<script src="./termTooltips.js"></script>
 	</body>
 </html>

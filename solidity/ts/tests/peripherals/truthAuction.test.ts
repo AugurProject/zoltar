@@ -1,6 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
+import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: truth auction', () => {
 	const fixture = usePeripheralsTruthAuctionFixture()
@@ -85,6 +86,7 @@ describe('Peripherals: truth auction', () => {
 		securityMultiplier,
 		outcomes,
 		triggerExternalForkForSecurityPool,
+		setupStartedTruthAuction,
 		setupTruthAuctionWithMixedBids,
 		setupTruthAuctionWithTwoWinningBids,
 		setupFinalizedTruthAuctionWithMixedBids,
@@ -140,6 +142,44 @@ describe('Peripherals: truth auction', () => {
 
 			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Migration window active/)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should keep accepting migration until the parent window closes')
+		})
+
+		test('startTruthAuction keeps migration open at the exact parent deadline and starts one second later', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+
+			await triggerExternalForkForSecurityPool(undefined, 'parent migration deadline boundary fork source')
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Migration window active/)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in migration at the exact parent deadline')
+
+			await mockWindow.setTime(migrationDeadline)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should enter truth auction after the parent migration window closes')
+		})
+
+		test('finalizeTruthAuction keeps the auction active at the exact end and finalizes one second later', async () => {
+			const { yesSecurityPool } = await setupStartedTruthAuction('truth auction finalization deadline source')
+			const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+			const auctionDeadline = truthAuctionStarted + 7n * DAY
+
+			await mockWindow.setTime(auctionDeadline - 1n)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Auction not ended/)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should remain in truth auction at the exact finalization deadline')
+
+			await mockWindow.setTime(auctionDeadline)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after the truth auction end boundary passes')
 		})
 
 		test('startTruthAuction skips auction startup when all REP is already migrated', async () => {
@@ -962,6 +1002,39 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(thirdPartyBalanceAfterSettlement, thirdPartyBalanceBeforeSettlement, 'pre-finalization settlement should not redirect refunded ETH to the caller')
 		})
 
+		test('settleAuctionBids can settle mixed finalized winning and losing bids for the same bidder in one call', async () => {
+			const { yesSecurityPool, expectedEthToBuy, repAtFork } = await setupStartedTruthAuction('mixed claim and refund settlement source')
+			const mixedBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const competingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			const losingEth = expectedEthToBuy / 10n
+			const competingWinningEth = expectedEthToBuy / 100n
+			const winningEth = expectedEthToBuy - competingWinningEth
+			strictEqualTypeSafe(losingEth > 0n, true, 'mixed settlement losing bid should invest a positive amount')
+			strictEqualTypeSafe(winningEth > 0n, true, 'mixed settlement winning bid should invest a positive amount')
+			strictEqualTypeSafe(competingWinningEth > 0n, true, 'mixed settlement competing bid should invest a positive amount')
+
+			const losingTick = await participateAuction(mixedBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
+			const winningTick = await participateAuction(mixedBidder, yesSecurityPool.truthAuction, repAtFork / 4n, winningEth)
+			await participateAuction(competingBidder, yesSecurityPool.truthAuction, repAtFork / 4n, competingWinningEth)
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+			const mixedBidderBalanceBeforeSettlement = await getETHBalance(client, mixedBidder.account.address)
+			const mixedVaultBeforeSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, mixedBidder.account.address)
+			const expectedWinningRep = (winningEth * PRICE_PRECISION) / tickToPrice(winningTick)
+
+			await settleAuctionBids(client, yesSecurityPool.securityPool, mixedBidder.account.address, [{ tick: winningTick, bidIndex: 0n }], [{ tick: losingTick, bidIndex: 0n }])
+
+			const mixedBidderBalanceAfterSettlement = await getETHBalance(client, mixedBidder.account.address)
+			const mixedVaultAfterSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, mixedBidder.account.address)
+			const settledWinningRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, mixedVaultAfterSettlement.repDepositShare)
+
+			strictEqualTypeSafe(mixedBidderBalanceAfterSettlement - mixedBidderBalanceBeforeSettlement, losingEth, 'mixed finalized settlement should return the losing-bid ETH in the same call')
+			approximatelyEqual(settledWinningRep, expectedWinningRep, 1_000n, 'mixed finalized settlement should still mint the expected winning REP')
+			assert.ok(mixedVaultAfterSettlement.repDepositShare > mixedVaultBeforeSettlement.repDepositShare, 'mixed finalized settlement should increase pool ownership for the winning bid')
+		})
+
 		test('claimAuctionProceeds preserves winner accounting when a finalized losing refund is settled first', async () => {
 			const { yesSecurityPool, expectedEthToBuy, losingBidder, losingTick, winningBidder, winningTick } = await setupFinalizedTruthAuctionWithMixedBids()
 			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
@@ -1131,6 +1204,31 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(targetVaultAfterClaim.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance, forkDataBeforeClaim.auctionedSecurityBondAllowance, 'the original bidder should still receive the full auctioned allowance after liquidation')
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.repDepositShare, liquidatorVaultAfterLiquidation.repDepositShare, 'unclaimed finalized auction proceeds should not be swept into the liquidator vault')
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.securityBondAllowance, liquidatorVaultAfterLiquidation.securityBondAllowance, 'unclaimed finalized auction allowance should not be swept into the liquidator vault')
+		})
+
+		test('settleAuctionBids does not emit ClaimAuctionProceeds for finalized refund-only settlements', async () => {
+			const { yesSecurityPool, losingBidder, losingEth, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
+			const losingBidderBalanceBeforeSettlement = await getETHBalance(client, losingBidder.account.address)
+			const settlementHash = await settleAuctionBids(client, yesSecurityPool.securityPool, losingBidder.account.address, [], [{ tick: losingTick, bidIndex: 0n }])
+			const receipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+			const settlementLogs = receipt.logs
+				.map(log => {
+					try {
+						return decodeEventLog({
+							abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+							data: log.data,
+							topics: log.topics,
+						})
+					} catch (error) {
+						if (!isIgnorableLogDecodeError(error)) throw error
+						return undefined
+					}
+				})
+				.filter(log => log?.eventName === 'ClaimAuctionProceeds')
+			const losingBidderBalanceAfterSettlement = await getETHBalance(client, losingBidder.account.address)
+
+			strictEqualTypeSafe(losingBidderBalanceAfterSettlement - losingBidderBalanceBeforeSettlement, losingEth, 'refund-only batch settlement should still release the losing-bid ETH')
+			strictEqualTypeSafe(settlementLogs.length, 0, 'refund-only batch settlement should not emit ClaimAuctionProceeds')
 		})
 
 		test('claimAuctionProceeds cannot settle the same finalized losing bid twice', async () => {

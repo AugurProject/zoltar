@@ -247,7 +247,24 @@ export type TransactionReceipt = {
 	type?: string | undefined
 }
 
+export type ReplacementReason = 'cancelled' | 'replaced' | 'repriced'
+
+export type TransactionReplacement = {
+	reason: ReplacementReason
+	replacedTransaction: Pick<BlockTransaction, 'hash'>
+	transaction: Pick<BlockTransaction, 'hash'>
+	transactionReceipt: TransactionReceipt
+}
+
+type WaitForTransactionReceiptParameters = {
+	hash: Hash
+	onReplaced?: ((replacement: TransactionReplacement) => void) | undefined
+	pollingInterval?: number | undefined
+	timeout?: number | undefined
+}
+
 export type BlockTransaction = {
+	blockNumber?: bigint | undefined
 	from: Address
 	gas: bigint
 	gasPrice?: bigint | undefined
@@ -380,8 +397,10 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
 	simulateContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractSimulateParameters<TAbi, TFunctionName>) => Promise<{ result: ContractFunctionResult<TAbi, TFunctionName> }>
 	transport: TTransport
-	waitForTransactionReceipt: (parameters: { hash: Hash; pollingInterval?: number | undefined; timeout?: number | undefined }) => Promise<TransactionReceipt>
+	waitForTransactionReceipt: (parameters: WaitForTransactionReceiptParameters) => Promise<TransactionReceipt>
 }
+
+type PublicClientActions = Omit<PublicClientShape<Transport, Chain | undefined>, 'chain' | 'extend' | 'transport'>
 
 type WalletClientShape<TTransport extends Transport, TChain extends Chain | undefined, TAccount extends Account | undefined> = Omit<PublicClientShape<TTransport, TChain>, 'extend'> & {
 	account: TAccount
@@ -1049,6 +1068,7 @@ function normalizeTransaction(value: unknown): BlockTransaction {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction')
 	const transaction = value as Record<string, unknown>
 	return {
+		blockNumber: transaction['blockNumber'] === undefined || transaction['blockNumber'] === null ? undefined : normalizeRpcBigInt(transaction['blockNumber']),
 		from: normalizeAddress(transaction['from']),
 		gas: normalizeRpcBigInt(transaction['gas']),
 		gasPrice: transaction['gasPrice'] === undefined || transaction['gasPrice'] === null ? undefined : normalizeRpcBigInt(transaction['gasPrice']),
@@ -1075,6 +1095,34 @@ function normalizeBlock(value: unknown, includeTransactions: boolean) {
 		timestamp: normalizeRpcBigInt(block['timestamp']),
 		transactions: Array.isArray(block['transactions']) ? block['transactions'].map(transaction => (includeTransactions ? normalizeTransaction(transaction) : normalizeHash(transaction))) : [],
 	} satisfies Block
+}
+
+function isBlockTransaction(value: unknown): value is BlockTransaction {
+	return typeof value === 'object' && value !== null && 'hash' in value && 'from' in value && 'nonce' in value
+}
+
+function isTransactionNotFoundError(error: unknown) {
+	return error instanceof Error && error.message.includes('could not be found')
+}
+
+function getReplacementReason(originalTransaction: BlockTransaction, replacementTransaction: BlockTransaction): ReplacementReason {
+	if (replacementTransaction.to?.toLowerCase() === originalTransaction.from.toLowerCase() && replacementTransaction.value === 0n && replacementTransaction.input === '0x') return 'cancelled'
+	if (replacementTransaction.to?.toLowerCase() === originalTransaction.to?.toLowerCase() && replacementTransaction.value === originalTransaction.value && replacementTransaction.input === originalTransaction.input) return 'repriced'
+	return 'replaced'
+}
+
+const REPLACEMENT_SCAN_BLOCK_DEPTH = 12n
+
+async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }) {
+	for (let blockNumber = parameters.fromBlock; blockNumber <= parameters.toBlock; blockNumber += 1n) {
+		const block = await actions.getBlock({
+			blockNumber,
+			includeTransactions: true,
+		})
+		const replacementTransaction = block.transactions.find((transaction): transaction is BlockTransaction => isBlockTransaction(transaction) && transaction.hash !== originalTransaction.hash && transaction.nonce === originalTransaction.nonce && transaction.from.toLowerCase() === originalTransaction.from.toLowerCase())
+		if (replacementTransaction !== undefined) return replacementTransaction
+	}
+	return undefined
 }
 
 function buildRpcTransactionRequest(parameters: {
@@ -1316,20 +1364,59 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const timeoutMilliseconds = parameters.timeout ?? 120_000
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
-			while (true) {
+			const actions = buildPublicClientActions({ chain, transport })
+			let originalTransaction: BlockTransaction | undefined
+			let lastScannedReplacementBlock: bigint | undefined
+			if (parameters.onReplaced !== undefined) {
 				try {
-					return await buildPublicClientActions({ chain, transport }).getTransactionReceipt({
+					originalTransaction = await actions.getTransaction({
 						hash: parameters.hash,
 					})
 				} catch (error) {
-					if (error instanceof Error && error.message.includes('could not be found')) {
-						if (Date.now() - startTime >= timeoutMilliseconds) throw error
-						await new Promise(resolve => {
-							setTimeout(resolve, pollingInterval)
-						})
-						continue
+					if (!isTransactionNotFoundError(error)) throw error
+				}
+			}
+			while (true) {
+				try {
+					return await actions.getTransactionReceipt({
+						hash: parameters.hash,
+					})
+				} catch (error) {
+					if (!isTransactionNotFoundError(error)) throw error
+					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
+						try {
+							originalTransaction = await actions.getTransaction({
+								hash: parameters.hash,
+							})
+						} catch (transactionError) {
+							if (!isTransactionNotFoundError(transactionError)) throw transactionError
+						}
 					}
-					throw error
+					if (originalTransaction !== undefined) {
+						const latestBlockNumber = await actions.getBlockNumber()
+						let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
+						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
+							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
+						}
+						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, originalTransaction, { fromBlock: firstScanBlock, toBlock: latestBlockNumber })
+						lastScannedReplacementBlock = latestBlockNumber
+						if (replacementTransaction !== undefined) {
+							const transactionReceipt = await actions.getTransactionReceipt({
+								hash: replacementTransaction.hash,
+							})
+							parameters.onReplaced?.({
+								reason: getReplacementReason(originalTransaction, replacementTransaction),
+								replacedTransaction: originalTransaction,
+								transaction: replacementTransaction,
+								transactionReceipt,
+							})
+							return transactionReceipt
+						}
+					}
+					if (Date.now() - startTime >= timeoutMilliseconds) throw error
+					await new Promise(resolve => {
+						setTimeout(resolve, pollingInterval)
+					})
 				}
 			}
 		},

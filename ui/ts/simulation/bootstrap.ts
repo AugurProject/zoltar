@@ -8,6 +8,7 @@ import {
 	createCompleteSetInSecurityPool,
 	createSecurityPool,
 	depositRepToSecurityPool,
+	executeOracleManagerStagedOperation,
 	forkZoltarWithOwnEscalation,
 	getDeploymentSteps,
 	loadAllSecurityPools,
@@ -27,7 +28,7 @@ import {
 	submitInitialOracleReport,
 	submitTruthAuctionBid,
 } from '../contracts.js'
-import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
@@ -624,13 +625,7 @@ async function executeReadySecurityBondAllowanceOperation({
 	if (managerDetails.pendingOperation.targetVault !== accountAddress) return
 
 	try {
-		const hash = await writeClient.writeContract({
-			address: managerDetails.managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'executeStagedOperation',
-			args: [managerDetails.pendingOperation.operationId],
-		})
-		await writeClient.waitForTransactionReceipt({ hash })
+		await executeOracleManagerStagedOperation(writeClient, managerDetails.managerAddress, managerDetails.pendingOperation.operationId)
 	} catch (error) {
 		const updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
 		if (updatedVault.securityBondAllowance === securityBondAllowance) return

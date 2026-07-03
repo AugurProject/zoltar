@@ -30,7 +30,7 @@ const getQuestionOutcomeAbi = [
 type SecurityPoolForkerForkData = {
 	auctionableRepAtFork: bigint
 	truthAuction: Address
-	truthAuctionStarted: boolean
+	truthAuctionStarted: bigint
 	migratedRep: bigint
 	auctionedSecurityBondAllowance: bigint
 	escalationElapsedAtFork: bigint
@@ -211,7 +211,7 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 	return {
 		auctionableRepAtFork: requireBigInt(data[0], 'Security pool fork data auctionable REP'),
 		truthAuction: requireAddress(data[1], 'Security pool fork data truth auction'),
-		truthAuctionStarted: requireBoolean(data[2], 'Security pool fork data truth auction started'),
+		truthAuctionStarted: requireBigInt(data[2], 'Security pool fork data truth auction started'),
 		migratedRep: requireBigInt(data[3], 'Security pool fork data migrated REP'),
 		auctionedSecurityBondAllowance: requireBigInt(data[4], 'Security pool fork data auctioned security bond allowance'),
 		escalationElapsedAtFork: requireBigInt(data[5], 'Security pool fork data escalation elapsed'),

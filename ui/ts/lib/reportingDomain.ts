@@ -1,5 +1,12 @@
+import {
+	computeEscalationTimeSinceStartFromAttritionCost,
+	getEscalationBindingCapital,
+	getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount,
+	getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount,
+	projectEscalationDeposit,
+	type EscalationBalanceTuple,
+} from '@zoltar/shared/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
-import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { requireDefined } from './required.js'
 import { getTimeRemaining } from './time.js'
@@ -8,21 +15,12 @@ type ReportingAmountSuggestion = {
 	reason: string | undefined
 }
 const REP_UNIT = 10n ** 18n
-const ESCALATION_TIME_LENGTH = 4233600n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
-const SCALE = 1000000n
-const LN2_SCALED = 693147n
-const MAX_ATANH_ITERATIONS = 16
+export { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBindingCapital }
 const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
-type EscalationBalanceTuple = readonly [bigint, bigint, bigint]
-type ProjectedEscalationDeposit = {
-	acceptedAmount: bigint
-	projectedBalances: EscalationBalanceTuple
-	reachesNonDecision: boolean
-}
 type ProjectedEscalationEndTime = {
 	acceptedAmount: bigint
 	endsImmediately: boolean
@@ -65,7 +63,7 @@ export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 function hasEscalationTimedOut(details: ActiveReportingDetails) {
-	return details.currentTime >= details.escalationEndTime
+	return details.currentTime > details.escalationEndTime
 }
 export function isPoolQuestionFinalized(details: Pick<ReportingDetails, 'questionOutcome' | 'systemState'> | undefined) {
 	return details !== undefined && details.systemState === 'operational' && details.questionOutcome !== 'none'
@@ -85,20 +83,6 @@ export function getEscalationBalanceTuple(sides: EscalationSide[]): EscalationBa
 	const yesBalance = sides.find(side => side.key === 'yes')?.balance ?? 0n
 	const noBalance = sides.find(side => side.key === 'no')?.balance ?? 0n
 	return [invalidBalance, yesBalance, noBalance]
-}
-export function getEscalationBindingCapital(balances: EscalationBalanceTuple) {
-	const [invalidBalance, yesBalance, noBalance] = balances
-	if ((invalidBalance >= yesBalance && invalidBalance <= noBalance) || (invalidBalance >= noBalance && invalidBalance <= yesBalance)) return invalidBalance
-	if ((yesBalance >= invalidBalance && yesBalance <= noBalance) || (yesBalance >= noBalance && yesBalance <= invalidBalance)) return yesBalance
-	return noBalance
-}
-export function computeEscalationTimeSinceStartFromAttritionCost(startBond: bigint, nonDecisionThreshold: bigint, attritionCost: bigint) {
-	if (attritionCost <= startBond) return 0n
-	if (attritionCost >= nonDecisionThreshold) return ESCALATION_TIME_LENGTH
-	const lnRatioScaled = computeLnRatioScaled(startBond, nonDecisionThreshold)
-	if (lnRatioScaled === 0n) return 0n
-	const lnCostRatioScaled = computeLnRatioScaled(startBond, attritionCost)
-	return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled
 }
 function computeHypotheticalBindingDuration(startBond: bigint, nonDecisionThreshold: bigint, bindingCapital: bigint) {
 	if (bindingCapital <= 0n) return 0n
@@ -130,45 +114,26 @@ export function projectEscalationEndTime(details: ActiveReportingDetails, outcom
 function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
 	if (winningOutcomeBalance === undefined) return undefined
-	const bindingCapitalAmount = details.bindingCapital
-	const rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / 2n
-	const rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount
-	const rewardBonusPoolAmount = (bindingCapitalAmount * 3n) / 5n
-	let amountToWithdraw: bigint
-	if (rewardEligiblePrincipalAmount === 0n) {
-		amountToWithdraw = deposit.amount
-	} else {
-		const depositStart = deposit.cumulativeAmount - deposit.amount
-		const eligibleEndAmount = deposit.cumulativeAmount < rewardEligibleCapAmount ? deposit.cumulativeAmount : rewardEligibleCapAmount
-		const rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0n
-		const cappedRewardEligibleDepositAmount = rewardEligibleDepositAmount > deposit.amount ? deposit.amount : rewardEligibleDepositAmount
-		const bonusShare = (cappedRewardEligibleDepositAmount * rewardBonusPoolAmount) / rewardEligiblePrincipalAmount
-		amountToWithdraw = deposit.amount + bonusShare
-	}
-	if (details.forkThreshold < details.nonDecisionThreshold) return (amountToWithdraw * details.forkThreshold) / details.nonDecisionThreshold
-	return amountToWithdraw
+	return computeWinningEscalationDepositClaimAmount({
+		bindingCapital: details.bindingCapital,
+		cumulativeAmount: deposit.cumulativeAmount,
+		depositAmount: deposit.amount,
+		forkThreshold: details.forkThreshold,
+		nonDecisionThreshold: details.nonDecisionThreshold,
+		winningOutcomeBalance,
+	})
 }
 function getWinningImportedEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: ImportedEscalationDeposit) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
 	if (winningOutcomeBalance === undefined) return undefined
-	const bindingCapitalAmount = details.bindingCapital
-	const rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / 2n
-	const rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount
-	const rewardBonusPoolAmount = (bindingCapitalAmount * 3n) / 5n
-	let amountToWithdraw: bigint
-	if (rewardEligiblePrincipalAmount === 0n) {
-		amountToWithdraw = deposit.amount
-	} else {
-		const depositStart = deposit.cumulativeAmount
-		const depositEnd = deposit.cumulativeAmount + deposit.amount
-		const eligibleEndAmount = depositEnd < rewardEligibleCapAmount ? depositEnd : rewardEligibleCapAmount
-		const rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0n
-		const cappedRewardEligibleDepositAmount = rewardEligibleDepositAmount > deposit.amount ? deposit.amount : rewardEligibleDepositAmount
-		const bonusShare = (cappedRewardEligibleDepositAmount * rewardBonusPoolAmount) / rewardEligiblePrincipalAmount
-		amountToWithdraw = deposit.amount + bonusShare
-	}
-	if (details.forkThreshold < details.nonDecisionThreshold) return (amountToWithdraw * details.forkThreshold) / details.nonDecisionThreshold
-	return amountToWithdraw
+	return computeWinningImportedEscalationDepositClaimAmount({
+		bindingCapital: details.bindingCapital,
+		postDepositCumulativeAmount: deposit.cumulativeAmount,
+		depositAmount: deposit.amount,
+		forkThreshold: details.forkThreshold,
+		nonDecisionThreshold: details.nonDecisionThreshold,
+		winningOutcomeBalance,
+	})
 }
 export function getEscalationDepositClaimAmount(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
 	if (details === undefined || details.status !== 'active' || !details.parentWithdrawalEnabled) return undefined
@@ -446,99 +411,4 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		}
 	}
 	return previewEscalationContribution(details, outcome, amount)
-}
-function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
-	let normalizedLow = lowValue
-	let log2Count = 0n
-	while (highValue >= normalizedLow * 2n) {
-		normalizedLow *= 2n
-		log2Count += 1n
-	}
-	const diff = highValue - normalizedLow
-	const sum = highValue + normalizedLow
-	const z = (diff * SCALE) / sum
-	if (z === 0n) return 0n
-	return log2Count * LN2_SCALED + 2n * computeAtanhScaled(z)
-}
-function computeAtanhScaled(z: bigint) {
-	const z2 = (z * z) / SCALE
-	let term = z
-	let atanhScaled = term
-	for (let iteration = 1; iteration < MAX_ATANH_ITERATIONS; iteration += 1) {
-		term = (term * z2 * BigInt(2 * iteration - 1)) / (BigInt(2 * iteration + 1) * SCALE)
-		if (term === 0n) break
-		atanhScaled += term
-	}
-	return atanhScaled
-}
-function getOutcomeIndex(outcome: ReportingOutcomeKey) {
-	switch (outcome) {
-		case 'invalid':
-			return 0
-		case 'yes':
-			return 1
-		case 'no':
-			return 2
-		default:
-			return assertNever(outcome)
-	}
-}
-function getMaxEscalationBalance(balances: EscalationBalanceTuple) {
-	const [invalidBalance, yesBalance, noBalance] = balances
-	return (() => {
-		if (invalidBalance > yesBalance) {
-			if (invalidBalance > noBalance) return invalidBalance
-
-			return noBalance
-		}
-		if (yesBalance > noBalance) return yesBalance
-
-		return noBalance
-	})()
-}
-function hasReachedNonDecision(balances: EscalationBalanceTuple, nonDecisionThreshold: bigint) {
-	let thresholdHits = 0
-	if (balances[0] >= nonDecisionThreshold) thresholdHits += 1
-	if (balances[1] >= nonDecisionThreshold) thresholdHits += 1
-	if (balances[2] >= nonDecisionThreshold) thresholdHits += 1
-	return thresholdHits >= 2
-}
-function setBalanceAtIndex(balances: EscalationBalanceTuple, index: number, value: bigint): EscalationBalanceTuple {
-	switch (index) {
-		case 0:
-			return [value, balances[1], balances[2]]
-		case 1:
-			return [balances[0], value, balances[2]]
-		case 2:
-			return [balances[0], balances[1], value]
-		default:
-			throw new RangeError(`Unknown escalation balance index: ${index.toString()}`)
-	}
-}
-function projectEscalationDeposit({ amount, balances, nonDecisionThreshold, outcome, startBond }: { amount: bigint; balances: EscalationBalanceTuple; nonDecisionThreshold: bigint; outcome: ReportingOutcomeKey; startBond: bigint }): ProjectedEscalationDeposit | undefined {
-	if (amount < startBond) return undefined
-	const outcomeIndex = getOutcomeIndex(outcome)
-	const currentBalance = balances[outcomeIndex]
-	if (currentBalance >= nonDecisionThreshold) return undefined
-	const room = nonDecisionThreshold - currentBalance
-	let acceptedAmount = amount > room ? room : amount
-	let newBalance = currentBalance + acceptedAmount
-	const maxBalance = getMaxEscalationBalance(balances)
-	const otherHasMax = (() => {
-		if (outcomeIndex === 0) return balances[1] === maxBalance || balances[2] === maxBalance
-		if (outcomeIndex === 1) return balances[0] === maxBalance || balances[2] === maxBalance
-
-		return balances[0] === maxBalance || balances[1] === maxBalance
-	})()
-	if (newBalance === maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
-		acceptedAmount -= 1n
-		if (acceptedAmount < startBond) return undefined
-		newBalance = currentBalance + acceptedAmount
-	}
-	const projectedBalances = setBalanceAtIndex(balances, outcomeIndex, newBalance)
-	return {
-		acceptedAmount,
-		projectedBalances,
-		reachesNonDecision: hasReachedNonDecision(projectedBalances, nonDecisionThreshold),
-	}
 }

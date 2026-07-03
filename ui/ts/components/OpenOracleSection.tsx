@@ -955,7 +955,7 @@ export function OpenOracleSection({
 							</div>
 						</SectionBlock>
 					)}
-					<SectionBlock title='Advanced Standalone Oracle Game' description='Direct Open Oracle creation for protocol testing. This bypasses pool-managed oracle-manager staging, so confirm addresses, token amounts, fees, and timing before submitting.'>
+					<SectionBlock title='Advanced Standalone Oracle Game' variant='plain' description='Direct Open Oracle creation for protocol testing. This bypasses pool-managed oracle-manager staging, so confirm addresses, token amounts, fees, and timing before submitting.'>
 						<p className='notice warning'>Use this only when you intend to create a standalone oracle game directly from the connected wallet. Pool-managed oracle requests should be started from a selected security pool.</p>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title='Token Pair' variant='embedded'>

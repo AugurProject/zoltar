@@ -11,6 +11,7 @@ import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createPoolOracleWarningPresentation } from '../lib/transactionPresentations.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
@@ -22,7 +23,7 @@ type UsePriceOracleManagerParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
 export function usePriceOracleManager({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
@@ -85,7 +86,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					},
 					refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
-						await refreshState()
+						await refreshWalletStateOnly(refreshState)
 						await loadPoolOracleManager(managerAddress)
 					},
 					setErrorMessage: message => {
@@ -139,7 +140,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					},
 					refreshErrorFallback: 'Staged operation execution succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
-						await refreshState()
+						await refreshWalletStateOnly(refreshState)
 						await loadPoolOracleManager(managerAddress)
 					},
 					setErrorMessage: message => {

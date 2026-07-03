@@ -157,12 +157,13 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			address(0x0),
 			false
 		);
+		uint256 sourcePrincipalToTransfer = _sumOutcomeAmounts(sourcePrincipalByOutcome);
+		if (sourcePrincipalToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 		uint256 currentRepToTransfer = _sumOutcomeAmounts(currentRepByOutcome);
-		if (currentRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
-		require(currentRepToTransfer > 0, 'No migration REP');
 		uint256 childRepToTransfer = _previewOwnForkEscalationRep(parent, currentRepToTransfer);
 		childRepToTransfer = _capOwnForkEscalationChildRep(parent, childOutcomeIndex, childRepToTransfer);
-		if (childRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
+		if (currentRepToTransfer > 0 && childRepToTransfer == 0)
+			return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 		(EscalationGame childEscalationGame, SecurityPoolMigrationProxy migrationProxy) = _loadChildEscalationAndProxy(
 			parent,
 			child
@@ -184,6 +185,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			currentRepToTransfer,
 			childRepToTransfer
 		);
+		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 		return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 	}
 
@@ -199,23 +201,29 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			parent,
 			child
 		);
-		require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
+		_requireContinuationMigrationOpen(child, childEscalationGame);
+		bool childStillMigrating = child.systemState() == SystemState.ForkMigration;
 		(uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) = _exportUnresolvedRep(
 			parentEscalationGame,
 			vault,
 			address(migrationProxy),
 			true
 		);
+		uint256 sourcePrincipalToTransfer = _sumOutcomeAmounts(sourcePrincipalByOutcome);
+		if (sourcePrincipalToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 		uint256 childRepToTransfer = _sumOutcomeAmounts(currentRepByOutcome);
-		if (childRepToTransfer == 0) return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
-		require(childRepToTransfer > 0, 'No child REP to migrate');
 		// Non-own continuation follows the same model: inherited carry snapshot + child REP backing.
 		// Replaying parent deposits as child-local deposits would duplicate unresolved state
 		// that already exists in the inherited carry tree.
 		migrationProxy.lockRep(childRepToTransfer);
 		_splitMigrationRepToChild(parent, childOutcomeIndex, childRepToTransfer, false, false);
 		migrationProxy.sweepChildRep(address(childEscalationGame), child.repToken(), childRepToTransfer);
-		_migrateVaultUnlockedState(parent, child, vault);
+		// Once the child truth auction finalizes, ordinary vault migration is closed.
+		// Late continuation funding can add only the carried escalation escrow needed
+		// to resume the paused child continuation game.
+		if (childStillMigrating) {
+			_migrateVaultUnlockedState(parent, child, vault);
+		}
 		_recordForkedEscrowAndRefreshVault(
 			childEscalationGame,
 			child,
@@ -225,6 +233,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			childRepToTransfer,
 			childRepToTransfer
 		);
+		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 		return _hasMoreUnresolvedMigration(parentEscalationGame, vault);
 	}
 
@@ -234,12 +243,12 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	) private returns (ISecurityPool child) {
 		child = childrenByPoolAndOutcome[parent][childOutcomeIndex];
 		if (address(child) != address(0x0)) {
-			require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
+			require(child.systemState() == SystemState.ForkMigration, 'Child migration over');
 			return child;
 		}
 		require(
 			block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-			'Own-fork migration window closed'
+			'Own-fork window closed'
 		);
 		child = _getOrDeployChildPool(parent, childOutcomeIndex);
 	}
@@ -252,6 +261,17 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		migrationProxy = migrationProxyByPool[parent];
 		require(address(childEscalationGame) != address(0x0), 'Child game missing');
 		require(address(migrationProxy) != address(0x0), 'Migration proxy missing');
+	}
+
+	function _requireContinuationMigrationOpen(ISecurityPool child, EscalationGame childEscalationGame) private view {
+		SystemState childState = child.systemState();
+		bool migrationOpen =
+			childState == SystemState.ForkMigration ||
+				(childState == SystemState.Operational &&
+					child.awaitingForkContinuation() &&
+					childEscalationGame.forkContinuation() &&
+					childEscalationGame.forkResumedAt() == 0);
+		require(migrationOpen, 'Child migration over');
 	}
 
 	function _exportUnresolvedRep(
@@ -277,7 +297,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 				_addOutcomeAmounts(currentRepByOutcome, forkedChildRepByOutcome);
 			}
 		}
-		if (_sumOutcomeAmounts(currentRepByOutcome) != 0) return (sourcePrincipalByOutcome, currentRepByOutcome);
+		if (_sumOutcomeAmounts(sourcePrincipalByOutcome) != 0) return (sourcePrincipalByOutcome, currentRepByOutcome);
 		if (transferRep) {
 			sourcePrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedDepositAmounts(vault, repReceiver);
 		} else {

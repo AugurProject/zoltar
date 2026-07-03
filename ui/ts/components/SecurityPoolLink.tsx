@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
-import { formatAddress } from '../lib/addresses.js'
 import { getSecurityPoolLinkHref, navigateToSecurityPool } from '../lib/securityPoolNavigation.js'
 
 type SecurityPoolLinkProps = {
@@ -13,7 +12,7 @@ type SecurityPoolLinkProps = {
 
 export function SecurityPoolLink({ children, className = '', securityPoolAddress, selectedPoolView, universeId }: SecurityPoolLinkProps) {
 	const href = getSecurityPoolLinkHref(securityPoolAddress, selectedPoolView, universeId)
-	const label = children ?? formatAddress(securityPoolAddress)
+	const label = children ?? securityPoolAddress
 
 	return (
 		<a

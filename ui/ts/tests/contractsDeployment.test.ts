@@ -1,6 +1,6 @@
-/// <reference types="bun-types" />
+/// <reference types='bun-types' />
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { type Address, type Hash, type TransactionReceipt, getAddress } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../contracts.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
@@ -11,7 +11,7 @@ import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 type MockReadClient = Pick<ReadClient, 'getCode' | 'readContract'>
-type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
+type MockWriteClient = Pick<WriteClient, 'getCode' | 'sendTransaction' | 'waitForTransactionReceipt'> & Partial<Pick<WriteClient, 'sendRawTransaction' | 'installSimulationProxyDeployer' | 'onTransactionPrepared' | 'onTransactionSubmitted' | 'patchSimulationGenesisRepToken' | 'requiresWalletConfirmation'>>
 
 function asWriteClient(client: MockWriteClient): WriteClient {
 	return client as unknown as WriteClient
@@ -129,6 +129,60 @@ describe('contract deployment internals', () => {
 
 		expect(preparedPreview?.functionName).toBe('Deploy contract through deterministic proxy')
 		expect(preparedPreview?.requiresWalletConfirmation).toBe(false)
+	})
+
+	test('deployViaProxy-backed steps return the replacement hash when repriced in the wallet', async () => {
+		const steps = createDeploymentSteps()
+		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		const originalHash = `0x${'1'.repeat(64)}` as Hash
+		const replacementHash = `0x${'2'.repeat(64)}` as Hash
+		const onTransactionSubmitted = mock(() => undefined)
+		const client = asWriteClient({
+			getCode: async () => '0x1234',
+			onTransactionSubmitted,
+			sendTransaction: async () => originalHash,
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'repriced',
+					replacedTransaction: { hash: originalHash } as never,
+					transaction: { hash: replacementHash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+		})
+
+		const hash = await oracleStep.deploy(client)
+
+		expect(hash).toBe(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+	})
+
+	test('deployViaProxy-backed steps reject cancelled replacement transactions', async () => {
+		const steps = createDeploymentSteps()
+		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		const originalHash = `0x${'3'.repeat(64)}` as Hash
+		const replacementHash = `0x${'4'.repeat(64)}` as Hash
+		const onTransactionSubmitted = mock(() => undefined)
+		const client = asWriteClient({
+			getCode: async () => '0x1234',
+			onTransactionSubmitted,
+			sendTransaction: async () => originalHash,
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'cancelled',
+					replacedTransaction: { hash: originalHash } as never,
+					transaction: { hash: replacementHash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+		})
+
+		await expect(oracleStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
 	})
 
 	test('simulation deployViaProxy preview keeps the transaction tray in preparing state', async () => {
@@ -251,6 +305,65 @@ describe('contract deployment internals', () => {
 		expect(rawBroadcastPreview.account).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
 		expect(rawBroadcastPreview.dataLabel).toBe('Raw transaction')
 		expect(rawBroadcastPreview.requiresWalletConfirmation).toBe(false)
+	})
+
+	test('proxy deployer step stops when the signer-funding transaction is cancelled in the wallet', async () => {
+		const steps = createDeploymentSteps()
+		const proxyStep = steps.find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		const fundHash = `0x${'5'.repeat(64)}` as Hash
+		let sendRawTransactionCalled = false
+		const client = asWriteClient({
+			getCode: async () => undefined,
+			sendTransaction: async () => fundHash,
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'cancelled',
+					replacedTransaction: { hash: fundHash } as never,
+					transaction: { hash: `0x${'6'.repeat(64)}` as Hash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+			sendRawTransaction: async () => {
+				sendRawTransactionCalled = true
+				return `0x${'7'.repeat(64)}` as Hash
+			},
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		expect(sendRawTransactionCalled).toBe(false)
+	})
+
+	test('proxy deployer step returns the replacement hash when the raw deploy transaction is repriced', async () => {
+		const steps = createDeploymentSteps()
+		const proxyStep = steps.find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		const fundHash = `0x${'8'.repeat(64)}` as Hash
+		const rawHash = `0x${'9'.repeat(64)}` as Hash
+		const replacementHash = `0x${'a'.repeat(64)}` as Hash
+		const onTransactionSubmitted = mock(() => undefined)
+		const client = asWriteClient({
+			getCode: async () => undefined,
+			onTransactionSubmitted,
+			sendTransaction: async () => fundHash,
+			waitForTransactionReceipt: async parameters => {
+				if (parameters.hash === fundHash) return hashReceipt('success')
+				parameters.onReplaced?.({
+					reason: 'repriced',
+					replacedTransaction: { hash: rawHash } as never,
+					transaction: { hash: replacementHash } as never,
+					transactionReceipt: hashReceipt('success'),
+				})
+				return hashReceipt('success')
+			},
+			sendRawTransaction: async () => rawHash,
+		})
+
+		const hash = await proxyStep.deploy(client)
+
+		expect(hash).toBe(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
 	})
 
 	test('zoltar deployment step patches the Genesis REP token in simulation mode', async () => {

@@ -632,6 +632,247 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toContain('eth_getLogs')
 	})
 
+	test('waitForTransactionReceipt resolves same-nonce replacements and reports the replacement reason', async () => {
+		const originalHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'66'.repeat(32)}` satisfies Hash
+		const replacements: { reason: string; transactionHash: Hash }[] = []
+		const calls: { method: string; params: unknown }[] = []
+		const originalTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: originalHash,
+			input: '0x1234',
+			nonce: '0x7',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: null,
+			type: '0x2',
+			value: '0x5',
+		}
+		const replacementTransaction = {
+			...originalTransaction,
+			gasPrice: '0x9',
+			hash: replacementHash,
+			transactionIndex: '0x0',
+		}
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') {
+				expect(getArrayEntry(params, 0, 'transaction params')).toBe(originalHash)
+				return originalTransaction
+			}
+			if (method === 'eth_getTransactionReceipt') {
+				const hash = getArrayEntry(params, 0, 'receipt params')
+				if (hash === originalHash) return null
+				if (hash === replacementHash) {
+					return {
+						blockHash: BLOCK_HASH,
+						blockNumber: '0xa',
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x9',
+						from: OWNER_ADDRESS,
+						gasUsed: '0x5208',
+						logs: [],
+						status: '0x1',
+						to: RECIPIENT_ADDRESS,
+						transactionHash: replacementHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					}
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				expect(getArrayEntry(params, 0, 'replacement block params')).toBe('0x0')
+				expect(getArrayEntry(params, 1, 'replacement block params')).toBe(true)
+				return {
+					hash: BLOCK_HASH,
+					number: '0x0',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: [replacementTransaction],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		const receipt = await client.waitForTransactionReceipt({
+			hash: originalHash,
+			onReplaced: replacement => {
+				replacements.push({
+					reason: replacement.reason,
+					transactionHash: replacement.transaction.hash,
+				})
+			},
+			pollingInterval: 0,
+			timeout: 50,
+		})
+
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(replacements).toEqual([
+			{
+				reason: 'repriced',
+				transactionHash: replacementHash,
+			},
+		])
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
+	})
+
+	test('waitForTransactionReceipt scans previous blocks for delayed replacement detection', async () => {
+		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash
+		const replacements: Hash[] = []
+		const calls: { method: string; params: unknown }[] = []
+		const originalTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: originalHash,
+			input: '0xabcd',
+			nonce: '0x9',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: null,
+			type: '0x2',
+			value: '0x7',
+		}
+		const replacementTransaction = {
+			...originalTransaction,
+			hash: replacementHash,
+			transactionIndex: '0x0',
+		}
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') return originalTransaction
+			if (method === 'eth_getTransactionReceipt') {
+				const hash = getArrayEntry(params, 0, 'receipt params')
+				if (hash === originalHash) return null
+				if (hash === replacementHash) {
+					return {
+						blockHash: BLOCK_HASH,
+						blockNumber: '0x1',
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x9',
+						from: OWNER_ADDRESS,
+						gasUsed: '0x5208',
+						logs: [],
+						status: '0x1',
+						to: RECIPIENT_ADDRESS,
+						transactionHash: replacementHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					}
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x2'
+			if (method === 'eth_getBlockByNumber') {
+				const blockNumber = getArrayEntry(params, 0, 'replacement block params')
+				return {
+					hash: BLOCK_HASH,
+					number: blockNumber,
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: blockNumber === '0x1' ? [replacementTransaction] : [],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		const receipt = await client.waitForTransactionReceipt({
+			hash: originalHash,
+			onReplaced: replacement => {
+				replacements.push(replacement.transaction.hash)
+			},
+			pollingInterval: 0,
+			timeout: 50,
+		})
+
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(replacements).toEqual([replacementHash])
+		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1'])
+	})
+
+	test('waitForTransactionReceipt retries original transaction lookup before replacement scanning', async () => {
+		const originalHash = `0x${'99'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'aa'.repeat(32)}` satisfies Hash
+		const replacements: Hash[] = []
+		let transactionLookupCount = 0
+		const calls: { method: string; params: unknown }[] = []
+		const originalTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: originalHash,
+			input: '0xabcd',
+			nonce: '0xa',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: null,
+			type: '0x2',
+			value: '0x7',
+		}
+		const replacementTransaction = {
+			...originalTransaction,
+			hash: replacementHash,
+			transactionIndex: '0x0',
+		}
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') {
+				transactionLookupCount += 1
+				return transactionLookupCount === 1 ? null : originalTransaction
+			}
+			if (method === 'eth_getTransactionReceipt') {
+				const hash = getArrayEntry(params, 0, 'receipt params')
+				if (hash === originalHash) return null
+				if (hash === replacementHash) {
+					return {
+						blockHash: BLOCK_HASH,
+						blockNumber: '0x0',
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x9',
+						from: OWNER_ADDRESS,
+						gasUsed: '0x5208',
+						logs: [],
+						status: '0x1',
+						to: RECIPIENT_ADDRESS,
+						transactionHash: replacementHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					}
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x0',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: [replacementTransaction],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		const receipt = await client.waitForTransactionReceipt({
+			hash: originalHash,
+			onReplaced: replacement => {
+				replacements.push(replacement.transaction.hash)
+			},
+			pollingInterval: 0,
+			timeout: 50,
+		})
+
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(replacements).toEqual([replacementHash])
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_getTransactionByHash', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
+	})
+
 	test('simulateContract forwards account and call overrides into eth_call', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const expectedData = encodeFunctionData({

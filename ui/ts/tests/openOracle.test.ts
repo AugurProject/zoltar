@@ -1,8 +1,21 @@
 /// <reference types="bun-types" />
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, queueOracleManagerOperation, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
+import { getAddress, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import {
+	createOpenOracleReportInstance,
+	executeOracleManagerStagedOperation,
+	getOpenOracleAddress,
+	loadErc20Balance,
+	loadOpenOracleReportDetails,
+	loadOpenOracleReportSummaries,
+	loadOracleManagerDetails,
+	queueOracleManagerOperation,
+	requestOraclePrice,
+	settleOracleReport,
+	submitInitialOracleReport,
+	wrapWeth as wrapUiWeth,
+} from '../contracts.js'
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleDisputeSubmissionDetails,
@@ -31,6 +44,7 @@ import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
+import type { WriteContractClient } from '../contracts/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
@@ -65,6 +79,24 @@ const securityMultiplier = 2n
 const reportedRepEthPrice = 10n
 const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
 const outcomes = ['Yes', 'No']
+
+function createSuccessfulReceipt(hash: Hash, managerAddress: Address) {
+	return {
+		status: 'success',
+		blockHash: '0x0',
+		blockNumber: 0n,
+		contractAddress: null,
+		cumulativeGasUsed: 0n,
+		from: getAddress('0x00000000000000000000000000000000000000a1'),
+		gasUsed: 0n,
+		logs: [],
+		logsBloom: '0x',
+		to: managerAddress,
+		transactionHash: hash,
+		transactionIndex: 0n,
+		type: 'eip1559',
+	} as never
+}
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
 	const client = createConnectedReadClient()
@@ -230,6 +262,33 @@ describe('Open Oracle helpers', () => {
 
 	test('getOpenOracleAddress returns the deterministic non-zero oracle address', () => {
 		expect(getOpenOracleAddress()).not.toBe(zeroAddress)
+	})
+
+	test('executeOracleManagerStagedOperation forwards an explicit gas limit', async () => {
+		const stagedOperationManagerAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const hash = `0x${'1'.repeat(64)}` as Hash
+		const sentTransactions: Array<{ gas: bigint | undefined; to: Address | undefined }> = []
+
+		const writeClient = {
+			sendTransaction: async ({ gas, to }) => {
+				sentTransactions.push({ gas, to: typeof to === 'string' ? to : undefined })
+				return hash
+			},
+			waitForTransactionReceipt: async () => createSuccessfulReceipt(hash, stagedOperationManagerAddress),
+		} satisfies WriteContractClient
+
+		const result = await executeOracleManagerStagedOperation(writeClient, stagedOperationManagerAddress, 7n)
+
+		expect(sentTransactions).toEqual([
+			{
+				gas: 5_000_000n,
+				to: stagedOperationManagerAddress,
+			},
+		])
+		expect(result).toEqual({
+			action: 'executeStagedOperation',
+			hash,
+		})
 	})
 
 	test('createOpenOracleReportInstance creates a browsable report and browse ordering is newest-first', async () => {

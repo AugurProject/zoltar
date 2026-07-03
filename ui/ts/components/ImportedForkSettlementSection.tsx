@@ -81,7 +81,7 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 										)}
 									</span>
 									<span>
-										Imported ordering start: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+										Imported entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
 									</span>
 								</div>
 							</label>

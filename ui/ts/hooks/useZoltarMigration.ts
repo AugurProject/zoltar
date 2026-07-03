@@ -12,6 +12,7 @@ import { requireWallet } from '../lib/walletGuard.js'
 import { assertActiveWallet } from '../lib/walletGuards.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { WriteOperationsParameters, ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -24,7 +25,7 @@ type UseZoltarMigrationParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	refreshZoltarForkAccess: () => Promise<void>
 	refreshZoltarUniverse: () => Promise<void>
 	zoltarForkRepBalance: bigint | undefined
@@ -94,16 +95,17 @@ export function useZoltarMigration({
 			zoltarMigrationError.value = undefined
 			zoltarMigrationFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 			zoltarMigrationResult.value = undefined
+			const submittedForm = zoltarMigrationForm.value
 
 			try {
 				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')
-				const amount = parseRepAmountInput(zoltarMigrationForm.value.amount, 'Migration amount')
+				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
 				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
-				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(zoltarMigrationForm.value.outcomeIndexes, 'Outcome indexes') : []
+				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(submittedForm.outcomeIndexes, 'Outcome indexes') : []
 				const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
 				zoltarMigrationResult.value = result
 				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
@@ -122,7 +124,7 @@ export function useZoltarMigration({
 			try {
 				if (writeFailed) return
 				if (refreshAfter) {
-					await refreshState()
+					await refreshWalletStateOnly(refreshState)
 					await refreshZoltarUniverse()
 				}
 				await refreshZoltarForkAccess()

@@ -8,11 +8,14 @@ type StickyObjectContextProps = {
 	items: StickyContextItem[]
 	sticky?: boolean
 	title: string
+	variant?: 'context-strip' | 'default'
 }
 
-export function StickyObjectContext({ badge, children, eyebrow, items, sticky = true, title }: StickyObjectContextProps) {
+export function StickyObjectContext({ badge, children, eyebrow, items, sticky = true, title, variant = 'default' }: StickyObjectContextProps) {
+	const classes = ['sticky-object-context', sticky ? '' : 'static', variant === 'context-strip' ? 'context-strip' : ''].filter(Boolean).join(' ')
+
 	return (
-		<section className={`sticky-object-context${sticky ? '' : ' static'}`}>
+		<section className={classes}>
 			<div className='sticky-object-context-header'>
 				<div className='sticky-object-context-copy'>
 					{eyebrow === undefined ? undefined : <p className='panel-label'>{eyebrow}</p>}

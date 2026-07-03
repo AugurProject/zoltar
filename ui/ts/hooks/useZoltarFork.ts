@@ -16,6 +16,7 @@ import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -29,7 +30,7 @@ type UseZoltarForkParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	refreshZoltarUniverse: () => Promise<void>
 	shouldAutoLoadForkAccess: boolean
 	zoltarUniverse: ZoltarUniverseSummary | undefined
@@ -43,6 +44,16 @@ function toReadError(error: unknown) {
 
 function formatQuestionId(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
+}
+
+function resolveSubmittedForkQuestionId(submittedQuestionId: string) {
+	return parseBigIntInput(submittedQuestionId, 'Fork question ID')
+}
+
+function resolveUniverseForkQuestionId(universe: ZoltarUniverseSummary) {
+	const questionIdString = universe.forkQuestionDetails?.questionId ?? ''
+	if (questionIdString === '') throw new Error('Fork question ID is missing')
+	return BigInt(questionIdString)
 }
 
 export function useZoltarFork({
@@ -170,7 +181,7 @@ export function useZoltarFork({
 		})
 	}
 
-	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean, options?: { requireQuestionIdInput?: boolean }) => {
+	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean, questionIdSource: 'submitted' | 'universe') => {
 		if (
 			!requireWallet(
 				accountAddress,
@@ -187,6 +198,7 @@ export function useZoltarFork({
 		zoltarForkError.value = undefined
 		zoltarForkFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 		zoltarForkResult.value = undefined
+		const submittedQuestionId = zoltarForkQuestionId.value
 
 		try {
 			let result: ZoltarForkActionResult | undefined
@@ -194,13 +206,7 @@ export function useZoltarFork({
 				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarForkTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
-				const questionId = options?.requireQuestionIdInput
-					? parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
-					: (() => {
-							const questionIdString = universe.forkQuestionDetails?.questionId ?? ''
-							if (questionIdString === '') throw new Error('Fork question ID is missing')
-							return BigInt(questionIdString)
-						})()
+				const questionId = questionIdSource === 'submitted' ? resolveSubmittedForkQuestionId(submittedQuestionId) : resolveUniverseForkQuestionId(universe)
 				result = await action(accountAddress, universe, questionId)
 				zoltarForkResult.value = result
 				zoltarForkFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
@@ -214,7 +220,7 @@ export function useZoltarFork({
 
 			try {
 				if (refreshAfter) {
-					await refreshState()
+					await refreshWalletStateOnly(refreshState)
 					await refreshZoltarUniverse()
 				}
 				await loadZoltarForkAccess()
@@ -246,7 +252,7 @@ export function useZoltarFork({
 				},
 				'Failed to approve REP for Zoltar fork',
 				false,
-				{ requireQuestionIdInput: false },
+				'universe',
 			),
 		[runZoltarForkAction, onTransactionPrepared, onTransactionSubmitted],
 	)
@@ -260,6 +266,7 @@ export function useZoltarFork({
 			},
 			'Failed to fork Zoltar',
 			true,
+			'submitted',
 		)
 
 	useEffect(() => {

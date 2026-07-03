@@ -17,8 +17,8 @@ import type {
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
+	SecurityPoolBrowsePage,
 	SecurityPoolCreationResult,
-	SecurityPoolPage,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
 	SecurityVaultActionResult,
@@ -147,7 +147,7 @@ export type SectionBlockProps = {
 	headingLevel?: 2 | 3 | 4
 	title?: ComponentChildren
 	tone?: 'critical' | 'default' | 'muted'
-	variant?: 'default' | 'embedded'
+	variant?: 'default' | 'embedded' | 'plain' | 'surface'
 }
 
 export type RouteWorkflowPanelProps = {
@@ -337,6 +337,7 @@ export type OverviewPanelsProps = {
 	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
+	isRefreshingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefreshRepPrices: () => void
@@ -374,6 +375,7 @@ export type MarketRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
 	activeView: ZoltarView
+	environmentRefreshKey: number
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
@@ -425,8 +427,6 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	onLoadMarket: () => void
-	onLoadMarketById: (marketId: string) => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
@@ -470,19 +470,20 @@ type LiquidationModalStateProps = {
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
 	checkedSecurityPoolAddress: string | undefined
+	environmentRefreshKey: number
 	hasLoadedSecurityPools: boolean
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
 	loadingSecurityPools: boolean
 	onCreateSecurityPool?: () => void
-	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number) => void
+	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPoolBrowseCount: bigint | undefined
-	securityPoolPage: SecurityPoolPage | undefined
+	securityPoolPage: SecurityPoolBrowsePage | undefined
 	securityPools: ListedSecurityPool[]
 } & LiquidationModalStateProps &
 	RepPerEthPriceProps

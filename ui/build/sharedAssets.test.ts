@@ -3,23 +3,21 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
+import { sharedBrowserArtifactRelativePaths } from '../../scripts/sharedBrowserArtifacts.ts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
 const uiRootPath = path.join(repositoryRootPath, 'ui')
 const uiContractsPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts.ts')
 const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'reportingDomain.ts')
 const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'simulation', 'bootstrap.ts')
+const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
+const uiWatchBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'watch.mts')
 const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
-const sharedBrowserArtifacts = [
-	path.join(repositoryRootPath, 'shared', 'js', 'bigInt.js'),
-	path.join(repositoryRootPath, 'shared', 'js', 'constants.js'),
-	path.join(repositoryRootPath, 'shared', 'js', 'deploymentAddresses.js'),
-	path.join(repositoryRootPath, 'shared', 'js', 'ethereum.js'),
-	path.join(repositoryRootPath, 'shared', 'js', 'protocolConfig.js'),
-]
+const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
 	abitype: './vendor/abitype/exports/index.js',
@@ -223,6 +221,27 @@ function collectRuntimeModuleSpecifiers(sourceFile: ts.SourceFile) {
 	return specifiers
 }
 
+function isBunStringLiteral(node: ts.Node) {
+	return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === 'bun'
+}
+
+function getSourceLocation(sourceFile: ts.SourceFile, node: ts.Node) {
+	const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+	return `${path.relative(repositoryRootPath, sourceFile.fileName)}:${line + 1}:${character + 1}`
+}
+
+function collectBareBunStringLiterals(sourceFile: ts.SourceFile) {
+	const locations: string[] = []
+	const visit = (node: ts.Node) => {
+		if (isBunStringLiteral(node)) {
+			locations.push(getSourceLocation(sourceFile, node))
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(sourceFile)
+	return locations
+}
+
 function getExportedNames(filePath: string, imports: Record<string, string>, exportCache: Map<string, Set<string>>) {
 	const cachedExports = exportCache.get(filePath)
 	if (cachedExports !== undefined) return cachedExports
@@ -296,14 +315,18 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/protocolConfig'")
 	expect(contractsSource).toContain("from '@zoltar/shared/ethereum'")
+	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/shared/escalationMath'")
+	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/shared/truthAuctionTickMath'")
 	expect(contractsSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
 	expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
@@ -311,14 +334,26 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	}
 })
 
+test('watch build regression scanner catches indirect bare Bun commands', () => {
+	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'ui', 'build', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
+
+	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['ui/build/bare-bun-fixture.mts:1:21'])
+})
+
 test('development import map maps browser dependency subpaths', () => {
 	const imports = readDevelopmentImportMap()
 	const vendorBuildSource = fs.readFileSync(uiVendorBuildPath, 'utf8')
+	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
+	const watchBuildSourceFile = parseModule(uiWatchBuildPath, watchBuildSource)
 
 	for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
 		expect(imports[specifier]).toBe(mappedPath)
 	}
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
+	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
+	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
+	expect(watchBuildSource).toContain('const BUN_EXECUTABLE_PATH = process.execPath')
+	expect(collectBareBunStringLiterals(watchBuildSourceFile)).toEqual([])
 })
 
 test('development import map resolves all static imports reachable from the dev entrypoint', () => {

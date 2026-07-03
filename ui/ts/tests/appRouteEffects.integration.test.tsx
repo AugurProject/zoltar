@@ -14,6 +14,7 @@ type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEffectsProps {
 	return {
 		accountAddress: undefined,
+		activeEnvironmentNonce: 0,
 		augurPlaceHolderDeploymentMissing: false,
 		environmentReady: true,
 		loadOracleReport: async () => undefined,
@@ -99,6 +100,69 @@ describe('app route effects integration', () => {
 		expect(calls).toEqual(['1'])
 		await cleanup()
 		dom.cleanup()
+	})
+
+	test('reloads route data after the active environment nonce changes', async () => {
+		const dom = installDomEnvironment()
+		const securityPoolCalls: string[] = []
+		const initialProps = createDefaultProps({
+			environmentReady: true,
+			loadSecurityPools: async securityPoolAddress => {
+				securityPoolCalls.push(securityPoolAddress ?? '')
+			},
+			route: 'security-pools',
+			securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+			selectedPoolSecurityPoolAddress: undefined,
+			walletBootstrapComplete: true,
+		})
+
+		try {
+			const rendered = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
+			await act(() => Promise.resolve())
+			expect(securityPoolCalls).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+
+			await act(() => {
+				render(<RouteEffectsHarness {...initialProps} activeEnvironmentNonce={1} />, rendered.container)
+			})
+			await act(() => Promise.resolve())
+			expect(securityPoolCalls).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009', '0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+
+			await rendered.cleanup()
+		} finally {
+			dom.cleanup()
+		}
+	})
+
+	test('reloads a selected security pool after the active environment nonce changes', async () => {
+		const dom = installDomEnvironment()
+		const securityPoolCalls: string[] = []
+		const securityPoolAddress = '0x84834d4Dccea071b363e53952BD300F7bf56a009'
+		const initialProps = createDefaultProps({
+			environmentReady: true,
+			loadSecurityPools: async nextSecurityPoolAddress => {
+				securityPoolCalls.push(nextSecurityPoolAddress ?? '')
+			},
+			route: 'security-pools',
+			securityPoolAddress,
+			selectedPoolSecurityPoolAddress: securityPoolAddress,
+			walletBootstrapComplete: true,
+		})
+
+		try {
+			const rendered = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
+			await act(() => Promise.resolve())
+			expect(securityPoolCalls).toEqual([])
+
+			await act(() => {
+				render(<RouteEffectsHarness {...initialProps} activeEnvironmentNonce={1} />, rendered.container)
+			})
+			await act(() => Promise.resolve())
+			expect(securityPoolCalls).toEqual([securityPoolAddress])
+
+			await rendered.cleanup()
+		} finally {
+			dom.cleanup()
+		}
 	})
 
 	test('does not repeatedly reload the same unresolved security pool across rerenders', async () => {

@@ -2,12 +2,12 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const DIST_ROOT_PATH = path.join(UI_ROOT_PATH, 'dist')
 const DIST_ASSETS_PATH = path.join(DIST_ROOT_PATH, 'assets')
-const MODULES_ROOT_PATH = path.join(UI_ROOT_PATH, 'node_modules')
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
 	env: {},
@@ -25,11 +25,11 @@ globalThis.global ??= globalThis
 
 function createBrowserVendorAliasPlugin() {
 	const aliasEntries: Array<[RegExp, string]> = [
-		[/^pino$/, path.join(MODULES_ROOT_PATH, 'pino', 'browser.js')],
-		[/^tevm$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
-		[/^tevm\/common$/, path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
-		[/^@tevm\/memory-client$/, path.join(MODULES_ROOT_PATH, '@tevm', 'memory-client', 'dist', 'index.js')],
-		[/^@tevm\/common$/, path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
+		[/^pino$/, resolveBundlerSpecifierPath('pino/browser.js')],
+		[/^tevm$/, resolveBundlerSpecifierPath('@tevm/memory-client')],
+		[/^tevm\/common$/, resolveBundlerSpecifierPath('@tevm/common')],
+		[/^@tevm\/memory-client$/, resolveBundlerSpecifierPath('@tevm/memory-client')],
+		[/^@tevm\/common$/, resolveBundlerSpecifierPath('@tevm/common')],
 	]
 	type BrowserVendorBuild = {
 		onResolve(options: { filter: RegExp }, callback: (args: { path: string }) => { path: string }): void
@@ -63,7 +63,7 @@ async function writeProductionIndexHtml() {
 
 async function buildProductionApp() {
 	await Bun.build({
-		entrypoints: [path.join(UI_ROOT_PATH, 'ts', 'index.ts')],
+		entrypoints: [normalizeBundlerPath(path.join(UI_ROOT_PATH, 'ts', 'index.ts'))],
 		naming: {
 			entry: 'app.js',
 			chunk: 'chunks/[name]-[hash].js',
@@ -80,7 +80,7 @@ async function buildProductionWorker() {
 	const BANNER_LINE_COUNT = WORKER_BANNER.split('\n').length
 
 	const result = await Bun.build({
-		entrypoints: [workerEntryPath],
+		entrypoints: [normalizeBundlerPath(workerEntryPath)],
 		naming: { entry: 'tevmWorker.worker.js' },
 		outdir: DIST_ASSETS_PATH,
 		plugins: [createBrowserVendorAliasPlugin()],

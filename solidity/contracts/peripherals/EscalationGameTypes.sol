@@ -43,6 +43,9 @@ struct OutcomeState {
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
 	uint256 inheritedUnresolvedTotal;
+	// Total inherited/source principal already backed by recorded forked escrow in this continuation instance.
+	// This can exceed `balance` when a recursive own-fork branch carries more parent principal than child REP.
+	uint256 forkedEscrowSourcePrincipalTotal;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	// The current unresolved carry state after local and inherited deposits are consumed.

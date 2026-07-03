@@ -85,4 +85,95 @@ describe('useDeploymentFlow', () => {
 		expect(deploy).not.toHaveBeenCalled()
 		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
 	})
+
+	test('does not request a deployment transaction when the wallet disconnects after selection', async () => {
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		const deploy = mock(async () => `0x${'1'.repeat(64)}` as Hash)
+		const onTransactionRequested = mock(() => undefined)
+		const onTransactionFailed = mock(() => undefined)
+		const deploymentStatuses: DeploymentStatus[] = [
+			{
+				address: getAddress('0x00000000000000000000000000000000000000d1'),
+				dependencies: [],
+				deploy,
+				deployed: false,
+				id: 'zoltar',
+				label: 'Zoltar',
+			},
+		]
+		let hookState: UseDeploymentFlowState | undefined
+		const Harness = function DeploymentFlowHarness() {
+			hookState = useDeploymentFlow({
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionPrepared: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				setDeploymentStatuses: () => undefined,
+			})
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).deployStep('zoltar')
+		})
+
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(deploy).not.toHaveBeenCalled()
+		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account is no longer connected. Reconnect your wallet and try again')
+	})
+
+	test('does not request a deployment transaction when the wallet network changed', async () => {
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
+			getChainId: async () => '0x5',
+		})
+		const deploy = mock(async () => `0x${'1'.repeat(64)}` as Hash)
+		const onTransactionRequested = mock(() => undefined)
+		const onTransactionFailed = mock(() => undefined)
+		const deploymentStatuses: DeploymentStatus[] = [
+			{
+				address: getAddress('0x00000000000000000000000000000000000000d1'),
+				dependencies: [],
+				deploy,
+				deployed: false,
+				id: 'zoltar',
+				label: 'Zoltar',
+			},
+		]
+		let hookState: UseDeploymentFlowState | undefined
+		const Harness = function DeploymentFlowHarness() {
+			hookState = useDeploymentFlow({
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionPrepared: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				setDeploymentStatuses: () => undefined,
+			})
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).deployStep('zoltar')
+		})
+
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(deploy).not.toHaveBeenCalled()
+		expect(onTransactionFailed).toHaveBeenCalledWith('Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+	})
 })

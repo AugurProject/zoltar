@@ -13,8 +13,8 @@ import {
 	Zoltar_Zoltar,
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
-	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
+	peripherals_SecurityPool_SecurityPool,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_tokens_ShareToken_ShareToken,
@@ -94,7 +94,6 @@ type SecurityPoolMintCapacity = {
 	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint
 }
-
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
@@ -730,12 +729,13 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		hash,
 	} satisfies OpenOracleActionResult
 }
-export async function executeOracleManagerStagedOperation(client: WriteClient, managerAddress: Address, operationId: bigint) {
+export async function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint) {
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'executeStagedOperation',
 		args: [operationId],
+		gas: 5_000_000n,
 	}))
 	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation') ?? getStagedOracleExecutionResult(receipt, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, 'setSecurityBondsAllowance')
 	return {

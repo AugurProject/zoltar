@@ -2,13 +2,17 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
+import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
+import type { TransactionIntent } from '../types/components.js'
 import type { DeploymentStatus, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { waitFor } from './testUtils/queries'
 
 type UseTradingOperations = typeof import('../hooks/useTradingOperations.js')['useTradingOperations']
 type UseTradingOperationsState = ReturnType<UseTradingOperations>
@@ -16,6 +20,16 @@ type UseTradingOperationsState = ReturnType<UseTradingOperations>
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
+}
 
 function createDeploymentStep(id: DeploymentStatus['id']): DeploymentStatus {
 	return {
@@ -63,14 +77,28 @@ function requireHookState(state: UseTradingOperationsState | undefined) {
 	return state
 }
 
-function createHarness(useTradingOperations: UseTradingOperations, onRender: (state: UseTradingOperationsState) => void, onTransactionFailed: (message: string) => void, { onTransactionRequested = () => undefined }: { onTransactionRequested?: () => void } = {}) {
+function createHarness(
+	useTradingOperations: UseTradingOperations,
+	onRender: (state: UseTradingOperationsState) => void,
+	onTransactionFailed: (message: string) => void,
+	{
+		onTransactionCanceled = () => undefined,
+		onTransactionFinished = () => undefined,
+		onTransactionRequested = () => undefined,
+	}: {
+		onTransactionCanceled?: () => void
+		onTransactionFinished?: () => void
+		onTransactionRequested?: Parameters<UseTradingOperations>[0]['onTransactionRequested']
+	} = {},
+) {
 	return function TradingOperationsHarness() {
 		const state = useTradingOperations({
 			accountAddress: WALLET_ADDRESS,
 			deploymentStatuses: [createDeploymentStep('proxyDeployer')],
 			enabled: true,
+			onTransactionCanceled,
 			onTransactionFailed,
-			onTransactionFinished: () => undefined,
+			onTransactionFinished,
 			onTransactionPresented: () => undefined,
 			onTransactionRequested,
 			onTransactionSubmitted: () => undefined,
@@ -115,7 +143,6 @@ describe('useTradingOperations', () => {
 		const readClient = {
 			getBalance: mock(async () => 2n * 10n ** 18n),
 		}
-
 		mock.module('../contracts.js', () => ({
 			createCompleteSetInSecurityPool,
 			loadSecurityPoolMintCapacity: mock(async () => ({
@@ -186,7 +213,6 @@ describe('useTradingOperations', () => {
 		const readClient = {
 			getBalance: mock(async () => 2n * 10n ** 18n),
 		}
-
 		mock.module('../contracts.js', () => ({
 			createCompleteSetInSecurityPool: mock(async () => {
 				throw new Error('createCompleteSetInSecurityPool should not be called in this test')
@@ -247,6 +273,269 @@ describe('useTradingOperations', () => {
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalled()
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
+	})
+
+	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {
+		const poolA = getAddress('0x00000000000000000000000000000000000000c1')
+		const poolB = getAddress('0x00000000000000000000000000000000000000d1')
+		const pendingResult = createDeferred<{
+			action: 'createCompleteSet'
+			hash: typeof zeroHash
+			securityPoolAddress: typeof poolA
+			universeId: bigint
+		}>()
+		const detailsA = createTradingDetails({
+			shareBalances: {
+				invalid: 1n,
+				no: 2n,
+				yes: 3n,
+			},
+			universeId: 1n,
+		})
+		const detailsB = createTradingDetails({
+			shareBalances: {
+				invalid: 4n,
+				no: 5n,
+				yes: 6n,
+			},
+			universeId: 2n,
+		})
+		const universeA = createUniverseSummary({ childUniverses: [{ exists: true, forkTime: 0n, outcomeIndex: 0n, outcomeLabel: 'Invalid', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 11n }], hasForked: true, universeId: 1n })
+		const universeB = createUniverseSummary({ childUniverses: [{ exists: true, forkTime: 0n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 2n, reputationToken: zeroAddress, universeId: 22n }], hasForked: true, universeId: 2n })
+		const createCompleteSetInSecurityPool = mock(async () => await pendingResult.promise)
+		const loadTradingDetails = mock(async (_client: unknown, securityPoolAddress: string) => {
+			if (securityPoolAddress === poolA) return detailsA
+			if (securityPoolAddress === poolB) return detailsB
+			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+		})
+		const loadZoltarUniverseSummary = mock(async (_client: unknown, universeId: bigint) => {
+			if (universeId === universeA.universeId) return universeA
+			if (universeId === universeB.universeId) return universeB
+			throw new Error(`Unexpected universe ${universeId.toString()}`)
+		})
+		const onTransactionFailed = mock(() => undefined)
+		const readClient = {
+			getBalance: mock(async () => 2n * 10n ** 18n),
+		}
+
+		mock.module('../contracts.js', () => ({
+			createCompleteSetInSecurityPool,
+			loadSecurityPoolMintCapacity: mock(async () => ({
+				completeSetCollateralAmount: 1n * 10n ** 18n,
+				shareTokenSupply: 1n * 10n ** 18n,
+				totalRepDeposit: 20n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			})),
+			loadTradingDetails,
+			loadZoltarUniverseSummary,
+			migrateSharesFromUniverse: mock(async () => {
+				throw new Error('migrateSharesFromUniverse should not be called in this test')
+			}),
+			redeemCompleteSetInSecurityPool: mock(async () => {
+				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
+			}),
+			redeemSharesInSecurityPool: mock(async () => {
+				throw new Error('redeemSharesInSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseTradingOperationsState | undefined
+		let setSelectedSecurityPoolAddress: ((value: typeof poolA | typeof poolB) => void) | undefined
+		function TradingOperationsHarness() {
+			const [selectedSecurityPoolAddress, setSelectedPoolAddress] = useState<typeof poolA | typeof poolB>(poolA)
+			setSelectedSecurityPoolAddress = setSelectedPoolAddress
+			const state = useTradingOperations({
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses: [createDeploymentStep('proxyDeployer')],
+				enabled: true,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress,
+			})
+			hookState = state
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(h(TradingOperationsHarness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeA.universeId))
+		await waitFor(() => expect(requireHookState(hookState).tradingForkUniverse?.universeId).toBe(universeA.universeId))
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({
+				...current,
+				completeSetAmount: '1',
+			}))
+		})
+
+		let createPromise = Promise.resolve()
+		await act(() => {
+			createPromise = requireHookState(hookState).createCompleteSet()
+		})
+
+		await waitFor(() => expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			setSelectedSecurityPoolAddress?.(poolB)
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeB.universeId))
+		await waitFor(() => expect(requireHookState(hookState).tradingForkUniverse?.universeId).toBe(universeB.universeId))
+		expect(requireHookState(hookState).tradingDetails?.shareBalances).toEqual(detailsB.shareBalances)
+
+		await act(async () => {
+			pendingResult.resolve({
+				action: 'createCompleteSet',
+				hash: zeroHash,
+				securityPoolAddress: poolA,
+				universeId: universeA.universeId,
+			})
+			await createPromise
+		})
+
+		expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeB.universeId)
+		expect(requireHookState(hookState).tradingForkUniverse?.universeId).toBe(universeB.universeId)
+		expect(requireHookState(hookState).tradingDetails?.shareBalances).toEqual(detailsB.shareBalances)
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
+	test('createCompleteSet ignores a stale preflight refresh after the selected pool changes', async () => {
+		const poolA = getAddress('0x00000000000000000000000000000000000000e1')
+		const poolB = getAddress('0x00000000000000000000000000000000000000e2')
+		const deferredMintCapacity = createDeferred<{
+			completeSetCollateralAmount: bigint
+			shareTokenSupply: bigint
+			totalRepDeposit: bigint
+			totalSecurityBondAllowance: bigint
+		}>()
+		const detailsA = createTradingDetails({ universeId: 1n })
+		const detailsB = createTradingDetails({ universeId: 2n })
+		const universeA = createUniverseSummary({ hasForked: true, universeId: 1n })
+		const universeB = createUniverseSummary({ hasForked: true, universeId: 2n })
+		const createCompleteSetInSecurityPool = mock(async () => ({
+			action: 'createCompleteSet' as const,
+			hash: zeroHash,
+			securityPoolAddress: poolA,
+			universeId: universeA.universeId,
+		}))
+		const loadTradingDetails = mock(async (_client: unknown, securityPoolAddress: string) => {
+			if (securityPoolAddress === poolA) return detailsA
+			if (securityPoolAddress === poolB) return detailsB
+			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+		})
+		const loadZoltarUniverseSummary = mock(async (_client: unknown, universeId: bigint) => {
+			if (universeId === universeA.universeId) return universeA
+			if (universeId === universeB.universeId) return universeB
+			throw new Error(`Unexpected universe ${universeId.toString()}`)
+		})
+		const onTransactionFailed = mock(() => undefined)
+		const readClient = {
+			getBalance: mock(async () => 2n * 10n ** 18n),
+		}
+		let transactionState = createInitialTransactionTrayState()
+
+		mock.module('../contracts.js', () => ({
+			createCompleteSetInSecurityPool,
+			loadSecurityPoolMintCapacity: mock(async () => await deferredMintCapacity.promise),
+			loadTradingDetails,
+			loadZoltarUniverseSummary,
+			migrateSharesFromUniverse: mock(async () => {
+				throw new Error('migrateSharesFromUniverse should not be called in this test')
+			}),
+			redeemCompleteSetInSecurityPool: mock(async () => {
+				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
+			}),
+			redeemSharesInSecurityPool: mock(async () => {
+				throw new Error('redeemSharesInSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseTradingOperationsState | undefined
+		let setSelectedSecurityPoolAddress: ((value: typeof poolA | typeof poolB) => void) | undefined
+		function TradingOperationsHarness() {
+			const [selectedSecurityPoolAddress, setSelectedPoolAddress] = useState<typeof poolA | typeof poolB>(poolA)
+			setSelectedSecurityPoolAddress = setSelectedPoolAddress
+			hookState = useTradingOperations({
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses: [createDeploymentStep('proxyDeployer')],
+				enabled: true,
+				onTransactionCanceled: () => {
+					transactionState = markTransactionCanceled(transactionState)
+				},
+				onTransactionFailed,
+				onTransactionFinished: () => {
+					transactionState = markTransactionFinished(transactionState)
+				},
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: (intent: TransactionIntent) => {
+					transactionState = markTransactionRequested(transactionState, intent)
+				},
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress,
+			})
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(h(TradingOperationsHarness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeA.universeId))
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({
+				...current,
+				completeSetAmount: '1',
+			}))
+		})
+
+		let createPromise = Promise.resolve()
+		await act(() => {
+			createPromise = requireHookState(hookState).createCompleteSet()
+		})
+
+		await waitFor(() => expect(loadTradingDetails).toHaveBeenCalled())
+		expect(requireHookState(hookState).tradingFeedback?.status.tone).toBe('pending')
+		expect(transactionState.pendingIntent?.action).toBe('createCompleteSet')
+
+		await act(async () => {
+			setSelectedSecurityPoolAddress?.(poolB)
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeB.universeId))
+
+		await act(async () => {
+			deferredMintCapacity.resolve({
+				completeSetCollateralAmount: 1n * 10n ** 18n,
+				shareTokenSupply: 1n * 10n ** 18n,
+				totalRepDeposit: 20n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			})
+			await createPromise
+		})
+
+		expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeB.universeId)
+		expect(requireHookState(hookState).tradingFeedback).toBeUndefined()
+		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(transactionState.active).toBeUndefined()
+		expect(transactionState.pendingIntent).toBeUndefined()
+		expect(transactionState.inFlightCount).toBe(0)
 	})
 
 	test('does not request a mint transaction when the active wallet account changed', async () => {

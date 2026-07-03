@@ -10,23 +10,25 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { WriteOperationsParameters } from '../types/app.js'
-import type { ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
 	accountAddress: Address | undefined
+	onTransactionCanceled?: WriteOperationsParameters['onTransactionCanceled']
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
 const SECURITY_POOL_PAGE_FALLBACK_DETAILS = ['no contract data was returned', 'returned no data']
@@ -52,7 +54,7 @@ async function waitForSecurityPoolReadBackend() {
 	await getActiveBackend().waitUntilReady?.()
 }
 
-export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
+export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
 	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
@@ -61,7 +63,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
 	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
-	const securityPoolPage = useSignal<SecurityPoolPage | undefined>(undefined)
+	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
 	const securityPoolPageLoad = useLoadController()
 	const hasLoadedSecurityPools = useSignal(false)
@@ -112,7 +114,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		})
 	}
 
-	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number) => {
+	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number, requestKey: string) => {
 		const isCurrent = nextSecurityPoolPageLoad()
 		await securityPoolPageLoad.run({
 			isCurrent,
@@ -127,7 +129,6 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 					return await loadSecurityPoolPage(readClient, pageIndex, pageSize, accountAddress)
 				} catch (error) {
 					if (!shouldFallbackToAllSecurityPoolsPage(error)) throw error
-					if (hasLoadedSecurityPools.value) return createSecurityPoolPageFromLoadedPools(securityPools.value, pageIndex, pageSize)
 					const pools = await loadAllSecurityPools(readClient, {
 						...(accountAddress === undefined ? {} : { accountAddress }),
 						vaultDetailMode: 'selected',
@@ -138,7 +139,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true
 				securityPoolBrowseCount.value = page.poolCount
-				securityPoolPage.value = page
+				securityPoolPage.value = { ...page, requestKey }
 			},
 			onError: error => {
 				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
@@ -177,13 +178,23 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewResult.value = undefined
+		const submittedLiquidationTargetVault = liquidationTargetVault.value
+		const submittedLiquidationAmount = liquidationAmount.value
+		const submittedLiquidationTimeoutMinutes = liquidationTimeoutMinutes.value
+		const isCurrentLiquidationSubmission = () =>
+			liquidationManagerAddress.value === managerAddress && liquidationSecurityPoolAddress.value === securityPoolAddress && liquidationTargetVault.value === submittedLiquidationTargetVault && liquidationAmount.value === submittedLiquidationAmount && liquidationTimeoutMinutes.value === submittedLiquidationTimeoutMinutes
 		let completedResult: SecurityPoolOverviewActionResult | undefined
 		try {
 			securityPoolOverviewActiveAction.value = 'queueLiquidation'
 			securityPoolOverviewFeedback.value = createPendingActionFeedback('queueLiquidation', 'Submitting liquidation')
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation', createLiquidationTransactionIntent()),
+					...buildWriteActionConfig(
+						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
+						securityPoolOverviewError,
+						'Connect a wallet before queueing liquidation',
+						createLiquidationTransactionIntent(),
+					),
 					onRefreshError: (message, hash) => {
 						if (completedResult?.stagedExecution?.success === false) return
 						securityPoolOverviewFeedback.value =
@@ -191,9 +202,14 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						if (completedResult !== undefined) onTransactionPresented(createLiquidationWarningPresentation(completedResult, message))
 					},
 					onWriteError: message => {
-						liquidationModalOpen.value = true
-						securityPoolLiquidationError.value = message
+						if (isCurrentLiquidationSubmission()) {
+							liquidationModalOpen.value = true
+							securityPoolLiquidationError.value = message
+						}
 						securityPoolOverviewFeedback.value = createErrorActionFeedback('queueLiquidation', 'Liquidation failed', message)
+					},
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
 					},
 				},
 				async walletAddress => {
@@ -205,9 +221,9 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						walletEthBalance,
 					})
 					if (liquidationGuardMessage !== undefined) throw new Error(liquidationGuardMessage)
-					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
-					const amount = parseRepAmountInput(liquidationAmount.value, 'Liquidation amount')
-					const timeoutMinutes = parseBigIntInput(liquidationTimeoutMinutes.value, 'Liquidation timeout')
+					const targetVault = parseAddressInput(submittedLiquidationTargetVault, 'Target vault')
+					const amount = parseRepAmountInput(submittedLiquidationAmount, 'Liquidation amount')
+					const timeoutMinutes = parseBigIntInput(submittedLiquidationTimeoutMinutes, 'Liquidation timeout')
 					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
 					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)

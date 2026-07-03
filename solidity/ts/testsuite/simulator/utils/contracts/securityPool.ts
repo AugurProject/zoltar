@@ -2,6 +2,7 @@ import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_Sec
 import type { Address } from '@zoltar/shared/ethereum'
 import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
+import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 
@@ -46,6 +47,7 @@ export const depositToEscalationGame = async (client: WriteClient, securityPoolA
 			functionName: 'depositToEscalationGame',
 			address: securityPoolAddress,
 			args: [outcome, amount],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -56,6 +58,7 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 			functionName: 'withdrawFromEscalationGame',
 			address: securityPoolAddress,
 			args: [outcome, depositIndexes],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 	return hash
@@ -68,6 +71,7 @@ export const depositRep = async (client: WriteClient, securityPoolAddress: Addre
 			functionName: 'depositRep',
 			address: securityPoolAddress,
 			args: [amount],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -79,6 +83,7 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 			address: securityPoolAddress,
 			args: [],
 			value: completeSetsToCreate,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -89,6 +94,7 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 			functionName: 'redeemCompleteSet',
 			address: securityPoolAddress,
 			args: [completeSetsToRedeem],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -279,6 +285,7 @@ export const redeemShares = async (client: WriteClient, securityPoolAddress: Add
 			functionName: 'redeemShares',
 			address: securityPoolAddress,
 			args: [],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -316,6 +323,7 @@ export const updateVaultFees = async (client: WriteClient, securityPoolAddress: 
 			functionName: 'updateVaultFees',
 			address: securityPoolAddress,
 			args: [vault],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -326,6 +334,7 @@ export const redeemFees = async (client: WriteClient, securityPoolAddress: Addre
 			functionName: 'redeemFees',
 			address: securityPoolAddress,
 			args: [vault],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
@@ -336,6 +345,7 @@ export const redeemRep = async (client: WriteClient, securityPoolAddress: Addres
 			functionName: 'redeemRep',
 			address: securityPoolAddress,
 			args: [vault],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 

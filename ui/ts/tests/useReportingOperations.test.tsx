@@ -7,6 +7,8 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { ReportingDetails } from '../types/contracts.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
+import type { TransactionIntent } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -74,13 +76,26 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 	}
 }
 
-function createHarness(useReportingOperations: UseReportingOperations, onRender: (state: UseReportingOperationsState) => void) {
+function createHarness(
+	useReportingOperations: UseReportingOperations,
+	onRender: (state: UseReportingOperationsState) => void,
+	{
+		onTransactionCanceled = () => undefined,
+		onTransactionFinished = () => undefined,
+		onTransactionRequested = () => undefined,
+	}: {
+		onTransactionCanceled?: () => void
+		onTransactionFinished?: () => void
+		onTransactionRequested?: Parameters<UseReportingOperations>[0]['onTransactionRequested']
+	} = {},
+) {
 	return function ReportingOperationsHarness() {
 		const state = useReportingOperations({
 			accountAddress: zeroAddress,
-			onTransactionFinished: () => undefined,
+			onTransactionCanceled,
+			onTransactionFinished,
 			onTransactionPresented: () => undefined,
-			onTransactionRequested: () => undefined,
+			onTransactionRequested,
 			onTransactionSubmitted: () => undefined,
 			refreshState: async () => undefined,
 		})
@@ -553,5 +568,217 @@ describe('useReportingOperations', () => {
 			yes: [1n],
 			no: [],
 		})
+	})
+
+	test('withdrawEscalation ignores a stale post-success refresh after the selected pool changes', async () => {
+		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000e1')
+		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000e2')
+		const staleRefresh = createDeferred<ReportingDetails>()
+		let firstPoolLoadCount = 0
+		const firstPoolDetails = createReportingDetails(firstPoolAddress, {
+			sides: [
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			settlementState: 'resolved',
+			parentWithdrawalEnabled: true,
+		})
+		const secondPoolDetails = createReportingDetails(secondPoolAddress, {
+			sides: [
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 4n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 2n, cumulativeAmount: 2n, depositIndex: 2n, depositor: zeroAddress }] },
+				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amount: 3n, cumulativeAmount: 3n, depositIndex: 3n, depositor: zeroAddress }] },
+			],
+			settlementState: 'resolved',
+			parentWithdrawalEnabled: true,
+		})
+		const loadReportingDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+			if (securityPoolAddress === firstPoolAddress) {
+				firstPoolLoadCount += 1
+				if (firstPoolLoadCount === 1) return firstPoolDetails
+				return await staleRefresh.promise
+			}
+			if (securityPoolAddress === secondPoolAddress) return secondPoolDetails
+			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+		})
+		const withdrawEscalationFromSecurityPool = mock(async () => ({
+			action: 'withdrawEscalation' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+			outcome: 'yes' as const,
+			securityPoolAddress: firstPoolAddress,
+			universeId: 1n,
+		}))
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool: mock(async () => {
+				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
+			}),
+			withdrawEscalationFromSecurityPool,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(useReportingOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				securityPoolAddress: firstPoolAddress,
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [],
+					yes: [0n],
+					no: [],
+				},
+			}))
+		})
+
+		let withdrawPromise = Promise.resolve()
+		await act(() => {
+			withdrawPromise = requireHookState(hookState).withdrawEscalation('yes', [0n])
+		})
+
+		await waitFor(() => expect(loadReportingDetails).toHaveBeenCalledTimes(2))
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				securityPoolAddress: secondPoolAddress,
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [],
+					yes: [2n],
+					no: [3n],
+				},
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).loadReporting()
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
+		expect(requireHookState(hookState).reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
+			invalid: [],
+			yes: [2n],
+			no: [3n],
+		})
+
+		await act(async () => {
+			staleRefresh.resolve(firstPoolDetails)
+			await withdrawPromise
+		})
+
+		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(requireHookState(hookState).reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
+			invalid: [],
+			yes: [2n],
+			no: [3n],
+		})
+		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(1)
+	})
+
+	test('reportOutcome ignores a stale preflight reload after the selected pool changes', async () => {
+		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const stalePreflight = createDeferred<ReportingDetails>()
+		const loadReportingDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+			if (securityPoolAddress === firstPoolAddress) return await stalePreflight.promise
+			if (securityPoolAddress === secondPoolAddress) return createReportingDetails(secondPoolAddress)
+			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+		})
+		const reportOutcomeInSecurityPool = mock(async () => ({
+			action: 'reportOutcome' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
+			outcome: 'yes' as const,
+			securityPoolAddress: firstPoolAddress,
+			universeId: 1n,
+		}))
+		let transactionState = createInitialTransactionTrayState()
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool,
+			withdrawEscalationFromSecurityPool: mock(async () => {
+				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			{
+				onTransactionCanceled: () => {
+					transactionState = markTransactionCanceled(transactionState)
+				},
+				onTransactionFinished: () => {
+					transactionState = markTransactionFinished(transactionState)
+				},
+				onTransactionRequested: (intent: TransactionIntent) => {
+					transactionState = markTransactionRequested(transactionState, intent)
+				},
+			},
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				reportAmount: '1',
+				securityPoolAddress: firstPoolAddress,
+				selectedOutcome: 'yes',
+			}))
+		})
+
+		let reportPromise = Promise.resolve()
+		await act(() => {
+			reportPromise = requireHookState(hookState).onReportOutcome()
+		})
+
+		await waitFor(() => expect(loadReportingDetails).toHaveBeenCalledTimes(1))
+		expect(requireHookState(hookState).reportingFeedback?.status.tone).toBe('pending')
+		expect(transactionState.pendingIntent?.action).toBe('reportOutcome')
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				securityPoolAddress: secondPoolAddress,
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).loadReporting()
+		})
+
+		await waitFor(() => expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
+
+		await act(async () => {
+			stalePreflight.resolve(createReportingDetails(firstPoolAddress))
+			await reportPromise
+		})
+
+		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(requireHookState(hookState).reportingFeedback).toBeUndefined()
+		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+		expect(transactionState.active).toBeUndefined()
+		expect(transactionState.pendingIntent).toBeUndefined()
+		expect(transactionState.inFlightCount).toBe(0)
 	})
 })

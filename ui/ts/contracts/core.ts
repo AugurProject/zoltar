@@ -1,4 +1,4 @@
-import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type ReplacementReason, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getMulticall3Address } from './deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
@@ -17,10 +17,16 @@ type ContractCallClient = {
 	call?: WriteClient['call']
 }
 
+type SubmittedTransactionClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = {
+	onTransactionSubmitted?: ((hash: Hash) => void) | undefined
+	waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
+}
+
 export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<WriteClient, 'sendTransaction'> &
 	ContractCallClient & {
 		chain?: WriteClient['chain']
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
+		onTransactionSubmitted?: ((hash: Hash) => void) | undefined
 		requiresWalletConfirmation?: boolean | undefined
 		waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 	}
@@ -71,9 +77,37 @@ function getOriginalErrorMessage(error: unknown) {
 	return undefined
 }
 
+function getReplacementFailureMessage(reason: ReplacementReason) {
+	if (reason === 'cancelled') return 'Transaction was cancelled in the wallet before confirmation.'
+	return 'Transaction was replaced in the wallet before confirmation.'
+}
+
 export async function writeContractAndWait<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams) {
 	const { hash } = await writeContractAndWaitForReceipt(client, getCallParams)
 	return hash
+}
+
+export async function waitForSubmittedTransactionReceipt<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: SubmittedTransactionClient<TReceipt>, hash: Hash, { allowRevertedReceipt = false }: { allowRevertedReceipt?: boolean } = {}): Promise<{ hash: Hash; receipt: TReceipt }> {
+	let resolvedHash = hash
+	let replacementReason: ReplacementReason | undefined
+	const receipt = await client.waitForTransactionReceipt({
+		hash,
+		onReplaced: replacement => {
+			resolvedHash = replacement.transaction.hash
+			replacementReason = replacement.reason
+			client.onTransactionSubmitted?.(resolvedHash)
+		},
+	})
+	if (replacementReason === 'cancelled' || replacementReason === 'replaced') {
+		throw new Error(getReplacementFailureMessage(replacementReason))
+	}
+	if (!allowRevertedReceipt && receipt.status === 'reverted') {
+		throw new Error('Transaction reverted')
+	}
+	return {
+		hash: resolvedHash,
+		receipt,
+	}
 }
 
 export async function writeContractAndWaitForReceipt<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams): Promise<{ hash: Hash; receipt: TReceipt }> {
@@ -107,10 +141,10 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 		const reason = await getContractRevertReason(client, callParams)
 		throw new Error(reason ?? getOriginalErrorMessage(error) ?? 'Transaction reverted')
 	}
-	const receipt = await client.waitForTransactionReceipt({ hash })
+	const { hash: resolvedHash, receipt } = await waitForSubmittedTransactionReceipt(client, hash, { allowRevertedReceipt: true })
 	if (receipt.status === 'reverted') {
 		const reason = await getContractRevertReason(client, callParams)
 		throw new Error(reason ?? 'Transaction reverted')
 	}
-	return { hash, receipt }
+	return { hash: resolvedHash, receipt }
 }

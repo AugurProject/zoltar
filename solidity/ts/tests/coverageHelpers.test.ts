@@ -4,7 +4,7 @@ import assert from '../testsuite/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { privateKeyToAccount } from '@zoltar/shared/ethereum'
 import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
-import { collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getKnownSourceMapCoverageGapRuleMatchCountsForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
+import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getKnownSourceMapCoverageGapRuleMatchCountsForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -72,6 +72,20 @@ const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFi
 		}
 	}
 	throw new Error(`Coverage summary is missing ${sourceSuffix}`)
+}
+
+const normalizeRpcBytecode = (value: string): string => (value.startsWith('0x') ? value.slice(2) : value).toLowerCase()
+
+const findLineNumberByExactSource = async (relativePath: string, sourceLine: string): Promise<number> => {
+	const lines = (await readFile(relativePath, 'utf8')).split('\n')
+	const lineIndex = lines.findIndex(line => line.trim() === sourceLine.trim())
+	if (lineIndex === -1) throw new Error(`Unable to find source line '${sourceLine}' in ${relativePath}`)
+	return lineIndex + 1
+}
+
+const readCoverageHitCount = async (sourceSuffix: string, lineNumber: number): Promise<number> => {
+	const coverage = await readCoverageFileSummary(sourceSuffix)
+	return coverage.lineHits[String(lineNumber)] ?? 0
 }
 
 test('coverage classifier keeps simple executable lines coverable so misses stay visible', () => {
@@ -465,6 +479,98 @@ describe('Solidity bytecode coverage helpers', () => {
 		assert.strictEqual(helperGetCodeRequests, 1, 'first attribution should fetch deployed helper code once')
 		await collectManualCoverage()
 		assert.strictEqual(helperGetCodeRequests, 1, 'second attribution should reuse the cached helper coverage profile')
+	})
+
+	test('traces eth_call coverage using state override code instead of latest chain code', async () => {
+		if (!isCoverageEnabled()) return
+
+		const helperRuntimeBytecode = test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.evm?.deployedBytecode?.object
+		if (helperRuntimeBytecode === undefined || helperRuntimeBytecode.length === 0) throw new Error('CoverageHelpersHarness deployed bytecode is unavailable')
+		const overrideCode = helperRuntimeBytecode.startsWith('0x') ? helperRuntimeBytecode : `0x${helperRuntimeBytecode}`
+		const overrideAddress = participantClient.account.address
+		const targetLineNumber = await findLineNumberByExactSource('solidity/contracts/peripherals/tokens/TokenId.sol', '_tokenId := or(')
+		const callData = encodeFunctionData({
+			abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+			functionName: 'getTokenId',
+			args: [7n, 1],
+		})
+
+		await flushSolidityBytecodeCoverageForTest()
+		const priorHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+
+		resetSolidityBytecodeCoverageAddressCache()
+		let overrideAddressGetCodeRequests = 0
+		const countingRequest = async (args: { method: string; params?: unknown[] | undefined }): Promise<unknown> => {
+			if (args.method === 'eth_getCode' && Array.isArray(args.params) && args.params[0] === overrideAddress) overrideAddressGetCodeRequests++
+			return await mockWindow.request(args)
+		}
+
+		await collectBytecodeCoverageForCall({
+			request: countingRequest,
+			transaction: { to: overrideAddress, data: callData },
+			stateOverrides: {
+				[overrideAddress]: {
+					code: overrideCode,
+				},
+			},
+		})
+
+		await flushSolidityBytecodeCoverageForTest()
+		const nextHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+		assert.strictEqual(overrideAddressGetCodeRequests, 0, 'state override code should avoid a latest eth_getCode lookup for the overridden address')
+		assert.ok(nextHitCount > priorHitCount, 'state override-backed eth_call coverage should attribute the TokenId source line')
+	})
+
+	test('traces eth_call coverage using code from the requested historical block instead of latest', async () => {
+		if (!isCoverageEnabled()) return
+
+		const helperAddress = await deployCoverageHelper()
+		const targetLineNumber = await findLineNumberByExactSource('solidity/contracts/peripherals/tokens/TokenId.sol', '_tokenId := or(')
+		const callData = encodeFunctionData({
+			abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+			functionName: 'getTokenId',
+			args: [9n, 2],
+		})
+
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		const callBlockNumber = parseRpcQuantity(await mockWindow.request({ method: 'eth_blockNumber', params: [] }))
+		const callBlockTag = `0x${callBlockNumber.toString(16)}`
+		const historicalCode = await mockWindow.request({
+			method: 'eth_getCode',
+			params: [helperAddress, callBlockTag],
+		})
+		if (typeof historicalCode !== 'string' || normalizeRpcBytecode(historicalCode).length === 0) throw new Error('Historical helper code is unavailable')
+		const trace = await mockWindow.request({
+			method: 'debug_traceCall',
+			params: [{ to: helperAddress, data: callData }, callBlockTag, { disableStack: false, disableMemory: true, disableStorage: true }],
+		})
+		const latestCode = '0x00'
+		assert.notStrictEqual(normalizeRpcBytecode(latestCode), normalizeRpcBytecode(historicalCode), 'historical block coverage test requires the mocked latest code to differ from the historical helper bytecode')
+
+		await flushSolidityBytecodeCoverageForTest()
+		const priorHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+
+		resetSolidityBytecodeCoverageAddressCache()
+		let helperCodeLookupBlockTag: unknown
+		const countingRequest = async (args: { method: string; params?: unknown[] | undefined }): Promise<unknown> => {
+			if (args.method === 'eth_getCode' && Array.isArray(args.params) && typeof args.params[0] === 'string' && args.params[0].toLowerCase() === helperAddress.toLowerCase()) {
+				helperCodeLookupBlockTag = args.params[1]
+				return args.params[1] === callBlockTag ? historicalCode : latestCode
+			}
+			if (args.method === 'debug_traceCall') return trace
+			return await mockWindow.request(args)
+		}
+
+		await collectBytecodeCoverageForCall({
+			request: countingRequest,
+			transaction: { to: helperAddress, data: callData },
+			blockNumberOrHash: callBlockTag,
+		})
+
+		await flushSolidityBytecodeCoverageForTest()
+		const nextHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+		assert.strictEqual(helperCodeLookupBlockTag, callBlockTag, 'historical eth_call coverage should resolve bytecode at the original block selector')
+		assert.ok(nextHitCount > priorHitCount, 'historical eth_call coverage should attribute the TokenId source line even when latest code differs')
 	})
 
 	test('traces ERC1155 legacy helper overloads and internal mint, transfer, and burn paths', async () => {

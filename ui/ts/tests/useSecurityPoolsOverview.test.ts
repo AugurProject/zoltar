@@ -3,16 +3,27 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
 import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage } from '../hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { waitFor } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type UseSecurityPoolsOverview = typeof import('../hooks/useSecurityPoolsOverview.js')['useSecurityPoolsOverview']
 type UseSecurityPoolsOverviewState = ReturnType<UseSecurityPoolsOverview>
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
+}
 
 function createMarketDetails(questionId: string): MarketDetails {
 	return {
@@ -113,13 +124,13 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(page.pools.map(pool => pool.questionId)).toEqual(['0x03'])
 	})
 
-	void test('recovers registry page no-data reads from already loaded pools without rereading the registry', async () => {
-		const loadedPools = [createListedSecurityPool('0x01', '0x0000000000000000000000000000000000000001'), createListedSecurityPool('0x02', '0x0000000000000000000000000000000000000002'), createListedSecurityPool('0x03', '0x0000000000000000000000000000000000000003')]
+	void test('recovers registry page no-data reads by rereading current registry context', async () => {
+		const initialPools = [createListedSecurityPool('0x01', '0x0000000000000000000000000000000000000001')]
+		const currentPools = [createListedSecurityPool('0x02', '0x0000000000000000000000000000000000000002'), createListedSecurityPool('0x03', '0x0000000000000000000000000000000000000003'), createListedSecurityPool('0x04', '0x0000000000000000000000000000000000000004')]
 		let allPoolsLoadCount = 0
 		const loadAllSecurityPools = mock(async () => {
 			allPoolsLoadCount += 1
-			if (allPoolsLoadCount > 1) throw new Error('loadAllSecurityPools should not be called for cached registry page fallback')
-			return loadedPools
+			return allPoolsLoadCount === 1 ? initialPools : currentPools
 		})
 		const loadSecurityPoolPage = mock(async () => {
 			throw new Error('Contract function returned no data for registry page')
@@ -156,15 +167,19 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			await requireHookState(hookState).loadSecurityPools()
 		})
 
+		expect(allPoolsLoadCount).toBe(1)
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
+
 		await act(async () => {
-			await requireHookState(hookState).loadBrowseSecurityPoolPage(1, 2)
+			await requireHookState(hookState).loadBrowseSecurityPoolPage(1, 2, 'current-request')
 		})
 
-		expect(allPoolsLoadCount).toBe(1)
+		expect(allPoolsLoadCount).toBe(2)
 		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolBrowseCount).toBe(3n)
-		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x03'])
+		expect(requireHookState(hookState).securityPoolPage?.requestKey).toBe('current-request')
+		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x04'])
 	})
 
 	void test('waits for active backend readiness before loading the registry page', async () => {
@@ -213,11 +228,163 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireHookState(hookState).loadBrowseSecurityPoolPage(0, 2)
+			await requireHookState(hookState).loadBrowseSecurityPoolPage(0, 2, 'ready-request')
 		})
 
 		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x01'])
+	})
+
+	void test('queueLiquidation snapshots the submitted modal inputs before async preflight completes', async () => {
+		const managerAddressA = getAddress('0x00000000000000000000000000000000000000a1')
+		const managerAddressB = getAddress('0x00000000000000000000000000000000000000b1')
+		const securityPoolAddressA = getAddress('0x00000000000000000000000000000000000000a2')
+		const securityPoolAddressB = getAddress('0x00000000000000000000000000000000000000b2')
+		const targetVaultA = getAddress('0x00000000000000000000000000000000000000a3')
+		const targetVaultB = getAddress('0x00000000000000000000000000000000000000b3')
+		const walletBalance = createDeferred<bigint>()
+		const readClient = {
+			getBalance: mock(async () => await walletBalance.promise),
+		}
+		const queueSecurityPoolLiquidation = mock(async (_client: unknown, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint) => {
+			expect(managerAddress).toBe(managerAddressA)
+			expect(targetVault).toBe(targetVaultA)
+			expect(amount).toBe(1n * 10n ** 18n)
+			expect(validForSeconds).toBe(120n)
+			return {
+				hash: zeroHash,
+				queuedOperation: undefined,
+				stagedExecution: undefined,
+			}
+		})
+
+		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
+		mock.module('../contracts.js', () => ({
+			loadAllSecurityPools: mock(async () => []),
+			loadOracleManagerDetails: mock(async () => ({
+				requestPriceEthCost: 0n,
+			})),
+			loadSecurityPoolPage: mock(async () => {
+				throw new Error('loadSecurityPoolPage should not be called in this test')
+			}),
+			queueSecurityPoolLiquidation,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(useSecurityPoolsOverview, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).openLiquidationModal(managerAddressA, securityPoolAddressA, targetVaultA, 5n * 10n ** 18n)
+			requireHookState(hookState).setLiquidationAmount('1')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('2')
+		})
+
+		let queuePromise = Promise.resolve()
+		await act(() => {
+			queuePromise = requireHookState(hookState).queueLiquidation(managerAddressA, securityPoolAddressA)
+		})
+
+		await waitFor(() => {
+			expect(readClient.getBalance).toHaveBeenCalledTimes(1)
+		})
+
+		await act(async () => {
+			requireHookState(hookState).openLiquidationModal(managerAddressB, securityPoolAddressB, targetVaultB, 7n * 10n ** 18n)
+			requireHookState(hookState).setLiquidationAmount('3')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+		})
+
+		await act(async () => {
+			walletBalance.resolve(2n * 10n ** 18n)
+			await queuePromise
+		})
+
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).liquidationTargetVault).toBe(targetVaultB)
+		expect(requireHookState(hookState).liquidationAmount).toBe('3')
+		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
+	})
+
+	void test('queueLiquidation ignores stale modal errors after the amount and timeout inputs change', async () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000c1')
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000c2')
+		const targetVault = getAddress('0x00000000000000000000000000000000000000c3')
+		const walletBalance = createDeferred<bigint>()
+		const readClient = {
+			getBalance: mock(async () => await walletBalance.promise),
+		}
+		const queueSecurityPoolLiquidation = mock(async () => {
+			throw new Error('liquidation reverted')
+		})
+
+		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
+		mock.module('../contracts.js', () => ({
+			loadAllSecurityPools: mock(async () => []),
+			loadOracleManagerDetails: mock(async () => ({
+				requestPriceEthCost: 0n,
+			})),
+			loadSecurityPoolPage: mock(async () => {
+				throw new Error('loadSecurityPoolPage should not be called in this test')
+			}),
+			queueSecurityPoolLiquidation,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(useSecurityPoolsOverview, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).openLiquidationModal(managerAddress, securityPoolAddress, targetVault, 5n * 10n ** 18n)
+			requireHookState(hookState).setLiquidationAmount('1')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('2')
+		})
+
+		let queuePromise = Promise.resolve()
+		await act(() => {
+			queuePromise = requireHookState(hookState).queueLiquidation(managerAddress, securityPoolAddress)
+		})
+
+		await waitFor(() => {
+			expect(readClient.getBalance).toHaveBeenCalledTimes(1)
+		})
+
+		await act(async () => {
+			requireHookState(hookState).setLiquidationAmount('3')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+		})
+
+		await act(async () => {
+			walletBalance.resolve(2n * 10n ** 18n)
+			await queuePromise
+		})
+
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).liquidationAmount).toBe('3')
+		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
+		expect(requireHookState(hookState).securityPoolLiquidationError).toBeUndefined()
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toContain('liquidation reverted')
 	})
 })

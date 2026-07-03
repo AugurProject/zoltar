@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
@@ -19,12 +18,21 @@ const listFilesRecursively = async directoryPath => {
 	const filePaths = await Promise.all(
 		entries.map(async entry => {
 			const entryPath = path.join(directoryPath, entry.name)
+			if (entry.isSymbolicLink()) return []
 			if (entry.isDirectory()) return await listFilesRecursively(entryPath)
 			if (!entry.isFile()) return []
 			return [entryPath]
 		}),
 	)
 	return filePaths.flat().sort()
+}
+
+const listPackageFilesRecursively = async packageRootPath => {
+	const filePaths = await listFilesRecursively(packageRootPath)
+	return filePaths.filter(filePath => {
+		const relativePath = path.relative(packageRootPath, filePath)
+		return !relativePath.split(path.sep).includes('node_modules')
+	})
 }
 
 const hashFile = async filePath =>
@@ -44,8 +52,7 @@ const getPublishedSharedFiles = async () => {
 	return [path.join(sharedPackagePath, 'package.json'), ...publishedFiles.flat()].sort()
 }
 
-const getSharedPackageManifest = async packageRootPath => {
-	const files = await getPublishedSharedFiles()
+const getSharedPackageManifest = async (packageRootPath, files) => {
 	return await Promise.all(
 		files.map(async sourcePath => {
 			const relativePath = path.relative(sharedPackagePath, sourcePath)
@@ -59,7 +66,17 @@ const getSharedPackageManifest = async packageRootPath => {
 
 const manifestsMatch = async () => {
 	try {
-		const [sourceManifest, installedManifest] = await Promise.all([getSharedPackageManifest(sharedPackagePath), getSharedPackageManifest(installedSharedPackagePath)])
+		const sourceFiles = await getPublishedSharedFiles()
+		const installedFiles = await listPackageFilesRecursively(installedSharedPackagePath)
+		if (
+			sourceFiles.map(filePath => path.relative(sharedPackagePath, filePath)).join('\n') !==
+			installedFiles
+				.map(filePath => path.relative(installedSharedPackagePath, filePath))
+				.sort()
+				.join('\n')
+		)
+			return false
+		const [sourceManifest, installedManifest] = await Promise.all([getSharedPackageManifest(sharedPackagePath, sourceFiles), getSharedPackageManifest(installedSharedPackagePath, sourceFiles)])
 		if (sourceManifest.length !== installedManifest.length) return false
 		return sourceManifest.every((sourceEntry, index) => {
 			const installedEntry = installedManifest[index]
@@ -99,18 +116,13 @@ const linkSharedPackageNodeModules = async () => {
 
 const refreshSharedPackageInstall = async () => {
 	console.warn(`Refreshing stale @zoltar/shared install in ${process.cwd()}`)
-	const result = spawnSync('bun', ['install', '--frozen-lockfile'], {
-		cwd: process.cwd(),
-		stdio: 'inherit',
-	})
-	if (result.status !== 0) process.exit(result.status ?? 1)
 	await copyCurrentSharedPackageInstall()
 	await linkSharedPackageNodeModules()
 }
 
 if (!(await manifestsMatch())) {
 	if (mode === 'check') {
-		throw new Error(`Installed @zoltar/shared package in ${process.cwd()} does not match ${sharedPackagePath}. Run 'bun install --frozen-lockfile' in ${process.cwd()} to refresh it.`)
+		throw new Error(`Installed @zoltar/shared package in ${process.cwd()} does not match ${sharedPackagePath}. Run the shared dependency refresh for this workspace to sync it.`)
 	}
 	await refreshSharedPackageInstall()
 	if (!(await manifestsMatch())) {

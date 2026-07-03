@@ -15,6 +15,7 @@ import {
 	getZoltarInitCode,
 	getZoltarQuestionDataByteCode,
 } from './deploymentHelpers.js'
+import { waitForSubmittedTransactionReceipt } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
@@ -108,8 +109,8 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 		to: PROXY_DEPLOYER_ADDRESS,
 		data: bytecode,
 	})
-	await client.waitForTransactionReceipt({ hash })
-	return hash
+	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
+	return resolvedHash
 }
 
 async function ensureProxyDeployerDeployed(client: WriteClient) {
@@ -132,7 +133,7 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 		to: PROXY_DEPLOYER_SIGNER,
 		value: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT,
 	})
-	await client.waitForTransactionReceipt({ hash: fundHash })
+	await waitForSubmittedTransactionReceipt(client, fundHash)
 
 	markDeploymentTransactionPrepared(client, {
 		account: PROXY_DEPLOYER_SIGNER,
@@ -144,8 +145,8 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const deployHash = await client.sendRawTransaction({
 		serializedTransaction: PROXY_DEPLOYER_RAW_TRANSACTION,
 	})
-	await client.waitForTransactionReceipt({ hash: deployHash })
-	return deployHash
+	const { hash: resolvedDeployHash } = await waitForSubmittedTransactionReceipt(client, deployHash)
+	return resolvedDeployHash
 }
 
 async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {

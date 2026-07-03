@@ -26,6 +26,48 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		createSelectedPool,
 		createSecurityPoolWorkflowProps,
 	} = fixture
+	const getClosestSectionBlock = (headingName: string) => {
+		const heading = Array.from(document.body.querySelectorAll('h2, h3, h4')).find(element => element.textContent?.trim() === headingName)
+		if (!(heading instanceof HTMLElement)) throw new Error(`Expected ${headingName} heading`)
+		const section = heading.closest('.section-block')
+		if (!(section instanceof HTMLElement)) throw new Error(`Expected ${headingName} to be inside a section block`)
+		return section
+	}
+	const expectSectionVariant = (headingName: string, variant: 'embedded' | 'plain') => {
+		const section = getClosestSectionBlock(headingName)
+		expect(section.classList.contains(variant)).toBe(true)
+		expect(section.classList.contains('default')).toBe(false)
+	}
+
+	test('uses one selected-pool surface with unframed direct structural sections', async () => {
+		await renderLoadedPool()
+
+		const routeSurface = document.body.querySelector('.route-workflow-stack')?.closest('.section-block')
+		if (!(routeSurface instanceof HTMLElement)) throw new Error('Expected selected pool route surface')
+		expect(routeSurface.classList.contains('surface')).toBe(true)
+		expect(routeSurface.classList.contains('default')).toBe(false)
+		expect(document.body.querySelector('.sticky-object-context.context-strip')).not.toBeNull()
+		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
+		expectSectionVariant('Vault Operations', 'plain')
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Directory' }))
+		})
+		expectSectionVariant('Vault Directory', 'embedded')
+	})
+
+	test('renders staged operations as an unframed selected-pool workflow section', async () => {
+		await renderLoadedPool({ selectedPoolView: 'staged-operations' })
+
+		expectSectionVariant('Staged Operations', 'plain')
+		expectSectionVariant('Staged Operations List', 'embedded')
+	})
+
+	test('renders open oracle as an unframed selected-pool workflow section', async () => {
+		await renderLoadedPool({ selectedPoolView: 'price-oracle' })
+
+		expectSectionVariant('Open Oracle', 'plain')
+	})
 
 	test('keeps the workflow rail visible with disabled items before a pool loads', async () => {
 		await renderWorkflow(createSecurityPoolWorkflowProps())
@@ -191,7 +233,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const parentPoolLink = documentQueries.getByRole('link', { name: '0x0000…0200' })
+		const parentPoolLink = documentQueries.getByRole('link', { name: parentPoolAddress })
 		expect(parentPoolLink).not.toBeNull()
 		expect(document.body.textContent?.includes('Parent Pool')).toBe(true)
 		expect(parentPoolLink.getAttribute('title')).toBe(parentPoolAddress)

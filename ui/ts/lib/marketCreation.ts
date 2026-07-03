@@ -83,6 +83,10 @@ function getOutcomeLabels(form: MarketFormState) {
 			return assertNever(form.marketType)
 	}
 }
+
+export function getMarketCreationOutcomeLabels(form: MarketFormState) {
+	return getOutcomeLabels(form)
+}
 function setFieldError(fieldErrors: Partial<Record<MarketFormField, string>>, field: MarketFormField, message: string) {
 	if (fieldErrors[field] !== undefined) return
 	fieldErrors[field] = message
@@ -187,7 +191,7 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 export function createMarketParameters(form: MarketFormState) {
 	return {
 		marketType: form.marketType,
-		outcomeLabels: getOutcomeLabels(form),
+		outcomeLabels: getMarketCreationOutcomeLabels(form),
 		questionData: createQuestionData(form),
 	}
 }

@@ -9,17 +9,20 @@ type RunWriteActionParameters = {
 	formatErrorMessage?: ((error: unknown, fallbackMessage: string) => string) | undefined
 	missingWalletMessage: string
 	onRefreshError?: ((message: string, hash?: Hash) => void) | undefined
+	onTransactionCanceled?: (() => void) | undefined
 	onTransactionFailed?: ((message: string) => void) | undefined
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
+	onWriteCanceled?: (() => void) | undefined
 	onWriteError?: ((message: string) => void) | undefined
 	refreshErrorFallback?: string
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	setErrorMessage: (message: string | undefined) => void
 }
 
 type BuildWriteActionConfigParameters = {
 	accountAddress: WriteOperationsParameters['accountAddress']
+	onTransactionCanceled: WriteOperationsParameters['onTransactionCanceled']
 	onTransactionFailed: WriteOperationsParameters['onTransactionFailed'] | undefined
 	onTransactionFinished: WriteOperationsParameters['onTransactionFinished']
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
@@ -31,6 +34,7 @@ type BuildWriteActionConfigParameters = {
 export function buildWriteActionConfig(params: BuildWriteActionConfigParameters, errorSignal: { value: string | undefined }, missingWalletMessage: string, transactionIntent: TransactionIntent) {
 	return {
 		accountAddress: params.accountAddress,
+		onTransactionCanceled: params.onTransactionCanceled,
 		onTransactionFinished: params.onTransactionFinished,
 		onTransactionFailed: params.onTransactionFailed,
 		onTransactionRequested: () => {
@@ -61,7 +65,11 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			parameters.onTransactionRequested()
 			parameters.setErrorMessage(undefined)
 			result = await action(parameters.accountAddress, activeWallet)
-			if (result === undefined) return
+			if (result === undefined) {
+				parameters.onWriteCanceled?.()
+				parameters.onTransactionCanceled?.()
+				return
+			}
 		} catch (error) {
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
 			parameters.onTransactionFailed?.(message)

@@ -5,6 +5,7 @@ import { fireEvent, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { MarketCreateQuestionSection } from '../components/MarketCreateQuestionSection.js'
+import { createMarketParameters } from '../lib/marketCreation.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -93,7 +94,8 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const questionTypeButton = documentQueries.getByRole('button', { name: 'Question Type' })
+		expect(documentQueries.getByText('Write the question the way a resolver will read it.')).not.toBeNull()
+		const questionTypeButton = documentQueries.getByRole('button', { name: 'Question Type: Binary' })
 		await act(() => {
 			fireEvent.click(questionTypeButton)
 		})
@@ -142,7 +144,10 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title')
-		expect(documentQueries.getByText('Times use your browser timezone. Reporting, settlement, and pool workflows depend on the end time.')).not.toBeNull()
+		expect(documentQueries.getByText('Times use your browser timezone. Leave start time blank to allow activity immediately after creation. Reporting and trading settlement depend on the end time.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Question Type Guidance' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
+		expect(documentQueries.getByText('Placeholder origin security pools support this exact Yes / No question shape.')).not.toBeNull()
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
 		expect(documentQueries.getAllByText('Missing required fields: Title')).toHaveLength(1)
@@ -237,7 +242,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.input(documentQueries.getByPlaceholderText('Outcome 1') as HTMLInputElement, { target: { value: 'Up' } })
+			fireEvent.input(documentQueries.getByLabelText('Outcome 1') as HTMLInputElement, { target: { value: 'Up' } })
 		})
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Add Outcome' }))
@@ -246,6 +251,144 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Remove' })[0] as HTMLButtonElement)
 		})
 		expect(updates.some(update => update.categoricalOutcomes !== undefined)).toBe(true)
+	})
+
+	test('uses canonical categorical outcome ordering in the draft preview', async () => {
+		const marketForm = createMarketForm({
+			categoricalOutcomes: ['Cherry', 'Apple', 'Banana'],
+			marketType: 'categorical',
+		})
+		const expectedOutcomeLabels = [...createMarketParameters(marketForm).outcomeLabels, 'Invalid']
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={marketForm}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewSection = draftPreviewHeading.closest('section')
+		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
+		expect(renderedOutcomeLabels).toEqual(expectedOutcomeLabels)
+	})
+
+	test('does not duplicate invalid in the categorical draft preview when the user already entered it', async () => {
+		const marketForm = createMarketForm({
+			categoricalOutcomes: ['Yes', 'Invalid', 'No'],
+			marketType: 'categorical',
+		})
+		const expectedOutcomeLabels = createMarketParameters(marketForm).outcomeLabels
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={marketForm}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewSection = draftPreviewHeading.closest('section')
+		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
+		expect(renderedOutcomeLabels).toEqual(expectedOutcomeLabels)
+		expect(renderedOutcomeLabels.filter(label => label.toLowerCase() === 'invalid')).toHaveLength(1)
+	})
+
+	test('renders a user-entered lowercase invalid outcome as the single warning chip in the draft preview', async () => {
+		const marketForm = createMarketForm({
+			categoricalOutcomes: ['Yes', 'invalid', 'No'],
+			marketType: 'categorical',
+		})
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={marketForm}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewSection = draftPreviewHeading.closest('section')
+		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
+		expect(renderedOutcomeLabels.filter(label => label.toLowerCase() === 'invalid')).toHaveLength(1)
+
+		const invalidChip = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).find(element => element.textContent?.trim().toLowerCase() === 'invalid')
+		if (!(invalidChip instanceof HTMLElement)) throw new Error('Expected invalid outcome chip')
+		expect(invalidChip.className).toContain('warning')
+	})
+
+	test('uses the same scalar label in the draft preview as the final question display', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({
+					marketType: 'scalar',
+				})}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft Preview' })
+		const draftPreviewSection = draftPreviewHeading.closest('section')
+		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
+		expect(renderedOutcomeLabels).toContain('Scalar')
+		expect(renderedOutcomeLabels).not.toContain('Scalar value')
 	})
 
 	test('shows scalar preview guidance for malformed scalar inputs', async () => {

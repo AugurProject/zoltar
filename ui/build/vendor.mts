@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as url from 'url'
 import { promises as fs } from 'fs'
+import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 type FileType = 'file' | 'directory'
 
 async function recursiveDirectoryCopy(source: string, destination: string, inclusionPredicate: (path: string, fileType: FileType) => boolean | Promise<boolean>, rewriteCallback?: (sourcePath: string, destinationPath: string) => Promise<void>): Promise<void> {
@@ -84,16 +85,16 @@ async function bundleTevm() {
 	const tevmOutRoot = path.join(VENDOR_OUTPUT_PATH, 'tevm')
 	await Promise.all([
 		Bun.build({
-			entrypoints: [path.join(MODULES_ROOT_PATH, 'tevm', 'index.js')],
+			entrypoints: [resolveBundlerSpecifierPath('tevm')],
 			naming: { entry: 'index.js' },
 			outdir: tevmOutRoot,
 			target: 'browser',
 			sourcemap: 'linked',
 		}),
 		Bun.build({
-			entrypoints: [path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js')],
+			entrypoints: [resolveBundlerSpecifierPath('tevm/common')],
 			naming: { entry: 'index.js' },
-			outdir: path.join(tevmOutRoot, 'common'),
+			outdir: normalizeBundlerPath(path.join(tevmOutRoot, 'common')),
 			target: 'browser',
 			sourcemap: 'linked',
 		}),
