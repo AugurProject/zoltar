@@ -1,6 +1,7 @@
 :root {
 	--docs-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--docs-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+	/* All docs intentionally share the same wide page width. */
 	--docs-page-width: 1280px;
 	--docs-page-tablet-width: 860px;
 	--docs-page-inline-gutter-desktop: 1rem;

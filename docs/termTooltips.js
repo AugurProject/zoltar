@@ -1,37 +1,123 @@
-const termDefinitions = {
-	callback: 'A contract call OpenOracle makes during settlement so another contract can consume the settled report amounts.',
-	bounty: 'The ETH the coordinator forwards to OpenOracle so a settler has a settlement incentive.',
-	'child rep': 'Reputation minted inside a child universe from migration balance.',
-	'colored coins model': 'A branch-aware claim model for coordinating assets after a fork.',
-	'complete set': 'One Invalid, one Yes, and one No share minted together against ETH collateral.',
-	'escalation game': 'The local dispute process that tries to resolve a market before a fork.',
-	'escalation halt': 'The maximum report size after which OpenOracle disputes stop multiplying and advance linearly.',
-	'eth-notional': 'Operation exposure expressed as ETH value so different operation types can share one budget.',
-	'fresh price': 'A cached oracle price that has not passed the coordinator validity window.',
-	invalid: 'A valid answer state for an unresolvable or invalid market outcome.',
-	'liquidation distance': 'The required margin beyond the liquidation threshold before a staged liquidation may execute.',
-	'liquidation threshold': 'The REP/ETH price at which a vault becomes undercollateralized enough to liquidate.',
-	malformed: 'An answer encoding rejected by the question definition.',
-	'migrated rep': 'REP backing carried into a child universe to support a child pool.',
-	migration: 'Moving pool state from a parent universe into child universes after a fork.',
-	'migration balance': 'REP value held after a fork that can be split into one or more child universes.',
-	'non-decision': 'The unresolved escalation state that opens the Zoltar fork path.',
-	pool: 'A SecurityPool for one question in one universe.',
-	'price round': 'One settled REP/ETH price plus the operation volume it is allowed to authorize.',
-	'price-round budget': 'The remaining ETH-denominated operation volume one settled oracle price may authorize.',
-	'report liquidity': 'The economic size of the OpenOracle report that honest reporters can use to dispute a manipulated price.',
-	'request bounty': 'The ETH the coordinator forwards to OpenOracle so a settler has a settlement incentive.',
-	'soft rejection': 'A callback failure that settles the OpenOracle report but does not update the coordinator price or replay queued operations.',
-	'staged operation': 'A queued liquidation, withdrawal, or allowance update waiting for a fresh oracle price.',
-	'truth auction': 'A child-pool auction that sells child-universe REP for ETH to repair missing collateral.',
-	universe: 'A Zoltar fork domain with its own REP token and optional parent universe.',
-	vault: 'A pool-specific REP account whose owner supplies underwriting capacity.',
-}
-
 const tooltipId = 'term-tooltip'
+const skippedAutoTermAncestors = 'a, button, script, style, svg, math, .term'
 
 function normalizeTermKey(value) {
 	return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+const rawTermDefinitions = window.protocolTermDefinitions ?? {}
+const normalizedTermDefinitions = Object.fromEntries(Object.entries(rawTermDefinitions).map(([term, definition]) => [normalizeTermKey(term), definition]))
+
+function escapeRegExp(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function getTermDefinition(value) {
+	const trimmedValue = value.trim()
+	return normalizedTermDefinitions[normalizeTermKey(trimmedValue)] ?? rawTermDefinitions[trimmedValue]
+}
+
+function getAutoTermEntries() {
+	return Object.keys(rawTermDefinitions)
+		.filter(term => {
+			const normalizedTerm = normalizeTermKey(term)
+			return term.length > 2 && normalizedTerm !== 'yes' && normalizedTerm !== 'no'
+		})
+		.sort((left, right) => right.length - left.length)
+}
+
+function buildTermPattern() {
+	const terms = getAutoTermEntries().map(escapeRegExp)
+	return new RegExp(`(^|[^A-Za-z0-9_])(${terms.join('|')})(?=$|[^A-Za-z0-9_])`, 'gi')
+}
+
+function createTermElement(text) {
+	const element = document.createElement('span')
+	element.className = 'term'
+	element.tabIndex = 0
+	element.textContent = text
+	return element
+}
+
+function annotateTextNode(textNode, pattern, annotatedTerms) {
+	const text = textNode.nodeValue
+	if (text === null) return false
+
+	let lastIndex = 0
+	let changed = false
+	const fragment = document.createDocumentFragment()
+
+	for (const match of text.matchAll(pattern)) {
+		const matchedText = match[2]
+		const definition = getTermDefinition(matchedText)
+		const termKey = normalizeTermKey(matchedText)
+		if (definition === undefined || annotatedTerms.has(termKey)) continue
+
+		const prefix = match[1]
+		const matchIndex = match.index ?? 0
+		const termStart = matchIndex + prefix.length
+		if (termStart > lastIndex) {
+			fragment.append(document.createTextNode(text.slice(lastIndex, termStart)))
+		}
+
+		const termElement = createTermElement(text.slice(termStart, termStart + matchedText.length))
+		termElement.dataset.termDefinition = definition
+		fragment.append(termElement)
+		annotatedTerms.add(termKey)
+		lastIndex = termStart + matchedText.length
+		changed = true
+	}
+
+	if (!changed) return false
+
+	if (lastIndex < text.length) {
+		fragment.append(document.createTextNode(text.slice(lastIndex)))
+	}
+	textNode.replaceWith(fragment)
+	return true
+}
+
+function annotateProtocolTerms() {
+	const pattern = buildTermPattern()
+	const annotatedTerms = new Set()
+	const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+		acceptNode(textNode) {
+			const parent = textNode.parentElement
+			if (parent === null) return NodeFilter.FILTER_REJECT
+			if (parent.closest(skippedAutoTermAncestors) !== null) return NodeFilter.FILTER_REJECT
+			if (textNode.nodeValue?.trim() === '') return NodeFilter.FILTER_REJECT
+			return NodeFilter.FILTER_ACCEPT
+		},
+	})
+	const textNodes = []
+	while (walker.nextNode()) {
+		textNodes.push(walker.currentNode)
+	}
+	for (const textNode of textNodes) {
+		annotateTextNode(textNode, pattern, annotatedTerms)
+	}
+}
+
+function removeDuplicateTermTooltips() {
+	const seenTerms = new Set()
+	for (const element of document.querySelectorAll('.term')) {
+		if (!(element instanceof HTMLElement)) continue
+
+		const rawKey = element.getAttribute('data-term') ?? element.textContent ?? ''
+		const definition = element.dataset.termDefinition ?? getTermDefinition(rawKey)
+		if (definition === undefined) continue
+
+		const termKey = normalizeTermKey(rawKey)
+		if (!seenTerms.has(termKey)) {
+			seenTerms.add(termKey)
+			continue
+		}
+
+		element.classList.remove('term')
+		element.removeAttribute('tabindex')
+		delete element.dataset.termDefinition
+		delete element.dataset.hasTooltip
+	}
 }
 
 function ensureTooltipElement() {
@@ -76,6 +162,8 @@ function updateTooltipPosition(tooltip, targetRect, pointerX, pointerY) {
 }
 
 function applyTermTooltips() {
+	annotateProtocolTerms()
+	removeDuplicateTermTooltips()
 	const tooltip = ensureTooltipElement()
 
 	let activeElement
@@ -111,7 +199,7 @@ function applyTermTooltips() {
 		if (!(element instanceof HTMLElement)) continue
 
 		const rawKey = element.getAttribute('data-term') ?? element.textContent ?? ''
-		const definition = termDefinitions[normalizeTermKey(rawKey)]
+		const definition = element.dataset.termDefinition ?? getTermDefinition(rawKey)
 		if (definition === undefined) continue
 
 		element.dataset.termDefinition = definition
