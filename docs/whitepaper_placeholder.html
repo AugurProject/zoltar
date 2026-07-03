@@ -2301,12 +2301,12 @@
 					</figure>
 					<h3>Auction Mechanics</h3>
 					<div class="equation" id="eq-placeholder-auction-tick-price">
-						<math display="block" aria-label="price at tick equals 10 to the 18 times 1.0001 raised to tick" data-source="priceAtTick = 1e18 * 1.0001^tick">
+						<math display="block" aria-label="price at tick equals ten to the eighteenth times 1.0001 raised to tick" data-source="priceAtTick = 10^18 \cdot 1.0001^tick">
 							<mrow>
 								<mi>priceAtTick</mi>
 								<mo>=</mo>
-								<mn>1e18</mn>
-								<mo>*</mo>
+								<msup><mn>10</mn><mn>18</mn></msup>
+								<mo>&#x22C5;</mo>
 								<msup>
 									<mn>1.0001</mn>
 									<mi>tick</mi>
@@ -2316,7 +2316,7 @@
 						<p class="equation-caption"><span class="equation-label">Auction Tick Price</span>Each tick maps to a scaled ETH-per-REP price on the auction ladder.</p>
 					</div>
 					<div class="equation" id="eq-placeholder-auction-tick-index">
-						<math display="block" aria-label="tick is approximately the natural log of price in wei per REP divided by 10 to the 18, divided by the natural log of 1.0001" data-source="tick ~= ln(priceInWeiPerRep / 1e18) / ln(1.0001)">
+						<math display="block" aria-label="tick is approximately the natural log of price in wei per REP divided by ten to the eighteenth, divided by the natural log of 1.0001" data-source="tick ~= ln(priceInWeiPerRep / 10^18) / ln(1.0001)">
 							<mrow>
 								<mi>tick</mi>
 								<mo>&asymp;</mo>
@@ -2326,7 +2326,7 @@
 										<mo>(</mo>
 										<mfrac>
 											<mi>priceInWeiPerRep</mi>
-											<mn>1e18</mn>
+											<msup><mn>10</mn><mn>18</mn></msup>
 										</mfrac>
 										<mo>)</mo>
 									</mrow>
@@ -2845,7 +2845,7 @@
 								</tr>
 								<tr>
 									<td><code>pricePrecision</code></td>
-									<td>The fixed <code>1e18</code> scale factor used for REP/ETH price math.</td>
+									<td>The fixed <math><msup><mn>10</mn><mn>18</mn></msup></math> scale factor used for REP/ETH price math.</td>
 								</tr>
 								<tr>
 									<td><code>priceRoundBudgetMultiplierBps</code></td>
@@ -3138,7 +3138,7 @@
 							</tr>
 							<tr>
 								<td><code>PRICE_PRECISION</code></td>
-								<td><code>1e18</code></td>
+								<td><math><msup><mn>10</mn><mn>18</mn></msup></math></td>
 								<td>Fixed-point precision for REP/ETH and retention-rate math.</td>
 							</tr>
 							<tr>
@@ -3183,7 +3183,7 @@
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Per-operation settlement gas estimate used by the coordinator.</td></tr>
 							<tr><td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td><td><code>4</code></td><td>Maximum staged operations executed from one OpenOracle settlement callback.</td></tr>
 							<tr><td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>Maximum self-service validity window for staged oracle-gated operations.</td></tr>
-							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><code>250 * 10^18</code></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
+							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><math><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
 							<tr><td>OpenOracle <code>escalationHalt</code></td><td><code>exactToken1Report * 100000 / 10000</code></td><td>Dynamic halt threshold for report escalation, equal to <code>10x</code> the initial REP report amount.</td></tr>
 							<tr><td>OpenOracle <code>settlerReward</code></td><td><code>block.basefee * 2 * gasConsumedOpenOracleReportPrice</code></td><td>Dynamic ETH reward paid to settler.</td></tr>
 							<tr><td>OpenOracle <code>settlementTime</code></td><td><code>480</code></td><td>Settlement delay encoded as <code>40 * 12</code>.</td></tr>
