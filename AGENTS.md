@@ -1,3 +1,17 @@
+# Startup Prerequisites
+
+Before starting work, check whether root dependencies are installed:
+
+```bash
+test -d node_modules
+```
+
+If `node_modules` is missing, install dependencies before proceeding:
+
+```bash
+bun install --frozen-lockfile
+```
+
 # Quality Assurance Guidelines
 
 After completing the requested changes, choose validation based on the files and behavior touched by the task. Run each selected command separately, in the order below, and address issues before moving to the next selected check.

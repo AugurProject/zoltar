@@ -20,6 +20,7 @@ import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, getStag
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
@@ -265,6 +266,9 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					},
 					onWriteError: message => {
 						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+					},
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
 					},
 				},
 				async walletAddress => {

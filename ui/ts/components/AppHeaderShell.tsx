@@ -10,10 +10,11 @@ type AppHeaderShellProps = {
 	simulationController: SimulationController | undefined
 	subNavigation?: ComponentChildren
 	tabNavigation: TabNavigationProps
+	onEnvironmentChanged?: () => Promise<void>
 	onRefresh: () => Promise<void>
 }
 
-export function AppHeaderShell({ overview, simulationController, subNavigation, tabNavigation, onRefresh }: AppHeaderShellProps) {
+export function AppHeaderShell({ overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh }: AppHeaderShellProps) {
 	const focusAppContent = () => {
 		const appContent = document.getElementById('app-content')
 		if (appContent instanceof HTMLElement) appContent.focus()
@@ -26,7 +27,7 @@ export function AppHeaderShell({ overview, simulationController, subNavigation, 
 					Skip simulation controls
 				</button>
 			)}
-			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onRefresh={onRefresh} />}
+			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />}
 			<div className='top-shell'>
 				<div className='top-shell-content'>
 					<OverviewPanels {...overview} />

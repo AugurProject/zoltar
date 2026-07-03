@@ -67,6 +67,7 @@ function getSecurityPoolGuidance({ hasKnownForkActivity, lifecycleState, questio
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
+	environmentRefreshKey,
 	hasLoadedSecurityPoolPage,
 	liquidationAmount,
 	liquidationMaxAmount,
@@ -104,17 +105,21 @@ export function SecurityPoolsOverviewSection({
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
 	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
 	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
-	const effectivePoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
-	const poolPageCount = getPaginationPageCount(effectivePoolCount, SECURITY_POOL_PAGE_SIZE)
-	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, poolPageCount)
-	const currentPageRequestKey = `${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}`
-	const hasCurrentPageData = securityPoolPage?.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
+	const requestedPoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
+	const requestedPoolPageCount = getPaginationPageCount(requestedPoolCount, SECURITY_POOL_PAGE_SIZE)
+	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, requestedPoolPageCount)
+	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}:${accountRequestKey}`
+	const hasCurrentPageData = securityPoolPage?.requestKey === currentPageRequestKey && securityPoolPage.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
+	const currentPoolCount = hasCurrentPageData ? securityPoolPage.poolCount : undefined
+	const poolPageCount = getPaginationPageCount(currentPoolCount, SECURITY_POOL_PAGE_SIZE)
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
 	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
+	const loadingCurrentPage = loadingSecurityPoolPage || isWaitingForPageData
 	const hasLoadedCurrentPage = hasLoadedSecurityPoolPage && hasCurrentPageData
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedCurrentPage,
-		isLoading: (loadingSecurityPoolPage || isWaitingForPageData) && !hasLoadedCurrentPage,
+		isLoading: loadingCurrentPage && !hasLoadedCurrentPage,
 		mode: 'collection',
 		poolCount: pagedSecurityPools.length,
 	})
@@ -139,9 +144,9 @@ export function SecurityPoolsOverviewSection({
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const hasPreviousPage = resolvedPageIndex > 0
-	const hasNextPage = getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
+	const hasNextPage = hasCurrentPageData && getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
 	const retryPoolRegistryLoad = () => {
-		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE)
+		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey)
 	}
 	useEffect(() => {
 		if (resolvedPageIndex === pageIndex) return
@@ -150,7 +155,7 @@ export function SecurityPoolsOverviewSection({
 	useEffect(() => {
 		let cancelled = false
 		setActivePageRequestKey(currentPageRequestKey)
-		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE))
+		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
 			.catch(() => undefined)
 			.finally(() => {
 				if (cancelled) return
@@ -159,7 +164,7 @@ export function SecurityPoolsOverviewSection({
 		return () => {
 			cancelled = true
 		}
-	}, [currentPageRequestKey, resolvedPageIndex])
+	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
@@ -178,14 +183,14 @@ export function SecurityPoolsOverviewSection({
 					<PaginationControls
 						hasNextPage={hasNextPage}
 						hasPreviousPage={hasPreviousPage}
-						loading={loadingSecurityPoolPage}
+						loading={loadingCurrentPage}
 						onNextPage={() => {
 							setPageIndex(current => current + 1)
 						}}
 						onPreviousPage={() => {
 							setPageIndex(current => Math.max(0, current - 1))
 						}}
-						summary={securityPoolPage === undefined ? undefined : formatPaginationSummary(resolvedPageIndex, poolPageCount)}
+						summary={hasCurrentPageData ? formatPaginationSummary(resolvedPageIndex, poolPageCount) : undefined}
 					/>
 				}
 			>

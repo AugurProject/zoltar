@@ -1,7 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
-import { formatAddress } from '../lib/addresses.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
@@ -24,6 +23,7 @@ const SIMULATION_TIME_PRESETS = [
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
 	controller: SimulationController
+	onEnvironmentChanged?: () => Promise<void>
 	onRefresh: () => Promise<void>
 }
 
@@ -39,7 +39,7 @@ function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 
 function navigateToSimulationSearch(nextSearch: string) {
 	window.history.pushState({}, '', buildRouteHref(getCurrentRouteHash(), nextSearch))
-	window.dispatchEvent(new PopStateEvent('popstate'))
+	window.dispatchEvent(new window.PopStateEvent('popstate'))
 }
 
 function navigateToBuiltInScenario(scenario: string) {
@@ -65,7 +65,7 @@ function hasSavedSimulationStateRoute() {
 }
 
 function getSimulationAccountOptionLabel(account: string) {
-	return `QA ${formatAddress(account)}`
+	return `QA ${account}`
 }
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
@@ -87,7 +87,7 @@ function getScenarioStatus(parameters: { bootstrapError: string | undefined; isB
 	}
 }
 
-export function SimulationBanner({ controller, onRefresh }: SimulationBannerProps) {
+export function SimulationBanner({ controller, onEnvironmentChanged = async () => undefined, onRefresh }: SimulationBannerProps) {
 	const { copied, copyText } = useCopyToClipboard()
 	const busy = useSignal(false)
 	const blockCountSinceReset = useSignal(controller.blockCountSinceReset)
@@ -185,10 +185,18 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 		}
 	}
 
+	const navigateAndRefreshEnvironment = async (navigate: () => void) => {
+		await runNavigationControl(async () => {
+			navigate()
+			await onEnvironmentChanged()
+		})
+	}
+
 	const persistAndNavigateToSavedState = async (serialized: string) => {
 		const record = persistSavedSimulationState(serialized, savedStateStorage)
 		reloadSavedStateRecords()
 		navigateToSavedSimulationState(record.id)
+		await onEnvironmentChanged()
 	}
 
 	const showExportModal = async () => {
@@ -250,10 +258,14 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						onChange={event => {
 							const nextSelection = event.currentTarget.value
 							if (nextSelection.startsWith('saved:')) {
-								navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
+								void navigateAndRefreshEnvironment(() => {
+									navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
+								})
 								return
 							}
-							navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
+							void navigateAndRefreshEnvironment(() => {
+								navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
+							})
 						}}
 					>
 						<optgroup label='Built-in scenarios'>
@@ -564,8 +576,10 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							void runNavigationControl(async () => {
 								if (currentSource.value.kind !== 'saved-state') return
 								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(`Saved simulation state "${currentSource.value.name}" no longer exists`)
+								const baseScenario = currentSource.value.baseScenario
 								reloadSavedStateRecords()
-								navigateToBuiltInScenario(currentSource.value.baseScenario)
+								navigateToBuiltInScenario(baseScenario)
+								await onEnvironmentChanged()
 							})
 						}
 					>
@@ -590,6 +604,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								clearSavedStateStorageWarning()
 								if (hasSavedSimulationStateRoute()) {
 									navigateToBuiltInScenario(currentScenario.value)
+									await onEnvironmentChanged()
 									return
 								}
 							})

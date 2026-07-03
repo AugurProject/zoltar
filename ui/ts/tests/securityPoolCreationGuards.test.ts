@@ -56,6 +56,18 @@ describe('security pool creation guards', () => {
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
 				isMainnet: true,
+				marketDetails: undefined,
+				securityPoolCreating: false,
+				zoltarUniverseHasForked: false,
+			}),
+		).toBe('Enter an exact binary Yes / No question before creating a pool.')
+
+		expect(
+			getSecurityPoolCreateDisabledReason({
+				accountAddress: zeroAddress,
+				checkingDuplicateOriginPool: false,
+				duplicateOriginPoolExists: false,
+				isMainnet: true,
 				marketDetails: createMarketDetails({ marketType: 'categorical' }),
 				securityPoolCreating: false,
 				zoltarUniverseHasForked: false,

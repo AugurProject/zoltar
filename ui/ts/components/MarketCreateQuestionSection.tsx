@@ -53,8 +53,8 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 
 function getPoolEligibilityMessage(marketType: MarketFormState['marketType']) {
 	if (marketType === 'binary') return 'Placeholder origin security pools support this exact Yes / No question shape.'
-	if (marketType === 'categorical') return 'This question is valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
-	return 'This scalar question is valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
+	if (marketType === 'categorical') return 'Categorical questions are valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
+	return 'Scalar questions are valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
 }
 
 function getFieldErrorId(field: MarketFormFieldName) {
@@ -223,7 +223,7 @@ export function MarketCreateQuestionSection({
 				<SectionBlock title='Create Question' description='Define the market type, timing, and outcomes for a new Zoltar question.'>
 					<div className='workflow-summary-strip workflow-guide'>
 						<div className='workflow-guide-intro'>
-							<strong>Write this the way a resolver will read it.</strong>
+							<strong>Write the question the way a resolver will read it.</strong>
 							<p className='detail'>{marketTypeGuidance.description}</p>
 						</div>
 						<div className='workflow-summary-strip-steps'>
@@ -390,7 +390,7 @@ export function MarketCreateQuestionSection({
 							return undefined
 						})()}
 
-						<SectionBlock headingLevel={4} title='Draft Preview' variant='embedded' description='This preview shows the level of clarity traders and reporters will see before trusting the question.'>
+						<SectionBlock headingLevel={4} title='Draft Preview' variant='embedded' description='Draft Preview shows the level of clarity traders and reporters will see before trusting the question.'>
 							<div className='question-draft-preview'>
 								<div className='question-draft-preview-header'>
 									<div className='question-summary-heading'>

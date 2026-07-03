@@ -16,6 +16,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createReportingSuccessPresentation, createReportingTransactionIntent, createReportingWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, WriteOperationsParameters } from '../types/app.js'
 import type { ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -122,6 +123,9 @@ export function useReportingOperations({ accountAddress, onTransactionCanceled, 
 						reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
 					refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
+					},
 				},
 				async walletAddress => {
 					reportingResult.value = undefined

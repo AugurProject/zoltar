@@ -50,8 +50,6 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		loadingMarketDetails: false,
 		marketDetails: createMarketDetails(),
 		onCreateSecurityPool: () => undefined,
-		onLoadMarket: () => undefined,
-		onLoadMarketById: async () => undefined,
 		onOpenCreatedPool: () => undefined,
 		onResetSecurityPoolCreation: () => undefined,
 		onReturnToBrowse: () => undefined,
@@ -147,11 +145,10 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		const securityMultiplierInput = documentQueries.getByRole('textbox', { name: 'Security Multiplier' })
 		expect(securityMultiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
-		expect(documentQueries.getByText('This sets the REP collateral target relative to open interest. Higher values are safer but require more REP backing.')).not.toBeNull()
+		expect(documentQueries.getByText('Security Multiplier sets the REP collateral target relative to open interest. Higher values require more REP backing and create a thicker safety buffer.')).not.toBeNull()
 	})
 
-	test('loads and previews the pasted question before pool creation', async () => {
-		let loadMarketCount = 0
+	test('previews the pasted question before pool creation without a manual load action', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolSection,
@@ -160,22 +157,16 @@ describe('SecurityPoolSection', () => {
 						description: 'Previewed binary question',
 						title: 'Question ready for a pool',
 					}),
-					onLoadMarket: () => {
-						loadMarketCount += 1
-					},
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Paste an exact binary Yes / No Zoltar question ID, or use "Create Pool From Question" after creating a question. Load the preview before deploying so you can verify the question wording.')).not.toBeNull()
+		expect(documentQueries.getByText('Paste an exact binary Yes / No Zoltar question ID.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
-
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Load Question' }))
-
-		expect(loadMarketCount).toBe(1)
+		expect(documentQueries.queryByRole('button', { name: 'Load Question' })).toBeNull()
 	})
 
 	test('shows only the shared missing-context warning when a loaded question lacks description details', async () => {

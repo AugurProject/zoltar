@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress } from 'viem'
+import { createPublicClient, getAddress, http } from 'viem'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -91,7 +91,10 @@ describe('useRepPrices refresh races', () => {
 			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
 		}))
 
-		installActiveEnvironmentForTesting(createFakeBackend())
+		installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
+		})
 		const { useRepPrices } = await import(`../hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
 		const Harness = createHarness(useRepPrices)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))

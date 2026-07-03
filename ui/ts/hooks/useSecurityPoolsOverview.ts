@@ -10,13 +10,14 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { WriteOperationsParameters } from '../types/app.js'
-import type { ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolOverviewActionResult, SecurityPoolPage } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
 	accountAddress: Address | undefined
@@ -27,7 +28,7 @@ type UseSecurityPoolsOverviewParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 }
 
 const SECURITY_POOL_PAGE_FALLBACK_DETAILS = ['no contract data was returned', 'returned no data']
@@ -62,7 +63,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
 	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
-	const securityPoolPage = useSignal<SecurityPoolPage | undefined>(undefined)
+	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
 	const securityPoolPageLoad = useLoadController()
 	const hasLoadedSecurityPools = useSignal(false)
@@ -113,7 +114,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 		})
 	}
 
-	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number) => {
+	const loadBrowseSecurityPoolPage = async (pageIndex: number, pageSize: number, requestKey: string) => {
 		const isCurrent = nextSecurityPoolPageLoad()
 		await securityPoolPageLoad.run({
 			isCurrent,
@@ -128,7 +129,6 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 					return await loadSecurityPoolPage(readClient, pageIndex, pageSize, accountAddress)
 				} catch (error) {
 					if (!shouldFallbackToAllSecurityPoolsPage(error)) throw error
-					if (hasLoadedSecurityPools.value) return createSecurityPoolPageFromLoadedPools(securityPools.value, pageIndex, pageSize)
 					const pools = await loadAllSecurityPools(readClient, {
 						...(accountAddress === undefined ? {} : { accountAddress }),
 						vaultDetailMode: 'selected',
@@ -139,7 +139,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true
 				securityPoolBrowseCount.value = page.poolCount
-				securityPoolPage.value = page
+				securityPoolPage.value = { ...page, requestKey }
 			},
 			onError: error => {
 				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
@@ -207,6 +207,9 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 							securityPoolLiquidationError.value = message
 						}
 						securityPoolOverviewFeedback.value = createErrorActionFeedback('queueLiquidation', 'Liquidation failed', message)
+					},
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
 					},
 				},
 				async walletAddress => {

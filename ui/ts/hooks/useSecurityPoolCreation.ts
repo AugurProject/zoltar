@@ -25,7 +25,7 @@ type UseSecurityPoolCreationParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	zoltarUniverseHasForked: boolean
 }
 
@@ -118,8 +118,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			},
 		})
 	}
-
-	const loadMarket = async () => await loadMarketById(securityPoolForm.value.marketId)
 
 	const createPool = async () => {
 		if (securityPoolSubmissionInProgress.value) {
@@ -233,7 +231,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 		checkingDuplicateOriginPool: duplicateOriginPoolCheckLoad.isLoading.value,
 		duplicateOriginPoolExists: duplicateOriginPoolExists.value,
 		loadMarketById,
-		loadMarket,
 		loadingMarketDetails: marketDetailsLoad.isLoading.value,
 		marketDetails: marketDetails.value,
 		securityPoolCreationFeedback: securityPoolCreationFeedback.value,

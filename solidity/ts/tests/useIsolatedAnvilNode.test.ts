@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode } from '../testsuite/simulator/anvilNode'
+import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs } from '../testsuite/simulator/anvilNode'
 
 test('getAnvilConnectionMode uses the platform default when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']
@@ -80,6 +80,13 @@ test('getGasCostsAnvilConnectionMode uses ANVIL_RPC when provided', () => {
 			process.env['ANVIL_RPC'] = originalAnvilRpc
 		}
 	}
+})
+
+test('isolated Anvil nodes disable persisted state snapshots', () => {
+	const expectedBaseArgs = ['--host', '127.0.0.1', '--port', '12345', '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee', '--max-persisted-states', '0']
+
+	expect(getIsolatedAnvilArgs({ port: 12345 })).toEqual(expectedBaseArgs)
+	expect(getIsolatedAnvilArgs({ port: 12345, printTraces: true })).toEqual([...expectedBaseArgs, '--print-traces'])
 })
 
 test('connectToExistingAnvilNode reports an actionable setup message when RPC validation fails', async () => {

@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, SecurityPoolPage } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -88,17 +88,38 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
-function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {}): SecurityPoolsOverviewSectionProps {
+type SecurityPoolsOverviewSectionTestOverrides = Omit<Partial<SecurityPoolsOverviewSectionProps>, 'securityPoolPage'> & {
+	securityPoolPage?: SecurityPoolPage | SecurityPoolBrowsePage | undefined
+}
+
+function getSecurityPoolPageRequestKey(page: SecurityPoolPage | SecurityPoolBrowsePage): string | undefined {
+	return 'requestKey' in page ? page.requestKey : undefined
+}
+
+function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}): SecurityPoolsOverviewSectionProps {
+	const accountState = overrides.accountState ?? createAccountState()
 	const defaultPools = [createSecurityPool()]
 	const securityPools = overrides.securityPools ?? defaultPools
-	const defaultPage: SecurityPoolPage = {
+	const environmentRefreshKey = overrides.environmentRefreshKey ?? 0
+	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const defaultPage: SecurityPoolBrowsePage = {
 		pageIndex: 0,
 		pageSize: 6,
 		poolCount: BigInt(securityPools.length),
 		pools: securityPools,
+		requestKey: `${environmentRefreshKey}:0:6:${accountRequestKey}`,
 	}
+	const hasSecurityPoolPageOverride = Object.hasOwn(overrides, 'securityPoolPage')
+	const overrideSecurityPoolPage = hasSecurityPoolPageOverride ? overrides.securityPoolPage : defaultPage
+	const securityPoolPage =
+		overrideSecurityPoolPage === undefined
+			? undefined
+			: {
+					...overrideSecurityPoolPage,
+					requestKey: getSecurityPoolPageRequestKey(overrideSecurityPoolPage) ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
+				}
 	return {
-		accountState: createAccountState(),
+		accountState,
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
 		hasLoadedSecurityPools: true,
@@ -125,14 +146,15 @@ function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {})
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
-		securityPoolBrowseCount: overrides.securityPoolPage?.poolCount ?? BigInt(securityPools.length),
-		securityPoolPage: overrides.securityPoolPage ?? defaultPage,
 		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
 		securityPoolLiquidationError: undefined,
 		securityPoolOverviewResult: undefined,
-		securityPools,
 		...overrides,
+		environmentRefreshKey,
+		securityPoolBrowseCount: securityPoolPage?.poolCount,
+		securityPoolPage,
+		securityPools,
 	}
 }
 
@@ -188,6 +210,162 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Submitted' })).toBeNull()
 		expect(documentQueries.queryByText('Check State')).toBeNull()
 		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
+	})
+
+	test('reloads the current browse page when the environment refresh key changes', async () => {
+		const onLoadSecurityPoolPage = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					environmentRefreshKey: 0,
+					onLoadSecurityPoolPage,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		})
+
+		await act(() => {
+			render(
+				<SecurityPoolsOverviewSection
+					{...createProps({
+						environmentRefreshKey: 1,
+						onLoadSecurityPoolPage,
+					})}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
+			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, `1:0:6:${zeroAddress}`)
+		})
+	})
+
+	test('hides stale pool page data while an environment refresh reload is pending', async () => {
+		const deferredPageLoad = createDeferred<void>()
+		let pageLoadCount = 0
+		const onLoadSecurityPoolPage = mock(() => {
+			pageLoadCount += 1
+			return pageLoadCount === 2 ? deferredPageLoad.promise : undefined
+		})
+		const securityPoolPage: SecurityPoolPage = {
+			pageIndex: 0,
+			pageSize: 6,
+			poolCount: 12n,
+			pools: [
+				createSecurityPool({
+					marketDetails: createMarketDetails({ title: 'Previous environment pool' }),
+					securityPoolAddress: '0x0000000000000000000000000000000000000100',
+				}),
+			],
+		}
+		const initialProps = createProps({
+			environmentRefreshKey: 0,
+			onLoadSecurityPoolPage,
+			securityPoolPage,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		})
+		expect(within(document.body).getByText('Previous environment pool')).not.toBeNull()
+		expect(within(document.body).getByText('Page 1 of 2')).not.toBeNull()
+
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...initialProps} environmentRefreshKey={1} />, renderedComponent.container)
+		})
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
+		})
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Previous environment pool')).toBeNull()
+		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
+
+		const staleResolvedPage: SecurityPoolBrowsePage = {
+			...securityPoolPage,
+			pools: [
+				createSecurityPool({
+					marketDetails: createMarketDetails({ title: 'Stale resolved environment pool' }),
+					securityPoolAddress: '0x0000000000000000000000000000000000000101',
+				}),
+			],
+			requestKey: `0:0:6:${zeroAddress}`,
+		}
+		await act(() => {
+			render(
+				<SecurityPoolsOverviewSection
+					{...createProps({
+						environmentRefreshKey: 1,
+						onLoadSecurityPoolPage,
+						securityPoolPage: staleResolvedPage,
+					})}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		expect(documentQueries.queryByText('Stale resolved environment pool')).toBeNull()
+		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+
+		deferredPageLoad.resolve()
+		await act(async () => {
+			await deferredPageLoad.promise
+		})
+	})
+
+	test('hides stale pool page data while an account-specific reload is pending', async () => {
+		const accountA = '0x00000000000000000000000000000000000000a1'
+		const accountB = '0x00000000000000000000000000000000000000b2'
+		const onLoadSecurityPoolPage = mock(() => undefined)
+		const securityPoolPage: SecurityPoolBrowsePage = {
+			pageIndex: 0,
+			pageSize: 6,
+			poolCount: 12n,
+			pools: [
+				createSecurityPool({
+					marketDetails: createMarketDetails({ title: 'Account A pool' }),
+					securityPoolAddress: '0x0000000000000000000000000000000000000102',
+				}),
+			],
+			requestKey: `0:0:6:${accountA}`,
+		}
+		const initialProps = createProps({
+			accountState: createAccountState({ address: accountA }),
+			onLoadSecurityPoolPage,
+			securityPoolPage,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		})
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Account A pool')).not.toBeNull()
+		expect(documentQueries.getByText('Page 1 of 2')).not.toBeNull()
+
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...initialProps} accountState={createAccountState({ address: accountB })} />, renderedComponent.container)
+		})
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
+			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, `0:0:6:${accountB}`)
+		})
+		expect(documentQueries.queryByText('Account A pool')).toBeNull()
+		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
 	})
 
 	test('keeps pool-list load errors inline instead of opening liquidation', async () => {
@@ -562,11 +740,15 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
+		})
 		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
-		expect(documentQueries.getByText('Page 2 of 2')).not.toBeNull()
+		expect(documentQueries.queryByText('Page 2 of 2')).toBeNull()
+		expect(loadPageCalls.some(call => call.pageIndex === 1)).toBe(true)
 
 		const shrunkProps = createProps({
 			onLoadSecurityPoolPage: initialProps.onLoadSecurityPoolPage,
@@ -592,10 +774,12 @@ describe('SecurityPoolsOverviewSection', () => {
 
 	test('stops showing a loading state when a requested pool page fails to load', async () => {
 		const failedPageLoad = createDeferred<void>()
+		const loadPageCalls: number[] = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
 					onLoadSecurityPoolPage: async pageIndex => {
+						loadPageCalls.push(pageIndex)
 						if (pageIndex === 1) return await failedPageLoad.promise
 					},
 					securityPoolPage: {
@@ -615,6 +799,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(loadPageCalls.includes(0)).toBe(true)
+		})
 		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))

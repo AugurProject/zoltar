@@ -32,6 +32,7 @@ Review method:
 - Flag new or changed code that duplicates an existing method or reimplements almost the same behavior unless the diff makes a clear, justified distinction.
 - Check changed documentation, instructions, UI copy, and comments for repeated statements of the same guidance; prefer one canonical explanation with links or concise references.
 - Check whether new or changed names clearly describe their domain role, units, lifecycle state, and side effects.
+- In documentation, equations, code, and tests, flag single-letter variable names as readability issues unless they are standard units, loop indices in tiny local scopes, coordinate axes in graphics, or externally mandated names. Mathematical notation in docs should use descriptive variable names that state the domain role and units, such as `oracleReportLiquidity` or `externalPayoffNotional` instead of terse symbolic names.
 - Check whether the control flow, data flow, module boundaries, and tests are simple enough for a future maintainer to understand, extend, and change safely without hidden conversation context.
 - Check whether the implementation creates long-term maintenance risk through hard-coded exceptions, inconsistent patterns, duplicated policy, fragile ordering assumptions, or missing ownership of shared behavior.
 - Check whether tests and skipped checks match the repository validation rules.

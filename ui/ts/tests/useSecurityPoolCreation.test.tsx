@@ -382,6 +382,51 @@ describe('useSecurityPoolCreation', () => {
 		})
 	})
 
+	test('auto-loads market details when a valid question ID is entered', async () => {
+		const loadedDetails = createMarketDetails({ questionId: '0x0b', title: 'Auto loaded question' })
+		const loadedQuestionIds: bigint[] = []
+		const loadMarketDetails = mock(async (_client: unknown, questionId: bigint) => {
+			loadedQuestionIds.push(questionId)
+			return loadedDetails
+		})
+		setupContractMocks({
+			loadMarketDetails,
+			originSecurityPoolExists: mock(async () => false),
+		})
+
+		const { useSecurityPoolCreation } = await import(`../hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			newState => {
+				state = newState
+			},
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0x0b' }))
+		})
+
+		await waitFor(() => {
+			expect(loadMarketDetails).toHaveBeenCalledTimes(1)
+			expect(loadedQuestionIds).toEqual([11n])
+			expect(requireState(state).marketDetails?.title).toBe('Auto loaded question')
+		})
+	})
+
 	test('createPool blocks when required deployment step is missing', async () => {
 		setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails()),

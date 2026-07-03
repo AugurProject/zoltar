@@ -32,6 +32,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createOpenOracleWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '../types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails } from '../types/contracts.js'
 
@@ -619,6 +620,9 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 						openOracleFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
 					refreshErrorFallback: 'Oracle transaction succeeded, but refreshing the selected report failed',
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
+					},
 				},
 				async walletAddress => {
 					openOracleActiveAction.value = actionName

@@ -16,6 +16,7 @@ import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -29,7 +30,7 @@ type UseZoltarForkParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	refreshZoltarUniverse: () => Promise<void>
 	shouldAutoLoadForkAccess: boolean
 	zoltarUniverse: ZoltarUniverseSummary | undefined
@@ -219,7 +220,7 @@ export function useZoltarFork({
 
 			try {
 				if (refreshAfter) {
-					await refreshState()
+					await refreshWalletStateOnly(refreshState)
 					await refreshZoltarUniverse()
 				}
 				await loadZoltarForkAccess()
