@@ -94,6 +94,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Write the question the way a resolver will read it.')).not.toBeNull()
 		const questionTypeButton = documentQueries.getByRole('button', { name: 'Question Type: Binary' })
 		await act(() => {
 			fireEvent.click(questionTypeButton)
