@@ -168,6 +168,20 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should enter truth auction after the parent migration window closes')
 		})
 
+		test('finalizeTruthAuction keeps the auction active at the exact end and finalizes one second later', async () => {
+			const { yesSecurityPool } = await setupStartedTruthAuction('truth auction finalization deadline source')
+			const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+			const auctionDeadline = truthAuctionStarted + 7n * DAY
+
+			await mockWindow.setTime(auctionDeadline - 1n)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Auction not ended/)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should remain in truth auction at the exact finalization deadline')
+
+			await mockWindow.setTime(auctionDeadline)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after the truth auction end boundary passes')
+		})
+
 		test('startTruthAuction skips auction startup when all REP is already migrated', async () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)

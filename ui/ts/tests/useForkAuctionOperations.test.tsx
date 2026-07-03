@@ -746,6 +746,170 @@ describe('useForkAuctionOperations', () => {
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 	})
 
+	test('migrateEscalation snapshots the submitted form values before details reload resolves', async () => {
+		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fb')
+		const initialVaultAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const editedVaultAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const detailsReload = createDeferred<ForkAuctionDetails>()
+		const onTransactionFailed = mock(() => undefined)
+		const loadForkAuctionDetails = mock(async () => await detailsReload.promise)
+		const migrateEscalationDeposits = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: string, depositIndexes: bigint[]) => {
+			expect(securityPoolAddress).toBe(firstPoolAddress)
+			expect(universeId).toBe(1n)
+			expect(vaultAddress).toBe(initialVaultAddress)
+			expect(outcome).toBe('yes')
+			expect(depositIndexes).toEqual([1n, 3n])
+			return createForkAuctionResult('migrateEscalationDeposits')
+		})
+		const actualContracts = await import('../contracts.js')
+		const actualClients = await import('../lib/clients.js')
+
+		mock.module('../contracts.js', () => ({
+			...actualContracts,
+			loadForkAuctionDetails,
+			migrateEscalationDeposits,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			...actualClients,
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseForkAuctionOperationsState | undefined
+		function Harness() {
+			const state = useForkAuctionOperations({
+				accountAddress: WALLET_ADDRESS,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionPrepared: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress: undefined,
+			})
+			hookState = state
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setForkAuctionForm(current => ({
+				...current,
+				depositIndexes: '1,3',
+				securityPoolAddress: firstPoolAddress,
+				selectedOutcome: 'yes',
+				vaultAddress: initialVaultAddress,
+			}))
+		})
+
+		let migratePromise = Promise.resolve()
+		await act(() => {
+			migratePromise = requireHookState(hookState).migrateEscalation()
+		})
+
+		await waitFor(() => expect(loadForkAuctionDetails).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			requireHookState(hookState).setForkAuctionForm(current => ({
+				...current,
+				depositIndexes: '2',
+				selectedOutcome: 'no',
+				vaultAddress: editedVaultAddress,
+			}))
+		})
+
+		await act(async () => {
+			detailsReload.resolve(createForkAuctionDetails({ securityPoolAddress: firstPoolAddress }))
+			await migratePromise
+		})
+
+		expect(migrateEscalationDeposits).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('migrateEscalationDeposits')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
+	test('migrateVault snapshots the submitted outcome before details reload resolves', async () => {
+		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fc')
+		const detailsReload = createDeferred<ForkAuctionDetails>()
+		const onTransactionFailed = mock(() => undefined)
+		const loadForkAuctionDetails = mock(async () => await detailsReload.promise)
+		const migrateSecurityVault = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, outcome: string) => {
+			expect(securityPoolAddress).toBe(firstPoolAddress)
+			expect(universeId).toBe(1n)
+			expect(outcome).toBe('yes')
+			return createForkAuctionResult('migrateVault')
+		})
+		const actualContracts = await import('../contracts.js')
+		const actualClients = await import('../lib/clients.js')
+
+		mock.module('../contracts.js', () => ({
+			...actualContracts,
+			loadForkAuctionDetails,
+			migrateSecurityVault,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			...actualClients,
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseForkAuctionOperationsState | undefined
+		function Harness() {
+			const state = useForkAuctionOperations({
+				accountAddress: WALLET_ADDRESS,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionPrepared: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress: undefined,
+			})
+			hookState = state
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setForkAuctionForm(current => ({
+				...current,
+				securityPoolAddress: firstPoolAddress,
+				selectedOutcome: 'yes',
+			}))
+		})
+
+		let migratePromise = Promise.resolve()
+		await act(() => {
+			migratePromise = requireHookState(hookState).migrateVault()
+		})
+
+		await waitFor(() => expect(loadForkAuctionDetails).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			requireHookState(hookState).setForkAuctionForm(current => ({
+				...current,
+				selectedOutcome: 'no',
+			}))
+		})
+
+		await act(async () => {
+			detailsReload.resolve(createForkAuctionDetails({ securityPoolAddress: firstPoolAddress }))
+			await migratePromise
+		})
+
+		expect(migrateSecurityVault).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('migrateVault')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
 	test('startTruthAuction override ignores a stale post-success refresh after the selected pool changes', async () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000f8')
 		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000f9')

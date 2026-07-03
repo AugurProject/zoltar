@@ -129,9 +129,13 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
+	const resolveSelectedVaultAddressFromForm = (form: SecurityVaultFormState) => {
+		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(form.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
+		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
+	}
 	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
-	const resolveStagedOperationValidForSeconds = () => {
-		const timeoutMinutes = parseBigIntInput(securityVaultForm.value.stagedOperationTimeoutMinutes ?? '', 'Staged operation timeout')
+	const resolveStagedOperationValidForSecondsFromForm = (form: SecurityVaultFormState) => {
+		const timeoutMinutes = parseBigIntInput(form.stagedOperationTimeoutMinutes ?? '', 'Staged operation timeout')
 		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Staged operation timeout must be at least 1 minute')
 		const timeoutSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
 		if (timeoutSeconds === undefined) throw new Error('Staged operation timeout must be at least 1 minute')
@@ -232,10 +236,11 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 
 	const runVaultAction = async (
 		actionName: SecurityVaultActionResult['action'],
-		action: (ethereumAddress: Address, securityPoolAddress: Address, isCurrentSelection: () => boolean) => Promise<SecurityVaultActionResult | undefined>,
+		action: (ethereumAddress: Address, securityPoolAddress: Address, currentForm: SecurityVaultFormState, isCurrentSelection: () => boolean) => Promise<SecurityVaultActionResult | undefined>,
 		errorFallback: string,
 		onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address, isCurrentSelection: () => boolean) => Promise<void> | void,
 	) => {
+		const currentForm = securityVaultForm.value
 		const actionSelectionKey = effectiveVaultSelectionKey
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		let securityPoolAddress: Address | undefined
@@ -265,11 +270,11 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				async walletAddress => {
 					securityPoolAddress = resolveSecurityVaultPoolAddress()
 					if (securityVaultMissing.value) throw new Error('Security pool does not exist')
-					const selectedVaultAddress = resolveSelectedVaultAddress()
+					const selectedVaultAddress = resolveSelectedVaultAddressFromForm(currentForm)
 					if (!sameAddress(selectedVaultAddress, walletAddress)) throw new Error('Selected vault is read-only')
 					securityVaultError.value = undefined
 					securityVaultResult.value = undefined
-					return await action(selectedVaultAddress, securityPoolAddress, isCurrentSelection)
+					return await action(selectedVaultAddress, securityPoolAddress, currentForm, isCurrentSelection)
 				},
 				errorFallback,
 				async (result, walletAddress) => {
@@ -289,10 +294,10 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const approveRep = async (amount?: bigint) =>
 		await runVaultAction(
 			'approveRep',
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
+			async (vaultAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
-				const approvalAmount = amount ?? parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP collateral amount')
+				const approvalAmount = amount ?? parseRepAmountInput(currentForm.depositAmount, 'REP collateral amount')
 				if (!isCurrentSelection()) return undefined
 				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
@@ -308,8 +313,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const depositRep = async () =>
 		await runVaultAction(
 			'depositRep',
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
-				const depositAmount = parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP collateral amount')
+			async (vaultAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+				const depositAmount = parseRepAmountInput(currentForm.depositAmount, 'REP collateral amount')
 				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
@@ -333,8 +338,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const setSecurityBondAllowance = async () =>
 		await runVaultAction(
 			'queueSetSecurityBondAllowance',
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
-				const amount = parseRepAmountInput(securityVaultForm.value.securityBondAllowanceAmount, 'Security bond allowance')
+			async (vaultAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+				const amount = parseRepAmountInput(currentForm.securityBondAllowanceAmount, 'Security bond allowance')
 				if (amount < 0n) throw new Error('Security bond allowance must be zero or a positive amount')
 				if (amount !== 0n && amount < MIN_SECURITY_BOND_ALLOWANCE) throw new Error(`Security bond allowance must be zero or at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH`)
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
@@ -349,7 +354,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				})
 				if (setBondAllowanceGuardMessage !== undefined) throw new Error(setBondAllowanceGuardMessage)
 				if (!isCurrentSelection()) return undefined
-				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, resolveStagedOperationValidForSeconds())
+				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, resolveStagedOperationValidForSecondsFromForm(currentForm))
 				return {
 					action: 'queueSetSecurityBondAllowance',
 					hash: result.hash,
@@ -366,7 +371,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const redeemFees = async () =>
 		await runVaultAction(
 			'redeemFees',
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
+			async (vaultAddress, securityPoolAddress, _currentForm, isCurrentSelection) => {
 				if (!isCurrentSelection()) return undefined
 				await refreshVaultFees(vaultAddress, securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
@@ -381,7 +386,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const redeemRep = async () =>
 		await runVaultAction(
 			'redeemRep',
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
+			async (vaultAddress, securityPoolAddress, _currentForm, isCurrentSelection) => {
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
 				if (!isCurrentSelection()) return undefined
@@ -399,8 +404,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const withdrawRep = async () =>
 		await runVaultAction(
 			'queueWithdrawRep',
-			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
-				const amount = parseRepAmountInput(securityVaultForm.value.repWithdrawAmount, 'REP withdraw amount')
+			async (vaultAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
+				const amount = parseRepAmountInput(currentForm.repWithdrawAmount, 'REP withdraw amount')
 				if (amount <= 0n) throw new Error('REP withdraw amount must be greater than zero')
 
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
@@ -415,7 +420,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				})
 				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
 				if (!isCurrentSelection()) return undefined
-				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSeconds())
+				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromForm(currentForm))
 				return {
 					action: 'queueWithdrawRep',
 					hash: result.hash,

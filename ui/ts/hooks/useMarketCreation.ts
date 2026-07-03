@@ -42,6 +42,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 			marketError.value = 'Question creation already in progress'
 			return
 		}
+		const submittedMarketForm = marketForm.value
 		marketSubmissionInProgress.value = true
 		marketResult.value = undefined
 		marketFeedback.value = createPendingActionFeedback('createMarket', 'Creating question')
@@ -77,7 +78,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 				},
 				async walletAddress => {
 					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
-					const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), createMarketParameters(marketForm.value))
+					const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), createMarketParameters(submittedMarketForm))
 					return { ...result, hash: result.createQuestionHash }
 				},
 				'Failed to create question',

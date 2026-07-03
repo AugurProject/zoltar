@@ -369,12 +369,191 @@ describe('useSecurityVaultOperations', () => {
 		expect(transactionState.inFlightCount).toBe(0)
 	})
 
+	test('approveRep snapshots the submitted deposit amount before vault details load resolves', async () => {
+		const poolA = getAddress('0x00000000000000000000000000000000000000a4')
+		const repTokenA = getAddress('0x00000000000000000000000000000000000000c4')
+		const detailsLoad = createDeferred<SecurityVaultDetails>()
+		const detailsA = createSecurityVaultDetails(poolA, zeroAddress, repTokenA)
+		let loadCount = 0
+		const loadSecurityVaultDetails = mock(async () => {
+			loadCount += 1
+			if (loadCount === 1) return await detailsLoad.promise
+			return detailsA
+		})
+		const approveErc20 = mock(async (_client: unknown, repToken: Address, spender: Address, amount: bigint) => {
+			expect(repToken).toBe(repTokenA)
+			expect(spender).toBe(poolA)
+			expect(amount).toBe(1n * REP)
+			return {
+				action: 'approveRep' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e1',
+			}
+		})
+
+		mock.module('../contracts.js', () => ({
+			approveErc20,
+			depositRepToSecurityPool: mock(async () => {
+				throw new Error('depositRepToSecurityPool should not be called in this test')
+			}),
+			loadErc20Allowance: mock(async () => 111n * REP),
+			loadErc20Balance: mock(async () => 11n * REP),
+			loadOracleManagerDetails: mock(async () => {
+				throw new Error('loadOracleManagerDetails should not be called in this test')
+			}),
+			loadSecurityVaultDetails,
+			queueOracleManagerOperation: mock(async () => {
+				throw new Error('queueOracleManagerOperation should not be called in this test')
+			}),
+			redeemRepFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			}),
+			redeemSecurityVaultFees: mock(async () => {
+				throw new Error('redeemSecurityVaultFees should not be called in this test')
+			}),
+			updateSecurityVaultFees: mock(async () => {
+				throw new Error('updateSecurityVaultFees should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(useSecurityVaultOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).securityVaultForm.selectedVaultAddress).toBe(zeroAddress))
+
+		await act(async () => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				depositAmount: '1',
+				securityPoolAddress: poolA,
+			}))
+		})
+
+		let approvePromise = Promise.resolve()
+		await act(() => {
+			approvePromise = requireHookState(hookState).approveRep()
+		})
+
+		await waitFor(() => expect(loadSecurityVaultDetails).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				depositAmount: '2',
+			}))
+		})
+
+		await act(async () => {
+			detailsLoad.resolve(detailsA)
+			await approvePromise
+		})
+
+		expect(approveErc20).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).securityVaultResult?.action).toBe('approveRep')
+	})
+
+	test('depositRep snapshots the submitted deposit amount before wallet preflight resolves', async () => {
+		const poolA = getAddress('0x00000000000000000000000000000000000000a7')
+		const repTokenA = getAddress('0x00000000000000000000000000000000000000c7')
+		const activeAccounts = createDeferred<readonly Address[]>()
+		const detailsA = createSecurityVaultDetails(poolA, zeroAddress, repTokenA)
+		const depositRepToSecurityPool = mock(async (_client: unknown, securityPoolAddress: Address, amount: bigint) => {
+			expect(securityPoolAddress).toBe(poolA)
+			expect(amount).toBe(1n * REP)
+			return {
+				action: 'depositRep' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e5',
+			}
+		})
+
+		mock.module('../contracts.js', () => ({
+			approveErc20: mock(async () => {
+				throw new Error('approveErc20 should not be called in this test')
+			}),
+			depositRepToSecurityPool,
+			loadErc20Allowance: mock(async () => 111n * REP),
+			loadErc20Balance: mock(async () => 11n * REP),
+			loadOracleManagerDetails: mock(async () => {
+				throw new Error('loadOracleManagerDetails should not be called in this test')
+			}),
+			loadSecurityVaultDetails: mock(async () => detailsA),
+			queueOracleManagerOperation: mock(async () => {
+				throw new Error('queueOracleManagerOperation should not be called in this test')
+			}),
+			redeemRepFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			}),
+			redeemSecurityVaultFees: mock(async () => {
+				throw new Error('redeemSecurityVaultFees should not be called in this test')
+			}),
+			updateSecurityVaultFees: mock(async () => {
+				throw new Error('updateSecurityVaultFees should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ accountAddress: zeroAddress }),
+			getAccounts: async () => await activeAccounts.promise,
+		})
+
+		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(useSecurityVaultOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).securityVaultForm.selectedVaultAddress).toBe(zeroAddress))
+
+		await act(async () => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				depositAmount: '1',
+				securityPoolAddress: poolA,
+			}))
+		})
+
+		let depositPromise = Promise.resolve()
+		await act(() => {
+			depositPromise = requireHookState(hookState).depositRep()
+		})
+
+		await act(async () => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				depositAmount: '2',
+			}))
+		})
+
+		await act(async () => {
+			activeAccounts.resolve([zeroAddress])
+			await depositPromise
+		})
+
+		expect(depositRepToSecurityPool).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).securityVaultResult?.action).toBe('depositRep')
+	})
+
 	test('redeemFees ignores a stale selection change before the first write starts', async () => {
 		const poolA = getAddress('0x00000000000000000000000000000000000000a5')
 		const poolB = getAddress('0x00000000000000000000000000000000000000b5')
 		const repTokenA = getAddress('0x00000000000000000000000000000000000000c5')
 		const repTokenB = getAddress('0x00000000000000000000000000000000000000d5')
-		const activeWallet = createDeferred<{ accountAddress: Address; chainId: string }>()
+		const activeAccounts = createDeferred<readonly Address[]>()
 		const detailsA = createSecurityVaultDetails(poolA, zeroAddress, repTokenA)
 		const detailsB = createSecurityVaultDetails(poolB, zeroAddress, repTokenB)
 		const updateSecurityVaultFees = mock(async () => ({
@@ -424,9 +603,12 @@ describe('useSecurityVaultOperations', () => {
 			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
 			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
 		}))
-		mock.module('../lib/walletGuards.js', () => ({
-			assertActiveWallet: mock(async () => await activeWallet.promise),
-		}))
+
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ accountAddress: zeroAddress }),
+			getAccounts: async () => await activeAccounts.promise,
+		})
 
 		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityVaultOperationsState | undefined
@@ -470,10 +652,7 @@ describe('useSecurityVaultOperations', () => {
 		await waitFor(() => expect(requireHookState(hookState).securityVaultDetails?.securityPoolAddress).toBe(poolB))
 
 		await act(async () => {
-			activeWallet.resolve({
-				accountAddress: zeroAddress,
-				chainId: '0x1',
-			})
+			activeAccounts.resolve([zeroAddress])
 			await redeemPromise
 		})
 
@@ -601,5 +780,100 @@ describe('useSecurityVaultOperations', () => {
 		expect(requireHookState(hookState).securityVaultRepBalance).toBe(22n * REP)
 		expect(requireHookState(hookState).securityVaultRepApproval.value).toBe(222n * REP)
 		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+	})
+
+	test('setSecurityBondAllowance snapshots the submitted amount and timeout before the ETH preflight resolves', async () => {
+		const poolA = getAddress('0x00000000000000000000000000000000000000a6')
+		const repTokenA = getAddress('0x00000000000000000000000000000000000000c6')
+		const walletBalance = createDeferred<bigint>()
+		const detailsA = createSecurityVaultDetails(poolA, zeroAddress, repTokenA)
+		const queueOracleManagerOperation = mock(async (_client: unknown, _managerAddress: Address, operation: string, targetVault: Address, amount: bigint, validForSeconds: bigint) => {
+			expect(operation).toBe('setSecurityBondsAllowance')
+			expect(targetVault).toBe(zeroAddress)
+			expect(amount).toBe(1n * REP)
+			expect(validForSeconds).toBe(60n)
+			return {
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e4',
+			}
+		})
+		const readClient = {
+			getBalance: mock(async () => await walletBalance.promise),
+		}
+
+		mock.module('../contracts.js', () => ({
+			approveErc20: mock(async () => {
+				throw new Error('approveErc20 should not be called in this test')
+			}),
+			depositRepToSecurityPool: mock(async () => {
+				throw new Error('depositRepToSecurityPool should not be called in this test')
+			}),
+			loadErc20Allowance: mock(async () => 111n * REP),
+			loadErc20Balance: mock(async () => 11n * REP),
+			loadOracleManagerDetails: mock(async () => ({
+				isPriceValid: true,
+				requestPriceEthCost: 0n,
+			})),
+			loadSecurityVaultDetails: mock(async () => detailsA),
+			queueOracleManagerOperation,
+			redeemRepFromSecurityPool: mock(async () => {
+				throw new Error('redeemRepFromSecurityPool should not be called in this test')
+			}),
+			redeemSecurityVaultFees: mock(async () => {
+				throw new Error('redeemSecurityVaultFees should not be called in this test')
+			}),
+			updateSecurityVaultFees: mock(async () => {
+				throw new Error('updateSecurityVaultFees should not be called in this test')
+			}),
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(useSecurityVaultOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).securityVaultForm.selectedVaultAddress).toBe(zeroAddress))
+
+		await act(async () => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				securityBondAllowanceAmount: '1',
+				securityPoolAddress: poolA,
+				stagedOperationTimeoutMinutes: '1',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).loadSecurityVault()
+		})
+
+		let setAllowancePromise = Promise.resolve()
+		await act(() => {
+			setAllowancePromise = requireHookState(hookState).setSecurityBondAllowance()
+		})
+
+		await waitFor(() => expect(readClient.getBalance).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				securityBondAllowanceAmount: '2',
+				stagedOperationTimeoutMinutes: '5',
+			}))
+		})
+
+		await act(async () => {
+			walletBalance.resolve(10n * REP)
+			await setAllowancePromise
+		})
+
+		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).securityVaultResult?.action).toBe('queueSetSecurityBondAllowance')
 	})
 })

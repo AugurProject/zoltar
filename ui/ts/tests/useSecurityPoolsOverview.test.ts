@@ -312,4 +312,75 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(requireHookState(hookState).liquidationAmount).toBe('3')
 		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
 	})
+
+	void test('queueLiquidation ignores stale modal errors after the amount and timeout inputs change', async () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000c1')
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000c2')
+		const targetVault = getAddress('0x00000000000000000000000000000000000000c3')
+		const walletBalance = createDeferred<bigint>()
+		const readClient = {
+			getBalance: mock(async () => await walletBalance.promise),
+		}
+		const queueSecurityPoolLiquidation = mock(async () => {
+			throw new Error('liquidation reverted')
+		})
+
+		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
+		mock.module('../contracts.js', () => ({
+			loadAllSecurityPools: mock(async () => []),
+			loadOracleManagerDetails: mock(async () => ({
+				requestPriceEthCost: 0n,
+			})),
+			loadSecurityPoolPage: mock(async () => {
+				throw new Error('loadSecurityPoolPage should not be called in this test')
+			}),
+			queueSecurityPoolLiquidation,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => readClient),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(useSecurityPoolsOverview, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).openLiquidationModal(managerAddress, securityPoolAddress, targetVault, 5n * 10n ** 18n)
+			requireHookState(hookState).setLiquidationAmount('1')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('2')
+		})
+
+		let queuePromise = Promise.resolve()
+		await act(() => {
+			queuePromise = requireHookState(hookState).queueLiquidation(managerAddress, securityPoolAddress)
+		})
+
+		await waitFor(() => {
+			expect(readClient.getBalance).toHaveBeenCalledTimes(1)
+		})
+
+		await act(async () => {
+			requireHookState(hookState).setLiquidationAmount('3')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+		})
+
+		await act(async () => {
+			walletBalance.resolve(2n * 10n ** 18n)
+			await queuePromise
+		})
+
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).liquidationAmount).toBe('3')
+		expect(requireHookState(hookState).liquidationTimeoutMinutes).toBe('5')
+		expect(requireHookState(hookState).securityPoolLiquidationError).toBeUndefined()
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toContain('liquidation reverted')
+	})
 })

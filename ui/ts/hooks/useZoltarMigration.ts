@@ -94,16 +94,17 @@ export function useZoltarMigration({
 			zoltarMigrationError.value = undefined
 			zoltarMigrationFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 			zoltarMigrationResult.value = undefined
+			const submittedForm = zoltarMigrationForm.value
 
 			try {
 				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')
-				const amount = parseRepAmountInput(zoltarMigrationForm.value.amount, 'Migration amount')
+				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
 				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
-				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(zoltarMigrationForm.value.outcomeIndexes, 'Outcome indexes') : []
+				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(submittedForm.outcomeIndexes, 'Outcome indexes') : []
 				const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
 				zoltarMigrationResult.value = result
 				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)

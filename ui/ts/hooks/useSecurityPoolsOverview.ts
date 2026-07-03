@@ -181,7 +181,8 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 		const submittedLiquidationTargetVault = liquidationTargetVault.value
 		const submittedLiquidationAmount = liquidationAmount.value
 		const submittedLiquidationTimeoutMinutes = liquidationTimeoutMinutes.value
-		const isCurrentLiquidationSubmission = () => liquidationManagerAddress.value === managerAddress && liquidationSecurityPoolAddress.value === securityPoolAddress && liquidationTargetVault.value === submittedLiquidationTargetVault
+		const isCurrentLiquidationSubmission = () =>
+			liquidationManagerAddress.value === managerAddress && liquidationSecurityPoolAddress.value === securityPoolAddress && liquidationTargetVault.value === submittedLiquidationTargetVault && liquidationAmount.value === submittedLiquidationAmount && liquidationTimeoutMinutes.value === submittedLiquidationTimeoutMinutes
 		let completedResult: SecurityPoolOverviewActionResult | undefined
 		try {
 			securityPoolOverviewActiveAction.value = 'queueLiquidation'

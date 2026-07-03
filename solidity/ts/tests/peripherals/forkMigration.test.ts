@@ -1257,6 +1257,26 @@ describe('Peripherals: fork migration', () => {
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /migration window closed/i)
 		})
 
+		test('createChildUniverse allows the exact own-fork migration deadline and rejects one second later', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
+
+			await mockWindow.setTime(migrationDeadline + 1n)
+			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /migration window closed/i)
+		})
+
 		test('migrateRepToZoltar should fund an already-created child pool with the unlocked vault REP in own-fork mode', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)

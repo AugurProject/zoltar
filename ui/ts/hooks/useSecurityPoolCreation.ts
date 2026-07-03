@@ -55,6 +55,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	const duplicateOriginPoolExists = useSignal(false)
 	const nextMarketDetailsLoad = useRequestGuard()
 	const nextDuplicateCheck = useRequestGuard()
+	const isCurrentSubmittedQuestion = (questionId: bigint) => tryParseBigIntInput(securityPoolForm.value.marketId) === questionId
 
 	const loadDuplicateOriginPoolState = async () => {
 		const isCurrent = nextDuplicateCheck()
@@ -125,6 +126,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			securityPoolError.value = 'Security pool creation already in progress'
 			return
 		}
+		const submittedSecurityPoolForm = securityPoolForm.value
 		securityPoolSubmissionInProgress.value = true
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
@@ -164,16 +166,20 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 					if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool')
 					if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
 
-					const parameters = createSecurityPoolParameters(securityPoolForm.value)
+					const parameters = createSecurityPoolParameters(submittedSecurityPoolForm)
 					capturedQuestionId = parameters.questionId
 					const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
 					if (!details.exists) throw new Error('No market found for that ID')
 					if (details.marketType !== 'binary') {
-						marketDetails.value = details
+						if (isCurrentSubmittedQuestion(parameters.questionId)) {
+							marketDetails.value = details
+						}
 						throw new Error('Security pools can only be deployed for binary markets')
 					}
 					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
-						marketDetails.value = details
+						if (isCurrentSubmittedQuestion(parameters.questionId)) {
+							marketDetails.value = details
+						}
 						throw new Error('A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.')
 					}
 
@@ -185,8 +191,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				result => {
 					if (capturedDetails !== undefined) {
 						poolCreationMarketDetails.value = capturedDetails
-						const currentQuestionId = tryParseBigIntInput(securityPoolForm.value.marketId)
-						if (capturedQuestionId !== undefined && currentQuestionId === capturedQuestionId) {
+						if (capturedQuestionId !== undefined && isCurrentSubmittedQuestion(capturedQuestionId)) {
 							marketDetails.value = capturedDetails
 						}
 					}

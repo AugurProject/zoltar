@@ -365,12 +365,7 @@ export function useForkAuctionOperations({ accountAddress, onTransactionCanceled
 				'forkUniverse',
 				async (walletAddress, details, isCurrentSelection) => {
 					if (!isCurrentSelection()) return undefined
-					return await forkUniverseDirectly(
-						createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
-						parseBigIntInput(submittedDirectForkUniverseId, 'Fork universe ID'),
-						parseBigIntInput(submittedDirectForkQuestionId, 'Fork question ID'),
-						details.securityPoolAddress,
-					)
+					return await forkUniverseDirectly(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parseBigIntInput(submittedDirectForkUniverseId, 'Fork universe ID'), parseBigIntInput(submittedDirectForkQuestionId, 'Fork question ID'), details.securityPoolAddress)
 				},
 				'Failed to fork universe directly',
 			)
