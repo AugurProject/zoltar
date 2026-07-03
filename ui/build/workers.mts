@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as url from 'url'
 import { promises as fs } from 'fs'
+import { normalizeBundlerPath } from './bundlerPaths.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
@@ -24,7 +25,7 @@ const workerEntryPath = path.join(UI_ROOT_PATH, 'ts', 'simulation', 'tevmWorker.
 const BANNER_LINE_COUNT = WORKER_BANNER.split('\n').length
 
 const result = await Bun.build({
-	entrypoints: [workerEntryPath],
+	entrypoints: [normalizeBundlerPath(workerEntryPath)],
 	naming: { entry: 'tevmWorker.worker.js' },
 	outdir: path.join(UI_ROOT_PATH, 'js', 'simulation'),
 	target: 'browser',

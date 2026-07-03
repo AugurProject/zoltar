@@ -15,6 +15,7 @@ const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'sim
 const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
+const uiWatchBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'watch.mts')
 const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
@@ -218,6 +219,27 @@ function collectRuntimeModuleSpecifiers(sourceFile: ts.SourceFile) {
 	return specifiers
 }
 
+function isBunStringLiteral(node: ts.Node) {
+	return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === 'bun'
+}
+
+function getSourceLocation(sourceFile: ts.SourceFile, node: ts.Node) {
+	const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+	return `${path.relative(repositoryRootPath, sourceFile.fileName)}:${line + 1}:${character + 1}`
+}
+
+function collectBareBunStringLiterals(sourceFile: ts.SourceFile) {
+	const locations: string[] = []
+	const visit = (node: ts.Node) => {
+		if (isBunStringLiteral(node)) {
+			locations.push(getSourceLocation(sourceFile, node))
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(sourceFile)
+	return locations
+}
+
 function getExportedNames(filePath: string, imports: Record<string, string>, exportCache: Map<string, Set<string>>) {
 	const cachedExports = exportCache.get(filePath)
 	if (cachedExports !== undefined) return cachedExports
@@ -307,14 +329,26 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	}
 })
 
+test('watch build regression scanner catches indirect bare Bun commands', () => {
+	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'ui', 'build', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
+
+	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['ui/build/bare-bun-fixture.mts:1:21'])
+})
+
 test('development import map maps browser dependency subpaths', () => {
 	const imports = readDevelopmentImportMap()
 	const vendorBuildSource = fs.readFileSync(uiVendorBuildPath, 'utf8')
+	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
+	const watchBuildSourceFile = parseModule(uiWatchBuildPath, watchBuildSource)
 
 	for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
 		expect(imports[specifier]).toBe(mappedPath)
 	}
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
+	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
+	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
+	expect(watchBuildSource).toContain('const BUN_EXECUTABLE_PATH = process.execPath')
+	expect(collectBareBunStringLiterals(watchBuildSourceFile)).toEqual([])
 })
 
 test('development import map resolves all static imports reachable from the dev entrypoint', () => {
