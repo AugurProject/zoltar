@@ -14,7 +14,7 @@ type RunWriteActionParameters = {
 	onTransactionRequested: () => void
 	onWriteError?: ((message: string) => void) | undefined
 	refreshErrorFallback?: string
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	setErrorMessage: (message: string | undefined) => void
 }
 

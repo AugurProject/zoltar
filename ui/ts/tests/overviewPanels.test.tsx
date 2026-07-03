@@ -34,6 +34,7 @@ describe('OverviewPanels', () => {
 			},
 			isConnectingWallet: false,
 			isLoadingRepPrices: false,
+			isRefreshingRepPrices: false,
 			isLoadingUniverseRepBalance: false,
 			isRefreshing: false,
 			onConnect: () => undefined,
@@ -175,6 +176,23 @@ describe('OverviewPanels', () => {
 		fireEvent.click(refreshButton)
 
 		expect(onRefreshRepPrices).toHaveBeenCalledTimes(1)
+	})
+
+	test('keeps stale REP prices visible while the refresh control shows an in-flight refresh', async () => {
+		const documentQueries = await renderOverviewPanels({
+			isLoadingRepPrices: false,
+			isRefreshingRepPrices: true,
+			repPerEthPrice: 2439024390243902439024n,
+			repUsdcPrice: 1234567n,
+		})
+
+		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh REP prices' })
+		if (!(refreshButton instanceof HTMLButtonElement)) throw new Error('Expected refresh button')
+
+		expect(refreshButton.disabled).toBe(true)
+		expect(refreshButton.title).toBe('Refreshing REP prices...')
+		expect(documentQueries.getByTitle('2 439.024390243902439024')).toBeDefined()
+		expect(documentQueries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
 
 	test('surfaces a forked Zoltar status in the operations header', async () => {

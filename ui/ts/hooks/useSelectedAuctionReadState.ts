@@ -64,7 +64,11 @@ export function useSelectedAuctionReadState({
 			return
 		}
 		let cancelled = false
-		void loadAllSecurityPools(fullTruthAuctionReadClient ?? createConnectedReadClient(), accountAddress === undefined ? {} : { accountAddress })
+		void loadAllSecurityPools(fullTruthAuctionReadClient ?? createConnectedReadClient(), {
+			...(accountAddress === undefined ? {} : { accountAddress }),
+			selectedSecurityPoolAddress: securityPoolAddress,
+			vaultDetailMode: 'selected',
+		})
 			.then(allPools => {
 				if (cancelled) return
 				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === selectedOutcome)

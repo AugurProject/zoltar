@@ -12,6 +12,7 @@ import { requireWallet } from '../lib/walletGuard.js'
 import { assertActiveWallet } from '../lib/walletGuards.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { WriteOperationsParameters, ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -24,7 +25,7 @@ type UseZoltarMigrationParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: WriteOperationsParameters['refreshState']
 	refreshZoltarForkAccess: () => Promise<void>
 	refreshZoltarUniverse: () => Promise<void>
 	zoltarForkRepBalance: bigint | undefined
@@ -122,7 +123,7 @@ export function useZoltarMigration({
 			try {
 				if (writeFailed) return
 				if (refreshAfter) {
-					await refreshState()
+					await refreshWalletStateOnly(refreshState)
 					await refreshZoltarUniverse()
 				}
 				await refreshZoltarForkAccess()
