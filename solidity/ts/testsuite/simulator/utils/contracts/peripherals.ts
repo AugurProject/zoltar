@@ -45,6 +45,7 @@ export const executeStagedOperation = async (client: WriteClient, priceOracleMan
 			functionName: 'executeStagedOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operationId],
+			gas: 5_000_000n,
 		}),
 	)
 

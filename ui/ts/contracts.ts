@@ -722,6 +722,7 @@ export async function executeOracleManagerStagedOperation(client: WriteClient, m
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'executeStagedOperation',
 		args: [operationId],
+		gas: 5_000_000n,
 	}))
 	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation') ?? getStagedOracleExecutionResult(receipt, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, 'setSecurityBondsAllowance')
 	return {
