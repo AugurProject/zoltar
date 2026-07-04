@@ -167,6 +167,68 @@ After the reviewer finishes, the main agent must read the full review and decide
 
 In the final response to the user, summarize the reviewer feedback received, report the score from each review pass, state which findings were addressed, note any findings considered non-issues and what readability or self-documenting improvements were made, and list the checks run after the final changes.
 
+## Documentation Text Review Gate
+
+When documentation under `docs/` is modified, the main agent must also spawn the project-scoped `textReview` custom agent defined in `.codex/agents/textReview.toml` and wait for it to complete before responding to the user. Start the text reviewer from a clear task summary instead of relying on inherited conversation context.
+
+The main agent must ask the text reviewer to review the changed docs for story, text flow, order of concepts, contract accuracy, MathML equation structure, notation clarity, interactive examples after complicated math, and whether concepts are introduced well for a reader who is familiar with Ethereum, cryptography, game theory, cryptocurrencies, Uniswap, the oracle problem, and mathematical notation. The request should list the changed documentation files, the Solidity contracts they describe, and any linked files or tooltips that affect the same reading path.
+
+Send the text reviewer a prompt with this shape:
+
+```text
+Use the project-scoped textReview instructions from .codex/agents/textReview.toml.
+
+Original user request:
+<brief verbatim excerpt or exact task summary>
+
+Acceptance criteria:
+- <requirement 1>
+- <requirement 2>
+
+Intentional non-goals / exclusions:
+- <anything intentionally not implemented>
+
+Implementation summary:
+- <what changed and why>
+
+Changed documentation files:
+- <docs file list>
+
+Solidity contracts described:
+- <contract file list, or "none">
+
+Linked docs, tooltips, diagrams, or shared references:
+- <related file or section list>
+
+Validation:
+- <command>: <passed/failed/skipped>
+- <skip reason, if skipped>
+
+Known risks or areas needing close attention:
+- <risk, tradeoff, or "none known">
+
+Review the current worktree diff against origin/main, including committed branch changes, staged changes, unstaged changes, and untracked files intended for the task. Review the changed docs for story, text flow, order of concepts, contract accuracy, MathML equation structure, notation clarity, interactive examples after complicated math, and whether concepts are introduced well for the target reader.
+Do not modify files.
+Return findings grouped by High, Medium, and Low.
+
+Also include:
+- Story arc
+- What works well
+- Contract sync assessment
+- Validation assessment
+- Review limitations, or "None" if there are no limitations
+- Review score from 0 to 100 using the textReview rubric
+```
+
+After the text reviewer finishes, the main agent must read the full review and decide how to handle every finding:
+
+- Fix all valid High, Medium, and Low documentation issues before completing the task.
+- If a finding is a non-issue, improve the text, captions, names, or local explanation so a future reader can understand why the concern does not apply without needing this conversation.
+- If no High, Medium, or Low issues are found, the documentation task may proceed to the final reviewer gate.
+- If any High, Medium, or Low issues are fixed, rerun the required documentation checks and repeat the `textReview` gate until no valid findings remain.
+
+In the final response to the user for docs-changing tasks, summarize the text-review feedback received, report the 0-100 review score from each text-review pass, state which findings were addressed, note any findings considered non-issues and what readability or contract-sync improvements were made, and list the checks run after the final changes.
+
 # Package Guidelines
 
 - **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.
