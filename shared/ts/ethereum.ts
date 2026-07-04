@@ -497,12 +497,21 @@ function isHexCharacter(value: string) {
 function hexToBigInt(value: string | bigint | number | undefined) {
 	if (value === undefined) return undefined
 	if (typeof value === 'bigint') return value
-	if (typeof value === 'number') return BigInt(value)
+	if (typeof value === 'number') return normalizeQuantityValue(value)
 	return BigInt(value)
 }
 
+function normalizeQuantityValue(value: bigint | number) {
+	if (typeof value === 'number') {
+		if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Number "${value.toString()}" is not in safe integer range`)
+		return BigInt(value)
+	}
+	if (value < 0n) throw new Error(`Number "${value.toString()}n" is not in safe integer range`)
+	return value
+}
+
 function hexQuantity(value: bigint | number) {
-	const normalized = typeof value === 'number' ? BigInt(value) : value
+	const normalized = normalizeQuantityValue(value)
 	return normalized === 0n ? '0x0' : ensure0x(normalized.toString(16))
 }
 
@@ -560,7 +569,9 @@ function normalizeAddress(value: unknown) {
 
 function normalizeHash(value: unknown) {
 	if (typeof value !== 'string' || !isHex(value, { strict: true })) throw new Error('RPC returned an invalid hash')
-	return ensure0x(stripHexPrefix(value).toLowerCase()) as Hash
+	const normalized = stripHexPrefix(value).toLowerCase()
+	if (normalized.length !== 64) throw new Error('RPC returned an invalid hash')
+	return ensure0x(normalized) as Hash
 }
 
 function normalizeRpcHex(value: unknown) {
@@ -621,9 +632,14 @@ function normalizeCodecValue(parameter: AbiParameter, value: unknown): unknown {
 		)
 	}
 	if ((parameter.type === 'bytes' || isStaticBytesAbiType(parameter.type)) && typeof value === 'string' && isHex(value, { strict: true })) {
-		return nobleHexToBytes(stripHexPrefix(value))
+		return abiHexToBytes(value)
 	}
 	return value
+}
+
+function abiHexToBytes(value: Hex | string) {
+	const stripped = stripHexPrefix(value)
+	return nobleHexToBytes(stripped.length % 2 === 0 ? stripped : `${stripped}0`)
 }
 
 function normalizeCodecArguments(parameters: readonly AbiParameter[] | undefined, values: readonly unknown[] | undefined) {
@@ -720,6 +736,12 @@ function normalizeDecodedValue(parameter: AbiParameter, value: unknown): unknown
 }
 
 function normalizeDecodedArguments(parameters: readonly AbiParameter[], value: unknown): unknown[] {
+	if (parameters.length === 0) return []
+	if (parameters.length === 1) {
+		const parameter = parameters[0]
+		if (parameter === undefined) return [value]
+		return [normalizeDecodedValue(parameter, value)]
+	}
 	return normalizeDecodeFunctionArgs(value).map((item, index) => {
 		const parameter = parameters[index]
 		return parameter === undefined ? item : normalizeDecodedValue(parameter, item)
@@ -899,14 +921,34 @@ function checksumAddressFromBytes(value: Uint8Array) {
 function normalizeEventTopicArgs(eventAbi: AbiParameter, args: readonly unknown[] | Record<string, unknown> | undefined) {
 	const inputs = eventAbi.inputs ?? []
 	const hasNames = inputs.every((input: AbiParameter) => input.name !== undefined)
+	const normalizeTopicValue = (input: AbiParameter, value: unknown) => {
+		if (value === null || value === undefined) return null
+		if (input.type === 'bytes' && typeof value === 'string' && isHex(value, { strict: true })) return hexToBytes(value)
+		return normalizeCodecValue(input, value)
+	}
 	if (args === undefined) {
 		if (hasNames) {
 			return Object.fromEntries(inputs.map((input: AbiParameter) => [input.name as string, null]))
 		}
 		return inputs.map(() => null)
 	}
-	if (!hasNames || Array.isArray(args)) return args
-	return args
+	if (!hasNames || Array.isArray(args)) {
+		let indexedInputIndex = 0
+		const usesFullInputArray = Array.isArray(args) && args.length === inputs.length
+		return inputs.map((input, inputIndex) => {
+			if (input.indexed !== true) return null
+			const value = Array.isArray(args) ? args[usesFullInputArray ? inputIndex : indexedInputIndex] : undefined
+			indexedInputIndex += 1
+			return normalizeTopicValue(input, value)
+		})
+	}
+	return Object.fromEntries(
+		inputs.map(input => {
+			const name = input.name
+			if (name === undefined) throw new Error('ABI event input name is missing')
+			return [name, input.indexed === true ? normalizeTopicValue(input, Reflect.get(args, name)) : null]
+		}),
+	)
 }
 
 function createDecodeError(name: string, message: string) {
@@ -1361,7 +1403,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}
 		},
 		waitForTransactionReceipt: async parameters => {
-			const timeoutMilliseconds = parameters.timeout ?? 120_000
+			const timeoutMilliseconds = parameters.timeout ?? 180_000
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport })
@@ -1633,14 +1675,11 @@ export function isAddress(value: string) {
 }
 
 export function isHex(value: string, options: { strict?: boolean | undefined } = {}) {
-	if (options.strict === true) {
-		if (!value.startsWith('0x')) return false
-		if (value === '0x') return true
-		const normalized = stripHexPrefix(value)
-		return normalized.length % 2 === 0 && isHexCharacter(normalized)
-	}
+	if (options.strict === true && !value.startsWith('0x')) return false
+	if (!value.startsWith('0x')) return false
+	if (value === '0x') return true
 	const normalized = stripHexPrefix(value)
-	return normalized.length % 2 === 0 && isHexCharacter(normalized)
+	return isHexCharacter(normalized)
 }
 
 export function bytesToHex(value: Uint8Array) {
@@ -1648,7 +1687,7 @@ export function bytesToHex(value: Uint8Array) {
 }
 
 export function hexToBytes(value: Hex | string) {
-	return nobleHexToBytes(stripHexPrefix(value))
+	return nobleHexToBytes(ensureEvenHex(stripHexPrefix(value)))
 }
 
 export function concatHex(values: readonly Hex[]) {
@@ -1659,14 +1698,21 @@ export function toHex(value: bigint | number | string | Uint8Array, options: { s
 	if (typeof value === 'string') {
 		return ensure0x(nobleBytesToHex(utf8ToBytes(value)))
 	}
-	const bytes = typeof value === 'bigint' || typeof value === 'number' ? bigintToBytes(typeof value === 'number' ? BigInt(value) : value) : value
-	if (options.size === undefined) return ensure0x(bytes.length === 0 ? '00' : nobleBytesToHex(bytes))
+	if (typeof value === 'bigint' || typeof value === 'number') {
+		const bigintValue = normalizeQuantityValue(value)
+		if (options.size === undefined) return hexQuantity(bigintValue)
+		const bytes = bigintToBytes(bigintValue)
+		if (bytes.length > options.size) throw new Error(`Value exceeds requested size of ${options.size.toString()} bytes`)
+		return ensure0x(nobleBytesToHex(Uint8Array.from([...new Uint8Array(options.size - bytes.length), ...bytes])))
+	}
+	const bytes = value
+	if (options.size === undefined) return ensure0x(nobleBytesToHex(bytes))
 	if (bytes.length > options.size) throw new Error(`Value exceeds requested size of ${options.size.toString()} bytes`)
 	return ensure0x(nobleBytesToHex(Uint8Array.from([...new Uint8Array(options.size - bytes.length), ...bytes])))
 }
 
 export function numberToBytes(value: bigint | number, options: { size?: number | undefined } = {}) {
-	const bytes = bigintToBytes(typeof value === 'number' ? BigInt(value) : value)
+	const bytes = bigintToBytes(normalizeQuantityValue(value))
 	if (options.size === undefined) return bytes
 	if (bytes.length > options.size) throw new Error(`Value exceeds requested size of ${options.size.toString()} bytes`)
 	return Uint8Array.from([...new Uint8Array(options.size - bytes.length), ...bytes])
@@ -1674,7 +1720,7 @@ export function numberToBytes(value: bigint | number, options: { size?: number |
 
 export function keccak256(value: Hex | Uint8Array | string) {
 	if (typeof value === 'string' && value.startsWith('0x')) {
-		return ensure0x(nobleBytesToHex(keccak_256(nobleHexToBytes(stripHexPrefix(value)))))
+		return ensure0x(nobleBytesToHex(keccak_256(hexToBytes(value))))
 	}
 	const bytes = typeof value === 'string' ? utf8ToBytes(value) : value
 	return ensure0x(nobleBytesToHex(keccak_256(bytes)))
@@ -1831,12 +1877,12 @@ export function getCreateAddress(parameters: { from: Address; nonce: bigint }) {
 
 export function getCreate2Address(parameters: { bytecode?: Hex | undefined; bytecodeHash?: Hex | undefined; from: Address; salt: Hex | Uint8Array }) {
 	const fromBytes = nobleHexToBytes(stripHexPrefix(parameters.from))
-	const saltBytes = parameters.salt instanceof Uint8Array ? parameters.salt : nobleHexToBytes(stripHexPrefix(parameters.salt))
+	const saltBytes = parameters.salt instanceof Uint8Array ? parameters.salt : hexToBytes(parameters.salt)
 	if (saltBytes.length !== 32) throw new Error('CREATE2 salt must be 32 bytes')
 	const bytecodeHashBytes = (() => {
-		if (parameters.bytecodeHash !== undefined) return nobleHexToBytes(stripHexPrefix(parameters.bytecodeHash))
+		if (parameters.bytecodeHash !== undefined) return hexToBytes(parameters.bytecodeHash)
 		if (parameters.bytecode === undefined) return undefined
-		return keccak_256(nobleHexToBytes(stripHexPrefix(parameters.bytecode)))
+		return keccak_256(hexToBytes(parameters.bytecode))
 	})()
 	if (bytecodeHashBytes === undefined) throw new Error('CREATE2 address derivation requires bytecode or bytecodeHash')
 	const encoded = concatBytes(Uint8Array.of(0xff), fromBytes, saltBytes, bytecodeHashBytes)
@@ -1845,13 +1891,14 @@ export function getCreate2Address(parameters: { bytecode?: Hex | undefined; byte
 
 export function parseUnits(value: string, decimals: number) {
 	const trimmed = value.trim()
-	if (!/^-?(?:\d+|\d*\.\d+)$/.test(trimmed)) throw new Error(`Invalid decimal value: ${value}`)
+	if (!/^-?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) throw new Error(`Invalid decimal value: ${value}`)
 	const negative = trimmed.startsWith('-')
 	const normalized = negative ? trimmed.slice(1) : trimmed
 	const [wholePartRaw, fractionPartRaw = ''] = normalized.split('.')
 	const wholePart = wholePartRaw === '' ? '0' : wholePartRaw
-	if (fractionPartRaw.length > decimals) throw new Error(`Too many decimal places: expected at most ${decimals.toString()}`)
-	const paddedFraction = fractionPartRaw.padEnd(decimals, '0')
+	const trimmedFraction = fractionPartRaw.replace(/0+$/, '')
+	if (trimmedFraction.length > decimals) throw new Error(`Too many decimal places: expected at most ${decimals.toString()}`)
+	const paddedFraction = trimmedFraction.padEnd(decimals, '0')
 	const combined = `${wholePart}${paddedFraction}`.replace(/^0+/, '') || '0'
 	const result = BigInt(combined)
 	return negative ? -result : result

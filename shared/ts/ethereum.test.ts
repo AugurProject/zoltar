@@ -14,9 +14,12 @@ import {
 	formatUnits,
 	getAddress,
 	getCreate2Address,
+	hexToBytes,
 	isAddress,
+	isHex,
 	keccak256,
 	mainnet,
+	numberToBytes,
 	parseAbiItem,
 	parseAbiParameters,
 	parseTransaction,
@@ -209,6 +212,51 @@ describe('shared ethereum compatibility layer', () => {
 		})
 		expect(decodedCall.functionName).toBe('transfer')
 		expect(decodedCall.args).toEqual([getAddress(lowerCaseOwner), 15n])
+		const arrayCallAbi = [
+			{
+				inputs: [{ name: 'values', type: 'uint256[]' }],
+				name: 'setValues',
+				outputs: [],
+				type: 'function',
+			},
+		] as const
+		expect(
+			decodeFunctionData({
+				abi: arrayCallAbi,
+				data: encodeFunctionData({
+					abi: arrayCallAbi,
+					args: [[1n, 2n]],
+					functionName: 'setValues',
+				}),
+			}).args,
+		).toEqual([[1n, 2n]])
+		const tupleArrayCallAbi = [
+			{
+				inputs: [
+					{
+						components: [
+							{ name: 'amount', type: 'uint256' },
+							{ name: 'recipient', type: 'address' },
+						],
+						name: 'items',
+						type: 'tuple[]',
+					},
+				],
+				name: 'setItems',
+				outputs: [],
+				type: 'function',
+			},
+		] as const
+		expect(
+			decodeFunctionData({
+				abi: tupleArrayCallAbi,
+				data: encodeFunctionData({
+					abi: tupleArrayCallAbi,
+					args: [[{ amount: 3n, recipient: lowerCaseOwner }]],
+					functionName: 'setItems',
+				}),
+			}).args,
+		).toEqual([[{ amount: 3n, recipient: getAddress(lowerCaseOwner) }]])
 
 		const eventTopics = encodeEventTopics({
 			abi: TRANSFER_EVENT_ABI,
@@ -469,8 +517,116 @@ describe('shared ethereum compatibility layer', () => {
 		expect(parsedEip1559.type).toBe('eip1559')
 
 		expect(parseUnits('1.2300', 6)).toBe(1_230_000n)
+		expect(parseUnits('1.', 18)).toBe(1_000_000_000_000_000_000n)
+		expect(parseUnits('0.', 18)).toBe(0n)
+		expect(parseUnits('1.0000000000000000000', 18)).toBe(1_000_000_000_000_000_000n)
+		expect(() => parseUnits('.', 18)).toThrow('Invalid decimal value')
+		expect(() => parseUnits('1.0000000000000000001', 18)).toThrow('Too many decimal places')
 		expect(formatUnits(-1_230_000n, 6)).toBe('-1.23')
 		expect(formatEther(123_000_000_000_000_000n)).toBe('0.123')
+		expect(toHex(0)).toBe('0x0')
+		expect(toHex(1)).toBe('0x1')
+		expect(toHex(1n, { size: 2 })).toBe('0x0001')
+		expect(toHex(new Uint8Array([]))).toBe('0x')
+		expect(toHex(new Uint8Array([1]))).toBe('0x01')
+		expect(() => toHex(-1)).toThrow('safe integer range')
+		expect(() => toHex(-1n)).toThrow('safe integer range')
+		expect(() => toHex(Number.MAX_SAFE_INTEGER + 1)).toThrow('safe integer range')
+		expect(() => numberToBytes(Number.MAX_SAFE_INTEGER + 1)).toThrow('safe integer range')
+		await expect(
+			account.signTransaction?.({
+				chainId: Number.MAX_SAFE_INTEGER + 1,
+				gas: 21_000n,
+				gasPrice: 5n,
+				nonce: 7n,
+				to: TOKEN_ADDRESS,
+				value: 9n,
+			}),
+		).rejects.toThrow('safe integer range')
+		expect(hexToBytes('0x1')).toEqual(new Uint8Array([1]))
+		expect(isHex('0x1')).toBe(true)
+		expect(isHex('0x1', { strict: true })).toBe(true)
+		expect(isHex('ab')).toBe(false)
+		expect(isHex('ab', { strict: true })).toBe(false)
+		expect(isHex('abc')).toBe(false)
+		expect(isHex('0xg')).toBe(false)
+		expect(encodeAbiParameters([{ type: 'bytes' }], ['0x1'])).toBe(`0x${'00'.repeat(31)}20${'00'.repeat(31)}01${'10'}${'00'.repeat(31)}`)
+		expect(encodeAbiParameters([{ type: 'bytes1' }], ['0x1'])).toBe(`0x10${'00'.repeat(31)}`)
+		const oddBytesEventAbi = [
+			{
+				inputs: [
+					{ indexed: true, name: 'fixed', type: 'bytes1' },
+					{ indexed: true, name: 'dynamic', type: 'bytes' },
+				],
+				name: 'OddBytes',
+				type: 'event',
+			},
+		] as const
+		expect(
+			encodeEventTopics({
+				abi: oddBytesEventAbi,
+				args: {
+					dynamic: '0x1',
+					fixed: '0x1',
+				},
+				eventName: 'OddBytes',
+			}),
+		).toEqual(['0x8e116c9360bbe2babb572771bef9e7dc316ca38e5c8b8660288df9d109be14f2', `0x10${'00'.repeat(31)}`, '0x5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2'])
+		expect(
+			encodeEventTopics({
+				abi: oddBytesEventAbi,
+				args: ['0x12', '0x12'],
+				eventName: 'OddBytes',
+			}),
+		).toEqual(['0x8e116c9360bbe2babb572771bef9e7dc316ca38e5c8b8660288df9d109be14f2', `0x12${'00'.repeat(31)}`, '0x5fa2358263196dbbf23d1ca7a509451f7a2f64c15837bfbb81298b1e3e24e4fa'])
+		expect(() =>
+			encodeEventTopics({
+				abi: oddBytesEventAbi,
+				args: {
+					dynamic: '0x1',
+					fixed: '0x123',
+				},
+				eventName: 'OddBytes',
+			}),
+		).toThrow()
+		const mixedIndexedEventAbi = [
+			{
+				inputs: [
+					{ indexed: true, name: 'fixed', type: 'bytes1' },
+					{ indexed: false, name: 'value', type: 'uint256' },
+					{ indexed: true, name: 'dynamic', type: 'bytes' },
+				],
+				name: 'Mixed',
+				type: 'event',
+			},
+		] as const
+		const mixedIndexedTopics: (Hex | null)[] = ['0x14a2d594a2cb204ac32de7c5cd85d7edefbdcd1950db4ac196dfa859d6c00bb9', `0x10${'00'.repeat(31)}`, '0x5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2']
+		expect(
+			encodeEventTopics({
+				abi: mixedIndexedEventAbi,
+				args: ['0x1', '0x1'],
+				eventName: 'Mixed',
+			}),
+		).toEqual(mixedIndexedTopics)
+		expect(
+			encodeEventTopics({
+				abi: mixedIndexedEventAbi,
+				args: ['0x1', 5n, '0x1'],
+				eventName: 'Mixed',
+			}),
+		).toEqual(mixedIndexedTopics)
+		expect(
+			encodeEventTopics({
+				abi: mixedIndexedEventAbi,
+				args: {
+					dynamic: '0x1',
+					fixed: '0x1',
+					value: 5n,
+				},
+				eventName: 'Mixed',
+			}),
+		).toEqual(mixedIndexedTopics)
+		expect(keccak256('0x1')).toBe(keccak256('0x01'))
 		expect(
 			getCreate2Address({
 				bytecode: '0x60006001',
@@ -480,6 +636,19 @@ describe('shared ethereum compatibility layer', () => {
 		).toBe(
 			getCreate2Address({
 				bytecodeHash: keccak256('0x60006001'),
+				from: OWNER_ADDRESS,
+				salt: toHex(1, { size: 32 }),
+			}),
+		)
+		expect(
+			getCreate2Address({
+				bytecode: '0x1',
+				from: OWNER_ADDRESS,
+				salt: toHex(1, { size: 32 }),
+			}),
+		).toBe(
+			getCreate2Address({
+				bytecode: '0x01',
 				from: OWNER_ADDRESS,
 				salt: toHex(1, { size: 32 }),
 			}),
@@ -718,6 +887,60 @@ describe('shared ethereum compatibility layer', () => {
 			},
 		])
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
+	})
+
+	test('public client rejects malformed fixed-width rpc hashes', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: '0x1',
+					number: '0x1',
+					parentHash: BLOCK_HASH,
+					timestamp: '0x5',
+					transactions: [],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		await expect(
+			client.getBlock({
+				blockNumber: 1n,
+			}),
+		).rejects.toThrow('RPC returned an invalid hash')
+	})
+
+	test('waitForTransactionReceipt keeps the viem-compatible default timeout window', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const clockValues = [0, 120_000, 180_000]
+		const originalDateNow = Date.now
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		Date.now = () => clockValues.shift() ?? 180_000
+		try {
+			await expect(
+				client.waitForTransactionReceipt({
+					hash: RECEIPT_HASH,
+					pollingInterval: 0,
+				}),
+			).rejects.toThrow(`Transaction receipt with hash "${RECEIPT_HASH}" could not be found.`)
+		} finally {
+			Date.now = originalDateNow
+		}
+
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
 	})
 
 	test('waitForTransactionReceipt scans previous blocks for delayed replacement detection', async () => {

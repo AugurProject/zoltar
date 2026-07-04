@@ -199,6 +199,7 @@ export function getOpenOracleCreateParameterValidationMessage(
 function normalizeOpenOracleUnknownScaleDecimalInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') return trimmed
+	if (trimmed === '.' || trimmed === '-.') return trimmed
 	if (trimmed.startsWith('.')) return `0${trimmed}`
 	if (trimmed.endsWith('.')) return `${trimmed}0`
 	return trimmed
