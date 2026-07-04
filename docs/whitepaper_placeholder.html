@@ -1719,6 +1719,49 @@
 								<p class="equation-caption"><span class="equation-label">Fork Migration Proportion</span>Unlocked vault migration preserves the parent ownership share, then transfers ETH collateral according to the migrated REP share of REP at fork.</p>
 							</div>
 							<p>
+								The equation above is the external-fork unlocked transfer path. In an
+								own-fork migration, child collateral uses cumulative ceiling accounting so
+								repeated vault migrations do not strand collateral because each individual
+								transfer rounded down.
+							</p>
+							<div class="equation" id="eq-placeholder-own-fork-collateral-ceiling">
+								<math display="block" aria-label="cumulative collateral required after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by vault REP at fork; collateral delta to transfer equals cumulative collateral required after migration minus cumulative collateral already transferred" data-source="cumulativeCollateralRequiredAfterMigration = ceil(parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / vaultRepAtFork); collateralDeltaToTransfer = cumulativeCollateralRequiredAfterMigration - cumulativeCollateralAlreadyTransferred">
+									<mtable>
+										<mtr>
+											<mtd>
+												<mi>cumulativeCollateralRequiredAfterMigration</mi>
+											</mtd>
+											<mtd>
+												<mo>=</mo>
+												<mi>ceil</mi>
+												<mo>(</mo>
+												<mfrac>
+													<mrow>
+														<mi>parentCollateralAtFork</mi>
+														<mo>&#x22C5;</mo>
+														<mi>cumulativeRepTransferredAfterMigration</mi>
+													</mrow>
+													<mi>vaultRepAtFork</mi>
+												</mfrac>
+												<mo>)</mo>
+											</mtd>
+										</mtr>
+										<mtr>
+											<mtd>
+												<mi>collateralDeltaToTransfer</mi>
+											</mtd>
+											<mtd>
+												<mo>=</mo>
+												<mi>cumulativeCollateralRequiredAfterMigration</mi>
+												<mo>-</mo>
+												<mi>cumulativeCollateralAlreadyTransferred</mi>
+											</mtd>
+										</mtr>
+									</mtable>
+								</math>
+								<p class="equation-caption"><span class="equation-label">Own-Fork Collateral Ceiling</span>The forker recomputes the cumulative collateral required after the migration, subtracts cumulative collateral already transferred, and sends only that newly required difference to the child pool.</p>
+							</div>
+							<p>
 								Own-fork migration has one extra accounting split. The pool and its active
 								escalation game both contribute REP to the fork, but the child-universe REP
 								returning from Zoltar is a single auctionable migration balance. Placeholder
