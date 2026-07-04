@@ -19,13 +19,12 @@
 					<span>Companion paper</span>
 					<b>Zoltar Oracle Layer</b>
 				</a>
-				<nav aria-label="Document sections">
-					<a href="#abstract" aria-current="location">Abstract</a>
-					<a href="#overview">System Overview</a>
-					<a href="#architecture">Architecture</a>
-					<a href="#glossary">Glossary</a>
-					<a href="#roles">Economic Roles</a>
-					<a href="#pools">Security Pools</a>
+					<nav aria-label="Document sections">
+						<a href="#abstract" aria-current="location">Abstract</a>
+						<a href="#overview">System Overview</a>
+						<a href="#architecture">Architecture</a>
+						<a href="#roles">Economic Roles</a>
+						<a href="#pools">Security Pools</a>
 					<a href="#shares">Shares</a>
 					<a href="#escalation">Escalation</a>
 					<a href="#migration">Fork Migration</a>
@@ -125,16 +124,17 @@
 							Placeholder</code> is the application layer that adds market collateral,
 							underwriting, local disputes, migration, and collateral repair. For the base
 							oracle layer, see <a href="./whitepaper_zoltar.html">whitepaper_zoltar.html</a>.
-						</p>
-						<p>
-							Placeholder uses two oracle paths, and they answer different questions. Zoltar
-							answers market truth by creating child universes when local disputes cannot
-							resolve. OpenOracle only supplies a bounded REP/ETH solvency price: the
-							coordinator requests a REP/WETH report, a reporter posts amounts, disputers may
-							replace a bad report, settlement finalizes the report, and the callback lets the
-							coordinator accept the resulting REP/ETH price for withdrawals, allowance
-							updates, and liquidations.
-						</p>
+							</p>
+							<p>
+								Placeholder uses two oracle paths, and they answer different questions. Zoltar
+								represents unresolved market-truth disputes by creating child universes; it does
+								not pick the winning branch. Users and applications decide which branch they
+								treat as truthful. OpenOracle only supplies a bounded REP/ETH solvency price:
+								the coordinator requests a REP/WETH report, a reporter posts amounts, disputers
+								may replace a bad report, settlement finalizes the report, and the callback lets
+								the coordinator accept the resulting REP/ETH price for withdrawals, allowance
+								updates, and liquidations.
+							</p>
 						<ol>
 						<li>A question is registered in Zoltar and a Placeholder security pool is deployed for that question in one universe.</li>
 						<li>REP vaults fund underwriting capacity and users mint ETH-backed complete sets.</li>
@@ -328,78 +328,9 @@
 					</figure>
 				</section>
 
-				<section class="paper-section" id="glossary">
-					<div class="section-heading">
-						<h2>3. Glossary</h2>
-						<a class="anchor-link" href="#glossary" aria-label="Link to Glossary">#</a>
-					</div>
-					<table>
-						<thead>
-							<tr>
-								<th>Term</th>
-								<th>Meaning</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td><span class="term" tabindex="0"><code>universe</code></span></td>
-								<td>A Zoltar fork domain. A parent universe can split into multiple child universes after a fork.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>pool</code></span></td>
-								<td>An Augur Placeholder <code>SecurityPool</code> for one question in one universe.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>vault</code></span></td>
-								<td>A pool-specific REP account whose owner provides underwriting capacity.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>complete set</code></span></td>
-								<td>One <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share minted together against ETH collateral.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>escalation game</code></span></td>
-								<td>The local dispute process that tries to pick a single winning outcome before a fork.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>non-decision</code></span></td>
-								<td>The unresolved escalation state that opens the Zoltar fork path.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>migration</code></span></td>
-								<td>The process that moves REP, shares, collateral accounting, and eligible escalation positions from a parent pool into child pools.</td>
-							</tr>
-								<tr>
-									<td><span class="term" tabindex="0"><code>truth auction</code></span></td>
-									<td>The batch auction that lets a child pool sell child-universe REP for ETH when migrated collateral is incomplete. It repairs collateral; it does not choose the truthful branch.</td>
-								</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>migrated REP</code></span></td>
-								<td>REP backing carried from a parent universe into a child universe and made available to support the child pool.</td>
-							</tr>
-								<tr>
-									<td><span class="term" tabindex="0"><code>price round</code></span></td>
-									<td>The lifetime of one settled REP/WETH report converted into a REP/ETH coordinator price.</td>
-								</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>price-round budget</code></span></td>
-								<td>The ETH-notional operation cap for a single settled oracle price. Each successful oracle-gated operation consumes some of this budget.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>ETH-notional</code></span></td>
-								<td>An operation's exposure expressed as ETH value, used to compare withdrawals, liquidations, and allowance updates against one budget.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>staged operation</code></span></td>
-								<td>A solvency-sensitive operation queued behind the coordinator until it can execute with a fresh REP/ETH price.</td>
-							</tr>
-						</tbody>
-					</table>
-				</section>
-
 				<section class="paper-section" id="roles">
 					<div class="section-heading">
-						<h2>4. Core Economic Roles</h2>
+						<h2>3. Core Economic Roles</h2>
 						<a class="anchor-link" href="#roles" aria-label="Link to Core Economic Roles">#</a>
 					</div>
 					<ul>
@@ -416,7 +347,7 @@
 
 				<section class="paper-section" id="pools">
 					<div class="section-heading">
-						<h2>5. Security Pools</h2>
+						<h2>4. Security Pools</h2>
 						<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 					</div>
 					<p class="lede">
@@ -728,7 +659,7 @@
 							<p class="equation-caption"><span class="equation-label">Retention Rate Curve</span>The implementation returns the maximum retention rate when allowance is zero, otherwise it linearly declines to the dip and then clamps to the minimum rate.</p>
 						</div>
 						<div class="equation" id="eq-placeholder-retention-decay">
-							<math display="block" aria-label="collateral at later time equals collateral at current time times retention rate raised to elapsed time" data-source="collateralAtLaterTime = collateralAtCurrentTime \cdot retentionRate^elapsedTime">
+							<math display="block" aria-label="collateral at later time equals collateral at current time times retention rate raised to elapsed time" data-source="collateralAtLaterTime = collateralAtCurrentTime \cdot pow(retentionRate, elapsedTime)">
 								<mrow>
 									<mi>collateralAtLaterTime</mi>
 								<mo>=</mo>
@@ -975,7 +906,7 @@
 
 				<section class="paper-section" id="shares">
 					<div class="section-heading">
-						<h2>6. Shares and Complete Sets</h2>
+						<h2>5. Shares and Complete Sets</h2>
 						<a class="anchor-link" href="#shares" aria-label="Link to Shares">#</a>
 					</div>
 					<p>
@@ -1073,7 +1004,7 @@
 
 				<section class="paper-section" id="escalation">
 					<div class="section-heading">
-						<h2>7. Escalation Resolution</h2>
+						<h2>6. Escalation Resolution</h2>
 						<a class="anchor-link" href="#escalation" aria-label="Link to Escalation">#</a>
 					</div>
 						<p class="lede">
@@ -1481,7 +1412,7 @@
 
 				<section class="paper-section" id="migration">
 					<div class="section-heading">
-						<h2>8. Forks and Migration</h2>
+						<h2>7. Forks and Migration</h2>
 						<a class="anchor-link" href="#migration" aria-label="Link to Forks and Migration">#</a>
 					</div>
 							<p>
@@ -2194,7 +2125,7 @@
 
 				<section class="paper-section" id="auction">
 					<div class="section-heading">
-						<h2>9. Truth Auction</h2>
+						<h2>8. Truth Auction</h2>
 						<a class="anchor-link" href="#auction" aria-label="Link to Truth Auction">#</a>
 					</div>
 						<p class="lede">
@@ -2318,7 +2249,7 @@
 					</figure>
 					<h3>Auction Mechanics</h3>
 					<div class="equation" id="eq-placeholder-auction-tick-price">
-						<math display="block" aria-label="price at tick equals 10¹⁸ times 1.0001 raised to tick" data-source="priceAtTick = 10¹⁸ \cdot 1.0001^tick">
+						<math display="block" aria-label="price at tick equals ten to the eighteenth times 1.0001 raised to tick" data-source="priceAtTick = pow10(18) \cdot pow(1.0001, tick)">
 							<mrow>
 								<mi>priceAtTick</mi>
 								<mo>=</mo>
@@ -2333,7 +2264,7 @@
 						<p class="equation-caption"><span class="equation-label">Auction Tick Price</span>Each tick maps to a scaled ETH-per-REP price on the auction ladder.</p>
 					</div>
 					<div class="equation" id="eq-placeholder-auction-tick-index">
-						<math display="block" aria-label="tick is approximately the natural log of price in wei per REP divided by 10¹⁸, divided by the natural log of 1.0001" data-source="tick ~= ln(priceInWeiPerRep / 10¹⁸) / ln(1.0001)">
+						<math display="block" aria-label="tick is approximately the natural log of price in wei per REP divided by ten to the eighteenth, divided by the natural log of 1.0001" data-source="tick ~= ln(priceInWeiPerRep / pow10(18)) / ln(1.0001)">
 							<mrow>
 								<mi>tick</mi>
 								<mo>&asymp;</mo>
@@ -2652,7 +2583,7 @@
 
 				<section class="paper-section" id="oracle">
 					<div class="section-heading">
-						<h2>10. REP/ETH Price Oracle</h2>
+						<h2>9. REP/ETH Price Oracle</h2>
 						<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 					</div>
 						<p>
@@ -2888,7 +2819,7 @@
 								</tr>
 								<tr>
 									<td><code>pricePrecision</code></td>
-									<td>The fixed <math aria-label="price precision scale" data-source="10¹⁸"><msup><mn>10</mn><mn>18</mn></msup></math> scale factor used for REP/ETH price math.</td>
+									<td>The fixed <math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math> scale factor used for REP/ETH price math.</td>
 								</tr>
 								<tr>
 									<td><code>priceRoundBudgetMultiplierBps</code></td>
@@ -2977,7 +2908,7 @@
 
 				<section class="paper-section" id="security">
 					<div class="section-heading">
-						<h2>11. Assumptions and Security Model</h2>
+						<h2>10. Assumptions and Security Model</h2>
 						<a class="anchor-link" href="#security" aria-label="Link to Security Model">#</a>
 					</div>
 					<div class="equation" id="eq-placeholder-security-assumption">
@@ -3021,7 +2952,7 @@
 
 				<section class="paper-section" id="parameters">
 					<div class="section-heading">
-						<h2>12. Current Parameters</h2>
+						<h2>11. Current Parameters</h2>
 						<a class="anchor-link" href="#parameters" aria-label="Link to Current Parameters">#</a>
 					</div>
 					<figure class="diagram" id="fig-placeholder-parameter-strip">
@@ -3181,7 +3112,7 @@
 							</tr>
 							<tr>
 								<td><code>PRICE_PRECISION</code></td>
-									<td><math aria-label="price precision scale" data-source="10¹⁸"><msup><mn>10</mn><mn>18</mn></msup></math></td>
+									<td><math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math></td>
 								<td>Fixed-point precision for REP/ETH and retention-rate math.</td>
 							</tr>
 							<tr>
@@ -3226,7 +3157,7 @@
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Per-operation settlement gas estimate used by the coordinator.</td></tr>
 							<tr><td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td><td><code>4</code></td><td>Maximum staged operations executed from one OpenOracle settlement callback.</td></tr>
 							<tr><td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>Maximum self-service validity window for staged oracle-gated operations.</td></tr>
-							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><math aria-label="250 times price precision scale" data-source="250 \cdot 10¹⁸"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
+							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><math aria-label="250 times price precision scale" data-source="250 \cdot pow10(18)"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
 							<tr><td>OpenOracle <code>escalationHalt</code></td><td><math aria-label="exact token one report times 100000 divided by 10000" data-source="exactToken1Report \cdot 100000 / 10000"><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mn>100000</mn><mo>/</mo><mn>10000</mn></math></td><td>Dynamic halt threshold for report escalation, equal to <code>10x</code> the initial REP report amount.</td></tr>
 							<tr><td>OpenOracle <code>settlerReward</code></td><td><math aria-label="block base fee times 2 times gas consumed open oracle report price" data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td><td>Dynamic ETH reward paid to settler.</td></tr>
 							<tr><td>OpenOracle <code>settlementTime</code></td><td><math aria-label="40 times 12" data-source="40 \cdot 12"><mn>40</mn><mo>&#x22C5;</mo><mn>12</mn></math></td><td>Settlement delay encoded as <code>480</code>.</td></tr>
@@ -3241,7 +3172,7 @@
 							<tr><td><code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Oracle price-round budget multiplier, equal to <code>4x</code>.</td></tr>
 							<tr><td><code>escalationHaltMultiplierBps</code></td><td><code>100000</code></td><td>Multiplier used to derive the OpenOracle escalation halt from <code>exactToken1Report</code>, equal to <code>10x</code>.</td></tr>
 							<tr><td><code>maxSettlementBaseFeeMultiplierBps</code></td><td><code>30000</code></td><td>Maximum settlement base-fee multiplier accepted by the coordinator, equal to <code>3x</code>.</td></tr>
-							<tr><td><code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum liquidation distance required before executing a staged liquidation: <code>(currentPrice - thresholdPrice) / currentPrice</code> must be at least <code>10%</code>.</td></tr>
+								<tr><td><code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum liquidation distance required before executing a staged liquidation: <math aria-label="current price minus threshold price divided by current price" data-source="(currentPrice - thresholdPrice) / currentPrice"><mfrac><mrow><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi></mrow><mi>currentPrice</mi></mfrac></math> must be at least <code>10%</code>.</td></tr>
 							<tr><td>Coordinator <code>WETH</code></td><td><code>0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2</code></td><td>Mainnet WETH address used in REP/ETH price reports.</td></tr>
 						</tbody>
 					</table>
@@ -3249,7 +3180,7 @@
 
 				<section class="paper-section" id="example">
 					<div class="section-heading">
-						<h2>13. Lifecycle Recap</h2>
+						<h2>12. Lifecycle Recap</h2>
 						<a class="anchor-link" href="#example" aria-label="Link to Lifecycle Recap">#</a>
 					</div>
 					<p>
@@ -3268,7 +3199,7 @@
 
 				<section class="paper-section" id="constraints">
 					<div class="section-heading">
-						<h2>14. Implementation Constraints</h2>
+						<h2>13. Implementation Constraints</h2>
 						<a class="anchor-link" href="#constraints" aria-label="Link to Implementation Constraints">#</a>
 					</div>
 					<ul>

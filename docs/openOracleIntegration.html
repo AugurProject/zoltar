@@ -64,7 +64,7 @@
 					the following REP per ETH price:
 				</p>
 				<figure class="equation" id="eq-rep-eth-price">
-					<math display="block" aria-label="last price equals amount one times 10¹⁸ divided by amount two" data-source="lastPrice = amount1 \cdot 10¹⁸ / amount2">
+					<math display="block" aria-label="last price equals amount one times ten to the eighteenth divided by amount two" data-source="lastPrice = amount1 \cdot pow10(18) / amount2">
 						<mrow>
 							<mi>lastPrice</mi>
 							<mo>=</mo>
@@ -256,7 +256,7 @@
 					that one settled REP/ETH price may authorize before the coordinator needs a new
 					OpenOracle report. Here <code>exactToken1Report</code> is the initial REP report
 					size, <code>PRICE_PRECISION</code> is the fixed
-						<math aria-label="price precision scale" data-source="10¹⁸"><msup><mn>10</mn><mn>18</mn></msup></math> price scale,
+						<math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math> price scale,
 					<code>priceRoundBudgetMultiplierBps</code> is the configured multiplier in basis
 					points, <code>repPerEthPrice</code> is the settled coordinator price, and
 					<code>ORACLE_BUDGET_BPS</code> is the <code>10000</code> basis-point denominator.
@@ -503,10 +503,10 @@
 								Liquidation threshold
 								<input type="number" min="0.0001" step="0.01" value="101" data-example-input="liquidationThresholdPrice">
 							</label>
-							<label>
-								Liquidation distance bps
-								<input type="number" min="0" step="1" value="1000" data-example-input="minLiquidationPriceDistanceBps">
-							</label>
+								<label>
+									Liquidation distance bps
+									<input type="number" min="0" max="10000" step="1" value="1000" data-example-input="minLiquidationPriceDistanceBps">
+								</label>
 							<label>
 								Payoff notional ETH
 								<input type="number" min="0.0001" step="1" value="1000" data-example-input="externalPayoffNotional">
@@ -520,7 +520,7 @@
 								<input type="number" min="0" max="1" step="0.001" value="0.01" data-example-input="honestDisputeBarrierFraction">
 							</label>
 							<label>
-								Censorship duration
+									Censorship duration (steps)
 								<input type="number" min="0" step="1" value="24" data-example-input="censorshipDuration">
 							</label>
 							<label>
@@ -534,7 +534,7 @@
 							<li>Attacker payoff: <output data-example-output="attackerProfit">0 ETH</output></li>
 							<li>Censorship cost: <output data-example-output="censorshipCost">0 ETH</output></li>
 							<li>Oracle liquidity ratio: <output data-example-output="oracleLiquidityRatio">0</output></li>
-							<li>Safe censorship duration: <output data-example-output="safeCensorshipDuration">0</output></li>
+							<li>Safe censorship duration (steps): <output data-example-output="safeCensorshipDuration">0</output></li>
 						</ul>
 					</details>
 					<p>
@@ -566,7 +566,7 @@
 				</div>
 				<ul>
 					<li><strong>Censorship and delay:</strong> <code>settlementTime</code> gives reporters time to dispute, while the price-round budget keeps <code>oracleLiquidityRatio</code> from collapsing as more operations use the same price.</li>
-					<li><strong>Binary threshold attacks:</strong> staged liquidations must satisfy <code>minLiquidationPriceDistanceBps = 1000</code>, so <code>(currentPrice - thresholdPrice) / currentPrice</code> must be at least <code>10%</code> rather than barely crossing the threshold.</li>
+					<li><strong>Binary threshold attacks:</strong> staged liquidations must satisfy <code>minLiquidationPriceDistanceBps = 1000</code>, so <math aria-label="current price minus threshold price divided by current price" data-source="(currentPrice - thresholdPrice) / currentPrice"><mfrac><mrow><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi></mrow><mi>currentPrice</mi></mfrac></math> must be at least <code>10%</code> rather than barely crossing the threshold.</li>
 					<li><strong>Block stuffing:</strong> the coordinator records a request-time max settlement base fee and rejects the callback if settlement base fee exceeds <code>maxSettlementBaseFeeMultiplierBps = 30000</code>, currently <code>3x</code>.</li>
 					<li><strong>Parasitic notional:</strong> each successful operation consumes price-round budget, and only up to four operations are auto-executed from one settlement callback.</li>
 					<li><strong>Freshness:</strong> prices expire after <code>PRICE_VALID_FOR_SECONDS = 5 minutes</code>, so delayed operations cannot reuse old reports indefinitely.</li>
@@ -650,7 +650,7 @@
 						</tr>
 						<tr>
 							<td><code>exactToken1Report</code></td>
-							<td><math aria-label="250 times price precision scale" data-source="250 \cdot 10¹⁸"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> REP</td>
+							<td><math aria-label="250 times price precision scale" data-source="250 \cdot pow10(18)"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> REP</td>
 							<td>Sets the initial report size and feeds the price-round budget.</td>
 						</tr>
 						<tr>
@@ -663,11 +663,16 @@
 							<td><math aria-label="block base fee times 2 times gas consumed open oracle report price" data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td>
 							<td>Pays the account that settles the report and triggers the callback.</td>
 						</tr>
-						<tr>
-							<td><code>settlementTime</code> / <code>disputeDelay</code></td>
-							<td><code>480</code> / <code>0</code></td>
-							<td>Controls when the report can settle; staged operations expire after settlement time plus their validity window.</td>
-						</tr>
+							<tr>
+								<td><code>settlementTime</code></td>
+								<td><code>480</code></td>
+								<td>Sets the report settlement delay. Staged operations expire after this delay plus their operation-specific validity window.</td>
+							</tr>
+							<tr>
+								<td><code>disputeDelay</code></td>
+								<td><code>0</code></td>
+								<td>Allows disputes immediately after each report; the dispute opportunity still lasts until the settlement delay elapses.</td>
+							</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
 							<td><math aria-label="gas consumed settlement times 4" data-source="gasConsumedSettlement \cdot 4"><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo><mn>4</mn></math></td>
@@ -725,11 +730,17 @@
 					const inputValue = Number(inputElement.value)
 					return Number.isFinite(inputValue) ? inputValue : 0
 				}
-				const formatPercent = (fractionValue) => `${(fractionValue * 100).toFixed(2)}%`
-				const formatEth = (ethValue) => `${ethValue.toFixed(2)} ETH`
-				const formatDuration = (durationValue) => {
-					if (!Number.isFinite(durationValue)) {
-						return 'unbounded when censorship rate is zero'
+					const formatPercent = (fractionValue) => `${(fractionValue * 100).toFixed(2)}%`
+					const formatEth = (ethValue) => `${ethValue.toFixed(2)} ETH`
+					const formatExecutionThreshold = (thresholdValue) => {
+						if (!Number.isFinite(thresholdValue)) {
+							return 'no finite threshold'
+						}
+						return formatPercent(thresholdValue)
+					}
+					const formatDuration = (durationValue) => {
+						if (!Number.isFinite(durationValue)) {
+							return 'unbounded when censorship rate is zero'
 					}
 					return durationValue.toFixed(2)
 				}
@@ -738,23 +749,27 @@
 					const manipulatedPrice = Math.max(readExampleNumber('manipulatedPrice'), 0.0001)
 					const liquidationThresholdPrice = Math.max(readExampleNumber('liquidationThresholdPrice'), 0.0001)
 					const minLiquidationPriceDistanceBps = Math.max(readExampleNumber('minLiquidationPriceDistanceBps'), 0)
-					const externalPayoffNotional = Math.max(readExampleNumber('externalPayoffNotional'), 0.0001)
-					const oracleReportLiquidity = Math.max(readExampleNumber('oracleReportLiquidity'), 0.0001)
-					const honestDisputeBarrierFraction = Math.max(readExampleNumber('honestDisputeBarrierFraction'), 0)
-					const censorshipDuration = Math.max(readExampleNumber('censorshipDuration'), 0)
-					const targetGriefRatio = Math.max(readExampleNumber('targetGriefRatio'), 0)
-					const liquidationDistanceFraction = minLiquidationPriceDistanceBps / 10000
-					const discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction)
-					const executionErrorThreshold = Math.max(0, liquidationThresholdPrice / discountedHonestPrice - 1)
-					const manipulatedPriceError = Math.max(0, (manipulatedPrice - honestPrice) / honestPrice)
-					const attackerProfit = manipulatedPriceError >= executionErrorThreshold ? externalPayoffNotional : 0
+						const externalPayoffNotional = Math.max(readExampleNumber('externalPayoffNotional'), 0.0001)
+						const oracleReportLiquidity = Math.max(readExampleNumber('oracleReportLiquidity'), 0.0001)
+						const honestDisputeBarrierFraction = Math.max(readExampleNumber('honestDisputeBarrierFraction'), 0)
+						const censorshipDuration = Math.max(readExampleNumber('censorshipDuration'), 0)
+						const targetGriefRatio = Math.max(readExampleNumber('targetGriefRatio'), 0)
+						const boundedLiquidationDistanceBps = Math.min(minLiquidationPriceDistanceBps, 10000)
+						const liquidationDistanceFraction = boundedLiquidationDistanceBps / 10000
+						const discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction)
+						const executionErrorThreshold =
+							discountedHonestPrice === 0
+								? Number.POSITIVE_INFINITY
+								: Math.max(0, liquidationThresholdPrice / discountedHonestPrice - 1)
+						const manipulatedPriceError = Math.max(0, (manipulatedPrice - honestPrice) / honestPrice)
+						const attackerProfit = manipulatedPriceError >= executionErrorThreshold ? externalPayoffNotional : 0
 					const censorshipRate = Math.max(0, manipulatedPriceError - honestDisputeBarrierFraction)
 					const censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity
 					const oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional
 					const safeCensorshipDuration =
 						censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)
 
-					exampleOutputs.executionErrorThreshold.value = formatPercent(executionErrorThreshold)
+						exampleOutputs.executionErrorThreshold.value = formatExecutionThreshold(executionErrorThreshold)
 					exampleOutputs.manipulatedPriceError.value = formatPercent(manipulatedPriceError)
 					exampleOutputs.attackerProfit.value = formatEth(attackerProfit)
 					exampleOutputs.censorshipCost.value = formatEth(censorshipCost)
