@@ -13,7 +13,7 @@
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
 					<strong>Zoltar</strong>
-					<p>Branching oracle layer used by the Placeholder market layer.</p>
+					<p>Branching truth-oracle layer used by the Placeholder market layer.</p>
 				</div>
 				<a class="sidebar-companion" href="./whitepaper_placeholder.html">
 					<span>Companion paper</span>
@@ -86,8 +86,8 @@
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Zoltar is a forkable oracle layer centered on universes, question encoding,
-						and REP branching. It implements the branching model described in
+						Zoltar is a forkable truth oracle layer centered on universes, question
+						encoding, and REP branching. It implements the branching model described in
 						<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins.md</a>:
 						unresolved disagreement becomes explicit child universes, and REP holders
 						convert post-fork migration balances into child-universe REP across one or more
@@ -186,9 +186,9 @@
 						<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 					</div>
 					<p>
-						Zoltar is the base oracle layer in this repository. It does not implement the
-						full market, collateral, or underwriting system built on top of it elsewhere in
-						the repo. Its role is narrower and more fundamental:
+						Zoltar is the base truth/forking oracle layer in this repository. It does not
+						implement the full market, collateral, or underwriting system built on top of it
+						elsewhere in the repo. Its role is narrower and more fundamental:
 					</p>
 					<ul class="clean-list">
 							<li>register questions</li>
@@ -378,7 +378,10 @@
 						<h2>3. Fork Thresholds and REP Economics</h2>
 						<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 					</div>
-					<p>The current fork threshold is:</p>
+					<p>
+						The threshold is a REP commitment large enough to force branch creation, but it
+						is not itself a choice of the winning branch. The current fork threshold is:
+					</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals total theoretical REP supply divided by 20" data-source="forkThreshold = totalTheoreticalRepSupply / 20">
 							<mrow>
@@ -412,7 +415,7 @@
 						<p class="equation-caption"><span class="equation-label">Fork Burn</span>The default burn is one fifth of the threshold deposit.</p>
 					</div>
 					<div class="equation" id="eq-zoltar-initiator-migration-balance">
-						<math display="block" aria-label="fork initiator migration balance equals fork threshold minus burned REP amount, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 * forkThreshold / 5">
+						<math display="block" aria-label="fork initiator migration balance equals fork threshold minus burned REP amount, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 \cdot forkThreshold / 5">
 							<mrow>
 								<mi>forkInitiatorMigrationBalance</mi>
 								<mo>=</mo>
@@ -423,7 +426,7 @@
 								<mfrac>
 									<mrow>
 										<mn>4</mn>
-										<mo>*</mo>
+										<mo>&#x22C5;</mo>
 										<mi>forkThreshold</mi>
 									</mrow>
 									<mn>5</mn>
@@ -785,7 +788,7 @@
 						range:
 					</p>
 					<div class="equation" id="eq-zoltar-scalar-display-value">
-						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks * (displayValueMax - displayValueMin)">
+						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks \cdot (displayValueMax - displayValueMin)">
 							<mrow>
 								<mi>displayedValue</mi>
 								<mo>=</mo>
@@ -795,7 +798,7 @@
 									<mi>secondPayoutNumerator</mi>
 									<mi>numTicks</mi>
 								</mfrac>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mo>(</mo>
 								<mi>displayValueMax</mi>
 								<mo>-</mo>
