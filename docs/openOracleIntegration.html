@@ -46,7 +46,7 @@
 					the following REP per ETH price:
 				</p>
 				<figure class="equation" id="eq-rep-eth-price">
-					<math display="block" aria-label="last price equals amount one times 10^18 divided by amount two" data-source="lastPrice = amount1 \cdot 10^18 / amount2">
+					<math display="block" aria-label="last price equals amount one times 10¹⁸ divided by amount two" data-source="lastPrice = amount1 \cdot 10¹⁸ / amount2">
 						<mrow>
 							<mi>lastPrice</mi>
 							<mo>=</mo>
@@ -62,7 +62,7 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span>The settled REP amount is scaled by the fixed price precision and divided by the settled WETH amount.</p>
 				</figure>
-				<p>
+				<p id="integration-terms">
 					After the coordinator accepts a settlement, that accepted price starts a
 					<span class="term" tabindex="0">price round</span>: the lifetime of one settled
 					REP/WETH price inside the coordinator. The
