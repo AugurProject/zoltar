@@ -254,9 +254,79 @@ body.doc-openoracle .example-grid input {
 	color: var(--ink);
 	font: inherit;
 }
+body.doc-openoracle .example-grid input[type="range"] {
+	padding: 0;
+	border: 0;
+	accent-color: var(--accent);
+}
+body.doc-openoracle .example-value {
+	color: var(--ink);
+	font-size: 0.86rem;
+	font-weight: 800;
+}
 body.doc-openoracle .example-output {
 	margin: 0;
 	padding-left: 1.1rem;
+}
+body.doc-openoracle .example-output-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+body.doc-openoracle .example-output-grid div {
+	padding: 0.75rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--card-bg);
+}
+body.doc-openoracle .example-output-grid span {
+	display: block;
+	color: var(--muted);
+	font-size: 0.82rem;
+	font-weight: 700;
+}
+body.doc-openoracle .example-output-grid output {
+	display: block;
+	margin-top: 0.25rem;
+	color: var(--ink);
+	font-weight: 800;
+}
+body.doc-openoracle .example-visual {
+	margin: 1rem 0;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--section-bg);
+	overflow-x: auto;
+}
+body.doc-openoracle .example-visual svg {
+	display: block;
+	width: 100%;
+	min-width: 34rem;
+	height: auto;
+}
+body.doc-openoracle .example-bar-base {
+	fill: color-mix(in srgb, var(--line) 58%, transparent);
+}
+body.doc-openoracle .example-bar-green {
+	fill: var(--green-soft);
+	stroke: var(--green);
+	stroke-width: 1.5;
+}
+body.doc-openoracle .example-bar-blue {
+	fill: var(--blue-soft);
+	stroke: var(--blue);
+	stroke-width: 1.5;
+}
+body.doc-openoracle .example-bar-gold {
+	fill: var(--gold-soft);
+	stroke: var(--gold);
+	stroke-width: 1.5;
+}
+body.doc-openoracle .example-bar-red {
+	fill: var(--red-soft);
+	stroke: var(--red);
+	stroke-width: 1.5;
 }
 body.doc-openoracle .figure-label,
 body.doc-openoracle .equation-label {
@@ -862,6 +932,105 @@ body.paper-placeholder .callout {
 body.paper-placeholder .callout strong {
 	display: block;
 	margin-bottom: 0.25rem;
+}
+body.paper-placeholder .interactive-example {
+	max-width: 76ch;
+	margin: 1.25rem 0;
+	padding: 1rem;
+	border: 1px solid var(--soft-line);
+	border-radius: var(--radius);
+	background: var(--card-bg);
+}
+body.paper-placeholder .interactive-example summary {
+	cursor: pointer;
+	font-weight: 800;
+}
+body.paper-placeholder .interactive-example > p {
+	margin: 0.75rem 0 0;
+}
+body.paper-placeholder .example-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+	gap: 0.85rem;
+	margin: 1rem 0;
+}
+body.paper-placeholder .example-grid label {
+	display: grid;
+	gap: 0.35rem;
+	color: var(--muted);
+	font-size: 0.9rem;
+	font-weight: 700;
+}
+body.paper-placeholder .example-grid input[type="range"] {
+	width: 100%;
+	accent-color: var(--accent);
+}
+body.paper-placeholder .example-value {
+	color: var(--ink);
+	font-size: 0.86rem;
+	font-weight: 800;
+}
+body.paper-placeholder .example-output-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+	gap: 0.7rem;
+	margin: 0.85rem 0 0;
+}
+body.paper-placeholder .example-output-grid div {
+	padding: 0.75rem;
+	border: 1px solid var(--soft-line);
+	border-radius: calc(var(--radius) * 0.75);
+	background: var(--paper);
+}
+body.paper-placeholder .example-output-grid span {
+	display: block;
+	color: var(--muted);
+	font-size: 0.74rem;
+	font-weight: 850;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+body.paper-placeholder .example-output-grid output {
+	display: block;
+	margin-top: 0.25rem;
+	color: var(--ink);
+	font-weight: 850;
+}
+body.paper-placeholder .example-visual {
+	margin-top: 1rem;
+	border: 1px solid var(--soft-line);
+	border-radius: var(--radius);
+	background: var(--section-bg);
+	overflow-x: auto;
+}
+body.paper-placeholder .example-visual svg {
+	display: block;
+	width: 100%;
+	min-width: 34rem;
+	height: auto;
+}
+body.paper-placeholder .example-bar-base {
+	fill: color-mix(in srgb, var(--line) 58%, transparent);
+}
+body.paper-placeholder .example-bar-green {
+	fill: var(--green-soft);
+	stroke: var(--green);
+	stroke-width: 1.5;
+}
+body.paper-placeholder .example-bar-blue {
+	fill: var(--blue-soft);
+	stroke: var(--blue);
+	stroke-width: 1.5;
+}
+body.paper-placeholder .example-bar-gold {
+	fill: var(--gold-soft);
+	stroke: var(--gold);
+	stroke-width: 1.5;
+}
+body.paper-placeholder .example-bar-red {
+	fill: var(--red-soft);
+	stroke: var(--red);
+	stroke-width: 1.5;
 }
 body.paper-placeholder .equation,
 body.paper-placeholder .diagram {
