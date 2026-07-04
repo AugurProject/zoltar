@@ -993,6 +993,51 @@
 						</svg>
 						<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance is burned once and reproduced in each valid selected child token id.</p>
 					</figure>
+					<details class="interactive-example" id="share-migration-example">
+						<summary>Adjust a share migration reproduction example</summary>
+						<p>
+								The migration call burns the full parent token balance and reproduces that same
+								balance into each selected child outcome. The contract accepts any non-empty,
+								strictly increasing list of valid non-malformed fork-question outcome indexes;
+								this compact diagram caps the displayed branches at three to show why migration is
+								not a pro-rata split.
+						</p>
+									<div class="example-grid">
+							<label>
+								Parent share balance
+								<input type="range" min="1" max="100" step="1" value="30" data-example-input="parentBalance">
+								<span class="example-value" data-example-value="parentBalance">30 shares</span>
+							</label>
+							<label>
+									Displayed selected child outcomes
+								<input type="range" min="1" max="3" step="1" value="2" data-example-input="selectedChildren">
+								<span class="example-value" data-example-value="selectedChildren">2 branches</span>
+							</label>
+						</div>
+						<div class="example-visual">
+							<svg viewBox="0 0 760 220" role="img" aria-label="Share migration balance reproduction">
+								<rect class="example-bar-base" x="80" y="42" width="220" height="32" rx="6"></rect>
+								<rect class="example-bar-red" x="80" y="42" width="66" height="32" rx="6" data-example-rect="parent"></rect>
+								<text class="svg-label" x="80" y="30">Parent burned</text>
+								<text class="svg-small" x="314" y="64" data-example-text="parentText">30</text>
+								<path class="svg-line" d="M 350 58 H 420"></path>
+								<rect class="example-bar-base" x="460" y="30" width="220" height="28" rx="6"></rect>
+								<rect class="example-bar-green" x="460" y="30" width="66" height="28" rx="6" data-example-rect="childA"></rect>
+								<text class="svg-small" x="690" y="50" data-example-text="childAText">30</text>
+								<rect class="example-bar-base" x="460" y="82" width="220" height="28" rx="6"></rect>
+								<rect class="example-bar-blue" x="460" y="82" width="66" height="28" rx="6" data-example-rect="childB"></rect>
+								<text class="svg-small" x="690" y="102" data-example-text="childBText">30</text>
+								<rect class="example-bar-base" x="460" y="134" width="220" height="28" rx="6"></rect>
+								<rect class="example-bar-gold" x="460" y="134" width="66" height="28" rx="6" data-example-rect="childC"></rect>
+								<text class="svg-small" x="690" y="154" data-example-text="childCText">0</text>
+							</svg>
+						</div>
+						<div class="example-output-grid">
+							<div><span>Parent balance after call</span><output data-example-output="parentAfter">0 shares</output></div>
+							<div><span>Child balance per selected branch</span><output data-example-output="childBalance">30 shares</output></div>
+							<div><span>Total displayed child balances</span><output data-example-output="totalChildBalances">60 shares</output></div>
+						</div>
+					</details>
 					<ul>
 						<li>The selected target list must be non-empty.</li>
 						<li>The caller must hold a positive balance of the parent token id.</li>
@@ -1125,6 +1170,127 @@
 								and the game applies a small tie-avoidance adjustment when a below-threshold
 								deposit would otherwise make two outcomes share the maximum balance.
 							</p>
+							<details class="interactive-example" id="escalation-deposit-example">
+								<summary>Adjust escalation deposit clipping and tie avoidance</summary>
+								<p>
+									The accepted deposit is capped by remaining room under the non-decision
+									threshold. If a below-threshold deposit would tie the current leading
+									outcome, the game reduces the accepted amount by one atomic REP unit
+									(<code>1 wei</code> of REP precision).
+								</p>
+								<div class="example-grid">
+									<label>
+										Invalid balance
+										<input type="range" min="0" max="20" step="1" value="1" data-example-input="invalidBalance">
+										<span class="example-value" data-example-value="invalidBalance">1 REP</span>
+									</label>
+									<label>
+										Yes balance
+										<input type="range" min="0" max="20" step="1" value="9" data-example-input="yesBalance">
+										<span class="example-value" data-example-value="yesBalance">9 REP</span>
+									</label>
+									<label>
+										No balance
+										<input type="range" min="0" max="20" step="1" value="7" data-example-input="noBalance">
+										<span class="example-value" data-example-value="noBalance">7 REP</span>
+									</label>
+									<label>
+										Proposed deposit to No
+										<input type="range" min="0" max="20" step="1" value="5" data-example-input="proposedDeposit">
+										<span class="example-value" data-example-value="proposedDeposit">5 REP</span>
+									</label>
+									<label>
+										Start bond
+										<input type="range" min="1" max="10" step="1" value="2" data-example-input="startBond">
+										<span class="example-value" data-example-value="startBond">2 REP</span>
+									</label>
+									<label>
+										Non-decision threshold
+										<input type="range" min="5" max="25" step="1" value="10" data-example-input="nonDecisionThreshold">
+										<span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span>
+									</label>
+								</div>
+								<div class="example-visual">
+									<svg viewBox="0 0 760 230" role="img" aria-label="Escalation deposit accepted amount">
+										<text class="svg-label" x="70" y="34">Before</text>
+										<text class="svg-label" x="405" y="34">After accepted deposit</text>
+										<rect class="example-bar-base" x="80" y="58" width="220" height="24" rx="5"></rect>
+										<rect class="example-bar-blue" x="80" y="58" width="11" height="24" rx="5" data-example-rect="invalidBefore"></rect>
+										<text class="svg-small" x="315" y="76">Invalid</text>
+										<rect class="example-bar-base" x="80" y="102" width="220" height="24" rx="5"></rect>
+										<rect class="example-bar-green" x="80" y="102" width="99" height="24" rx="5" data-example-rect="yesBefore"></rect>
+										<text class="svg-small" x="315" y="120">Yes</text>
+										<rect class="example-bar-base" x="80" y="146" width="220" height="24" rx="5"></rect>
+										<rect class="example-bar-red" x="80" y="146" width="77" height="24" rx="5" data-example-rect="noBefore"></rect>
+										<text class="svg-small" x="315" y="164">No</text>
+										<rect class="example-bar-base" x="420" y="58" width="220" height="24" rx="5"></rect>
+										<rect class="example-bar-blue" x="420" y="58" width="11" height="24" rx="5" data-example-rect="invalidAfter"></rect>
+										<rect class="example-bar-base" x="420" y="102" width="220" height="24" rx="5"></rect>
+										<rect class="example-bar-green" x="420" y="102" width="99" height="24" rx="5" data-example-rect="yesAfter"></rect>
+										<rect class="example-bar-base" x="420" y="146" width="220" height="24" rx="5"></rect>
+										<rect class="example-bar-red" x="420" y="146" width="110" height="24" rx="5" data-example-rect="noAfter"></rect>
+										<line class="svg-line" x1="80" y1="190" x2="640" y2="190"></line>
+										<text class="svg-small" x="640" y="211" text-anchor="end" data-example-text="thresholdText">threshold 10 REP</text>
+									</svg>
+								</div>
+								<div class="example-output-grid">
+									<div><span>Room on No</span><output data-example-output="remainingRoom">3 REP</output></div>
+									<div><span>Accepted amount</span><output data-example-output="acceptedAmount">3 REP</output></div>
+									<div><span>Adjustment</span><output data-example-output="depositAdjustment">clipped to threshold</output></div>
+									<div><span>Post-deposit condition</span><output data-example-output="depositCondition">No reaches threshold</output></div>
+								</div>
+							</details>
+							<details class="interactive-example" id="resolution-edge-example">
+								<summary>Adjust escalation resolution edge cases</summary>
+								<p>
+									The resolution helper first checks whether at least two outcomes meet the
+									running cost. If not unresolved, strict <code>Invalid</code> or
+									<code>Yes</code> leads win before the fallback to <code>No</code>.
+								</p>
+								<div class="example-grid">
+									<label>
+										Invalid balance
+										<input type="range" min="0" max="20" step="1" value="4" data-example-input="invalidBalance">
+										<span class="example-value" data-example-value="invalidBalance">4 REP</span>
+									</label>
+									<label>
+										Yes balance
+										<input type="range" min="0" max="20" step="1" value="6" data-example-input="yesBalance">
+										<span class="example-value" data-example-value="yesBalance">6 REP</span>
+									</label>
+									<label>
+										No balance
+										<input type="range" min="0" max="20" step="1" value="6" data-example-input="noBalance">
+										<span class="example-value" data-example-value="noBalance">6 REP</span>
+									</label>
+										<label>
+											Running total cost
+											<input type="range" min="1" max="20" step="1" value="5" data-example-input="runningCost">
+											<span class="example-value" data-example-value="runningCost">5 REP</span>
+										</label>
+									</div>
+									<div class="example-visual">
+										<svg viewBox="0 0 760 210" role="img" aria-label="Resolution balances against running cost">
+											<text class="svg-label" x="80" y="30">Balances compared with running cost</text>
+											<rect class="example-bar-base" x="90" y="50" width="520" height="24" rx="5"></rect>
+											<rect class="example-bar-blue" x="90" y="50" width="104" height="24" rx="5" data-example-rect="resolutionInvalid"></rect>
+											<text class="svg-small" x="625" y="68">Invalid</text>
+											<rect class="example-bar-base" x="90" y="92" width="520" height="24" rx="5"></rect>
+											<rect class="example-bar-green" x="90" y="92" width="156" height="24" rx="5" data-example-rect="resolutionYes"></rect>
+											<text class="svg-small" x="625" y="110">Yes</text>
+											<rect class="example-bar-base" x="90" y="134" width="520" height="24" rx="5"></rect>
+											<rect class="example-bar-red" x="90" y="134" width="156" height="24" rx="5" data-example-rect="resolutionNo"></rect>
+											<text class="svg-small" x="625" y="152">No</text>
+											<line class="svg-line" x1="220" y1="40" x2="220" y2="174"></line>
+											<text class="svg-small" x="220" y="194" text-anchor="middle" data-example-text="resolutionCostMarker">cost 5 REP</text>
+										</svg>
+									</div>
+									<div class="example-output-grid">
+									<div><span>Outcomes at or above cost</span><output data-example-output="outcomesAtCost">2</output></div>
+									<div><span>Resolution helper returns</span><output data-example-output="resolutionResult">None</output></div>
+									<div><span>Reason</span><output data-example-output="resolutionReason">two outcomes still contest the cost</output></div>
+								</div>
+							</details>
 					<p>
 						The contract exposes both directions of this curve: it can compute the required
 								cost from elapsed time, and it can derive the effective end time from the final
@@ -1370,6 +1536,66 @@
 						game’s configured <code>nonDecisionThreshold</code>, the payout is scaled down by
 						<code>actualForkThreshold / nonDecisionThreshold</code>.
 					</p>
+					<details class="interactive-example" id="payout-region-example">
+						<summary>Adjust escalation payout regions and threshold scaling</summary>
+							<p>
+								Winning capital up to the reward cap shares the fixed reward pool. Winning
+								capital above the cap receives principal only, and a lower actual fork threshold
+								scales the withdrawal down. If the fallback <code>No</code> outcome wins after
+								<code>Invalid</code> and <code>Yes</code> tie at larger balances, the binding
+								capital can be greater than the winning principal; the contract still computes
+								the payout from those two values.
+							</p>
+						<div class="example-grid">
+							<label>
+								Binding capital
+								<input type="range" min="1" max="50" step="1" value="10" data-example-input="bindingCapital">
+								<span class="example-value" data-example-value="bindingCapital">10 REP</span>
+							</label>
+							<label>
+								Winning principal
+								<input type="range" min="1" max="80" step="1" value="18" data-example-input="winningPrincipal">
+								<span class="example-value" data-example-value="winningPrincipal">18 REP</span>
+							</label>
+							<label>
+								This deposit amount
+								<input type="range" min="1" max="30" step="1" value="5" data-example-input="depositAmount">
+								<span class="example-value" data-example-value="depositAmount">5 REP</span>
+							</label>
+							<label>
+								Deposit starts after
+								<input type="range" min="0" max="80" step="1" value="10" data-example-input="depositStart">
+								<span class="example-value" data-example-value="depositStart">10 REP</span>
+							</label>
+							<label>
+								Actual fork threshold share
+								<input type="range" min="20" max="100" step="5" value="100" data-example-input="actualForkThresholdPercent">
+								<span class="example-value" data-example-value="actualForkThresholdPercent">100%</span>
+							</label>
+						</div>
+						<div class="example-visual">
+							<svg viewBox="0 0 760 190" role="img" aria-label="Escalation payout regions">
+								<rect class="example-bar-base" x="80" y="62" width="600" height="36" rx="7"></rect>
+								<rect class="example-bar-green" x="80" y="62" width="333" height="36" rx="7" data-example-rect="bindingRegion"></rect>
+								<rect class="example-bar-gold" x="413" y="62" width="167" height="36" rx="0" data-example-rect="safetyRegion"></rect>
+								<rect class="example-bar-red" x="580" y="62" width="80" height="36" rx="0" data-example-rect="excessRegion"></rect>
+								<line class="svg-line" x1="80" y1="124" x2="680" y2="124"></line>
+								<text class="svg-small" x="80" y="145">0</text>
+								<text class="svg-small" x="413" y="145" text-anchor="middle" data-example-text="bindingMarker">binding 10</text>
+								<text class="svg-small" x="580" y="145" text-anchor="middle" data-example-text="capMarker">cap 15</text>
+								<text class="svg-small" x="680" y="145" text-anchor="end" data-example-text="winningMarker">winning 18</text>
+							</svg>
+						</div>
+						<div class="example-output-grid">
+							<div><span>Reward-eligible cap</span><output data-example-output="rewardCap">15 REP</output></div>
+							<div><span>Reward bonus pool</span><output data-example-output="rewardPool">6 REP</output></div>
+							<div><span>Reward-eligible part of this deposit</span><output data-example-output="eligibleDeposit">5 REP</output></div>
+							<div><span>Excess principal</span><output data-example-output="excessPrincipal">3 REP</output></div>
+								<div><span>This deposit withdrawal</span><output data-example-output="depositWithdrawal">7 REP</output></div>
+								<div><span>Scaled withdrawal</span><output data-example-output="scaledWithdrawal">7 REP</output></div>
+							<div><span>Payout state</span><output data-example-output="payoutState">reachable game state</output></div>
+						</div>
+					</details>
 						<p>
 							Settlement uses different calls for local games, own-fork claims, external-fork
 							migration, and child continuation games. The distinction matters because some
@@ -2079,6 +2305,57 @@
 								</math>
 								<p class="equation-caption"><span class="equation-label">Forked Escrow Scaling</span>Forked escrow claims scale source principal into child REP with ceiling division, and cumulative claimed state prevents each partial proof from restarting the rounding calculation.</p>
 							</div>
+							<details class="interactive-example" id="forked-escrow-example">
+								<summary>Adjust forked escrow cumulative rounding</summary>
+								<p>
+									Each claim computes the cumulative child REP that should have been released,
+									then subtracts what was already claimed. This prevents each partial proof from
+									restarting the ceiling division. Rounding is at atomic REP precision, so each
+									ceiling step rounds up by at most one atomic unit.
+								</p>
+								<div class="example-grid">
+									<label>
+										Escrow source principal
+										<input type="range" min="1" max="100" step="1" value="17" data-example-input="escrowPrincipal">
+										<span class="example-value" data-example-value="escrowPrincipal">17 REP</span>
+									</label>
+									<label>
+										Escrow child REP
+										<input type="range" min="1" max="100" step="1" value="23" data-example-input="escrowChildRep">
+										<span class="example-value" data-example-value="escrowChildRep">23 REP</span>
+									</label>
+									<label>
+										Already claimed source
+										<input type="range" min="0" max="100" step="1" value="5" data-example-input="claimedSource">
+										<span class="example-value" data-example-value="claimedSource">5 REP</span>
+									</label>
+									<label>
+										New source claim
+										<input type="range" min="1" max="50" step="1" value="4" data-example-input="newSourceClaim">
+										<span class="example-value" data-example-value="newSourceClaim">4 REP</span>
+										</label>
+									</div>
+									<div class="example-visual">
+										<svg viewBox="0 0 760 210" role="img" aria-label="Forked escrow cumulative rounding">
+											<text class="svg-label" x="80" y="32">Cumulative release minus already claimed</text>
+											<rect class="example-bar-base" x="90" y="58" width="560" height="28" rx="6"></rect>
+											<rect class="example-bar-blue" x="90" y="58" width="165" height="28" rx="6" data-example-rect="alreadyReleasedBar"></rect>
+											<rect class="example-bar-green" x="255" y="58" width="132" height="28" rx="0" data-example-rect="releasedNowBar"></rect>
+											<text class="svg-small" x="650" y="78" text-anchor="end" data-example-text="cumulativeText">cumulative 12.176471 REP</text>
+											<text class="svg-label" x="80" y="126">If this claim restarted rounding alone</text>
+											<rect class="example-bar-base" x="90" y="148" width="560" height="24" rx="6"></rect>
+											<rect class="example-bar-gold" x="90" y="148" width="132" height="24" rx="6" data-example-rect="restartRoundingBar"></rect>
+											<text class="svg-small" x="650" y="168" text-anchor="end" data-example-text="restartText">restart 5.411765 REP</text>
+										</svg>
+									</div>
+									<div class="example-output-grid">
+									<div><span>Child REP already released</span><output data-example-output="alreadyReleased">6.764706 REP</output></div>
+									<div><span>Cumulative child REP after claim</span><output data-example-output="cumulativeRelease">12.176471 REP</output></div>
+									<div><span>Child REP released now</span><output data-example-output="releasedNow">5.411765 REP</output></div>
+									<div><span>If rounding restarted</span><output data-example-output="restartRounding">5.411765 REP if each claim rounded alone</output></div>
+									<div><span>Claim bounds</span><output data-example-output="claimBounds">within escrow principal</output></div>
+								</div>
+							</details>
 							<h3>Recursive Continuation Example</h3>
 						<div class="table-wrap">
 							<table class="wide-table">
@@ -2169,7 +2446,7 @@
 						<p class="diagram-caption"><span class="figure-label">System Decision Flow</span>The main path is simple, but the continuation loop matters: a child escalation game can become the parent of the next fork generation.</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-truth-auction-shortfall">
-						<math display="block" aria-label="ETH collateral to buy equals parent collateral amount minus parent collateral amount times migrated REP amount divided by REP at fork amount" data-source="ethCollateralToBuy = parentCollateralAmount - parentCollateralAmount \cdot migratedRepAmount / repAtForkAmount">
+						<math display="block" aria-label="ETH collateral to buy equals parent collateral amount minus parent collateral amount times migrated REP amount divided by repair denominator REP at fork amount" data-source="ethCollateralToBuy = parentCollateralAmount - parentCollateralAmount \cdot migratedRepAmount / repairDenominatorRepAtForkAmount">
 							<mrow>
 								<mi>ethCollateralToBuy</mi>
 								<mo>=</mo>
@@ -2181,16 +2458,16 @@
 										<mo>&#x22C5;</mo>
 										<mi>migratedRepAmount</mi>
 									</mrow>
-									<mi>repAtForkAmount</mi>
+										<mi>repairDenominatorRepAtForkAmount</mi>
 								</mfrac>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Auction Shortfall</span>The truth auction targets the parent collateral not already covered by migrated REP.</p>
+							<p class="equation-caption"><span class="equation-label">Auction Shortfall</span>The truth auction targets the parent collateral not already covered by migrated REP. The denominator is the contract’s repair denominator: own-fork repair uses <code>vaultRepAtFork</code>, while external-fork repair uses <code>auctionableRepAtFork</code>.</p>
 					</div>
 					<h3>Worked Example: Child-Universe Collateral Repair</h3>
 					<div class="callout">
 						Worked repair example: if a parent pool has <code>50 ETH</code> supporting clean
-						redemption and <code>200 REP</code> at fork, then a split where
+						redemption and <code>200 REP</code> of parent auctionable pool REP at fork, then a split where
 						<code>190 REP</code> moves to the user-preferred child and <code>10 REP</code>
 						moves elsewhere gives the preferred child <code>47.5 ETH</code> by proportional
 						collateral migration. The child is short <code>2.5 ETH</code>. If the truth
@@ -2198,6 +2475,55 @@
 						returns to the full <code>50 ETH</code> collateral base; if the auction is
 						underfunded, collateral repair is incomplete.
 					</div>
+					<details class="interactive-example" id="collateral-repair-example">
+						<summary>Adjust child collateral repair</summary>
+						<p>
+							Migration moves collateral in proportion to migrated REP. The auction can repair
+							the remaining ETH shortfall only up to the ETH it actually raises.
+							For own-fork children the denominator is the parent pool's
+							<code>vaultRepAtFork</code>; for external-fork children it is the parent pool's
+							full <code>auctionableRepAtFork</code>.
+						</p>
+						<div class="example-grid">
+							<label>
+								Parent collateral
+								<input type="range" min="10" max="200" step="1" value="50" data-example-input="parentCollateral">
+								<span class="example-value" data-example-value="parentCollateral">50 ETH</span>
+							</label>
+							<label>
+								Repair denominator REP at fork
+								<input type="range" min="10" max="500" step="1" value="200" data-example-input="repairDenominatorRepAtFork">
+								<span class="example-value" data-example-value="repairDenominatorRepAtFork">200 REP</span>
+							</label>
+							<label>
+								Migrated REP
+								<input type="range" min="0" max="500" step="1" value="190" data-example-input="migratedRep">
+								<span class="example-value" data-example-value="migratedRep">190 REP</span>
+							</label>
+							<label>
+								Auction ETH raised
+								<input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised">
+								<span class="example-value" data-example-value="auctionRaised">2.5 ETH</span>
+							</label>
+						</div>
+						<div class="example-visual">
+							<svg viewBox="0 0 760 170" role="img" aria-label="Child collateral repair progress">
+								<rect class="example-bar-base" x="80" y="58" width="600" height="34" rx="7"></rect>
+								<rect class="example-bar-green" x="80" y="58" width="570" height="34" rx="7" data-example-rect="migratedCollateral"></rect>
+								<rect class="example-bar-blue" x="650" y="58" width="30" height="34" rx="0" data-example-rect="auctionRepair"></rect>
+								<line class="svg-line" x1="680" y1="42" x2="680" y2="108"></line>
+								<text class="svg-small" x="80" y="126">0 ETH</text>
+								<text class="svg-small" x="680" y="126" text-anchor="end" data-example-text="repairTarget">target 50 ETH</text>
+							</svg>
+						</div>
+						<div class="example-output-grid">
+							<div><span>Migrated collateral</span><output data-example-output="migratedCollateral">47.50 ETH</output></div>
+							<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
+							<div><span>Remaining shortfall</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
+							<div><span>Repair status</span><output data-example-output="repairStatus">full repair</output></div>
+							<div><span>Migration bounds</span><output data-example-output="migrationBounds">within repair denominator REP</output></div>
+						</div>
+					</details>
 				</section>
 
 				<section class="paper-section" id="auction">
@@ -2656,6 +2982,69 @@
 						vault claims. It converts part of the child-universe security capital into the
 						ETH collateral required for the child market to continue operating cleanly.
 					</p>
+					<details class="interactive-example" id="auction-clearing-example">
+						<summary>Adjust funded and underfunded auction clearing</summary>
+							<p>
+								The auction sells REP at a uniform clearing price when demand is strong enough.
+									The contract input is an integer tick; this example uses a three-level
+									tick-derived ladder displayed near <code>5</code>, <code>4</code>, and
+									<code>3 ETH/REP</code> to keep the arithmetic readable. If qualifying demand is
+									below the ETH raise cap, the qualifying bidders share the full REP inventory pro
+									rata by ETH contribution. The calculator shows human-unit allocations; exact
+									withdrawals use integer REP-wei division with remainder carry across paged
+									withdrawals.
+								</p>
+						<div class="example-grid">
+							<label>
+								ETH raise cap
+								<input type="range" min="1" max="60" step="1" value="20" data-example-input="ethRaiseCap">
+								<span class="example-value" data-example-value="ethRaiseCap">20 ETH</span>
+							</label>
+							<label>
+								REP inventory
+								<input type="range" min="1" max="20" step="1" value="4" data-example-input="repInventory">
+								<span class="example-value" data-example-value="repInventory">4 REP</span>
+								</label>
+								<label>
+									Alice ETH at high tick (~5 ETH/REP)
+									<input type="range" min="0" max="30" step="1" value="3" data-example-input="aliceEth">
+									<span class="example-value" data-example-value="aliceEth">3 ETH</span>
+								</label>
+								<label>
+									Bob ETH at middle tick (~4 ETH/REP)
+									<input type="range" min="0" max="30" step="1" value="4" data-example-input="bobEth">
+									<span class="example-value" data-example-value="bobEth">4 ETH</span>
+								</label>
+								<label>
+									Carol ETH at low tick (~3 ETH/REP)
+									<input type="range" min="0" max="30" step="1" value="6" data-example-input="carolEth">
+									<span class="example-value" data-example-value="carolEth">6 ETH</span>
+								</label>
+						</div>
+						<div class="example-visual">
+							<svg viewBox="0 0 760 210" role="img" aria-label="Auction clearing allocation">
+								<rect class="example-bar-base" x="100" y="44" width="560" height="28" rx="6"></rect>
+								<rect class="example-bar-green" x="100" y="44" width="140" height="28" rx="6" data-example-rect="aliceRep"></rect>
+								<rect class="example-bar-blue" x="240" y="44" width="187" height="28" rx="0" data-example-rect="bobRep"></rect>
+								<rect class="example-bar-gold" x="427" y="44" width="233" height="28" rx="0" data-example-rect="carolRep"></rect>
+								<text class="svg-label" x="100" y="30">REP allocation</text>
+								<rect class="example-bar-base" x="100" y="118" width="560" height="28" rx="6"></rect>
+								<rect class="example-bar-green" x="100" y="118" width="168" height="28" rx="6" data-example-rect="ethRaised"></rect>
+								<line class="svg-line" x1="660" y1="100" x2="660" y2="160"></line>
+								<text class="svg-label" x="100" y="104">ETH raised toward cap</text>
+								<text class="svg-small" x="660" y="176" text-anchor="end" data-example-text="ethCapMarker">cap 20 ETH</text>
+							</svg>
+						</div>
+						<div class="example-output-grid">
+								<div><span>Clearing mode</span><output data-example-output="clearingMode">funded near 3 ETH/REP</output></div>
+							<div><span>ETH raised</span><output data-example-output="ethRaised">12 ETH</output></div>
+							<div><span>Derived underfunded threshold</span><output data-example-output="underfundedThreshold">not underfunded</output></div>
+							<div><span>Alice receives</span><output data-example-output="aliceReceives">1.00 REP</output></div>
+							<div><span>Bob receives</span><output data-example-output="bobReceives">1.33 REP</output></div>
+							<div><span>Carol receives</span><output data-example-output="carolReceives">1.67 REP</output></div>
+							<div><span>Refunds</span><output data-example-output="refunds">1.00 ETH</output></div>
+						</div>
+					</details>
 				</section>
 
 				<section class="paper-section" id="oracle">
@@ -3270,8 +3659,8 @@
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Per-operation settlement gas estimate used by the coordinator.</td></tr>
 							<tr><td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td><td><code>4</code></td><td>Maximum staged operations executed from one OpenOracle settlement callback.</td></tr>
 							<tr><td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>Maximum self-service validity window for staged oracle-gated operations.</td></tr>
-							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><math aria-label="250 times price precision scale" data-source="250 \cdot pow10(18)"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
-							<tr><td>OpenOracle <code>escalationHalt</code></td><td><math aria-label="exact token one report times 100000 divided by 10000" data-source="exactToken1Report \cdot 100000 / 10000"><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mn>100000</mn><mo>/</mo><mn>10000</mn></math></td><td>Dynamic halt threshold for report escalation, equal to <code>10x</code> the initial REP report amount.</td></tr>
+								<tr><td>OpenOracle <code>exactToken1Report</code></td><td>250 REP (<math aria-label="250 times 10 to the 18 atomic REP units" data-source="250 \cdot pow10(18) atomic REP units"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td><td>Initial report liquidity parameter, stored as an ERC-20 atomic REP amount.</td></tr>
+								<tr><td>OpenOracle <code>escalationHalt</code></td><td>2,500 REP (<math aria-label="2500 times 10 to the 18 atomic REP units" data-source="2500 \cdot pow10(18) atomic REP units"><mn>2500</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td><td>Dynamic halt threshold for multiplicative report escalation; later reports add one atomic REP unit at a time.</td></tr>
 							<tr><td>OpenOracle <code>settlerReward</code></td><td><math aria-label="block base fee times 2 times gas consumed open oracle report price" data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td><td>Dynamic ETH reward paid to settler.</td></tr>
 							<tr><td>OpenOracle <code>settlementTime</code></td><td><math aria-label="40 times 12" data-source="40 \cdot 12"><mn>40</mn><mo>&#x22C5;</mo><mn>12</mn></math></td><td>Settlement delay encoded as <code>480</code>.</td></tr>
 							<tr><td>OpenOracle <code>disputeDelay</code></td><td><code>0</code></td><td>No extra waiting period after each report.</td></tr>
@@ -3326,9 +3715,443 @@
 					</ul>
 				</section>
 			</main>
-		</div>
-		<script>
-			const navLinks = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'))
+			</div>
+			<script>
+				const formatFixed = (value, digits = 2) => {
+					if (Number.isInteger(value)) {
+						return value.toFixed(0)
+					}
+					return value.toFixed(digits)
+				}
+				const formatRep = (value, digits = 2) => `${formatFixed(value, digits)} REP`
+				const formatEth = value => `${formatFixed(value)} ETH`
+				const formatShares = value => `${formatFixed(value, 0)} shares`
+				const formatPercent = value => `${formatFixed(value, 0)}%`
+				const atomicDisplayScale = 1_000_000n
+				const weiPerDisplayUnit = 1_000_000_000_000n
+				const toAtomic = value => BigInt(Math.round(value * Number(atomicDisplayScale))) * weiPerDisplayUnit
+				const fromAtomic = atomicValue => Number(atomicValue / weiPerDisplayUnit) / Number(atomicDisplayScale)
+				const formatAtomicRep = (atomicValue, digits = 18) => {
+					const wholePart = atomicValue / (atomicDisplayScale * weiPerDisplayUnit)
+					const fractionalPart = atomicValue % (atomicDisplayScale * weiPerDisplayUnit)
+					const paddedFraction = fractionalPart.toString().padStart(18, '0').slice(0, digits)
+					return `${wholePart.toString()}.${paddedFraction} REP`
+				}
+				const ceilDiv = (numerator, denominator) => (numerator + denominator - 1n) / denominator
+				const collectExample = exampleId => {
+					const example = document.getElementById(exampleId)
+					if (example === null) {
+						return undefined
+					}
+					const inputs = Object.fromEntries(
+						Array.from(example.querySelectorAll('[data-example-input]')).map(inputElement => [
+							inputElement.dataset.exampleInput,
+							inputElement,
+						]),
+					)
+					const outputs = Object.fromEntries(
+						Array.from(example.querySelectorAll('[data-example-output]')).map(outputElement => [
+							outputElement.dataset.exampleOutput,
+							outputElement,
+						]),
+					)
+					const values = Object.fromEntries(
+						Array.from(example.querySelectorAll('[data-example-value]')).map(valueElement => [
+							valueElement.dataset.exampleValue,
+							valueElement,
+						]),
+					)
+					const rects = Object.fromEntries(
+						Array.from(example.querySelectorAll('[data-example-rect]')).map(rectElement => [
+							rectElement.dataset.exampleRect,
+							rectElement,
+						]),
+					)
+					const texts = Object.fromEntries(
+						Array.from(example.querySelectorAll('[data-example-text]')).map(textElement => [
+							textElement.dataset.exampleText,
+							textElement,
+						]),
+					)
+					const read = inputName => {
+						const inputElement = inputs[inputName]
+						if (inputElement === undefined) {
+							return 0
+						}
+						const inputValue = Number(inputElement.value)
+						return Number.isFinite(inputValue) ? inputValue : 0
+					}
+					const write = (outputName, value) => {
+						const outputElement = outputs[outputName]
+						if (outputElement !== undefined) {
+							outputElement.value = value
+						}
+					}
+					const writeValue = (valueName, value) => {
+						const valueElement = values[valueName]
+						if (valueElement !== undefined) {
+							valueElement.textContent = value
+						}
+					}
+					const writeText = (textName, value) => {
+						const textElement = texts[textName]
+						if (textElement !== undefined) {
+							textElement.textContent = value
+						}
+					}
+					const setRectWidth = (rectName, width) => {
+						const rectElement = rects[rectName]
+						if (rectElement !== undefined) {
+							rectElement.setAttribute('width', String(Math.max(0, width)))
+						}
+					}
+					const setRectX = (rectName, rectX) => {
+						const rectElement = rects[rectName]
+						if (rectElement !== undefined) {
+							rectElement.setAttribute('x', String(rectX))
+						}
+					}
+					return { inputs, read, write, writeValue, writeText, setRectWidth, setRectX }
+				}
+				const bindExample = (exampleId, update) => {
+					const context = collectExample(exampleId)
+					if (context === undefined) {
+						return
+					}
+					for (const inputElement of Object.values(context.inputs)) {
+						inputElement.addEventListener('input', () => update(context))
+					}
+					update(context)
+				}
+				bindExample('share-migration-example', context => {
+					const parentBalance = context.read('parentBalance')
+					const selectedChildren = context.read('selectedChildren')
+					const childWidth = parentBalance * 2.2
+					context.writeValue('parentBalance', formatShares(parentBalance))
+					context.writeValue('selectedChildren', `${selectedChildren} ${selectedChildren === 1 ? 'branch' : 'branches'}`)
+					context.setRectWidth('parent', childWidth)
+					context.setRectWidth('childA', selectedChildren >= 1 ? childWidth : 0)
+					context.setRectWidth('childB', selectedChildren >= 2 ? childWidth : 0)
+					context.setRectWidth('childC', selectedChildren >= 3 ? childWidth : 0)
+					context.writeText('parentText', formatFixed(parentBalance, 0))
+					context.writeText('childAText', selectedChildren >= 1 ? formatFixed(parentBalance, 0) : '0')
+					context.writeText('childBText', selectedChildren >= 2 ? formatFixed(parentBalance, 0) : '0')
+					context.writeText('childCText', selectedChildren >= 3 ? formatFixed(parentBalance, 0) : '0')
+					context.write('parentAfter', formatShares(0))
+					context.write('childBalance', formatShares(parentBalance))
+					context.write('totalChildBalances', formatShares(parentBalance * selectedChildren))
+				})
+				bindExample('escalation-deposit-example', context => {
+					const invalidBalance = context.read('invalidBalance')
+					const yesBalance = context.read('yesBalance')
+					const noBalance = context.read('noBalance')
+					const proposedDeposit = context.read('proposedDeposit')
+					const startBond = context.read('startBond')
+					const threshold = Math.max(context.read('nonDecisionThreshold'), 1)
+					const invalidStartParameters = startBond >= threshold
+					const room = Math.max(0, threshold - noBalance)
+					const clipped = Math.min(proposedDeposit, room)
+					const maxBefore = Math.max(invalidBalance, yesBalance, noBalance)
+					const outcomeFull = noBalance >= threshold
+					const tieAdjusted = noBalance + clipped === maxBefore && noBalance + clipped < threshold
+					const clippedAtomic = toAtomic(clipped)
+					const acceptedAtomicPreview = tieAdjusted && clippedAtomic > 0n ? clippedAtomic - 1n : clippedAtomic
+					const noAfterAtomicPreview = toAtomic(noBalance) + acceptedAtomicPreview
+					const previewReverts =
+						invalidStartParameters ||
+						outcomeFull ||
+						proposedDeposit < startBond ||
+						(acceptedAtomicPreview < toAtomic(startBond) && noAfterAtomicPreview !== toAtomic(threshold))
+					const acceptedAtomic = previewReverts ? 0n : acceptedAtomicPreview
+					const accepted = fromAtomic(acceptedAtomic)
+					const noAfterAtomic = toAtomic(noBalance) + acceptedAtomic
+					const noAfter = fromAtomic(noAfterAtomic)
+					const scale = 220 / threshold
+					context.writeValue('invalidBalance', formatRep(invalidBalance))
+					context.writeValue('yesBalance', formatRep(yesBalance))
+					context.writeValue('noBalance', formatRep(noBalance))
+					context.writeValue('proposedDeposit', formatRep(proposedDeposit))
+					context.writeValue('startBond', formatRep(startBond))
+					context.writeValue('nonDecisionThreshold', formatRep(threshold))
+					context.setRectWidth('invalidBefore', Math.min(invalidBalance * scale, 220))
+					context.setRectWidth('yesBefore', Math.min(yesBalance * scale, 220))
+					context.setRectWidth('noBefore', Math.min(noBalance * scale, 220))
+					context.setRectWidth('invalidAfter', Math.min(invalidBalance * scale, 220))
+					context.setRectWidth('yesAfter', Math.min(yesBalance * scale, 220))
+					context.setRectWidth('noAfter', Math.min(noAfter * scale, 220))
+					context.writeText('thresholdText', `threshold ${formatRep(threshold)}`)
+					context.write('remainingRoom', formatRep(room))
+					const acceptedAmountText = tieAdjusted && !previewReverts ? formatAtomicRep(acceptedAtomic, 18) : formatRep(accepted)
+					context.write('acceptedAmount', previewReverts ? 'preview reverts' : acceptedAmountText)
+					let adjustment = 'accepted as proposed'
+					if (invalidStartParameters) {
+						adjustment = 'invalid game parameters'
+					} else if (outcomeFull) {
+						adjustment = 'Outcome full'
+					} else if (proposedDeposit > room) {
+						adjustment = 'clipped to threshold'
+					} else if (tieAdjusted) {
+						adjustment = 'reduced by 0.000000000000000001 REP (1 wei) to avoid tie'
+					}
+					if (previewReverts && !invalidStartParameters && !outcomeFull) {
+						adjustment = 'Below start bond'
+					}
+					context.write('depositAdjustment', adjustment)
+					let depositCondition = tieAdjusted ? `No ends at ${formatAtomicRep(noAfterAtomic, 18)}` : `No ends at ${formatRep(noAfter)}`
+					if (invalidStartParameters) {
+						depositCondition = 'game setup reverts: Threshold too low'
+					} else if (outcomeFull) {
+						depositCondition = 'operation reverts because No is full'
+					} else if (previewReverts) {
+						depositCondition = 'operation reverts before recording'
+					} else if (noAfter >= threshold) {
+						depositCondition = 'No reaches threshold'
+					}
+					context.write('depositCondition', depositCondition)
+				})
+				bindExample('resolution-edge-example', context => {
+					const invalidBalance = context.read('invalidBalance')
+					const yesBalance = context.read('yesBalance')
+					const noBalance = context.read('noBalance')
+					const runningCost = context.read('runningCost')
+					context.writeValue('invalidBalance', formatRep(invalidBalance))
+					context.writeValue('yesBalance', formatRep(yesBalance))
+					context.writeValue('noBalance', formatRep(noBalance))
+					context.writeValue('runningCost', formatRep(runningCost))
+					const balances = [invalidBalance, yesBalance, noBalance]
+					const atCost = balances.filter(balance => balance >= runningCost).length
+					const allZero = balances.every(balance => balance === 0)
+					let result = 'No'
+					let reason = 'no strict Invalid or Yes lead, so the helper falls through'
+					if (atCost >= 2) {
+						result = 'None'
+						reason = 'two or more outcomes still contest the cost'
+					} else if (allZero) {
+						result = 'Invalid'
+						reason = 'empty game after cost is non-zero'
+					} else if (invalidBalance > yesBalance && invalidBalance > noBalance) {
+						result = 'Invalid'
+						reason = 'Invalid has a strict lead'
+						} else if (yesBalance > invalidBalance && yesBalance > noBalance) {
+							result = 'Yes'
+							reason = 'Yes has a strict lead'
+						}
+						const resolutionScale = 520 / Math.max(invalidBalance, yesBalance, noBalance, runningCost, 1)
+						context.setRectWidth('resolutionInvalid', invalidBalance * resolutionScale)
+						context.setRectWidth('resolutionYes', yesBalance * resolutionScale)
+						context.setRectWidth('resolutionNo', noBalance * resolutionScale)
+						context.writeText('resolutionCostMarker', `cost ${formatRep(runningCost)}`)
+						context.write('outcomesAtCost', String(atCost))
+						context.write('resolutionResult', result)
+						context.write('resolutionReason', reason)
+					})
+					bindExample('payout-region-example', context => {
+						const bindingCapital = context.read('bindingCapital')
+						const winningPrincipal = context.read('winningPrincipal')
+						const depositAmount = Math.min(context.read('depositAmount'), winningPrincipal)
+					const depositStart = Math.min(context.read('depositStart'), Math.max(0, winningPrincipal - depositAmount))
+					const cumulativeAmount = depositStart + depositAmount
+					const thresholdPercent = context.read('actualForkThresholdPercent')
+					const bindingAtomic = toAtomic(bindingCapital)
+					const rewardCap = fromAtomic(bindingAtomic + bindingAtomic / 2n)
+					const rewardPool = fromAtomic(bindingAtomic * 3n / 5n)
+					const rewardEligiblePrincipal = Math.max(Math.min(winningPrincipal, rewardCap), 0.000001)
+					const eligibleEnd = Math.min(cumulativeAmount, rewardCap)
+					const eligibleDeposit = Math.max(0, Math.min(depositAmount, eligibleEnd - depositStart))
+					const depositWithdrawal = depositAmount + eligibleDeposit * rewardPool / rewardEligiblePrincipal
+					const scaledWithdrawal = depositWithdrawal * thresholdPercent / 100
+					const excessPrincipal = Math.max(0, winningPrincipal - rewardCap)
+					const visualMax = Math.max(winningPrincipal, rewardCap, 1)
+					const visualScale = 600 / visualMax
+					context.writeValue('bindingCapital', formatRep(bindingCapital))
+					context.writeValue('winningPrincipal', formatRep(winningPrincipal))
+					context.writeValue('depositAmount', formatRep(depositAmount))
+					context.writeValue('depositStart', formatRep(depositStart))
+					context.writeValue('actualForkThresholdPercent', formatPercent(thresholdPercent))
+					context.setRectWidth('bindingRegion', Math.min(bindingCapital * visualScale, 600))
+					context.setRectWidth('safetyRegion', Math.max(0, Math.min((rewardCap - bindingCapital) * visualScale, 600)))
+					context.setRectX('safetyRegion', 80 + Math.min(bindingCapital * visualScale, 600))
+					context.setRectWidth('excessRegion', Math.max(0, Math.min(excessPrincipal * visualScale, 600)))
+					context.setRectX('excessRegion', 80 + Math.min(rewardCap * visualScale, 600))
+					context.writeText('bindingMarker', `binding ${formatFixed(bindingCapital, 0)}`)
+					context.writeText('capMarker', `cap ${formatFixed(rewardCap, 0)}`)
+					context.writeText('winningMarker', `winning ${formatFixed(winningPrincipal, 0)}`)
+					context.write('rewardCap', formatRep(rewardCap))
+						context.write('rewardPool', formatRep(rewardPool))
+						context.write('eligibleDeposit', formatRep(eligibleDeposit))
+						context.write('excessPrincipal', formatRep(excessPrincipal))
+						context.write('depositWithdrawal', formatRep(depositWithdrawal))
+						context.write('scaledWithdrawal', formatRep(scaledWithdrawal))
+						context.write(
+							'payoutState',
+							bindingCapital > winningPrincipal ? 'reachable No fallback/tied-leader edge case' : 'reachable ordinary winner state',
+						)
+					})
+				bindExample('forked-escrow-example', context => {
+					const escrowPrincipal = Math.max(context.read('escrowPrincipal'), 1)
+					const escrowChildRep = context.read('escrowChildRep')
+					const claimedSource = Math.min(context.read('claimedSource'), escrowPrincipal)
+					const newSourceClaim = Math.min(context.read('newSourceClaim'), escrowPrincipal - claimedSource)
+					const escrowPrincipalAtomic = toAtomic(escrowPrincipal)
+					const escrowChildRepAtomic = toAtomic(escrowChildRep)
+					const claimedSourceAtomic = toAtomic(claimedSource)
+					const newSourceClaimAtomic = toAtomic(newSourceClaim)
+					const alreadyReleasedAtomic = ceilDiv(claimedSourceAtomic * escrowChildRepAtomic, escrowPrincipalAtomic)
+					const cumulativeReleaseAtomic = ceilDiv(
+						(claimedSourceAtomic + newSourceClaimAtomic) * escrowChildRepAtomic,
+						escrowPrincipalAtomic,
+					)
+					const releasedNowAtomic = cumulativeReleaseAtomic - alreadyReleasedAtomic
+					const restartRoundingAtomic = ceilDiv(newSourceClaimAtomic * escrowChildRepAtomic, escrowPrincipalAtomic)
+					context.writeValue('escrowPrincipal', formatRep(escrowPrincipal))
+					context.writeValue('escrowChildRep', formatRep(escrowChildRep))
+					context.writeValue('claimedSource', formatRep(claimedSource))
+					context.writeValue('newSourceClaim', formatRep(newSourceClaim))
+					context.write('alreadyReleased', formatAtomicRep(alreadyReleasedAtomic, 18))
+						context.write('cumulativeRelease', formatAtomicRep(cumulativeReleaseAtomic, 18))
+						context.write('releasedNow', formatAtomicRep(releasedNowAtomic, 18))
+						context.write('restartRounding', `${formatAtomicRep(restartRoundingAtomic, 18)} if each claim rounded alone`)
+						const escrowVisualScale = 560 / Math.max(fromAtomic(cumulativeReleaseAtomic), fromAtomic(restartRoundingAtomic), 1)
+						const alreadyReleasedWidth = fromAtomic(alreadyReleasedAtomic) * escrowVisualScale
+						const releasedNowWidth = fromAtomic(releasedNowAtomic) * escrowVisualScale
+						context.setRectWidth('alreadyReleasedBar', alreadyReleasedWidth)
+						context.setRectWidth('releasedNowBar', releasedNowWidth)
+						context.setRectX('releasedNowBar', 90 + alreadyReleasedWidth)
+						context.setRectWidth('restartRoundingBar', fromAtomic(restartRoundingAtomic) * escrowVisualScale)
+						context.writeText('cumulativeText', `cumulative ${formatAtomicRep(cumulativeReleaseAtomic, 6)}`)
+						context.writeText('restartText', `restart ${formatAtomicRep(restartRoundingAtomic, 6)}`)
+						const claimBounds =
+						context.read('claimedSource') > escrowPrincipal || context.read('newSourceClaim') > escrowPrincipal - claimedSource
+							? 'claim limited to remaining escrow principal'
+							: 'within escrow principal'
+					context.write('claimBounds', claimBounds)
+				})
+				bindExample('collateral-repair-example', context => {
+					const parentCollateral = context.read('parentCollateral')
+					const repairDenominatorRepAtFork = Math.max(context.read('repairDenominatorRepAtFork'), 1)
+					const migratedRep = Math.min(context.read('migratedRep'), repairDenominatorRepAtFork)
+					const auctionRaised = context.read('auctionRaised')
+					const migratedCollateral = parentCollateral * migratedRep / repairDenominatorRepAtFork
+					const initialShortfall = Math.max(0, parentCollateral - migratedCollateral)
+					const repairEth = Math.min(auctionRaised, initialShortfall)
+					const remainingShortfall = Math.max(0, initialShortfall - repairEth)
+					const scale = 600 / Math.max(parentCollateral, 1)
+					context.writeValue('parentCollateral', formatEth(parentCollateral))
+					context.writeValue('repairDenominatorRepAtFork', formatRep(repairDenominatorRepAtFork))
+					context.writeValue('migratedRep', formatRep(migratedRep))
+					context.writeValue('auctionRaised', formatEth(auctionRaised))
+					context.setRectWidth('migratedCollateral', Math.min(migratedCollateral * scale, 600))
+					context.setRectX('auctionRepair', 80 + Math.min(migratedCollateral * scale, 600))
+					context.setRectWidth('auctionRepair', Math.min(repairEth * scale, Math.max(0, 600 - migratedCollateral * scale)))
+					context.writeText('repairTarget', `target ${formatEth(parentCollateral)}`)
+					context.write('migratedCollateral', formatEth(migratedCollateral))
+					context.write('initialShortfall', formatEth(initialShortfall))
+					context.write('remainingShortfall', formatEth(remainingShortfall))
+					context.write('repairStatus', remainingShortfall === 0 ? 'full repair' : 'partial repair')
+					context.write(
+						'migrationBounds',
+						context.read('migratedRep') > repairDenominatorRepAtFork
+							? 'migration limited to repair denominator REP'
+							: 'within repair denominator REP',
+					)
+				})
+				bindExample('auction-clearing-example', context => {
+					const ethRaiseCap = context.read('ethRaiseCap')
+					const repInventory = context.read('repInventory')
+					const aliceEth = context.read('aliceEth')
+					const bobEth = context.read('bobEth')
+					const carolEth = context.read('carolEth')
+					context.writeValue('ethRaiseCap', formatEth(ethRaiseCap))
+					context.writeValue('repInventory', formatRep(repInventory))
+					context.writeValue('aliceEth', formatEth(aliceEth))
+					context.writeValue('bobEth', formatEth(bobEth))
+					context.writeValue('carolEth', formatEth(carolEth))
+					const bids = [
+						{ name: 'alice', eth: aliceEth, price: 5 },
+						{ name: 'bob', eth: bobEth, price: 4 },
+						{ name: 'carol', eth: carolEth, price: 3 },
+					]
+					let ethRaised = 0
+					let refunds = 0
+					const repResults = { alice: 0, bob: 0, carol: 0 }
+					let accumulatedEth = 0
+					let clearingPrice = 0
+					let ethFilledAtClearing = 0
+					let funded = false
+					let lastValidPrice = 0
+					let lastValidEthAtTick = 0
+					for (const bid of bids) {
+						if (accumulatedEth > 0 && accumulatedEth / bid.price > repInventory) {
+							funded = true
+							clearingPrice = lastValidPrice
+							ethFilledAtClearing = lastValidEthAtTick
+							ethRaised = accumulatedEth
+							break
+						}
+						const ethToTake = Math.min(bid.eth, Math.max(0, ethRaiseCap - accumulatedEth))
+						const newAccumulatedEth = accumulatedEth + ethToTake
+						if (newAccumulatedEth / bid.price >= repInventory) {
+							funded = true
+							clearingPrice = bid.price
+							ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * bid.price - accumulatedEth))
+							ethRaised = accumulatedEth + ethFilledAtClearing
+							break
+						}
+						if (newAccumulatedEth >= ethRaiseCap) {
+							funded = true
+							clearingPrice = bid.price
+							ethFilledAtClearing = ethToTake
+							ethRaised = newAccumulatedEth
+							break
+						}
+						accumulatedEth = newAccumulatedEth
+						lastValidPrice = bid.price
+						lastValidEthAtTick = ethToTake
+					}
+					if (funded) {
+						for (const bid of bids) {
+							if (bid.price > clearingPrice) {
+								repResults[bid.name] = bid.eth / clearingPrice
+							} else if (bid.price === clearingPrice) {
+								const fillEth = Math.min(bid.eth, ethFilledAtClearing)
+								repResults[bid.name] = fillEth / clearingPrice
+								refunds += bid.eth - fillEth
+							} else {
+								refunds += bid.eth
+							}
+						}
+						context.write('clearingMode', `funded near ${formatFixed(clearingPrice)} ETH/REP`)
+						context.write('underfundedThreshold', 'not underfunded')
+					} else {
+						ethRaised = accumulatedEth
+						const underfundedThreshold = repInventory === 0 ? Number.POSITIVE_INFINITY : ethRaised / repInventory
+						const qualifyingBids = bids.filter(bid => bid.price >= underfundedThreshold)
+						const qualifyingEth = qualifyingBids.reduce((sum, bid) => sum + bid.eth, 0)
+						refunds = bids.reduce((sum, bid) => sum + bid.eth, 0) - qualifyingEth
+						for (const bid of qualifyingBids) {
+							repResults[bid.name] = qualifyingEth === 0 ? 0 : repInventory * bid.eth / qualifyingEth
+						}
+						context.write('clearingMode', 'underfunded pro rata')
+						context.write('underfundedThreshold', `${formatFixed(underfundedThreshold)} ETH/REP`)
+					}
+					const repScale = 560 / Math.max(repInventory, 1)
+					const aliceWidth = repResults.alice * repScale
+					const bobWidth = repResults.bob * repScale
+					const carolWidth = repResults.carol * repScale
+					context.setRectWidth('aliceRep', aliceWidth)
+					context.setRectWidth('bobRep', bobWidth)
+					context.setRectX('bobRep', 100 + aliceWidth)
+					context.setRectWidth('carolRep', carolWidth)
+					context.setRectX('carolRep', 100 + aliceWidth + bobWidth)
+					context.setRectWidth('ethRaised', Math.min(ethRaised / Math.max(ethRaiseCap, 1) * 560, 560))
+					context.writeText('ethCapMarker', `cap ${formatEth(ethRaiseCap)}`)
+					context.write('ethRaised', formatEth(ethRaised))
+					context.write('aliceReceives', formatRep(repResults.alice))
+					context.write('bobReceives', formatRep(repResults.bob))
+					context.write('carolReceives', formatRep(repResults.carol))
+					context.write('refunds', formatEth(refunds))
+				})
+				const navLinks = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'))
 			const sectionLinks = navLinks
 				.map(link => {
 					const href = link.getAttribute('href')
