@@ -224,6 +224,13 @@
 					amounts through the callback.
 				</p>
 				<p>
+					Callers who join an already pending settlement slot pay
+					<code>getQueuedOperationEthCost()</code> instead of funding a second OpenOracle
+					report. The coordinator credits that ETH to the original
+					<code>pendingReportSponsor</code> in <code>oracleFeeCredits</code>, and sponsors
+					withdraw accumulated credits with <code>withdrawOracleFeeCredits()</code>.
+				</p>
+				<p>
 					Escalation-game REP deposits are the exception to the staged callback path. When
 					the pool has active security-bond allowance, <code>depositToEscalationGame</code>
 					requires a fresh coordinator price and reverts if it is stale. After previewing
@@ -337,15 +344,16 @@
 					and coordinator recovery is not available.
 				</p>
 				<p>
-					Other callback failures are soft rejections after the pending id is cleared. A
-					settlement with base fee above the request-time cap, zero amounts, or a computed
-					zero price emits <code>PriceReportRejected</code> and does not update the price
+					Coordinator-level price rejections are separate from low-level callback failures.
+					After a callback successfully enters the coordinator, a settlement with base fee
+					above the request-time cap, zero amounts, or a computed zero price clears the
+					pending id, emits <code>PriceReportRejected</code>, and does not update the price
 					cache or replay pending operations. Those pending settlement operations remain
 					queued for a later valid price report, but a later call to stage another operation
 					will not automatically fund a retry while that pending settlement list is still
 					non-empty; an operator or user may need to call <code>requestPrice</code> directly.
 					When OpenOracle has already settled but the coordinator is still pending because
-					the callback did not complete, anyone can call
+					the low-level callback did not complete, anyone can call
 					<code>recoverSettledPendingReport</code>. Recovery clears the pending report,
 					resets the settlement base-fee cap, and consumes the single pending-operation slot
 					without treating it as a successful price update.

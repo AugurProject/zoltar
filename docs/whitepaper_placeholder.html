@@ -2666,6 +2666,13 @@
 							The coordinator sizes that ETH cost from the current base fee, the callback gas
 							limit, and the configured gas budget for reporting the price.
 						</p>
+						<p>
+							A later caller that joins the same pending settlement slot pays
+							<code>getQueuedOperationEthCost()</code> instead of funding another report. The
+							coordinator records that payment in <code>oracleFeeCredits</code> for the
+							original pending report sponsor, who can later call
+							<code>withdrawOracleFeeCredits()</code>.
+						</p>
 						<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
 							<mrow>
