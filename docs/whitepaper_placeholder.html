@@ -19,13 +19,12 @@
 					<span>Companion paper</span>
 					<b>Zoltar Oracle Layer</b>
 				</a>
-				<nav aria-label="Document sections">
-					<a href="#abstract" aria-current="location">Abstract</a>
-					<a href="#overview">System Overview</a>
-					<a href="#architecture">Architecture</a>
-					<a href="#glossary">Glossary</a>
-					<a href="#roles">Economic Roles</a>
-					<a href="#pools">Security Pools</a>
+					<nav aria-label="Document sections">
+						<a href="#abstract" aria-current="location">Abstract</a>
+						<a href="#overview">System Overview</a>
+						<a href="#architecture">Architecture</a>
+						<a href="#roles">Economic Roles</a>
+						<a href="#pools">Security Pools</a>
 					<a href="#shares">Shares</a>
 					<a href="#escalation">Escalation</a>
 					<a href="#migration">Fork Migration</a>
@@ -90,11 +89,13 @@
 					</div>
 					<p class="lede">
 						Augur Placeholder is a prediction-market and oracle-security protocol built on
-						top of Zoltar. Zoltar supplies forkable universes, question registration,
-						outcome encoding, and post-fork REP splitting. Placeholder adds
+						top of Zoltar. Zoltar supplies the truth/forking oracle layer: forkable
+						universes, question registration, outcome encoding, and post-fork REP
+						splitting. Placeholder adds
 						question-specific security pools, ETH-collateralized complete sets, local
-						escalation resolution, and a fork-recovery path that can repair missing child
-						collateral through a truth auction.
+							escalation resolution, and a fork-recovery path that can repair missing child
+							collateral through a truth auction. Despite the name, a truth auction repairs
+							child-pool ETH collateral; it does not choose the truthful branch.
 					</p>
 						<div class="summary-grid">
 							<div class="summary-card">
@@ -117,13 +118,23 @@
 						<h2>1. System Overview</h2>
 						<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 					</div>
-					<p>
-						The stack has two protocol identities. <code>Zoltar</code> is the base oracle
-						layer for universes, questions, scalar math, and REP branching. <code>Augur
-						Placeholder</code> is the application layer that adds market collateral,
-						underwriting, local disputes, migration, and collateral repair. For the base
-						oracle layer, see <a href="./whitepaper_zoltar.html">whitepaper_zoltar.html</a>.
-					</p>
+						<p>
+							The stack has two protocol identities. <code>Zoltar</code> is the base
+							truth/forking oracle layer for universes, questions, scalar math, and REP branching. <code>Augur
+							Placeholder</code> is the application layer that adds market collateral,
+							underwriting, local disputes, migration, and collateral repair. For the base
+							oracle layer, see <a href="./whitepaper_zoltar.html">whitepaper_zoltar.html</a>.
+							</p>
+							<p>
+								Placeholder uses two oracle paths, and they answer different questions. Zoltar
+								represents unresolved market-truth disputes by creating child universes; it does
+								not pick the winning branch. Users and applications decide which branch they
+								treat as truthful. OpenOracle only supplies a bounded REP/ETH solvency price:
+								the coordinator requests a REP/WETH report, a reporter posts amounts, disputers
+								may replace a bad report, settlement finalizes the report, and the callback lets
+								the coordinator accept the resulting REP/ETH price for withdrawals, allowance
+								updates, and liquidations.
+							</p>
 						<ol>
 						<li>A question is registered in Zoltar and a Placeholder security pool is deployed for that question in one universe.</li>
 						<li>REP vaults fund underwriting capacity and users mint ETH-backed complete sets.</li>
@@ -317,83 +328,14 @@
 					</figure>
 				</section>
 
-				<section class="paper-section" id="glossary">
-					<div class="section-heading">
-						<h2>3. Glossary</h2>
-						<a class="anchor-link" href="#glossary" aria-label="Link to Glossary">#</a>
-					</div>
-					<table>
-						<thead>
-							<tr>
-								<th>Term</th>
-								<th>Meaning</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td><span class="term" tabindex="0"><code>universe</code></span></td>
-								<td>A Zoltar fork domain. A parent universe can split into multiple child universes after a fork.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>pool</code></span></td>
-								<td>An Augur Placeholder <code>SecurityPool</code> for one question in one universe.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>vault</code></span></td>
-								<td>A pool-specific REP account whose owner provides underwriting capacity.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>complete set</code></span></td>
-								<td>One <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share minted together against ETH collateral.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>escalation game</code></span></td>
-								<td>The local dispute process that tries to pick a single winning outcome before a fork.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>non-decision</code></span></td>
-								<td>The unresolved escalation state that opens the Zoltar fork path.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>migration</code></span></td>
-								<td>The process that moves REP, shares, collateral accounting, and eligible escalation positions from a parent pool into child pools.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>truth auction</code></span></td>
-								<td>The batch auction that lets a child pool sell child-universe REP for ETH when migrated collateral is incomplete.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>migrated REP</code></span></td>
-								<td>REP backing carried from a parent universe into a child universe and made available to support the child pool.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>price round</code></span></td>
-								<td>The lifetime of one settled REP/ETH oracle price inside the coordinator.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>price-round budget</code></span></td>
-								<td>The ETH-notional operation cap for a single settled oracle price. Each successful oracle-gated operation consumes some of this budget.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>ETH-notional</code></span></td>
-								<td>An operation's exposure expressed as ETH value, used to compare withdrawals, liquidations, and allowance updates against one budget.</td>
-							</tr>
-							<tr>
-								<td><span class="term" tabindex="0"><code>staged operation</code></span></td>
-								<td>A solvency-sensitive operation queued behind the coordinator until it can execute with a fresh REP/ETH price.</td>
-							</tr>
-						</tbody>
-					</table>
-				</section>
-
 				<section class="paper-section" id="roles">
 					<div class="section-heading">
-						<h2>4. Core Economic Roles</h2>
+						<h2>3. Core Economic Roles</h2>
 						<a class="anchor-link" href="#roles" aria-label="Link to Core Economic Roles">#</a>
 					</div>
 					<ul>
 						<li>Question creators register questions in Zoltar question data, creating the objects around which Placeholder markets can be built.</li>
-						<li>REP vault operators deposit REP into a security pool and provide oracle security capacity. Their deposits back open interest and earn fees extracted from collateral over time.</li>
+							<li>REP vault operators deposit REP into a security pool and provide REP-backed underwriting capacity. Their deposits back open interest and earn fees extracted from collateral over time.</li>
 						<li>Users mint complete sets with ETH and hold outcome shares.</li>
 						<li>REP vault operators can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends to settle locally or force a non-decision.</li>
 						<li>Anyone can create child pools, while vault owners and share holders move vault state, eligible escalation positions, and shares across child universes after a Zoltar fork; some settlement helpers are permissionless.</li>
@@ -405,7 +347,7 @@
 
 				<section class="paper-section" id="pools">
 					<div class="section-heading">
-						<h2>5. Security Pools</h2>
+						<h2>4. Security Pools</h2>
 						<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 					</div>
 					<p class="lede">
@@ -508,48 +450,54 @@
 						</svg>
 						<p class="diagram-caption"><span class="figure-label">Asset Flow</span>The pool is the accounting hub: ETH backs complete sets, REP backs underwriting, fees accrue to vaults, and child REP can be monetized to repair child collateral after a fork.</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-bond-solvency">
-						<math display="block" aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price" data-source="remainingRepBacking * pricePrecision &gt;= securityBondAllowance * repPerEthPrice">
-							<mrow>
-								<mi>remainingRepBacking</mi>
-								<mo>*</mo>
-								<mi>pricePrecision</mi>
-								<mo>&ge;</mo>
-								<mi>securityBondAllowance</mi>
-								<mo>*</mo>
-								<mi>repPerEthPrice</mi>
-							</mrow>
-						</math>
-						<p class="equation-caption"><span class="equation-label">Bond Solvency</span>Vault and pool bond checks require remaining REP value to cover the ETH-denominated security-bond allowance.</p>
-					</div>
-					<div class="equation" id="eq-placeholder-rep-eth-price">
-						<math display="block" aria-label="REP per ETH price equals REP amount times price precision divided by ETH amount" data-source="repPerEthPrice = repAmount * pricePrecision / ethAmount">
-							<mrow>
-								<mi>repPerEthPrice</mi>
-								<mo>=</mo>
-								<mfrac>
-									<mrow>
-										<mi>repAmount</mi>
-										<mo>*</mo>
-										<mi>pricePrecision</mi>
-									</mrow>
-									<mi>ethAmount</mi>
-								</mfrac>
-							</mrow>
-						</math>
-						<p class="equation-caption"><span class="equation-label">REP/ETH Price</span>The coordinator stores the oracle quote as scaled REP units per ETH.</p>
-					</div>
+						<p>
+							The next equations compare REP backing with ETH-denominated obligations. This
+							price is a price-oracle value, not a truth outcome. OpenOracle settles REP/WETH
+							amounts, and the coordinator stores the result as scaled REP per ETH because
+							solvency checks compare REP backing against ETH obligations.
+						</p>
+						<div class="equation" id="eq-placeholder-rep-eth-price">
+							<math display="block" aria-label="REP per ETH price equals REP amount times price precision divided by ETH amount" data-source="repPerEthPrice = repAmount \cdot pricePrecision / ethAmount">
+								<mrow>
+									<mi>repPerEthPrice</mi>
+									<mo>=</mo>
+									<mfrac>
+										<mrow>
+											<mi>repAmount</mi>
+											<mo>&#x22C5;</mo>
+											<mi>pricePrecision</mi>
+										</mrow>
+										<mi>ethAmount</mi>
+									</mfrac>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">REP/ETH Price</span><code>repPerEthPrice</code> is stored as scaled REP units per ETH, and <code>pricePrecision</code> is the fixed scale factor that keeps REP-side and ETH-side terms in the same integer math units.</p>
+						</div>
+						<div class="equation" id="eq-placeholder-bond-solvency">
+							<math display="block" aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price" data-source="remainingRepBacking \cdot pricePrecision &gt;= securityBondAllowance \cdot repPerEthPrice">
+								<mrow>
+									<mi>remainingRepBacking</mi>
+									<mo>&#x22C5;</mo>
+									<mi>pricePrecision</mi>
+									<mo>&ge;</mo>
+									<mi>securityBondAllowance</mi>
+									<mo>&#x22C5;</mo>
+									<mi>repPerEthPrice</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">Bond Solvency</span>Vault and pool bond checks require remaining REP value to cover the ETH-denominated security-bond allowance.</p>
+						</div>
 					<div class="equation" id="eq-placeholder-liquidation-condition">
-						<math display="block" aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision" data-source="securityBondAllowance * securityMultiplier * repPerEthPrice &gt; repBacking * pricePrecision">
+						<math display="block" aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision" data-source="securityBondAllowance \cdot securityMultiplier \cdot repPerEthPrice &gt; repBacking \cdot pricePrecision">
 							<mrow>
 								<mi>securityBondAllowance</mi>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mi>securityMultiplier</mi>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mi>repPerEthPrice</mi>
 								<mo>&gt;</mo>
 								<mi>repBacking</mi>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mi>pricePrecision</mi>
 							</mrow>
 						</math>
@@ -662,7 +610,7 @@
 							<p class="equation-caption"><span class="equation-label">Utilization</span>The retention curve uses open collateral divided by total underwriting allowance.</p>
 						</div>
 						<div class="equation" id="eq-placeholder-retention-rate">
-							<math display="block" aria-label="retention rate equals max retention rate when bond allowance is zero, otherwise max minus slope span times utilization over retention rate dip until the dip, otherwise minimum retention rate" data-source="retentionRate = totalSecurityBondAllowance == 0 ? maxRetentionRate : utilization &lt;= retentionRateDip ? maxRetentionRate - (maxRetentionRate - minRetentionRate) * utilization / retentionRateDip : minRetentionRate">
+							<math display="block" aria-label="retention rate equals max retention rate when bond allowance is zero, otherwise max minus slope span times utilization over retention rate dip until the dip, otherwise minimum retention rate" data-source="retentionRate = totalSecurityBondAllowance == 0 ? maxRetentionRate : utilization &lt;= retentionRateDip ? maxRetentionRate - (maxRetentionRate - minRetentionRate) \cdot utilization / retentionRateDip : minRetentionRate">
 								<mrow>
 									<mi>retentionRate</mi>
 									<mo>=</mo>
@@ -687,7 +635,7 @@
 														<mo>-</mo>
 														<mi>minRetentionRate</mi>
 														<mo>)</mo>
-														<mo>*</mo>
+														<mo>&#x22C5;</mo>
 														<mi>utilization</mi>
 													</mrow>
 													<mi>retentionRateDip</mi>
@@ -711,12 +659,12 @@
 							<p class="equation-caption"><span class="equation-label">Retention Rate Curve</span>The implementation returns the maximum retention rate when allowance is zero, otherwise it linearly declines to the dip and then clamps to the minimum rate.</p>
 						</div>
 						<div class="equation" id="eq-placeholder-retention-decay">
-							<math display="block" aria-label="collateral at later time equals collateral at current time times retention rate raised to elapsed time" data-source="collateralAtLaterTime = collateralAtCurrentTime * retentionRate^elapsedTime">
+							<math display="block" aria-label="collateral at later time equals collateral at current time times retention rate raised to elapsed time" data-source="collateralAtLaterTime = collateralAtCurrentTime \cdot pow(retentionRate, elapsedTime)">
 								<mrow>
 									<mi>collateralAtLaterTime</mi>
 								<mo>=</mo>
 								<mi>collateralAtCurrentTime</mi>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<msup>
 									<mi>retentionRate</mi>
 									<mi>elapsedTime</mi>
@@ -726,7 +674,7 @@
 							<p class="equation-caption"><span class="equation-label">Retention Decay</span>Complete-set collateral decays exponentially into vault fees over elapsed time.</p>
 						</div>
 						<div class="equation" id="eq-placeholder-fee-index-accrual">
-							<math display="block" aria-label="fee index next equals fee index plus collateral decay times price precision divided by total security bond allowance, and vault fees equal allowance times fee index delta divided by price precision" data-source="feeIndexNext = feeIndex + collateralDecay * pricePrecision / totalSecurityBondAllowance; vaultFees = securityBondAllowance * (feeIndex - vaultFeeIndex) / pricePrecision">
+							<math display="block" aria-label="fee index next equals fee index plus collateral decay times price precision divided by total security bond allowance, and vault fees equal allowance times fee index delta divided by price precision" data-source="feeIndexNext = feeIndex + collateralDecay \cdot pricePrecision / totalSecurityBondAllowance; vaultFees = securityBondAllowance \cdot (feeIndex - vaultFeeIndex) / pricePrecision">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -741,7 +689,7 @@
 											<mfrac>
 												<mrow>
 													<mi>collateralDecay</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>pricePrecision</mi>
 												</mrow>
 												<mi>totalSecurityBondAllowance</mi>
@@ -759,7 +707,7 @@
 											<mfrac>
 												<mrow>
 													<mi>securityBondAllowance</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mo>(</mo>
 													<mi>feeIndex</mi>
 													<mo>-</mo>
@@ -817,7 +765,7 @@
 							<p class="diagram-caption"><span class="figure-label">Pool Accounting</span>REP ownership and fee accounting use separate proportional ledgers: ownership tracks REP claims, while the fee index tracks decayed ETH collateral owed to vaults.</p>
 						</figure>
 						<div class="equation" id="eq-placeholder-pool-ownership-conversion">
-							<math display="block" aria-label="pool ownership equals REP amount times pool ownership denominator divided by total REP balance, and REP amount equals pool ownership times total REP balance divided by pool ownership denominator" data-source="poolOwnership = repAmount * poolOwnershipDenominator / totalRepBalance; repAmount = poolOwnership * totalRepBalance / poolOwnershipDenominator">
+							<math display="block" aria-label="pool ownership equals REP amount times pool ownership denominator divided by total REP balance, and REP amount equals pool ownership times total REP balance divided by pool ownership denominator" data-source="poolOwnership = repAmount \cdot poolOwnershipDenominator / totalRepBalance; repAmount = poolOwnership \cdot totalRepBalance / poolOwnershipDenominator">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -830,7 +778,7 @@
 											<mfrac>
 												<mrow>
 													<mi>repAmount</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>poolOwnershipDenominator</mi>
 												</mrow>
 												<mi>totalRepBalance</mi>
@@ -848,7 +796,7 @@
 											<mfrac>
 												<mrow>
 													<mi>poolOwnership</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>totalRepBalance</mi>
 												</mrow>
 												<mi>poolOwnershipDenominator</mi>
@@ -907,7 +855,7 @@
 							<p class="diagram-caption"><span class="figure-label">Liquidation Transfer</span>Liquidation moves a capped slice of target allowance and the matching proportional REP claim to the caller vault.</p>
 						</figure>
 						<div class="equation" id="eq-placeholder-liquidation-transfer">
-							<math display="block" aria-label="debt to move equals minimum of requested debt and target allowance, and REP to move equals debt to move times target REP divided by target allowance" data-source="debtToMove = min(requestedDebt, targetAllowance); repToMove = debtToMove * targetRep / targetAllowance">
+							<math display="block" aria-label="debt to move equals minimum of requested debt and target allowance, and REP to move equals debt to move times target REP divided by target allowance" data-source="debtToMove = min(requestedDebt, targetAllowance); repToMove = debtToMove \cdot targetRep / targetAllowance">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -936,7 +884,7 @@
 											<mfrac>
 												<mrow>
 													<mi>debtToMove</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>targetRep</mi>
 												</mrow>
 												<mi>targetAllowance</mi>
@@ -958,7 +906,7 @@
 
 				<section class="paper-section" id="shares">
 					<div class="section-heading">
-						<h2>6. Shares and Complete Sets</h2>
+						<h2>5. Shares and Complete Sets</h2>
 						<a class="anchor-link" href="#shares" aria-label="Link to Shares">#</a>
 					</div>
 					<p>
@@ -1056,7 +1004,7 @@
 
 				<section class="paper-section" id="escalation">
 					<div class="section-heading">
-						<h2>7. Escalation Resolution</h2>
+						<h2>6. Escalation Resolution</h2>
 						<a class="anchor-link" href="#escalation" aria-label="Link to Escalation">#</a>
 					</div>
 						<p class="lede">
@@ -1081,15 +1029,15 @@
 							</div>
 						</div>
 						<div class="equation" id="eq-placeholder-escalation-cost">
-							<math display="block" aria-label="required escalation cost at time t equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times t divided by full escalation interval" data-source="requiredEscalationCost(t) = startingBondAmount * exp(ln(nonDecisionThresholdAmount / startingBondAmount) * t / fullEscalationInterval)">
+							<math display="block" aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval" data-source="requiredEscalationCost(elapsedEscalationTime) = startingBondAmount \cdot exp(ln(nonDecisionThresholdAmount / startingBondAmount) \cdot elapsedEscalationTime / fullEscalationInterval)">
 								<mrow>
 									<mi>requiredEscalationCost</mi>
 									<mo>(</mo>
-									<mi>t</mi>
+									<mi>elapsedEscalationTime</mi>
 									<mo>)</mo>
 									<mo>=</mo>
 									<mi>startingBondAmount</mi>
-									<mo>*</mo>
+									<mo>&#x22C5;</mo>
 									<mi>exp</mi>
 									<mo>(</mo>
 									<mfrac>
@@ -1101,8 +1049,8 @@
 												<mi>startingBondAmount</mi>
 											</mfrac>
 											<mo>)</mo>
-											<mo>*</mo>
-											<mi>t</mi>
+											<mo>&#x22C5;</mo>
+											<mi>elapsedEscalationTime</mi>
 										</mrow>
 										<mi>fullEscalationInterval</mi>
 									</mfrac>
@@ -1264,7 +1212,7 @@
 							<p class="diagram-caption"><span class="figure-label">Payout Regions</span>Winning deposits below binding capital and in the safety boundary share rewards, while excess receives principal only.</p>
 						</figure>
 						<div class="equation" id="eq-placeholder-escalation-winning-payout">
-							<math display="block" aria-label="reward eligible cap equals binding capital plus binding capital divided by excess reward window divisor, reward bonus pool equals binding capital times three fifths, burn amount equals eligible deposit times binding capital times two fifths divided by eligible principal, amount to withdraw equals deposit amount plus eligible deposit times reward bonus pool divided by eligible principal, and scaled withdrawal equals amount to withdraw times actual fork threshold divided by non decision threshold when actual fork threshold is lower" data-source="rewardEligibleCap = bindingCapital + bindingCapital / excessRewardWindowDivisor; rewardBonusPool = bindingCapital * 3 / 5; burnAmount = rewardEligibleDeposit * (bindingCapital * 2 / 5) / rewardEligiblePrincipal; amountToWithdraw = depositAmount + rewardEligibleDeposit * rewardBonusPool / rewardEligiblePrincipal; scaledWithdrawal = amountToWithdraw * actualForkThreshold / nonDecisionThreshold when actualForkThreshold &lt; nonDecisionThreshold">
+							<math display="block" aria-label="reward eligible cap equals binding capital plus binding capital divided by excess reward window divisor, reward bonus pool equals binding capital times three fifths, burn amount equals eligible deposit times binding capital times two fifths divided by eligible principal, amount to withdraw equals deposit amount plus eligible deposit times reward bonus pool divided by eligible principal, and scaled withdrawal equals amount to withdraw times actual fork threshold divided by non decision threshold when actual fork threshold is lower" data-source="rewardEligibleCap = bindingCapital + bindingCapital / excessRewardWindowDivisor; rewardBonusPool = bindingCapital \cdot 3 / 5; burnAmount = rewardEligibleDeposit \cdot (bindingCapital \cdot 2 / 5) / rewardEligiblePrincipal; amountToWithdraw = depositAmount + rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal; scaledWithdrawal = amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold when actualForkThreshold &lt; nonDecisionThreshold">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -1293,7 +1241,7 @@
 											<mfrac>
 												<mrow>
 													<mi>bindingCapital</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mn>3</mn>
 												</mrow>
 												<mn>5</mn>
@@ -1311,10 +1259,10 @@
 											<mfrac>
 												<mrow>
 													<mi>rewardEligibleDeposit</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mo>(</mo>
 													<mi>bindingCapital</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mfrac>
 														<mn>2</mn>
 														<mn>5</mn>
@@ -1338,7 +1286,7 @@
 											<mfrac>
 												<mrow>
 													<mi>rewardEligibleDeposit</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>rewardBonusPool</mi>
 												</mrow>
 												<mi>rewardEligiblePrincipal</mi>
@@ -1356,7 +1304,7 @@
 											<mfrac>
 												<mrow>
 													<mi>amountToWithdraw</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>actualForkThreshold</mi>
 												</mrow>
 												<mi>nonDecisionThreshold</mi>
@@ -1464,7 +1412,7 @@
 
 				<section class="paper-section" id="migration">
 					<div class="section-heading">
-						<h2>8. Forks and Migration</h2>
+						<h2>7. Forks and Migration</h2>
 						<a class="anchor-link" href="#migration" aria-label="Link to Forks and Migration">#</a>
 					</div>
 							<p>
@@ -1694,7 +1642,7 @@
 							<p class="diagram-caption"><span class="figure-label">Proportional Migration</span>Vault migration first converts parent pool ownership into migrated REP, then transfers parent collateral in the same REP-at-fork proportion.</p>
 						</figure>
 						<div class="equation" id="eq-placeholder-fork-migration-proportion">
-							<math display="block" aria-label="migrated REP equals parent pool ownership times parent REP at fork divided by parent pool ownership denominator, and collateral to transfer equals parent collateral times migrated REP divided by parent REP at fork" data-source="migratedRep = parentPoolOwnership * parentRepAtFork / parentPoolOwnershipDenominator; collateralToTransfer = parentCollateral * migratedRep / parentRepAtFork">
+							<math display="block" aria-label="migrated REP equals parent pool ownership times parent REP at fork divided by parent pool ownership denominator, and collateral to transfer equals parent collateral times migrated REP divided by parent REP at fork" data-source="migratedRep = parentPoolOwnership \cdot parentRepAtFork / parentPoolOwnershipDenominator; collateralToTransfer = parentCollateral \cdot migratedRep / parentRepAtFork">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -1707,7 +1655,7 @@
 											<mfrac>
 												<mrow>
 													<mi>parentPoolOwnership</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>parentRepAtFork</mi>
 												</mrow>
 												<mi>parentPoolOwnershipDenominator</mi>
@@ -1725,7 +1673,7 @@
 											<mfrac>
 												<mrow>
 													<mi>parentCollateral</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>migratedRep</mi>
 												</mrow>
 												<mi>parentRepAtFork</mi>
@@ -1775,7 +1723,7 @@
 								<p class="diagram-caption"><span class="figure-label">Own-Fork REP Buckets</span>In an own fork, child REP is allocated between migrated vault ownership and unresolved escalation escrow according to the pre-burn source REP mix.</p>
 							</figure>
 								<div class="equation" id="eq-placeholder-own-fork-rep-buckets">
-									<math display="block" aria-label="total REP before burn equals pool REP to fork plus escalation REP to fork, vault REP at fork equals zero when total REP before burn is zero otherwise pool REP to fork times auctionable REP at fork divided by total REP before burn, escalation child REP at fork equals auctionable REP at fork minus vault REP at fork, preview escalation child REP equals source REP amount times escalation child REP at fork divided by escalation source REP at fork, and escalation child REP to transfer equals the minimum of preview escalation child REP and remaining outcome escrow child REP" data-source="totalRepBeforeBurn = poolRepToFork + escalationRepToFork; vaultRepAtFork = totalRepBeforeBurn == 0 ? 0 : poolRepToFork * auctionableRepAtFork / totalRepBeforeBurn; escalationChildRepAtFork = auctionableRepAtFork - vaultRepAtFork; previewEscalationChildRep = sourceRepAmount * escalationChildRepAtFork / escalationSourceRepAtFork; escalationChildRepToTransfer = min(previewEscalationChildRep, remainingOutcomeEscrowChildRep)">
+									<math display="block" aria-label="total REP before burn equals pool REP to fork plus escalation REP to fork, vault REP at fork equals zero when total REP before burn is zero otherwise pool REP to fork times auctionable REP at fork divided by total REP before burn, escalation child REP at fork equals auctionable REP at fork minus vault REP at fork, preview escalation child REP equals source REP amount times escalation child REP at fork divided by escalation source REP at fork, and escalation child REP to transfer equals the minimum of preview escalation child REP and remaining outcome escrow child REP" data-source="totalRepBeforeBurn = poolRepToFork + escalationRepToFork; vaultRepAtFork = totalRepBeforeBurn == 0 ? 0 : poolRepToFork \cdot auctionableRepAtFork / totalRepBeforeBurn; escalationChildRepAtFork = auctionableRepAtFork - vaultRepAtFork; previewEscalationChildRep = sourceRepAmount \cdot escalationChildRepAtFork / escalationSourceRepAtFork; escalationChildRepToTransfer = min(previewEscalationChildRep, remainingOutcomeEscrowChildRep)">
 										<mtable>
 										<mtr>
 											<mtd>
@@ -1812,7 +1760,7 @@
 																<mfrac>
 																	<mrow>
 																		<mi>poolRepToFork</mi>
-																		<mo>*</mo>
+																		<mo>&#x22C5;</mo>
 																		<mi>auctionableRepAtFork</mi>
 																	</mrow>
 																	<mi>totalRepBeforeBurn</mi>
@@ -1849,7 +1797,7 @@
 												<mfrac>
 													<mrow>
 														<mi>sourceRepAmount</mi>
-														<mo>*</mo>
+														<mo>&#x22C5;</mo>
 														<mi>escalationChildRepAtFork</mi>
 													</mrow>
 													<mi>escalationSourceRepAtFork</mi>
@@ -1993,7 +1941,7 @@
 								game can be swept back to the security pool.
 							</p>
 							<div class="equation" id="eq-placeholder-forked-escrow-scaling">
-								<math display="block" aria-label="next child REP claimed equals ceiling of next source principal claimed times forked escrow child REP divided by forked escrow principal, child REP to release equals next child REP claimed minus child REP already claimed, and scaled withdrawal equals ceiling of source amount times forked escrow child REP divided by forked escrow principal" data-source="nextChildRepClaimed = ceil(nextSourcePrincipalClaimed * forkedEscrowChildRep / forkedEscrowPrincipal); childRepToRelease = nextChildRepClaimed - childRepClaimed; scaledWithdrawal = ceil(sourceAmount * forkedEscrowChildRep / forkedEscrowPrincipal)">
+								<math display="block" aria-label="next child REP claimed equals ceiling of next source principal claimed times forked escrow child REP divided by forked escrow principal, child REP to release equals next child REP claimed minus child REP already claimed, and scaled withdrawal equals ceiling of source amount times forked escrow child REP divided by forked escrow principal" data-source="nextChildRepClaimed = ceil(nextSourcePrincipalClaimed \cdot forkedEscrowChildRep / forkedEscrowPrincipal); childRepToRelease = nextChildRepClaimed - childRepClaimed; scaledWithdrawal = ceil(sourceAmount \cdot forkedEscrowChildRep / forkedEscrowPrincipal)">
 									<mtable>
 										<mtr>
 											<mtd>
@@ -2008,7 +1956,7 @@
 												<mfrac>
 													<mrow>
 														<mi>nextSourcePrincipalClaimed</mi>
-														<mo>*</mo>
+														<mo>&#x22C5;</mo>
 														<mi>forkedEscrowChildRep</mi>
 													</mrow>
 													<mi>forkedEscrowPrincipal</mi>
@@ -2042,7 +1990,7 @@
 												<mfrac>
 													<mrow>
 														<mi>sourceAmount</mi>
-														<mo>*</mo>
+														<mo>&#x22C5;</mo>
 														<mi>forkedEscrowChildRep</mi>
 													</mrow>
 													<mi>forkedEscrowPrincipal</mi>
@@ -2144,7 +2092,7 @@
 						<p class="diagram-caption"><span class="figure-label">System Decision Flow</span>The main path is simple, but the continuation loop matters: a child escalation game can become the parent of the next fork generation.</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-truth-auction-shortfall">
-						<math display="block" aria-label="ETH collateral to buy equals parent collateral amount minus parent collateral amount times migrated REP amount divided by REP at fork amount" data-source="ethCollateralToBuy = parentCollateralAmount - parentCollateralAmount * migratedRepAmount / repAtForkAmount">
+						<math display="block" aria-label="ETH collateral to buy equals parent collateral amount minus parent collateral amount times migrated REP amount divided by REP at fork amount" data-source="ethCollateralToBuy = parentCollateralAmount - parentCollateralAmount \cdot migratedRepAmount / repAtForkAmount">
 							<mrow>
 								<mi>ethCollateralToBuy</mi>
 								<mo>=</mo>
@@ -2153,7 +2101,7 @@
 								<mfrac>
 									<mrow>
 										<mi>parentCollateralAmount</mi>
-										<mo>*</mo>
+										<mo>&#x22C5;</mo>
 										<mi>migratedRepAmount</mi>
 									</mrow>
 									<mi>repAtForkAmount</mi>
@@ -2177,7 +2125,7 @@
 
 				<section class="paper-section" id="auction">
 					<div class="section-heading">
-						<h2>9. Truth Auction</h2>
+						<h2>8. Truth Auction</h2>
 						<a class="anchor-link" href="#auction" aria-label="Link to Truth Auction">#</a>
 					</div>
 						<p class="lede">
@@ -2301,12 +2249,12 @@
 					</figure>
 					<h3>Auction Mechanics</h3>
 					<div class="equation" id="eq-placeholder-auction-tick-price">
-						<math display="block" aria-label="price at tick equals 10 to the 18 times 1.0001 raised to tick" data-source="priceAtTick = 1e18 * 1.0001^tick">
+						<math display="block" aria-label="price at tick equals ten to the eighteenth times 1.0001 raised to tick" data-source="priceAtTick = pow10(18) \cdot pow(1.0001, tick)">
 							<mrow>
 								<mi>priceAtTick</mi>
 								<mo>=</mo>
-								<mn>1e18</mn>
-								<mo>*</mo>
+								<msup><mn>10</mn><mn>18</mn></msup>
+								<mo>&#x22C5;</mo>
 								<msup>
 									<mn>1.0001</mn>
 									<mi>tick</mi>
@@ -2316,7 +2264,7 @@
 						<p class="equation-caption"><span class="equation-label">Auction Tick Price</span>Each tick maps to a scaled ETH-per-REP price on the auction ladder.</p>
 					</div>
 					<div class="equation" id="eq-placeholder-auction-tick-index">
-						<math display="block" aria-label="tick is approximately the natural log of price in wei per REP divided by 10 to the 18, divided by the natural log of 1.0001" data-source="tick ~= ln(priceInWeiPerRep / 1e18) / ln(1.0001)">
+						<math display="block" aria-label="tick is approximately the natural log of price in wei per REP divided by ten to the eighteenth, divided by the natural log of 1.0001" data-source="tick ~= ln(priceInWeiPerRep / pow10(18)) / ln(1.0001)">
 							<mrow>
 								<mi>tick</mi>
 								<mo>&asymp;</mo>
@@ -2326,7 +2274,7 @@
 										<mo>(</mo>
 										<mfrac>
 											<mi>priceInWeiPerRep</mi>
-											<mn>1e18</mn>
+											<msup><mn>10</mn><mn>18</mn></msup>
 										</mfrac>
 										<mo>)</mo>
 									</mrow>
@@ -2423,7 +2371,7 @@
 							<p class="diagram-caption"><span class="figure-label">Auction Clearing</span>The auction is dual-capped: it tries to raise enough ETH without selling more REP than allowed.</p>
 						</figure>
 						<div class="equation" id="eq-placeholder-auction-fill-math">
-							<math display="block" aria-label="filled REP equals ETH used times price precision divided by clearing price, underfunded threshold equals ETH raised times price precision divided by max REP being sold, and underfunded REP share equals bid ETH times total REP purchased divided by underfunded winning ETH" data-source="filledRep = ethUsed * pricePrecision / clearingPrice; underfundedThreshold = ethRaised * pricePrecision / maxRepBeingSold; repShare = bidEth * totalRepPurchased / underfundedWinningEth">
+							<math display="block" aria-label="filled REP equals ETH used times price precision divided by clearing price, underfunded threshold equals ETH raised times price precision divided by max REP being sold, and underfunded REP share equals bid ETH times total REP purchased divided by underfunded winning ETH" data-source="filledRep = ethUsed \cdot pricePrecision / clearingPrice; underfundedThreshold = ethRaised \cdot pricePrecision / maxRepBeingSold; repShare = bidEth \cdot totalRepPurchased / underfundedWinningEth">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2436,7 +2384,7 @@
 											<mfrac>
 												<mrow>
 													<mi>ethUsed</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>pricePrecision</mi>
 												</mrow>
 												<mi>clearingPrice</mi>
@@ -2454,7 +2402,7 @@
 											<mfrac>
 												<mrow>
 													<mi>ethRaised</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>pricePrecision</mi>
 												</mrow>
 												<mi>maxRepBeingSold</mi>
@@ -2472,7 +2420,7 @@
 											<mfrac>
 												<mrow>
 													<mi>bidEth</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>totalRepPurchased</mi>
 												</mrow>
 												<mi>underfundedWinningEth</mi>
@@ -2504,7 +2452,7 @@
 							claim taking the remainder left by integer division.
 						</p>
 						<div class="equation" id="eq-placeholder-auction-settlement-allocation">
-							<math display="block" aria-label="auction pool ownership amount equals rep to pool ownership of purchased REP amount, and new security bond allowance equals remaining auctioned allowance for the final claim, otherwise auctioned security bond allowance times purchased REP amount divided by total REP purchased" data-source="poolOwnershipAmount = repToPoolOwnership(purchasedRepAmount); newSecurityBondAllowance = finalClaim ? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : auctionedSecurityBondAllowance * purchasedRepAmount / totalRepPurchased">
+							<math display="block" aria-label="auction pool ownership amount equals rep to pool ownership of purchased REP amount, and new security bond allowance equals remaining auctioned allowance for the final claim, otherwise auctioned security bond allowance times purchased REP amount divided by total REP purchased" data-source="poolOwnershipAmount = repToPoolOwnership(purchasedRepAmount); newSecurityBondAllowance = finalClaim ? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : auctionedSecurityBondAllowance \cdot purchasedRepAmount / totalRepPurchased">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2544,7 +2492,7 @@
 														<mfrac>
 															<mrow>
 																<mi>auctionedSecurityBondAllowance</mi>
-																<mo>*</mo>
+																<mo>&#x22C5;</mo>
 																<mi>purchasedRepAmount</mi>
 															</mrow>
 															<mi>totalRepPurchased</mi>
@@ -2568,7 +2516,7 @@
 						<li>Bids are accepted only after start, before finalization, and before <code>auctionStarted + 1 week</code>.</li>
 						<li>Finalization walks aggregate AVL tick totals from the highest ETH/REP tick to the lowest; raw bids are settled later through paged withdrawals.</li>
 						<li>The sweep stops when the ETH raise cap binds or when the ETH collected so far, at that price, would buy all REP being sold.</li>
-						<li>In an underfunded auction, the contract computes <code>underfundedThreshold = ethRaised * PRICE_PRECISION / maxRepBeingSold</code>.</li>
+						<li>In an underfunded auction, the contract computes <math aria-label="underfunded threshold equals ETH raised times price precision divided by max REP being sold" data-source="underfundedThreshold = ethRaised \cdot PRICE_PRECISION / maxRepBeingSold"><mi>underfundedThreshold</mi><mo>=</mo><mfrac><mrow><mi>ethRaised</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mrow><mi>maxRepBeingSold</mi></mfrac></math>.</li>
 						<li>Only bids at or above that underfunded threshold count as winners; all winning ETH buys the full REP inventory pro rata.</li>
 						<li>Normal clearing carries division dust through <code>clearingRemainder</code>; underfunded clearing carries division dust through <code>underfundedRemainder</code> as bids are withdrawn.</li>
 						<li>Before finalization, losing bids below the currently found clearing tick can be refunded in paged batches.</li>
@@ -2635,7 +2583,7 @@
 
 				<section class="paper-section" id="oracle">
 					<div class="section-heading">
-						<h2>10. REP/ETH Price Oracle</h2>
+						<h2>9. REP/ETH Price Oracle</h2>
 						<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 					</div>
 						<p>
@@ -2647,8 +2595,17 @@
 							handled by escalation and, if necessary, Zoltar forks.
 						</p>
 						<p>
+							The OpenOracle path is contestable before the coordinator can use it: the
+							coordinator requests a REP/WETH report, a reporter posts token amounts,
+							disputers can replace a bad report with a larger one, a settler finalizes the
+							report after the timing window, and the settlement callback returns the final
+							amounts to the coordinator. The dedicated
+							<a href="./openOracleIntegration.html">OpenOracle integration</a>
+							page expands this lifecycle and its safety checks.
+						</p>
+						<p>
 							If the last price is stale, solvency-sensitive operations can be queued until a
-							valid report is settled. The manager then replays the pending operation against
+							valid report is settled. The coordinator then replays the pending operation against
 							the fresh price. Escalation deposits are the exception: they require a fresh price
 							when bond allowance is outstanding, but they revert instead of entering the staged
 							callback queue. This price path is only for security backing against ETH
@@ -2676,7 +2633,8 @@
 							</defs>
 							<rect class="svg-blue" x="52" y="58" width="220" height="78" rx="10"></rect>
 							<text class="svg-label" x="162" y="88" text-anchor="middle">Operation Request</text>
-							<text class="svg-small" x="162" y="113" text-anchor="middle">withdraw, allowance, liquidation</text>
+							<text class="svg-small" x="162" y="108" text-anchor="middle">withdraw, allowance,</text>
+							<text class="svg-small" x="162" y="124" text-anchor="middle">liquidation</text>
 							<path class="svg-line" marker-end="url(#arrow-oracle-flow)" d="M 272 97 H 360"></path>
 							<rect class="svg-gold" x="360" y="58" width="220" height="78" rx="10"></rect>
 							<text class="svg-label" x="470" y="88" text-anchor="middle">Valid Price?</text>
@@ -2688,27 +2646,42 @@
 							<path class="svg-line" marker-end="url(#arrow-oracle-flow)" d="M 470 136 V 196"></path>
 							<rect class="svg-red" x="342" y="196" width="256" height="82" rx="10"></rect>
 							<text class="svg-label" x="470" y="227" text-anchor="middle">Stage Operation</text>
-							<text class="svg-small" x="470" y="252" text-anchor="middle">up to 4 pending callbacks</text>
+							<text class="svg-small" x="470" y="252" text-anchor="middle">one callback replays up to 4</text>
 							<path class="svg-line" marker-end="url(#arrow-oracle-flow)" d="M 598 237 H 688"></path>
 							<rect class="svg-blue" x="688" y="196" width="210" height="82" rx="10"></rect>
-							<text class="svg-label" x="793" y="227" text-anchor="middle">OpenOracle</text>
-							<text class="svg-small" x="793" y="252" text-anchor="middle">callback supplies price</text>
+							<text class="svg-label" x="793" y="219" text-anchor="middle">OpenOracle</text>
+							<text class="svg-small" x="793" y="239" text-anchor="middle">reporter posts</text>
+							<text class="svg-small" x="793" y="255" text-anchor="middle">disputer may replace</text>
+							<text class="svg-small" x="793" y="271" text-anchor="middle">settler callback</text>
 							<path class="svg-line" marker-end="url(#arrow-oracle-flow)" d="M 688 278 C 610 336 396 336 320 278"></path>
 							<rect class="svg-box" x="84" y="196" width="236" height="82" rx="10"></rect>
 							<text class="svg-label" x="202" y="227" text-anchor="middle">Consume or Replay</text>
-							<text class="svg-small" x="202" y="252" text-anchor="middle">expired, stale, over budget, or executed</text>
-						</svg>
-						<p class="diagram-caption"><span class="figure-label">REP/ETH Oracle Flow</span>The coordinator is a queue plus cache. A fresh price can execute immediately; a stale price moves operations into a bounded pending-settlement path.</p>
-					</figure>
-					<div class="equation" id="eq-placeholder-oracle-request-cost">
-						<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee * 4 * (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
+							<text class="svg-small" x="202" y="247" text-anchor="middle">expired, stale, over budget,</text>
+							<text class="svg-small" x="202" y="263" text-anchor="middle">or executed</text>
+							</svg>
+							<p class="diagram-caption"><span class="figure-label">REP/ETH Oracle Flow</span>The coordinator is a queue plus cache. A fresh price can execute immediately; a stale price moves operations into a bounded pending-settlement path.</p>
+						</figure>
+						<p>
+							When no fresh price is available, the caller funds the OpenOracle request bounty.
+							The coordinator sizes that ETH cost from the current base fee, the callback gas
+							limit, and the configured gas budget for reporting the price.
+						</p>
+						<p>
+							A later caller that joins the same pending settlement slot pays
+							<code>getQueuedOperationEthCost()</code> instead of funding another report. The
+							coordinator records that payment in <code>oracleFeeCredits</code> for the
+							original pending report sponsor, who can later call
+							<code>withdrawOracleFeeCredits()</code>.
+						</p>
+						<div class="equation" id="eq-placeholder-oracle-request-cost">
+						<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
 							<mrow>
 								<mi>requestPriceEthCost</mi>
 								<mo>=</mo>
 								<mi>block.basefee</mi>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mn>4</mn>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mo>(</mo>
 								<mi>callbackGasLimit</mi>
 								<mo>+</mo>
@@ -2717,10 +2690,16 @@
 								<mo>+</mo>
 								<mn>101</mn>
 							</mrow>
-						</math>
-						<p class="equation-caption"><span class="equation-label">Oracle Request Cost</span>The coordinator sizes the ETH bounty from current base fee and the configured report and callback gas limits.</p>
-					</div>
-						<div class="equation" id="eq-placeholder-staged-expiry">
+							</math>
+							<p class="equation-caption"><span class="equation-label">Oracle Request Cost</span>The coordinator sizes the ETH bounty from current base fee and the configured report and callback gas limits. The <code>101</code> offset keeps the forwarded bounty strictly above the computed gas product so the OpenOracle-funded reward path has a positive buffer instead of landing exactly on the boundary.</p>
+						</div>
+						<p>
+							Staged operations also need an expiry because they are caller-authorized actions,
+							not permanent permissions. A delayed callback should not execute an old
+							withdrawal, allowance change, or liquidation after the caller-selected validity
+							window has passed.
+						</p>
+							<div class="equation" id="eq-placeholder-staged-expiry">
 							<math display="block" aria-label="staged expiry equals queued at plus settlement time plus valid for seconds" data-source="stagedExpiry = queuedAt + settlementTime + validForSeconds">
 								<mrow>
 									<mi>stagedExpiry</mi>
@@ -2768,10 +2747,12 @@
 							<code>priceRoundMaxNotional</code> and the still-available budget
 							<code>remainingNotional</code>. The coordinator subtracts
 							<code>consumedNotional</code> as successful operations use the current price
-							round.
+							round. Here <code>exactToken1Report</code> is the initial REP report size,
+							<code>pricePrecision</code> is the fixed scaling factor, and
+							<code>repPerEthPrice</code> is the settled REP per ETH price.
 						</p>
 						<div class="equation" id="eq-placeholder-oracle-round-budget">
-							<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = exactToken1Report * pricePrecision * priceRoundBudgetMultiplierBps / repPerEthPrice / oracleBudgetBps; remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
+							<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = exactToken1Report \cdot pricePrecision \cdot priceRoundBudgetMultiplierBps / (repPerEthPrice \cdot oracleBudgetBps); remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2784,14 +2765,14 @@
 											<mfrac>
 												<mrow>
 													<mi>exactToken1Report</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>pricePrecision</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>priceRoundBudgetMultiplierBps</mi>
 												</mrow>
 												<mrow>
 													<mi>repPerEthPrice</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>oracleBudgetBps</mi>
 												</mrow>
 											</mfrac>
@@ -2845,7 +2826,7 @@
 								</tr>
 								<tr>
 									<td><code>pricePrecision</code></td>
-									<td>The fixed <code>1e18</code> scale factor used for REP/ETH price math.</td>
+									<td>The fixed <math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math> scale factor used for REP/ETH price math.</td>
 								</tr>
 								<tr>
 									<td><code>priceRoundBudgetMultiplierBps</code></td>
@@ -2862,7 +2843,7 @@
 							</tbody>
 						</table>
 						<div class="equation" id="eq-placeholder-liquidation-price-distance">
-							<math display="block" aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times oracle budget basis points divided by current price and must be at least the minimum liquidation price distance basis points" data-source="thresholdPrice = vaultRep * pricePrecision / (snapshotTargetAllowance * securityMultiplier); distanceBps = (currentPrice - thresholdPrice) * oracleBudgetBps / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps">
+							<math display="block" aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times oracle budget basis points divided by current price and must be at least the minimum liquidation price distance basis points" data-source="thresholdPrice = vaultRep \cdot pricePrecision / (snapshotTargetAllowance \cdot securityMultiplier); distanceBps = (currentPrice - thresholdPrice) \cdot oracleBudgetBps / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2875,12 +2856,12 @@
 											<mfrac>
 												<mrow>
 													<mi>vaultRep</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>pricePrecision</mi>
 												</mrow>
 												<mrow>
 													<mi>snapshotTargetAllowance</mi>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>securityMultiplier</mi>
 												</mrow>
 											</mfrac>
@@ -2901,7 +2882,7 @@
 													<mo>-</mo>
 													<mi>thresholdPrice</mi>
 													<mo>)</mo>
-													<mo>*</mo>
+													<mo>&#x22C5;</mo>
 													<mi>oracleBudgetBps</mi>
 												</mrow>
 												<mi>currentPrice</mi>
@@ -2934,7 +2915,7 @@
 
 				<section class="paper-section" id="security">
 					<div class="section-heading">
-						<h2>11. Assumptions and Security Model</h2>
+						<h2>10. Assumptions and Security Model</h2>
 						<a class="anchor-link" href="#security" aria-label="Link to Security Model">#</a>
 					</div>
 					<div class="equation" id="eq-placeholder-security-assumption">
@@ -2978,7 +2959,7 @@
 
 				<section class="paper-section" id="parameters">
 					<div class="section-heading">
-						<h2>12. Current Parameters</h2>
+						<h2>11. Current Parameters</h2>
 						<a class="anchor-link" href="#parameters" aria-label="Link to Current Parameters">#</a>
 					</div>
 					<figure class="diagram" id="fig-placeholder-parameter-strip">
@@ -3072,7 +3053,7 @@
 							<tr>
 								<td>Escalation <code>nonDecisionThreshold</code></td>
 								<td><code>totalTheoreticalRepSupply / 40</code></td>
-								<td>Deployed as <code>repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2)</code>.</td>
+								<td>Deployed as <math aria-label="REP token total theoretical supply divided by fork threshold divisor times 2" data-source="repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR \cdot 2)"><mfrac><mrow><mi>repToken.getTotalTheoreticalSupply</mi><mo>(</mo><mo>)</mo></mrow><mrow><mi>FORK_THRESHOLD_DIVISOR</mi><mo>&#x22C5;</mo><mn>2</mn></mrow></mfrac></math>.</td>
 							</tr>
 							<tr>
 								<td><code>EXCESS_REWARD_WINDOW_DIVISOR</code></td>
@@ -3138,7 +3119,7 @@
 							</tr>
 							<tr>
 								<td><code>PRICE_PRECISION</code></td>
-								<td><code>1e18</code></td>
+									<td><math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math></td>
 								<td>Fixed-point precision for REP/ETH and retention-rate math.</td>
 							</tr>
 							<tr>
@@ -3183,13 +3164,13 @@
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Per-operation settlement gas estimate used by the coordinator.</td></tr>
 							<tr><td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td><td><code>4</code></td><td>Maximum staged operations executed from one OpenOracle settlement callback.</td></tr>
 							<tr><td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>Maximum self-service validity window for staged oracle-gated operations.</td></tr>
-							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><code>250 * 10^18</code></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
-							<tr><td>OpenOracle <code>escalationHalt</code></td><td><code>exactToken1Report * 100000 / 10000</code></td><td>Dynamic halt threshold for report escalation, equal to <code>10x</code> the initial REP report amount.</td></tr>
-							<tr><td>OpenOracle <code>settlerReward</code></td><td><code>block.basefee * 2 * gasConsumedOpenOracleReportPrice</code></td><td>Dynamic ETH reward paid to settler.</td></tr>
-							<tr><td>OpenOracle <code>settlementTime</code></td><td><code>480</code></td><td>Settlement delay encoded as <code>40 * 12</code>.</td></tr>
+							<tr><td>OpenOracle <code>exactToken1Report</code></td><td><math aria-label="250 times price precision scale" data-source="250 \cdot pow10(18)"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math></td><td>Initial report liquidity parameter, denominated in REP token units.</td></tr>
+							<tr><td>OpenOracle <code>escalationHalt</code></td><td><math aria-label="exact token one report times 100000 divided by 10000" data-source="exactToken1Report \cdot 100000 / 10000"><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mn>100000</mn><mo>/</mo><mn>10000</mn></math></td><td>Dynamic halt threshold for report escalation, equal to <code>10x</code> the initial REP report amount.</td></tr>
+							<tr><td>OpenOracle <code>settlerReward</code></td><td><math aria-label="block base fee times 2 times gas consumed open oracle report price" data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td><td>Dynamic ETH reward paid to settler.</td></tr>
+							<tr><td>OpenOracle <code>settlementTime</code></td><td><math aria-label="40 times 12" data-source="40 \cdot 12"><mn>40</mn><mo>&#x22C5;</mo><mn>12</mn></math></td><td>Settlement delay encoded as <code>480</code>.</td></tr>
 							<tr><td>OpenOracle <code>disputeDelay</code></td><td><code>0</code></td><td>No extra waiting period after each report.</td></tr>
 							<tr><td>OpenOracle <code>protocolFee</code></td><td><code>100000</code></td><td>Protocol fee sent to the configured fee sink, equal to <code>1%</code>.</td></tr>
-							<tr><td>OpenOracle <code>callbackGasLimit</code></td><td><code>4000000</code></td><td>Settlement callback gas limit computed as <code>gasConsumedSettlement * MAX_PENDING_SETTLEMENT_OPERATIONS</code>.</td></tr>
+							<tr><td>OpenOracle <code>callbackGasLimit</code></td><td><code>4000000</code></td><td>Settlement callback gas limit computed as <math aria-label="gas consumed settlement times max pending settlement operations" data-source="gasConsumedSettlement \cdot MAX_PENDING_SETTLEMENT_OPERATIONS"><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo><mi>MAX_PENDING_SETTLEMENT_OPERATIONS</mi></math>.</td></tr>
 							<tr><td>OpenOracle <code>feePercentage</code></td><td><code>10000</code></td><td>Fee paid to previous reporter, annotated in code as <code>0.1%</code>.</td></tr>
 							<tr><td>OpenOracle <code>multiplier</code></td><td><code>115</code></td><td>New report amount must be <code>1.15x</code> the prior amount until the escalation halt.</td></tr>
 							<tr><td>OpenOracle <code>timeType</code></td><td><code>true</code></td><td>OpenOracle uses block timestamps rather than block numbers.</td></tr>
@@ -3198,7 +3179,7 @@
 							<tr><td><code>priceRoundBudgetMultiplierBps</code></td><td><code>40000</code></td><td>Oracle price-round budget multiplier, equal to <code>4x</code>.</td></tr>
 							<tr><td><code>escalationHaltMultiplierBps</code></td><td><code>100000</code></td><td>Multiplier used to derive the OpenOracle escalation halt from <code>exactToken1Report</code>, equal to <code>10x</code>.</td></tr>
 							<tr><td><code>maxSettlementBaseFeeMultiplierBps</code></td><td><code>30000</code></td><td>Maximum settlement base-fee multiplier accepted by the coordinator, equal to <code>3x</code>.</td></tr>
-							<tr><td><code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum distance from the liquidation threshold required before executing a staged liquidation, equal to <code>10%</code>.</td></tr>
+								<tr><td><code>minLiquidationPriceDistanceBps</code></td><td><code>1000</code></td><td>Minimum liquidation distance required before executing a staged liquidation: <math aria-label="current price minus threshold price divided by current price" data-source="(currentPrice - thresholdPrice) / currentPrice"><mfrac><mrow><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi></mrow><mi>currentPrice</mi></mfrac></math> must be at least <code>10%</code>.</td></tr>
 							<tr><td>Coordinator <code>WETH</code></td><td><code>0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2</code></td><td>Mainnet WETH address used in REP/ETH price reports.</td></tr>
 						</tbody>
 					</table>
@@ -3206,7 +3187,7 @@
 
 				<section class="paper-section" id="example">
 					<div class="section-heading">
-						<h2>13. Lifecycle Recap</h2>
+						<h2>12. Lifecycle Recap</h2>
 						<a class="anchor-link" href="#example" aria-label="Link to Lifecycle Recap">#</a>
 					</div>
 					<p>
@@ -3215,16 +3196,17 @@
 							<a href="#fig-placeholder-lifecycle">Lifecycle Flow figure</a> shows the happy
 							path; the migration and auction sections define the exceptional cases.
 					</p>
-					<ul class="clean-list">
-						<li>Local resolution keeps redemption in the original pool.</li>
-						<li>Non-decision moves the relevant state into child pools.</li>
-						<li>Short child collateral triggers truth-auction repair before normal child operation resumes.</li>
-					</ul>
+						<ul class="clean-list">
+							<li>Local resolution keeps redemption in the original pool.</li>
+							<li>Non-decision moves the relevant state into child pools.</li>
+							<li>Short child collateral triggers truth-auction repair before normal child operation resumes.</li>
+							<li>Solvency-sensitive operations run through the bounded REP/ETH price-oracle path, not through the truth/forking path.</li>
+						</ul>
 				</section>
 
 				<section class="paper-section" id="constraints">
 					<div class="section-heading">
-						<h2>14. Implementation Constraints</h2>
+						<h2>13. Implementation Constraints</h2>
 						<a class="anchor-link" href="#constraints" aria-label="Link to Implementation Constraints">#</a>
 					</div>
 					<ul>

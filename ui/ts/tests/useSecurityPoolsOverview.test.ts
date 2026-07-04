@@ -262,9 +262,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 		mock.module('../contracts.js', () => ({
 			loadAllSecurityPools: mock(async () => []),
-			loadOracleManagerDetails: mock(async () => ({
-				requestPriceEthCost: 0n,
-			})),
+			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
 			}),
@@ -332,9 +330,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 		mock.module('../contracts.js', () => ({
 			loadAllSecurityPools: mock(async () => []),
-			loadOracleManagerDetails: mock(async () => ({
-				requestPriceEthCost: 0n,
-			})),
+			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
 			}),

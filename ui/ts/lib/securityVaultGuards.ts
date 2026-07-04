@@ -44,9 +44,9 @@ export function getVaultDepositGuardMessage({
 
 export function getVaultWithdrawGuardMessage({
 	accountAddress,
-	hasValidOraclePrice,
+	bufferRequiredEthCost = false,
 	isMainnet,
-	requestPriceEthCost,
+	requiredEthCost,
 	selectedVaultIsOwnedByAccount,
 	stagedOperationTimeoutMinutes,
 	withdrawAmount,
@@ -54,9 +54,9 @@ export function getVaultWithdrawGuardMessage({
 	walletEthBalance,
 }: {
 	accountAddress: Address | undefined
-	hasValidOraclePrice: boolean
+	bufferRequiredEthCost?: boolean | undefined
 	isMainnet: boolean
-	requestPriceEthCost: bigint | undefined
+	requiredEthCost: bigint | undefined
 	selectedVaultIsOwnedByAccount: boolean
 	stagedOperationTimeoutMinutes: bigint | undefined
 	withdrawAmount: bigint | undefined
@@ -66,7 +66,6 @@ export function getVaultWithdrawGuardMessage({
 	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to withdraw REP.'
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing REP.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing REP.'
-	if (!hasValidOraclePrice) return 'A valid oracle price is required before withdrawing REP.'
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
 	if (withdrawAmount <= 0n) return 'Enter a REP withdraw amount greater than zero.'
 	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return 'No REP is currently withdrawable from this vault.'
@@ -75,7 +74,8 @@ export function getVaultWithdrawGuardMessage({
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this REP withdrawal',
-		requestPriceEthCost,
+		includeBuffer: bufferRequiredEthCost,
+		requiredEthCost,
 		walletEthBalance,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage
@@ -83,20 +83,20 @@ export function getVaultWithdrawGuardMessage({
 }
 
 export function getVaultSetSecurityBondAllowanceGuardMessage({
-	hasValidOraclePrice,
+	bufferRequiredEthCost = false,
 	isMainnet,
 	maxSecurityBondAllowanceAmount,
-	requestPriceEthCost,
+	requiredEthCost,
 	securityBondAllowanceAmount,
 	selectedVaultDetailsLoaded,
 	selectedVaultIsOwnedByAccount,
 	stagedOperationTimeoutMinutes,
 	walletEthBalance,
 }: {
-	hasValidOraclePrice: boolean
+	bufferRequiredEthCost?: boolean | undefined
 	isMainnet: boolean
 	maxSecurityBondAllowanceAmount: bigint | undefined
-	requestPriceEthCost: bigint | undefined
+	requiredEthCost: bigint | undefined
 	securityBondAllowanceAmount: bigint | undefined
 	selectedVaultDetailsLoaded: boolean
 	selectedVaultIsOwnedByAccount: boolean
@@ -106,7 +106,6 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to set the security bond allowance.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before setting the security bond allowance.'
 	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before setting the security bond allowance.'
-	if (!hasValidOraclePrice) return 'A valid oracle price is required before setting the security bond allowance.'
 	if (securityBondAllowanceAmount === undefined || securityBondAllowanceAmount < 0n) return 'Enter a valid security bond allowance.'
 	if (securityBondAllowanceAmount !== 0n && securityBondAllowanceAmount < MIN_SECURITY_BOND_ALLOWANCE) return `Enter at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH for a non-zero allowance.`
 	if (maxSecurityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > maxSecurityBondAllowanceAmount) return `Reduce the security bond allowance to ${formatCurrencyBalance(maxSecurityBondAllowanceAmount)} ETH or less.`
@@ -114,7 +113,8 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this bond allowance update',
-		requestPriceEthCost,
+		includeBuffer: bufferRequiredEthCost,
+		requiredEthCost,
 		walletEthBalance,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage
@@ -155,16 +155,18 @@ export function getVaultRedeemRepGuardMessage({
 export function getVaultRequestPriceGuardMessage({
 	accountAddress,
 	hasLoadedSelectedPool,
+	bufferRequiredEthCost = true,
 	isMainnet,
 	pendingReportId,
-	requestPriceEthCost,
+	requiredEthCost,
 	walletEthBalance,
 }: {
 	accountAddress: Address | undefined
 	hasLoadedSelectedPool: boolean
+	bufferRequiredEthCost?: boolean | undefined
 	isMainnet: boolean
 	pendingReportId: bigint | undefined
-	requestPriceEthCost: bigint | undefined
+	requiredEthCost: bigint | undefined
 	walletEthBalance: bigint | undefined
 }) {
 	if (accountAddress === undefined) return 'Connect a wallet before requesting a new price.'
@@ -173,7 +175,8 @@ export function getVaultRequestPriceGuardMessage({
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'request a new price',
-		requestPriceEthCost,
+		includeBuffer: bufferRequiredEthCost,
+		requiredEthCost,
 		walletEthBalance,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage

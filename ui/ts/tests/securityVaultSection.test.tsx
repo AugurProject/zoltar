@@ -93,8 +93,10 @@ function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['or
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingSettlementOperationIds: [],
+		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
+		queuedOperationEthCost: 0n,
 		requestPriceEthCost: 0n,
 		token1: undefined,
 		token2: undefined,
@@ -206,6 +208,60 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+	})
+
+	test('allows a non-zero bond allowance when the oracle price is stale but fresh-report funding is available', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({
+						ethBalance: 2n * 10n ** 18n,
+					}),
+					oracleManagerDetails: {
+						...createOracleManagerDetails(),
+						isPriceValid: false,
+						requestPriceEthCost: 1n,
+					},
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+	})
+
+	test('allows REP withdrawal staging when the oracle price is stale but fresh-report funding is available', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({
+						ethBalance: 2n * 10n ** 18n,
+					}),
+					oracleManagerDetails: {
+						...createOracleManagerDetails(),
+						isPriceValid: false,
+						requestPriceEthCost: 1n,
+					},
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
 	test('defaults queued self-service timeout copy to 5 minutes when the form has no explicit timeout', async () => {

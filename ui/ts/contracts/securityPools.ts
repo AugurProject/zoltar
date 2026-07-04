@@ -141,8 +141,9 @@ function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint,
 	return poolOwnership > 0n || securityBondAllowance > 0n || unpaidEthFees > 0n
 }
 
-function normalizeBigintValue(value: bigint | number) {
-	return typeof value === 'bigint' ? value : BigInt(value)
+export function getRepDepositShareFromPoolOwnership({ poolOwnership, poolOwnershipDenominator, totalRepBalance }: { poolOwnership: bigint; poolOwnershipDenominator: bigint; totalRepBalance: bigint }) {
+	if (poolOwnership === 0n || poolOwnershipDenominator === 0n) return 0n
+	return (poolOwnership * totalRepBalance) / poolOwnershipDenominator
 }
 
 async function loadSecurityPoolVaultSummaries(
@@ -204,11 +205,14 @@ async function loadSecurityPoolVaultSummaries(
 			if (currentEscrowedRep === undefined) throw new Error('Unexpected escrowed REP response')
 			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscrowedRep === 0n) return []
 			const [poolOwnership, securityBondAllowance, unpaidEthFees] = currentVaultData
-			const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : normalizeBigintValue((poolOwnership * totalRepBalance) / poolOwnershipDenominator)
 			return [
 				{
 					escalationEscrowedRep: currentEscrowedRep,
-					repDepositShare,
+					repDepositShare: getRepDepositShareFromPoolOwnership({
+						poolOwnership,
+						poolOwnershipDenominator,
+						totalRepBalance,
+					}),
 					securityBondAllowance,
 					unpaidEthFees,
 					vaultAddress,
@@ -497,7 +501,11 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	])
 
 	const [poolOwnership, securityBondAllowance, unpaidEthFees] = vaultData
-	const repDepositShare = poolOwnershipDenominator === 0n || poolOwnership === 0n ? 0n : normalizeBigintValue((poolOwnership * totalRepBalance) / poolOwnershipDenominator)
+	const repDepositShare = getRepDepositShareFromPoolOwnership({
+		poolOwnership,
+		poolOwnershipDenominator,
+		totalRepBalance,
+	})
 
 	return {
 		currentRetentionRate,

@@ -14,6 +14,7 @@ import {
 	getActiveStagedOperations,
 	getPendingSettlementOperationCount,
 	getPendingSettlementOperationIds,
+	getQueuedOperationEthCost,
 	getQuestionEndDate,
 	getRequestPriceEthCost,
 	getStagedOperation,
@@ -466,10 +467,17 @@ describe('Peripherals invariant harness', () => {
 	test('oracle-staged operations cannot be overwritten or executed twice', async () => {
 		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const allowances = [repDeposit / 4n, repDeposit / 5n, repDeposit / 6n, repDeposit / 7n, repDeposit / 8n]
 
 		for (let index = 0; index < allowances.length; index += 1) {
-			await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, ensureDefined(allowances[index], `allowances[${index}] is undefined`), 5n * 60n, index === 0 ? ethCost : 0n)
+			let value = 0n
+			if (index === 0) {
+				value = ethCost
+			} else if (index < 4) {
+				value = queuedOperationEthCost
+			}
+			await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, ensureDefined(allowances[index], `allowances[${index}] is undefined`), 5n * 60n, value)
 		}
 
 		strictEqualTypeSafe(await getStagedOperationCounter(client, priceOracle), 5n, 'queued operations should use append-only ids')

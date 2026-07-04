@@ -21,7 +21,7 @@ import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
-import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
@@ -231,11 +231,21 @@ export function LiquidationModal({
 	const queueLiquidationEthGuardMessage =
 		liquidationExecutionMode !== 'queue'
 			? undefined
-			: getOracleRequestEthGuardMessage({
-					actionLabel: 'queue this liquidation',
-					requestPriceEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
-					walletEthBalance,
-				})
+			: (() => {
+					const funding = resolveOracleOperationEthFunding({
+						amount: liquidationAmountValue ?? 0n,
+						currentTargetAllowance: targetVaultSummary?.securityBondAllowance,
+						currentTargetRepDeposit: targetVaultSummary?.repDepositShare,
+						managerDetails: currentPoolOracleManagerDetails,
+						operation: 'liquidation',
+					})
+					return getOracleRequestEthGuardMessage({
+						actionLabel: 'queue this liquidation',
+						includeBuffer: funding?.includeBuffer === true,
+						requiredEthCost: funding?.ethCost,
+						walletEthBalance,
+					})
+				})()
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
 	const liquidationActionReason = pickFirstReason(
 		accountAddress === undefined ? 'Connect a wallet before liquidating.' : undefined,

@@ -1260,6 +1260,28 @@ describe('Open Oracle helpers', () => {
 		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setSecurityBondsAllowance'])
 	})
 
+	test('queueOracleManagerOperation lets another wallet join a pending report with the buffered queued operation fee', async () => {
+		const secondAddress = addressString(TEST_ADDRESSES[1])
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+
+		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(managerDetails.pendingReportId).toBeGreaterThan(0n)
+		expect(managerDetails.queuedOperationEthCost).toBeGreaterThan(0n)
+		expect(addOpenOracleBountyBuffer(managerDetails.requestPriceEthCost)).toBeGreaterThan(managerDetails.queuedOperationEthCost)
+		expect(addOpenOracleBountyBuffer(managerDetails.queuedOperationEthCost)).toBeGreaterThan(managerDetails.queuedOperationEthCost)
+
+		await mockWindow.setBalance(secondAddress, addOpenOracleBountyBuffer(managerDetails.queuedOperationEthCost))
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		installInjectedEthereum(mockWindow, secondAddress)
+		const secondUiWriteClient = createWalletWriteClient(secondAddress)
+		const queuedResult = await queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+
+		expect(queuedResult.queuedOperation).toBeDefined()
+		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(true)
+		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingSettlementOperationIds.length).toBe(2)
+	})
+
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
 		await requestOraclePrice(uiWriteClient, managerAddress)
 

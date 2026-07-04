@@ -1,6 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
+import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 
 describe('Peripherals: fork migration', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
@@ -1205,7 +1206,27 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), parentAllowance, 'test setup requires inherited mint capacity')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), /Exchange rate undefined/)
+			const childCollateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const childShareSupplyBeforeFailedMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+			const childMintRejected = await newMinter
+				.simulateContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'createCompleteSet',
+					address: yesSecurityPool.securityPool,
+					args: [],
+					account: newMinter.account,
+					value: 1n * 10n ** 18n,
+				})
+				.then(
+					() => false,
+					error => {
+						if (!(error instanceof Error)) throw error
+						return true
+					},
+				)
+			strictEqualTypeSafe(childMintRejected, true, 'zero-collateral child should reject new complete-set minting')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), childCollateralBeforeFailedMint, 'failed child mint should not add collateral')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), childShareSupplyBeforeFailedMint, 'failed child mint should not mint shares')
 		})
 
 		test('can migrate escalation deposits before migrateVault', async () => {

@@ -26,9 +26,11 @@ import {
 	getPendingReportMaxSettlementBaseFee,
 	getPendingSettlementOperationCount,
 	getPendingSettlementOperationIds,
+	getQueuedOperationEthCost,
 	getPriceRoundConsumedNotional,
 	getPriceRoundRemainingNotional,
 	getRequestPriceEthCost,
+	getOracleFeeCredit,
 	getStagedOperation,
 	getStagedOperationCounter,
 	openOracleSettle,
@@ -38,6 +40,7 @@ import {
 	requestPrice,
 	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
+	withdrawOracleFeeCredits,
 	wrapWeth,
 } from '../testsuite/simulator/utils/contracts/peripherals'
 import { depositRep, getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
@@ -160,6 +163,22 @@ const findPriceRoundNotionalConsumedLogs = (logs: TransactionReceiptLogs) =>
 			}
 		})
 		.filter(log => log?.eventName === 'PriceRoundNotionalConsumed')
+
+const findOracleFeeCreditWithdrawnLog = (logs: TransactionReceiptLogs) =>
+	logs
+		.map(log => {
+			try {
+				return decodeEventLog({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				return undefined
+			}
+		})
+		.find(log => log?.eventName === 'OracleFeeCreditWithdrawn')
 
 const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -312,9 +331,9 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	const queueStagedOperation = async (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, targetVault, amount, validForSeconds, value)
 
-	const fillPendingSettlementOperationList = async (ethCost: bigint, validForSeconds: bigint) => {
+	const fillPendingSettlementOperationList = async (ethCost: bigint, queuedOperationEthCost: bigint, validForSeconds: bigint) => {
 		for (let index = 0; index < 4; index++) {
-			await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? ethCost : 0n)
+			await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? ethCost : queuedOperationEthCost)
 		}
 	}
 
@@ -575,6 +594,62 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.ok(recoveryPendingReportId > 0n, 'oracle state should recover after an invalid settled report clears the pending request')
 	})
 
+	test('joining a pending report charges the queued operation fee and credits the report sponsor', async () => {
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
+		const sponsorAllowance = repDeposit / 4n
+		const counterpartyAllowance = repDeposit / 5n
+
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+
+		const pendingReportIdBeforeJoin = await getPendingReportId(client, priceOracle)
+		const sponsorCreditBeforeJoin = await getOracleFeeCredit(client, priceOracle, client.account.address)
+		const counterpartyEthBeforeJoin = await getETHBalance(counterpartyClient, counterpartyClient.account.address)
+		const zeroFeeJoinRejected = await counterpartyClient
+			.simulateContract({
+				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				functionName: 'requestPriceIfNeededAndStageOperation',
+				address: priceOracle,
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+				account: counterpartyClient.account,
+			})
+			.then(
+				() => false,
+				error => {
+					if (!(error instanceof Error)) throw error
+					return error.message.includes('pending oracle settlement queue')
+				},
+			)
+
+		await requestPriceIfNeededAndStageOperationWithValue(counterpartyClient, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+
+		const pendingReportIdAfterJoin = await getPendingReportId(client, priceOracle)
+		const sponsorCreditAfterJoin = await getOracleFeeCredit(client, priceOracle, client.account.address)
+		const counterpartyEthAfterJoin = await getETHBalance(counterpartyClient, counterpartyClient.account.address)
+		const sponsorEthBeforeWithdraw = await getETHBalance(client, client.account.address)
+
+		const withdrawHash = await withdrawOracleFeeCredits(client, priceOracle)
+		const withdrawReceipt = await client.waitForTransactionReceipt({ hash: withdrawHash })
+
+		const sponsorCreditAfterWithdraw = await getOracleFeeCredit(client, priceOracle, client.account.address)
+		const sponsorEthAfterWithdraw = await getETHBalance(client, client.account.address)
+		const withdrawLog = findOracleFeeCreditWithdrawnLog(withdrawReceipt.logs)
+		if (withdrawLog === undefined) throw new Error('missing OracleFeeCreditWithdrawn log')
+
+		assert.strictEqual(pendingReportIdAfterJoin, pendingReportIdBeforeJoin, 'joining a pending report should reuse the existing oracle request')
+		assert.strictEqual(zeroFeeJoinRejected, true, 'joining a pending report without the queued-operation fee should be rejected even when basefee is zero')
+		assert.strictEqual(sponsorCreditAfterJoin - sponsorCreditBeforeJoin, queuedOperationEthCost, 'queued joiners should credit the report sponsor by the per-operation oracle fee')
+		assert.strictEqual(counterpartyEthBeforeJoin - counterpartyEthAfterJoin, queuedOperationEthCost, 'queued joiners should pay the per-operation oracle fee')
+		assert.strictEqual(sponsorCreditAfterWithdraw, 0n, 'withdrawing oracle fee credits should clear the sponsor credit balance')
+		assert.strictEqual(sponsorEthAfterWithdraw - sponsorEthBeforeWithdraw, queuedOperationEthCost, 'withdrawing oracle fee credits should pay the full credited amount to the sponsor')
+		assert.strictEqual(withdrawLog.args.sponsor, client.account.address, 'withdraw event should identify the sponsor')
+		assert.strictEqual(withdrawLog.args.amount, queuedOperationEthCost, 'withdraw event should report the full credited amount')
+	})
+
 	test('expired pending auto-execute slots do not block later valid oracle settlements', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
@@ -718,6 +793,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('settlement auto-executes a bounded pending operation list and leaves overflow manual', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const firstAllowance = repDeposit / 4n
 		const secondAllowance = repDeposit / 5n
 		const thirdAllowance = repDeposit / 6n
@@ -725,9 +801,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		const fifthAllowance = repDeposit / 8n
 
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, thirdAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, thirdAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fifthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 
 		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
@@ -810,6 +886,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(updatedActiveStagedOperationCount, 1n, 'active staged operation count should leave only the overflow operation')
 		assert.deepStrictEqual(Array.from(remainingOperationIds), [5n], 'active staged operations should keep the overflow operation active')
 		assert.strictEqual(remainingOperations[0]?.amount, fifthAllowance, 'overflow operation should stay in the active preview')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement should leave a fresh price available for manual overflow execution')
 
 		await executeStagedOperation(client, priceOracle, 5n)
 		const finalActiveStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
@@ -820,11 +897,12 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('one oracle price round cannot authorize operations beyond its shared protocol budget', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const budgetConsumingAllowance = 900n * 10n ** 18n
 		const budgetExceedingAllowance = 1050n * 10n ** 18n
 
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetConsumingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetExceedingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, budgetExceedingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
@@ -862,6 +940,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('manual overflow allowance operations cannot bypass the shared budget after the live allowance changes', async () => {
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const initialAllowance = 900n * 10n ** 18n
 		const overflowAllowance = 950n * 10n ** 18n
 
@@ -876,16 +955,19 @@ describe('Price Oracle Refund Security Tests', () => {
 		const stagedOperationCounterBeforeQueue = await getStagedOperationCounter(client, priceOracle)
 
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		assert.strictEqual(await getPendingSettlementOperationCount(client, priceOracle), 4n, 'test setup requires all bounded pending settlement slots to be occupied before adding the overflow operation')
+		assert.ok((await getPendingReportId(client, priceOracle)) > 0n, 'test setup requires an active pending report before adding the overflow operation')
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
 
 		const overflowOperationId = stagedOperationCounterBeforeQueue + 5n
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
 		const overflowOperationAfterSettlement = await getStagedOperation(client, priceOracle, overflowOperationId)
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement should leave a fresh price available for the counterparty increase')
 		assert.strictEqual(overflowOperationAfterSettlement[1], client.account.address, 'overflow allowance operation should remain manually executable after settlement')
 
 		await requestPriceIfNeededAndStageOperationWithValue(counterpartyClient, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
@@ -901,8 +983,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		const vaultAfterReduction = await getSecurityVault(client, securityPool, client.account.address)
 		assert.strictEqual(consumedAfterReduction, overflowAllowance, 'allowance reduction should not consume any additional budget')
 		assert.strictEqual(vaultAfterReduction.securityBondAllowance, 0n, 'test setup should reduce the live allowance to zero before manual execution')
-
-		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, overflowAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n), /Not enough ETH was provided to request a fresh oracle price/i)
 
 		const executionHash = await executeStagedOperation(client, priceOracle, overflowOperationId)
 		const executionReceipt = await client.waitForTransactionReceipt({ hash: executionHash })
@@ -972,9 +1052,10 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('pending withdrawals that become zero-effect during execution do not consume extra budget', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
 
 		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
 
@@ -1026,10 +1107,11 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('staged operations can only be executed once', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const successfulAllowance = repDeposit / 4n
 		const manualOperationId = 5n
 
-		await fillPendingSettlementOperationList(ethCost, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await fillPendingSettlementOperationList(ethCost, queuedOperationEthCost, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 		await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, successfulAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
@@ -1049,11 +1131,12 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('staged liquidations expire after their caller-selected validity window', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const liquidationTimeoutSeconds = 60n
 		const manualOperationId = 5n
 		const targetVault = addressString(TEST_ADDRESSES[1])
 
-		await fillPendingSettlementOperationList(ethCost, liquidationTimeoutSeconds)
+		await fillPendingSettlementOperationList(ethCost, queuedOperationEthCost, liquidationTimeoutSeconds)
 		await queueStagedOperation(OperationType.Liquidation, targetVault, 1n, liquidationTimeoutSeconds)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
@@ -1075,10 +1158,11 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('staged self operations expire after their caller-selected validity window', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const selfOperationTimeoutSeconds = 60n
 		const manualOperationId = 5n
 
-		await fillPendingSettlementOperationList(ethCost, selfOperationTimeoutSeconds)
+		await fillPendingSettlementOperationList(ethCost, queuedOperationEthCost, selfOperationTimeoutSeconds)
 		await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, 1n, selfOperationTimeoutSeconds)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)

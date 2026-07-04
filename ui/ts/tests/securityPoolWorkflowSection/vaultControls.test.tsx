@@ -280,7 +280,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '0',
+							securityBondAllowanceAmount: '1.5',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultAddress: zeroAddress,
 						},
