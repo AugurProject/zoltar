@@ -183,6 +183,17 @@ export const getMinBidSize = async (client: ReadClient, auctionAddress: Address)
 		'Auction min bid size',
 	)
 
+export const getMaxRepBeingSold = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'maxRepBeingSold',
+			address: auctionAddress,
+			args: [],
+		}),
+		'Auction max REP being sold',
+	)
+
 export const getEthRaiseCap = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
