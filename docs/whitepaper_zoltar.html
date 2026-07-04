@@ -13,17 +13,16 @@
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
 					<strong>Zoltar</strong>
-					<p>Branching oracle layer used by the Placeholder market layer.</p>
+					<p>Branching truth-oracle layer used by the Placeholder market layer.</p>
 				</div>
 				<a class="sidebar-companion" href="./whitepaper_placeholder.html">
 					<span>Companion paper</span>
 					<b>Placeholder Market Layer</b>
 				</a>
-				<nav aria-label="Document sections">
-					<a href="#abstract" aria-current="location">Abstract</a>
-					<a href="#glossary">Glossary</a>
-					<a href="#timeline">Lifecycle Timeline</a>
-					<a href="#overview">System Overview</a>
+					<nav aria-label="Document sections">
+						<a href="#abstract" aria-current="location">Abstract</a>
+						<a href="#timeline">Lifecycle Timeline</a>
+						<a href="#overview">System Overview</a>
 					<a href="#universe-model">Universe Model</a>
 					<a href="#economics">Fork Economics</a>
 					<a href="#splitting">REP Splitting</a>
@@ -86,8 +85,8 @@
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Zoltar is a forkable oracle layer centered on universes, question encoding,
-						and REP branching. It implements the branching model described in
+						Zoltar is a forkable truth oracle layer centered on universes, question
+						encoding, and REP branching. It implements the branching model described in
 						<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins.md</a>:
 						unresolved disagreement becomes explicit child universes, and REP holders
 						convert post-fork migration balances into child-universe REP across one or more
@@ -112,39 +111,6 @@
 						as a legitimate answer state, and branches protocol state without embedding a
 						higher-level market design directly into the core layer.
 					</p>
-				</section>
-
-				<section class="paper-section" id="glossary">
-					<div class="section-heading">
-						<h2>Glossary</h2>
-						<a class="anchor-link" href="#glossary" aria-label="Link to Glossary">#</a>
-					</div>
-					<div class="glossary-grid">
-						<div class="glossary-card">
-							<b><span class="term" tabindex="0">Universe</span></b>
-							<p>A branch of oracle state with its own REP token and optional parent universe.</p>
-						</div>
-						<div class="glossary-card">
-							<b><span class="term" tabindex="0">Migration balance</span></b>
-							<p>REP value held after a fork that can be split into one or more child universes.</p>
-						</div>
-						<div class="glossary-card">
-							<b><span class="term" tabindex="0">Invalid</span></b>
-							<p>A valid answer state representing an unresolvable or invalid market outcome.</p>
-							</div>
-							<div class="glossary-card">
-								<b><span class="term" tabindex="0">Malformed</span></b>
-								<p>An answer encoding the question definition does not permit.</p>
-							</div>
-							<div class="glossary-card">
-								<b><span class="term" tabindex="0">Child REP</span></b>
-								<p>Reputation minted inside a child universe from migration balance.</p>
-							</div>
-							<div class="glossary-card">
-								<b><span class="term" tabindex="0">Colored Coins model</span></b>
-								<p>A branch-aware claim model for post-fork coordination.</p>
-							</div>
-					</div>
 				</section>
 
 				<section class="paper-section" id="timeline">
@@ -186,9 +152,9 @@
 						<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 					</div>
 					<p>
-						Zoltar is the base oracle layer in this repository. It does not implement the
-						full market, collateral, or underwriting system built on top of it elsewhere in
-						the repo. Its role is narrower and more fundamental:
+						Zoltar is the base truth/forking oracle layer in this repository. It does not
+						implement the full market, collateral, or underwriting system built on top of it
+						elsewhere in the repo. Its role is narrower and more fundamental:
 					</p>
 					<ul class="clean-list">
 							<li>register questions</li>
@@ -378,7 +344,10 @@
 						<h2>3. Fork Thresholds and REP Economics</h2>
 						<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 					</div>
-					<p>The current fork threshold is:</p>
+					<p>
+						The threshold is a REP commitment large enough to force branch creation, but it
+						is not itself a choice of the winning branch. The current fork threshold is:
+					</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals total theoretical REP supply divided by 20" data-source="forkThreshold = totalTheoreticalRepSupply / 20">
 							<mrow>
@@ -392,38 +361,41 @@
 						</math>
 						<p class="equation-caption"><span class="equation-label">Fork Threshold</span>The default fork threshold is one twentieth of theoretical REP supply.</p>
 					</div>
-					<p>
-						Initiating a fork requires supplying REP equal to 5% of the universe’s total
-						theoretical supply. Under the current constants, 20% of that threshold deposit
-						is permanently burned, which is 1% of total theoretical supply, and the
-						remaining 80% becomes the initiator’s migration balance.
-					</p>
-					<div class="equation" id="eq-zoltar-fork-burn">
-						<math display="block" aria-label="burned REP amount equals fork threshold divided by 5" data-source="burnedRepAmount = forkThreshold / 5">
-							<mrow>
-								<mi>burnedRepAmount</mi>
-								<mo>=</mo>
-								<mfrac>
-									<mi>forkThreshold</mi>
+						<p>
+							Initiating a fork requires supplying REP equal to 5% of the universe’s total
+							theoretical supply. The full threshold deposit leaves the parent universe:
+							<code>forkUniverse</code> burns or transfers that entire parent-REP amount and
+							reduces the parent theoretical supply by the full threshold. The burn divisor
+							then controls how much child-REP minting credit the initiator receives. Under
+							the current constants, one fifth of the threshold is an uncredited haircut and
+							the remaining four fifths becomes the initiator’s migration balance.
+						</p>
+						<div class="equation" id="eq-zoltar-fork-burn">
+							<math display="block" aria-label="uncredited fork haircut equals fork threshold divided by 5" data-source="uncreditedForkHaircut = forkThreshold / 5">
+								<mrow>
+									<mi>uncreditedForkHaircut</mi>
+									<mo>=</mo>
+									<mfrac>
+										<mi>forkThreshold</mi>
 									<mn>5</mn>
 								</mfrac>
-							</mrow>
-						</math>
-						<p class="equation-caption"><span class="equation-label">Fork Burn</span>The default burn is one fifth of the threshold deposit.</p>
-					</div>
-					<div class="equation" id="eq-zoltar-initiator-migration-balance">
-						<math display="block" aria-label="fork initiator migration balance equals fork threshold minus burned REP amount, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 * forkThreshold / 5">
-							<mrow>
-								<mi>forkInitiatorMigrationBalance</mi>
-								<mo>=</mo>
-								<mi>forkThreshold</mi>
-								<mo>-</mo>
-								<mi>burnedRepAmount</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit; the full parent-REP threshold is still burned or transferred out of the parent universe.</p>
+						</div>
+						<div class="equation" id="eq-zoltar-initiator-migration-balance">
+							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut = 4 \cdot forkThreshold / 5">
+								<mrow>
+									<mi>forkInitiatorMigrationBalance</mi>
+									<mo>=</mo>
+									<mi>forkThreshold</mi>
+									<mo>-</mo>
+									<mi>uncreditedForkHaircut</mi>
 								<mo>=</mo>
 								<mfrac>
 									<mrow>
 										<mn>4</mn>
-										<mo>*</mo>
+										<mo>&#x22C5;</mo>
 										<mi>forkThreshold</mi>
 									</mrow>
 									<mn>5</mn>
@@ -433,10 +405,10 @@
 						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>The default remaining four fifths becomes the initiator's migration balance.</p>
 					</div>
 					<div class="implementation-grid">
-						<div class="implementation-note">
-							<b>Implementation entry points</b>
-							<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns the configured share, and creates the initiator migration balance.</p>
-						</div>
+							<div class="implementation-note">
+								<b>Implementation entry points</b>
+								<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns or transfers the full parent-REP threshold out of the parent universe, reduces parent theoretical supply by that full amount, and credits only the post-haircut migration balance to the initiator.</p>
+							</div>
 						<div class="implementation-note">
 							<b>Genesis token exception</b>
 							<p>Genesis REP is transferred to <code>BURN_ADDRESS</code>; child REP can be burned directly by <a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>.</p>
@@ -445,7 +417,7 @@
 
 					<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
-						<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit splits into 20 percent burned and 80 percent migration balance.">
+							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe, with 20 percent uncredited haircut and 80 percent migration balance.">
 							<defs>
 								<marker id="arrow-deposit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
@@ -462,16 +434,17 @@
 							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 610 222 V 260"></path>
 							<rect class="svg-red" x="134" y="264" width="232" height="58" rx="10"></rect>
 							<rect class="svg-teal" x="494" y="264" width="232" height="58" rx="10"></rect>
-							<text class="svg-label" x="250" y="299" text-anchor="middle">20% burned</text>
-							<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration</text>
-							<text class="svg-small" x="610" y="313" text-anchor="middle">balance</text>
+								<text class="svg-label" x="250" y="292" text-anchor="middle">20% uncredited</text>
+								<text class="svg-small" x="250" y="313" text-anchor="middle">haircut</text>
+								<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration</text>
+								<text class="svg-small" x="610" y="313" text-anchor="middle">balance</text>
 						</svg>
 						<div class="legend" aria-label="Deposit diagram legend">
 							<span class="legend-item"><span class="legend-swatch gold"></span>Required fork deposit</span>
-							<span class="legend-item"><span class="legend-swatch red"></span>Burned REP</span>
+								<span class="legend-item"><span class="legend-swatch red"></span>Uncredited migration haircut</span>
 							<span class="legend-item"><span class="legend-swatch teal"></span>Migration balance</span>
 						</div>
-						<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The initiator pays to force the branch point into existence, but most of the deposit becomes migratable REP.</p>
+							<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most of that amount is re-expressed as migratable child-REP credit, while the haircut is not credited to the initiator.</p>
 					</figure>
 
 					<p>
@@ -506,11 +479,11 @@
 									<td><code>20</code></td>
 									<td>Fork threshold is <code>totalTheoreticalRepSupply / 20</code>, or 5% of supply</td>
 								</tr>
-								<tr>
-									<td><code>FORK_BURN_DIVISOR</code></td>
-									<td><code>5</code></td>
-									<td>Burned amount is <code>forkThreshold / 5</code>, or 20% of threshold</td>
-								</tr>
+									<tr>
+										<td><code>FORK_BURN_DIVISOR</code></td>
+										<td><code>5</code></td>
+										<td>The uncredited migration haircut is <code>forkThreshold / 5</code>, or 20% of the threshold; the full threshold parent-REP amount still leaves parent supply</td>
+									</tr>
 							</tbody>
 						</table>
 					</div>
@@ -785,7 +758,7 @@
 						range:
 					</p>
 					<div class="equation" id="eq-zoltar-scalar-display-value">
-						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks * (displayValueMax - displayValueMin)">
+						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks \cdot (displayValueMax - displayValueMin)">
 							<mrow>
 								<mi>displayedValue</mi>
 								<mo>=</mo>
@@ -795,7 +768,7 @@
 									<mi>secondPayoutNumerator</mi>
 									<mi>numTicks</mi>
 								</mfrac>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mo>(</mo>
 								<mi>displayValueMax</mi>
 								<mo>-</mo>
@@ -881,7 +854,7 @@
 					<ol class="step-list">
 						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</span></li>
 						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
-						<li><span class="step-content">The fork initiator’s REP deposit is partly burned and partly converted into migration balance.</span></li>
+						<li><span class="step-content">The fork initiator’s full parent-REP deposit leaves parent supply, and the post-haircut amount becomes migration balance.</span></li>
 						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>
 						<li><span class="step-content">REP holders call <code>splitMigrationRep</code> to mint child-universe REP across the outcome branches they support.</span></li>
 					</ol>
