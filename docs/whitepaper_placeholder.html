@@ -2538,8 +2538,8 @@
 							<summary>Adjust an underfunded limit-price example</summary>
 							<p>
 								Use the inputs to see how the accepted threshold ETH, REP sale cap, tick
-								price, same-tick ETH, and bidder ETH determine the threshold, per-tick demand,
-								bidder fill, and unsold REP.
+									price, same-tick ETH, and bidder ETH determine the threshold, per-tick demand,
+									bidder fill, and REP not purchased by the displayed tick.
 							</p>
 							<div class="example-grid">
 								<label>
@@ -2569,7 +2569,7 @@
 								<li>Underfunded threshold: <output data-example-output="underfundedThreshold">0 ETH/REP</output></li>
 								<li>Tick REP demand: <output data-example-output="tickRepDemand">0 REP</output></li>
 								<li>Bidder REP fill: <output data-example-output="underfundedRepShare">0 REP</output></li>
-								<li>Unsold REP: <output data-example-output="unsoldRep">0 REP</output></li>
+									<li>REP outside this tick: <output data-example-output="repOutsideTick">0 REP</output></li>
 							</ul>
 						</details>
 						<p>
@@ -3482,7 +3482,7 @@
 					const tickQualifies = tickPrice >= underfundedThreshold
 					const tickRepDemand = tickQualifies ? tickTotalEth / tickPrice : 0
 					const underfundedRepShare = tickQualifies && tickTotalEth > 0 ? (bidEth * tickRepDemand) / tickTotalEth : 0
-					const unsoldRep = Math.max(maxRepBeingSold - tickRepDemand, 0)
+						const repOutsideTick = Math.max(maxRepBeingSold - tickRepDemand, 0)
 
 					exampleOutputs.inputNote.value = inputWasClamped
 						? 'accepted ETH was raised to include this tick'
@@ -3491,7 +3491,7 @@
 					exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold)
 					exampleOutputs.tickRepDemand.value = formatRep(tickRepDemand)
 					exampleOutputs.underfundedRepShare.value = formatRep(underfundedRepShare)
-					exampleOutputs.unsoldRep.value = formatRep(unsoldRep)
+						exampleOutputs.repOutsideTick.value = formatRep(repOutsideTick)
 				}
 				for (const inputElement of Object.values(exampleInputs)) {
 					inputElement.addEventListener('input', updateUnderfundedAuctionExample)
