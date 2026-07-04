@@ -53,13 +53,14 @@ After finalization, paged settlement handles both claim and refund cases:
 - losing bids receive ETH refunds
 - winning bids convert ETH into purchased REP at the uniform clearing price
 - marginal clearing-tick bids may be partially filled and partially refunded
-- underfunded winning bids receive REP pro rata by ETH contribution
+- underfunded winning ticks receive only the REP demanded at each tick's bid limit
+  price, and same-tick bids share that tick's REP demand pro rata by ETH
 
 Zero-effective-price ticks are rejected when bids are submitted, so underfunded
 settlement cannot assign REP to bids whose rounded ETH/REP price is zero.
 Both finalized allocation paths carry division dust across paged withdrawals:
 normal clearing carries `clearingRemainder` through the uniform-price
-ETH-to-REP division, and underfunded clearing carries `underfundedRemainder`
-through the pro-rata winning-ETH division. Later withdrawals may receive the
-remainder carried from earlier integer division so bid-level withdrawals
-reconcile to the aggregate finalized REP.
+ETH-to-REP division, and underfunded clearing carries a per-tick remainder
+through the same-tick ETH-to-REP allocation. Later withdrawals at the same tick
+may receive the remainder carried from earlier integer division so bid-level
+withdrawals reconcile to the aggregate finalized REP demanded at that tick.

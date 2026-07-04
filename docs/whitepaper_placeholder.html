@@ -2411,6 +2411,24 @@
 									</mtr>
 									<mtr>
 										<mtd>
+											<mi>tickRepDemand</mi>
+										</mtd>
+										<mtd>
+											<mo>=</mo>
+										</mtd>
+										<mtd>
+											<mfrac>
+												<mrow>
+													<mi>tickTotalEth</mi>
+													<mo>&#x22C5;</mo>
+													<mi>pricePrecision</mi>
+												</mrow>
+												<mi>tickPrice</mi>
+											</mfrac>
+										</mtd>
+									</mtr>
+									<mtr>
+										<mtd>
 											<mi>underfundedRepShare</mi>
 										</mtd>
 										<mtd>
@@ -2421,28 +2439,29 @@
 												<mrow>
 													<mi>bidEth</mi>
 													<mo>&#x22C5;</mo>
-													<mi>totalRepPurchased</mi>
+													<mi>tickRepDemand</mi>
 												</mrow>
-												<mi>underfundedWinningEth</mi>
+												<mi>tickTotalEth</mi>
 											</mfrac>
 										</mtd>
 									</mtr>
 								</mtable>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Auction Fill Math</span>Normal clearing converts filled ETH at the uniform clearing price; underfunded clearing sets a threshold price and distributes REP pro rata among qualifying winning ETH.</p>
+							<p class="equation-caption"><span class="equation-label">Auction Fill Math</span>Normal clearing converts filled ETH at the uniform clearing price; underfunded clearing sets a threshold price and sells each winning tick only the REP demanded at that tick's bid limit.</p>
 						</div>
 						<p>
 							In normal clearing, bids above the clearing tick win in full, bids below it lose,
 							and bids at the clearing tick are filled in submission order. In the underfunded
-							path, bids at or above the underfunded threshold share the full REP inventory
-							pro rata by ETH contribution.
+							path, ticks at or above the underfunded threshold win only their limit-priced
+							REP demand. Same-tick bids share that tick's REP demand pro rata by ETH
+							contribution, and unsold REP remains unsold.
 						</p>
 						<p>
 							Both finalized paths carry division dust across paged withdrawals. Normal
 							clearing carries <code>clearingRemainder</code> through the uniform-price
-							ETH-to-REP division, and underfunded clearing carries
-							<code>underfundedRemainder</code> through the pro-rata winning-ETH division,
-							so bid-level withdrawals reconcile to the aggregate finalized REP.
+							ETH-to-REP division, and underfunded clearing carries a per-tick remainder
+							through same-tick ETH-to-REP allocation, so bid-level withdrawals reconcile to
+							the aggregate finalized REP demanded at that tick.
 						</p>
 						<p>
 							Settlement then turns purchased REP into child-pool vault accounting. The filled
@@ -2517,17 +2536,18 @@
 						<li>Finalization walks aggregate AVL tick totals from the highest ETH/REP tick to the lowest; raw bids are settled later through paged withdrawals.</li>
 						<li>The sweep stops when the ETH raise cap binds or when the ETH collected so far, at that price, would buy all REP being sold.</li>
 						<li>In an underfunded auction, the contract computes <math aria-label="underfunded threshold equals ETH raised times price precision divided by max REP being sold" data-source="underfundedThreshold = ethRaised \cdot PRICE_PRECISION / maxRepBeingSold"><mi>underfundedThreshold</mi><mo>=</mo><mfrac><mrow><mi>ethRaised</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mrow><mi>maxRepBeingSold</mi></mfrac></math>.</li>
-						<li>Only bids at or above that underfunded threshold count as winners; all winning ETH buys the full REP inventory pro rata.</li>
-						<li>Normal clearing carries division dust through <code>clearingRemainder</code>; underfunded clearing carries division dust through <code>underfundedRemainder</code> as bids are withdrawn.</li>
+						<li>Only bids at or above that underfunded threshold count as winners; each winning tick buys only the REP demanded at that tick's bid limit.</li>
+						<li>Normal clearing carries division dust through <code>clearingRemainder</code>; underfunded clearing carries division dust per tick as bids are withdrawn.</li>
 						<li>Before finalization, losing bids below the currently found clearing tick can be refunded in paged batches.</li>
 						<li>After finalization, only the owner withdraws bid outcomes from the auction; <code>SecurityPoolForker</code> wraps that call so anyone can settle a vault's bid pages.</li>
 					</ul>
 					<div class="callout">
 						Underfunded intuition: if <code>100 REP</code> is for sale and the qualifying
-						winners at or above threshold contribute <code>10 ETH</code> total, then a bidder who
-						contributed <code>4 ETH</code> receives <code>40 REP</code> and a bidder who
-						contributed <code>6 ETH</code> receives <code>60 REP</code>. Bids below the
-						threshold are refunded.
+						winners at one tick contribute <code>10 ETH</code> total at
+						<code>5 ETH/REP</code>, that tick demands <code>2 REP</code>. A bidder who
+						contributed <code>4 ETH</code> receives <code>0.8 REP</code>, a bidder who
+						contributed <code>6 ETH</code> receives <code>1.2 REP</code>, and the remaining
+						<code>98 REP</code> is unsold. Bids below the threshold are refunded.
 					</div>
 					<h3>Worked Clearing Example</h3>
 					<p>
