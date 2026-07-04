@@ -17,10 +17,12 @@ import {
 	executeStagedOperation,
 	getActiveStagedOperationCount,
 	getActiveStagedOperations,
+	getExactToken1Report,
 	getIsPriceValid,
 	getLastPrice,
 	getOpenOracleExtraData,
 	getOpenOracleReportMeta,
+	getPendingExactToken1Report,
 	getPendingOperationSlotId,
 	getPendingReportId,
 	getPendingReportMaxSettlementBaseFee,
@@ -196,7 +198,7 @@ const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'SettlementCallbackExecuted')
 
-type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint, bigint]
+type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
@@ -233,7 +235,8 @@ describe('Price Oracle Refund Security Tests', () => {
 	let securityPool: Address
 	const ORACLE_REPORT_GAS = 100000n
 	const ORACLE_SETTLEMENT_GAS = 1000000
-	const ORACLE_EXACT_TOKEN1_REPORT = 250n * 10n ** 18n
+	const ORACLE_MIN_EXACT_TOKEN1_REPORT = 250n * 10n ** 18n
+	const ORACLE_MAX_EXACT_TOKEN1_REPORT = 2500n * 10n ** 18n
 	const ORACLE_SETTLEMENT_TIME = 40 * 12
 	const ORACLE_DISPUTE_DELAY = 0
 	const ORACLE_PROTOCOL_FEE = 100000
@@ -252,7 +255,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		WETH_ADDRESS,
 		ORACLE_REPORT_GAS,
 		ORACLE_SETTLEMENT_GAS,
-		ORACLE_EXACT_TOKEN1_REPORT,
+		ORACLE_MIN_EXACT_TOKEN1_REPORT,
+		ORACLE_MAX_EXACT_TOKEN1_REPORT,
 		ORACLE_SETTLEMENT_TIME,
 		ORACLE_DISPUTE_DELAY,
 		ORACLE_PROTOCOL_FEE,
@@ -360,16 +364,51 @@ describe('Price Oracle Refund Security Tests', () => {
 		return { pendingReportId, settleReceipt }
 	}
 
+	const settlePendingReportWithRejectedHighBaseFee = async () => {
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		const amount1 = reportMeta.exactToken1Report
+		const amount2 = amount1
+		const openOracle = getInfraContractAddresses().openOracle
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await approveToken(client, WETH_ADDRESS, openOracle)
+		await mockWindow.setBalance(client.account.address, amount2 * 2n)
+		await wrapWeth(client, amount2)
+		const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
+		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x1'] })
+		const settlementHash = await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		return { pendingReportId, settlementReceipt }
+	}
+
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
 		const baseArgs = getOracleCoordinatorConstructorArgs()
-		const buildArgsWithRiskParameters = (priceRoundBudgetMultiplierBps: bigint, escalationHaltMultiplierBps: bigint, maxSettlementBaseFeeMultiplierBps: bigint, minLiquidationPriceDistanceBps: bigint): OracleCoordinatorConstructorArgs => [
+		const buildArgsWithRiskParameters = ({
+			minExactToken1Report = baseArgs[5],
+			maxExactToken1Report = baseArgs[6],
+			priceRoundBudgetMultiplierBps = baseArgs[15],
+			escalationHaltMultiplierBps = baseArgs[16],
+			maxSettlementBaseFeeMultiplierBps = baseArgs[17],
+			minLiquidationPriceDistanceBps = baseArgs[18],
+		}: {
+			minExactToken1Report?: bigint
+			maxExactToken1Report?: bigint
+			priceRoundBudgetMultiplierBps?: bigint
+			escalationHaltMultiplierBps?: bigint
+			maxSettlementBaseFeeMultiplierBps?: bigint
+			minLiquidationPriceDistanceBps?: bigint
+		}): OracleCoordinatorConstructorArgs => [
 			baseArgs[0],
 			baseArgs[1],
 			baseArgs[2],
 			baseArgs[3],
 			baseArgs[4],
-			baseArgs[5],
-			baseArgs[6],
+			minExactToken1Report,
+			maxExactToken1Report,
 			baseArgs[7],
 			baseArgs[8],
 			baseArgs[9],
@@ -377,6 +416,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			baseArgs[11],
 			baseArgs[12],
 			baseArgs[13],
+			baseArgs[14],
 			priceRoundBudgetMultiplierBps,
 			escalationHaltMultiplierBps,
 			maxSettlementBaseFeeMultiplierBps,
@@ -384,19 +424,35 @@ describe('Price Oracle Refund Security Tests', () => {
 		]
 		const invalidRiskParameterCases: Array<{ args: OracleCoordinatorConstructorArgs; message: RegExp }> = [
 			{
-				args: buildArgsWithRiskParameters(0n, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
+				args: buildArgsWithRiskParameters({ minExactToken1Report: 0n }),
+				message: /minimum exact token1 report must be greater than zero/i,
+			},
+			{
+				args: buildArgsWithRiskParameters({ minExactToken1Report: ORACLE_MAX_EXACT_TOKEN1_REPORT + 1n }),
+				message: /minimum exact token1 report cannot exceed maximum/i,
+			},
+			{
+				args: buildArgsWithRiskParameters({ maxExactToken1Report: 1n << 128n }),
+				message: /maximum exact token1 report exceeds uint128 maximum/i,
+			},
+			{
+				args: buildArgsWithRiskParameters({ maxExactToken1Report: (1n << 128n) - 1n }),
+				message: /maximum escalation halt amount exceeds uint128 maximum/i,
+			},
+			{
+				args: buildArgsWithRiskParameters({ priceRoundBudgetMultiplierBps: 0n }),
 				message: /price round budget multiplier must be greater than zero/i,
 			},
 			{
-				args: buildArgsWithRiskParameters(ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS, 0n, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
+				args: buildArgsWithRiskParameters({ escalationHaltMultiplierBps: 0n }),
 				message: /escalation halt multiplier must be greater than zero/i,
 			},
 			{
-				args: buildArgsWithRiskParameters(ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, 9999n, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
+				args: buildArgsWithRiskParameters({ maxSettlementBaseFeeMultiplierBps: 9999n }),
 				message: /max settlement base fee multiplier must be at least one oracle budget/i,
 			},
 			{
-				args: buildArgsWithRiskParameters(ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, 10001n),
+				args: buildArgsWithRiskParameters({ minLiquidationPriceDistanceBps: 10001n }),
 				message: /minimum liquidation price distance cannot exceed one oracle budget/i,
 			},
 		]
@@ -437,21 +493,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		const priceRoundConsumedNotionalBeforeSettlement = await getPriceRoundConsumedNotional(client, priceOracle)
 
-		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		const amount1 = reportMeta.exactToken1Report
-		const amount2 = amount1
-		const openOracle = getInfraContractAddresses().openOracle
-		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
-		await approveToken(client, WETH_ADDRESS, openOracle)
-		await mockWindow.setBalance(client.account.address, amount2 * 2n)
-		await wrapWeth(client, amount2)
-		const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
-		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
-		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x1'] })
-		const settlementHash = await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
-		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
-		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		const { settlementReceipt } = await settlePendingReportWithRejectedHighBaseFee()
 
 		const isPriceValid = await getIsPriceValid(client, priceOracle)
 		const pendingReportIdAfterSettlement = await getPendingReportId(client, priceOracle)
@@ -481,6 +523,214 @@ describe('Price Oracle Refund Security Tests', () => {
 		await requestPrice(client, priceOracle)
 		const recoveryPendingReportId = await getPendingReportId(client, priceOracle)
 		assert.ok(recoveryPendingReportId > 0n, 'oracle state should recover after a high-basefee settlement clears the report')
+	})
+
+	test('direct requestPrice retry sizes report from pending settlement operations', async () => {
+		await depositRep(client, securityPool, 2000n * 10n ** 18n)
+		const repEthPrice = 10n ** 18n
+		const pendingAllowance = 2000n * 10n ** 18n
+		const expectedScaledReport = 500n * 10n ** 18n
+
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
+
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, pendingAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'setup should open the first pending report with the scaled operation budget')
+
+		await settlePendingReportWithRejectedHighBaseFee()
+		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'base-fee rejection should clear the stale pending report')
+		assert.strictEqual(await getPendingSettlementOperationCount(client, priceOracle), 1n, 'base-fee rejection should keep the staged operation in the pending settlement list')
+
+		await requestPrice(client, priceOracle)
+		const retryPendingReportId = await getPendingReportId(client, priceOracle)
+		const retryReportMeta = await getOpenOracleReportMeta(client, retryPendingReportId)
+		assert.strictEqual(await getExactToken1Report(client, priceOracle), expectedScaledReport, 'retry sizing preview should include pending settlement operation risk')
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'direct retry should remember the scaled pending-operation report size')
+		assert.strictEqual(retryReportMeta.exactToken1Report, expectedScaledReport, 'direct retry should pass the pending-operation scaled report size into OpenOracle')
+
+		const { settleReceipt } = await settlePendingReportWithPrice(repEthPrice)
+		const executionLog = findExecutedStagedOperationLog(settleReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing retry execution log')
+		const stagedOperation = await getStagedOperation(client, priceOracle, 1n)
+		const vaultAfterRetry = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(executionLog.args.success, false, 'retry settlement should consume the pending operation after the second settlement window')
+		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired', 'retry settlement should fail from expiry, not from an undersized oracle budget')
+		assert.strictEqual(await getPriceRoundRemainingNotional(client, priceOracle), pendingAllowance, 'retry settlement should leave enough budget for the pending operation notional')
+		assert.strictEqual(stagedOperation[1], zeroAddress, 'retry settlement should consume the pending operation')
+		assert.strictEqual(vaultAfterRetry.securityBondAllowance, 0n, 'expired retry settlement must not apply the pending allowance')
+	})
+
+	test('direct requestPrice retry sizes report from cumulative pending withdrawal budget', async () => {
+		const repEthPrice = 10n ** 18n
+		const firstWithdrawal = repDeposit
+		const secondWithdrawal = repDeposit
+		const expectedPendingConsumption = firstWithdrawal + secondWithdrawal
+		const expectedScaledReport = 500n * 10n ** 18n
+
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
+
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, firstWithdrawal, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, secondWithdrawal, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		assert.strictEqual(await getPendingSettlementOperationCount(client, priceOracle), 2n, 'setup should queue both withdrawals for callback execution')
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), ORACLE_MIN_EXACT_TOKEN1_REPORT, 'first report should size from the first pending withdrawal only')
+
+		await settlePendingReportWithRejectedHighBaseFee()
+		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'base-fee rejection should clear the stale pending report')
+		assert.strictEqual(await getPendingSettlementOperationCount(client, priceOracle), 2n, 'base-fee rejection should keep both withdrawals queued for direct retry')
+
+		await requestPrice(client, priceOracle)
+		const retryPendingReportId = await getPendingReportId(client, priceOracle)
+		const retryReportMeta = await getOpenOracleReportMeta(client, retryPendingReportId)
+		assert.strictEqual(await getExactToken1Report(client, priceOracle), expectedScaledReport, 'retry sizing preview should include cumulative pending withdrawal notional')
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'direct retry should remember the cumulative pending-withdrawal report size')
+		assert.strictEqual(retryReportMeta.exactToken1Report, expectedScaledReport, 'direct retry should pass the cumulative pending-withdrawal report size into OpenOracle')
+
+		const { settleReceipt } = await settlePendingReportWithPrice(repEthPrice)
+		const executionLogs = findExecutedStagedOperationLogs(settleReceipt.logs)
+		const firstExecutionLog = executionLogs.find(log => log?.args.operationId === 1n)
+		const secondExecutionLog = executionLogs.find(log => log?.args.operationId === 2n)
+		if (firstExecutionLog === undefined) throw new Error('missing first retry withdrawal execution log')
+		if (secondExecutionLog === undefined) throw new Error('missing second retry withdrawal execution log')
+		assert.strictEqual(firstExecutionLog.args.errorMessage, 'staged operation expired', 'first retry withdrawal should expire rather than fail from budget exhaustion')
+		assert.strictEqual(secondExecutionLog.args.errorMessage, 'staged operation expired', 'second retry withdrawal should expire rather than fail from budget exhaustion')
+		assert.strictEqual(await getPriceRoundRemainingNotional(client, priceOracle), expectedPendingConsumption, 'retry settlement should leave enough budget for both pending withdrawals')
+	})
+
+	test('oracle report size scales with post-operation pool risk', async () => {
+		await depositRep(client, securityPool, 2000n * 10n ** 18n)
+		const initialEthCost = await getRequestPriceEthCost(client, priceOracle)
+		const initialAllowance = 1000n * 10n ** 18n
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, initialEthCost)
+
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), ORACLE_MIN_EXACT_TOKEN1_REPORT, 'first origin report should use the minimum report size before a REP/ETH price is seeded')
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		const vaultAfterInitialAllowance = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(vaultAfterInitialAllowance.securityBondAllowance, initialAllowance, 'setup should establish the initial pool allowance')
+
+		const expandedAllowance = 2000n * 10n ** 18n
+		const expectedScaledReport = 500n * 10n ** 18n
+		const nextEthCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, expandedAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, nextEthCost)
+
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		assert.strictEqual(await getExactToken1Report(client, priceOracle), expectedScaledReport, 'request sizing preview should include the pending post-operation pool risk')
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'pending report should remember the scaled report size chosen at request time')
+		assert.strictEqual(reportMeta.exactToken1Report, expectedScaledReport, 'OpenOracle game should receive the scaled report size')
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		const priceRoundMaxNotional = await client.readContract({
+			address: priceOracle,
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'priceRoundMaxNotional',
+			args: [],
+		})
+		assert.strictEqual(priceRoundMaxNotional, expandedAllowance, 'new price-round budget should equal the post-operation pool risk at the configured 4x report multiplier')
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), 0n, 'settlement should clear the pending report size')
+	})
+
+	test('oracle report size max cap bounds over-cap operation budget', async () => {
+		const repEthPrice = 10n ** 18n
+		const maxDerivedBudget = (ORACLE_MAX_EXACT_TOKEN1_REPORT * ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS) / 10000n
+		const overCapAllowance = maxDerivedBudget + 1000n * 10n ** 18n
+		await depositRep(client, securityPool, overCapAllowance)
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, overCapAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), ORACLE_MAX_EXACT_TOKEN1_REPORT, 'over-cap risk should clamp the pending report size to the configured maximum')
+		assert.strictEqual(reportMeta.exactToken1Report, ORACLE_MAX_EXACT_TOKEN1_REPORT, 'OpenOracle game should receive the capped report size')
+
+		const { settleReceipt } = await settlePendingReportWithPrice(repEthPrice)
+		const executionLog = findExecutedStagedOperationLog(settleReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing over-cap execution log')
+
+		const overCapOperation = await getStagedOperation(client, priceOracle, 1n)
+		const vaultAfterSettlement = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(executionLog.args.success, false, 'over-cap operation should not execute from the capped report')
+		assert.strictEqual(executionLog.args.errorMessage, 'oracle budget exceeded', 'over-cap operation should fail with the coordinator budget guard')
+		assert.strictEqual(await getPriceRoundRemainingNotional(client, priceOracle), maxDerivedBudget, 'failed over-cap operation should leave the capped price-round budget unused')
+		assert.strictEqual(overCapOperation[1], zeroAddress, 'over-cap staged operation should be consumed as a failed execution')
+		assert.strictEqual(vaultAfterSettlement.securityBondAllowance, 0n, 'over-cap operation must not increase pool risk')
+	})
+
+	test('standalone requestPrice scales report size from current pool risk', async () => {
+		await depositRep(client, securityPool, 2000n * 10n ** 18n)
+		const repEthPrice = 10n ** 18n
+		const livePoolRisk = 2000n * 10n ** 18n
+		const expectedScaledReport = 500n * 10n ** 18n
+
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, livePoolRisk, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+		const vaultAfterSetup = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(vaultAfterSetup.securityBondAllowance, livePoolRisk, 'setup should establish live pool risk above the minimum-derived budget')
+
+		await requestPrice(client, priceOracle)
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		assert.strictEqual(await getExactToken1Report(client, priceOracle), expectedScaledReport, 'current-risk preview should scale standalone request sizing')
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'standalone price requests should remember the scaled report size chosen at request time')
+		assert.strictEqual(reportMeta.exactToken1Report, expectedScaledReport, 'standalone price requests should pass the scaled report size into OpenOracle')
+	})
+
+	test('withdrawal report size uses operation notional when it exceeds live pool risk', async () => {
+		await depositRep(client, securityPool, 2000n * 10n ** 18n)
+		const repEthPrice = 10n ** 18n
+		const withdrawAmount = 2000n * 10n ** 18n
+		const expectedScaledReport = 500n * 10n ** 18n
+
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
+
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, withdrawAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'withdrawal request should size the report from operation notional when live pool risk is smaller')
+		assert.strictEqual(reportMeta.exactToken1Report, expectedScaledReport, 'withdrawal OpenOracle report should receive the operation-notional scaled report size')
+	})
+
+	test('liquidation report size uses live pool risk when it exceeds operation notional', async () => {
+		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const repEthPrice = 10n ** 18n
+		const livePoolRisk = 2000n * 10n ** 18n
+		const liquidationAmount = 100n * 10n ** 18n
+		const expectedScaledReport = 500n * 10n ** 18n
+		await depositRep(client, securityPool, livePoolRisk)
+
+		await requestPrice(client, priceOracle)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+
+		const allowanceEthCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, livePoolRisk, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, allowanceEthCost)
+		await handleOracleReporting(client, mockWindow, priceOracle, repEthPrice)
+		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
+		const vaultAfterSetup = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(vaultAfterSetup.securityBondAllowance, livePoolRisk, 'setup should establish live pool risk above the liquidation operation notional')
+
+		const liquidationEthCost = await getRequestPriceEthCost(liquidatorClient, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithValue(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, liquidationEthCost)
+
+		const pendingReportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		assert.strictEqual(await getPendingExactToken1Report(client, priceOracle), expectedScaledReport, 'liquidation request should size the report from live pool risk when it is larger than operation notional')
+		assert.strictEqual(reportMeta.exactToken1Report, expectedScaledReport, 'liquidation OpenOracle report should receive the live-risk scaled report size')
 	})
 
 	test('requestPrice should refund excess Ether when overpaid', async () => {

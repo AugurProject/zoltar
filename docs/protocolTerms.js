@@ -52,7 +52,7 @@ window.protocolTermDefinitions = Object.freeze({
 	'escalation multiplier': 'The factor that increases required report or bond size during escalation.',
 	'execute staged operation': 'The coordinator action that tries to perform a queued operation after receiving a valid price.',
 	'execution error threshold': 'The manipulated price error required before a thresholded attack payoff becomes positive.',
-	exactToken1Report: 'The configured initial REP-side OpenOracle report amount.',
+	exactToken1Report: 'For Placeholder coordinator-created reports, the REP-side OpenOracle initial report amount selected from pool risk and bounded by configured minimum and maximum values.',
 	'external payoff notional': 'The outside ETH-denominated payoff an attacker can gain if a manipulated price enables the target action.',
 	externalPayoffNotional: 'The outside ETH-denominated payoff an attacker can gain if a manipulated price enables the target action.',
 	EXCESS_REWARD_WINDOW_DIVISOR: 'The constant used to size the excess reward window around binding capital.',

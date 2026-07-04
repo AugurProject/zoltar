@@ -114,6 +114,22 @@ export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, p
 		args: [],
 	})
 
+export const getPendingExactToken1Report = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		functionName: 'pendingExactToken1Report',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
+export const getExactToken1Report = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		functionName: 'exactToken1Report',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
 export const getPendingOperationSlotId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,

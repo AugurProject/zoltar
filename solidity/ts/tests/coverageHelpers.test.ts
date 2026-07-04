@@ -847,7 +847,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				bytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
-				args: [zeroAddress, 100000n, 1000000, 250n * 10n ** 18n, 480, 0, 100000, 10000, 115, true, true, client.account.address, 40000n, 100000n, 30000n, 1000n],
+				args: [zeroAddress, 100000n, 1000000, 250n * 10n ** 18n, 2500n * 10n ** 18n, 480, 0, 100000, 10000, 115, true, true, client.account.address, 40000n, 100000n, 30000n, 1000n],
 			}),
 		)
 		await transact(

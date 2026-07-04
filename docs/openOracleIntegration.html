@@ -261,8 +261,8 @@
 					<code>priceRoundMaxNotional</code>. In plain English,
 					<code>priceRoundMaxNotional</code> is the largest ETH-notional operation volume
 					that one settled REP/ETH price may authorize before the coordinator needs a new
-					OpenOracle report. Here <code>exactToken1Report</code> is the initial REP report
-					size, <code>PRICE_PRECISION</code> is the fixed
+					OpenOracle report. Here <code>exactToken1Report</code> is the selected initial
+					REP report size for that OpenOracle report, <code>PRICE_PRECISION</code> is the fixed
 						<math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math> price scale,
 					<code>priceRoundBudgetMultiplierBps</code> is the configured multiplier in basis
 					points, <code>repPerEthPrice</code> is the settled coordinator price, and
@@ -301,10 +301,112 @@
 					</math>
 					<p class="equation-caption"><span class="equation-label">Price-Round Budget</span>The initial REP report size and the configured multiplier cap how much <span class="term" tabindex="0">ETH-notional</span> activity one settled price can authorize, with Solidity integer division flooring each sequential division.</p>
 				</div>
+				<p>
+					Because OpenOracle security depends on the ratio between report liquidity and
+					external payoff, meaning the ETH-denominated value an attacker could extract
+					from a bad accepted price, Placeholder sizes <code>exactToken1Report</code> from
+					pool risk instead of deploying every coordinator with one global REP amount.
+					<code>riskNotional</code> is the coordinator's local cap and proxy for that
+					payoff. The coordinator estimates it from the live pool allowance. For allowance
+					increases, it uses the post-operation pool allowance; for withdrawals and
+					liquidations, it uses the larger of live pool allowance and the operation's own
+					ETH-notional exposure. If a coordinator-level rejection leaves operations queued
+					for a direct retry, <code>requestPrice</code> includes those pending settlement
+					operations in <code>riskNotional</code> instead of sizing only from the live
+					allowance, using the larger of simulated post-allowance pool risk and cumulative
+					pending operation consumption. The first origin-pool report can fall back to the minimum
+					report size because no REP/ETH price has been seeded yet. A pool that expects to
+					authorize more exposure than the minimum-derived budget should first settle a seed
+					price or keep first-round operations within that floor.
+				</p>
+				<p>
+					In ETH-notional terms, the OpenOracle liquidity side is
+					<math aria-label="oracle report liquidity equals exact token one report times price precision divided by REP per ETH price" data-source="oracleReportLiquidity = exactToken1Report \cdot PRICE_PRECISION / repPerEthPrice"><mi>oracleReportLiquidity</mi><mo>=</mo><mfrac><mrow><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mrow><mi>repPerEthPrice</mi></mfrac></math>,
+					so the inverse sizing formula asks how much REP-side report liquidity is needed
+					to cover the local <code>riskNotional</code> budget.
+				</p>
+				<div class="equation" id="eq-openoracle-report-sizing">
+					<math display="block" aria-label="exact token one report equals the clamped ceiling of risk notional times REP per ETH price times oracle budget basis points divided by price precision times price round budget multiplier basis points" data-source="exactToken1Report = clamp(ceil(riskNotional \cdot repPerEthPrice \cdot ORACLE_BUDGET_BPS / (PRICE_PRECISION \cdot priceRoundBudgetMultiplierBps)), minExactToken1Report, maxExactToken1Report)">
+						<mrow>
+							<mi>exactToken1Report</mi>
+							<mo>=</mo>
+							<mi>clamp</mi>
+							<mo>(</mo>
+							<mo>&#x2308;</mo>
+							<mfrac>
+								<mrow>
+									<mi>riskNotional</mi>
+									<mo>&#x22C5;</mo>
+									<mi>repPerEthPrice</mi>
+									<mo>&#x22C5;</mo>
+									<mi>ORACLE_BUDGET_BPS</mi>
+								</mrow>
+								<mrow>
+									<mi>PRICE_PRECISION</mi>
+									<mo>&#x22C5;</mo>
+									<mi>priceRoundBudgetMultiplierBps</mi>
+								</mrow>
+							</mfrac>
+							<mo>&#x2309;</mo>
+							<mo>,</mo>
+							<mi>minExactToken1Report</mi>
+							<mo>,</mo>
+							<mi>maxExactToken1Report</mi>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Risk-Scaled Report Size</span>This is the inverse of the price-round budget equation. It asks for enough REP-side report liquidity to make the next round's budget cover the pool's bounded risk, while still enforcing explicit lower and upper report-size bounds.</p>
+				</div>
+				<details class="interactive-example" id="report-sizing-example">
+					<summary>Adjust a report sizing example</summary>
+					<p>
+						Use human-readable ETH and REP units to check the inverse-budget relationship.
+						The Solidity implementation uses fixed-point integers and ceiling division, then
+						applies the same minimum and maximum bounds shown here.
+					</p>
+					<div class="example-grid">
+						<label>
+							Risk notional (ETH)
+							<input type="number" min="0" step="1" value="2000" data-example-input="riskNotional">
+						</label>
+						<label>
+							REP per ETH price
+							<input type="number" min="0.0001" step="0.01" value="1" data-example-input="repPerEthPrice">
+						</label>
+						<label>
+							Budget multiplier (bps)
+							<input type="number" min="1" step="1" value="40000" data-example-input="priceRoundBudgetMultiplierBps">
+						</label>
+						<label>
+							Minimum report (REP)
+							<input type="number" min="1" step="1" value="250" data-example-input="minExactToken1Report">
+						</label>
+						<label>
+							Maximum report (REP)
+							<input type="number" min="1" step="1" value="2500" data-example-input="maxExactToken1Report">
+						</label>
+					</div>
+					<ul class="example-output" aria-live="polite">
+						<li>Unbounded report size: <output data-example-output="unboundedReport">0 REP</output></li>
+						<li>Selected report size: <output data-example-output="selectedReport">0 REP</output></li>
+						<li>Resulting price-round budget: <output data-example-output="resultingBudget">0 ETH</output></li>
+						<li>Budget result: <output data-example-output="budgetResult">within budget</output></li>
+					</ul>
+				</details>
+				<p>
+					The selected report size is stored as <code>pendingExactToken1Report</code> when a
+					report is opened. Settlement uses that stored value, not a fresh preview, so later
+					allowance changes cannot silently resize the budget of an already pending
+					OpenOracle game. If the computed size exceeds the configured maximum, the report uses
+					the maximum. That capped report cannot authorize over-budget operation volume: a
+					staged operation that does not fit the settled budget is consumed as an
+					<code>oracle budget exceeded</code> failure; the caller must stage a new operation
+					after a later accepted price round.
+				</p>
 				<figure class="diagram" id="fig-openoracle-budget-consumption">
 					<svg viewBox="0 0 980 310" role="img" aria-labelledby="budget-consumption-title budget-consumption-desc">
 						<title id="budget-consumption-title">Price-round budget consumption</title>
-						<desc id="budget-consumption-desc">One settled OpenOracle report creates a maximum price-round budget. Successful operations consume that budget; new requests that do not fit are staged for another report, while pending callback operations that do not fit are consumed as failed.</desc>
+						<desc id="budget-consumption-desc">One settled OpenOracle report creates a maximum price-round budget. Successful operations consume that budget; new requests that do not fit are staged for another report, while pending callback operations that do not fit are consumed as oracle budget exceeded failures.</desc>
 						<defs>
 							<marker id="arrow-budget-consumption" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -327,10 +429,10 @@
 						<rect class="svg-red" x="610" y="214" width="378" height="72" rx="8"></rect>
 						<text class="svg-label" x="799" y="239" text-anchor="middle">Remaining Room</text>
 						<text class="svg-label" x="799" y="258" text-anchor="middle">Too Small</text>
-						<text class="svg-small" x="799" y="277" text-anchor="middle">new requests stage; pending ones fail</text>
+						<text class="svg-small" x="799" y="277" text-anchor="middle">new requests stage; pending fail as budget exceeded</text>
 						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 610 250 H 468 V 158"></path>
 					</svg>
-					<p class="diagram-caption"><span class="figure-label">Budget Consumption</span>The coordinator treats the settled price as a bounded resource: successful operations subtract from the price-round budget. A new request that does not fit the cached price round stages for another report; an already staged operation that does not fit during execution is consumed as a failed operation.</p>
+					<p class="diagram-caption"><span class="figure-label">Budget Consumption</span>The coordinator treats the settled price as a bounded resource: successful operations subtract from the price-round budget. A new request that does not fit the cached price round stages for another report; an already staged operation that does not fit during execution is consumed as <code>oracle budget exceeded</code>, and the caller must stage a new operation after a later accepted price round.</p>
 				</figure>
 				<p>
 					Each operation consumes budget according to the exposure it adds or moves.
@@ -587,16 +689,19 @@
 					</details>
 					<p>
 						Placeholder defends this model by bounding
-					<code>externalPayoffNotional</code>, forcing liquidations to be meaningfully past
-					threshold, and rejecting bad settlement environments. The
-					<span class="term" tabindex="0">price-round budget</span>
-					limits the total ETH-notional operation volume one settled report can authorize.
-					With the current <code>priceRoundBudgetMultiplierBps = 40000</code>, one price
-					round can authorize at most about <code>4x</code> the initial report's
-					ETH-notional size before another report is needed.
-				</p>
-				<div class="equation" id="eq-openoracle-placeholder-liquidity-ratio">
-					<math display="block" aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity \cdot priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
+						<code>externalPayoffNotional</code>, forcing liquidations to be meaningfully past
+						threshold, and rejecting bad settlement environments. The
+						<span class="term" tabindex="0">price-round budget</span>
+						limits the total ETH-notional operation volume one settled report can authorize.
+						With the current <code>priceRoundBudgetMultiplierBps = 40000</code>, one price
+						round can authorize at most about <code>4x</code> the initial report's
+						ETH-notional size before another report is needed. The dynamic report-size
+						rule chooses <code>exactToken1Report</code> by inverting this relationship
+						against pool risk, then clamps the result between
+						<code>minExactToken1Report</code> and <code>maxExactToken1Report</code>.
+					</p>
+					<div class="equation" id="eq-openoracle-placeholder-liquidity-ratio">
+						<math display="block" aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity \cdot priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
 						<mtable>
 							<mtr>
 								<mtd><mi>externalPayoffNotional</mi></mtd>
@@ -827,13 +932,23 @@
 						</tr>
 						<tr>
 							<td><code>exactToken1Report</code></td>
-								<td>250 REP (<math aria-label="250 times 10 to the 18 atomic REP units" data-source="250 \cdot pow10(18) atomic REP units"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td>
-							<td>Sets the initial report size and feeds the price-round budget.</td>
+							<td>Derived per request</td>
+							<td>Sets the initial report size from pool risk, bounded by the minimum and maximum report-size parameters.</td>
+						</tr>
+						<tr>
+							<td><code>minExactToken1Report</code></td>
+							<td>250 REP (<math aria-label="250 times 10 to the 18 atomic REP units" data-source="250 \cdot pow10(18) atomic REP units"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td>
+							<td>Lower report-size floor used before an origin pool has a seeded REP/ETH price and for small pool-risk values.</td>
+						</tr>
+						<tr>
+							<td><code>maxExactToken1Report</code></td>
+							<td>2,500 REP (<math aria-label="2500 times 10 to the 18 atomic REP units" data-source="2500 \cdot pow10(18) atomic REP units"><mn>2500</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td>
+							<td>Upper report-size cap. If a staged operation exceeds the capped round's remaining budget at execution, it is consumed as <code>oracle budget exceeded</code>; any later attempt requires a newly staged operation and enough budget in that later round.</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
-								<td>2,500 REP (<math aria-label="2500 times 10 to the 18 atomic REP units" data-source="2500 \cdot pow10(18) atomic REP units"><mn>2500</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td>
-							<td>Stops multiplicative report-size escalation at <code>10x</code>; later disputes add one atomic REP unit at a time.</td>
+							<td><math aria-label="exact token one report times 100000 divided by 10000" data-source="exactToken1Report \cdot 100000 / 10000"><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mn>100000</mn><mo>/</mo><mn>10000</mn></math></td>
+							<td>Stops multiplicative report-size escalation at <code>10x</code> the selected initial report size; later disputes add one atomic REP unit at a time.</td>
 						</tr>
 						<tr>
 							<td><code>settlerReward</code></td>
@@ -960,6 +1075,33 @@
 					}
 					return durationValue.toFixed(2)
 				}
+				const formatExampleNumber = (value, suffix) => {
+					if (!Number.isFinite(value)) {
+						return `unbounded ${suffix}`.trim()
+					}
+					return `${value.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${suffix}`.trim()
+				}
+				bindExample('#report-sizing-example', context => {
+					const riskNotional = Math.max(context.read('riskNotional'), 0)
+					const repPerEthPrice = Math.max(context.read('repPerEthPrice'), 0.0001)
+					const priceRoundBudgetMultiplierBps = Math.max(context.read('priceRoundBudgetMultiplierBps'), 1)
+					const minExactToken1Report = Math.max(context.read('minExactToken1Report'), 1)
+					const maxExactToken1Report = Math.max(context.read('maxExactToken1Report'), minExactToken1Report)
+					const rawReport = riskNotional * repPerEthPrice * 10000 / priceRoundBudgetMultiplierBps
+					const unboundedReport = Math.ceil(rawReport * 1_000_000) / 1_000_000
+					const selectedReport = Math.min(Math.max(unboundedReport, minExactToken1Report), maxExactToken1Report)
+					const resultingBudget = selectedReport * priceRoundBudgetMultiplierBps / repPerEthPrice / 10000
+					const overBudget = riskNotional > resultingBudget
+					context.writeOutput('unboundedReport', formatExampleNumber(unboundedReport, 'REP'))
+					context.writeOutput('selectedReport', formatExampleNumber(selectedReport, 'REP'))
+					context.writeOutput('resultingBudget', formatExampleNumber(resultingBudget, 'ETH'))
+					context.writeOutput(
+						'budgetResult',
+						overBudget
+							? 'over cap; stage a new operation after a later accepted price round'
+							: 'within the selected price-round budget',
+					)
+				})
 				bindExample('#binary-censorship-example', context => {
 					const honestPrice = Math.max(context.read('honestPrice'), 0.0001)
 					const manipulatedPrice = Math.max(context.read('manipulatedPrice'), 0.0001)

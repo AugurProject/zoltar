@@ -3213,7 +3213,7 @@
 							<code>priceRoundMaxNotional</code> and the still-available budget
 							<code>remainingNotional</code>. The coordinator subtracts
 							<code>consumedNotional</code> as successful operations use the current price
-							round. Here <code>exactToken1Report</code> is the initial REP report size,
+							round. Here <code>exactToken1Report</code> is the selected initial REP report size for that OpenOracle report,
 							<code>pricePrecision</code> is the fixed scaling factor, and
 							<code>repPerEthPrice</code> is the settled REP per ETH price. REP-denominated
 							operations are converted into ETH-notional with ceiling division so a non-zero
@@ -3317,7 +3317,7 @@
 								</tr>
 								<tr>
 									<td><code>exactToken1Report</code></td>
-									<td>The initial REP amount used in the OpenOracle report.</td>
+									<td>The selected initial REP amount frozen for the OpenOracle report whose settlement created the current price round.</td>
 								</tr>
 								<tr>
 									<td><code>pricePrecision</code></td>
@@ -3659,8 +3659,10 @@
 							<tr><td><code>gasConsumedSettlement</code></td><td><code>1000000</code></td><td>Per-operation settlement gas estimate used by the coordinator.</td></tr>
 							<tr><td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td><td><code>4</code></td><td>Maximum staged operations executed from one OpenOracle settlement callback.</td></tr>
 							<tr><td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td><td><code>5 minutes</code></td><td>Maximum self-service validity window for staged oracle-gated operations.</td></tr>
-								<tr><td>OpenOracle <code>exactToken1Report</code></td><td>250 REP (<math aria-label="250 times 10 to the 18 atomic REP units" data-source="250 \cdot pow10(18) atomic REP units"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td><td>Initial report liquidity parameter, stored as an ERC-20 atomic REP amount.</td></tr>
-								<tr><td>OpenOracle <code>escalationHalt</code></td><td>2,500 REP (<math aria-label="2500 times 10 to the 18 atomic REP units" data-source="2500 \cdot pow10(18) atomic REP units"><mn>2500</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td><td>Dynamic halt threshold for multiplicative report escalation; later reports add one atomic REP unit at a time.</td></tr>
+							<tr><td>OpenOracle <code>exactToken1Report</code></td><td>Derived per request</td><td>Initial report liquidity parameter, denominated in REP token units and scaled from pool risk.</td></tr>
+							<tr><td>OpenOracle <code>minExactToken1Report</code></td><td>250 REP (<math aria-label="250 times 10 to the 18 atomic REP units" data-source="250 \cdot pow10(18) atomic REP units"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td><td>Lower bound for risk-scaled report sizing.</td></tr>
+							<tr><td>OpenOracle <code>maxExactToken1Report</code></td><td>2,500 REP (<math aria-label="2500 times 10 to the 18 atomic REP units" data-source="2500 \cdot pow10(18) atomic REP units"><mn>2500</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td><td>Upper bound for risk-scaled report sizing.</td></tr>
+							<tr><td>OpenOracle <code>escalationHalt</code></td><td><math aria-label="exact token one report times 100000 divided by 10000" data-source="exactToken1Report \cdot 100000 / 10000"><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mn>100000</mn><mo>/</mo><mn>10000</mn></math></td><td>Dynamic halt threshold for report escalation, equal to <code>10x</code> the initial REP report amount.</td></tr>
 							<tr><td>OpenOracle <code>settlerReward</code></td><td><math aria-label="block base fee times 2 times gas consumed open oracle report price" data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td><td>Dynamic ETH reward paid to settler.</td></tr>
 							<tr><td>OpenOracle <code>settlementTime</code></td><td><math aria-label="40 times 12" data-source="40 \cdot 12"><mn>40</mn><mo>&#x22C5;</mo><mn>12</mn></math></td><td>Settlement delay encoded as <code>480</code>.</td></tr>
 							<tr><td>OpenOracle <code>disputeDelay</code></td><td><code>0</code></td><td>No extra waiting period after each report.</td></tr>

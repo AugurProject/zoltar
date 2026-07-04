@@ -53,7 +53,8 @@ contract SecurityPoolOracleCoordinator {
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
-	uint256 public immutable exactToken1Report;
+	uint256 public immutable minExactToken1Report;
+	uint256 public immutable maxExactToken1Report;
 	uint48 public immutable settlementTime;
 	uint24 public immutable disputeDelay;
 	uint24 public immutable protocolFee;
@@ -67,6 +68,7 @@ contract SecurityPoolOracleCoordinator {
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
 	uint256 public pendingReportMaxSettlementBaseFee;
+	uint256 public pendingExactToken1Report;
 	uint256 public priceRoundId;
 	uint256 public priceRoundMaxNotional;
 	uint256 public priceRoundConsumedNotional;
@@ -148,7 +150,8 @@ contract SecurityPoolOracleCoordinator {
 		IWeth9 _weth,
 		uint256 _gasConsumedOpenOracleReportPrice,
 		uint32 _gasConsumedSettlement,
-		uint256 _exactToken1Report,
+		uint256 _minExactToken1Report,
+		uint256 _maxExactToken1Report,
 		uint48 _settlementTime,
 		uint24 _disputeDelay,
 		uint24 _protocolFee,
@@ -167,7 +170,11 @@ contract SecurityPoolOracleCoordinator {
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
-		exactToken1Report = _exactToken1Report;
+		require(_minExactToken1Report > 0, 'Minimum exact token1 report must be greater than zero');
+		require(_minExactToken1Report <= _maxExactToken1Report, 'Minimum exact token1 report cannot exceed maximum');
+		require(_maxExactToken1Report <= type(uint128).max, 'Maximum exact token1 report exceeds uint128 maximum');
+		minExactToken1Report = _minExactToken1Report;
+		maxExactToken1Report = _maxExactToken1Report;
 		settlementTime = _settlementTime;
 		disputeDelay = _disputeDelay;
 		protocolFee = _protocolFee;
@@ -178,6 +185,14 @@ contract SecurityPoolOracleCoordinator {
 		protocolFeeRecipient = _protocolFeeRecipient;
 		require(_priceRoundBudgetMultiplierBps > 0, 'Price round budget multiplier must be greater than zero');
 		require(_escalationHaltMultiplierBps > 0, 'Escalation halt multiplier must be greater than zero');
+		require(
+			_maxExactToken1Report <= type(uint256).max / PRICE_PRECISION / _priceRoundBudgetMultiplierBps,
+			'Maximum exact token1 report is too large for price-round budget math'
+		);
+		require(
+			_maxExactToken1Report <= (uint256(type(uint128).max) * ORACLE_BUDGET_BPS) / _escalationHaltMultiplierBps,
+			'Maximum escalation halt amount exceeds uint128 maximum'
+		);
 		priceRoundBudgetMultiplierBps = _priceRoundBudgetMultiplierBps;
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
 		require(
@@ -223,7 +238,7 @@ contract SecurityPoolOracleCoordinator {
 	function requestPrice() public payable {
 		uint256 ethCost = getRequestPriceEthCost();
 		require(msg.value >= ethCost, 'ETH bounty is too small to request a fresh oracle price');
-		_requestPrice(msg.sender, ethCost);
+		_requestPrice(msg.sender, ethCost, _getRequestPriceRiskNotional());
 
 		uint256 excess = msg.value - ethCost;
 		if (excess > 0) {
@@ -241,17 +256,18 @@ contract SecurityPoolOracleCoordinator {
 		emit OracleFeeCreditWithdrawn(msg.sender, credit);
 	}
 
-	function _requestPrice(address sponsor, uint256 ethCost) private {
+	function _requestPrice(address sponsor, uint256 ethCost, uint256 riskNotional) private {
 		require(pendingReportId == 0, 'Oracle price request is already pending');
-		uint256 escalationHalt = (exactToken1Report * escalationHaltMultiplierBps) / ORACLE_BUDGET_BPS;
+		uint256 reportExactToken1 = getExactToken1ReportForRiskNotional(riskNotional);
+		uint256 escalationHalt = (reportExactToken1 * escalationHaltMultiplierBps) / ORACLE_BUDGET_BPS;
 		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
-		require(exactToken1Report <= type(uint128).max, 'Oracle exact token1 report amount exceeds uint128 maximum');
 		require(escalationHalt <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerReward <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
 		pendingReportMaxSettlementBaseFee = (block.basefee * maxSettlementBaseFeeMultiplierBps) / ORACLE_BUDGET_BPS;
+		pendingExactToken1Report = reportExactToken1;
 
 		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
-			exactToken1Report: uint128(exactToken1Report),
+			exactToken1Report: uint128(reportExactToken1),
 			escalationHalt: uint128(escalationHalt), // amount of token1 past which escalation stops but disputes can still happen
 			settlerReward: uint96(settlerReward), // eth paid to settler in wei
 			token1Address: address(reputationToken), // address of token1 in the oracle report instance
@@ -280,6 +296,7 @@ contract SecurityPoolOracleCoordinator {
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
 		pendingReportMaxSettlementBaseFee = 0;
+		pendingExactToken1Report = 0;
 		_consumeRecoveredPendingOperation();
 		emit PendingReportRecovered(
 			reportId,
@@ -314,8 +331,10 @@ contract SecurityPoolOracleCoordinator {
 	) external {
 		require(msg.sender == address(openOracle), 'Only OpenOracle can call the security pool oracle callback');
 		require(reportId == pendingReportId, 'Oracle callback report id does not match the pending request');
+		uint256 reportExactToken1 = pendingExactToken1Report;
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
+		pendingExactToken1Report = 0;
 		if (block.basefee > pendingReportMaxSettlementBaseFee) {
 			pendingReportMaxSettlementBaseFee = 0;
 			_emitPriceReportRejected(reportId, 'Base fee too high');
@@ -331,14 +350,15 @@ contract SecurityPoolOracleCoordinator {
 			_emitPriceReportRejected(reportId, 'Oracle price is zero');
 			return;
 		}
+		if (reportExactToken1 == 0) {
+			_emitPriceReportRejected(reportId, 'Oracle report size is zero');
+			return;
+		}
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		priceRoundId++;
 		priceRoundConsumedNotional = 0;
-		priceRoundMaxNotional =
-			(exactToken1Report * PRICE_PRECISION * priceRoundBudgetMultiplierBps) /
-			price /
-			ORACLE_BUDGET_BPS;
+		priceRoundMaxNotional = getPriceRoundMaxNotionalForReport(reportExactToken1, price);
 		emit PriceReported(
 			reportId,
 			lastPrice,
@@ -383,6 +403,30 @@ contract SecurityPoolOracleCoordinator {
 	function getPriceRoundRemainingNotional() public view returns (uint256) {
 		if (priceRoundMaxNotional <= priceRoundConsumedNotional) return 0;
 		return priceRoundMaxNotional - priceRoundConsumedNotional;
+	}
+
+	function exactToken1Report() public view returns (uint256) {
+		return getExactToken1ReportForRiskNotional(_getRequestPriceRiskNotional());
+	}
+
+	function getPriceRoundMaxNotionalForReport(uint256 reportExactToken1, uint256 price) public view returns (uint256) {
+		require(price > 0, 'Oracle price is zero');
+		return (reportExactToken1 * PRICE_PRECISION * priceRoundBudgetMultiplierBps) / price / ORACLE_BUDGET_BPS;
+	}
+
+	function getExactToken1ReportForRiskNotional(uint256 riskNotional) public view returns (uint256) {
+		uint256 price = lastPrice;
+		if (price == 0 || riskNotional == 0) return minExactToken1Report;
+
+		uint256 minReportNotional = getPriceRoundMaxNotionalForReport(minExactToken1Report, price);
+		if (riskNotional <= minReportNotional) return minExactToken1Report;
+
+		uint256 maxReportNotional = getPriceRoundMaxNotionalForReport(maxExactToken1Report, price);
+		if (riskNotional >= maxReportNotional) return maxExactToken1Report;
+
+		uint256 denominator = PRICE_PRECISION * priceRoundBudgetMultiplierBps;
+		uint256 numerator = riskNotional * price * ORACLE_BUDGET_BPS;
+		return (numerator - 1) / denominator + 1;
 	}
 
 	function requestPriceIfNeededAndStageOperation(
@@ -453,7 +497,7 @@ contract SecurityPoolOracleCoordinator {
 				uint256 ethCost = getRequestPriceEthCost();
 				require(msg.value >= ethCost, 'Not enough ETH was provided to request a fresh oracle price');
 				retained += ethCost;
-				_requestPrice(msg.sender, ethCost);
+				_requestPrice(msg.sender, ethCost, _getRequestPriceRiskNotional());
 			} else if (pendingReportId != 0 && isPendingSettlementOperationId) {
 				uint256 queuedOperationEthCost = getQueuedOperationEthCost();
 				require(
@@ -671,6 +715,66 @@ contract SecurityPoolOracleCoordinator {
 		);
 	}
 
+	function _getCurrentPoolRiskNotional() private view returns (uint256) {
+		if (address(securityPool) == address(0)) return 0;
+		return securityPool.totalSecurityBondAllowance();
+	}
+
+	function _getRequestPriceRiskNotional() private view returns (uint256) {
+		uint256 currentPoolRisk = _getCurrentPoolRiskNotional();
+		uint256 simulatedPoolRisk = currentPoolRisk;
+		uint256 pendingConsumptionNotional = 0;
+		uint256 operationCount = pendingSettlementOperationIds.length;
+		for (uint256 index = 0; index < operationCount; index++) {
+			StagedOperation memory stagedOperation = stagedOperations[pendingSettlementOperationIds[index]];
+			if (stagedOperation.initiatorVault == address(0)) continue;
+			if (stagedOperation.operation == OperationType.SetSecurityBondsAllowance) {
+				uint256 currentTargetAllowance = _getSimulatedPendingAllowanceBefore(
+					index,
+					stagedOperation.targetVault
+				);
+				uint256 operationNotional = _getAllowanceIncreaseNotional(
+					stagedOperation.amount,
+					currentTargetAllowance
+				);
+				pendingConsumptionNotional = _addSaturating(pendingConsumptionNotional, operationNotional);
+				if (stagedOperation.amount > currentTargetAllowance) {
+					simulatedPoolRisk = _addSaturating(simulatedPoolRisk, operationNotional);
+				} else {
+					uint256 decrease = currentTargetAllowance - stagedOperation.amount;
+					simulatedPoolRisk = decrease > simulatedPoolRisk ? 0 : simulatedPoolRisk - decrease;
+				}
+			} else {
+				pendingConsumptionNotional = _addSaturating(
+					pendingConsumptionNotional,
+					_getOperationNotional(stagedOperation)
+				);
+			}
+		}
+		uint256 poolRisk = currentPoolRisk > simulatedPoolRisk ? currentPoolRisk : simulatedPoolRisk;
+		return poolRisk > pendingConsumptionNotional ? poolRisk : pendingConsumptionNotional;
+	}
+
+	function _getSimulatedPendingAllowanceBefore(
+		uint256 operationIndex,
+		address targetVault
+	) private view returns (uint256) {
+		(, uint256 simulatedAllowance, , ) = securityPool.securityVaults(targetVault);
+		for (uint256 index = 0; index < operationIndex; index++) {
+			StagedOperation memory previousOperation = stagedOperations[pendingSettlementOperationIds[index]];
+			if (previousOperation.initiatorVault == address(0)) continue;
+			if (previousOperation.operation != OperationType.SetSecurityBondsAllowance) continue;
+			if (previousOperation.targetVault != targetVault) continue;
+			simulatedAllowance = previousOperation.amount;
+		}
+		return simulatedAllowance;
+	}
+
+	function _addSaturating(uint256 left, uint256 right) private pure returns (uint256) {
+		if (left > type(uint256).max - right) return type(uint256).max;
+		return left + right;
+	}
+
 	function _getOperationNotional(StagedOperation memory stagedOperation) private view returns (uint256) {
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			uint256 debtToMove = _getLiquidationDebtToMove(stagedOperation);
@@ -687,8 +791,15 @@ contract SecurityPoolOracleCoordinator {
 		// allowance after staging and replay a stale manual operation to restore more
 		// exposure than the current price-round budget still permits.
 		(, uint256 currentTargetAllowance, , ) = securityPool.securityVaults(stagedOperation.targetVault);
-		if (stagedOperation.amount <= currentTargetAllowance) return 0;
-		return stagedOperation.amount - currentTargetAllowance;
+		return _getAllowanceIncreaseNotional(stagedOperation.amount, currentTargetAllowance);
+	}
+
+	function _getAllowanceIncreaseNotional(
+		uint256 nextAllowance,
+		uint256 currentAllowance
+	) private pure returns (uint256) {
+		if (nextAllowance <= currentAllowance) return 0;
+		return nextAllowance - currentAllowance;
 	}
 
 	function _previewWithdrawRep(
