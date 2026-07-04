@@ -487,6 +487,20 @@
 							</math>
 							<p class="equation-caption"><span class="equation-label">Bond Solvency</span>Vault and pool bond checks require remaining REP value to cover the ETH-denominated security-bond allowance.</p>
 						</div>
+						<div class="equation" id="eq-placeholder-allowance-backing">
+							<math display="block" aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price for allowance backing" data-source="repBacking \cdot pricePrecision &gt; securityBondAllowance \cdot repPerEthPrice">
+								<mrow>
+									<mi>repBacking</mi>
+									<mo>&#x22C5;</mo>
+									<mi>pricePrecision</mi>
+									<mo>&gt;</mo>
+									<mi>securityBondAllowance</mi>
+									<mo>&#x22C5;</mo>
+									<mi>repPerEthPrice</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">Allowance Backing</span>Setting or increasing bond allowance uses a strict inequality at both the vault and pool level, so equality is not enough to authorize new allowance.</p>
+						</div>
 					<div class="equation" id="eq-placeholder-liquidation-condition">
 						<math display="block" aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision" data-source="securityBondAllowance \cdot securityMultiplier \cdot repPerEthPrice &gt; repBacking \cdot pricePrecision">
 							<mrow>
@@ -993,6 +1007,26 @@
 						complete-set claim, subject to collateral accounting remaining intact through
 						migration and any required auction repair.
 					</p>
+					<div class="equation" id="eq-placeholder-share-redemption">
+						<math display="block" aria-label="cash payout equals floor of complete set amount times complete set collateral amount divided by share token supply" data-source="cashPayout = floor(completeSetAmount \cdot completeSetCollateralAmount / shareTokenSupply)">
+							<mrow>
+								<mi>cashPayout</mi>
+								<mo>=</mo>
+								<mi>floor</mi>
+								<mo>(</mo>
+								<mfrac>
+									<mrow>
+										<mi>completeSetAmount</mi>
+										<mo>&#x22C5;</mo>
+										<mi>completeSetCollateralAmount</mi>
+									</mrow>
+									<mi>shareTokenSupply</mi>
+								</mfrac>
+								<mo>)</mo>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Share Redemption</span><code>sharesToCash</code> pays a pro-rata share of the pool's current collateral accounting, with Solidity integer division flooring any remainder.</p>
+					</div>
 					<p>
 						The important edge case is fork recovery. If a child pool emerges from migration
 						with incomplete collateral, the truth auction sells REP for ETH so the child pool
@@ -1683,6 +1717,49 @@
 								</mtable>
 							</math>
 								<p class="equation-caption"><span class="equation-label">Fork Migration Proportion</span>Unlocked vault migration preserves the parent ownership share, then transfers ETH collateral according to the migrated REP share of REP at fork.</p>
+							</div>
+							<p>
+								The equation above is the external-fork unlocked transfer path. In an
+								own-fork migration, child collateral uses cumulative ceiling accounting so
+								repeated vault migrations do not strand collateral because each individual
+								transfer rounded down.
+							</p>
+							<div class="equation" id="eq-placeholder-own-fork-collateral-ceiling">
+								<math display="block" aria-label="cumulative collateral required after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by vault REP at fork; collateral delta to transfer equals cumulative collateral required after migration minus cumulative collateral already transferred" data-source="cumulativeCollateralRequiredAfterMigration = ceil(parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / vaultRepAtFork); collateralDeltaToTransfer = cumulativeCollateralRequiredAfterMigration - cumulativeCollateralAlreadyTransferred">
+									<mtable>
+										<mtr>
+											<mtd>
+												<mi>cumulativeCollateralRequiredAfterMigration</mi>
+											</mtd>
+											<mtd>
+												<mo>=</mo>
+												<mi>ceil</mi>
+												<mo>(</mo>
+												<mfrac>
+													<mrow>
+														<mi>parentCollateralAtFork</mi>
+														<mo>&#x22C5;</mo>
+														<mi>cumulativeRepTransferredAfterMigration</mi>
+													</mrow>
+													<mi>vaultRepAtFork</mi>
+												</mfrac>
+												<mo>)</mo>
+											</mtd>
+										</mtr>
+										<mtr>
+											<mtd>
+												<mi>collateralDeltaToTransfer</mi>
+											</mtd>
+											<mtd>
+												<mo>=</mo>
+												<mi>cumulativeCollateralRequiredAfterMigration</mi>
+												<mo>-</mo>
+												<mi>cumulativeCollateralAlreadyTransferred</mi>
+											</mtd>
+										</mtr>
+									</mtable>
+								</math>
+								<p class="equation-caption"><span class="equation-label">Own-Fork Collateral Ceiling</span>The forker recomputes the cumulative collateral required after the migration, subtracts cumulative collateral already transferred, and sends only that newly required difference to the child pool.</p>
 							</div>
 							<p>
 								Own-fork migration has one extra accounting split. The pool and its active
@@ -2749,10 +2826,32 @@
 							<code>consumedNotional</code> as successful operations use the current price
 							round. Here <code>exactToken1Report</code> is the initial REP report size,
 							<code>pricePrecision</code> is the fixed scaling factor, and
-							<code>repPerEthPrice</code> is the settled REP per ETH price.
+							<code>repPerEthPrice</code> is the settled REP per ETH price. REP-denominated
+							operations are converted into ETH-notional with ceiling division so a non-zero
+							REP movement always consumes at least the smallest rounded-up ETH-notional unit.
 						</p>
+						<div class="equation" id="eq-placeholder-rep-notional-rounding">
+							<math display="block" aria-label="REP to ETH notional equals ceiling of REP amount times price precision divided by REP per ETH price" data-source="repEthNotional = ceil(repAmount \cdot pricePrecision / repPerEthPrice)">
+								<mrow>
+									<mi>repEthNotional</mi>
+									<mo>=</mo>
+									<mi>ceil</mi>
+									<mo>(</mo>
+									<mfrac>
+										<mrow>
+											<mi>repAmount</mi>
+											<mo>&#x22C5;</mo>
+											<mi>pricePrecision</mi>
+										</mrow>
+										<mi>repPerEthPrice</mi>
+									</mfrac>
+									<mo>)</mo>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">REP Notional Rounding</span>Withdrawals and the REP side of liquidations spend price-round budget using rounded-up REP-to-ETH conversion.</p>
+						</div>
 						<div class="equation" id="eq-placeholder-oracle-round-budget">
-							<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = exactToken1Report \cdot pricePrecision \cdot priceRoundBudgetMultiplierBps / (repPerEthPrice \cdot oracleBudgetBps); remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
+							<math display="block" aria-label="maximum price-round budget equals floor of floor of exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price divided by oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = floor(floor(exactToken1Report \cdot pricePrecision \cdot priceRoundBudgetMultiplierBps / repPerEthPrice) / oracleBudgetBps); remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2762,20 +2861,27 @@
 											<mo>=</mo>
 										</mtd>
 										<mtd>
+											<mi>floor</mi>
+											<mo>(</mo>
 											<mfrac>
 												<mrow>
-													<mi>exactToken1Report</mi>
-													<mo>&#x22C5;</mo>
-													<mi>pricePrecision</mi>
-													<mo>&#x22C5;</mo>
-													<mi>priceRoundBudgetMultiplierBps</mi>
+													<mi>floor</mi>
+													<mo>(</mo>
+													<mfrac>
+														<mrow>
+															<mi>exactToken1Report</mi>
+															<mo>&#x22C5;</mo>
+															<mi>pricePrecision</mi>
+															<mo>&#x22C5;</mo>
+															<mi>priceRoundBudgetMultiplierBps</mi>
+														</mrow>
+														<mi>repPerEthPrice</mi>
+													</mfrac>
+													<mo>)</mo>
 												</mrow>
-												<mrow>
-													<mi>repPerEthPrice</mi>
-													<mo>&#x22C5;</mo>
-													<mi>oracleBudgetBps</mi>
-												</mrow>
+												<mi>oracleBudgetBps</mi>
 											</mfrac>
+											<mo>)</mo>
 										</mtd>
 									</mtr>
 									<mtr>
@@ -2798,7 +2904,7 @@
 									</mtr>
 								</mtable>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Oracle Price-Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required.</p>
+							<p class="equation-caption"><span class="equation-label">Oracle Price-Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required. The contract performs the two divisions sequentially, so each division floors its remainder.</p>
 						</div>
 						<table>
 							<thead>

@@ -267,29 +267,39 @@
 					<code>priceRoundBudgetMultiplierBps</code> is the configured multiplier in basis
 					points, <code>repPerEthPrice</code> is the settled coordinator price, and
 					<code>ORACLE_BUDGET_BPS</code> is the <code>10000</code> basis-point denominator.
+					The contract performs the divisions sequentially, so the result floors once after
+					dividing by <code>repPerEthPrice</code> and again after dividing by
+					<code>ORACLE_BUDGET_BPS</code>.
 				</p>
 				<div class="equation" id="eq-openoracle-round-budget">
-					<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points" data-source="priceRoundMaxNotional = exactToken1Report \cdot PRICE_PRECISION \cdot priceRoundBudgetMultiplierBps / (repPerEthPrice \cdot ORACLE_BUDGET_BPS)">
+					<math display="block" aria-label="maximum price-round budget equals floor of floor of exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price divided by oracle budget basis points" data-source="priceRoundMaxNotional = floor(floor(exactToken1Report \cdot PRICE_PRECISION \cdot priceRoundBudgetMultiplierBps / repPerEthPrice) / ORACLE_BUDGET_BPS)">
 						<mrow>
 							<mi>priceRoundMaxNotional</mi>
 							<mo>=</mo>
+							<mi>floor</mi>
+							<mo>(</mo>
 							<mfrac>
 								<mrow>
-									<mi>exactToken1Report</mi>
-									<mo>&#x22C5;</mo>
-									<mi>PRICE_PRECISION</mi>
-									<mo>&#x22C5;</mo>
-									<mi>priceRoundBudgetMultiplierBps</mi>
+									<mi>floor</mi>
+									<mo>(</mo>
+									<mfrac>
+										<mrow>
+											<mi>exactToken1Report</mi>
+											<mo>&#x22C5;</mo>
+											<mi>PRICE_PRECISION</mi>
+											<mo>&#x22C5;</mo>
+											<mi>priceRoundBudgetMultiplierBps</mi>
+										</mrow>
+										<mi>repPerEthPrice</mi>
+									</mfrac>
+									<mo>)</mo>
 								</mrow>
-								<mrow>
-									<mi>repPerEthPrice</mi>
-									<mo>&#x22C5;</mo>
-									<mi>ORACLE_BUDGET_BPS</mi>
-								</mrow>
+								<mi>ORACLE_BUDGET_BPS</mi>
 							</mfrac>
+							<mo>)</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Price-Round Budget</span>The initial REP report size and the configured multiplier cap how much <span class="term" tabindex="0">ETH-notional</span> activity one settled price can authorize.</p>
+					<p class="equation-caption"><span class="equation-label">Price-Round Budget</span>The initial REP report size and the configured multiplier cap how much <span class="term" tabindex="0">ETH-notional</span> activity one settled price can authorize, with Solidity integer division flooring each sequential division.</p>
 				</div>
 				<figure class="diagram" id="fig-openoracle-budget-consumption">
 					<svg viewBox="0 0 980 310" role="img" aria-labelledby="budget-consumption-title budget-consumption-desc">

@@ -632,8 +632,10 @@
 					<h3>Categorical Questions</h3>
 					<p>
 						Categorical questions store sorted outcome labels. The implementation requires
-						labels to be non-empty and strictly ordered by hash. The contract stores the
-						labels in <code>outcomeLabels[questionId]</code>. Any number of categorical
+						labels to be non-empty and strictly ordered by hash: each label's
+						<code>keccak256(abi.encode(label))</code> value must be lower than the previous
+						label's hash, so callers provide labels in descending hash order. The contract
+						stores the labels in <code>outcomeLabels[questionId]</code>. Any number of categorical
 						outcomes can exist at the Zoltar level as long as those conditions hold.
 					</p>
 
