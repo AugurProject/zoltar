@@ -78,23 +78,21 @@ describe('security vault guards', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasValidOraclePrice: false,
 				isMainnet: true,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				selectedVaultIsOwnedByAccount: true,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n,
 				withdrawableRepAmount: 1n,
 				walletEthBalance: 1n,
 			}),
-		).toBe('A valid oracle price is required before withdrawing REP.')
+		).toBeUndefined()
 
 		expect(
 			getVaultWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasValidOraclePrice: true,
 				isMainnet: true,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				selectedVaultIsOwnedByAccount: true,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 0n,
@@ -106,9 +104,8 @@ describe('security vault guards', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasValidOraclePrice: true,
 				isMainnet: true,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				selectedVaultIsOwnedByAccount: true,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 10_000n * 10n ** 18n,
@@ -119,10 +116,9 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({
-				hasValidOraclePrice: true,
 				isMainnet: true,
 				maxSecurityBondAllowanceAmount: undefined,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				securityBondAllowanceAmount: undefined,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
@@ -133,10 +129,9 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({
-				hasValidOraclePrice: true,
 				isMainnet: true,
 				maxSecurityBondAllowanceAmount: undefined,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				securityBondAllowanceAmount: 0n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
@@ -147,10 +142,9 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({
-				hasValidOraclePrice: true,
 				isMainnet: true,
 				maxSecurityBondAllowanceAmount: 5n * 10n ** 18n,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				securityBondAllowanceAmount: 5n * 10n ** 17n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
@@ -161,10 +155,9 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({
-				hasValidOraclePrice: true,
 				isMainnet: true,
 				maxSecurityBondAllowanceAmount: 5n * 10n ** 18n,
-				requestPriceEthCost: undefined,
+				requiredEthCost: undefined,
 				securityBondAllowanceAmount: 6n * 10n ** 18n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
@@ -198,7 +191,7 @@ describe('security vault guards', () => {
 				hasLoadedSelectedPool: true,
 				isMainnet: true,
 				pendingReportId: 9n,
-				requestPriceEthCost: 1n,
+				requiredEthCost: 1n,
 				walletEthBalance: 1n,
 			}),
 		).toBe('A pending price report already exists for this pool.')
@@ -231,7 +224,7 @@ describe('security vault guards', () => {
 				hasLoadedSelectedPool: true,
 				isMainnet: true,
 				pendingReportId: 0n,
-				requestPriceEthCost: 10n * ETH,
+				requiredEthCost: 10n * ETH,
 				walletEthBalance: 5n * ETH,
 			}),
 		).toBe('Need 7 more ETH in this wallet to request a new price.')
@@ -239,9 +232,9 @@ describe('security vault guards', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasValidOraclePrice: true,
+				bufferRequiredEthCost: true,
 				isMainnet: true,
-				requestPriceEthCost: 10n * ETH,
+				requiredEthCost: 10n * ETH,
 				selectedVaultIsOwnedByAccount: true,
 				stagedOperationTimeoutMinutes: 5n,
 				withdrawAmount: 1n * ETH,
@@ -252,10 +245,10 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({
-				hasValidOraclePrice: true,
 				isMainnet: true,
 				maxSecurityBondAllowanceAmount: undefined,
-				requestPriceEthCost: 10n * ETH,
+				bufferRequiredEthCost: true,
+				requiredEthCost: 10n * ETH,
 				securityBondAllowanceAmount: 0n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,

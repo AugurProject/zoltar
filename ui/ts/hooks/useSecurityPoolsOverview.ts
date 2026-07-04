@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadAllSecurityPools, loadOracleManagerDetails, loadSecurityPoolPage, queueSecurityPoolLiquidation } from '../contracts.js'
+import { loadAllSecurityPools, loadOracleManagerQueueOperationEthValue, loadSecurityPoolPage, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -13,7 +13,7 @@ import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
-import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { WriteOperationsParameters } from '../types/app.js'
@@ -21,6 +21,7 @@ import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolOverviewAc
 
 type UseSecurityPoolsOverviewParameters = {
 	accountAddress: Address | undefined
+	onTransactionCanceled?: WriteOperationsParameters['onTransactionCanceled']
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
 	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
@@ -53,7 +54,7 @@ async function waitForSecurityPoolReadBackend() {
 	await getActiveBackend().waitUntilReady?.()
 }
 
-export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
+export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
 	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
@@ -174,16 +175,31 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 		return getLiquidationSubmittedFeedback(result.hash)
 	}
 
+	const isLiquidationSnapshotCurrent = (snapshot: { amount: string; managerAddress: Address; securityPoolAddress: Address; targetVault: string; timeoutMinutes: string }) =>
+		liquidationAmount.value === snapshot.amount && liquidationManagerAddress.value === snapshot.managerAddress && liquidationSecurityPoolAddress.value === snapshot.securityPoolAddress && liquidationTargetVault.value === snapshot.targetVault && liquidationTimeoutMinutes.value === snapshot.timeoutMinutes
+
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewResult.value = undefined
+		const submittedLiquidation = {
+			amount: liquidationAmount.value,
+			managerAddress,
+			securityPoolAddress,
+			targetVault: liquidationTargetVault.value,
+			timeoutMinutes: liquidationTimeoutMinutes.value,
+		}
 		let completedResult: SecurityPoolOverviewActionResult | undefined
 		try {
 			securityPoolOverviewActiveAction.value = 'queueLiquidation'
 			securityPoolOverviewFeedback.value = createPendingActionFeedback('queueLiquidation', 'Submitting liquidation')
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation', createLiquidationTransactionIntent()),
+					...buildWriteActionConfig(
+						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
+						securityPoolOverviewError,
+						'Connect a wallet before queueing liquidation',
+						createLiquidationTransactionIntent(),
+					),
 					onRefreshError: (message, hash) => {
 						if (completedResult?.stagedExecution?.success === false) return
 						securityPoolOverviewFeedback.value =
@@ -191,8 +207,10 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 						if (completedResult !== undefined) onTransactionPresented(createLiquidationWarningPresentation(completedResult, message))
 					},
 					onWriteError: message => {
-						liquidationModalOpen.value = true
-						securityPoolLiquidationError.value = message
+						if (isLiquidationSnapshotCurrent(submittedLiquidation)) {
+							liquidationModalOpen.value = true
+							securityPoolLiquidationError.value = message
+						}
 						securityPoolOverviewFeedback.value = createErrorActionFeedback('queueLiquidation', 'Liquidation failed', message)
 					},
 					refreshState: async () => {
@@ -200,17 +218,12 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionFailed, 
 					},
 				},
 				async walletAddress => {
-					const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
-					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
-					const liquidationGuardMessage = getOracleRequestEthGuardMessage({
-						actionLabel: 'queue this liquidation',
-						requestPriceEthCost: managerDetails.requestPriceEthCost,
-						walletEthBalance,
-					})
-					if (liquidationGuardMessage !== undefined) throw new Error(liquidationGuardMessage)
-					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
-					const amount = parseRepAmountInput(liquidationAmount.value, 'Liquidation amount')
-					const timeoutMinutes = parseBigIntInput(liquidationTimeoutMinutes.value, 'Liquidation timeout')
+					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
+					const amount = parseRepAmountInput(submittedLiquidation.amount, 'Liquidation amount')
+					const requiredEthValue = await loadOracleManagerQueueOperationEthValue(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, 'liquidation', targetVault, amount)
+					const walletEthBalance = requiredEthValue === 0n ? undefined : await createConnectedReadClient().getBalance({ address: walletAddress })
+					if (walletEthBalance !== undefined && walletEthBalance < requiredEthValue) throw new Error(`Need ${formatCurrencyBalance(requiredEthValue - walletEthBalance)} more ETH in this wallet to queue this liquidation.`)
+					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')
 					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
 					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)

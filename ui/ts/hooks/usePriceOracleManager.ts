@@ -100,7 +100,8 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
 					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
 						actionLabel: 'request a new price',
-						requestPriceEthCost: refreshedManagerDetails?.requestPriceEthCost,
+						includeBuffer: true,
+						requiredEthCost: refreshedManagerDetails?.requestPriceEthCost,
 						walletEthBalance,
 					})
 					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)

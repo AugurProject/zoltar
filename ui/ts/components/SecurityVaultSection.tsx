@@ -28,6 +28,7 @@ import { balanceShortage } from '../lib/inputs.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
+import { resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
@@ -325,6 +326,7 @@ export function SecurityVaultSection({
 		totalRepDeposit: selectedPoolTotalRepDeposit,
 		totalSecurityBondAllowance: selectedPoolTotalSecurityBondAllowance,
 	})
+	const queuedWithdrawRepLimit = hasValidOraclePrice ? withdrawableRepAmount : currentSelectedVaultDetails?.repDepositShare
 	const maxSecurityBondAllowanceAmount = getSecurityVaultMaxBondAllowanceAmount({
 		currentSecurityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
@@ -348,16 +350,33 @@ export function SecurityVaultSection({
 	const effectiveRepExitMode = redeemRepEnabled ? 'redeem' : 'withdraw'
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepEnabled : queueWithdrawRepEnabled
 	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? 'Redeem REP' : 'Withdraw REP'
+	const repExitAmountLabel = (() => {
+		if (effectiveRepExitMode === 'redeem') return 'Redeemable REP'
+		if (hasValidOraclePrice) return 'Withdrawable REP'
+		return 'REP Available To Queue'
+	})()
+	const repExitRefreshMessage = (() => {
+		if (effectiveRepExitMode === 'redeem') return 'Refresh to see redeemable REP.'
+		if (hasValidOraclePrice) return 'Refresh to see withdrawable REP.'
+		return 'Refresh to see how much REP can be queued while the oracle price is stale.'
+	})()
 	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
 		hasClaimableFees,
 		isMainnet,
 		selectedVaultIsOwnedByAccount,
 	})
+	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
+		amount: securityBondAllowanceAmount ?? 0n,
+		currentTargetAllowance: currentSelectedVaultDetails?.securityBondAllowance,
+		currentTargetRepDeposit: undefined,
+		managerDetails: oracleManagerDetails,
+		operation: 'setSecurityBondsAllowance',
+	})
 	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
-		hasValidOraclePrice,
+		bufferRequiredEthCost: setSecurityBondAllowanceFunding?.includeBuffer === true,
 		isMainnet,
-		maxSecurityBondAllowanceAmount,
-		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
+		maxSecurityBondAllowanceAmount: hasValidOraclePrice ? maxSecurityBondAllowanceAmount : undefined,
+		requiredEthCost: setSecurityBondAllowanceFunding?.ethCost,
 		securityBondAllowanceAmount,
 		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
@@ -374,15 +393,22 @@ export function SecurityVaultSection({
 		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
 	})
+	const withdrawRepFunding = resolveOracleOperationEthFunding({
+		amount: withdrawAmount ?? 0n,
+		currentTargetAllowance: undefined,
+		currentTargetRepDeposit: undefined,
+		managerDetails: oracleManagerDetails,
+		operation: 'withdrawRep',
+	})
 	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
 		accountAddress: accountState.address,
-		hasValidOraclePrice,
+		bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
 		isMainnet,
-		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
+		requiredEthCost: withdrawRepFunding?.ethCost,
 		selectedVaultIsOwnedByAccount,
 		stagedOperationTimeoutMinutes,
 		withdrawAmount,
-		withdrawableRepAmount,
+		withdrawableRepAmount: queuedWithdrawRepLimit,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const redeemRepGuardMessage = getVaultRedeemRepGuardMessage({
@@ -476,7 +502,7 @@ export function SecurityVaultSection({
 		},
 		{
 			actionLabel: repExitActionLabel,
-			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal once a valid oracle price exists.',
+			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal now, or let it execute immediately when a valid oracle price is already available.',
 			key: 'rep-exit',
 			safetyId: effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep'),
 			...(repExitEnabled ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
@@ -596,7 +622,7 @@ export function SecurityVaultSection({
 				isOpen={vaultActionModal === 'withdraw-rep'}
 				onClose={() => setVaultActionModal(undefined)}
 				title={repExitActionLabel}
-				description={effectiveRepExitMode === 'redeem' ? 'Redeem the remaining REP collateral from this ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal after reviewing the current withdrawable balance and oracle validity.'}
+				description={effectiveRepExitMode === 'redeem' ? 'Redeem the remaining REP collateral from this ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal after reviewing the current vault collateral and oracle status.'}
 			>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{effectiveRepExitMode === 'redeem' ? 'Refresh the selected vault before redeeming REP.' : 'Refresh the selected vault before withdrawing REP.'}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
@@ -629,16 +655,16 @@ export function SecurityVaultSection({
 							variant='embedded'
 						/>
 						<MetricGrid>
-							<MetricField label={effectiveRepExitMode === 'redeem' ? 'Redeemable REP' : 'Withdrawable REP'}>
+							<MetricField label={repExitAmountLabel}>
 								{(() => {
 									if (effectiveRepExitMode === 'redeem') {
 										if (redeemableRepAmount === undefined) return '—'
 
 										return <CurrencyValue value={redeemableRepAmount} suffix='REP' />
 									}
-									if (withdrawableRepAmount === undefined) return '—'
+									if (queuedWithdrawRepLimit === undefined) return '—'
 
-									return <CurrencyValue value={withdrawableRepAmount} suffix='REP' />
+									return <CurrencyValue value={queuedWithdrawRepLimit} suffix='REP' />
 								})()}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
@@ -658,10 +684,10 @@ export function SecurityVaultSection({
 										className='quiet field-inline-action'
 										type='button'
 										onClick={() => {
-											if (withdrawableRepAmount === undefined) return
-											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
+											if (queuedWithdrawRepLimit === undefined) return
+											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(queuedWithdrawRepLimit) })
 										}}
-										disabled={withdrawableRepAmount === undefined || !poolCollateralActionsEnabled}
+										disabled={queuedWithdrawRepLimit === undefined || !poolCollateralActionsEnabled}
 									>
 										Max
 									</button>
@@ -684,8 +710,16 @@ export function SecurityVaultSection({
 										]
 									: [
 											{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
-											{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
-											{ key: 'withdrawable', label: 'The vault has withdrawable REP', resolved: withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n },
+											{
+												key: 'oracle',
+												label: hasValidOraclePrice ? 'A valid oracle price is available' : 'Oracle execution can be funded until a fresh price arrives',
+												resolved: hasValidOraclePrice || withdrawRepFunding !== undefined,
+											},
+											{
+												key: 'withdrawable',
+												label: hasValidOraclePrice ? 'The vault has withdrawable REP' : 'The vault still holds REP collateral to queue',
+												resolved: queuedWithdrawRepLimit !== undefined && queuedWithdrawRepLimit > 0n,
+											},
 											{ key: 'timeout', label: 'Manual execution timeout is at least 1 minute', resolved: stagedOperationTimeoutSeconds !== undefined },
 										]
 							}
@@ -917,12 +951,12 @@ export function SecurityVaultSection({
 			</SectionBlock>
 
 			<SectionBlock title={repExitActionLabel}>
-				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmount : withdrawableRepAmount) === undefined ? (
-					<p className='detail'>{effectiveRepExitMode === 'redeem' ? 'Refresh to see redeemable REP.' : 'Refresh to see withdrawable REP.'}</p>
+				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit) === undefined ? (
+					<p className='detail'>{repExitRefreshMessage}</p>
 				) : (
 					<div className='entity-metric-grid'>
-						<MetricField className='entity-metric' label={effectiveRepExitMode === 'redeem' ? 'Redeemable REP' : 'Withdrawable REP'}>
-							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmount : withdrawableRepAmount} suffix='REP' />
+						<MetricField className='entity-metric' label={repExitAmountLabel}>
+							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit} suffix='REP' />
 						</MetricField>
 						{(() => {
 							if (effectiveRepExitMode === 'redeem')
@@ -950,10 +984,10 @@ export function SecurityVaultSection({
 								className='quiet field-inline-action'
 								type='button'
 								onClick={() => {
-									if (withdrawableRepAmount === undefined) return
-									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
+									if (queuedWithdrawRepLimit === undefined) return
+									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(queuedWithdrawRepLimit) })
 								}}
-								disabled={withdrawableRepAmount === undefined || !poolCollateralActionsEnabled}
+								disabled={queuedWithdrawRepLimit === undefined || !poolCollateralActionsEnabled}
 							>
 								Max
 							</button>

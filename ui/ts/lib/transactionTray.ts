@@ -61,7 +61,18 @@ export function markTransactionPrepared(state: TransactionTrayState, preview: Tr
 
 export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash): TransactionTrayState {
 	const pendingIntent = state.pendingIntent
-	if (pendingIntent === undefined) return state
+	if (pendingIntent === undefined) {
+		const active = state.active
+		if (active?.tone !== 'pending') return state
+		return {
+			...state,
+			active: {
+				...active,
+				dismissKey: hash,
+				hash,
+			},
+		}
+	}
 
 	return {
 		...state,
@@ -101,6 +112,18 @@ export function markTransactionFailed(state: TransactionTrayState, message: stri
 			dismissKey: active.hash,
 			tone: 'error',
 		},
+	}
+}
+
+export function markTransactionCanceled(state: TransactionTrayState): TransactionTrayState {
+	const pendingRequestKey = state.pendingRequestKey
+	if (pendingRequestKey === undefined) return state
+
+	return {
+		...state,
+		active: state.active?.dismissKey === pendingRequestKey ? undefined : state.active,
+		pendingIntent: undefined,
+		pendingRequestKey: undefined,
 	}
 }
 

@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../lib/chainBackend.js'
 import { isRecoverableQuoteError } from '../lib/errors.js'
@@ -40,6 +41,7 @@ type UseRepPricesOptions = {
 
 const repPriceCacheByBackend = new Map<ChainBackend, CachedRepPrices>()
 const repPriceRefreshByBackend = new Map<ChainBackend, Promise<CachedRepPrices | undefined>>()
+const repPriceRefreshGenerationByBackend = new Map<ChainBackend, number>()
 
 function getCachedRepPrices(backend: ChainBackend) {
 	return repPriceCacheByBackend.get(backend)
@@ -55,6 +57,7 @@ function getFreshCachedRepPrices(backend: ChainBackend) {
 export function resetRepPriceCacheForTesting() {
 	repPriceCacheByBackend.clear()
 	repPriceRefreshByBackend.clear()
+	repPriceRefreshGenerationByBackend.clear()
 }
 
 async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadClient']>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
@@ -75,8 +78,10 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	if (cachedRepPrices !== undefined) return cachedRepPrices
 
 	const pendingRefresh = repPriceRefreshByBackend.get(backend)
-	if (pendingRefresh !== undefined) return await pendingRefresh
+	if (!forceRefresh && pendingRefresh !== undefined) return await pendingRefresh
 
+	const refreshGeneration = (repPriceRefreshGenerationByBackend.get(backend) ?? 0) + 1
+	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
 		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
@@ -111,6 +116,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 		}
 
 		if (!hasNextCachedRepPrices) return getCachedRepPrices(backend)
+		if (repPriceRefreshGenerationByBackend.get(backend) !== refreshGeneration) return getCachedRepPrices(backend)
 		repPriceCacheByBackend.set(backend, nextCachedRepPrices)
 		return nextCachedRepPrices
 	})()
@@ -120,7 +126,9 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	try {
 		return await refreshPromise
 	} finally {
-		repPriceRefreshByBackend.delete(backend)
+		if (repPriceRefreshByBackend.get(backend) === refreshPromise) {
+			repPriceRefreshByBackend.delete(backend)
+		}
 	}
 }
 
@@ -134,6 +142,7 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 	const repUsdcSource = useSignal<PriceSource | undefined>(cachedRepPrices?.repUsdcSource)
 	const repUsdcSourceUrl = useSignal<string | undefined>(cachedRepPrices?.repUsdcSourceUrl)
 	const repPricesLoad = useLoadController()
+	const nextRepPricesLoad = useRequestGuard()
 	const applyCachedRepPrices = (nextCachedRepPrices: CachedRepPrices) => {
 		repPerEthPrice.value = nextCachedRepPrices.repPerEthPrice
 		repPerEthSource.value = nextCachedRepPrices.repPerEthSource
@@ -144,6 +153,7 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 	}
 
 	const refreshRepPricesInternal = (forceRefresh: boolean) => {
+		const isCurrent = nextRepPricesLoad()
 		const nextFreshCachedRepPrices = forceRefresh ? undefined : getFreshCachedRepPrices(backend)
 		if (nextFreshCachedRepPrices !== undefined) {
 			applyCachedRepPrices(nextFreshCachedRepPrices)
@@ -153,6 +163,7 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 		void repPricesLoad
 			.track(async () => {
 				const nextCachedRepPrices = await loadRepPrices(backend, forceRefresh)
+				if (!isCurrent()) return
 				if (nextCachedRepPrices === undefined) return
 				applyCachedRepPrices(nextCachedRepPrices)
 			})

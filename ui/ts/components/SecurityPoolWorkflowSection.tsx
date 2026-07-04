@@ -61,7 +61,7 @@ import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingLockedUntilMessage } from '../lib/reporting.js'
+import { getReportingLockedUntilMessage, hasReportingOpened } from '../lib/reporting.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
@@ -198,7 +198,7 @@ export function SecurityPoolWorkflowSection({
 		systemState: selectedPoolState,
 	})
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
-	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
+	const reportingReady = marketDetails === undefined ? undefined : hasReportingOpened(marketDetails.endTime, currentTimestamp)
 	const selectedPoolReportingStage = deriveSecurityPoolReportingStage({
 		reportingDetails: currentReportingDetails,
 		reportingReady,
@@ -365,7 +365,7 @@ export function SecurityPoolWorkflowSection({
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
 		isMainnet,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
-		requestPriceEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
+		requiredEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
@@ -685,6 +685,7 @@ export function SecurityPoolWorkflowSection({
 				sticky={false}
 				title={getSelectedPoolCardTitle()}
 				items={[]}
+				variant='context-strip'
 			>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>
@@ -734,7 +735,9 @@ export function SecurityPoolWorkflowSection({
 
 					<div className='selected-pool-workflow-content'>
 						{!showSelectedPoolWorkflowDetails ? (
-							<SectionBlock title={selectedPoolLookupState === 'missing' ? 'Pool not found' : 'Manage Pool'}>{selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}</SectionBlock>
+							<SectionBlock title={selectedPoolLookupState === 'missing' ? 'Pool not found' : 'Manage Pool'} variant='plain'>
+								{selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
+							</SectionBlock>
 						) : (
 							<>
 								{view === 'vaults' ? (
@@ -742,6 +745,7 @@ export function SecurityPoolWorkflowSection({
 										<SectionBlock
 											density='compact'
 											title='Vault Operations'
+											variant='plain'
 											actions={
 												<div className='actions'>
 													<ViewTabs ariaLabel='Selected pool vault views' className='vault-content-switch' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
@@ -776,7 +780,7 @@ export function SecurityPoolWorkflowSection({
 										</SectionBlock>
 
 										{vaultView === 'browse-vaults' ? (
-											<SectionBlock title='Vault Directory'>
+											<SectionBlock title='Vault Directory' variant='embedded'>
 												<SecurityPoolVaultDirectory
 													emptyState={(() => {
 														if (selectedPool === undefined) {
@@ -911,7 +915,7 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title='Staged Operations'>
+									<SectionBlock density='compact' title='Staged Operations' variant='plain'>
 										<ErrorNotice message={poolOracleManagerError} />
 										<SectionBlock density='compact' headingLevel={4} title='Staged Operations List' variant='embedded'>
 											{stagedOperations.map(operation => (
@@ -980,7 +984,7 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title='Open Oracle'>
+									<SectionBlock density='compact' title='Open Oracle' variant='plain'>
 										<MetricGrid>
 											<MetricField label='Open Oracle Price' valueTagName='span'>
 												<OpenOraclePriceValue

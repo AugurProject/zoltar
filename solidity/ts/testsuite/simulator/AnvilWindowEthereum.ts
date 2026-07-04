@@ -43,6 +43,7 @@ type RpcTransactionRequest = {
 	readonly from?: string
 	readonly to?: string
 	readonly data?: string
+	readonly gas?: string
 	readonly gasPrice?: string
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
@@ -55,6 +56,8 @@ type EthCallCoverageRequest = {
 	readonly stateOverrides?: unknown
 	readonly blockOverrides?: unknown
 }
+
+const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1c9c380'
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -97,6 +100,7 @@ export function normalizeAnvilTransactionParams(params: unknown[]) {
 
 	const normalizedTransactionRequest: Record<string, unknown> = {
 		...firstParam,
+		gas: firstParam.gas ?? DEFAULT_ANVIL_TRANSACTION_GAS,
 		gasPrice: firstParam.gasPrice ?? '0x0',
 	}
 

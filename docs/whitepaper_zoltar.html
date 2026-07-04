@@ -4,1150 +4,7 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Zoltar White Paper</title>
-		<style>
-			:root {
-				color-scheme: light dark;
-				--bg: #f4f7f6;
-				--paper: #fffefd;
-				--ink: #202427;
-				--muted: #58646a;
-				--line: #d4ddda;
-				--soft-line: #e8eeec;
-				--card-bg: #fbfcfb;
-				--table-head: #eef5f2;
-				--green: #1c7659;
-				--green-soft: #d9eee7;
-				--gold: #8a5c14;
-				--gold-soft: #f3dfb8;
-				--teal: #1c7659;
-				--teal-soft: #d9eee7;
-				--red: #9f463d;
-				--red-soft: #f2d2cb;
-				--blue: #285f9f;
-				--blue-soft: #dce9f8;
-				--code-bg: #f8f3e8;
-				--section-bg: #f8faf9;
-				--accent: var(--blue);
-				--accent-soft: var(--blue-soft);
-				--accent-2: var(--green);
-				--accent-2-soft: var(--green-soft);
-				--accent-rgb: 40 95 159;
-				--accent-2-rgb: 28 118 89;
-				--diagram-line: #59615f;
-				--focus: #174f9d;
-				--radius: 0.5rem;
-				--radius-sm: 0.35rem;
-				--shadow: 0 18px 48px rgb(22 50 45 / 9%);
-				--section-shadow: 0 12px 34px rgb(22 50 45 / 6%);
-				font-family:
-					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-					sans-serif;
-			}
-
-			body.paper-placeholder {
-				--accent: var(--green);
-				--accent-soft: var(--green-soft);
-				--accent-2: var(--gold);
-				--accent-2-soft: var(--gold-soft);
-				--accent-rgb: 28 118 89;
-				--accent-2-rgb: 138 92 20;
-			}
-
-			body.paper-zoltar {
-				--accent: var(--blue);
-				--accent-soft: var(--blue-soft);
-				--accent-2: var(--green);
-				--accent-2-soft: var(--green-soft);
-				--accent-rgb: 40 95 159;
-				--accent-2-rgb: 28 118 89;
-			}
-
-			@media (prefers-color-scheme: dark) {
-				:root {
-					--bg: #111516;
-					--paper: #191d1e;
-					--ink: #f1f4f2;
-					--muted: #b4bfbb;
-					--line: #3b4744;
-					--soft-line: #2b3331;
-					--card-bg: #1d2322;
-					--table-head: #232b29;
-					--green: #72cba9;
-					--green-soft: #14372c;
-					--gold: #e6b65d;
-					--gold-soft: #3a2d15;
-					--teal: #72cba9;
-					--teal-soft: #14372c;
-					--red: #ef8e82;
-					--red-soft: #3d201d;
-					--blue: #8bb9f0;
-					--blue-soft: #17283f;
-					--code-bg: #27231c;
-					--section-bg: #1d2221;
-					--diagram-line: #aeb9b5;
-					--focus: #acd0ff;
-					--shadow: 0 18px 48px rgb(0 0 0 / 32%);
-					--section-shadow: 0 12px 34px rgb(0 0 0 / 22%);
-				}
-
-				body.paper-placeholder {
-					--accent: var(--green);
-					--accent-soft: var(--green-soft);
-					--accent-2: var(--gold);
-					--accent-2-soft: var(--gold-soft);
-					--accent-rgb: 114 203 169;
-					--accent-2-rgb: 230 182 93;
-				}
-
-				body.paper-zoltar {
-					--accent: var(--blue);
-					--accent-soft: var(--blue-soft);
-					--accent-2: var(--green);
-					--accent-2-soft: var(--green-soft);
-					--accent-rgb: 139 185 240;
-					--accent-2-rgb: 114 203 169;
-				}
-			}
-
-			* {
-				box-sizing: border-box;
-			}
-
-			html {
-				scroll-behavior: smooth;
-				scroll-padding-top: 1.5rem;
-			}
-
-			@media (prefers-reduced-motion: reduce) {
-				*,
-				*::before,
-				*::after {
-					transition-duration: 0.01ms !important;
-					animation-duration: 0.01ms !important;
-					animation-iteration-count: 1 !important;
-				}
-
-				html {
-					scroll-behavior: auto;
-				}
-			}
-
-			body {
-				counter-reset: figure equation;
-				margin: 0;
-				background:
-					linear-gradient(120deg, rgb(var(--accent-rgb) / 9%), transparent 32rem),
-					linear-gradient(300deg, rgb(var(--accent-2-rgb) / 8%), transparent 34rem),
-					var(--bg);
-				color: var(--ink);
-				font-size: 1rem;
-				line-height: 1.64;
-				text-rendering: optimizeLegibility;
-			}
-
-			body::before {
-				position: fixed;
-				z-index: 2;
-				top: 0;
-				right: 0;
-				left: 0;
-				height: 0.22rem;
-				background: linear-gradient(90deg, var(--accent), var(--accent-2));
-				content: "";
-				pointer-events: none;
-			}
-
-			a {
-				color: var(--blue);
-				text-decoration-thickness: 0.08em;
-				text-underline-offset: 0.18em;
-			}
-
-			a:hover {
-				color: var(--ink);
-			}
-
-			a:focus-visible,
-			button:focus-visible,
-			[tabindex]:focus-visible {
-				outline: 2px solid var(--focus);
-				outline-offset: 3px;
-				border-radius: var(--radius-sm);
-			}
-
-			p {
-				margin: 0 0 1rem;
-			}
-
-			figure {
-				margin-right: 0;
-				margin-left: 0;
-			}
-
-			code {
-				padding: 0.1rem 0.32rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius-sm);
-				background: var(--code-bg);
-				font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-				font-size: 0.92em;
-				overflow-wrap: anywhere;
-			}
-
-			.skip-link {
-				position: fixed;
-				z-index: 3;
-				top: 0.55rem;
-				left: 0.75rem;
-				transform: translateY(-150%);
-				padding: 0.55rem 0.75rem;
-				border: 1px solid var(--line);
-				border-radius: var(--radius-sm);
-				background: var(--paper);
-				box-shadow: var(--section-shadow);
-				color: var(--ink);
-				font-weight: 800;
-				text-decoration: none;
-			}
-
-			.skip-link:focus-visible {
-				transform: translateY(0);
-			}
-
-			.site-shell {
-				display: grid;
-				grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
-				gap: clamp(1rem, 3vw, 2.25rem);
-				width: min(1280px, calc(100% - 1rem));
-				margin: 0 auto;
-				padding: 2rem 0 4rem;
-			}
-
-			.sidebar {
-				position: sticky;
-				top: 1.5rem;
-				align-self: start;
-				max-height: calc(100vh - 3rem);
-				overflow: auto;
-				padding: 0.85rem;
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: color-mix(in srgb, var(--paper) 92%, transparent);
-				box-shadow: 0 10px 34px rgb(22 50 45 / 7%);
-				backdrop-filter: blur(12px);
-			}
-
-			.sidebar-header {
-				padding: 0.2rem 0.25rem 0.75rem;
-				border-bottom: 1px solid var(--soft-line);
-			}
-
-			.sidebar-series {
-				display: block;
-				color: var(--muted);
-				font-size: 0.75rem;
-				font-weight: 800;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.sidebar strong {
-				display: block;
-				margin-top: 0.15rem;
-				color: var(--accent);
-				font-size: 0.98rem;
-				font-weight: 850;
-			}
-
-			.sidebar-header p {
-				margin: 0.2rem 0 0;
-				color: var(--muted);
-				font-size: 0.86rem;
-				line-height: 1.35;
-			}
-
-			.sidebar-companion,
-			.companion-link {
-				text-decoration: none;
-			}
-
-			.sidebar-companion {
-				display: block;
-				margin: 0.8rem 0;
-				padding: 0.65rem 0.72rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius-sm);
-				background: color-mix(in srgb, var(--accent-soft) 54%, var(--paper));
-				color: var(--ink);
-			}
-
-			.sidebar-companion span,
-			.companion-link span {
-				display: block;
-				color: var(--muted);
-				font-size: 0.72rem;
-				font-weight: 850;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.sidebar-companion b,
-			.companion-link b {
-				display: block;
-				margin-top: 0.16rem;
-				font-size: 0.92rem;
-				line-height: 1.25;
-			}
-
-			.sidebar nav {
-				display: grid;
-				gap: 0.12rem;
-			}
-
-			.sidebar nav a {
-				display: block;
-				min-height: 2rem;
-				padding: 0.36rem 0.65rem 0.36rem 0.75rem;
-				border: 1px solid transparent;
-				border-radius: var(--radius-sm);
-				color: var(--muted);
-				font-size: 0.91rem;
-				line-height: 1.35;
-				text-decoration: none;
-			}
-
-			.sidebar nav a:hover {
-				border-color: var(--soft-line);
-				background: color-mix(in srgb, var(--accent-soft) 36%, transparent);
-				color: var(--ink);
-			}
-
-			.sidebar nav a[aria-current="location"] {
-				border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-				background: color-mix(in srgb, var(--accent-soft) 68%, var(--paper));
-				box-shadow: inset 0.22rem 0 0 var(--accent);
-				color: var(--ink);
-				font-weight: 800;
-			}
-
-			main {
-				min-width: 0;
-			}
-
-			.hero,
-			.paper-section {
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: var(--paper);
-				box-shadow: var(--section-shadow);
-			}
-
-			.hero {
-				position: relative;
-				overflow: hidden;
-				padding: clamp(2rem, 5vw, 4rem);
-				background:
-					radial-gradient(circle at 85% 15%, rgb(var(--accent-2-rgb) / 14%), transparent 15rem),
-					linear-gradient(145deg, var(--paper), var(--section-bg));
-				box-shadow: var(--shadow);
-			}
-
-			.hero::after {
-				position: absolute;
-				inset: 0;
-				background: linear-gradient(90deg, rgb(var(--accent-rgb) / 9%), transparent 28rem);
-				content: "";
-				pointer-events: none;
-			}
-
-			.hero > * {
-				position: relative;
-				z-index: 1;
-			}
-
-			.paper-brand {
-				display: flex;
-				align-items: flex-start;
-				justify-content: space-between;
-				gap: 1rem;
-				margin-bottom: clamp(1.5rem, 4vw, 2.4rem);
-			}
-
-			.brand-lockup {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.72rem;
-				min-width: 0;
-			}
-
-			.brand-mark {
-				display: grid;
-				flex: 0 0 auto;
-				grid-template-columns: repeat(2, 0.55rem);
-				grid-template-rows: repeat(2, 0.55rem);
-				gap: 0.22rem;
-				place-content: center;
-				width: 2.35rem;
-				height: 2.35rem;
-				border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
-				border-radius: var(--radius);
-				background: color-mix(in srgb, var(--accent-soft) 56%, var(--paper));
-			}
-
-			.brand-mark span {
-				border-radius: 999px;
-				background: var(--accent);
-			}
-
-			.brand-mark span:nth-child(2) {
-				background: var(--accent-2);
-			}
-
-			.brand-mark span:nth-child(3) {
-				grid-column: 1 / 3;
-				width: 1.32rem;
-				border-radius: 0.2rem;
-				background: linear-gradient(90deg, var(--accent), var(--accent-2));
-				justify-self: center;
-			}
-
-			.brand-name,
-			.brand-subtitle {
-				display: block;
-				line-height: 1.2;
-			}
-
-			.brand-name {
-				font-size: 0.92rem;
-				font-weight: 850;
-			}
-
-			.brand-subtitle {
-				margin-top: 0.12rem;
-				color: var(--muted);
-				font-size: 0.78rem;
-			}
-
-			.companion-link {
-				max-width: 15.5rem;
-				padding: 0.62rem 0.75rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius-sm);
-				background: color-mix(in srgb, var(--paper) 78%, transparent);
-				color: var(--ink);
-			}
-
-			.hero-label-row {
-				display: flex;
-				flex-wrap: wrap;
-				align-items: center;
-				gap: 0.7rem 1rem;
-				margin-bottom: 0.8rem;
-			}
-
-			.kicker {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.42rem;
-				margin: 0;
-				color: var(--accent);
-				font-size: 0.8rem;
-				font-weight: 850;
-				letter-spacing: 0.1em;
-				text-transform: uppercase;
-			}
-
-			.layer-dot {
-				width: 0.52rem;
-				height: 0.52rem;
-				border-radius: 999px;
-				background: var(--accent);
-				box-shadow: 0 0 0 0.22rem rgb(var(--accent-rgb) / 14%);
-			}
-
-			.paper-status {
-				margin: 0;
-				color: var(--muted);
-				font-size: 0.9rem;
-				font-weight: 650;
-			}
-
-			h1,
-			h2,
-			h3 {
-				line-height: 1.15;
-			}
-
-			h1 {
-				max-width: 18ch;
-				margin: 0;
-				font-size: clamp(2.5rem, 6vw, 4.6rem);
-				letter-spacing: 0;
-			}
-
-			.subtitle {
-				max-width: 74ch;
-				margin: 1.1rem 0 0;
-				color: var(--muted);
-				font-size: 1.12rem;
-			}
-
-			.meta-grid {
-				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-				gap: 0.9rem;
-				margin-top: 1.8rem;
-			}
-
-			.meta-card,
-			.summary-card {
-				border: 1px solid var(--soft-line);
-				border-top: 2px solid color-mix(in srgb, var(--accent) 52%, var(--line));
-				border-radius: var(--radius);
-				background: var(--card-bg);
-				padding: 0.95rem 1rem;
-			}
-
-			.meta-card span,
-			.summary-card span {
-				display: block;
-				color: var(--muted);
-				font-size: 0.76rem;
-				font-weight: 850;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.meta-card b,
-			.summary-card b {
-				display: block;
-				margin-top: 0.28rem;
-				font-size: 1rem;
-				line-height: 1.34;
-			}
-
-			.summary-grid {
-				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-				gap: 0.9rem;
-				margin: 1.35rem 0 0;
-			}
-
-			.paper-section {
-				margin-top: 1.25rem;
-				padding: clamp(1rem, 3vw, 2rem);
-			}
-
-			.paper-section:target {
-				border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-				box-shadow:
-					0 0 0 3px rgb(var(--accent-rgb) / 10%),
-					var(--section-shadow);
-			}
-
-			.paper-section h2 {
-				margin: 0 0 1rem;
-				font-size: clamp(1.8rem, 4vw, 2.55rem);
-			}
-
-			.paper-section h3 {
-				max-width: 76ch;
-				margin: 1.8rem 0 0.65rem;
-				font-size: 1.25rem;
-			}
-
-			.paper-section > p,
-			.paper-section > ol,
-			.paper-section > ul {
-				max-width: 76ch;
-			}
-
-			.lede {
-				max-width: 76ch;
-				color: color-mix(in srgb, var(--ink) 82%, var(--muted));
-				font-size: 1.08rem;
-				line-height: 1.68;
-			}
-
-			.callout {
-				max-width: 76ch;
-				margin: 1.25rem 0;
-				padding: 1rem 1.1rem;
-				border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-				border-left: 0.35rem solid var(--accent);
-				border-radius: var(--radius);
-				background: color-mix(in srgb, var(--accent-soft) 62%, var(--paper));
-			}
-
-			.callout strong {
-				display: block;
-				margin-bottom: 0.25rem;
-			}
-
-			.contract-list,
-			.clean-list {
-				display: grid;
-				gap: 0.55rem;
-				padding-left: 1.1rem;
-			}
-
-			.contract-list li,
-			.clean-list li {
-				padding-left: 0.2rem;
-			}
-
-			.equation {
-				counter-increment: equation;
-				scroll-margin-top: 1rem;
-				margin: 1.1rem 0;
-				padding: 0.5rem;
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: var(--code-bg);
-				overflow-x: auto;
-				overscroll-behavior-x: contain;
-				scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
-				scrollbar-width: thin;
-			}
-
-			.equation math {
-				display: block;
-				min-width: max-content;
-				font-size: 1.02rem;
-			}
-
-			.equation-caption {
-				margin: 0.7rem 0 0;
-				color: var(--muted);
-				font-size: 0.92rem;
-			}
-
-			.equation-label {
-				color: var(--ink);
-				font-weight: 850;
-			}
-
-			.equation-label::before {
-				content: "Equation " counter(equation) ": ";
-			}
-
-			.equation-label::after {
-				content: ". ";
-			}
-
-			.table-wrap {
-				overflow-x: auto;
-				margin: 1.2rem 0;
-				border: 1px solid var(--line);
-				border-radius: var(--radius);
-				background: var(--section-bg);
-				scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
-				scrollbar-width: thin;
-			}
-
-			table {
-				width: 100%;
-				margin: 1.2rem 0;
-				border-collapse: separate;
-				border-spacing: 0;
-				background: var(--section-bg);
-				font-size: 0.94rem;
-			}
-
-			.table-wrap table {
-				margin: 0;
-			}
-
-			.invalid-table {
-				min-width: 42rem;
-			}
-
-			.invalid-table th:first-child,
-			.invalid-table td:first-child {
-				width: 10rem;
-				white-space: nowrap;
-			}
-
-			th,
-			td {
-				padding: 0.78rem 0.9rem;
-				border-bottom: 1px solid var(--soft-line);
-				text-align: left;
-				vertical-align: top;
-			}
-
-			th + th,
-			td + td {
-				border-left: 1px solid var(--soft-line);
-			}
-
-			th {
-				background: var(--table-head);
-				color: var(--accent);
-				font-size: 0.78rem;
-				font-weight: 850;
-				letter-spacing: 0.06em;
-				text-transform: uppercase;
-			}
-
-			tr:last-child td {
-				border-bottom: 0;
-			}
-
-			.diagram {
-				counter-increment: figure;
-				scroll-margin-top: 1rem;
-				margin: 1.45rem 0;
-				padding: 0.5rem;
-				border: 1px solid var(--line);
-				border-top: 3px solid var(--accent);
-				border-radius: var(--radius);
-				background: var(--section-bg);
-				box-shadow: inset 0 -1.5rem 1.8rem -2rem rgb(var(--accent-rgb) / 34%);
-				overflow-x: auto;
-				overscroll-behavior-x: contain;
-				scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
-				scrollbar-width: thin;
-			}
-
-			.diagram:nth-of-type(even) {
-				border-top-color: var(--accent-2);
-			}
-
-			.diagram svg {
-				display: block;
-				width: 100%;
-				min-width: 42rem;
-				height: auto;
-				color: var(--diagram-line);
-			}
-
-			.diagram-title {
-				margin: 0 0 0.75rem;
-				color: var(--muted);
-				font-size: 0.8rem;
-				font-weight: 850;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-			}
-
-			.diagram-caption {
-				margin: 0.8rem 0 0;
-				color: var(--muted);
-				font-size: 0.94rem;
-				line-height: 1.5;
-			}
-
-			.figure-label {
-				color: var(--ink);
-				font-weight: 850;
-			}
-
-			.figure-label::before {
-				content: "Figure " counter(figure) ": ";
-			}
-
-			.figure-label::after {
-				content: ". ";
-			}
-
-			.legend {
-				display: flex;
-				flex-wrap: wrap;
-				gap: 0.55rem 1rem;
-				margin-top: 0.8rem;
-				color: var(--muted);
-				font-size: 0.86rem;
-			}
-
-			.legend-item {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.4rem;
-			}
-
-			.legend-swatch {
-				width: 0.9rem;
-				height: 0.9rem;
-				border: 1px solid currentColor;
-				border-radius: 0.2rem;
-			}
-
-			.legend-swatch.teal,
-			.legend-swatch.green {
-				background: var(--green-soft);
-				color: var(--green);
-			}
-
-			.legend-swatch.gold {
-				background: var(--gold-soft);
-				color: var(--gold);
-			}
-
-			.legend-swatch.red {
-				background: var(--red-soft);
-				color: var(--red);
-			}
-
-			.legend-swatch.blue {
-				background: var(--blue-soft);
-				color: var(--blue);
-			}
-
-			.section-heading {
-				display: flex;
-				align-items: baseline;
-				justify-content: space-between;
-				gap: 1rem;
-				margin-bottom: 1rem;
-				border-bottom: 1px solid var(--soft-line);
-			}
-
-			.anchor-link {
-				flex: none;
-				color: var(--muted);
-				font-size: 1rem;
-				font-weight: 850;
-				text-decoration: none;
-			}
-
-			.anchor-link:hover {
-				color: var(--ink);
-			}
-
-			.glossary-grid,
-			.timeline-grid,
-			.implementation-grid {
-				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-				gap: 0.85rem;
-				margin: 1.2rem 0;
-			}
-
-			.glossary-card,
-			.timeline-card,
-			.implementation-note {
-				padding: 0.95rem 1rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius);
-				background: var(--card-bg);
-			}
-
-			.glossary-card b,
-			.timeline-card b,
-			.implementation-note b {
-				display: block;
-				margin-bottom: 0.25rem;
-			}
-
-			.glossary-card p,
-			.timeline-card p,
-			.implementation-note p {
-				margin: 0;
-				color: var(--muted);
-			}
-
-			.term {
-				border-bottom: 1px dotted currentColor;
-				cursor: help;
-				font-weight: 650;
-				text-decoration: none;
-				text-underline-offset: 0.18em;
-			}
-
-			.term:focus-visible {
-				outline: 2px solid var(--accent);
-				outline-offset: 0.12rem;
-				border-radius: 0.15rem;
-			}
-
-			.implementation-note {
-				border-left: 0.3rem solid var(--blue);
-			}
-
-			.svg-box {
-				fill: var(--paper);
-				stroke: var(--line);
-				stroke-width: 2;
-			}
-
-			.svg-green,
-			.svg-teal {
-				fill: var(--green-soft);
-				stroke: var(--green);
-				stroke-width: 2;
-			}
-
-			.svg-gold {
-				fill: var(--gold-soft);
-				stroke: var(--gold);
-				stroke-width: 2;
-			}
-
-			.svg-red {
-				fill: var(--red-soft);
-				stroke: var(--red);
-				stroke-width: 2;
-			}
-
-			.svg-blue {
-				fill: var(--blue-soft);
-				stroke: var(--blue);
-				stroke-width: 2;
-			}
-
-			.svg-line {
-				fill: none;
-				stroke: var(--diagram-line);
-				stroke-linecap: round;
-				stroke-linejoin: round;
-				stroke-width: 2.35;
-			}
-
-			.svg-label {
-				fill: var(--ink);
-				font-family:
-					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-					sans-serif;
-				font-size: 17px;
-				font-weight: 800;
-			}
-
-			.svg-small {
-				fill: var(--muted);
-				font-size: 13px;
-				font-weight: 650;
-			}
-
-			.step-list {
-				display: grid;
-				gap: 0.8rem;
-				max-width: none;
-				counter-reset: steps;
-				list-style: none;
-				padding: 0;
-			}
-
-			.paper-section > .step-list {
-				max-width: none;
-			}
-
-			.step-list li {
-				display: flex;
-				gap: 0.75rem;
-				align-items: start;
-				min-width: 0;
-				padding: 0.85rem;
-				border: 1px solid var(--soft-line);
-				border-radius: var(--radius);
-				background: var(--section-bg);
-				counter-increment: steps;
-			}
-
-			.step-list li::before {
-				display: grid;
-				flex: 0 0 auto;
-				width: 2rem;
-				height: 2rem;
-				place-items: center;
-				border-radius: 999px;
-				background: var(--ink);
-				color: var(--paper);
-				content: counter(steps);
-				font-size: 0.9rem;
-				font-weight: 850;
-			}
-
-			.step-content {
-				min-width: 0;
-				overflow-wrap: anywhere;
-			}
-
-			.footer-note {
-				margin: 1.5rem 0 0;
-				color: var(--muted);
-				font-size: 0.92rem;
-			}
-
-			@media (max-width: 1000px) {
-				.site-shell {
-					display: block;
-					width: min(100% - 0.75rem, 860px);
-					padding-top: 0.75rem;
-				}
-
-				.sidebar {
-					position: static;
-					max-height: none;
-					margin: 0.5rem 0 1rem;
-				}
-
-				.sidebar nav {
-					grid-template-columns: repeat(2, minmax(0, 1fr));
-					column-gap: 0.35rem;
-				}
-
-				.paper-brand {
-					align-items: stretch;
-				}
-
-				.companion-link {
-					max-width: none;
-				}
-			}
-
-			@media (max-width: 640px) {
-				.site-shell {
-					width: min(100% - 0.5rem, 860px);
-					padding-bottom: 2rem;
-				}
-
-				.sidebar nav {
-					grid-template-columns: repeat(2, minmax(0, 1fr));
-					column-gap: 0.25rem;
-				}
-
-				.hero,
-				.paper-section {
-					border-radius: var(--radius);
-				}
-
-				.hero {
-					padding: 1.2rem;
-				}
-
-				.paper-section {
-					padding: 0.7rem;
-				}
-
-				.paper-brand {
-					flex-direction: column;
-					margin-bottom: 1.4rem;
-				}
-
-				h1 {
-					max-width: 100%;
-					font-size: clamp(2.15rem, 10.5vw, 3rem);
-				}
-
-				.subtitle {
-					font-size: 1rem;
-				}
-
-				.diagram {
-					margin-right: -0.2rem;
-					margin-left: -0.2rem;
-					padding: 0.4rem;
-				}
-
-				.diagram svg {
-					width: 42rem;
-					max-width: none;
-					min-width: 42rem;
-				}
-
-				th,
-				td {
-					padding: 0.65rem 0.72rem;
-				}
-			}
-
-			@media (max-width: 360px) {
-				.sidebar nav {
-					grid-template-columns: 1fr;
-				}
-			}
-
-			@page {
-				margin: 0.65in;
-			}
-
-			@media print {
-				:root {
-					color-scheme: light;
-					--bg: #fff;
-					--paper: #fff;
-					--ink: #111;
-					--muted: #444;
-					--line: #bbb;
-					--soft-line: #ddd;
-					--card-bg: #fff;
-					--section-bg: #fff;
-					--code-bg: #f6f6f6;
-					--table-head: #f1f1f1;
-					--shadow: none;
-					--section-shadow: none;
-				}
-
-				body {
-					background: #fff;
-				}
-
-				body::before,
-				.skip-link,
-				.anchor-link {
-					display: none;
-				}
-
-				.site-shell {
-					display: block;
-					width: 100%;
-					padding: 0;
-				}
-
-				.sidebar {
-					display: none;
-				}
-
-				.hero,
-				.paper-section {
-					border: 0;
-					box-shadow: none;
-					break-inside: auto;
-				}
-
-				.hero {
-					padding: 0 0 1rem;
-				}
-
-				.paper-section {
-					margin-top: 1rem;
-					padding: 1rem 0 0;
-					border-top: 1px solid #ddd;
-				}
-
-				.companion-link {
-					border: 0;
-					padding: 0;
-				}
-
-				.diagram,
-				.table-wrap,
-				table,
-				.step-list li,
-				.glossary-card,
-				.timeline-card,
-				.implementation-note {
-					break-inside: avoid;
-				}
-
-				.diagram,
-				.table-wrap,
-				.equation {
-					overflow: visible;
-				}
-
-				.diagram svg {
-					max-width: 100%;
-					min-width: 0;
-				}
-
-				a {
-					color: #111;
-					text-decoration: none;
-				}
-			}
-		</style>
+		<link rel="stylesheet" href="./shared-docs.css">
 	</head>
 	<body class="paper-page paper-zoltar">
 		<a class="skip-link" href="#main-content">Skip to document</a>
@@ -1156,17 +13,16 @@
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
 					<strong>Zoltar</strong>
-					<p>Branching oracle layer used by the Placeholder market layer.</p>
+					<p>Branching truth-oracle layer used by the Placeholder market layer.</p>
 				</div>
 				<a class="sidebar-companion" href="./whitepaper_placeholder.html">
 					<span>Companion paper</span>
 					<b>Placeholder Market Layer</b>
 				</a>
-				<nav aria-label="Document sections">
-					<a href="#abstract" aria-current="location">Abstract</a>
-					<a href="#glossary">Glossary</a>
-					<a href="#timeline">Lifecycle Timeline</a>
-					<a href="#overview">System Overview</a>
+					<nav aria-label="Document sections">
+						<a href="#abstract" aria-current="location">Abstract</a>
+						<a href="#timeline">Lifecycle Timeline</a>
+						<a href="#overview">System Overview</a>
 					<a href="#universe-model">Universe Model</a>
 					<a href="#economics">Fork Economics</a>
 					<a href="#splitting">REP Splitting</a>
@@ -1229,8 +85,8 @@
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Zoltar is a forkable oracle layer centered on universes, question encoding,
-						and REP branching. It implements the branching model described in
+						Zoltar is a forkable truth oracle layer centered on universes, question
+						encoding, and REP branching. It implements the branching model described in
 						<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins.md</a>:
 						unresolved disagreement becomes explicit child universes, and REP holders
 						convert post-fork migration balances into child-universe REP across one or more
@@ -1255,39 +111,6 @@
 						as a legitimate answer state, and branches protocol state without embedding a
 						higher-level market design directly into the core layer.
 					</p>
-				</section>
-
-				<section class="paper-section" id="glossary">
-					<div class="section-heading">
-						<h2>Glossary</h2>
-						<a class="anchor-link" href="#glossary" aria-label="Link to Glossary">#</a>
-					</div>
-					<div class="glossary-grid">
-						<div class="glossary-card">
-							<b><span class="term" tabindex="0">Universe</span></b>
-							<p>A branch of oracle state with its own REP token and optional parent universe.</p>
-						</div>
-						<div class="glossary-card">
-							<b><span class="term" tabindex="0">Migration balance</span></b>
-							<p>REP value held after a fork that can be split into one or more child universes.</p>
-						</div>
-						<div class="glossary-card">
-							<b><span class="term" tabindex="0">Invalid</span></b>
-							<p>A valid answer state representing an unresolvable or invalid market outcome.</p>
-							</div>
-							<div class="glossary-card">
-								<b><span class="term" tabindex="0">Malformed</span></b>
-								<p>An answer encoding the question definition does not permit.</p>
-							</div>
-							<div class="glossary-card">
-								<b><span class="term" tabindex="0">Child REP</span></b>
-								<p>Reputation minted inside a child universe from migration balance.</p>
-							</div>
-							<div class="glossary-card">
-								<b><span class="term" tabindex="0">Colored Coins model</span></b>
-								<p>A branch-aware claim model for post-fork coordination.</p>
-							</div>
-					</div>
 				</section>
 
 				<section class="paper-section" id="timeline">
@@ -1329,9 +152,9 @@
 						<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 					</div>
 					<p>
-						Zoltar is the base oracle layer in this repository. It does not implement the
-						full market, collateral, or underwriting system built on top of it elsewhere in
-						the repo. Its role is narrower and more fundamental:
+						Zoltar is the base truth/forking oracle layer in this repository. It does not
+						implement the full market, collateral, or underwriting system built on top of it
+						elsewhere in the repo. Its role is narrower and more fundamental:
 					</p>
 					<ul class="clean-list">
 							<li>register questions</li>
@@ -1521,7 +344,10 @@
 						<h2>3. Fork Thresholds and REP Economics</h2>
 						<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 					</div>
-					<p>The current fork threshold is:</p>
+					<p>
+						The threshold is a REP commitment large enough to force branch creation, but it
+						is not itself a choice of the winning branch. The current fork threshold is:
+					</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals total theoretical REP supply divided by 20" data-source="forkThreshold = totalTheoreticalRepSupply / 20">
 							<mrow>
@@ -1535,38 +361,41 @@
 						</math>
 						<p class="equation-caption"><span class="equation-label">Fork Threshold</span>The default fork threshold is one twentieth of theoretical REP supply.</p>
 					</div>
-					<p>
-						Initiating a fork requires supplying REP equal to 5% of the universe’s total
-						theoretical supply. Under the current constants, 20% of that threshold deposit
-						is permanently burned, which is 1% of total theoretical supply, and the
-						remaining 80% becomes the initiator’s migration balance.
-					</p>
-					<div class="equation" id="eq-zoltar-fork-burn">
-						<math display="block" aria-label="burned REP amount equals fork threshold divided by 5" data-source="burnedRepAmount = forkThreshold / 5">
-							<mrow>
-								<mi>burnedRepAmount</mi>
-								<mo>=</mo>
-								<mfrac>
-									<mi>forkThreshold</mi>
+						<p>
+							Initiating a fork requires supplying REP equal to 5% of the universe’s total
+							theoretical supply. The full threshold deposit leaves the parent universe:
+							<code>forkUniverse</code> burns or transfers that entire parent-REP amount and
+							reduces the parent theoretical supply by the full threshold. The burn divisor
+							then controls how much child-REP minting credit the initiator receives. Under
+							the current constants, one fifth of the threshold is an uncredited haircut and
+							the remaining four fifths becomes the initiator’s migration balance.
+						</p>
+						<div class="equation" id="eq-zoltar-fork-burn">
+							<math display="block" aria-label="uncredited fork haircut equals fork threshold divided by 5" data-source="uncreditedForkHaircut = forkThreshold / 5">
+								<mrow>
+									<mi>uncreditedForkHaircut</mi>
+									<mo>=</mo>
+									<mfrac>
+										<mi>forkThreshold</mi>
 									<mn>5</mn>
 								</mfrac>
-							</mrow>
-						</math>
-						<p class="equation-caption"><span class="equation-label">Fork Burn</span>The default burn is one fifth of the threshold deposit.</p>
-					</div>
-					<div class="equation" id="eq-zoltar-initiator-migration-balance">
-						<math display="block" aria-label="fork initiator migration balance equals fork threshold minus burned REP amount, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - burnedRepAmount = 4 * forkThreshold / 5">
-							<mrow>
-								<mi>forkInitiatorMigrationBalance</mi>
-								<mo>=</mo>
-								<mi>forkThreshold</mi>
-								<mo>-</mo>
-								<mi>burnedRepAmount</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit; the full parent-REP threshold is still burned or transferred out of the parent universe.</p>
+						</div>
+						<div class="equation" id="eq-zoltar-initiator-migration-balance">
+							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut = 4 \cdot forkThreshold / 5">
+								<mrow>
+									<mi>forkInitiatorMigrationBalance</mi>
+									<mo>=</mo>
+									<mi>forkThreshold</mi>
+									<mo>-</mo>
+									<mi>uncreditedForkHaircut</mi>
 								<mo>=</mo>
 								<mfrac>
 									<mrow>
 										<mn>4</mn>
-										<mo>*</mo>
+										<mo>&#x22C5;</mo>
 										<mi>forkThreshold</mi>
 									</mrow>
 									<mn>5</mn>
@@ -1576,10 +405,10 @@
 						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>The default remaining four fifths becomes the initiator's migration balance.</p>
 					</div>
 					<div class="implementation-grid">
-						<div class="implementation-note">
-							<b>Implementation entry points</b>
-							<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns the configured share, and creates the initiator migration balance.</p>
-						</div>
+							<div class="implementation-note">
+								<b>Implementation entry points</b>
+								<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns or transfers the full parent-REP threshold out of the parent universe, reduces parent theoretical supply by that full amount, and credits only the post-haircut migration balance to the initiator.</p>
+							</div>
 						<div class="implementation-note">
 							<b>Genesis token exception</b>
 							<p>Genesis REP is transferred to <code>BURN_ADDRESS</code>; child REP can be burned directly by <a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>.</p>
@@ -1588,7 +417,7 @@
 
 					<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
-						<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit splits into 20 percent burned and 80 percent migration balance.">
+							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe, with 20 percent uncredited haircut and 80 percent migration balance.">
 							<defs>
 								<marker id="arrow-deposit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
@@ -1605,16 +434,17 @@
 							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 610 222 V 260"></path>
 							<rect class="svg-red" x="134" y="264" width="232" height="58" rx="10"></rect>
 							<rect class="svg-teal" x="494" y="264" width="232" height="58" rx="10"></rect>
-							<text class="svg-label" x="250" y="299" text-anchor="middle">20% burned</text>
-							<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration</text>
-							<text class="svg-small" x="610" y="313" text-anchor="middle">balance</text>
+								<text class="svg-label" x="250" y="292" text-anchor="middle">20% uncredited</text>
+								<text class="svg-small" x="250" y="313" text-anchor="middle">haircut</text>
+								<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration</text>
+								<text class="svg-small" x="610" y="313" text-anchor="middle">balance</text>
 						</svg>
 						<div class="legend" aria-label="Deposit diagram legend">
 							<span class="legend-item"><span class="legend-swatch gold"></span>Required fork deposit</span>
-							<span class="legend-item"><span class="legend-swatch red"></span>Burned REP</span>
+								<span class="legend-item"><span class="legend-swatch red"></span>Uncredited migration haircut</span>
 							<span class="legend-item"><span class="legend-swatch teal"></span>Migration balance</span>
 						</div>
-						<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The initiator pays to force the branch point into existence, but most of the deposit becomes migratable REP.</p>
+							<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most of that amount is re-expressed as migratable child-REP credit, while the haircut is not credited to the initiator.</p>
 					</figure>
 
 					<p>
@@ -1649,11 +479,11 @@
 									<td><code>20</code></td>
 									<td>Fork threshold is <code>totalTheoreticalRepSupply / 20</code>, or 5% of supply</td>
 								</tr>
-								<tr>
-									<td><code>FORK_BURN_DIVISOR</code></td>
-									<td><code>5</code></td>
-									<td>Burned amount is <code>forkThreshold / 5</code>, or 20% of threshold</td>
-								</tr>
+									<tr>
+										<td><code>FORK_BURN_DIVISOR</code></td>
+										<td><code>5</code></td>
+										<td>The uncredited migration haircut is <code>forkThreshold / 5</code>, or 20% of the threshold; the full threshold parent-REP amount still leaves parent supply</td>
+									</tr>
 							</tbody>
 						</table>
 					</div>
@@ -1928,7 +758,7 @@
 						range:
 					</p>
 					<div class="equation" id="eq-zoltar-scalar-display-value">
-						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks * (displayValueMax - displayValueMin)">
+						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks \cdot (displayValueMax - displayValueMin)">
 							<mrow>
 								<mi>displayedValue</mi>
 								<mo>=</mo>
@@ -1938,7 +768,7 @@
 									<mi>secondPayoutNumerator</mi>
 									<mi>numTicks</mi>
 								</mfrac>
-								<mo>*</mo>
+								<mo>&#x22C5;</mo>
 								<mo>(</mo>
 								<mi>displayValueMax</mi>
 								<mo>-</mo>
@@ -2024,7 +854,7 @@
 					<ol class="step-list">
 						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</span></li>
 						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
-						<li><span class="step-content">The fork initiator’s REP deposit is partly burned and partly converted into migration balance.</span></li>
+						<li><span class="step-content">The fork initiator’s full parent-REP deposit leaves parent supply, and the post-haircut amount becomes migration balance.</span></li>
 						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>
 						<li><span class="step-content">REP holders call <code>splitMigrationRep</code> to mint child-universe REP across the outcome branches they support.</span></li>
 					</ol>
@@ -2109,6 +939,7 @@
 				window.addEventListener('hashchange', scheduleCurrentSectionUpdate)
 			}
 		</script>
+		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>
 	</body>
 </html>

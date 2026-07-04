@@ -326,6 +326,25 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(vaultAfterWithdrawal.repInEscalationGame, 0n, 'escalation lock should be released after withdrawal')
 	})
 
+	test('depositToEscalationGame rejects at exact market end and succeeds one second later', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+
+		// The Anvil harness mines mutating transactions one second after the latest block timestamp.
+		// Setting time to endTime - 1 makes the next transaction execute exactly at endTime.
+		await mockWindow.setTime(endTime - 1n)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question still active/)
+
+		// Resetting to endTime makes the next transaction execute at endTime + 1, the first valid second.
+		await mockWindow.setTime(endTime)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const yesDeposit = ensureDefined(yesDeposits[0], 'yesDeposits[0] is undefined')
+		strictEqualTypeSafe(yesDeposits.length, 1, 'there should be one accepted report after market end')
+		strictEqualTypeSafe(yesDeposit.depositIndex, 0n, 'first accepted post-close report should use deposit index zero')
+		strictEqualTypeSafe(yesDeposit.amount, reportBond, 'accepted report amount should match the requested report bond')
+	})
+
 	test('withdrawFromEscalationGame shares the binding-capital reward pool across all reward-eligible winning deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
