@@ -487,6 +487,20 @@
 							</math>
 							<p class="equation-caption"><span class="equation-label">Bond Solvency</span>Vault and pool bond checks require remaining REP value to cover the ETH-denominated security-bond allowance.</p>
 						</div>
+						<div class="equation" id="eq-placeholder-allowance-backing">
+							<math display="block" aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price for allowance backing" data-source="repBacking \cdot pricePrecision &gt; securityBondAllowance \cdot repPerEthPrice">
+								<mrow>
+									<mi>repBacking</mi>
+									<mo>&#x22C5;</mo>
+									<mi>pricePrecision</mi>
+									<mo>&gt;</mo>
+									<mi>securityBondAllowance</mi>
+									<mo>&#x22C5;</mo>
+									<mi>repPerEthPrice</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">Allowance Backing</span>Setting or increasing bond allowance uses a strict inequality at both the vault and pool level, so equality is not enough to authorize new allowance.</p>
+						</div>
 					<div class="equation" id="eq-placeholder-liquidation-condition">
 						<math display="block" aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision" data-source="securityBondAllowance \cdot securityMultiplier \cdot repPerEthPrice &gt; repBacking \cdot pricePrecision">
 							<mrow>
@@ -993,6 +1007,26 @@
 						complete-set claim, subject to collateral accounting remaining intact through
 						migration and any required auction repair.
 					</p>
+					<div class="equation" id="eq-placeholder-share-redemption">
+						<math display="block" aria-label="cash payout equals floor of complete set amount times complete set collateral amount divided by share token supply" data-source="cashPayout = floor(completeSetAmount \cdot completeSetCollateralAmount / shareTokenSupply)">
+							<mrow>
+								<mi>cashPayout</mi>
+								<mo>=</mo>
+								<mi>floor</mi>
+								<mo>(</mo>
+								<mfrac>
+									<mrow>
+										<mi>completeSetAmount</mi>
+										<mo>&#x22C5;</mo>
+										<mi>completeSetCollateralAmount</mi>
+									</mrow>
+									<mi>shareTokenSupply</mi>
+								</mfrac>
+								<mo>)</mo>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Share Redemption</span><code>sharesToCash</code> pays a pro-rata share of the pool's current collateral accounting, with Solidity integer division flooring any remainder.</p>
+					</div>
 					<p>
 						The important edge case is fork recovery. If a child pool emerges from migration
 						with incomplete collateral, the truth auction sells REP for ETH so the child pool
@@ -1685,6 +1719,49 @@
 								<p class="equation-caption"><span class="equation-label">Fork Migration Proportion</span>Unlocked vault migration preserves the parent ownership share, then transfers ETH collateral according to the migrated REP share of REP at fork.</p>
 							</div>
 							<p>
+								The equation above is the external-fork unlocked transfer path. In an
+								own-fork migration, child collateral uses cumulative ceiling accounting so
+								repeated vault migrations do not strand collateral because each individual
+								transfer rounded down.
+							</p>
+							<div class="equation" id="eq-placeholder-own-fork-collateral-ceiling">
+								<math display="block" aria-label="cumulative collateral required after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by vault REP at fork; collateral delta to transfer equals cumulative collateral required after migration minus cumulative collateral already transferred" data-source="cumulativeCollateralRequiredAfterMigration = ceil(parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / vaultRepAtFork); collateralDeltaToTransfer = cumulativeCollateralRequiredAfterMigration - cumulativeCollateralAlreadyTransferred">
+									<mtable>
+										<mtr>
+											<mtd>
+												<mi>cumulativeCollateralRequiredAfterMigration</mi>
+											</mtd>
+											<mtd>
+												<mo>=</mo>
+												<mi>ceil</mi>
+												<mo>(</mo>
+												<mfrac>
+													<mrow>
+														<mi>parentCollateralAtFork</mi>
+														<mo>&#x22C5;</mo>
+														<mi>cumulativeRepTransferredAfterMigration</mi>
+													</mrow>
+													<mi>vaultRepAtFork</mi>
+												</mfrac>
+												<mo>)</mo>
+											</mtd>
+										</mtr>
+										<mtr>
+											<mtd>
+												<mi>collateralDeltaToTransfer</mi>
+											</mtd>
+											<mtd>
+												<mo>=</mo>
+												<mi>cumulativeCollateralRequiredAfterMigration</mi>
+												<mo>-</mo>
+												<mi>cumulativeCollateralAlreadyTransferred</mi>
+											</mtd>
+										</mtr>
+									</mtable>
+								</math>
+								<p class="equation-caption"><span class="equation-label">Own-Fork Collateral Ceiling</span>The forker recomputes the cumulative collateral required after the migration, subtracts cumulative collateral already transferred, and sends only that newly required difference to the child pool.</p>
+							</div>
+							<p>
 								Own-fork migration has one extra accounting split. The pool and its active
 								escalation game both contribute REP to the fork, but the child-universe REP
 								returning from Zoltar is a single auctionable migration balance. Placeholder
@@ -2145,7 +2222,7 @@
 							</div>
 							<div class="summary-card">
 								<span>Edge cases</span>
-								<b>If demand is weak, qualifying bids share the REP inventory and repair remains partial.</b>
+								<b>If demand is weak, qualifying ticks buy only their limit-priced REP demand and repair remains partial.</b>
 							</div>
 						</div>
 						<p>
@@ -2366,12 +2443,20 @@
 							<path class="svg-line" marker-end="url(#arrow-auction)" d="M 575 264 C 495 320 325 320 230 264"></path>
 							<rect class="svg-box" x="40" y="184" width="190" height="80" rx="10"></rect>
 							<text class="svg-label" x="135" y="216" text-anchor="middle">Underfunded</text>
-							<text class="svg-small" x="135" y="240" text-anchor="middle">pro-rata winners only</text>
+							<text class="svg-small" x="135" y="240" text-anchor="middle">limit-price demand</text>
 							</svg>
 							<p class="diagram-caption"><span class="figure-label">Auction Clearing</span>The auction is dual-capped: it tries to raise enough ETH without selling more REP than allowed.</p>
 						</figure>
+						<p>
+							For the underfunded threshold row below,
+							<code>acceptedBidEthForThreshold</code> is the contract's
+							<code>ethRaised</code>: aggregate accepted bid ETH considered during
+							finalization. The ETH actually sent to the pool is
+							<code>underfundedWinningEth</code>, after below-threshold bids are excluded for
+							refund.
+						</p>
 						<div class="equation" id="eq-placeholder-auction-fill-math">
-							<math display="block" aria-label="filled REP equals ETH used times price precision divided by clearing price, underfunded threshold equals ETH raised times price precision divided by max REP being sold, and underfunded REP share equals bid ETH times total REP purchased divided by underfunded winning ETH" data-source="filledRep = ethUsed \cdot pricePrecision / clearingPrice; underfundedThreshold = ethRaised \cdot pricePrecision / maxRepBeingSold; repShare = bidEth \cdot totalRepPurchased / underfundedWinningEth">
+							<math display="block" aria-label="filled REP equals ETH used times price precision divided by clearing price, underfunded threshold equals accepted bid ETH for threshold times price precision divided by max REP being sold, tick REP demand equals tick total ETH times price precision divided by tick price, and underfunded REP share equals bid ETH times tick REP demand divided by tick total ETH" data-source="filledRep = ethUsed \cdot pricePrecision / clearingPrice; underfundedThreshold = acceptedBidEthForThreshold \cdot pricePrecision / maxRepBeingSold; tickRepDemand = tickTotalEth \cdot pricePrecision / tickPrice; underfundedRepShare = bidEth \cdot tickRepDemand / tickTotalEth">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2401,7 +2486,7 @@
 										<mtd>
 											<mfrac>
 												<mrow>
-													<mi>ethRaised</mi>
+													<mi>acceptedBidEthForThreshold</mi>
 													<mo>&#x22C5;</mo>
 													<mi>pricePrecision</mi>
 												</mrow>
@@ -2449,6 +2534,44 @@
 							</math>
 							<p class="equation-caption"><span class="equation-label">Auction Fill Math</span>Normal clearing converts filled ETH at the uniform clearing price; underfunded clearing sets a threshold price and sells each winning tick only the REP demanded at that tick's bid limit.</p>
 						</div>
+						<details class="interactive-example" id="underfunded-auction-example">
+							<summary>Adjust an underfunded limit-price example</summary>
+							<p>
+								Use the inputs to see how the accepted threshold ETH, REP sale cap, tick
+								price, same-tick ETH, and bidder ETH determine the threshold, per-tick demand,
+								bidder fill, and unsold REP.
+							</p>
+							<div class="example-grid">
+								<label>
+									Max REP being sold
+									<input type="number" min="0.0001" step="1" value="100" data-example-input="maxRepBeingSold">
+								</label>
+								<label>
+									Accepted ETH for threshold
+									<input type="number" min="0" step="0.1" value="10" data-example-input="acceptedBidEthForThreshold">
+								</label>
+								<label>
+									Tick total ETH
+									<input type="number" min="0" step="0.1" value="10" data-example-input="tickTotalEth">
+								</label>
+								<label>
+									Tick price ETH/REP
+									<input type="number" min="0.0001" step="0.1" value="5" data-example-input="tickPrice">
+								</label>
+								<label>
+									Bidder ETH at tick
+									<input type="number" min="0" step="0.1" value="4" data-example-input="bidEth">
+								</label>
+							</div>
+							<ul class="example-output" aria-live="polite">
+								<li>Input note: <output data-example-output="inputNote">inputs are consistent</output></li>
+								<li>Tick status: <output data-example-output="tickStatus">qualifying</output></li>
+								<li>Underfunded threshold: <output data-example-output="underfundedThreshold">0 ETH/REP</output></li>
+								<li>Tick REP demand: <output data-example-output="tickRepDemand">0 REP</output></li>
+								<li>Bidder REP fill: <output data-example-output="underfundedRepShare">0 REP</output></li>
+								<li>Unsold REP: <output data-example-output="unsoldRep">0 REP</output></li>
+							</ul>
+						</details>
 						<p>
 							In normal clearing, bids above the clearing tick win in full, bids below it lose,
 							and bids at the clearing tick are filled in submission order. In the underfunded
@@ -2535,19 +2658,16 @@
 						<li>Bids are accepted only after start, before finalization, and before <code>auctionStarted + 1 week</code>.</li>
 						<li>Finalization walks aggregate AVL tick totals from the highest ETH/REP tick to the lowest; raw bids are settled later through paged withdrawals.</li>
 						<li>The sweep stops when the ETH raise cap binds or when the ETH collected so far, at that price, would buy all REP being sold.</li>
-						<li>In an underfunded auction, the contract computes <math aria-label="underfunded threshold equals ETH raised times price precision divided by max REP being sold" data-source="underfundedThreshold = ethRaised \cdot PRICE_PRECISION / maxRepBeingSold"><mi>underfundedThreshold</mi><mo>=</mo><mfrac><mrow><mi>ethRaised</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mrow><mi>maxRepBeingSold</mi></mfrac></math>.</li>
+						<li>In an underfunded auction, the contract computes <math aria-label="underfunded threshold equals accepted bid ETH for threshold times price precision divided by max REP being sold" data-source="underfundedThreshold = acceptedBidEthForThreshold \cdot PRICE_PRECISION / maxRepBeingSold"><mi>underfundedThreshold</mi><mo>=</mo><mfrac><mrow><mi>acceptedBidEthForThreshold</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi></mrow><mi>maxRepBeingSold</mi></mfrac></math>, where <code>acceptedBidEthForThreshold</code> is the contract's aggregate <code>ethRaised</code> threshold input, not the final <code>underfundedWinningEth</code> sent after refunds.</li>
 						<li>Only bids at or above that underfunded threshold count as winners; each winning tick buys only the REP demanded at that tick's bid limit.</li>
 						<li>Normal clearing carries division dust through <code>clearingRemainder</code>; underfunded clearing carries division dust per tick as bids are withdrawn.</li>
 						<li>Before finalization, losing bids below the currently found clearing tick can be refunded in paged batches.</li>
 						<li>After finalization, only the owner withdraws bid outcomes from the auction; <code>SecurityPoolForker</code> wraps that call so anyone can settle a vault's bid pages.</li>
 					</ul>
 					<div class="callout">
-						Underfunded intuition: if <code>100 REP</code> is for sale and the qualifying
-						winners at one tick contribute <code>10 ETH</code> total at
-						<code>5 ETH/REP</code>, that tick demands <code>2 REP</code>. A bidder who
-						contributed <code>4 ETH</code> receives <code>0.8 REP</code>, a bidder who
-						contributed <code>6 ETH</code> receives <code>1.2 REP</code>, and the remaining
-						<code>98 REP</code> is unsold. Bids below the threshold are refunded.
+						Underfunded intuition: winning ticks buy their own limit-priced demand, and
+						bids below the threshold are refunded. The adjustable example above shows why weak
+						demand leaves REP unsold instead of giving one bidder the whole sale cap.
 					</div>
 					<h3>Worked Clearing Example</h3>
 					<p>
@@ -2769,10 +2889,32 @@
 							<code>consumedNotional</code> as successful operations use the current price
 							round. Here <code>exactToken1Report</code> is the initial REP report size,
 							<code>pricePrecision</code> is the fixed scaling factor, and
-							<code>repPerEthPrice</code> is the settled REP per ETH price.
+							<code>repPerEthPrice</code> is the settled REP per ETH price. REP-denominated
+							operations are converted into ETH-notional with ceiling division so a non-zero
+							REP movement always consumes at least the smallest rounded-up ETH-notional unit.
 						</p>
+						<div class="equation" id="eq-placeholder-rep-notional-rounding">
+							<math display="block" aria-label="REP to ETH notional equals ceiling of REP amount times price precision divided by REP per ETH price" data-source="repEthNotional = ceil(repAmount \cdot pricePrecision / repPerEthPrice)">
+								<mrow>
+									<mi>repEthNotional</mi>
+									<mo>=</mo>
+									<mi>ceil</mi>
+									<mo>(</mo>
+									<mfrac>
+										<mrow>
+											<mi>repAmount</mi>
+											<mo>&#x22C5;</mo>
+											<mi>pricePrecision</mi>
+										</mrow>
+										<mi>repPerEthPrice</mi>
+									</mfrac>
+									<mo>)</mo>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">REP Notional Rounding</span>Withdrawals and the REP side of liquidations spend price-round budget using rounded-up REP-to-ETH conversion.</p>
+						</div>
 						<div class="equation" id="eq-placeholder-oracle-round-budget">
-							<math display="block" aria-label="maximum price-round budget equals exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price and oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = exactToken1Report \cdot pricePrecision \cdot priceRoundBudgetMultiplierBps / (repPerEthPrice \cdot oracleBudgetBps); remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
+							<math display="block" aria-label="maximum price-round budget equals floor of floor of exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price divided by oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero" data-source="priceRoundMaxNotional = floor(floor(exactToken1Report \cdot pricePrecision \cdot priceRoundBudgetMultiplierBps / repPerEthPrice) / oracleBudgetBps); remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)">
 								<mtable>
 									<mtr>
 										<mtd>
@@ -2782,20 +2924,27 @@
 											<mo>=</mo>
 										</mtd>
 										<mtd>
+											<mi>floor</mi>
+											<mo>(</mo>
 											<mfrac>
 												<mrow>
-													<mi>exactToken1Report</mi>
-													<mo>&#x22C5;</mo>
-													<mi>pricePrecision</mi>
-													<mo>&#x22C5;</mo>
-													<mi>priceRoundBudgetMultiplierBps</mi>
+													<mi>floor</mi>
+													<mo>(</mo>
+													<mfrac>
+														<mrow>
+															<mi>exactToken1Report</mi>
+															<mo>&#x22C5;</mo>
+															<mi>pricePrecision</mi>
+															<mo>&#x22C5;</mo>
+															<mi>priceRoundBudgetMultiplierBps</mi>
+														</mrow>
+														<mi>repPerEthPrice</mi>
+													</mfrac>
+													<mo>)</mo>
 												</mrow>
-												<mrow>
-													<mi>repPerEthPrice</mi>
-													<mo>&#x22C5;</mo>
-													<mi>oracleBudgetBps</mi>
-												</mrow>
+												<mi>oracleBudgetBps</mi>
 											</mfrac>
+											<mo>)</mo>
 										</mtd>
 									</mtr>
 									<mtr>
@@ -2818,7 +2967,7 @@
 									</mtr>
 								</mtable>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Oracle Price-Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required.</p>
+							<p class="equation-caption"><span class="equation-label">Oracle Price-Round Budget</span>Each settled REP/ETH price authorizes only a bounded amount of notional operation volume before a fresh price is required. The contract performs the two divisions sequentially, so each division floors its remainder.</p>
 						</div>
 						<table>
 							<thead>
@@ -3295,6 +3444,59 @@
 				document.addEventListener('scroll', scheduleCurrentSectionUpdate, { passive: true })
 				window.addEventListener('resize', scheduleCurrentSectionUpdate)
 				window.addEventListener('hashchange', scheduleCurrentSectionUpdate)
+			}
+
+			const underfundedAuctionExample = document.querySelector('#underfunded-auction-example')
+			if (underfundedAuctionExample) {
+				const exampleInputs = Object.fromEntries(
+					Array.from(underfundedAuctionExample.querySelectorAll('[data-example-input]')).map(inputElement => [
+						inputElement.dataset.exampleInput,
+						inputElement,
+					]),
+				)
+				const exampleOutputs = Object.fromEntries(
+					Array.from(underfundedAuctionExample.querySelectorAll('[data-example-output]')).map(outputElement => [
+						outputElement.dataset.exampleOutput,
+						outputElement,
+					]),
+				)
+				const readExampleNumber = inputName => {
+					const inputElement = exampleInputs[inputName]
+					if (!inputElement) {
+						return 0
+					}
+					const inputValue = Number(inputElement.value)
+					return Number.isFinite(inputValue) ? inputValue : 0
+				}
+				const formatRep = repValue => `${repValue.toFixed(4)} REP`
+				const formatPrice = priceValue => `${priceValue.toFixed(4)} ETH/REP`
+				const updateUnderfundedAuctionExample = () => {
+					const maxRepBeingSold = Math.max(readExampleNumber('maxRepBeingSold'), 0.0001)
+					const acceptedBidEthForThreshold = Math.max(readExampleNumber('acceptedBidEthForThreshold'), 0)
+					const tickTotalEth = Math.max(readExampleNumber('tickTotalEth'), 0)
+					const tickPrice = Math.max(readExampleNumber('tickPrice'), 0.0001)
+					const bidEth = Math.min(Math.max(readExampleNumber('bidEth'), 0), tickTotalEth)
+					const effectiveAcceptedBidEthForThreshold = Math.max(acceptedBidEthForThreshold, tickTotalEth)
+					const inputWasClamped = effectiveAcceptedBidEthForThreshold !== acceptedBidEthForThreshold
+					const underfundedThreshold = effectiveAcceptedBidEthForThreshold / maxRepBeingSold
+					const tickQualifies = tickPrice >= underfundedThreshold
+					const tickRepDemand = tickQualifies ? tickTotalEth / tickPrice : 0
+					const underfundedRepShare = tickQualifies && tickTotalEth > 0 ? (bidEth * tickRepDemand) / tickTotalEth : 0
+					const unsoldRep = Math.max(maxRepBeingSold - tickRepDemand, 0)
+
+					exampleOutputs.inputNote.value = inputWasClamped
+						? 'accepted ETH was raised to include this tick'
+						: 'inputs are consistent'
+					exampleOutputs.tickStatus.value = tickQualifies ? 'qualifying tick' : 'refunded below threshold'
+					exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold)
+					exampleOutputs.tickRepDemand.value = formatRep(tickRepDemand)
+					exampleOutputs.underfundedRepShare.value = formatRep(underfundedRepShare)
+					exampleOutputs.unsoldRep.value = formatRep(unsoldRep)
+				}
+				for (const inputElement of Object.values(exampleInputs)) {
+					inputElement.addEventListener('input', updateUnderfundedAuctionExample)
+				}
+				updateUnderfundedAuctionExample()
 			}
 		</script>
 		<script src="./protocolTerms.js"></script>

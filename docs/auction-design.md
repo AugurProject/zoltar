@@ -48,12 +48,18 @@ enough to find a clearing tick. Only ticks below that found clearing tick can be
 withdrawn through the pre-finalization refund path; binding or potentially
 winning bids stay in the auction.
 
+In the underfunded branch, finalization computes `underfundedThreshold` from
+aggregate accepted bid ETH, and only ticks whose `tickToPrice` is at or above
+that threshold win.
+
 After finalization, paged settlement handles both claim and refund cases:
 
 - losing bids receive ETH refunds
-- winning bids convert ETH into purchased REP at the uniform clearing price
+- normal-clearing winning bids convert ETH into purchased REP at the uniform
+  clearing price
 - marginal clearing-tick bids may be partially filled and partially refunded
-- underfunded winning ticks receive only the REP demanded at each tick's bid limit
+- underfunded ticks whose `tickToPrice` is at or above
+  `underfundedThreshold` receive only the REP demanded at each tick's bid limit
   price, and same-tick bids share that tick's REP demand pro rata by ETH
 
 Zero-effective-price ticks are rejected when bids are submitted, so underfunded
