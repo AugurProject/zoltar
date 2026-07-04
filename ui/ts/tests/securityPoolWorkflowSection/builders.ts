@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from 'viem'
+import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { deriveHasForkActivity } from '../../lib/forkAuction.js'
 import type { AccountState } from '../../types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../types/contracts.js'

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { SecurityVaultSection } from '../components/SecurityVaultSection.js'
 import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { AccountState } from '../types/app.js'

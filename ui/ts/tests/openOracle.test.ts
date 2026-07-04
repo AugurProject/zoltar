@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address, type Hash } from 'viem'
+import { getAddress, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import {
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
@@ -50,7 +50,7 @@ import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bi
 import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/clients'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'
@@ -995,6 +995,10 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '.' } })).toBe('Enter a valid exact token1 report.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '-.' } })).toBe('Enter a valid exact token1 report.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '.' } })).toBe('Enter a valid escalation halt.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '-.' } })).toBe('Enter a valid escalation halt.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: (1n << 16n).toString() } })).toBe('Multiplier exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } })).toBe('Dispute delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } })).toBe('Settlement time exceeds the contract maximum.')

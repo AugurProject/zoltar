@@ -1,12 +1,23 @@
-import { parseAbiItem, zeroAddress, type Address } from 'viem'
+import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
-import { getMarketType, getQuestionId, getQuestionIdHex, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
+import { getMarketType, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 
 const CONTRACT_PAGE_SIZE = 30n
-const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
+const ANSWER_OPTION_ABI = [
+	{
+		inputs: [
+			{ name: 'questionId', type: 'uint256' },
+			{ name: 'answer', type: 'uint256' },
+		],
+		name: 'getAnswerOptionName',
+		outputs: [{ name: '', type: 'string' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 
 type DeployedChildUniverseRecord = {
 	forkQuestionId: bigint
@@ -18,6 +29,11 @@ type DeployedChildUniverseRecord = {
 
 type DeployedChildUniversesPage = readonly [readonly bigint[], readonly bigint[], readonly DeployedChildUniverseRecord[]]
 type QuestionTuple = readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]
+
+function requireBigintArray(value: unknown, context: string): bigint[] {
+	if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint')) throw new Error(`Unexpected ${context} response`)
+	return [...value]
+}
 
 function getDeploymentStepAddress(id: 'zoltar' | 'zoltarQuestionData') {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
@@ -209,27 +225,30 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 			const deployedChildUniverses: ZoltarUniverseSummary['childUniverses'] = []
 			let currentIndex = 0n
 			while (true) {
-				const page: DeployedChildUniversesPage = await client.readContract({
+				const pageResponse = await client.readContract({
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'getDeployedChildUniverses',
 					address: getDeploymentStepAddress('zoltar'),
 					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
 				})
+				if (!Array.isArray(pageResponse) || pageResponse.length !== 3) throw new Error('Unexpected deployed child universe page response')
+				const [outcomeIndexesRaw, childUniverseIdsRaw, childUniverseTuplesRaw] = pageResponse
+				const page: DeployedChildUniversesPage = [requireBigintArray(outcomeIndexesRaw, 'deployed child universe outcome indexes'), requireBigintArray(childUniverseIdsRaw, 'deployed child universe ids'), requireDeployedChildUniverseTupleArray(childUniverseTuplesRaw, 'deployed child universe page')]
 				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
-				const outcomeLabels =
-					outcomeIndexes.length === 0
-						? []
-						: (
-								await readRequiredMulticall(
-									client,
-									outcomeIndexes.map(outcomeIndex => ({
-										abi: ANSWER_OPTION_ABI,
-										functionName: 'getAnswerOptionName',
-										address: getDeploymentStepAddress('zoltarQuestionData'),
-										args: [forkQuestionId, outcomeIndex],
-									})),
-								)
-							).map(outcomeLabel => String(outcomeLabel))
+				let outcomeLabels: string[] = []
+				if (outcomeIndexes.length > 0) {
+					const rawOutcomeLabels = await readRequiredMulticall(
+						client,
+						outcomeIndexes.map(outcomeIndex => ({
+							abi: ANSWER_OPTION_ABI,
+							functionName: 'getAnswerOptionName',
+							address: getDeploymentStepAddress('zoltarQuestionData'),
+							args: [forkQuestionId, outcomeIndex],
+						})),
+					)
+					if (!isStringArray(rawOutcomeLabels)) throw new Error('Unexpected child universe outcome labels response')
+					outcomeLabels = rawOutcomeLabels.map(outcomeLabel => String(outcomeLabel))
+				}
 				const pageChildren = outcomeIndexes.map((outcomeIndex, index) => {
 					const childUniverse = childUniverseTuples[index]
 					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
@@ -261,7 +280,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					outcomeLabel,
 				})),
 			]
-			const childUniverseIds = (
+			const childUniverseIds = requireBigintArray(
 				await readRequiredMulticall(
 					client,
 					childOutcomeEntries.map(({ outcomeIndex }) => ({
@@ -270,12 +289,13 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 						address: getDeploymentStepAddress('zoltar'),
 						args: [universeId, outcomeIndex],
 					})),
-				)
-			).map(childUniverseId => BigInt(childUniverseId))
+				),
+				'child universe ids',
+			)
 			const childUniverseTuples = requireUniverseTupleArray(
 				await readRequiredMulticall(
 					client,
-					childUniverseIds.map(childUniverseId => ({
+					childUniverseIds.map((childUniverseId: bigint) => ({
 						abi: Zoltar_Zoltar.abi,
 						functionName: 'universes',
 						address: getDeploymentStepAddress('zoltar'),

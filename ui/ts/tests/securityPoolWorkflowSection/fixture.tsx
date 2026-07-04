@@ -3,7 +3,7 @@
 import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { pickFixtureProperties } from '@zoltar/shared/testing/pickFixtureProperties'
 import { SecurityPoolWorkflowSection } from '../../components/SecurityPoolWorkflowSection.js'
 import { ChainTimestampContext } from '../../lib/chainTimestamp.js'

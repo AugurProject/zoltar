@@ -1,4 +1,4 @@
-import { encodeAbiParameters, keccak256 } from 'viem'
+import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, QuestionData } from '../types/contracts.js'
 import { assertNever } from './assert.js'

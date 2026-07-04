@@ -1,10 +1,11 @@
-import { parseUnits } from 'viem'
+import { parseUnits } from '@zoltar/shared/ethereum'
 
 const DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
 
 function normalizeDecimalInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') return trimmed
+	if (trimmed === '.' || trimmed === '-.') return trimmed
 	return (() => {
 		if (trimmed.startsWith('.')) return `0${trimmed}`
 		if (trimmed.endsWith('.')) return `${trimmed}0`
@@ -15,7 +16,8 @@ function normalizeDecimalInput(value: string) {
 
 function hasValidDecimalPrecision(value: string, units: number) {
 	const fractionalPart = value.split('.')[1]
-	return fractionalPart === undefined || fractionalPart.length <= units
+	if (fractionalPart === undefined) return true
+	return fractionalPart.replace(/0+$/, '').length <= units
 }
 
 export function tryParseDecimalInput(value: string, units: number = 18) {

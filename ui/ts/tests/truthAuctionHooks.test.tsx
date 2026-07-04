@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { useTruthAuctionPaginationState } from '../hooks/useTruthAuctionPaginationState.js'
 import { useTruthAuctionSettlementActionState } from '../hooks/useTruthAuctionSettlementActionState.js'
 import type { TruthAuctionBidDisposition } from '../lib/truthAuctionBook.js'

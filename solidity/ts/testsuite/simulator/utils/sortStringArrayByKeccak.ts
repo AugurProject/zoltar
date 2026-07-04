@@ -1,4 +1,4 @@
-import { encodeAbiParameters, keccak256 } from 'viem'
+import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 
 function getStringHash(value: string) {
 	return keccak256(encodeAbiParameters([{ type: 'string' }], [value]))

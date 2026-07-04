@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../contracts.js'
 import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
 import type { ChainBackend, ReadBackendStatus } from '../lib/chainBackend.js'

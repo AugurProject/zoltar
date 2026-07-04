@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, type Hash } from 'viem'
+import { getAddress, zeroAddress, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { useZoltarUniverse } from '../hooks/useZoltarUniverse.js'
 import type { DeploymentStatus, MarketDetails } from '../types/contracts.js'

@@ -1,4 +1,4 @@
-import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type ReplacementReason, type TransactionReceipt } from 'viem'
+import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type ReplacementReason, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getMulticall3Address } from './deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
@@ -52,8 +52,8 @@ async function getContractRevertReason<TCallParams extends ContractRevertReasonP
 	try {
 		const data = encodeFunctionData({
 			abi: params.abi,
+			...(params.args === undefined ? {} : { args: params.args }),
 			functionName: params.functionName,
-			args: params.args,
 		})
 		const account = params.account ?? undefined
 		await client.call({
@@ -114,8 +114,8 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 	const callParams = getCallParams()
 	const data = encodeFunctionData({
 		abi: callParams.abi,
+		...(callParams.args === undefined ? {} : { args: callParams.args }),
 		functionName: callParams.functionName,
-		args: callParams.args,
 	})
 	const account = callParams.account ?? undefined
 	let hash: Hash

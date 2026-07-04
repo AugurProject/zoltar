@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import type { ForkWorkflowSelectionStage } from './securityPoolWorkflow.js'
 import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
 import { sameAddress } from './address.js'

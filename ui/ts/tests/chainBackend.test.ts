@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { getAddress, zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { createInjectedBackend, normalizeAccount } from '../lib/chainBackend.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 

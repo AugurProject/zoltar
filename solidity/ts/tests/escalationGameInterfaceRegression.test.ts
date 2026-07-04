@@ -1,7 +1,7 @@
 import { test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { keccak256, type Hex } from 'viem'
+import { keccak256, type Hex } from '@zoltar/shared/ethereum'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
 const escalationGameSourcePath = 'contracts/peripherals/EscalationGame.sol'

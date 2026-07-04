@@ -2,7 +2,7 @@
 
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { describe, expect, mock, test } from 'bun:test'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { SimulationBanner } from '../components/SimulationBanner.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'

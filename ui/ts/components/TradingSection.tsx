@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'

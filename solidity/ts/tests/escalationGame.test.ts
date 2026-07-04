@@ -1,11 +1,11 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from 'viem'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { contractExists, requireAddress, requireArray, requireBigInt, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import assert from '../testsuite/simulator/utils/assert'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
@@ -26,6 +26,35 @@ import { createCarryProof as createCarryProofFromHelpers, hashCarryLeaf, hashPar
 
 const ESCALATION_TIME_LENGTH = 4233600n
 const MAX_UINT256 = 2n ** 256n - 1n
+const initializeForkCarrySnapshotAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
+			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
+			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
+			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
+		],
+		name: 'initializeForkCarrySnapshot',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+]
+const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
+			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
+			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
+			{ name: 'snapshotResolutionBalances', type: 'uint256[3]' },
+			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
+		],
+		name: 'initializeForkCarrySnapshotWithResolutionBalances',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+]
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -36,6 +65,19 @@ describe('Escalation Game Test Suite', () => {
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
 	const recursiveResolutionTargetCost = (25n * reportBond) / 10n
+
+	type CarryLeaf = {
+		depositor: Address
+		amount: bigint
+		parentDepositIndex: bigint
+		sourceNodeId: bigint
+	}
+
+	const getTupleField = (value: unknown, index: number, key: string, context: string) => {
+		if (Array.isArray(value)) return value[index]
+		if (typeof value !== 'object' || value === null) throw new Error(`${context} must be a tuple`)
+		return Reflect.get(value, key)
+	}
 
 	const readIterativeAttritionCost = async (escalationGame: Address, timeSinceStart: bigint) =>
 		await client.readContract({
@@ -249,13 +291,16 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})
 	const readNullifierRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentNullifierRoot
-	const readTotalEscrowedRep = async (escalationGameAddress: Address) =>
-		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'totalEscrowedRep',
-			args: [],
-		})
+	const readTotalEscrowedRep = async (escalationGameAddress: Address): Promise<bigint> =>
+		requireBigInt(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escalationGameAddress,
+				functionName: 'totalEscrowedRep',
+				args: [],
+			}),
+			'Total escrowed REP',
+		)
 
 	const readForkCarrySnapshotInitialized = async (escalationGameAddress: Address) =>
 		await client.readContract({
@@ -265,29 +310,49 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})
 
-	const readEscrowedRepByVault = async (escalationGameAddress: Address, vault: Address) =>
-		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'escrowedRepByVault',
-			args: [vault],
-		})
+	const readEscrowedRepByVault = async (escalationGameAddress: Address, vault: Address): Promise<bigint> =>
+		requireBigInt(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escalationGameAddress,
+				functionName: 'escrowedRepByVault',
+				args: [vault],
+			}),
+			'Escrowed REP by vault',
+		)
 
-	const readForkedEscrowByVaultAndOutcome = async (escalationGameAddress: Address, vault: Address, outcome: QuestionOutcome) =>
-		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'getForkedEscrowByVaultAndOutcome',
-			args: [vault, outcome],
-		})
+	const readForkedEscrowByVaultAndOutcome = async (escalationGameAddress: Address, vault: Address, outcome: QuestionOutcome): Promise<readonly [bigint, bigint, bigint, bigint]> => {
+		const forkedEscrow = requireArray(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escalationGameAddress,
+				functionName: 'getForkedEscrowByVaultAndOutcome',
+				args: [vault, outcome],
+			}),
+			'Forked escrow by vault and outcome',
+		)
+		return [requireBigInt(forkedEscrow[0], 'Forked escrow source principal'), requireBigInt(forkedEscrow[1], 'Forked escrow transferred principal'), requireBigInt(forkedEscrow[2], 'Forked escrow child REP'), requireBigInt(forkedEscrow[3], 'Forked escrow transferred child REP')]
+	}
 
-	const readCarryLeafPage = async (escalationGameAddress: Address, outcome: QuestionOutcome, startNodeId: bigint, maxEntries: bigint) =>
-		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'getCarryLeafPageByOutcome',
-			args: [outcome, startNodeId, maxEntries],
-		})
+	const readCarryLeafPage = async (escalationGameAddress: Address, outcome: QuestionOutcome, startNodeId: bigint, maxEntries: bigint): Promise<readonly [CarryLeaf[], bigint]> => {
+		const carryLeafPage = requireArray(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escalationGameAddress,
+				functionName: 'getCarryLeafPageByOutcome',
+				args: [outcome, startNodeId, maxEntries],
+			}),
+			'Carry leaf page',
+		)
+		const leaves = requireArray(carryLeafPage[0], 'Carry leaf page leaves').map((leaf: unknown) => ({
+			depositor: requireAddress(getTupleField(leaf, 0, 'depositor', 'Carry leaf'), 'Carry leaf depositor'),
+			amount: requireBigInt(getTupleField(leaf, 1, 'amount', 'Carry leaf'), 'Carry leaf amount'),
+			parentDepositIndex: requireBigInt(getTupleField(leaf, 2, 'parentDepositIndex', 'Carry leaf'), 'Carry leaf parent deposit index'),
+			sourceNodeId: requireBigInt(getTupleField(leaf, 4, 'sourceNodeId', 'Carry leaf'), 'Carry leaf source node id'),
+		}))
+		const nextNodeId = requireBigInt(carryLeafPage[1], 'Carry leaf page next node id')
+		return [leaves, nextNodeId]
+	}
 
 	const readProofConsumedCarriedDepositIndexes = async (escalationGameAddress: Address, outcome: QuestionOutcome, startIndex: bigint, numberOfEntries: bigint) =>
 		await client.readContract({
@@ -405,7 +470,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
+					abi: initializeForkCarrySnapshotAbi,
 					address: testSecurityPoolAddress,
 					functionName: 'initializeForkCarrySnapshot',
 					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
@@ -424,7 +489,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
+					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
 					address: testSecurityPoolAddress,
 					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
 					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots],
@@ -1285,7 +1350,7 @@ describe('Escalation Game Test Suite', () => {
 		const totalEscrow = await readTotalEscrowedRep(escalationGameAddress)
 		const yesState = await readOutcomeState(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(depositLog.args.depositor, vault, 'deposit log should identify the depositing vault')
-		assert.strictEqual(depositLog.args.outcome, QuestionOutcome.Yes, 'deposit log should identify the outcome')
+		assert.strictEqual(depositLog.args.outcome, BigInt(QuestionOutcome.Yes), 'deposit log should identify the outcome')
 		assert.strictEqual(depositLog.args.amount, amount, 'deposit log should expose the requested amount')
 		assert.strictEqual(depositLog.args.depositIndex, 0n, 'deposit log should expose the new deposit index')
 		assert.strictEqual(depositLog.args.cumulativeAmount, yesState.balance, 'deposit log should expose the updated outcome balance')
@@ -1403,7 +1468,7 @@ describe('Escalation Game Test Suite', () => {
 		const vaultEscrow = await readEscrowedRepByVault(child.escalationGameAddress, client.account.address)
 		const totalEscrow = await readTotalEscrowedRep(child.escalationGameAddress)
 		assert.strictEqual(escrowRecordedLog.args.depositor, client.account.address, 'forked escrow log should identify the vault')
-		assert.strictEqual(escrowRecordedLog.args.outcome, QuestionOutcome.Yes, 'forked escrow log should identify the outcome')
+		assert.strictEqual(escrowRecordedLog.args.outcome, BigInt(QuestionOutcome.Yes), 'forked escrow log should identify the outcome')
 		assert.strictEqual(escrowRecordedLog.args.sourcePrincipalTotal, reportBond, 'forked escrow log should expose the new source principal total')
 		assert.strictEqual(escrowRecordedLog.args.childRepTotal, reportBond, 'forked escrow log should expose the new child REP total')
 		assert.strictEqual(escrowRecordedLog.args.escrowedRepByVault, vaultEscrow, 'forked escrow log should expose the updated vault escrow')
@@ -1769,7 +1834,14 @@ describe('Escalation Game Test Suite', () => {
 			functionName: 'migrateForkedEscrowWithoutTransferForTest',
 			args: [parent.escalationGameAddress, child.escalationGameAddress, client.account.address],
 		})
-		await writeContractAndWait(client, async () => client.writeContract(exportResult.request))
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: escalationGameForkerHarnessArtifact.abi,
+				address: forkerHarnessAddress,
+				functionName: 'migrateForkedEscrowWithoutTransferForTest',
+				args: [parent.escalationGameAddress, child.escalationGameAddress, client.account.address],
+			}),
+		)
 
 		assert.deepStrictEqual(exportResult.result[0], [0n, reportBond, 0n], 'source-only forked escrow should still export its original principal bucket')
 		assert.deepStrictEqual(exportResult.result[1], [0n, 0n, 0n], 'source-only forked escrow should not fabricate child REP backing during export')
@@ -2040,7 +2112,7 @@ describe('Escalation Game Test Suite', () => {
 		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
 		assert.strictEqual(await readBindingCapital(escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 10 REP depth')
 		assert.strictEqual(claimLog.args.depositor, winningDepositorAddress, 'claim event should identify the winning depositor')
-		assert.strictEqual(claimLog.args.outcome, QuestionOutcome.Yes, 'claim event should identify the winning outcome')
+		assert.strictEqual(claimLog.args.outcome, BigInt(QuestionOutcome.Yes), 'claim event should identify the winning outcome')
 		assert.strictEqual(claimLog.args.parentDepositIndex, 0n, 'claim event should identify the stable parent deposit index')
 		assert.strictEqual(claimLog.args.originalDepositAmount, firstWinningDeposit, 'claim event should include the original winning principal')
 		assert.strictEqual(claimLog.args.amountToWithdraw, 7n * 10n ** 18n, 'The first 5 REP winning deposit should receive its 2 REP pro-rata reward share')
@@ -2070,7 +2142,7 @@ describe('Escalation Game Test Suite', () => {
 		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
 		assert.strictEqual(await readBindingCapital(escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 20 REP depth')
 		assert.strictEqual(claimLog.args.depositor, secondWinningDepositorAddress, 'claim event should identify the crossing depositor')
-		assert.strictEqual(claimLog.args.outcome, QuestionOutcome.Yes, 'claim event should identify the winning outcome')
+		assert.strictEqual(claimLog.args.outcome, BigInt(QuestionOutcome.Yes), 'claim event should identify the winning outcome')
 		assert.strictEqual(claimLog.args.parentDepositIndex, 1n, 'claim event should identify the crossing deposit index')
 		assert.strictEqual(claimLog.args.originalDepositAmount, secondWinningDeposit, 'claim event should include the crossing principal')
 		assert.strictEqual(claimLog.args.amountToWithdraw, 18n * 10n ** 18n, 'The 14 REP crossing deposit should earn reward on its 10 REP safety-boundary slice and principal on its 4 REP excess slice')

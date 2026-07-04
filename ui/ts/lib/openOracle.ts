@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from 'viem'
+import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { sameAddress } from './address.js'
@@ -199,6 +199,7 @@ export function getOpenOracleCreateParameterValidationMessage(
 function normalizeOpenOracleUnknownScaleDecimalInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') return trimmed
+	if (trimmed === '.' || trimmed === '-.') return trimmed
 	if (trimmed.startsWith('.')) return `0${trimmed}`
 	if (trimmed.endsWith('.')) return `${trimmed}0`
 	return trimmed

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from 'viem'
+import { getAddress } from '@zoltar/shared/ethereum'
 import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../contracts/zoltar.js'
 
 const QUESTION_TUPLE_BINARY = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 100n, '']

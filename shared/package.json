@@ -23,6 +23,10 @@
 			"types": "./ts/deploymentAddresses.ts",
 			"default": "./js/deploymentAddresses.js"
 		},
+		"./ethereum": {
+			"types": "./ts/ethereum.ts",
+			"default": "./js/ethereum.js"
+		},
 		"./protocolConfig": {
 			"types": "./ts/protocolConfig.ts",
 			"default": "./js/protocolConfig.js"
@@ -48,6 +52,7 @@
 		"build": "bun x tsc --project tsconfig.json"
 	},
 	"dependencies": {
-		"viem": "2.53.1"
+		"@noble/hashes": "2.2.0",
+		"micro-eth-signer": "0.18.1"
 	}
 }

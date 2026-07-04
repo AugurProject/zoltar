@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, getAddress, http } from 'viem'
+import { createPublicClient, getAddress, http } from '@zoltar/shared/ethereum'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'

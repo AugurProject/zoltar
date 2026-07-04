@@ -165,7 +165,7 @@ describe('Peripherals: fork migration', () => {
 				args: [0n, deploymentCount],
 			})
 			const matchingChildDeployment = ensureDefined(
-				deployments.find(deployment => deployment.parent === securityPoolAddresses.securityPool && deployment.universeId === childUniverseId),
+				deployments.find((deployment: { parent: `0x${string}`; universeId: bigint }) => deployment.parent === securityPoolAddresses.securityPool && deployment.universeId === childUniverseId),
 				'child deployment not found',
 			)
 			const {
@@ -1693,7 +1693,7 @@ describe('Peripherals: fork migration', () => {
 			)
 			assert.deepStrictEqual(
 				parentGameClaimLogs.map(log => log.args.outcome),
-				[QuestionOutcome.Yes, QuestionOutcome.Yes],
+				[BigInt(QuestionOutcome.Yes), BigInt(QuestionOutcome.Yes)],
 				'parent-game claim logs should identify the claimed outcome',
 			)
 			assert.deepStrictEqual(
@@ -1712,7 +1712,7 @@ describe('Peripherals: fork migration', () => {
 			)
 			strictEqualTypeSafe(claimLog.args.parent.toLowerCase(), securityPoolAddresses.securityPool.toLowerCase(), 'claim log should identify the parent pool')
 			strictEqualTypeSafe(claimLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'claim log should identify the paid vault')
-			strictEqualTypeSafe(claimLog.args.outcomeIndex, QuestionOutcome.Yes, 'claim log should identify the winning outcome')
+			strictEqualTypeSafe(claimLog.args.outcomeIndex, BigInt(QuestionOutcome.Yes), 'claim log should identify the winning outcome')
 			assert.deepStrictEqual([...claimLog.args.depositIndexes], [0n, 1n], 'claim log should identify the claimed deposit indexes')
 			strictEqualTypeSafe(claimLog.args.sourceRepClaimed, sourceRepClaimedFromGame, 'claim log should report the source REP claimed from the parent game')
 			strictEqualTypeSafe(claimLog.args.walletRepPaid, walletRepAfterEscalation - walletRepBeforeEscalation, 'claim log should report the child REP paid to the wallet')

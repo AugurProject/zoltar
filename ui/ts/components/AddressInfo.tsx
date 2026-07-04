@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AddressValue } from './AddressValue.js'
 import { MetricField } from './MetricField.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'

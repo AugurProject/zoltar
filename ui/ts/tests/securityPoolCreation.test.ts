@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from 'viem'
+import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { createSecurityPool } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import type { WriteClient as UiWriteClient } from '../types/contracts.js'
@@ -10,7 +10,7 @@ import { DAY, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/ut
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../solidity/ts/testsuite/simulator/utils/clients'
 import { ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'

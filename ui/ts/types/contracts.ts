@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex } from 'viem'
+import type { Address, Hash, Hex } from '@zoltar/shared/ethereum'
 import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
 export type { ReadClient, WriteClient } from '../lib/clients.js'
 

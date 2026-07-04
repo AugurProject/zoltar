@@ -11,12 +11,15 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
+		"@noble/curves": "2.2.0",
+		"@noble/hashes": "2.2.0",
 		"@zoltar/shared": "file:../shared",
 		"buffer": "6.0.3",
+		"micro-eth-signer": "0.18.1",
+		"micro-packed": "0.8.0",
 		"preact": "10.26.4",
 		"source-map": "0.6.1",
-		"tevm": "1.0.0-rc.151",
-		"viem": "2.53.1"
+		"tevm": "1.0.0-rc.151"
 	},
 	"overrides": {
 		"tmp": "0.2.7",

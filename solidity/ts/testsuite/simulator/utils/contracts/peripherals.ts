@@ -1,6 +1,5 @@
-import 'viem/window'
-import type { Address, Hex } from 'viem'
-import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
+import type { Address, Hex } from '@zoltar/shared/ethereum'
+import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
 import {
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
@@ -314,13 +313,13 @@ interface ReportMeta {
 	fee: bigint
 	settlerReward: bigint
 	token1: Address
-	settlementTime: number
+	settlementTime: bigint
 	token2: Address
 	timeType: boolean
-	feePercentage: number
-	protocolFee: number
-	multiplier: number
-	disputeDelay: number
+	feePercentage: bigint
+	protocolFee: bigint
+	multiplier: bigint
+	disputeDelay: bigint
 }
 
 export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigint): Promise<ReportMeta> => {

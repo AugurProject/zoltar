@@ -1,17 +1,17 @@
-import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from 'viem'
+import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 const NULLIFIER_DEPTH = 64
 const NULLIFIER_PATH_MASK = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
 
-type EscalationGameNode = readonly [bigint, Address, number, bigint, bigint, bigint, bigint]
+type EscalationGameNode = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint]
 
 type CarryProofReadClient = {
 	readContract(parameters: { abi: typeof peripherals_EscalationGame_EscalationGame.abi; address: Address; functionName: 'nodes'; args: [bigint] }): Promise<EscalationGameNode>
 }
 
 type CreateCarryProofParameters = {
-	expectedOutcome?: number
+	expectedOutcome?: bigint | number
 	leafIndex: bigint
 	merkleMountainRangePeakIndex: bigint
 	merkleMountainRangeSiblings: readonly Hex[]
@@ -32,8 +32,8 @@ const readCarryNode = async (client: CarryProofReadClient, escalationGameAddress
 
 export const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
 
-export const hashCarryLeaf = (depositor: Address, outcome: number, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
-	keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+export const hashCarryLeaf = (depositor: Address, outcome: bigint | number, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
+	keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, BigInt(outcome), amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
 
 const buildZeroHashes = () => {
 	const zeroHashes: Hex[] = [zeroHash()]
@@ -94,7 +94,7 @@ export const createCarryProof = async (client: CarryProofReadClient, escalationG
 	if (node[4] !== parameters.parentDepositIndex) {
 		throw new Error('Carry proof source node parent deposit index mismatch')
 	}
-	if (parameters.expectedOutcome !== undefined && node[2] !== parameters.expectedOutcome) {
+	if (parameters.expectedOutcome !== undefined && node[2] !== BigInt(parameters.expectedOutcome)) {
 		throw new Error('Carry proof source node outcome mismatch')
 	}
 	return {

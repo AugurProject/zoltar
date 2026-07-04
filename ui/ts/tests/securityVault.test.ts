@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput, parseRepAmountInput } from '../lib/marketForm.js'
 import {

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AddressValue } from './AddressValue.js'
 import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { CurrencyValue } from './CurrencyValue.js'

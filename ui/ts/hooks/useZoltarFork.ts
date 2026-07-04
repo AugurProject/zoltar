@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
-import { zeroAddress, type Address, type Hash } from 'viem'
+import { zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
 import { Zoltar_Zoltar } from '../contractArtifact.js'
 import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMulticall } from '../contracts.js'

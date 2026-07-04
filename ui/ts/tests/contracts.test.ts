@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	buildForkCarriedEscalationProofs,
 	depositRepToSecurityPool,
@@ -67,7 +67,7 @@ function createBlockWithTimestamp(timestamp: bigint) {
 }
 
 function createReadContractStub(handler: MockReadContractHandler): ReadClient['readContract'] {
-	return async request => (await handler(request as MockReadContractRequest)) as never
+	return async request => (await handler(request as unknown as MockReadContractRequest)) as never
 }
 
 function createMulticallStub(handler: MockLoaderMulticallHandler): MockLoaderClient['multicall'] {
@@ -1320,7 +1320,8 @@ describe('contracts helpers', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		const decodedArgs = decodedCall.args as readonly [Address, Address, bigint]
+		if (!Array.isArray(decodedCall.args) || decodedCall.args.length !== 3) throw new Error('Unexpected migrateVaultWithUnresolvedEscalation calldata')
+		const decodedArgs = decodedCall.args
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
 		expect(decodedArgs[0]).toBe(securityPoolAddress)
 		expect(decodedArgs[1]).toBe(vaultAddress)
@@ -1349,11 +1350,12 @@ describe('contracts helpers', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		const decodedArgs = decodedCall.args as readonly [Address, Address, number, bigint[]]
+		if (!Array.isArray(decodedCall.args) || decodedCall.args.length !== 4) throw new Error('Unexpected claimForkedEscalationDeposits calldata')
+		const decodedArgs = decodedCall.args
 		expect(decodedCall.functionName).toBe('claimForkedEscalationDeposits')
 		expect(decodedArgs[0]).toBe(securityPoolAddress)
 		expect(decodedArgs[1]).toBe(vaultAddress)
-		expect(decodedArgs[2]).toBe(1)
+		expect(decodedArgs[2]).toBe(1n)
 		expect(decodedArgs[3]).toEqual([0n, 255n, 256n])
 		expect(result).toEqual({
 			action: 'migrateEscalationDeposits',
@@ -1394,21 +1396,19 @@ describe('contracts helpers', () => {
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('withdrawForkedEscalationDeposits')
-		expect(decodedCall.args).toEqual([
-			1,
-			[
-				{
-					depositor: vaultAddress,
-					amount: 5n,
-					parentDepositIndex: 3n,
-					cumulativeAmount: 8n,
-					sourceNodeId: 2n,
-					leafIndex: 1n,
-					merkleMountainRangeSiblings: [merkleMountainRangeSibling],
-					merkleMountainRangePeakIndex: 1n,
-					nullifierSiblings: [nullifierSibling],
-				},
-			],
+		expect(decodedCall.args[0]).toBe(1n)
+		expect(decodedCall.args[1]).toMatchObject([
+			{
+				depositor: vaultAddress,
+				amount: 5n,
+				parentDepositIndex: 3n,
+				cumulativeAmount: 8n,
+				sourceNodeId: 2n,
+				leafIndex: 1n,
+				merkleMountainRangeSiblings: [merkleMountainRangeSibling],
+				merkleMountainRangePeakIndex: 1n,
+				nullifierSiblings: [nullifierSibling],
+			},
 		])
 		expect(result).toEqual({
 			action: 'settleForkedEscalation',

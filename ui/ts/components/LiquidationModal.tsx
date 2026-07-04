@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AddressInfo } from './AddressInfo.js'
 import { AddressValue } from './AddressValue.js'
 import { Badge } from './Badge.js'

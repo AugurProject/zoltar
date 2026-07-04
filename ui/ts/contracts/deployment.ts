@@ -1,4 +1,4 @@
-import { encodeDeployData, getAddress, type Address, type Hash, type Hex } from 'viem'
+import { encodeDeployData, getAddress, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
@@ -301,20 +301,22 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 	return getDeploymentStatusSnapshot(deployedMask, true)
 }
 
-export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address) {
-	return await client.readContract({
+export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address): Promise<bigint> {
+	const balance = await client.readContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'balanceOf',
 		address: tokenAddress,
 		args: [ownerAddress],
 	})
+	return typeof balance === 'bigint' ? balance : BigInt(balance)
 }
 
-export async function loadErc20Allowance(client: ReadClient, tokenAddress: Address, ownerAddress: Address, spenderAddress: Address) {
-	return await client.readContract({
+export async function loadErc20Allowance(client: ReadClient, tokenAddress: Address, ownerAddress: Address, spenderAddress: Address): Promise<bigint> {
+	const allowance = await client.readContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'allowance',
 		address: tokenAddress,
 		args: [ownerAddress, spenderAddress],
 	})
+	return typeof allowance === 'bigint' ? allowance : BigInt(allowance)
 }

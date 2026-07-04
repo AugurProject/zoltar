@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { ChildUniversesSection, ChildUniverseStatusBadge } from './ChildUniversesSection.js'
 import { ActionLauncherButton } from './ActionLauncherButton.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'

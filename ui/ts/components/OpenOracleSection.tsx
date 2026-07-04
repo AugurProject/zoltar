@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { AddressValue } from './AddressValue.js'
 import { Badge } from './Badge.js'

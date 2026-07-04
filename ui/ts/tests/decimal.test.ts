@@ -8,10 +8,14 @@ void describe('decimal helpers', () => {
 		expect(parseDecimalInput('1.25', 'Price', 18)).toBe(1_250_000_000_000_000_000n)
 		expect(parseDecimalInput(' .5 ', 'Price', 18)).toBe(500_000_000_000_000_000n)
 		expect(parseDecimalInput('5.', 'Price', 18)).toBe(5_000_000_000_000_000_000n)
+		expect(parseDecimalInput('1.0000000000000000000', 'Price', 18)).toBe(1_000_000_000_000_000_000n)
 	})
 
 	void test('parseDecimalInput rejects empty or invalid input', () => {
 		expect(() => parseDecimalInput('', 'Price', 18)).toThrow('Price is required')
+		expect(() => parseDecimalInput('.', 'Price', 18)).toThrow('Price must be a decimal number')
+		expect(() => parseDecimalInput('-.', 'Price', 18)).toThrow('Price must be a decimal number')
 		expect(() => parseDecimalInput('not-a-number', 'Price', 18)).toThrow('Price must be a decimal number')
+		expect(() => parseDecimalInput('1.0000000000000000001', 'Price', 18)).toThrow('Price must be a decimal number')
 	})
 })

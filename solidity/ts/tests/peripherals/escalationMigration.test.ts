@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { type Address } from 'viem'
+import { type Address } from '@zoltar/shared/ethereum'
 import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './fixture'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
@@ -13,6 +13,21 @@ const createSingleLeafCarryProof = async (client: PeripheralsEscalationMigration
 		merkleMountainRangeSiblings: [],
 		nullifierSiblings: new SparseNullifierTree().getProof(parentDepositIndex),
 	})
+
+const localDepositsExportedAbi = [
+	{
+		inputs: [
+			{ name: 'vault', type: 'address' },
+			{ name: 'repReceiver', type: 'address' },
+			{ name: 'principalByOutcome', type: 'uint256[3]' },
+			{ name: 'principalToTransfer', type: 'uint256' },
+			{ name: 'exportCursor', type: 'uint256' },
+			{ name: 'transferredRep', type: 'bool' },
+		],
+		name: 'LocalDepositsExported',
+		type: 'event',
+	},
+] as const
 
 describe('Peripherals: escalation migration', () => {
 	const fixture = usePeripheralsEscalationMigrationFixture()
@@ -208,13 +223,20 @@ describe('Peripherals: escalation migration', () => {
 			return ensureDefined(
 				receipt.logs
 					.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
-					.map(log =>
-						decodeEventLog({
-							abi: peripherals_EscalationGame_EscalationGame.abi,
-							data: log.data,
-							topics: log.topics,
-						}),
-					)
+					.flatMap(log => {
+						try {
+							return [
+								decodeEventLog({
+									abi: localDepositsExportedAbi,
+									data: log.data,
+									topics: log.topics,
+								}),
+							]
+						} catch (error) {
+							if (error instanceof Error && error.name === 'AbiEventSignatureNotFoundError') return []
+							throw error
+						}
+					})
 					.find(log => log.eventName === 'LocalDepositsExported'),
 				missingMessage,
 			)

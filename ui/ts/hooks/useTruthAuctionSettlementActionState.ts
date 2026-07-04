@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { sameAddress } from '../lib/address.js'
 import { createTruthAuctionSettlementActionState, getTruthAuctionSettlementAction, reduceTruthAuctionSettlementActionState } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '../lib/truthAuctionSettlement.js'

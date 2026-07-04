@@ -4,7 +4,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses } from '../simulation/bootstrap.js'
-import { type Address, getAddress, getCreateAddress, toHex } from 'viem'
+import { type Address, getAddress, getCreateAddress, toHex } from '@zoltar/shared/ethereum'
 
 const MOCK_PRIMARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a1')
 const MOCK_SECONDARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a2')

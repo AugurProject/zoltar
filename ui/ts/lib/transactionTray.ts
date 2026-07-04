@@ -1,4 +1,4 @@
-import type { Hash } from 'viem'
+import type { Hash } from '@zoltar/shared/ethereum'
 import { getActiveBackend } from './activeEnvironment.js'
 import { createAwaitingWalletPresentation, createPreparedWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
 import type { TransactionRequestPreview } from './chainBackend.js'

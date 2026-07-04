@@ -26,12 +26,6 @@ globalThis.global ??= globalThis
 function createBrowserVendorAliasPlugin() {
 	const aliasEntries: Array<[RegExp, string]> = [
 		[/^pino$/, resolveBundlerSpecifierPath('pino/browser.js')],
-		[/^viem$/, resolveBundlerSpecifierPath('viem')],
-		[/^viem\/chains$/, resolveBundlerSpecifierPath('viem/chains')],
-		[/^viem\/window$/, resolveBundlerSpecifierPath('viem/window')],
-		[/^viem\/actions$/, resolveBundlerSpecifierPath('viem/actions')],
-		[/^viem\/accounts$/, resolveBundlerSpecifierPath('viem/accounts')],
-		[/^viem\/utils$/, resolveBundlerSpecifierPath('viem/utils')],
 		[/^tevm$/, resolveBundlerSpecifierPath('@tevm/memory-client')],
 		[/^tevm\/common$/, resolveBundlerSpecifierPath('@tevm/common')],
 		[/^@tevm\/memory-client$/, resolveBundlerSpecifierPath('@tevm/memory-client')],

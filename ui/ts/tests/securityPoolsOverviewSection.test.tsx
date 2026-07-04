@@ -11,7 +11,7 @@ import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {

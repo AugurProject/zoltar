@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 

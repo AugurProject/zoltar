@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach } from 'bun:test'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { SecurityPoolWorkflowSection } from '../../components/SecurityPoolWorkflowSection.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../../types/components.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'

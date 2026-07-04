@@ -1,4 +1,4 @@
-import { maxUint256 } from 'viem'
+import { maxUint256 } from '@zoltar/shared/ethereum'
 import { parseDecimalInput } from './decimal.js'
 import { sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance } from './formatters.js'

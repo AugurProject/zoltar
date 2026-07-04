@@ -1160,7 +1160,6 @@ describe('Peripherals: truth auction', () => {
 				const coordinatorLogs = await client.getLogs({
 					address: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
 					fromBlock: liquidationAttemptStartBlock,
-					toBlock: 'latest',
 				})
 				const executionReasons = coordinatorLogs
 					.map(log => {

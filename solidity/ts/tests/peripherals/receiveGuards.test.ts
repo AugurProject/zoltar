@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
-import type { Address } from 'viem'
-import { writeContractAndWait } from '../../testsuite/simulator/utils/viem'
+import type { Address } from '@zoltar/shared/ethereum'
+import { writeContractAndWait } from '../../testsuite/simulator/utils/clients'
 import { usePeripheralsReceiveGuardsFixture, type PeripheralsReceiveGuardsFixture } from './fixture'
 
 describe('Peripherals: receive guards', () => {

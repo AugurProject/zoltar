@@ -1,9 +1,9 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../types/contractArtifact'
 

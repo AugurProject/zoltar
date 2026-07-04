@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from 'viem'
+import { getAddress } from '@zoltar/shared/ethereum'
 import { loadOracleManagerQueueOperationEthValue } from '../contracts.js'
 import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
 

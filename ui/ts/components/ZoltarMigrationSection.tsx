@@ -1,5 +1,5 @@
 import { useMemo } from 'preact/hooks'
-import type { Address } from 'viem'
+import type { Address } from '@zoltar/shared/ethereum'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { ErrorNotice } from './ErrorNotice.js'

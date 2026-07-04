@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import type { Hash } from 'viem'
+import type { Hash } from '@zoltar/shared/ethereum'
 
 type ActionFeedbackStatus = {
 	detail: ComponentChildren

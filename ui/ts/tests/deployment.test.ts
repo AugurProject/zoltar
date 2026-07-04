@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { zeroAddress } from 'viem'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
@@ -9,7 +9,7 @@ import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDep
 import type { DeploymentStatus, ReadClient } from '../types/contracts.js'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../solidity/ts/testsuite/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
 

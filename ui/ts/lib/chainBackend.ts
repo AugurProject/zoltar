@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from 'viem'
+import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/shared/ethereum'
 import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from './errors.js'
 import { tryParseAddressInput } from './inputs.js'

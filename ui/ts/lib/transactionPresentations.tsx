@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import type { Account, Hash } from 'viem'
+import type { Account, Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../components/AddressValue.js'
 import { UniverseLink } from '../components/UniverseLink.js'
 import { formatCurrencyBalance } from './formatters.js'

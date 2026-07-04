@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from 'viem'
+import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
 import assert from '../testsuite/simulator/utils/assert'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
@@ -12,6 +12,21 @@ import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { ReputationToken_ReputationToken, peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier, peripherals_EscalationGame_EscalationGame, test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
 import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_TIME_LENGTH, getEscalationBindingCapital, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/shared/escalationMath'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+
+const initializeForkCarrySnapshotTestPoolAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'inheritedCarryPeaks', type: 'bytes32[64][3]' },
+			{ name: 'inheritedCarryLeafCounts', type: 'uint256[3]' },
+			{ name: 'inheritedCarryTotals', type: 'uint256[3]' },
+			{ name: 'inheritedNullifierRoots', type: 'bytes32[3]' },
+		],
+		name: 'initializeForkCarrySnapshot',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+]
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -28,6 +43,14 @@ describe('Escalation math parity', () => {
 	const requireContractAddress = (value: Address | null | undefined, context: string) => {
 		if (value === undefined || value === null) throw new Error(`${context} missing`)
 		return value
+	}
+
+	const requireHexArray = (value: unknown, context: string): readonly Hex[] => {
+		if (!Array.isArray(value)) throw new Error(`${context} must be an array`)
+		return value.map((item, index) => {
+			if (typeof item !== 'string' || !item.startsWith('0x')) throw new Error(`${context} entry ${index.toString()} must be hex`)
+			return item as Hex
+		})
 	}
 
 	const readBindingCapital = async (escalationGame: `0x${string}`) =>
@@ -94,7 +117,7 @@ describe('Escalation math parity', () => {
 			args: [outcome],
 		})
 
-	const readCarryPeaks = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentPeaks
+	const readCarryPeaks = async (escalationGameAddress: Address, outcome: QuestionOutcome) => requireHexArray(Reflect.get(await readOutcomeState(escalationGameAddress, outcome), 'currentPeaks'), 'Current carry peaks')
 	const readCarryLeafCount = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentLeafCount
 	const readCarryTotal = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryTotal
 	const readNullifierRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentNullifierRoot
@@ -202,7 +225,7 @@ describe('Escalation math parity', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
+					abi: initializeForkCarrySnapshotTestPoolAbi,
 					address: testSecurityPoolAddress,
 					functionName: 'initializeForkCarrySnapshot',
 					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
