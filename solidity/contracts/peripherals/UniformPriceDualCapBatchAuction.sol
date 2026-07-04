@@ -63,8 +63,6 @@ contract UniformPriceDualCapBatchAuction {
 	bool public underfunded;
 	// Carries funded-auction division dust so bid-level withdrawals reconcile to totalRepPurchased.
 	uint256 public clearingRemainder;
-	// underfundedRemainder is retained for legacy ABI compatibility; underfunded withdrawal dust is tracked per tick.
-	uint256 public underfundedRemainder;
 	uint256 public underfundedThreshold;
 	uint256 public underfundedWinningEth;
 	uint256 public activeTickCount;
@@ -155,7 +153,6 @@ contract UniformPriceDualCapBatchAuction {
 				ethToSend = 0;
 			} else {
 				underfundedThreshold = (ethRaised * PRICE_PRECISION) / maxRepBeingSold;
-				underfundedRemainder = 0;
 				underfundedWinningEth = _sumWinningEth(root, underfundedThreshold);
 				totalRepPurchased = _sumWinningRepDemand(root, underfundedThreshold);
 				ethToSend = underfundedWinningEth;
