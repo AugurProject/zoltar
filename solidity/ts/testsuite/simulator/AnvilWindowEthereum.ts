@@ -272,6 +272,19 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			if (transactionBlockNumber !== undefined) return undefined
 			return undefined
 		}
+		const waitForReceiptWithMiningFallback = async (hash: string) => {
+			const firstAttempt = await waitForReceiptStatus(hash)
+			if (firstAttempt !== undefined) return firstAttempt
+			try {
+				await request({
+					method: 'evm_mine',
+					params: [],
+				})
+			} catch {
+				return undefined
+			}
+			return await waitForReceiptStatus(hash)
+		}
 
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
@@ -283,7 +296,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 		}
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
-			const receiptResult = await waitForReceiptStatus(json.result)
+			const receiptResult = await waitForReceiptWithMiningFallback(json.result)
 			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
 			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
 			let transactionData = transaction !== undefined && typeof transaction.data === 'string' ? transaction.data : undefined
