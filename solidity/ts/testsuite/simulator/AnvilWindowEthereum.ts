@@ -186,6 +186,12 @@ export const validateLocalAnvilRpcUrl = (url: string): void => {
 	if (!allowedHosts.includes(parsed.hostname)) throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
 }
 
+const isEvmMineUnsupported = (error: unknown): boolean => {
+	if (!(error instanceof Error)) return false
+	const message = error.message.toLowerCase()
+	return message.includes('method not found') || message.includes('unknown method') || message.includes('method does not exist') || message.includes('not available') || message.includes('-32601')
+}
+
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
 	let currentTimestamp = 0n
@@ -281,8 +287,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					params: [],
 				})
 			} catch (error: unknown) {
-				void error
-				return undefined
+				if (!isEvmMineUnsupported(error)) throw error
 			}
 			return await waitForReceiptStatus(hash)
 		}
