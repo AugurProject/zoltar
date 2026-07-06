@@ -239,6 +239,10 @@ In the final response to the user for docs-changing tasks, summarize the text-re
 - If a deployment workflow ever requires committing generated artifacts, update this policy in the same PR and add a freshness check that regenerates the artifacts and fails on a dirty tracked diff.
 - The generated artifact freshness rule in Validation Selection is the source of truth for when to run artifact freshness checks.
 
+# Protocol ABI Policy
+
+- The protocol is not live yet. Do not preserve legacy contract ABIs, storage accessors, events, function names, or compatibility shims solely for backwards compatibility with previous development deployments. Prefer clean contract interfaces and redeploy contracts when Solidity changes require ABI changes. Only keep compatibility surface area when a current source consumer, test, deployment script, or documented launch requirement needs it.
+
 # Code Style Guidelines
 
 - **Immutable imported contracts**: Do not modify `solidity/contracts/peripherals/openOracle/OpenOracle.sol`, `solidity/contracts/peripherals/WETH9.sol`, or `solidity/contracts/peripherals/Multicall3.sol`. These contracts are treated as externally sourced/compatibility contracts; address warnings or integration issues in tooling, wrappers, tests, or documented exceptions instead.

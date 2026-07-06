@@ -512,7 +512,7 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('marks underfunded winning settlement amounts as unknown without the winning-ETH denominator', () => {
+	void test('marks underfunded winning settlement amounts as unknown without the per-tick ETH denominator', () => {
 		const underfundedAuction = createTruthAuction({
 			ethRaised: 4n * ONE_UNIT,
 			finalized: true,
