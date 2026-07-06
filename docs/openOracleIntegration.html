@@ -1,70 +1,92 @@
 <!doctype html>
 <html lang="en">
 	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>OpenOracle Integration</title>
-		<link rel="stylesheet" href="./shared-docs.css">
+		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
 				<h1>OpenOracle Integration</h1>
 				<p>
-					Augur Placeholder uses <code>OpenOracle</code> as a bounded, on-demand REP/ETH
-					price source for solvency-sensitive operations. It does not use OpenOracle to
-					resolve market truth; truth remains with Placeholder escalation games and Zoltar
-					forks.
+					Augur Placeholder uses <code>OpenOracle</code> as a bounded, on-demand
+					REP/ETH price source for solvency-sensitive operations. It does not
+					use OpenOracle to resolve market truth; truth remains with Placeholder
+					escalation games and Zoltar forks.
 				</p>
 				<p>
 					If you are new to oracle mechanics, read this page in order through
-					<strong>Security Guardrails</strong>, then read <strong>Attack Model and
-					Defenses</strong>. The first sections explain the operating path; the attack
-					model explains why the path is bounded.
+					<strong>Security Guardrails</strong>, then read
+					<strong>Attack Model and Defenses</strong>. The first sections explain
+					the operating path; the attack model explains why the path is bounded.
 				</p>
 				<p>
-					In this integration, one OpenOracle price request follows a compact lifecycle:
-					the coordinator requests a REP/WETH report, a reporter posts token amounts,
-					other reporters may dispute with a larger report, the report settles after its
-					timing window, and settlement calls the coordinator back with the final amounts.
-					The coordinator accepts those amounts only if local freshness, budget, and safety
-					checks pass.
+					In this integration, one OpenOracle price request follows a compact
+					lifecycle: the coordinator requests a REP/WETH report, a reporter
+					posts token amounts, other reporters may dispute with a larger report,
+					the report settles after its timing window, and settlement calls the
+					coordinator back with the final amounts. The coordinator accepts those
+					amounts only if local freshness, budget, and safety checks pass.
 				</p>
 				<p>
-					OpenOracle reports the onchain REP/WETH pair. These docs usually call the result
-					a REP/ETH price because WETH is the ETH-denominated leg used for solvency math.
+					OpenOracle reports the onchain REP/WETH pair. These docs usually call
+					the result a REP/ETH price because WETH is the ETH-denominated leg
+					used for solvency math.
 				</p>
 				<p>
-					Relevant references: <a href="https://docs.openoracle.org">OpenOracle
-					documentation</a>, the <a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle
-					paper</a>, the local <a href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol">OpenOracle
-					contract</a>, the <a href="../solidity/contracts/peripherals/SecurityPoolOracleCoordinator.sol">SecurityPoolOracleCoordinator
-					integration</a>, and the Placeholder whitepaper's
-					<a href="./whitepaper_placeholder.html#oracle">REP/ETH Price Oracle</a> section.
-					The OpenOracle Technical Details sidebar is the canonical source for current
-					oracle research, especially <a href="https://docs.openoracle.org/openoracle/attack-vectors">Attack
-					Vectors</a> and <a href="https://docs.openoracle.org/openoracle/attack-vectors-inclusion">Attack
-					Vectors (Inclusion)</a>.
+					Relevant references:
+					<a href="https://docs.openoracle.org">OpenOracle documentation</a>,
+					the
+					<a
+						href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971"
+						>OpenOracle paper</a
+					>, the local
+					<a href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+						>OpenOracle contract</a
+					>, the
+					<a
+						href="../solidity/contracts/peripherals/SecurityPoolOracleCoordinator.sol"
+						>SecurityPoolOracleCoordinator integration</a
+					>, and the Placeholder whitepaper's
+					<a href="./whitepaper_placeholder.html#oracle"
+						>REP/ETH Price Oracle</a
+					>
+					section. The OpenOracle Technical Details sidebar is the canonical
+					source for current oracle research, especially
+					<a href="https://docs.openoracle.org/openoracle/attack-vectors"
+						>Attack Vectors</a
+					>
+					and
+					<a
+						href="https://docs.openoracle.org/openoracle/attack-vectors-inclusion"
+						>Attack Vectors (Inclusion)</a
+					>.
 				</p>
 			</header>
 
 			<section id="openoracle-role">
 				<h2>OpenOracle Role</h2>
 				<p>
-					OpenOracle creates report instances for a token pair. Reporters submit token
-					amounts, later reporters can dispute by posting a larger report, and a report
-					can settle after its timing window. When a
+					OpenOracle creates report instances for a token pair. Reporters submit
+					token amounts, later reporters can dispute by posting a larger report,
+					and a report can settle after its timing window. When a
 					<span class="term" tabindex="0">callback</span>
-					contract is configured,
-					settlement calls that contract with the settled amounts.
+					contract is configured, settlement calls that contract with the
+					settled amounts.
 				</p>
 				<p>
 					In this repository the pair is REP as <code>token1</code> and WETH as
-					<code>token2</code>. The coordinator converts the callback amounts into
-					the following REP per ETH price:
+					<code>token2</code>. The coordinator converts the callback amounts
+					into the following REP per ETH price:
 				</p>
 				<figure class="equation" id="eq-rep-eth-price">
-					<math display="block" aria-label="last price equals amount one times ten to the eighteenth divided by amount two" data-source="lastPrice = amount1 \cdot pow10(18) / amount2">
+					<math
+						display="block"
+						aria-label="last price equals amount one times ten to the eighteenth divided by amount two"
+						data-source="lastPrice = amount1 \cdot pow10(18) / amount2"
+					>
 						<mrow>
 							<mi>lastPrice</mi>
 							<mo>=</mo>
@@ -78,124 +100,244 @@
 							</mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">REP/ETH Price</span>The settled REP amount is scaled by the fixed price precision and divided by the settled WETH amount.</p>
+					<p class="equation-caption">
+						<span class="equation-label">REP/ETH Price</span>The settled REP
+						amount is scaled by the fixed price precision and divided by the
+						settled WETH amount.
+					</p>
 				</figure>
-					<p id="integration-terms">
-						After the coordinator accepts a settlement, that accepted price starts a
-						<span class="term" tabindex="0">price round</span>: the lifetime of one settled
-						REP/WETH report converted into a REP/ETH coordinator price. The
+				<p id="integration-terms">
+					After the coordinator accepts a settlement, that accepted price starts
+					a
+					<span class="term" tabindex="0">price round</span>: the lifetime of
+					one settled REP/WETH report converted into a REP/ETH coordinator
+					price. The
 					<span class="term" tabindex="0">price-round budget</span>
-					is the ETH-denominated operation volume that single settled price may authorize
-					before the coordinator needs another report.
+					is the ETH-denominated operation volume that single settled price may
+					authorize before the coordinator needs another report.
 				</p>
 				<p>
-					A <span class="term" tabindex="0">staged operation</span> is a liquidation, REP
-					withdrawal, or allowance update queued behind the coordinator until it can use a
-					<span class="term" tabindex="0">fresh price</span>, meaning a settled coordinator
-					price still inside <code>PRICE_VALID_FOR_SECONDS</code>, currently a five-minute
-					cache window.
+					A <span class="term" tabindex="0">staged operation</span> is a
+					liquidation, REP withdrawal, or allowance update queued behind the
+					coordinator until it can use a
+					<span class="term" tabindex="0">fresh price</span>, meaning a settled
+					coordinator price still inside <code>PRICE_VALID_FOR_SECONDS</code>,
+					currently a five-minute cache window.
 				</p>
 				<p>
-					The coordinator compares operations in <span class="term" tabindex="0">ETH-notional</span>
-					terms, so debt movement, REP movement, and allowance increases can share one
-					budget. For liquidations, the relevant boundary is the
-					<span class="term" tabindex="0">liquidation threshold</span>, the REP/ETH price
-					where a vault becomes liquidatable, plus the configured
-					<span class="term" tabindex="0">liquidation distance</span>, an extra margin
-					currently set by <code>minLiquidationPriceDistanceBps</code>.
+					The coordinator compares operations in
+					<span class="term" tabindex="0">ETH-notional</span>
+					terms, so debt movement, REP movement, and allowance increases can
+					share one budget. For liquidations, the relevant boundary is the
+					<span class="term" tabindex="0">liquidation threshold</span>, the
+					REP/ETH price where a vault becomes liquidatable, plus the configured
+					<span class="term" tabindex="0">liquidation distance</span>, an extra
+					margin currently set by <code>minLiquidationPriceDistanceBps</code>.
 				</p>
 				<p>
-					OpenOracle disputes scale with <span class="term" tabindex="0">report liquidity</span>,
-					the REP/WETH report size posted into the oracle. Larger report liquidity gives
-					honest reporters more economic weight to dispute a bad price, and it also sets
-					the scale for the coordinator's price-round budget.
+					OpenOracle disputes scale with
+					<span class="term" tabindex="0">report liquidity</span>, the REP/WETH
+					report size posted into the oracle. Larger report liquidity gives
+					honest reporters more economic weight to dispute a bad price, and it
+					also sets the scale for the coordinator's price-round budget.
 				</p>
 			</section>
 
 			<section id="placeholder-integration">
 				<h2>Placeholder Integration</h2>
 				<p>
-					<code>SecurityPoolOracleCoordinator</code> is deployed with an immutable
-					<code>OpenOracle</code> address. A security pool stages liquidation,
-					REP-withdrawal, and security-bond-allowance operations through the coordinator
-					when a fresh REP/ETH price is needed.
+					<code>SecurityPoolOracleCoordinator</code> is deployed with an
+					immutable <code>OpenOracle</code> address. A security pool stages
+					liquidation, REP-withdrawal, and security-bond-allowance operations
+					through the coordinator when a fresh REP/ETH price is needed.
 				</p>
 				<p>
 					Deployment is per pool. <code>SecurityPoolFactory</code> asks
-					<code>PriceOracleManagerAndOperatorQueuerFactory</code> for a fresh coordinator
-					for each origin or child security pool, wiring it to the shared
-					<code>OpenOracle</code>, shared WETH, and that universe's REP token.
-					<code>SecurityPoolDeployer</code> passes the coordinator into the pool, and the
-					factory then calls <code>setSecurityPool</code> exactly once so only that pool can
-					seed and execute through the coordinator. Child pools inherit the parent's last
-					price as a starting value, but freshness is still controlled by the coordinator's
-					settlement timestamp and validity window.
+					<code>PriceOracleManagerAndOperatorQueuerFactory</code> for a fresh
+					coordinator for each origin or child security pool, wiring it to the
+					shared <code>OpenOracle</code>, shared WETH, and that universe's REP
+					token. <code>SecurityPoolDeployer</code> passes the coordinator into
+					the pool, and the factory then calls
+					<code>setSecurityPool</code> exactly once so only that pool can seed
+					and execute through the coordinator. Child pools inherit the parent's
+					last price as a starting value, but freshness is still controlled by
+					the coordinator's settlement timestamp and validity window.
 				</p>
 				<figure class="diagram" id="fig-openoracle-integration-flow">
-					<svg viewBox="0 0 980 320" role="img" aria-labelledby="integration-flow-title integration-flow-desc">
-						<title id="integration-flow-title">OpenOracle integration flow</title>
-						<desc id="integration-flow-desc">Placeholder queues solvency-sensitive operations behind a bounded OpenOracle REP/ETH report and executes them only with a fresh accepted price.</desc>
+					<svg
+						viewBox="0 0 980 320"
+						role="img"
+						aria-labelledby="integration-flow-title integration-flow-desc"
+					>
+						<title id="integration-flow-title">
+							OpenOracle integration flow
+						</title>
+						<desc id="integration-flow-desc">
+							Placeholder queues solvency-sensitive operations behind a bounded
+							OpenOracle REP/ETH report and executes them only with a fresh
+							accepted price.
+						</desc>
 						<defs>
-							<marker id="arrow-integration-flow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+							<marker
+								id="arrow-integration-flow"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
 							</marker>
 						</defs>
-						<rect class="svg-blue" x="40" y="72" width="205" height="86" rx="8"></rect>
-						<text class="svg-label" x="142" y="105" text-anchor="middle">User Operation</text>
-						<text class="svg-small" x="142" y="128" text-anchor="middle">liquidate, withdraw REP,</text>
-						<text class="svg-small" x="142" y="145" text-anchor="middle">allowance</text>
-						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 245 115 H 315"></path>
-						<rect class="svg-gold" x="315" y="72" width="205" height="86" rx="8"></rect>
-						<text class="svg-label" x="418" y="105" text-anchor="middle">Coordinator</text>
-						<text class="svg-small" x="418" y="132" text-anchor="middle">cache, budget, staging guards</text>
-						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 520 115 H 590"></path>
-						<rect class="svg-green" x="590" y="72" width="175" height="86" rx="8"></rect>
-						<text class="svg-label" x="678" y="96" text-anchor="middle">OpenOracle</text>
-						<text class="svg-small" x="678" y="119" text-anchor="middle">reporter posts</text>
-						<text class="svg-small" x="678" y="135" text-anchor="middle">disputer may replace</text>
-						<text class="svg-small" x="678" y="151" text-anchor="middle">settler finalizes</text>
-						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 765 115 H 835"></path>
-						<rect class="svg-box" x="835" y="72" width="110" height="86" rx="8"></rect>
-						<text class="svg-label" x="890" y="105" text-anchor="middle">Settle</text>
-						<text class="svg-small" x="890" y="132" text-anchor="middle">callback</text>
-						<path class="svg-line" marker-end="url(#arrow-integration-flow)" d="M 890 158 C 820 250 540 260 440 158"></path>
-						<rect class="svg-red" x="284" y="204" width="410" height="108" rx="8"></rect>
-						<text class="svg-label" x="489" y="230" text-anchor="middle">Execution Guardrails</text>
-						<text class="svg-small" x="489" y="252" text-anchor="middle">fresh price, budget room, and local safety checks</text>
-						<text class="svg-small" x="489" y="279" text-anchor="middle">Expired, stale, over-budget, or too-close liquidations</text>
-						<text class="svg-small" x="489" y="296" text-anchor="middle">are consumed as failures.</text>
+						<rect
+							class="svg-blue"
+							x="40"
+							y="72"
+							width="205"
+							height="86"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="142" y="105" text-anchor="middle">
+							User Operation
+						</text>
+						<text class="svg-small" x="142" y="128" text-anchor="middle">
+							liquidate, withdraw REP,
+						</text>
+						<text class="svg-small" x="142" y="145" text-anchor="middle">
+							allowance
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-integration-flow)"
+							d="M 245 115 H 315"
+						></path>
+						<rect
+							class="svg-gold"
+							x="315"
+							y="72"
+							width="205"
+							height="86"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="418" y="105" text-anchor="middle">
+							Coordinator
+						</text>
+						<text class="svg-small" x="418" y="132" text-anchor="middle">
+							cache, budget, staging guards
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-integration-flow)"
+							d="M 520 115 H 590"
+						></path>
+						<rect
+							class="svg-green"
+							x="590"
+							y="72"
+							width="175"
+							height="86"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="678" y="96" text-anchor="middle">
+							OpenOracle
+						</text>
+						<text class="svg-small" x="678" y="119" text-anchor="middle">
+							reporter posts
+						</text>
+						<text class="svg-small" x="678" y="135" text-anchor="middle">
+							disputer may replace
+						</text>
+						<text class="svg-small" x="678" y="151" text-anchor="middle">
+							settler finalizes
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-integration-flow)"
+							d="M 765 115 H 835"
+						></path>
+						<rect
+							class="svg-box"
+							x="835"
+							y="72"
+							width="110"
+							height="86"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="890" y="105" text-anchor="middle">
+							Settle
+						</text>
+						<text class="svg-small" x="890" y="132" text-anchor="middle">
+							callback
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-integration-flow)"
+							d="M 890 158 C 820 250 540 260 440 158"
+						></path>
+						<rect
+							class="svg-red"
+							x="284"
+							y="204"
+							width="410"
+							height="108"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="489" y="230" text-anchor="middle">
+							Execution Guardrails
+						</text>
+						<text class="svg-small" x="489" y="252" text-anchor="middle">
+							fresh price, budget room, and local safety checks
+						</text>
+						<text class="svg-small" x="489" y="279" text-anchor="middle">
+							Expired, stale, over-budget, or too-close liquidations
+						</text>
+						<text class="svg-small" x="489" y="296" text-anchor="middle">
+							are consumed as failures.
+						</text>
 					</svg>
-					<p class="diagram-caption"><span class="figure-label">Integration Flow</span>The coordinator is the trust boundary between Placeholder operations and OpenOracle reports. It applies guardrails before request and staging, then again after callback before execution.</p>
+					<p class="diagram-caption">
+						<span class="figure-label">Integration Flow</span>The coordinator is
+						the trust boundary between Placeholder operations and OpenOracle
+						reports. It applies guardrails before request and staging, then
+						again after callback before execution.
+					</p>
 				</figure>
 				<p>
 					If the cached price is valid and the operation fits the remaining
-					<span class="term" tabindex="0">price-round budget</span>,
-					the coordinator attempts immediate execution after staging the operation
-					record. Liquidation-specific gates, snapshot staleness, or downstream pool checks
-					can still consume the operation as a failed staged operation. Otherwise the
-					coordinator can create one OpenOracle report and attach up to four staged
-					operations to the settlement callback. Additional staged operations remain
-					active but outside the auto-executed callback batch; if the fresh price remains
-					valid and they have not expired, they require a later manual
+					<span class="term" tabindex="0">price-round budget</span>, the
+					coordinator attempts immediate execution after staging the operation
+					record. Liquidation-specific gates, snapshot staleness, or downstream
+					pool checks can still consume the operation as a failed staged
+					operation. Otherwise the coordinator can create one OpenOracle report
+					and attach up to four staged operations to the settlement callback.
+					Additional staged operations remain active but outside the
+					auto-executed callback batch; if the fresh price remains valid and
+					they have not expired, they require a later manual
 					<code>executeStagedOperation</code> call.
 				</p>
 				<p>
 					<span class="term" tabindex="0">Staged operation</span>
 					inputs are constrained before any oracle report is requested.
-					Liquidation and withdrawal amounts must be non-zero, allowance updates may set
-					zero, <code>validForSeconds</code> must be positive and no more than five minutes,
-					non-liquidation operations must target the caller's own vault, and staging is
-					disabled after the escalation question is already resolved.
+					Liquidation and withdrawal amounts must be non-zero, allowance updates
+					may set zero, <code>validForSeconds</code> must be positive and no
+					more than five minutes, non-liquidation operations must target the
+					caller's own vault, and staging is disabled after the escalation
+					question is already resolved.
 				</p>
 				<p>
 					Report funding is caller supplied. The coordinator computes
 					<code>requestPriceEthCost</code>, the caller-funded
-					<span class="term" tabindex="0">request bounty</span>, from the current base fee,
-					the callback gas limit, and the gas the coordinator expects to spend inside
-					<code>openOracleReportPrice</code>:
+					<span class="term" tabindex="0">request bounty</span>, from the
+					current base fee, the callback gas limit, and the gas the coordinator
+					expects to spend inside <code>openOracleReportPrice</code>:
 				</p>
 				<figure class="equation" id="eq-openoracle-request-price-cost">
-					<math display="block" aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101" data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101">
+					<math
+						display="block"
+						aria-label="request price ETH cost equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101"
+						data-source="requestPriceEthCost = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"
+					>
 						<mrow>
 							<mi>requestPriceEthCost</mi>
 							<mo>=</mo>
@@ -212,30 +354,43 @@
 							<mn>101</mn>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Oracle Request Cost</span><code>callbackGasLimit</code> is the gas reserved for the settlement callback, <code>gasConsumedOpenOracleReportPrice</code> is the coordinator's own report-price callback work, and the small <code>101</code> offset keeps the forwarded bounty strictly above the computed gas product so the OpenOracle-funded reward path has a positive buffer instead of landing exactly on the boundary.</p>
+					<p class="equation-caption">
+						<span class="equation-label">Oracle Request Cost</span
+						><code>callbackGasLimit</code> is the gas reserved for the
+						settlement callback,
+						<code>gasConsumedOpenOracleReportPrice</code> is the coordinator's
+						own report-price callback work, and the small
+						<code>101</code> offset keeps the forwarded bounty strictly above
+						the computed gas product so the OpenOracle-funded reward path has a
+						positive buffer instead of landing exactly on the boundary.
+					</p>
 				</figure>
 				<p>
-					If a cached price is usable, the staged operation pays no oracle request cost and
-					unused ETH is refunded. If a new report is needed, only the first pending
-					settlement slot retains the request cost; <code>requestPrice</code> forwards
-					exactly that bounty to OpenOracle and refunds any excess. That call creates an
-					OpenOracle report instance; external reporters still submit the initial REP/WETH
-					amounts, disputes can replace those amounts, and settlement returns the final
-					amounts through the callback.
+					If a cached price is usable, the staged operation pays no oracle
+					request cost and unused ETH is refunded. If a new report is needed,
+					only the first pending settlement slot retains the request cost;
+					<code>requestPrice</code> forwards exactly that bounty to OpenOracle
+					and refunds any excess. That call creates an OpenOracle report
+					instance; external reporters still submit the initial REP/WETH
+					amounts, disputes can replace those amounts, and settlement returns
+					the final amounts through the callback.
 				</p>
 				<p>
 					Callers who join an already pending settlement slot pay
-					<code>getQueuedOperationEthCost()</code> instead of funding a second OpenOracle
-					report. The coordinator credits that ETH to the original
-					<code>pendingReportSponsor</code> in <code>oracleFeeCredits</code>, and sponsors
-					withdraw accumulated credits with <code>withdrawOracleFeeCredits()</code>.
+					<code>getQueuedOperationEthCost()</code> instead of funding a second
+					OpenOracle report. The coordinator credits that ETH to the original
+					<code>pendingReportSponsor</code> in <code>oracleFeeCredits</code>,
+					and sponsors withdraw accumulated credits with
+					<code>withdrawOracleFeeCredits()</code>.
 				</p>
 				<p>
-					Escalation-game REP deposits are the exception to the staged callback path. When
-					the pool has active security-bond allowance, <code>depositToEscalationGame</code>
-					requires a fresh coordinator price and reverts if it is stale. After previewing
-					the accepted REP deposit, the pool uses <code>lastPrice</code> for the post-transfer
-					vault and pool coverage checks instead of queueing the deposit behind a report.
+					Escalation-game REP deposits are the exception to the staged callback
+					path. When the pool has active security-bond allowance,
+					<code>depositToEscalationGame</code> requires a fresh coordinator
+					price and reverts if it is stale. After previewing the accepted REP
+					deposit, the pool uses <code>lastPrice</code> for the post-transfer
+					vault and pool coverage checks instead of queueing the deposit behind
+					a report.
 				</p>
 			</section>
 
@@ -243,36 +398,65 @@
 				<h2>Security Guardrails</h2>
 				<p>
 					Placeholder uses the oracle to preserve solvency accounting around ETH
-					obligations backed by REP. The guarantee is conditional: operations that can
-					change REP backing or security-bond exposure must use a fresh, economically
-					contestable REP/ETH price and must pass local coordinator checks before they can
-					affect the pool.
+					obligations backed by REP. The guarantee is conditional: operations
+					that can change REP backing or security-bond exposure must use a
+					fresh, economically contestable REP/ETH price and must pass local
+					coordinator checks before they can affect the pool.
 				</p>
 				<ul>
-					<li><code>PRICE_VALID_FOR_SECONDS</code> limits accepted prices to a five-minute cache window.</li>
-					<li>Each settled price creates a bounded <span class="term" tabindex="0">ETH-notional</span> budget, so one report cannot authorize unlimited operation volume.</li>
-					<li>Pool execution functions reject direct user calls: withdrawals, liquidations, and allowance changes can be performed only by the configured coordinator while its price is still valid.</li>
-					<li>Liquidations use a queue-time snapshot and fail if target allowance changes or ownership decreases before execution.</li>
-					<li>Liquidations must remain at least <code>minLiquidationPriceDistanceBps</code> beyond the computed <span class="term" tabindex="0">liquidation threshold</span>.</li>
-					<li>The callback rejects zero reports, computed zero prices, unexpected report ids, and settlements during excessive base fee.</li>
+					<li>
+						<code>PRICE_VALID_FOR_SECONDS</code> limits accepted prices to a
+						five-minute cache window.
+					</li>
+					<li>
+						Each settled price creates a bounded
+						<span class="term" tabindex="0">ETH-notional</span> budget, so one
+						report cannot authorize unlimited operation volume.
+					</li>
+					<li>
+						Pool execution functions reject direct user calls: withdrawals,
+						liquidations, and allowance changes can be performed only by the
+						configured coordinator while its price is still valid.
+					</li>
+					<li>
+						Liquidations use a queue-time snapshot and fail if target allowance
+						changes or ownership decreases before execution.
+					</li>
+					<li>
+						Liquidations must remain at least
+						<code>minLiquidationPriceDistanceBps</code> beyond the computed
+						<span class="term" tabindex="0">liquidation threshold</span>.
+					</li>
+					<li>
+						The callback rejects zero reports, computed zero prices, unexpected
+						report ids, and settlements during excessive base fee.
+					</li>
 				</ul>
 				<p>
 					The next equation names the maximum budget as
 					<code>priceRoundMaxNotional</code>. In plain English,
-					<code>priceRoundMaxNotional</code> is the largest ETH-notional operation volume
-					that one settled REP/ETH price may authorize before the coordinator needs a new
-					OpenOracle report. Here <code>exactToken1Report</code> is the initial REP report
-					size, <code>PRICE_PRECISION</code> is the fixed
-						<math aria-label="price precision scale" data-source="pow10(18)"><msup><mn>10</mn><mn>18</mn></msup></math> price scale,
-					<code>priceRoundBudgetMultiplierBps</code> is the configured multiplier in basis
-					points, <code>repPerEthPrice</code> is the settled coordinator price, and
-					<code>ORACLE_BUDGET_BPS</code> is the <code>10000</code> basis-point denominator.
-					The contract performs the divisions sequentially, so the result floors once after
-					dividing by <code>repPerEthPrice</code> and again after dividing by
+					<code>priceRoundMaxNotional</code> is the largest ETH-notional
+					operation volume that one settled REP/ETH price may authorize before
+					the coordinator needs a new OpenOracle report. Here
+					<code>exactToken1Report</code> is the initial REP report size,
+					<code>PRICE_PRECISION</code> is the fixed
+					<math aria-label="price precision scale" data-source="pow10(18)"
+						><msup><mn>10</mn><mn>18</mn></msup></math
+					>
+					price scale, <code>priceRoundBudgetMultiplierBps</code> is the
+					configured multiplier in basis points, <code>repPerEthPrice</code> is
+					the settled coordinator price, and <code>ORACLE_BUDGET_BPS</code> is
+					the <code>10000</code> basis-point denominator. The contract performs
+					the divisions sequentially, so the result floors once after dividing
+					by <code>repPerEthPrice</code> and again after dividing by
 					<code>ORACLE_BUDGET_BPS</code>.
 				</p>
 				<div class="equation" id="eq-openoracle-round-budget">
-					<math display="block" aria-label="maximum price-round budget equals floor of floor of exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price divided by oracle budget basis points" data-source="priceRoundMaxNotional = floor(floor(exactToken1Report \cdot PRICE_PRECISION \cdot priceRoundBudgetMultiplierBps / repPerEthPrice) / ORACLE_BUDGET_BPS)">
+					<math
+						display="block"
+						aria-label="maximum price-round budget equals floor of floor of exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price divided by oracle budget basis points"
+						data-source="priceRoundMaxNotional = floor(floor(exactToken1Report \cdot PRICE_PRECISION \cdot priceRoundBudgetMultiplierBps / repPerEthPrice) / ORACLE_BUDGET_BPS)"
+					>
 						<mrow>
 							<mi>priceRoundMaxNotional</mi>
 							<mo>=</mo>
@@ -299,517 +483,1258 @@
 							<mo>)</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Price-Round Budget</span>The initial REP report size and the configured multiplier cap how much <span class="term" tabindex="0">ETH-notional</span> activity one settled price can authorize, with Solidity integer division flooring each sequential division.</p>
+					<p class="equation-caption">
+						<span class="equation-label">Price-Round Budget</span>The initial
+						REP report size and the configured multiplier cap how much
+						<span class="term" tabindex="0">ETH-notional</span> activity one
+						settled price can authorize, with Solidity integer division flooring
+						each sequential division.
+					</p>
 				</div>
 				<figure class="diagram" id="fig-openoracle-budget-consumption">
-					<svg viewBox="0 0 980 310" role="img" aria-labelledby="budget-consumption-title budget-consumption-desc">
-						<title id="budget-consumption-title">Price-round budget consumption</title>
-						<desc id="budget-consumption-desc">One settled OpenOracle report creates a maximum price-round budget. Successful operations consume that budget; new requests that do not fit are staged for another report, while pending callback operations that do not fit are consumed as failed.</desc>
+					<svg
+						viewBox="0 0 980 310"
+						role="img"
+						aria-labelledby="budget-consumption-title budget-consumption-desc"
+					>
+						<title id="budget-consumption-title">
+							Price-round budget consumption
+						</title>
+						<desc id="budget-consumption-desc">
+							One settled OpenOracle report creates a maximum price-round
+							budget. Successful operations consume that budget; new requests
+							that do not fit are staged for another report, while pending
+							callback operations that do not fit are consumed as failed.
+						</desc>
 						<defs>
-							<marker id="arrow-budget-consumption" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+							<marker
+								id="arrow-budget-consumption"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
 							</marker>
 						</defs>
-						<rect class="svg-green" x="42" y="62" width="220" height="84" rx="8"></rect>
-						<text class="svg-label" x="152" y="96" text-anchor="middle">Settled Report</text>
-						<text class="svg-small" x="152" y="123" text-anchor="middle">accepted REP/ETH price</text>
-						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 262 104 H 338"></path>
-						<rect class="svg-gold" x="338" y="50" width="260" height="108" rx="8"></rect>
-						<text class="svg-label" x="468" y="84" text-anchor="middle">Max Budget</text>
-						<text class="svg-small" x="468" y="111" text-anchor="middle">priceRoundMaxNotional</text>
-						<text class="svg-small" x="468" y="134" text-anchor="middle">ETH-notional cap for this price</text>
-						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 598 104 H 674"></path>
-						<rect class="svg-blue" x="674" y="50" width="250" height="108" rx="8"></rect>
-						<text class="svg-label" x="799" y="84" text-anchor="middle">Operations Consume</text>
-						<text class="svg-small" x="799" y="111" text-anchor="middle">withdraw, allowance, liquidation</text>
-						<text class="svg-small" x="799" y="134" text-anchor="middle">budget spent only on success</text>
-						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 799 158 V 214"></path>
-						<rect class="svg-red" x="610" y="214" width="378" height="72" rx="8"></rect>
-						<text class="svg-label" x="799" y="239" text-anchor="middle">Remaining Room</text>
-						<text class="svg-label" x="799" y="258" text-anchor="middle">Too Small</text>
-						<text class="svg-small" x="799" y="277" text-anchor="middle">new requests stage; pending ones fail</text>
-						<path class="svg-line" marker-end="url(#arrow-budget-consumption)" d="M 610 250 H 468 V 158"></path>
+						<rect
+							class="svg-green"
+							x="42"
+							y="62"
+							width="220"
+							height="84"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="152" y="96" text-anchor="middle">
+							Settled Report
+						</text>
+						<text class="svg-small" x="152" y="123" text-anchor="middle">
+							accepted REP/ETH price
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-budget-consumption)"
+							d="M 262 104 H 338"
+						></path>
+						<rect
+							class="svg-gold"
+							x="338"
+							y="50"
+							width="260"
+							height="108"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="468" y="84" text-anchor="middle">
+							Max Budget
+						</text>
+						<text class="svg-small" x="468" y="111" text-anchor="middle">
+							priceRoundMaxNotional
+						</text>
+						<text class="svg-small" x="468" y="134" text-anchor="middle">
+							ETH-notional cap for this price
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-budget-consumption)"
+							d="M 598 104 H 674"
+						></path>
+						<rect
+							class="svg-blue"
+							x="674"
+							y="50"
+							width="250"
+							height="108"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="799" y="84" text-anchor="middle">
+							Operations Consume
+						</text>
+						<text class="svg-small" x="799" y="111" text-anchor="middle">
+							withdraw, allowance, liquidation
+						</text>
+						<text class="svg-small" x="799" y="134" text-anchor="middle">
+							budget spent only on success
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-budget-consumption)"
+							d="M 799 158 V 214"
+						></path>
+						<rect
+							class="svg-red"
+							x="610"
+							y="214"
+							width="378"
+							height="72"
+							rx="8"
+						></rect>
+						<text class="svg-label" x="799" y="239" text-anchor="middle">
+							Remaining Room
+						</text>
+						<text class="svg-label" x="799" y="258" text-anchor="middle">
+							Too Small
+						</text>
+						<text class="svg-small" x="799" y="277" text-anchor="middle">
+							new requests stage; pending ones fail
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-budget-consumption)"
+							d="M 610 250 H 468 V 158"
+						></path>
 					</svg>
-					<p class="diagram-caption"><span class="figure-label">Budget Consumption</span>The coordinator treats the settled price as a bounded resource: successful operations subtract from the price-round budget. A new request that does not fit the cached price round stages for another report; an already staged operation that does not fit during execution is consumed as a failed operation.</p>
+					<p class="diagram-caption">
+						<span class="figure-label">Budget Consumption</span>The coordinator
+						treats the settled price as a bounded resource: successful
+						operations subtract from the price-round budget. A new request that
+						does not fit the cached price round stages for another report; an
+						already staged operation that does not fit during execution is
+						consumed as a failed operation.
+					</p>
 				</figure>
 				<p>
-					Each operation consumes budget according to the exposure it adds or moves.
-					Liquidations consume the larger of moved debt and the ETH-notional value of REP
-					moved with that debt. Withdrawals consume the ETH-notional value of the actual
-					previewed REP withdrawal after minimum-vault rules are applied. Allowance updates
-					consume only the live allowance increase at execution time, so a queued allowance
-					operation cannot restore more exposure than the current price round still has
-					room to authorize.
+					Each operation consumes budget according to the exposure it adds or
+					moves. Liquidations consume the larger of moved debt and the
+					ETH-notional value of REP moved with that debt. Withdrawals consume
+					the ETH-notional value of the actual previewed REP withdrawal after
+					minimum-vault rules are applied. Allowance updates consume only the
+					live allowance increase at execution time, so a queued allowance
+					operation cannot restore more exposure than the current price round
+					still has room to authorize.
 				</p>
 				<h2>Callback Rejection and Recovery</h2>
 				<p>
-					OpenOracle settles with a low-level callback and emits whether that callback
-					succeeded; it does not automatically undo settlement when the callback returns
-					<code>false</code>. The coordinator accepts callbacks only from the configured
-					<code>OpenOracle</code> and only for the current pending report id. If those checks
-					revert inside the low-level call, the OpenOracle report can still be settled while
-					the coordinator remains pending. If the settlement transaction cannot leave enough
-					gas headroom after attempting the callback, OpenOracle reverts settlement with
-					<code>InvalidGasLimit</code> instead; in that case the report is not settled yet
-					and coordinator recovery is not available.
+					OpenOracle settles with a low-level callback and emits whether that
+					callback succeeded; it does not automatically undo settlement when the
+					callback returns
+					<code>false</code>. The coordinator accepts callbacks only from the
+					configured <code>OpenOracle</code> and only for the current pending
+					report id. If those checks revert inside the low-level call, the
+					OpenOracle report can still be settled while the coordinator remains
+					pending. If the settlement transaction cannot leave enough gas
+					headroom after attempting the callback, OpenOracle reverts settlement
+					with <code>InvalidGasLimit</code> instead; in that case the report is
+					not settled yet and coordinator recovery is not available.
 				</p>
 				<p>
-					Coordinator-level price rejections are separate from low-level callback failures.
-					After a callback successfully enters the coordinator, a settlement with base fee
-					above the request-time cap, zero amounts, or a computed zero price clears the
-					pending id, emits <code>PriceReportRejected</code>, and does not update the price
-					cache or replay pending operations. Those pending settlement operations remain
-					queued for a later valid price report, but a later call to stage another operation
-					will not automatically fund a retry while that pending settlement list is still
-					non-empty; an operator or user may need to call <code>requestPrice</code> directly.
-					When OpenOracle has already settled but the coordinator is still pending because
-					the low-level callback did not complete, anyone can call
-					<code>recoverSettledPendingReport</code>. Recovery clears the pending report,
-					resets the settlement base-fee cap, and consumes the single pending-operation slot
-					without treating it as a successful price update.
+					Coordinator-level price rejections are separate from low-level
+					callback failures. After a callback successfully enters the
+					coordinator, a settlement with base fee above the request-time cap,
+					zero amounts, or a computed zero price clears the pending id, emits
+					<code>PriceReportRejected</code>, and does not update the price cache
+					or replay pending operations. Those pending settlement operations
+					remain queued for a later valid price report, but a later call to
+					stage another operation will not automatically fund a retry while that
+					pending settlement list is still non-empty; an operator or user may
+					need to call <code>requestPrice</code> directly. When OpenOracle has
+					already settled but the coordinator is still pending because the
+					low-level callback did not complete, anyone can call
+					<code>recoverSettledPendingReport</code>. Recovery clears the pending
+					report, resets the settlement base-fee cap, and consumes the single
+					pending-operation slot without treating it as a successful price
+					update.
 				</p>
 			</section>
 
 			<section id="attack-model">
 				<h2>Attack Model and Defenses</h2>
 				<p>
-					The security question is not whether OpenOracle can discover market truth. It is
-					whether an attacker can profit by forcing Placeholder to use a bad REP/ETH price
-					long enough for a solvency-sensitive operation to execute. Honest reporters can
-					dispute bad reports, so the model compares the attacker's outside payoff with the
-					liquidity, delay, and censorship cost needed to keep an honest correction out.
+					The security question is not whether OpenOracle can discover market
+					truth. It is whether an attacker can profit by forcing Placeholder to
+					use a bad REP/ETH price long enough for a solvency-sensitive operation
+					to execute. Honest reporters can dispute bad reports, so the model
+					compares the attacker's outside payoff with the liquidity, delay, and
+					censorship cost needed to keep an honest correction out.
 				</p>
 				<p>
-					OpenOracle's inclusion analysis models an attacker who posts a wrong price and
-					pays for censorship until the report can settle. For linear notionals the settle
-					payoff scales with price error, but Placeholder's most relevant liquidation
-					notional is binary: the attacker wins a fixed payoff if the manipulated REP/ETH
-					price crosses the liquidation threshold. OpenOracle's inclusion analysis notes
-					that binary notionals therefore replace the linear settle payoff with
-					<code>externalPayoffNotional</code>, while keeping the same censorship-spend term.
+					OpenOracle's inclusion analysis models an attacker who posts a wrong
+					price and pays for censorship until the report can settle. For linear
+					notionals the settle payoff scales with price error, but Placeholder's
+					most relevant liquidation notional is binary: the attacker wins a
+					fixed payoff if the manipulated REP/ETH price crosses the liquidation
+					threshold. OpenOracle's inclusion analysis notes that binary notionals
+					therefore replace the linear settle payoff with
+					<code>externalPayoffNotional</code>, while keeping the same
+					censorship-spend term.
 				</p>
 				<p>
-					The minimal attack story is: an attacker posts a manipulated REP/ETH report, an
-					honest reporter would normally dispute it, and the attacker must keep that honest
-					dispute or settlement correction out until the bad report can settle. The payoff
-					is binary because the liquidation either becomes executable or it does not. The
-					cost side scales with <code>oracleReportLiquidity</code>, the report's
-					ETH-notional liquidity after converting the REP-side report amount at the honest
-					REP/ETH price; <code>censorshipRate</code>, the modeled per-step pressure needed
-					to keep honest activity out; and <code>censorshipDuration</code>, how long the
-					attacker must maintain that pressure.
+					The minimal attack story is: an attacker posts a manipulated REP/ETH
+					report, an honest reporter would normally dispute it, and the attacker
+					must keep that honest dispute or settlement correction out until the
+					bad report can settle. The payoff is binary because the liquidation
+					either becomes executable or it does not. The cost side scales with
+					<code>oracleReportLiquidity</code>, the report's ETH-notional
+					liquidity after converting the REP-side report amount at the honest
+					REP/ETH price; <code>censorshipRate</code>, the modeled per-step
+					pressure needed to keep honest activity out; and
+					<code>censorshipDuration</code>, how long the attacker must maintain
+					that pressure.
 				</p>
 				<p>
-					In the equations below, price errors are fractions of the honest price,
-					<code>externalPayoffNotional</code> is the attacker's outside ETH-denominated
-					payoff, and <code>oracleLiquidityRatio</code> compares report liquidity with that
-					payoff. The bound is useful when the denominator is large enough that delaying
-					honest correction costs more than the liquidation can pay.
+					In the equations below, price errors are fractions of the honest
+					price,
+					<code>externalPayoffNotional</code> is the attacker's outside
+					ETH-denominated payoff, and <code>oracleLiquidityRatio</code> compares
+					report liquidity with that payoff. The bound is useful when the
+					denominator is large enough that delaying honest correction costs more
+					than the liquidation can pay.
 				</p>
 				<p>
-					First ask how far the manipulated price must move before the liquidation can
-					execute. The distance guard discounts the honest price, then the execution
-					threshold and reported price error are measured against that honest baseline.
+					First ask how far the manipulated price must move before the
+					liquidation can execute. The distance guard discounts the honest
+					price, then the execution threshold and reported price error are
+					measured against that honest baseline.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-threshold">
-					<math display="block" aria-label="binary liquidation threshold and upward manipulated price error" data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / ORACLE_BUDGET_BPS; discountedHonestPrice = honestPrice \cdot (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice)">
+					<math
+						display="block"
+						aria-label="binary liquidation threshold and upward manipulated price error"
+						data-source="liquidationDistanceFraction = minLiquidationPriceDistanceBps / ORACLE_BUDGET_BPS; discountedHonestPrice = honestPrice \cdot (1 - liquidationDistanceFraction); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice)"
+					>
 						<mtable>
 							<mtr>
 								<mtd><mi>liquidationDistanceFraction</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mfrac><mi>minLiquidationPriceDistanceBps</mi><mi>ORACLE_BUDGET_BPS</mi></mfrac></mtd>
+								<mtd
+									><mfrac
+										><mi>minLiquidationPriceDistanceBps</mi
+										><mi>ORACLE_BUDGET_BPS</mi></mfrac
+									></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>discountedHonestPrice</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>honestPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd>
+								<mtd
+									><mi>honestPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mn>1</mn
+									><mo>-</mo><mi>liquidationDistanceFraction</mi><mo>)</mo></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>executionErrorThreshold</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mfrac><mi>liquidationThresholdPrice</mi><mi>discountedHonestPrice</mi></mfrac><mo>-</mo><mn>1</mn><mo>)</mo></mtd>
+								<mtd
+									><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo
+									><mfrac
+										><mi>liquidationThresholdPrice</mi
+										><mi>discountedHonestPrice</mi></mfrac
+									><mo>-</mo><mn>1</mn><mo>)</mo></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>manipulatedPriceError</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-									<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mfrac><mrow><mi>manipulatedPrice</mi><mo>-</mo><mi>honestPrice</mi></mrow><mi>honestPrice</mi></mfrac><mo>)</mo></mtd>
+								<mtd
+									><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo
+									><mfrac
+										><mrow
+											><mi>manipulatedPrice</mi><mo>-</mo
+											><mi>honestPrice</mi></mrow
+										><mi>honestPrice</mi></mfrac
+									><mo>)</mo></mtd
+								>
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Execution Error Threshold</span>The manipulated price only creates liquidation payoff when its fractional error crosses the guarded liquidation threshold.</p>
+					<p class="equation-caption">
+						<span class="equation-label">Execution Error Threshold</span>The
+						manipulated price only creates liquidation payoff when its
+						fractional error crosses the guarded liquidation threshold.
+					</p>
 				</div>
 				<p>
-						Next ask what the attacker earns and what delay costs. The payoff is binary:
-						only a price strictly beyond the liquidation threshold and far enough past the
-						guarded distance unlocks <code>externalPayoffNotional</code>; everything else
-						unlocks nothing. The censorship cost grows with duration, the
-						dispute barrier, and the report liquidity honest reporters can use.
-					</p>
-					<div class="equation" id="eq-openoracle-binary-payoff-cost">
-						<math display="block" aria-label="binary attacker payoff and censorship cost" data-source="liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; attackerProfit = { externalPayoffNotional, liquidationExecutable; 0, otherwise }; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity">
-							<mtable>
-								<mtr>
-									<mtd><mi>liquidationExecutable</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd><mi>manipulatedPrice</mi><mo>&gt;</mo><mi>liquidationThresholdPrice</mi><mo>&#x22C0;</mo><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi></mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>attackerProfit</mi></mtd>
-									<mtd><mo>=</mo></mtd>
+					Next ask what the attacker earns and what delay costs. The payoff is
+					binary: only a price strictly beyond the liquidation threshold and far
+					enough past the guarded distance unlocks
+					<code>externalPayoffNotional</code>; everything else unlocks nothing.
+					The censorship cost grows with duration, the dispute barrier, and the
+					report liquidity honest reporters can use.
+				</p>
+				<div class="equation" id="eq-openoracle-binary-payoff-cost">
+					<math
+						display="block"
+						aria-label="binary attacker payoff and censorship cost"
+						data-source="liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; attackerProfit = { externalPayoffNotional, liquidationExecutable; 0, otherwise }; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>liquidationExecutable</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>manipulatedPrice</mi><mo>&gt;</mo
+									><mi>liquidationThresholdPrice</mi><mo>&#x22C0;</mo
+									><mi>manipulatedPriceError</mi><mo>&ge;</mo
+									><mi>executionErrorThreshold</mi></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>attackerProfit</mi></mtd>
+								<mtd><mo>=</mo></mtd>
 								<mtd>
 									<mo>{</mo>
 									<mtable>
-											<mtr>
-												<mtd><mi>externalPayoffNotional</mi></mtd>
-												<mtd><mo>,</mo></mtd>
-												<mtd><mi>liquidationExecutable</mi></mtd>
-											</mtr>
-											<mtr>
-												<mtd><mn>0</mn></mtd>
-												<mtd><mo>,</mo></mtd>
-												<mtd><mtext>otherwise</mtext></mtd>
-											</mtr>
+										<mtr>
+											<mtd><mi>externalPayoffNotional</mi></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mi>liquidationExecutable</mi></mtd>
+										</mtr>
+										<mtr>
+											<mtd><mn>0</mn></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mtext>otherwise</mtext></mtd>
+										</mtr>
 									</mtable>
 								</mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>censorshipRate</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo></mtd>
+								<mtd
+									><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo
+									><mi>manipulatedPriceError</mi><mo>-</mo
+									><mi>honestDisputeBarrierFraction</mi><mo>)</mo></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>censorshipCost</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>censorshipDuration</mi><mo>&#x22C5;</mo><mi>censorshipRate</mi><mo>&#x22C5;</mo><mi>oracleReportLiquidity</mi></mtd>
+								<mtd
+									><mi>censorshipDuration</mi><mo>&#x22C5;</mo
+									><mi>censorshipRate</mi><mo>&#x22C5;</mo
+									><mi>oracleReportLiquidity</mi></mtd
+								>
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Binary Payoff and Censorship Cost</span>Here <code>externalPayoffNotional</code> is the attacker's outside ETH-denominated payoff, and <code>oracleReportLiquidity</code> is the report's ETH-notional liquidity after converting the REP-side report amount at the honest REP/ETH price.</p>
+					<p class="equation-caption">
+						<span class="equation-label">Binary Payoff and Censorship Cost</span
+						>Here <code>externalPayoffNotional</code> is the attacker's outside
+						ETH-denominated payoff, and <code>oracleReportLiquidity</code> is
+						the report's ETH-notional liquidity after converting the REP-side
+						report amount at the honest REP/ETH price.
+					</p>
 				</div>
 				<p>
-					Finally ask how long censorship would need to remain cheap for the attack to be
-					attractive. The safety duration shrinks as the censorship rate and liquidity ratio
-					grow.
+					Finally ask how long censorship would need to remain cheap for the
+					attack to be attractive. The safety duration shrinks as the censorship
+					rate and liquidity ratio grow.
 				</p>
-					<div class="equation" id="eq-openoracle-safe-censorship-duration">
-						<math display="block" aria-label="safe censorship duration equals target grief ratio plus one divided by censorship rate times oracle liquidity ratio" data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio)">
+				<div class="equation" id="eq-openoracle-safe-censorship-duration">
+					<math
+						display="block"
+						aria-label="safe censorship duration equals target grief ratio plus one divided by censorship rate times oracle liquidity ratio"
+						data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio)"
+					>
 						<mtable>
 							<mtr>
 								<mtd><mi>oracleLiquidityRatio</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mfrac><mi>oracleReportLiquidity</mi><mi>externalPayoffNotional</mi></mfrac></mtd>
+								<mtd
+									><mfrac
+										><mi>oracleReportLiquidity</mi
+										><mi>externalPayoffNotional</mi></mfrac
+									></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>safeCensorshipDuration</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mfrac><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>censorshipRate</mi><mo>&#x22C5;</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac></mtd>
+								<mtd
+									><mfrac
+										><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow
+										><mrow
+											><mi>censorshipRate</mi><mo>&#x22C5;</mo
+											><mi>oracleLiquidityRatio</mi></mrow
+										></mfrac
+									></mtd
+								>
 							</mtr>
 						</mtable>
-						</math>
-						<p class="equation-caption"><span class="equation-label">Safe Censorship Duration</span>The bound is strongest when report liquidity is large relative to the payoff and each additional unit of price error is costly to keep undisputed.</p>
-					</div>
-					<details class="interactive-example" id="binary-censorship-example">
-						<summary>Adjust a binary censorship example</summary>
-						<p>
-							Use the inputs to see how the liquidation distance, manipulated price, report
-							liquidity, and payoff notional change the attacker's payoff and delay cost.
-						</p>
-						<div class="example-grid">
-							<label>
-								Honest price
-								<input type="range" min="50" max="200" step="1" value="100" data-example-input="honestPrice">
-								<span class="example-value" data-example-value="honestPrice">100</span>
-							</label>
-							<label>
-								Manipulated price
-								<input type="range" min="50" max="250" step="1" value="113" data-example-input="manipulatedPrice">
-								<span class="example-value" data-example-value="manipulatedPrice">113</span>
-							</label>
-							<label>
-								Liquidation threshold
-								<input type="range" min="50" max="200" step="1" value="101" data-example-input="liquidationThresholdPrice">
-								<span class="example-value" data-example-value="liquidationThresholdPrice">101</span>
-							</label>
-								<label>
-									Liquidation distance bps
-									<input type="range" min="0" max="3000" step="100" value="1000" data-example-input="minLiquidationPriceDistanceBps">
-									<span class="example-value" data-example-value="minLiquidationPriceDistanceBps">1000 bps</span>
-								</label>
-							<label>
-								Payoff notional ETH
-								<input type="range" min="100" max="10000" step="100" value="1000" data-example-input="externalPayoffNotional">
-								<span class="example-value" data-example-value="externalPayoffNotional">1000 ETH</span>
-							</label>
-							<label>
-								Report liquidity ETH-notional
-								<input type="range" min="100" max="20000" step="100" value="4000" data-example-input="oracleReportLiquidity">
-								<span class="example-value" data-example-value="oracleReportLiquidity">4000 ETH</span>
-							</label>
-							<label>
-								Honest dispute barrier
-								<input type="range" min="0" max="0.1" step="0.005" value="0.01" data-example-input="honestDisputeBarrierFraction">
-								<span class="example-value" data-example-value="honestDisputeBarrierFraction">1.00%</span>
-							</label>
-							<label>
-									Censorship duration (steps)
-								<input type="range" min="0" max="168" step="1" value="24" data-example-input="censorshipDuration">
-								<span class="example-value" data-example-value="censorshipDuration">24 steps</span>
-							</label>
-							<label>
-								Target grief ratio
-								<input type="range" min="0" max="5" step="0.1" value="1" data-example-input="targetGriefRatio">
-								<span class="example-value" data-example-value="targetGriefRatio">1.0</span>
-							</label>
-							</div>
-							<div class="example-visual">
-								<svg viewBox="0 0 760 210" role="img" aria-label="Binary censorship threshold and cost comparison">
-									<rect class="example-bar-base" x="120" y="42" width="520" height="28" rx="6"></rect>
-									<rect class="example-bar-blue" x="120" y="42" width="120" height="28" rx="6" data-example-rect="executionErrorThreshold"></rect>
-									<rect class="example-bar-red" x="120" y="86" width="130" height="28" rx="6" data-example-rect="manipulatedPriceError"></rect>
-									<text class="svg-label" x="120" y="30">Price error needed vs. supplied</text>
-									<text class="svg-small" x="650" y="63" text-anchor="end" data-example-text="thresholdText">threshold 0%</text>
-									<text class="svg-small" x="650" y="107" text-anchor="end" data-example-text="errorText">error 0%</text>
-									<rect class="example-bar-base" x="120" y="150" width="520" height="24" rx="6"></rect>
-									<rect class="example-bar-gold" x="120" y="150" width="180" height="24" rx="6" data-example-rect="censorshipCost"></rect>
-									<line class="svg-line" x1="640" y1="136" x2="640" y2="188"></line>
-									<text class="svg-small" x="650" y="190" text-anchor="end" data-example-text="payoffText">payoff 0 ETH</text>
-								</svg>
-							</div>
-								<ul class="example-output" aria-live="polite">
-									<li>Execution error threshold: <output data-example-output="executionErrorThreshold">0%</output></li>
-									<li>Manipulated price error: <output data-example-output="manipulatedPriceError">0%</output></li>
-									<li>Liquidation executable: <output data-example-output="liquidationExecutable">no</output></li>
-								<li>Attacker payoff: <output data-example-output="attackerProfit">0 ETH</output></li>
-								<li>Censorship cost: <output data-example-output="censorshipCost">0 ETH</output></li>
-								<li>Oracle liquidity ratio: <output data-example-output="oracleLiquidityRatio">0</output></li>
-							<li>Safe censorship duration (steps): <output data-example-output="safeCensorshipDuration">0</output></li>
-						</ul>
-					</details>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Safe Censorship Duration</span>The
+						bound is strongest when report liquidity is large relative to the
+						payoff and each additional unit of price error is costly to keep
+						undisputed.
+					</p>
+				</div>
+				<details class="interactive-example" id="binary-censorship-example">
+					<summary>Adjust a binary censorship example</summary>
 					<p>
-						Placeholder defends this model by bounding
-					<code>externalPayoffNotional</code>, forcing liquidations to be meaningfully past
-					threshold, and rejecting bad settlement environments. The
+						Use the inputs to see how the liquidation distance, manipulated
+						price, report liquidity, and payoff notional change the attacker's
+						payoff and delay cost.
+					</p>
+					<div class="example-grid">
+						<label>
+							Honest price
+							<input
+								type="range"
+								min="50"
+								max="200"
+								step="1"
+								value="100"
+								data-example-input="honestPrice"
+							/>
+							<span class="example-value" data-example-value="honestPrice"
+								>100</span
+							>
+						</label>
+						<label>
+							Manipulated price
+							<input
+								type="range"
+								min="50"
+								max="250"
+								step="1"
+								value="113"
+								data-example-input="manipulatedPrice"
+							/>
+							<span class="example-value" data-example-value="manipulatedPrice"
+								>113</span
+							>
+						</label>
+						<label>
+							Liquidation threshold
+							<input
+								type="range"
+								min="50"
+								max="200"
+								step="1"
+								value="101"
+								data-example-input="liquidationThresholdPrice"
+							/>
+							<span
+								class="example-value"
+								data-example-value="liquidationThresholdPrice"
+								>101</span
+							>
+						</label>
+						<label>
+							Liquidation distance bps
+							<input
+								type="range"
+								min="0"
+								max="3000"
+								step="100"
+								value="1000"
+								data-example-input="minLiquidationPriceDistanceBps"
+							/>
+							<span
+								class="example-value"
+								data-example-value="minLiquidationPriceDistanceBps"
+								>1000 bps</span
+							>
+						</label>
+						<label>
+							Payoff notional ETH
+							<input
+								type="range"
+								min="100"
+								max="10000"
+								step="100"
+								value="1000"
+								data-example-input="externalPayoffNotional"
+							/>
+							<span
+								class="example-value"
+								data-example-value="externalPayoffNotional"
+								>1000 ETH</span
+							>
+						</label>
+						<label>
+							Report liquidity ETH-notional
+							<input
+								type="range"
+								min="100"
+								max="20000"
+								step="100"
+								value="4000"
+								data-example-input="oracleReportLiquidity"
+							/>
+							<span
+								class="example-value"
+								data-example-value="oracleReportLiquidity"
+								>4000 ETH</span
+							>
+						</label>
+						<label>
+							Honest dispute barrier
+							<input
+								type="range"
+								min="0"
+								max="0.1"
+								step="0.005"
+								value="0.01"
+								data-example-input="honestDisputeBarrierFraction"
+							/>
+							<span
+								class="example-value"
+								data-example-value="honestDisputeBarrierFraction"
+								>1.00%</span
+							>
+						</label>
+						<label>
+							Censorship duration (steps)
+							<input
+								type="range"
+								min="0"
+								max="168"
+								step="1"
+								value="24"
+								data-example-input="censorshipDuration"
+							/>
+							<span
+								class="example-value"
+								data-example-value="censorshipDuration"
+								>24 steps</span
+							>
+						</label>
+						<label>
+							Target grief ratio
+							<input
+								type="range"
+								min="0"
+								max="5"
+								step="0.1"
+								value="1"
+								data-example-input="targetGriefRatio"
+							/>
+							<span class="example-value" data-example-value="targetGriefRatio"
+								>1.0</span
+							>
+						</label>
+					</div>
+					<div class="example-visual">
+						<svg
+							viewBox="0 0 760 210"
+							role="img"
+							aria-label="Binary censorship threshold and cost comparison"
+						>
+							<rect
+								class="example-bar-base"
+								x="120"
+								y="42"
+								width="520"
+								height="28"
+								rx="6"
+							></rect>
+							<rect
+								class="example-bar-blue"
+								x="120"
+								y="42"
+								width="120"
+								height="28"
+								rx="6"
+								data-example-rect="executionErrorThreshold"
+							></rect>
+							<rect
+								class="example-bar-red"
+								x="120"
+								y="86"
+								width="130"
+								height="28"
+								rx="6"
+								data-example-rect="manipulatedPriceError"
+							></rect>
+							<text class="svg-label" x="120" y="30">
+								Price error needed vs. supplied
+							</text>
+							<text
+								class="svg-small"
+								x="650"
+								y="63"
+								text-anchor="end"
+								data-example-text="thresholdText"
+							>
+								threshold 0%
+							</text>
+							<text
+								class="svg-small"
+								x="650"
+								y="107"
+								text-anchor="end"
+								data-example-text="errorText"
+							>
+								error 0%
+							</text>
+							<rect
+								class="example-bar-base"
+								x="120"
+								y="150"
+								width="520"
+								height="24"
+								rx="6"
+							></rect>
+							<rect
+								class="example-bar-gold"
+								x="120"
+								y="150"
+								width="180"
+								height="24"
+								rx="6"
+								data-example-rect="censorshipCost"
+							></rect>
+							<line class="svg-line" x1="640" y1="136" x2="640" y2="188"></line>
+							<text
+								class="svg-small"
+								x="650"
+								y="190"
+								text-anchor="end"
+								data-example-text="payoffText"
+							>
+								payoff 0 ETH
+							</text>
+						</svg>
+					</div>
+					<ul class="example-output" aria-live="polite">
+						<li>
+							Execution error threshold:
+							<output data-example-output="executionErrorThreshold">0%</output>
+						</li>
+						<li>
+							Manipulated price error:
+							<output data-example-output="manipulatedPriceError">0%</output>
+						</li>
+						<li>
+							Liquidation executable:
+							<output data-example-output="liquidationExecutable">no</output>
+						</li>
+						<li>
+							Attacker payoff:
+							<output data-example-output="attackerProfit">0 ETH</output>
+						</li>
+						<li>
+							Censorship cost:
+							<output data-example-output="censorshipCost">0 ETH</output>
+						</li>
+						<li>
+							Oracle liquidity ratio:
+							<output data-example-output="oracleLiquidityRatio">0</output>
+						</li>
+						<li>
+							Safe censorship duration (steps):
+							<output data-example-output="safeCensorshipDuration">0</output>
+						</li>
+					</ul>
+				</details>
+				<p>
+					Placeholder defends this model by bounding
+					<code>externalPayoffNotional</code>, forcing liquidations to be
+					meaningfully past threshold, and rejecting bad settlement
+					environments. The
 					<span class="term" tabindex="0">price-round budget</span>
-					limits the total ETH-notional operation volume one settled report can authorize.
-					With the current <code>priceRoundBudgetMultiplierBps = 40000</code>, one price
-					round can authorize at most about <code>4x</code> the initial report's
+					limits the total ETH-notional operation volume one settled report can
+					authorize. With the current
+					<code>priceRoundBudgetMultiplierBps = 40000</code>, one price round
+					can authorize at most about <code>4x</code> the initial report's
 					ETH-notional size before another report is needed.
 				</p>
 				<div class="equation" id="eq-openoracle-placeholder-liquidity-ratio">
-					<math display="block" aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier" data-source="externalPayoffNotional <= oracleReportLiquidity \cdot priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps">
+					<math
+						display="block"
+						aria-label="placeholder minimum liquidity ratio from price-round budget is at least one divided by the price-round budget multiplier"
+						data-source="externalPayoffNotional <= oracleReportLiquidity \cdot priceRoundBudgetMultiplierBps / ORACLE_BUDGET_BPS; oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional >= ORACLE_BUDGET_BPS / priceRoundBudgetMultiplierBps"
+					>
 						<mtable>
 							<mtr>
 								<mtd><mi>externalPayoffNotional</mi></mtd>
 								<mtd><mo>&le;</mo></mtd>
-								<mtd><mfrac><mrow><mi>oracleReportLiquidity</mi><mo>&#x22C5;</mo><mi>priceRoundBudgetMultiplierBps</mi></mrow><mi>ORACLE_BUDGET_BPS</mi></mfrac></mtd>
+								<mtd
+									><mfrac
+										><mrow
+											><mi>oracleReportLiquidity</mi><mo>&#x22C5;</mo
+											><mi>priceRoundBudgetMultiplierBps</mi></mrow
+										><mi>ORACLE_BUDGET_BPS</mi></mfrac
+									></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>oracleLiquidityRatio</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mfrac><mi>oracleReportLiquidity</mi><mi>externalPayoffNotional</mi></mfrac><mo>&ge;</mo><mfrac><mi>ORACLE_BUDGET_BPS</mi><mi>priceRoundBudgetMultiplierBps</mi></mfrac></mtd>
+								<mtd
+									><mfrac
+										><mi>oracleReportLiquidity</mi
+										><mi>externalPayoffNotional</mi></mfrac
+									><mo>&ge;</mo
+									><mfrac
+										><mi>ORACLE_BUDGET_BPS</mi
+										><mi>priceRoundBudgetMultiplierBps</mi></mfrac
+									></mtd
+								>
 							</mtr>
 						</mtable>
-				</math>
-					<p class="equation-caption"><span class="equation-label">Budgeted Liquidity Ratio</span>The <span class="term" tabindex="0">ETH-notional</span> budget keeps parasitic or repeated operation volume from attaching unlimited payoff to a single OpenOracle report.</p>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Budgeted Liquidity Ratio</span>The
+						<span class="term" tabindex="0">ETH-notional</span> budget keeps
+						parasitic or repeated operation volume from attaching unlimited
+						payoff to a single OpenOracle report.
+					</p>
 				</div>
 				<details class="interactive-example" id="price-round-budget-example">
 					<summary>Adjust price-round budget consumption</summary>
 					<p>
-						One settled REP/ETH report can authorize only a bounded ETH-notional volume.
-						Withdrawals, liquidations, and allowance increases all spend the same round
-						budget, so repeated operations cannot attach unlimited payoff to one price.
-							This ordered sequence is specifically pending callback replay: an operation that
-							does not fit during replay fails and is removed. A new request that does not fit
-							the cached price round stages for a later report instead.
+						One settled REP/ETH report can authorize only a bounded ETH-notional
+						volume. Withdrawals, liquidations, and allowance increases all spend
+						the same round budget, so repeated operations cannot attach
+						unlimited payoff to one price. This ordered sequence is specifically
+						pending callback replay: an operation that does not fit during
+						replay fails and is removed. A new request that does not fit the
+						cached price round stages for a later report instead.
 					</p>
 					<div class="example-grid">
 						<label>
 							Report liquidity ETH-notional
-							<input type="range" min="100" max="20000" step="100" value="4000" data-example-input="reportLiquidity">
-							<span class="example-value" data-example-value="reportLiquidity">4000 ETH</span>
+							<input
+								type="range"
+								min="100"
+								max="20000"
+								step="100"
+								value="4000"
+								data-example-input="reportLiquidity"
+							/>
+							<span class="example-value" data-example-value="reportLiquidity"
+								>4000 ETH</span
+							>
 						</label>
 						<label>
 							Price-round multiplier
-							<input type="range" min="10000" max="80000" step="5000" value="40000" data-example-input="budgetMultiplierBps">
-							<span class="example-value" data-example-value="budgetMultiplierBps">4.0x</span>
+							<input
+								type="range"
+								min="10000"
+								max="80000"
+								step="5000"
+								value="40000"
+								data-example-input="budgetMultiplierBps"
+							/>
+							<span
+								class="example-value"
+								data-example-value="budgetMultiplierBps"
+								>4.0x</span
+							>
 						</label>
 						<label>
 							Withdrawal notional
-							<input type="range" min="0" max="20000" step="100" value="3000" data-example-input="withdrawalNotional">
-							<span class="example-value" data-example-value="withdrawalNotional">3000 ETH</span>
+							<input
+								type="range"
+								min="0"
+								max="20000"
+								step="100"
+								value="3000"
+								data-example-input="withdrawalNotional"
+							/>
+							<span
+								class="example-value"
+								data-example-value="withdrawalNotional"
+								>3000 ETH</span
+							>
 						</label>
 						<label>
 							Liquidation notional
-							<input type="range" min="0" max="20000" step="100" value="7000" data-example-input="liquidationNotional">
-							<span class="example-value" data-example-value="liquidationNotional">7000 ETH</span>
+							<input
+								type="range"
+								min="0"
+								max="20000"
+								step="100"
+								value="7000"
+								data-example-input="liquidationNotional"
+							/>
+							<span
+								class="example-value"
+								data-example-value="liquidationNotional"
+								>7000 ETH</span
+							>
 						</label>
 						<label>
 							Allowance increase notional
-							<input type="range" min="0" max="20000" step="100" value="5000" data-example-input="allowanceNotional">
-							<span class="example-value" data-example-value="allowanceNotional">5000 ETH</span>
+							<input
+								type="range"
+								min="0"
+								max="20000"
+								step="100"
+								value="5000"
+								data-example-input="allowanceNotional"
+							/>
+							<span class="example-value" data-example-value="allowanceNotional"
+								>5000 ETH</span
+							>
 						</label>
-						</div>
-						<div class="example-visual">
-							<svg viewBox="0 0 760 180" role="img" aria-label="Price-round budget consumed and remaining">
-								<rect class="example-bar-base" x="110" y="54" width="540" height="34" rx="6"></rect>
-								<rect class="example-bar-green" x="110" y="54" width="101" height="34" rx="6" data-example-rect="withdrawalBudget"></rect>
-								<rect class="example-bar-blue" x="211" y="54" width="236" height="34" rx="0" data-example-rect="liquidationBudget"></rect>
-								<rect class="example-bar-gold" x="447" y="54" width="169" height="34" rx="0" data-example-rect="allowanceBudget"></rect>
-								<line class="svg-line" x1="650" y1="36" x2="650" y2="108"></line>
-								<text class="svg-label" x="110" y="36">Sequential round-budget consumption</text>
-								<text class="svg-small" x="650" y="126" text-anchor="end" data-example-text="budgetCapText">budget 16000 ETH</text>
-								<text class="svg-small" x="110" y="150" data-example-text="budgetStatusText">1000 ETH remains</text>
-							</svg>
-						</div>
-						<ul class="example-output" aria-live="polite">
-							<li>Round budget: <output data-example-output="roundBudget">16000 ETH</output></li>
-							<li>Withdrawal: <output data-example-output="withdrawalResult">executes; 13000 ETH remains</output></li>
-						<li>Liquidation: <output data-example-output="liquidationResult">executes; 6000 ETH remains</output></li>
-						<li>Allowance increase: <output data-example-output="allowanceResult">executes; 1000 ETH remains</output></li>
-						<li>Consumed by successful operations: <output data-example-output="consumedNotional">15000 ETH</output></li>
+					</div>
+					<div class="example-visual">
+						<svg
+							viewBox="0 0 760 180"
+							role="img"
+							aria-label="Price-round budget consumed and remaining"
+						>
+							<rect
+								class="example-bar-base"
+								x="110"
+								y="54"
+								width="540"
+								height="34"
+								rx="6"
+							></rect>
+							<rect
+								class="example-bar-green"
+								x="110"
+								y="54"
+								width="101"
+								height="34"
+								rx="6"
+								data-example-rect="withdrawalBudget"
+							></rect>
+							<rect
+								class="example-bar-blue"
+								x="211"
+								y="54"
+								width="236"
+								height="34"
+								rx="0"
+								data-example-rect="liquidationBudget"
+							></rect>
+							<rect
+								class="example-bar-gold"
+								x="447"
+								y="54"
+								width="169"
+								height="34"
+								rx="0"
+								data-example-rect="allowanceBudget"
+							></rect>
+							<line class="svg-line" x1="650" y1="36" x2="650" y2="108"></line>
+							<text class="svg-label" x="110" y="36">
+								Sequential round-budget consumption
+							</text>
+							<text
+								class="svg-small"
+								x="650"
+								y="126"
+								text-anchor="end"
+								data-example-text="budgetCapText"
+							>
+								budget 16000 ETH
+							</text>
+							<text
+								class="svg-small"
+								x="110"
+								y="150"
+								data-example-text="budgetStatusText"
+							>
+								1000 ETH remains
+							</text>
+						</svg>
+					</div>
+					<ul class="example-output" aria-live="polite">
+						<li>
+							Round budget:
+							<output data-example-output="roundBudget">16000 ETH</output>
+						</li>
+						<li>
+							Withdrawal:
+							<output data-example-output="withdrawalResult"
+								>executes; 13000 ETH remains</output
+							>
+						</li>
+						<li>
+							Liquidation:
+							<output data-example-output="liquidationResult"
+								>executes; 6000 ETH remains</output
+							>
+						</li>
+						<li>
+							Allowance increase:
+							<output data-example-output="allowanceResult"
+								>executes; 1000 ETH remains</output
+							>
+						</li>
+						<li>
+							Consumed by successful operations:
+							<output data-example-output="consumedNotional">15000 ETH</output>
+						</li>
 					</ul>
 				</details>
 				<ul>
-					<li><strong>Censorship and delay:</strong> <code>settlementTime</code> gives reporters time to dispute, while the price-round budget keeps <code>oracleLiquidityRatio</code> from collapsing as more operations use the same price.</li>
-					<li><strong>Binary threshold attacks:</strong> staged liquidations must satisfy <code>minLiquidationPriceDistanceBps = 1000</code>, so <math aria-label="current price minus threshold price divided by current price" data-source="(currentPrice - thresholdPrice) / currentPrice"><mfrac><mrow><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi></mrow><mi>currentPrice</mi></mfrac></math> must be at least <code>10%</code> rather than barely crossing the threshold.</li>
-					<li><strong>Block stuffing:</strong> the coordinator records a request-time max settlement base fee and rejects the callback if settlement base fee exceeds <code>maxSettlementBaseFeeMultiplierBps = 30000</code>, currently <code>3x</code>.</li>
-					<li><strong>Parasitic notional:</strong> each successful operation consumes price-round budget, and only up to four operations are auto-executed from one settlement callback.</li>
-					<li><strong>Freshness:</strong> prices expire after <code>PRICE_VALID_FOR_SECONDS = 5 minutes</code>, so delayed operations cannot reuse old reports indefinitely.</li>
+					<li>
+						<strong>Censorship and delay:</strong>
+						<code>settlementTime</code> gives reporters time to dispute, while
+						the price-round budget keeps <code>oracleLiquidityRatio</code> from
+						collapsing as more operations use the same price.
+					</li>
+					<li>
+						<strong>Binary threshold attacks:</strong> staged liquidations must
+						satisfy <code>minLiquidationPriceDistanceBps = 1000</code>, so
+						<math
+							aria-label="current price minus threshold price divided by current price"
+							data-source="(currentPrice - thresholdPrice) / currentPrice"
+							><mfrac
+								><mrow
+									><mi>currentPrice</mi><mo>-</mo><mi>thresholdPrice</mi></mrow
+								><mi>currentPrice</mi></mfrac
+							></math
+						>
+						must be at least <code>10%</code> rather than barely crossing the
+						threshold.
+					</li>
+					<li>
+						<strong>Block stuffing:</strong> the coordinator records a
+						request-time max settlement base fee and rejects the callback if
+						settlement base fee exceeds
+						<code>maxSettlementBaseFeeMultiplierBps = 30000</code>, currently
+						<code>3x</code>.
+					</li>
+					<li>
+						<strong>Parasitic notional:</strong> each successful operation
+						consumes price-round budget, and only up to four operations are
+						auto-executed from one settlement callback.
+					</li>
+					<li>
+						<strong>Freshness:</strong> prices expire after
+						<code>PRICE_VALID_FOR_SECONDS = 5 minutes</code>, so delayed
+						operations cannot reuse old reports indefinitely.
+					</li>
 				</ul>
 				<p>
-					The <a href="https://docs.openoracle.org/openoracle/attack-vectors-inclusion#dynamic-programming-analysis">dynamic-programming
-					section</a> of OpenOracle's inclusion analysis is a template for the inclusion
-					tradeoff, not a drop-in Placeholder proof. For a simplified binary censorship
-						bound, replace the linear price-error payoff with a thresholded payoff that only
-						pays after the manipulated report is strictly beyond the liquidation threshold
-						and far enough past the guarded distance. A full binary-delay model also needs
-						state for distance to threshold, price evolution,
-						and continuation value. Locally, OpenOracle escalation is also capped: once
-					<code>escalationHalt</code> is reached, disputes can continue, but the required
-					token1 amount advances by <code>1</code> atomic token1 unit instead of multiplying
-					by <code>reportEscalationMultiplier</code>.
+					The
+					<a
+						href="https://docs.openoracle.org/openoracle/attack-vectors-inclusion#dynamic-programming-analysis"
+						>dynamic-programming section</a
+					>
+					of OpenOracle's inclusion analysis is a template for the inclusion
+					tradeoff, not a drop-in Placeholder proof. For a simplified binary
+					censorship bound, replace the linear price-error payoff with a
+					thresholded payoff that only pays after the manipulated report is
+					strictly beyond the liquidation threshold and far enough past the
+					guarded distance. A full binary-delay model also needs state for
+					distance to threshold, price evolution, and continuation value.
+					Locally, OpenOracle escalation is also capped: once
+					<code>escalationHalt</code> is reached, disputes can continue, but the
+					required token1 amount advances by <code>1</code> atomic token1 unit
+					instead of multiplying by <code>reportEscalationMultiplier</code>.
 				</p>
-					<div class="equation" id="eq-openoracle-binary-dp-terminal">
-						<math display="block" aria-label="binary dynamic programming terminal payoff equals external payoff notional when liquidation executable is true and zero otherwise, per block bribe equals max zero manipulated price error minus honest dispute barrier fraction times report size divided by REP per ETH price, and report size is capped by escalation halt before advancing by one atomic token one unit" data-source="liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; binarySettlePayoff(manipulatedPriceError) = { externalPayoffNotional, liquidationExecutable; 0, otherwise }; censorshipBribeAtStep(manipulatedPriceError) = max(0, manipulatedPriceError - honestDisputeBarrierFraction) \cdot reportSizeAtStep / repPerEthPrice; nextReportSize = min(escalationHalt, reportEscalationMultiplier \cdot reportSizeAtStep) before halt; nextReportSize = reportSizeAtStep + 1 atomic token1 unit after halt">
-							<mtable>
-								<mtr>
-									<mtd><mi>liquidationExecutable</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd><mi>manipulatedPrice</mi><mo>&gt;</mo><mi>liquidationThresholdPrice</mi><mo>&#x22C0;</mo><mi>manipulatedPriceError</mi><mo>&ge;</mo><mi>executionErrorThreshold</mi></mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>binarySettlePayoff</mi><mo>(</mo><mi>manipulatedPriceError</mi><mo>)</mo></mtd>
-									<mtd><mo>=</mo></mtd>
+				<div class="equation" id="eq-openoracle-binary-dp-terminal">
+					<math
+						display="block"
+						aria-label="binary dynamic programming terminal payoff equals external payoff notional when liquidation executable is true and zero otherwise, per block bribe equals max zero manipulated price error minus honest dispute barrier fraction times report size divided by REP per ETH price, and report size is capped by escalation halt before advancing by one atomic token one unit"
+						data-source="liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; binarySettlePayoff(manipulatedPriceError) = { externalPayoffNotional, liquidationExecutable; 0, otherwise }; censorshipBribeAtStep(manipulatedPriceError) = max(0, manipulatedPriceError - honestDisputeBarrierFraction) \cdot reportSizeAtStep / repPerEthPrice; nextReportSize = min(escalationHalt, reportEscalationMultiplier \cdot reportSizeAtStep) before halt; nextReportSize = reportSizeAtStep + 1 atomic token1 unit after halt"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>liquidationExecutable</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>manipulatedPrice</mi><mo>&gt;</mo
+									><mi>liquidationThresholdPrice</mi><mo>&#x22C0;</mo
+									><mi>manipulatedPriceError</mi><mo>&ge;</mo
+									><mi>executionErrorThreshold</mi></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd
+									><mi>binarySettlePayoff</mi><mo>(</mo
+									><mi>manipulatedPriceError</mi><mo>)</mo></mtd
+								>
+								<mtd><mo>=</mo></mtd>
 								<mtd>
 									<mo>{</mo>
 									<mtable>
-											<mtr>
-												<mtd><mi>externalPayoffNotional</mi></mtd>
-												<mtd><mo>,</mo></mtd>
-												<mtd><mi>liquidationExecutable</mi></mtd>
-											</mtr>
-											<mtr>
-												<mtd><mn>0</mn></mtd>
-												<mtd><mo>,</mo></mtd>
-													<mtd><mtext>otherwise</mtext></mtd>
-											</mtr>
+										<mtr>
+											<mtd><mi>externalPayoffNotional</mi></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mi>liquidationExecutable</mi></mtd>
+										</mtr>
+										<mtr>
+											<mtd><mn>0</mn></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mtext>otherwise</mtext></mtd>
+										</mtr>
 									</mtable>
 								</mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>censorshipBribeAtStep</mi><mo>(</mo><mi>manipulatedPriceError</mi><mo>)</mo></mtd>
+								<mtd
+									><mi>censorshipBribeAtStep</mi><mo>(</mo
+									><mi>manipulatedPriceError</mi><mo>)</mo></mtd
+								>
 								<mtd><mo>=</mo></mtd>
-									<mtd><mfrac><mrow><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo><mo>&#x22C5;</mo><mi>reportSizeAtStep</mi></mrow><mi>repPerEthPrice</mi></mfrac></mtd>
+								<mtd
+									><mfrac
+										><mrow
+											><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo
+											><mi>manipulatedPriceError</mi><mo>-</mo
+											><mi>honestDisputeBarrierFraction</mi><mo>)</mo
+											><mo>&#x22C5;</mo><mi>reportSizeAtStep</mi></mrow
+										><mi>repPerEthPrice</mi></mfrac
+									></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>nextReportSize</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo><mi>reportEscalationMultiplier</mi><mo>&#x22C5;</mo><mi>reportSizeAtStep</mi><mo>)</mo><mtext> before halt</mtext></mtd>
+								<mtd
+									><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo
+									><mi>reportEscalationMultiplier</mi><mo>&#x22C5;</mo
+									><mi>reportSizeAtStep</mi><mo>)</mo
+									><mtext> before halt</mtext></mtd
+								>
 							</mtr>
 							<mtr>
 								<mtd><mi>nextReportSize</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>reportSizeAtStep</mi><mo>+</mo><mn>1</mn><mtext> atomic token1 unit after halt</mtext></mtd>
+								<mtd
+									><mi>reportSizeAtStep</mi><mo>+</mo><mn>1</mn
+									><mtext> atomic token1 unit after halt</mtext></mtd
+								>
 							</mtr>
 						</mtable>
-						</math>
-						<p class="equation-caption"><span class="equation-label">Binary Dynamic Programming Terminal</span>The simplified terminal payoff pays only after the reported error crosses the threshold distance. The censorship bribe still scales with report size, but local report-size growth is capped by <code>escalationHalt</code> before continuing by one atomic unit per step.</p>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label"
+							>Binary Dynamic Programming Terminal</span
+						>The simplified terminal payoff pays only after the reported error
+						crosses the threshold distance. The censorship bribe still scales
+						with report size, but local report-size growth is capped by
+						<code>escalationHalt</code> before continuing by one atomic unit per
+						step.
+					</p>
+				</div>
+				<details class="interactive-example" id="report-escalation-example">
+					<summary>
+						Adjust report escalation and censorship bribe growth
+					</summary>
+					<p>
+						OpenOracle disputes multiply the required report size until the halt
+						is reached. After that, the next required amount advances by
+						<code>+1</code> atomic token1 unit, which is
+						<code>0.000000000000000001 REP</code> for REP. The REP-scale visual
+						therefore remains effectively pinned at the halt while the exact
+						amount and per-step bribe continue to advance by one wei of REP. The
+						bribe output converts REP-side report size to ETH notional through
+						the selected REP/ETH price.
+					</p>
+					<div class="example-grid">
+						<label>
+							Initial report size
+							<input
+								type="range"
+								min="10"
+								max="1000"
+								step="10"
+								value="250"
+								data-example-input="initialReportSize"
+							/>
+							<span class="example-value" data-example-value="initialReportSize"
+								>250 REP</span
+							>
+						</label>
+						<label>
+							Escalation multiplier
+							<input
+								type="range"
+								min="1"
+								max="5"
+								step="0.05"
+								value="1.15"
+								data-example-input="reportMultiplier"
+							/>
+							<span class="example-value" data-example-value="reportMultiplier"
+								>1.15x</span
+							>
+						</label>
+						<label>
+							Escalation halt
+							<input
+								type="range"
+								min="250"
+								max="10000"
+								step="250"
+								value="2500"
+								data-example-input="escalationHalt"
+							/>
+							<span class="example-value" data-example-value="escalationHalt"
+								>2500 REP</span
+							>
+						</label>
+						<label>
+							Steps
+							<input
+								type="range"
+								min="1"
+								max="24"
+								step="1"
+								value="20"
+								data-example-input="reportSteps"
+							/>
+							<span class="example-value" data-example-value="reportSteps"
+								>20 steps</span
+							>
+						</label>
+						<label>
+							Manipulated price error
+							<input
+								type="range"
+								min="0"
+								max="0.5"
+								step="0.01"
+								value="0.12"
+								data-example-input="reportError"
+							/>
+							<span class="example-value" data-example-value="reportError"
+								>12.00%</span
+							>
+						</label>
+						<label>
+							Honest dispute barrier
+							<input
+								type="range"
+								min="0"
+								max="0.2"
+								step="0.005"
+								value="0.02"
+								data-example-input="reportBarrier"
+							/>
+							<span class="example-value" data-example-value="reportBarrier"
+								>2.00%</span
+							>
+						</label>
+						<label>
+							REP per ETH price
+							<input
+								type="range"
+								min="10"
+								max="500"
+								step="10"
+								value="100"
+								data-example-input="repPerEthPrice"
+							/>
+							<span class="example-value" data-example-value="repPerEthPrice"
+								>100 REP/ETH</span
+							>
+						</label>
 					</div>
-					<details class="interactive-example" id="report-escalation-example">
-						<summary>Adjust report escalation and censorship bribe growth</summary>
-						<p>
-							OpenOracle disputes multiply the required report size until the halt is reached.
-							After that, the next required amount advances by <code>+1</code> atomic token1
-							unit, which is <code>0.000000000000000001 REP</code> for REP. The REP-scale
-							visual therefore remains effectively pinned at the halt while the exact amount
-							and per-step bribe continue to advance by one wei of REP. The bribe output
-							converts REP-side report size to ETH notional through the selected REP/ETH price.
-						</p>
-						<div class="example-grid">
-							<label>
-								Initial report size
-								<input type="range" min="10" max="1000" step="10" value="250" data-example-input="initialReportSize">
-								<span class="example-value" data-example-value="initialReportSize">250 REP</span>
-							</label>
-							<label>
-								Escalation multiplier
-								<input type="range" min="1" max="5" step="0.05" value="1.15" data-example-input="reportMultiplier">
-								<span class="example-value" data-example-value="reportMultiplier">1.15x</span>
-							</label>
-							<label>
-								Escalation halt
-								<input type="range" min="250" max="10000" step="250" value="2500" data-example-input="escalationHalt">
-								<span class="example-value" data-example-value="escalationHalt">2500 REP</span>
-							</label>
-							<label>
-								Steps
-								<input type="range" min="1" max="24" step="1" value="20" data-example-input="reportSteps">
-								<span class="example-value" data-example-value="reportSteps">20 steps</span>
-							</label>
-							<label>
-								Manipulated price error
-								<input type="range" min="0" max="0.5" step="0.01" value="0.12" data-example-input="reportError">
-								<span class="example-value" data-example-value="reportError">12.00%</span>
-							</label>
-								<label>
-									Honest dispute barrier
-									<input type="range" min="0" max="0.2" step="0.005" value="0.02" data-example-input="reportBarrier">
-									<span class="example-value" data-example-value="reportBarrier">2.00%</span>
-								</label>
-								<label>
-									REP per ETH price
-									<input type="range" min="10" max="500" step="10" value="100" data-example-input="repPerEthPrice">
-									<span class="example-value" data-example-value="repPerEthPrice">100 REP/ETH</span>
-								</label>
-							</div>
-						<div class="example-visual">
-							<svg viewBox="0 0 760 230" role="img" aria-label="Report escalation sizes and bribe cost">
-								<text class="svg-label" x="80" y="32">Report size by step</text>
-								<rect class="example-bar-base" x="90" y="52" width="560" height="28" rx="6"></rect>
-								<rect class="example-bar-blue" x="90" y="52" width="56" height="28" rx="6" data-example-rect="reportStepOne"></rect>
-								<rect class="example-bar-green" x="90" y="92" width="112" height="28" rx="6" data-example-rect="reportStepTwo"></rect>
-								<rect class="example-bar-gold" x="90" y="132" width="224" height="28" rx="6" data-example-rect="reportStepLast"></rect>
-								<line class="svg-line" x1="650" y1="44" x2="650" y2="170"></line>
-								<text class="svg-small" x="650" y="190" text-anchor="end" data-example-text="haltMarker">halt 2500 REP</text>
-									<text class="svg-small" x="90" y="214" data-example-text="bribeText">latest bribe 2.50 ETH-notional</text>
-							</svg>
+					<div class="example-visual">
+						<svg
+							viewBox="0 0 760 230"
+							role="img"
+							aria-label="Report escalation sizes and bribe cost"
+						>
+							<text class="svg-label" x="80" y="32">Report size by step</text>
+							<rect
+								class="example-bar-base"
+								x="90"
+								y="52"
+								width="560"
+								height="28"
+								rx="6"
+							></rect>
+							<rect
+								class="example-bar-blue"
+								x="90"
+								y="52"
+								width="56"
+								height="28"
+								rx="6"
+								data-example-rect="reportStepOne"
+							></rect>
+							<rect
+								class="example-bar-green"
+								x="90"
+								y="92"
+								width="112"
+								height="28"
+								rx="6"
+								data-example-rect="reportStepTwo"
+							></rect>
+							<rect
+								class="example-bar-gold"
+								x="90"
+								y="132"
+								width="224"
+								height="28"
+								rx="6"
+								data-example-rect="reportStepLast"
+							></rect>
+							<line class="svg-line" x1="650" y1="44" x2="650" y2="170"></line>
+							<text
+								class="svg-small"
+								x="650"
+								y="190"
+								text-anchor="end"
+								data-example-text="haltMarker"
+							>
+								halt 2500 REP
+							</text>
+							<text
+								class="svg-small"
+								x="90"
+								y="214"
+								data-example-text="bribeText"
+							>
+								latest bribe 2.50 ETH-notional
+							</text>
+						</svg>
+					</div>
+					<div class="example-output-grid">
+						<div>
+							<span>Final report size</span
+							><output data-example-output="finalReportSize"
+								>2500.000000000000000002 REP</output
+							>
 						</div>
-						<div class="example-output-grid">
-							<div><span>Final report size</span><output data-example-output="finalReportSize">2500.000000000000000002 REP</output></div>
-							<div><span>Growth mode</span><output data-example-output="growthMode">halt reached; +1 wei of REP per step</output></div>
-							<div><span>Latest per-step bribe</span><output data-example-output="latestBribe">2.50 ETH-notional</output></div>
-							<div><span>Cumulative bribe proxy</span><output data-example-output="cumulativeBribe">23.77 ETH-notional</output></div>
+						<div>
+							<span>Growth mode</span
+							><output data-example-output="growthMode"
+								>halt reached; +1 wei of REP per step</output
+							>
 						</div>
-					</details>
-				</section>
+						<div>
+							<span>Latest per-step bribe</span
+							><output data-example-output="latestBribe"
+								>2.50 ETH-notional</output
+							>
+						</div>
+						<div>
+							<span>Cumulative bribe proxy</span
+							><output data-example-output="cumulativeBribe"
+								>23.77 ETH-notional</output
+							>
+						</div>
+					</div>
+				</details>
+			</section>
 
 			<section id="parameters">
 				<h2>OpenOracle Parameters Used</h2>
 				<p>
-					This table summarizes the OpenOracle fields most relevant to the integration.
-					The canonical exhaustive current-value table remains the Placeholder
-					whitepaper's <a href="./whitepaper_placeholder.html#parameters">Current
-					Parameters</a> section.
+					This table summarizes the OpenOracle fields most relevant to the
+					integration. The canonical exhaustive current-value table remains the
+					Placeholder whitepaper's
+					<a href="./whitepaper_placeholder.html#parameters"
+						>Current Parameters</a
+					>
+					section.
 				</p>
 				<table>
 					<thead>
@@ -823,312 +1748,577 @@
 						<tr>
 							<td><code>token1Address</code> / <code>token2Address</code></td>
 							<td>REP / WETH</td>
-							<td>Defines the REP/ETH price pair used for security-pool solvency checks.</td>
+							<td>
+								Defines the REP/ETH price pair used for security-pool solvency
+								checks.
+							</td>
 						</tr>
 						<tr>
 							<td><code>exactToken1Report</code></td>
-								<td>250 REP (<math aria-label="250 times 10 to the 18 atomic REP units" data-source="250 \cdot pow10(18) atomic REP units"><mn>250</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td>
-							<td>Sets the initial report size and feeds the price-round budget.</td>
+							<td>
+								250 REP (<math
+									aria-label="250 times 10 to the 18 atomic REP units"
+									data-source="250 \cdot pow10(18) atomic REP units"
+									><mn>250</mn><mo>&#x22C5;</mo
+									><msup><mn>10</mn><mn>18</mn></msup></math
+								>
+								atomic REP units)
+							</td>
+							<td>
+								Sets the initial report size and feeds the price-round budget.
+							</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
-								<td>2,500 REP (<math aria-label="2500 times 10 to the 18 atomic REP units" data-source="2500 \cdot pow10(18) atomic REP units"><mn>2500</mn><mo>&#x22C5;</mo><msup><mn>10</mn><mn>18</mn></msup></math> atomic REP units)</td>
-							<td>Stops multiplicative report-size escalation at <code>10x</code>; later disputes add one atomic REP unit at a time.</td>
+							<td>
+								2,500 REP (<math
+									aria-label="2500 times 10 to the 18 atomic REP units"
+									data-source="2500 \cdot pow10(18) atomic REP units"
+									><mn>2500</mn><mo>&#x22C5;</mo
+									><msup><mn>10</mn><mn>18</mn></msup></math
+								>
+								atomic REP units)
+							</td>
+							<td>
+								Stops multiplicative report-size escalation at <code>10x</code>;
+								later disputes add one atomic REP unit at a time.
+							</td>
 						</tr>
 						<tr>
 							<td><code>settlerReward</code></td>
-							<td><math aria-label="block base fee times 2 times gas consumed open oracle report price" data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn><mo>&#x22C5;</mo><mi>gasConsumedOpenOracleReportPrice</mi></math></td>
-							<td>Pays the account that settles the report and triggers the callback.</td>
+							<td>
+								<math
+									aria-label="block base fee times 2 times gas consumed open oracle report price"
+									data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"
+									><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn
+									><mo>&#x22C5;</mo
+									><mi>gasConsumedOpenOracleReportPrice</mi></math
+								>
+							</td>
+							<td>
+								Pays the account that settles the report and triggers the
+								callback.
+							</td>
 						</tr>
-							<tr>
-								<td><code>settlementTime</code></td>
-								<td><code>480</code></td>
-								<td>Sets the report settlement delay. Staged operations expire after this delay plus their operation-specific validity window.</td>
-							</tr>
-							<tr>
-								<td><code>disputeDelay</code></td>
-								<td><code>0</code></td>
-								<td>Allows disputes immediately after each report; the dispute opportunity still lasts until the settlement delay elapses.</td>
-							</tr>
+						<tr>
+							<td><code>settlementTime</code></td>
+							<td><code>480</code></td>
+							<td>
+								Sets the report settlement delay. Staged operations expire after
+								this delay plus their operation-specific validity window.
+							</td>
+						</tr>
+						<tr>
+							<td><code>disputeDelay</code></td>
+							<td><code>0</code></td>
+							<td>
+								Allows disputes immediately after each report; the dispute
+								opportunity still lasts until the settlement delay elapses.
+							</td>
+						</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
-							<td><math aria-label="gas consumed settlement times 4" data-source="gasConsumedSettlement \cdot 4"><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo><mn>4</mn></math></td>
-							<td>Sets the callback gas limit for up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> staged operations; settlement still needs enough surrounding gas to satisfy OpenOracle's callback headroom check.</td>
+							<td>
+								<math
+									aria-label="gas consumed settlement times 4"
+									data-source="gasConsumedSettlement \cdot 4"
+									><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo
+									><mn>4</mn></math
+								>
+							</td>
+							<td>
+								Sets the callback gas limit for up to
+								<code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> staged
+								operations; settlement still needs enough surrounding gas to
+								satisfy OpenOracle's callback headroom check.
+							</td>
 						</tr>
 						<tr>
 							<td><code>feePercentage</code> / <code>protocolFee</code></td>
 							<td><code>10000</code> / <code>100000</code></td>
-							<td>Configures OpenOracle reporter and protocol fee accounting, and creates the fee boundary behind the <code>honestDisputeBarrierFraction</code> dispute barrier in the attack model.</td>
+							<td>
+								Configures OpenOracle reporter and protocol fee accounting, and
+								creates the fee boundary behind the
+								<code>honestDisputeBarrierFraction</code> dispute barrier in the
+								attack model.
+							</td>
 						</tr>
 						<tr>
 							<td><code>protocolFeeRecipient</code></td>
 							<td><code>0x000000000000000000000000000000000000dEaD</code></td>
-							<td>Receives OpenOracle protocol fees for the coordinator-created report instance.</td>
+							<td>
+								Receives OpenOracle protocol fees for the coordinator-created
+								report instance.
+							</td>
 						</tr>
 						<tr>
 							<td><code>multiplier</code></td>
 							<td><code>115</code></td>
-							<td>Requires each dispute report to increase the REP side to <code>1.15x</code> the prior report until halt.</td>
+							<td>
+								Requires each dispute report to increase the REP side to
+								<code>1.15x</code> the prior report until halt.
+							</td>
 						</tr>
 						<tr>
 							<td><code>timeType</code> / <code>trackDisputes</code></td>
 							<td><code>true</code> / <code>true</code></td>
-							<td>Uses timestamps and keeps dispute history visible for report inspection.</td>
+							<td>
+								Uses timestamps and keeps dispute history visible for report
+								inspection.
+							</td>
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>
 							<td><code>SecurityPoolOracleCoordinator</code></td>
-							<td>Routes settled amounts back into Placeholder's price cache and staged-operation executor.</td>
+							<td>
+								Routes settled amounts back into Placeholder's price cache and
+								staged-operation executor.
+							</td>
 						</tr>
 					</tbody>
 				</table>
 			</section>
 		</main>
-			<script>
-				const collectExample = (exampleId) => {
-					const root = document.querySelector(exampleId)
-					if (!root) {
-						return undefined
-					}
-					const collect = (selector, key) =>
-						Object.fromEntries(Array.from(root.querySelectorAll(selector)).map(element => [element.dataset[key], element]))
-					const inputs = collect('[data-example-input]', 'exampleInput')
-					const outputs = collect('[data-example-output]', 'exampleOutput')
-					const values = collect('[data-example-value]', 'exampleValue')
-					const rects = collect('[data-example-rect]', 'exampleRect')
-					const texts = collect('[data-example-text]', 'exampleText')
-					const read = (inputName) => {
-						const inputElement = inputs[inputName]
-						if (!inputElement) {
-							return 0
-						}
-						const inputValue = Number(inputElement.value)
-						return Number.isFinite(inputValue) ? inputValue : 0
-					}
-					const writeOutput = (outputName, value) => {
-						const outputElement = outputs[outputName]
-						if (outputElement) {
-							outputElement.value = value
-						}
-					}
-					const writeValue = (valueName, value) => {
-						const valueElement = values[valueName]
-						if (valueElement) {
-							valueElement.textContent = value
-						}
-					}
-					const writeText = (textName, value) => {
-						const textElement = texts[textName]
-						if (textElement) {
-							textElement.textContent = value
-						}
-					}
-					const setRect = (rectName, attributes) => {
-						const rectElement = rects[rectName]
-						if (!rectElement) {
-							return
-						}
-						for (const [attributeName, attributeValue] of Object.entries(attributes)) {
-							rectElement.setAttribute(attributeName, String(attributeValue))
-						}
-					}
-					const setRectWidth = (rectName, width) => setRect(rectName, { width: Math.max(0, width) })
-					const setRectX = (rectName, x) => setRect(rectName, { x })
-					return { inputs, read, setRect, setRectWidth, setRectX, writeOutput, writeText, writeValue }
+		<script>
+			const collectExample = (exampleId) => {
+				const root = document.querySelector(exampleId);
+				if (!root) {
+					return undefined;
 				}
-				const bindExample = (exampleId, update) => {
-					const context = collectExample(exampleId)
-					if (!context) {
-						return
+				const collect = (selector, key) =>
+					Object.fromEntries(
+						Array.from(root.querySelectorAll(selector)).map((element) => [
+							element.dataset[key],
+							element,
+						]),
+					);
+				const inputs = collect("[data-example-input]", "exampleInput");
+				const outputs = collect("[data-example-output]", "exampleOutput");
+				const values = collect("[data-example-value]", "exampleValue");
+				const rects = collect("[data-example-rect]", "exampleRect");
+				const texts = collect("[data-example-text]", "exampleText");
+				const read = (inputName) => {
+					const inputElement = inputs[inputName];
+					if (!inputElement) {
+						return 0;
 					}
-					for (const inputElement of Object.values(context.inputs)) {
-						inputElement.addEventListener('input', () => update(context))
+					const inputValue = Number(inputElement.value);
+					return Number.isFinite(inputValue) ? inputValue : 0;
+				};
+				const writeOutput = (outputName, value) => {
+					const outputElement = outputs[outputName];
+					if (outputElement) {
+						outputElement.value = value;
 					}
-					update(context)
+				};
+				const writeValue = (valueName, value) => {
+					const valueElement = values[valueName];
+					if (valueElement) {
+						valueElement.textContent = value;
+					}
+				};
+				const writeText = (textName, value) => {
+					const textElement = texts[textName];
+					if (textElement) {
+						textElement.textContent = value;
+					}
+				};
+				const setRect = (rectName, attributes) => {
+					const rectElement = rects[rectName];
+					if (!rectElement) {
+						return;
+					}
+					for (const [attributeName, attributeValue] of Object.entries(
+						attributes,
+					)) {
+						rectElement.setAttribute(attributeName, String(attributeValue));
+					}
+				};
+				const setRectWidth = (rectName, width) =>
+					setRect(rectName, { width: Math.max(0, width) });
+				const setRectX = (rectName, x) => setRect(rectName, { x });
+				return {
+					inputs,
+					read,
+					setRect,
+					setRectWidth,
+					setRectX,
+					writeOutput,
+					writeText,
+					writeValue,
+				};
+			};
+			const bindExample = (exampleId, update) => {
+				const context = collectExample(exampleId);
+				if (!context) {
+					return;
 				}
-				const formatPercent = (fractionValue) => `${(fractionValue * 100).toFixed(2)}%`
-				const formatEth = (ethValue) => `${ethValue.toFixed(2)} ETH`
-				const formatExecutionThreshold = (thresholdValue) => {
-					if (!Number.isFinite(thresholdValue)) {
-						return 'no finite threshold'
-					}
-					return formatPercent(thresholdValue)
+				for (const inputElement of Object.values(context.inputs)) {
+					inputElement.addEventListener("input", () => update(context));
 				}
-				const formatDuration = (durationValue) => {
-					if (!Number.isFinite(durationValue)) {
-						return 'unbounded when censorship rate is zero'
-					}
-					return durationValue.toFixed(2)
+				update(context);
+			};
+			const formatPercent = (fractionValue) =>
+				`${(fractionValue * 100).toFixed(2)}%`;
+			const formatEth = (ethValue) => `${ethValue.toFixed(2)} ETH`;
+			const formatExecutionThreshold = (thresholdValue) => {
+				if (!Number.isFinite(thresholdValue)) {
+					return "no finite threshold";
 				}
-				bindExample('#binary-censorship-example', context => {
-					const honestPrice = Math.max(context.read('honestPrice'), 0.0001)
-					const manipulatedPrice = Math.max(context.read('manipulatedPrice'), 0.0001)
-					const liquidationThresholdPrice = Math.max(context.read('liquidationThresholdPrice'), 0.0001)
-					const minLiquidationPriceDistanceBps = Math.max(context.read('minLiquidationPriceDistanceBps'), 0)
-					const externalPayoffNotional = Math.max(context.read('externalPayoffNotional'), 0.0001)
-					const oracleReportLiquidity = Math.max(context.read('oracleReportLiquidity'), 0.0001)
-					const honestDisputeBarrierFraction = Math.max(context.read('honestDisputeBarrierFraction'), 0)
-					const censorshipDuration = Math.max(context.read('censorshipDuration'), 0)
-					const targetGriefRatio = Math.max(context.read('targetGriefRatio'), 0)
-					const boundedLiquidationDistanceBps = Math.min(minLiquidationPriceDistanceBps, 10000)
-					const liquidationDistanceFraction = boundedLiquidationDistanceBps / 10000
-					const discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction)
-					const executionErrorThreshold =
-						discountedHonestPrice === 0 ? Number.POSITIVE_INFINITY : Math.max(0, liquidationThresholdPrice / discountedHonestPrice - 1)
-					const manipulatedPriceError = Math.max(0, (manipulatedPrice - honestPrice) / honestPrice)
-					const liquidationExecutable = manipulatedPrice > liquidationThresholdPrice && manipulatedPriceError >= executionErrorThreshold
-					const attackerProfit = liquidationExecutable ? externalPayoffNotional : 0
-					const censorshipRate = Math.max(0, manipulatedPriceError - honestDisputeBarrierFraction)
-					const censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity
-					const oracleLiquidityRatio = oracleReportLiquidity / externalPayoffNotional
-					const safeCensorshipDuration =
-						censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)
-					context.writeValue('honestPrice', honestPrice.toFixed(0))
-					context.writeValue('manipulatedPrice', manipulatedPrice.toFixed(0))
-					context.writeValue('liquidationThresholdPrice', liquidationThresholdPrice.toFixed(0))
-					context.writeValue('minLiquidationPriceDistanceBps', `${boundedLiquidationDistanceBps.toFixed(0)} bps`)
-					context.writeValue('externalPayoffNotional', formatEth(externalPayoffNotional))
-					context.writeValue('oracleReportLiquidity', formatEth(oracleReportLiquidity))
-					context.writeValue('honestDisputeBarrierFraction', formatPercent(honestDisputeBarrierFraction))
-					context.writeValue('censorshipDuration', `${censorshipDuration.toFixed(0)} steps`)
-					context.writeValue('targetGriefRatio', targetGriefRatio.toFixed(1))
-					context.writeOutput('executionErrorThreshold', formatExecutionThreshold(executionErrorThreshold))
-					context.writeOutput('manipulatedPriceError', formatPercent(manipulatedPriceError))
-					context.writeOutput('liquidationExecutable', liquidationExecutable ? 'yes' : 'no')
-					context.writeOutput('attackerProfit', formatEth(attackerProfit))
-					context.writeOutput('censorshipCost', formatEth(censorshipCost))
-					context.writeOutput('oracleLiquidityRatio', oracleLiquidityRatio.toFixed(2))
-					context.writeOutput('safeCensorshipDuration', formatDuration(safeCensorshipDuration))
-					const thresholdForVisual = Number.isFinite(executionErrorThreshold) ? executionErrorThreshold : manipulatedPriceError
-					const priceErrorScale = Math.max(thresholdForVisual, manipulatedPriceError, 0.01)
-					context.setRectWidth('executionErrorThreshold', Math.min(thresholdForVisual / priceErrorScale * 520, 520))
-					context.setRectWidth('manipulatedPriceError', Math.min(manipulatedPriceError / priceErrorScale * 520, 520))
-					context.setRectWidth('censorshipCost', Math.min(censorshipCost / Math.max(externalPayoffNotional, 1) * 520, 520))
-					context.writeText('thresholdText', `threshold ${formatExecutionThreshold(executionErrorThreshold)}`)
-					context.writeText('errorText', `error ${formatPercent(manipulatedPriceError)}`)
-					context.writeText('payoffText', `payoff ${formatEth(attackerProfit)}`)
-				})
-				bindExample('#price-round-budget-example', context => {
-					const reportLiquidity = context.read('reportLiquidity')
-					const budgetMultiplierBps = context.read('budgetMultiplierBps')
-					const withdrawalNotional = context.read('withdrawalNotional')
-					const liquidationNotional = context.read('liquidationNotional')
-					const allowanceNotional = context.read('allowanceNotional')
-					const roundBudget = reportLiquidity * budgetMultiplierBps / 10000
-					let remainingBudget = roundBudget
-					let consumedNotional = 0
-					const consumedByOperation = []
-					const operationResult = notional => {
-						if (notional <= remainingBudget) {
-							remainingBudget -= notional
-							consumedNotional += notional
-							consumedByOperation.push(notional)
-							return `executes; ${formatEth(remainingBudget)} remains`
-						}
-						consumedByOperation.push(0)
-						return `operation fails and is removed; ${formatEth(remainingBudget)} remains`
+				return formatPercent(thresholdValue);
+			};
+			const formatDuration = (durationValue) => {
+				if (!Number.isFinite(durationValue)) {
+					return "unbounded when censorship rate is zero";
+				}
+				return durationValue.toFixed(2);
+			};
+			bindExample("#binary-censorship-example", (context) => {
+				const honestPrice = Math.max(context.read("honestPrice"), 0.0001);
+				const manipulatedPrice = Math.max(
+					context.read("manipulatedPrice"),
+					0.0001,
+				);
+				const liquidationThresholdPrice = Math.max(
+					context.read("liquidationThresholdPrice"),
+					0.0001,
+				);
+				const minLiquidationPriceDistanceBps = Math.max(
+					context.read("minLiquidationPriceDistanceBps"),
+					0,
+				);
+				const externalPayoffNotional = Math.max(
+					context.read("externalPayoffNotional"),
+					0.0001,
+				);
+				const oracleReportLiquidity = Math.max(
+					context.read("oracleReportLiquidity"),
+					0.0001,
+				);
+				const honestDisputeBarrierFraction = Math.max(
+					context.read("honestDisputeBarrierFraction"),
+					0,
+				);
+				const censorshipDuration = Math.max(
+					context.read("censorshipDuration"),
+					0,
+				);
+				const targetGriefRatio = Math.max(context.read("targetGriefRatio"), 0);
+				const boundedLiquidationDistanceBps = Math.min(
+					minLiquidationPriceDistanceBps,
+					10000,
+				);
+				const liquidationDistanceFraction =
+					boundedLiquidationDistanceBps / 10000;
+				const discountedHonestPrice =
+					honestPrice * (1 - liquidationDistanceFraction);
+				const executionErrorThreshold =
+					discountedHonestPrice === 0
+						? Number.POSITIVE_INFINITY
+						: Math.max(
+								0,
+								liquidationThresholdPrice / discountedHonestPrice - 1,
+							);
+				const manipulatedPriceError = Math.max(
+					0,
+					(manipulatedPrice - honestPrice) / honestPrice,
+				);
+				const liquidationExecutable =
+					manipulatedPrice > liquidationThresholdPrice &&
+					manipulatedPriceError >= executionErrorThreshold;
+				const attackerProfit = liquidationExecutable
+					? externalPayoffNotional
+					: 0;
+				const censorshipRate = Math.max(
+					0,
+					manipulatedPriceError - honestDisputeBarrierFraction,
+				);
+				const censorshipCost =
+					censorshipDuration * censorshipRate * oracleReportLiquidity;
+				const oracleLiquidityRatio =
+					oracleReportLiquidity / externalPayoffNotional;
+				const safeCensorshipDuration =
+					censorshipRate === 0
+						? Number.POSITIVE_INFINITY
+						: (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio);
+				context.writeValue("honestPrice", honestPrice.toFixed(0));
+				context.writeValue("manipulatedPrice", manipulatedPrice.toFixed(0));
+				context.writeValue(
+					"liquidationThresholdPrice",
+					liquidationThresholdPrice.toFixed(0),
+				);
+				context.writeValue(
+					"minLiquidationPriceDistanceBps",
+					`${boundedLiquidationDistanceBps.toFixed(0)} bps`,
+				);
+				context.writeValue(
+					"externalPayoffNotional",
+					formatEth(externalPayoffNotional),
+				);
+				context.writeValue(
+					"oracleReportLiquidity",
+					formatEth(oracleReportLiquidity),
+				);
+				context.writeValue(
+					"honestDisputeBarrierFraction",
+					formatPercent(honestDisputeBarrierFraction),
+				);
+				context.writeValue(
+					"censorshipDuration",
+					`${censorshipDuration.toFixed(0)} steps`,
+				);
+				context.writeValue("targetGriefRatio", targetGriefRatio.toFixed(1));
+				context.writeOutput(
+					"executionErrorThreshold",
+					formatExecutionThreshold(executionErrorThreshold),
+				);
+				context.writeOutput(
+					"manipulatedPriceError",
+					formatPercent(manipulatedPriceError),
+				);
+				context.writeOutput(
+					"liquidationExecutable",
+					liquidationExecutable ? "yes" : "no",
+				);
+				context.writeOutput("attackerProfit", formatEth(attackerProfit));
+				context.writeOutput("censorshipCost", formatEth(censorshipCost));
+				context.writeOutput(
+					"oracleLiquidityRatio",
+					oracleLiquidityRatio.toFixed(2),
+				);
+				context.writeOutput(
+					"safeCensorshipDuration",
+					formatDuration(safeCensorshipDuration),
+				);
+				const thresholdForVisual = Number.isFinite(executionErrorThreshold)
+					? executionErrorThreshold
+					: manipulatedPriceError;
+				const priceErrorScale = Math.max(
+					thresholdForVisual,
+					manipulatedPriceError,
+					0.01,
+				);
+				context.setRectWidth(
+					"executionErrorThreshold",
+					Math.min((thresholdForVisual / priceErrorScale) * 520, 520),
+				);
+				context.setRectWidth(
+					"manipulatedPriceError",
+					Math.min((manipulatedPriceError / priceErrorScale) * 520, 520),
+				);
+				context.setRectWidth(
+					"censorshipCost",
+					Math.min(
+						(censorshipCost / Math.max(externalPayoffNotional, 1)) * 520,
+						520,
+					),
+				);
+				context.writeText(
+					"thresholdText",
+					`threshold ${formatExecutionThreshold(executionErrorThreshold)}`,
+				);
+				context.writeText(
+					"errorText",
+					`error ${formatPercent(manipulatedPriceError)}`,
+				);
+				context.writeText("payoffText", `payoff ${formatEth(attackerProfit)}`);
+			});
+			bindExample("#price-round-budget-example", (context) => {
+				const reportLiquidity = context.read("reportLiquidity");
+				const budgetMultiplierBps = context.read("budgetMultiplierBps");
+				const withdrawalNotional = context.read("withdrawalNotional");
+				const liquidationNotional = context.read("liquidationNotional");
+				const allowanceNotional = context.read("allowanceNotional");
+				const roundBudget = (reportLiquidity * budgetMultiplierBps) / 10000;
+				let remainingBudget = roundBudget;
+				let consumedNotional = 0;
+				const consumedByOperation = [];
+				const operationResult = (notional) => {
+					if (notional <= remainingBudget) {
+						remainingBudget -= notional;
+						consumedNotional += notional;
+						consumedByOperation.push(notional);
+						return `executes; ${formatEth(remainingBudget)} remains`;
 					}
-					context.writeValue('reportLiquidity', formatEth(reportLiquidity))
-					context.writeValue('budgetMultiplierBps', `${(budgetMultiplierBps / 10000).toFixed(1)}x`)
-					context.writeValue('withdrawalNotional', formatEth(withdrawalNotional))
-					context.writeValue('liquidationNotional', formatEth(liquidationNotional))
-					context.writeValue('allowanceNotional', formatEth(allowanceNotional))
-					context.writeOutput('roundBudget', formatEth(roundBudget))
-					context.writeOutput('withdrawalResult', operationResult(withdrawalNotional))
-					context.writeOutput('liquidationResult', operationResult(liquidationNotional))
-					context.writeOutput('allowanceResult', operationResult(allowanceNotional))
-					context.writeOutput('consumedNotional', formatEth(consumedNotional))
-					const budgetScale = roundBudget <= 0 ? 0 : 540 / roundBudget
-					const withdrawalWidth = consumedByOperation[0] * budgetScale
-					const liquidationWidth = consumedByOperation[1] * budgetScale
-					const allowanceWidth = consumedByOperation[2] * budgetScale
-					context.setRect('withdrawalBudget', { x: 110, width: withdrawalWidth })
-					context.setRect('liquidationBudget', { x: 110 + withdrawalWidth, width: liquidationWidth })
-					context.setRect('allowanceBudget', { x: 110 + withdrawalWidth + liquidationWidth, width: allowanceWidth })
-					context.writeText('budgetCapText', `budget ${formatEth(roundBudget)}`)
-					context.writeText('budgetStatusText', `${formatEth(remainingBudget)} remains after successful operations`)
-				})
-				bindExample('#report-escalation-example', context => {
-					const reportAtomicDisplayScale = 1_000_000n
-					const weiPerReportDisplayUnit = 1_000_000_000_000n
-					const reportAtomicPerRep = reportAtomicDisplayScale * weiPerReportDisplayUnit
-					const toReportAtomic = (repValue) =>
-						BigInt(Math.round(repValue * Number(reportAtomicDisplayScale))) * weiPerReportDisplayUnit
-					const fromReportAtomic = (atomicValue) => Number(atomicValue / weiPerReportDisplayUnit) / Number(reportAtomicDisplayScale)
-					const formatReportRep = (repValue) => `${repValue.toFixed(2)} REP`
-					const formatReportAtomic = (atomicValue) => {
-						const wholePart = atomicValue / reportAtomicPerRep
-						const fractionalPart = atomicValue % reportAtomicPerRep
-						const fractionalText = fractionalPart.toString().padStart(18, '0')
-						if (fractionalPart === 0n) {
-							return `${wholePart.toString()} REP`
-						}
-						return `${wholePart.toString()}.${fractionalText} REP`
+					consumedByOperation.push(0);
+					return `operation fails and is removed; ${formatEth(remainingBudget)} remains`;
+				};
+				context.writeValue("reportLiquidity", formatEth(reportLiquidity));
+				context.writeValue(
+					"budgetMultiplierBps",
+					`${(budgetMultiplierBps / 10000).toFixed(1)}x`,
+				);
+				context.writeValue("withdrawalNotional", formatEth(withdrawalNotional));
+				context.writeValue(
+					"liquidationNotional",
+					formatEth(liquidationNotional),
+				);
+				context.writeValue("allowanceNotional", formatEth(allowanceNotional));
+				context.writeOutput("roundBudget", formatEth(roundBudget));
+				context.writeOutput(
+					"withdrawalResult",
+					operationResult(withdrawalNotional),
+				);
+				context.writeOutput(
+					"liquidationResult",
+					operationResult(liquidationNotional),
+				);
+				context.writeOutput(
+					"allowanceResult",
+					operationResult(allowanceNotional),
+				);
+				context.writeOutput("consumedNotional", formatEth(consumedNotional));
+				const budgetScale = roundBudget <= 0 ? 0 : 540 / roundBudget;
+				const withdrawalWidth = consumedByOperation[0] * budgetScale;
+				const liquidationWidth = consumedByOperation[1] * budgetScale;
+				const allowanceWidth = consumedByOperation[2] * budgetScale;
+				context.setRect("withdrawalBudget", { x: 110, width: withdrawalWidth });
+				context.setRect("liquidationBudget", {
+					x: 110 + withdrawalWidth,
+					width: liquidationWidth,
+				});
+				context.setRect("allowanceBudget", {
+					x: 110 + withdrawalWidth + liquidationWidth,
+					width: allowanceWidth,
+				});
+				context.writeText("budgetCapText", `budget ${formatEth(roundBudget)}`);
+				context.writeText(
+					"budgetStatusText",
+					`${formatEth(remainingBudget)} remains after successful operations`,
+				);
+			});
+			bindExample("#report-escalation-example", (context) => {
+				const reportAtomicDisplayScale = 1_000_000n;
+				const weiPerReportDisplayUnit = 1_000_000_000_000n;
+				const reportAtomicPerRep =
+					reportAtomicDisplayScale * weiPerReportDisplayUnit;
+				const toReportAtomic = (repValue) =>
+					BigInt(Math.round(repValue * Number(reportAtomicDisplayScale))) *
+					weiPerReportDisplayUnit;
+				const fromReportAtomic = (atomicValue) =>
+					Number(atomicValue / weiPerReportDisplayUnit) /
+					Number(reportAtomicDisplayScale);
+				const formatReportRep = (repValue) => `${repValue.toFixed(2)} REP`;
+				const formatReportAtomic = (atomicValue) => {
+					const wholePart = atomicValue / reportAtomicPerRep;
+					const fractionalPart = atomicValue % reportAtomicPerRep;
+					const fractionalText = fractionalPart.toString().padStart(18, "0");
+					if (fractionalPart === 0n) {
+						return `${wholePart.toString()} REP`;
 					}
-					const formatReportPercent = (fractionValue) => `${(fractionValue * 100).toFixed(2)}%`
-						const initialReportSize = Math.max(context.read('initialReportSize'), 0.0001)
-						const reportMultiplier = Math.max(context.read('reportMultiplier'), 1)
-						const escalationHalt = Math.max(context.read('escalationHalt'), initialReportSize)
-						const reportSteps = Math.max(context.read('reportSteps'), 1)
-						const reportError = Math.max(context.read('reportError'), 0)
-						const reportBarrier = Math.max(context.read('reportBarrier'), 0)
-						const repPerEthPrice = Math.max(context.read('repPerEthPrice'), 0.0001)
-						const initialReportSizeAtomic = toReportAtomic(initialReportSize)
-						const escalationHaltAtomic = toReportAtomic(escalationHalt)
-						const reportMultiplierUnits = BigInt(Math.round(reportMultiplier * 100))
-						const reportSizes = [initialReportSizeAtomic]
-						let capped = initialReportSizeAtomic >= escalationHaltAtomic
-						let usedAtomicIncrement = false
-						for (let stepIndex = 1; stepIndex < reportSteps; stepIndex += 1) {
-							const previousSize = reportSizes[reportSizes.length - 1]
-							const multipliedSize = previousSize * reportMultiplierUnits / 100n
-							let nextSize = multipliedSize
-							if (capped) {
-								nextSize = previousSize + 1n
-							} else if (multipliedSize > escalationHaltAtomic) {
-								nextSize = escalationHaltAtomic
-							}
-							if (capped) {
-								usedAtomicIncrement = true
-							}
-							if (nextSize >= escalationHaltAtomic) {
-								capped = true
-							}
-							reportSizes.push(nextSize)
-						}
-						const effectiveError = Math.max(0, reportError - reportBarrier)
-						const latestReportSize = reportSizes[reportSizes.length - 1]
-						const latestReportSizeRep = fromReportAtomic(latestReportSize)
-						const latestBribe = latestReportSizeRep / repPerEthPrice * effectiveError
-						const cumulativeBribe = reportSizes.reduce(
-							(sum, reportSize) => sum + fromReportAtomic(reportSize) / repPerEthPrice * effectiveError,
-							0,
-						)
-						const visualScale = 560 / Math.max(escalationHalt, latestReportSizeRep, 1)
-						context.writeValue('initialReportSize', formatReportRep(initialReportSize))
-						context.writeValue('reportMultiplier', `${reportMultiplier.toFixed(2)}x`)
-						context.writeValue('escalationHalt', formatReportRep(escalationHalt))
-						context.writeValue('reportSteps', `${reportSteps.toFixed(0)} steps`)
-						context.writeValue('reportError', formatReportPercent(reportError))
-						context.writeValue('reportBarrier', formatReportPercent(reportBarrier))
-						context.writeValue('repPerEthPrice', `${repPerEthPrice.toFixed(0)} REP/ETH`)
-						context.setRectWidth('reportStepOne', fromReportAtomic(reportSizes[0]) * visualScale)
-						context.setRectWidth('reportStepTwo', fromReportAtomic(reportSizes[Math.min(1, reportSizes.length - 1)]) * visualScale)
-						context.setRectWidth('reportStepLast', latestReportSizeRep * visualScale)
-						context.writeText('haltMarker', `halt ${formatReportRep(escalationHalt)}`)
-						context.writeText('bribeText', `latest bribe ${latestBribe.toFixed(2)} ETH-notional`)
-						context.writeOutput('finalReportSize', formatReportAtomic(latestReportSize))
-						let growthMode = 'multiplicative below halt'
-						if (usedAtomicIncrement) {
-							growthMode = 'halt reached; +1 wei of REP per step'
-						} else if (capped) {
-							growthMode = 'halt reached on final step'
-						}
-						context.writeOutput('growthMode', growthMode)
-						context.writeOutput('latestBribe', `${latestBribe.toFixed(2)} ETH-notional`)
-						context.writeOutput('cumulativeBribe', `${cumulativeBribe.toFixed(2)} ETH-notional`)
-					})
-			</script>
+					return `${wholePart.toString()}.${fractionalText} REP`;
+				};
+				const formatReportPercent = (fractionValue) =>
+					`${(fractionValue * 100).toFixed(2)}%`;
+				const initialReportSize = Math.max(
+					context.read("initialReportSize"),
+					0.0001,
+				);
+				const reportMultiplier = Math.max(context.read("reportMultiplier"), 1);
+				const escalationHalt = Math.max(
+					context.read("escalationHalt"),
+					initialReportSize,
+				);
+				const reportSteps = Math.max(context.read("reportSteps"), 1);
+				const reportError = Math.max(context.read("reportError"), 0);
+				const reportBarrier = Math.max(context.read("reportBarrier"), 0);
+				const repPerEthPrice = Math.max(context.read("repPerEthPrice"), 0.0001);
+				const initialReportSizeAtomic = toReportAtomic(initialReportSize);
+				const escalationHaltAtomic = toReportAtomic(escalationHalt);
+				const reportMultiplierUnits = BigInt(
+					Math.round(reportMultiplier * 100),
+				);
+				const reportSizes = [initialReportSizeAtomic];
+				let capped = initialReportSizeAtomic >= escalationHaltAtomic;
+				let usedAtomicIncrement = false;
+				for (let stepIndex = 1; stepIndex < reportSteps; stepIndex += 1) {
+					const previousSize = reportSizes[reportSizes.length - 1];
+					const multipliedSize = (previousSize * reportMultiplierUnits) / 100n;
+					let nextSize = multipliedSize;
+					if (capped) {
+						nextSize = previousSize + 1n;
+					} else if (multipliedSize > escalationHaltAtomic) {
+						nextSize = escalationHaltAtomic;
+					}
+					if (capped) {
+						usedAtomicIncrement = true;
+					}
+					if (nextSize >= escalationHaltAtomic) {
+						capped = true;
+					}
+					reportSizes.push(nextSize);
+				}
+				const effectiveError = Math.max(0, reportError - reportBarrier);
+				const latestReportSize = reportSizes[reportSizes.length - 1];
+				const latestReportSizeRep = fromReportAtomic(latestReportSize);
+				const latestBribe =
+					(latestReportSizeRep / repPerEthPrice) * effectiveError;
+				const cumulativeBribe = reportSizes.reduce(
+					(sum, reportSize) =>
+						sum +
+						(fromReportAtomic(reportSize) / repPerEthPrice) * effectiveError,
+					0,
+				);
+				const visualScale =
+					560 / Math.max(escalationHalt, latestReportSizeRep, 1);
+				context.writeValue(
+					"initialReportSize",
+					formatReportRep(initialReportSize),
+				);
+				context.writeValue(
+					"reportMultiplier",
+					`${reportMultiplier.toFixed(2)}x`,
+				);
+				context.writeValue("escalationHalt", formatReportRep(escalationHalt));
+				context.writeValue("reportSteps", `${reportSteps.toFixed(0)} steps`);
+				context.writeValue("reportError", formatReportPercent(reportError));
+				context.writeValue("reportBarrier", formatReportPercent(reportBarrier));
+				context.writeValue(
+					"repPerEthPrice",
+					`${repPerEthPrice.toFixed(0)} REP/ETH`,
+				);
+				context.setRectWidth(
+					"reportStepOne",
+					fromReportAtomic(reportSizes[0]) * visualScale,
+				);
+				context.setRectWidth(
+					"reportStepTwo",
+					fromReportAtomic(reportSizes[Math.min(1, reportSizes.length - 1)]) *
+						visualScale,
+				);
+				context.setRectWidth(
+					"reportStepLast",
+					latestReportSizeRep * visualScale,
+				);
+				context.writeText(
+					"haltMarker",
+					`halt ${formatReportRep(escalationHalt)}`,
+				);
+				context.writeText(
+					"bribeText",
+					`latest bribe ${latestBribe.toFixed(2)} ETH-notional`,
+				);
+				context.writeOutput(
+					"finalReportSize",
+					formatReportAtomic(latestReportSize),
+				);
+				let growthMode = "multiplicative below halt";
+				if (usedAtomicIncrement) {
+					growthMode = "halt reached; +1 wei of REP per step";
+				} else if (capped) {
+					growthMode = "halt reached on final step";
+				}
+				context.writeOutput("growthMode", growthMode);
+				context.writeOutput(
+					"latestBribe",
+					`${latestBribe.toFixed(2)} ETH-notional`,
+				);
+				context.writeOutput(
+					"cumulativeBribe",
+					`${cumulativeBribe.toFixed(2)} ETH-notional`,
+				);
+			});
+		</script>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>
 	</body>

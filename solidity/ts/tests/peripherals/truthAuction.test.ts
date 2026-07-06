@@ -1,6 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
+import { getMaxRepBeingSold, getMinBidSize } from '../../testsuite/simulator/utils/contracts/auction'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: truth auction', () => {
@@ -984,6 +985,30 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(losingVaultAfterClaim.securityBondAllowance, losingVaultBeforeClaim.securityBondAllowance, 'zero-REP finalized claim should not assign security bond allowance')
 			strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'zero-REP finalized claim should not alter fee accounting')
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'zero-REP finalized claim should not create a new vault')
+		})
+
+		test('test_EconomicAttack_MinBidCannotAcquireEntireUnderfundedTruthAuctionCap', async () => {
+			const { yesSecurityPool, expectedEthToBuy } = await setupStartedTruthAuction('minimum bid extraction fork source')
+			const auctionCap = await getMaxRepBeingSold(client, yesSecurityPool.truthAuction)
+			const minBidSize = await getMinBidSize(client, yesSecurityPool.truthAuction)
+			const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const attackerTick = await participateAuction(attacker, yesSecurityPool.truthAuction, 1n, minBidSize)
+			const attackerLimitPrice = tickToPrice(attackerTick)
+			const expectedAttackerRep = (minBidSize * PRICE_PRECISION) / attackerLimitPrice
+
+			assert.ok(minBidSize < expectedEthToBuy / 1_000n, 'test setup should keep the minimum bid economically tiny relative to the target raise')
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), expectedAttackerRep, 'one minimum bid should buy only its limit-priced REP demand')
+			assert.ok(expectedAttackerRep < auctionCap, 'minimum bid should no longer buy the full underfunded auction REP cap')
+
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, attacker.account.address, [{ tick: attackerTick, bidIndex: 0n }])
+
+			const attackerVault = await getSecurityVault(client, yesSecurityPool.securityPool, attacker.account.address)
+			const attackerRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, attackerVault.repDepositShare)
+			strictEqualTypeSafe(attackerRepClaim, expectedAttackerRep, 'settling the minimum bid should credit only the attackers limit-priced REP demand')
 		})
 
 		test('settleAuctionBids can refund a losing bid before truth auction finalization', async () => {

@@ -205,7 +205,7 @@ window.protocolTermDefinitions = Object.freeze({
 	'tick index': 'The scalar answer position used to compute payout numerators.',
 	'terminal payoff': 'The payoff used at the end of the simplified attack model.',
 	'truth auction': 'A child-pool auction that sells child-universe REP for ETH to repair missing collateral; it does not choose the truthful branch.',
-	underfundedThreshold: 'The price threshold below which a pool or auction path is considered underfunded.',
+	underfundedThreshold: 'The scaled ETH/REP cutoff computed from aggregate accepted bid ETH in an underfunded auction; bids below it are refunded, while qualifying ticks buy only their limit-priced REP demand and only qualifying ETH is sent to the pool.',
 	'underfunded remainder': 'The remaining obligation after available proceeds or collateral are insufficient.',
 	underwriting: 'Supplying REP-backed capacity to support market obligations and security-pool operations.',
 	'unresolved escalation': 'An escalation state that has not produced a local decision and may need fork handling.',

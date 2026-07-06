@@ -196,7 +196,7 @@ function renderTruthAuctionSettlementSelectionSummary({
 	let roundingDescription: string | undefined
 	if (selectedClaimCount > 0) {
 		if (estimatedRepClaimed === undefined) {
-			roundingDescription = 'Claim preview is unavailable for underfunded winning bids because the required winning-ETH denominator is not exposed in current UI data.'
+			roundingDescription = 'Claim preview is unavailable for underfunded winning bids because the required per-tick ETH denominator is not exposed in current UI data.'
 		} else {
 			roundingDescription = 'These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.'
 		}
