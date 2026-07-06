@@ -280,7 +280,8 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					method: 'evm_mine',
 					params: [],
 				})
-			} catch {
+			} catch (error: unknown) {
+				void error
 				return undefined
 			}
 			return await waitForReceiptStatus(hash)
