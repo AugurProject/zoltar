@@ -18,6 +18,7 @@ Prioritize:
 5. Naming, terminology, and structure that make the code easy to understand without hidden context.
 6. Code and text duplication that repeats existing behavior or guidance instead of reusing, consolidating, or linking to the canonical source.
 7. Maintainability problems that can cause future mistakes, especially unclear ownership boundaries, brittle special cases, hidden coupling, or unnecessary divergence between similar code paths.
+8. Mock quality in changed tests: verify that any new/adjusted mocks are necessary, minimal, and behaviorally faithful.
 
 Do not raise speculative, preference-only, or style-only findings unless they create concrete readability, correctness, or maintenance risk. Do not rely on hidden conversation context. Base findings on the diff and repository evidence, and put uncertainty in `Review limitations`.
 
@@ -26,6 +27,12 @@ Review method:
 - Inspect the worktree diff against origin/main and the relevant changed files.
 - Cross-check each acceptance criterion against the implementation.
 - Search the changed area and nearby/shared modules for existing methods, helpers, components, tests, scripts, or documented procedures that already cover the same responsibility.
+- For test changes, inspect mock usage introduced or modified in the diff:
+  - Identify added/changed `mock`, `mock.module`, and other local doubles.
+  - Confirm each mock is scoped to the behavior under test and justifies replacing the real dependency.
+  - Validate mock responses exercise realistic paths (success and failure/edge cases where relevant), especially for contracts, clients, providers, and asynchronous flows.
+  - Flag "lazy" mocks that over-abstract complex behavior and reduce test signal (for example overly broad stubbing that only asserts component rendering while bypassing critical orchestration or error handling).
+  - Suggest shared fixtures/helpers over copy-pasted inline mocks when the same dependency behavior repeats across multiple tests.
 - Search for analogous call sites, parallel implementations, shared entry points, and related test coverage across the repository when reviewing a bug fix or behavioral change.
 - Check whether the change addresses the underlying cause at the most maintainable layer. Flag narrow one-off patches when the same defect can still occur through another public path, duplicated implementation, or equivalent workflow.
 - Check whether the chosen scope is appropriately broad without being overgeneralized. Prefer shared helpers, central validation, or canonical documentation only when they reduce future drift and make the behavior easier to evolve.
