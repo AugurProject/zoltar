@@ -186,6 +186,12 @@ export const validateLocalAnvilRpcUrl = (url: string): void => {
 	if (!allowedHosts.includes(parsed.hostname)) throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
 }
 
+const isEvmMineUnsupported = (error: unknown): boolean => {
+	if (!(error instanceof Error)) return false
+	const message = error.message.toLowerCase()
+	return message.includes('method not found') || message.includes('unknown method') || message.includes('method does not exist') || message.includes('not available') || message.includes('-32601')
+}
+
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
 	let currentTimestamp = 0n
@@ -272,6 +278,19 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			if (transactionBlockNumber !== undefined) return undefined
 			return undefined
 		}
+		const waitForReceiptWithMiningFallback = async (hash: string) => {
+			const firstAttempt = await waitForReceiptStatus(hash)
+			if (firstAttempt !== undefined) return firstAttempt
+			try {
+				await request({
+					method: 'evm_mine',
+					params: [],
+				})
+			} catch (error: unknown) {
+				if (!isEvmMineUnsupported(error)) throw error
+			}
+			return await waitForReceiptStatus(hash)
+		}
 
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
@@ -283,7 +302,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 		}
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
-			const receiptResult = await waitForReceiptStatus(json.result)
+			const receiptResult = await waitForReceiptWithMiningFallback(json.result)
 			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
 			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
 			let transactionData = transaction !== undefined && typeof transaction.data === 'string' ? transaction.data : undefined
