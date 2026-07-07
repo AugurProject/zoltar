@@ -5,7 +5,7 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Hash, zeroAddress } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { useZoltarFork } from '../hooks/useZoltarFork.js'
+import { useZoltarFork, type UseZoltarForkDependencies } from '../hooks/useZoltarFork.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -15,6 +15,7 @@ type UseZoltarForkState = ReturnType<typeof useZoltarFork>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
+const REPUTATION_TOKEN_ADDRESS = getAddress('0x00000000000000000000000000000000000000c3')
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -66,6 +67,29 @@ function requireHookState(state: UseZoltarForkState | undefined) {
 	return state
 }
 
+function createZoltarForkDependencies(overrides: Partial<UseZoltarForkDependencies> = {}): UseZoltarForkDependencies {
+	return {
+		approveForkRep: async () => {
+			throw new Error('approveForkRep should not be called in this test')
+		},
+		forkZoltarUniverse: async () => {
+			throw new Error('forkZoltarUniverse should not be called in this test')
+		},
+		loadZoltarForkAccess: async () => {
+			throw new Error('loadZoltarForkAccess should not be called in this test')
+		},
+		...overrides,
+	}
+}
+
+function createForkAccessResults() {
+	return [
+		{ result: 100n, status: 'success' as const },
+		{ result: 0n, status: 'success' as const },
+		{ result: 0n, status: 'success' as const },
+	]
+}
+
 describe('useZoltarFork', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -94,20 +118,23 @@ describe('useZoltarFork', () => {
 		const onTransactionFailed = mock(() => undefined)
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 1n,
-				ensureZoltarUniverse,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				refreshZoltarUniverse: async () => undefined,
-				shouldAutoLoadForkAccess: false,
-				zoltarUniverse: createUniverse(),
-			})
+			hookState = useZoltarFork(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					ensureZoltarUniverse,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					refreshZoltarUniverse: async () => undefined,
+					shouldAutoLoadForkAccess: false,
+					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
+				},
+				createZoltarForkDependencies(),
+			)
 
 			return <div />
 		}
@@ -125,7 +152,7 @@ describe('useZoltarFork', () => {
 
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {
 		const universeLoad = createDeferred<ZoltarUniverseSummary>()
-		const forkZoltarUniverse = mock(async (_client: unknown, universeId: bigint, questionId: bigint) => {
+		const forkZoltarUniverse = mock(async (_accountAddress: string, _callbacks: unknown, universeId: bigint, questionId: bigint) => {
 			expect(universeId).toBe(1n)
 			expect(questionId).toBe(11n)
 			return {
@@ -135,40 +162,31 @@ describe('useZoltarFork', () => {
 				universeId,
 			}
 		})
-
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			forkZoltarUniverse,
-			getZoltarAddress: mock(() => zeroAddress),
-			readOptionalMulticall: mock(async () => []),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		const loadZoltarForkAccess = mock(async () => createForkAccessResults())
+		const dependencies = createZoltarForkDependencies({ forkZoltarUniverse, loadZoltarForkAccess })
 
 		resetEnvironment?.()
 		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
-		const { useZoltarFork } = await import(`../hooks/useZoltarFork.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 1n,
-				ensureZoltarUniverse: async () => await universeLoad.promise,
-				onTransactionFailed: () => undefined,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				refreshZoltarUniverse: async () => undefined,
-				shouldAutoLoadForkAccess: false,
-				zoltarUniverse: createUniverse(),
-			})
+			hookState = useZoltarFork(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					ensureZoltarUniverse: async () => await universeLoad.promise,
+					onTransactionFailed: () => undefined,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					refreshZoltarUniverse: async () => undefined,
+					shouldAutoLoadForkAccess: false,
+					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
+				},
+				dependencies,
+			)
 
 			return <div />
 		}
@@ -189,53 +207,51 @@ describe('useZoltarFork', () => {
 		})
 
 		await act(async () => {
-			universeLoad.resolve(createUniverse())
+			universeLoad.resolve(createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }))
 			await forkPromise
 		})
 
 		expect(forkZoltarUniverse).toHaveBeenCalledTimes(1)
+		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
 		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xb')
 	})
 
 	test('approveZoltarForkRep ignores malformed submitted question input and uses loaded universe details', async () => {
-		const approveErc20 = mock(async () => ({
+		const approveForkRep = mock(async (_accountAddress: string, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _reputationToken: string, _amount: bigint, questionId: bigint, universeId: bigint) => ({
+			action: 'approveForkRep' as const,
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000ac' as Hash,
+			questionId: `0x${questionId.toString(16)}`,
+			universeId,
 		}))
-
-		mock.module('../contracts.js', () => ({
-			approveErc20,
-			forkZoltarUniverse: mock(async () => {
-				throw new Error('forkZoltarUniverse should not be called in this test')
-			}),
-			getZoltarAddress: mock(() => zeroAddress),
-			readOptionalMulticall: mock(async () => []),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		const loadZoltarForkAccess = mock(async () => createForkAccessResults())
+		const dependencies = createZoltarForkDependencies({
+			approveForkRep,
+			loadZoltarForkAccess,
+		})
 
 		resetEnvironment?.()
 		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
-		const { useZoltarFork } = await import(`../hooks/useZoltarFork.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 1n,
-				ensureZoltarUniverse: async () => createUniverse({ forkQuestionDetails: createForkQuestion('0x0d') }),
-				onTransactionFailed: () => undefined,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				refreshZoltarUniverse: async () => undefined,
-				shouldAutoLoadForkAccess: false,
-				zoltarUniverse: createUniverse({ forkQuestionDetails: createForkQuestion('0x0d') }),
-			})
+			hookState = useZoltarFork(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					ensureZoltarUniverse: async () => createUniverse({ forkQuestionDetails: createForkQuestion('0x0d'), reputationToken: REPUTATION_TOKEN_ADDRESS }),
+					onTransactionFailed: () => undefined,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					refreshZoltarUniverse: async () => undefined,
+					shouldAutoLoadForkAccess: false,
+					zoltarUniverse: createUniverse({ forkQuestionDetails: createForkQuestion('0x0d'), reputationToken: REPUTATION_TOKEN_ADDRESS }),
+				},
+				dependencies,
+			)
 
 			return <div />
 		}
@@ -250,7 +266,16 @@ describe('useZoltarFork', () => {
 			await requireHookState(hookState).approveZoltarForkRep()
 		})
 
-		expect(approveErc20).toHaveBeenCalledTimes(1)
+		expect(approveForkRep).toHaveBeenCalledTimes(1)
+		const approveCall = approveForkRep.mock.calls[0]
+		if (approveCall === undefined) throw new Error('Expected approveForkRep call')
+		expect(approveCall[0]).toBe(WALLET_ADDRESS)
+		expect(typeof approveCall[1].onTransactionSubmitted).toBe('function')
+		expect(approveCall[2]).toBe(REPUTATION_TOKEN_ADDRESS)
+		expect(approveCall[3]).toBe(100n)
+		expect(approveCall[4]).toBe(13n)
+		expect(approveCall[5]).toBe(1n)
+		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
 		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xd')
 	})

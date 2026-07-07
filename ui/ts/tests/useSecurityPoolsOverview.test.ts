@@ -4,16 +4,16 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
-import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage } from '../hooks/useSecurityPoolsOverview.js'
+import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage, useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { waitFor } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testUtils/securityPoolsOverviewDependencies.js'
 
-type UseSecurityPoolsOverview = typeof import('../hooks/useSecurityPoolsOverview.js')['useSecurityPoolsOverview']
-type UseSecurityPoolsOverviewState = ReturnType<UseSecurityPoolsOverview>
+type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -74,16 +74,19 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 	}
 }
 
-function createHarness(useSecurityPoolsOverview: UseSecurityPoolsOverview, onRender: (state: UseSecurityPoolsOverviewState) => void) {
+function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void) {
 	return function SecurityPoolsOverviewHarness() {
-		const state = useSecurityPoolsOverview({
-			accountAddress: zeroAddress,
-			onTransactionFinished: () => undefined,
-			onTransactionPresented: () => undefined,
-			onTransactionRequested: () => undefined,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-		})
+		const state = useSecurityPoolsOverview(
+			{
+				accountAddress: zeroAddress,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			},
+			dependencies,
+		)
 
 		onRender(state)
 
@@ -136,28 +139,21 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			throw new Error('Contract function returned no data for registry page')
 		})
 
-		mock.module('../contracts.js', () => ({
-			loadAllSecurityPools,
-			loadOracleManagerDetails: mock(async () => {
-				throw new Error('loadOracleManagerDetails should not be called in this test')
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			createWalletWriteClient: mock(() => {
+				throw new Error('createWalletWriteClient should not be called in this test')
 			}),
+			loadAllSecurityPools,
 			loadSecurityPoolPage,
 			queueSecurityPoolLiquidation: mock(async () => {
 				throw new Error('queueSecurityPoolLiquidation should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({})),
-			createWalletWriteClient: mock(() => {
-				throw new Error('createWalletWriteClient should not be called in this test')
-			}),
-		}))
+		})
 
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -198,30 +194,26 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			return createSecurityPoolPageFromLoadedPools([createListedSecurityPool('0x01')], 0, 2)
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			createWalletWriteClient: mock(() => {
+				throw new Error('createWalletWriteClient should not be called in this test')
+			}),
 			loadAllSecurityPools: mock(async () => {
 				throw new Error('loadAllSecurityPools should not be called in this test')
-			}),
-			loadOracleManagerDetails: mock(async () => {
-				throw new Error('loadOracleManagerDetails should not be called in this test')
 			}),
 			loadSecurityPoolPage,
 			queueSecurityPoolLiquidation: mock(async () => {
 				throw new Error('queueSecurityPoolLiquidation should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({})),
-			createWalletWriteClient: mock(() => {
-				throw new Error('createWalletWriteClient should not be called in this test')
-			}),
-		}))
+			waitForSecurityPoolReadBackend: async () => {
+				await readyPromise
+			},
+		})
 
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -254,30 +246,23 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			expect(validForSeconds).toBe(120n)
 			return {
 				hash: zeroHash,
-				queuedOperation: undefined,
-				stagedExecution: undefined,
 			}
 		})
 
 		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
-		mock.module('../contracts.js', () => ({
-			loadAllSecurityPools: mock(async () => []),
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			createConnectedReadClient: mock(() => readClient),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
 			}),
 			queueSecurityPoolLiquidation,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -328,24 +313,19 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		})
 
 		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
-		mock.module('../contracts.js', () => ({
-			loadAllSecurityPools: mock(async () => []),
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			createConnectedReadClient: mock(() => readClient),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
 			}),
 			queueSecurityPoolLiquidation,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))

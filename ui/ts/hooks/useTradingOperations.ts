@@ -26,20 +26,32 @@ type UseTradingOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
 }
 
-export function useTradingOperations({
-	accountAddress,
-	deploymentStatuses,
-	enabled,
-	onTransactionCanceled,
-	onTransactionFailed,
-	onTransactionFinished,
-	onTransactionPresented,
-	onTransactionPrepared,
-	onTransactionRequested,
-	onTransactionSubmitted,
-	refreshState,
-	selectedSecurityPoolAddress,
-}: UseTradingOperationsParameters) {
+export type UseTradingOperationsDependencies = {
+	createCompleteSetInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, amount: bigint) => ReturnType<typeof createCompleteSetInSecurityPool>
+	getWalletEthBalance: (walletAddress: Address) => Promise<bigint>
+	loadSecurityPoolMintCapacity: (securityPoolAddress: Address) => ReturnType<typeof loadSecurityPoolMintCapacity>
+	loadTradingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadTradingDetailsForPool>
+	loadZoltarUniverseSummary: (universeId: bigint) => ReturnType<typeof loadZoltarUniverseSummary>
+	migrateSharesFromUniverse: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof migrateSharesFromUniverse>[2], targetOutcomeIndexes: bigint[]) => ReturnType<typeof migrateSharesFromUniverse>
+	redeemCompleteSetInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, amount: bigint) => ReturnType<typeof redeemCompleteSetInSecurityPool>
+	redeemSharesInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address) => ReturnType<typeof redeemSharesInSecurityPool>
+}
+
+const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies = {
+	createCompleteSetInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, amount) => await createCompleteSetInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, amount),
+	getWalletEthBalance: async walletAddress => await createConnectedReadClient().getBalance({ address: walletAddress }),
+	loadSecurityPoolMintCapacity: async securityPoolAddress => await loadSecurityPoolMintCapacity(createConnectedReadClient(), securityPoolAddress),
+	loadTradingDetails: async (securityPoolAddress, accountAddress) => await loadTradingDetailsForPool(createConnectedReadClient(), securityPoolAddress, accountAddress),
+	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createConnectedReadClient(), universeId),
+	migrateSharesFromUniverse: async (accountAddress, callbacks, securityPoolAddress, outcome, targetOutcomeIndexes) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, targetOutcomeIndexes),
+	redeemCompleteSetInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, amount) => await redeemCompleteSetInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, amount),
+	redeemSharesInSecurityPool: async (accountAddress, callbacks, securityPoolAddress) => await redeemSharesInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress),
+}
+
+export function useTradingOperations(
+	{ accountAddress, deploymentStatuses, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseTradingOperationsParameters,
+	dependencies: UseTradingOperationsDependencies = defaultUseTradingOperationsDependencies,
+) {
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
@@ -126,9 +138,8 @@ export function useTradingOperations({
 				tradingError.value = undefined
 			},
 			load: async () => {
-				const readClient = createConnectedReadClient()
-				const details = await loadTradingDetailsForPool(readClient, securityPoolAddress, walletAddress)
-				const forkUniverse = await loadZoltarUniverseSummary(readClient, details.universeId)
+				const details = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
+				const forkUniverse = await dependencies.loadZoltarUniverseSummary(details.universeId)
 				return { details, forkUniverse }
 			},
 			onSuccess: ({ details, forkUniverse }: { details: TradingDetails; forkUniverse: ZoltarUniverseSummary | undefined }) => {
@@ -173,17 +184,16 @@ export function useTradingOperations({
 				},
 				async (walletAddress, activeWallet) => {
 					const securityPoolAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Security pool address')
-					const readClient = createConnectedReadClient()
 					const isMainnet = isMainnetChain(activeWallet.chainId)
-					const latestTradingDetails = await loadTradingDetailsForPool(readClient, securityPoolAddress, walletAddress)
-					const latestForkUniverse = await loadZoltarUniverseSummary(readClient, latestTradingDetails.universeId)
+					const latestTradingDetails = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
+					const latestForkUniverse = await dependencies.loadZoltarUniverseSummary(latestTradingDetails.universeId)
 					if (isActionSelectionCurrent()) {
 						tradingDetails.value = latestTradingDetails
 						tradingForkUniverse.value = latestForkUniverse
 					}
 					if (actionName === 'createCompleteSet') {
-						const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
-						const walletEthBalance = await readClient.getBalance({ address: walletAddress })
+						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
+						const walletEthBalance = await dependencies.getWalletEthBalance(walletAddress)
 						const guardMessage = getTradingMintGuardMessage({
 							accountAddress: walletAddress,
 							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
@@ -198,7 +208,7 @@ export function useTradingOperations({
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemCompleteSet') {
-						const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
+						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
 							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
@@ -253,7 +263,7 @@ export function useTradingOperations({
 			'createCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
 				if (!isCurrentSelection()) return undefined
-				return await createCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount'))
+				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount'))
 			},
 			'Failed to mint complete sets',
 		)
@@ -262,13 +272,12 @@ export function useTradingOperations({
 		await runTradingAction(
 			'redeemCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
-				const readClient = createConnectedReadClient()
-				const latestMintCapacity = await loadSecurityPoolMintCapacity(readClient, securityPoolAddress)
+				const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
 				const redeemCollateralAmount = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
 				const redeemShareAmount = convertCollateralAmountToShareAmount(redeemCollateralAmount, latestMintCapacity.completeSetCollateralAmount, latestMintCapacity.shareTokenSupply)
 				if (redeemShareAmount === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
-				return await redeemCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, redeemShareAmount)
+				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, redeemShareAmount)
 			},
 			'Failed to redeem complete sets',
 		)
@@ -278,7 +287,7 @@ export function useTradingOperations({
 			'redeemShares',
 			async (walletAddress, securityPoolAddress, _currentForm, isCurrentSelection) => {
 				if (!isCurrentSelection()) return undefined
-				return await redeemSharesInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress)
+				return await dependencies.redeemSharesInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress)
 			},
 			'Failed to redeem shares',
 		)
@@ -288,7 +297,7 @@ export function useTradingOperations({
 			'migrateShares',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection) => {
 				if (!isCurrentSelection()) return undefined
-				return await migrateSharesFromUniverse(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, parseReportingOutcomeInput(currentForm.selectedShareOutcome), parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'))
+				return await dependencies.migrateSharesFromUniverse(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, parseReportingOutcomeInput(currentForm.selectedShareOutcome), parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'))
 			},
 			'Failed to migrate shares',
 		)

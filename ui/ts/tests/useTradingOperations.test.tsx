@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
+import { useTradingOperations, type UseTradingOperationsDependencies } from '../hooks/useTradingOperations.js'
 import type { TransactionIntent } from '../types/components.js'
 import type { DeploymentStatus, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
@@ -14,7 +15,7 @@ import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { waitFor } from './testUtils/queries'
 
-type UseTradingOperations = typeof import('../hooks/useTradingOperations.js')['useTradingOperations']
+type UseTradingOperations = typeof useTradingOperations
 type UseTradingOperationsState = ReturnType<UseTradingOperations>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -81,6 +82,7 @@ function createHarness(
 	useTradingOperations: UseTradingOperations,
 	onRender: (state: UseTradingOperationsState) => void,
 	onTransactionFailed: (message: string) => void,
+	dependencies: UseTradingOperationsDependencies,
 	{
 		onTransactionCanceled = () => undefined,
 		onTransactionFinished = () => undefined,
@@ -92,21 +94,54 @@ function createHarness(
 	} = {},
 ) {
 	return function TradingOperationsHarness() {
-		const state = useTradingOperations({
-			accountAddress: WALLET_ADDRESS,
-			deploymentStatuses: [createDeploymentStep('proxyDeployer')],
-			enabled: true,
-			onTransactionCanceled,
-			onTransactionFailed,
-			onTransactionFinished,
-			onTransactionPresented: () => undefined,
-			onTransactionRequested,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-			selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
-		})
+		const state = useTradingOperations(
+			{
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses: [createDeploymentStep('proxyDeployer')],
+				enabled: true,
+				onTransactionCanceled,
+				onTransactionFailed,
+				onTransactionFinished,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+			},
+			dependencies,
+		)
 		onRender(state)
 		return <div />
+	}
+}
+
+function createTradingOperationsDependencies(overrides: Partial<UseTradingOperationsDependencies>): UseTradingOperationsDependencies {
+	return {
+		createCompleteSetInSecurityPool: async () => {
+			throw new Error('createCompleteSetInSecurityPool should not be called in this test')
+		},
+		getWalletEthBalance: async () => {
+			throw new Error('getWalletEthBalance should not be called in this test')
+		},
+		loadSecurityPoolMintCapacity: async () => {
+			throw new Error('loadSecurityPoolMintCapacity should not be called in this test')
+		},
+		loadTradingDetails: async () => {
+			throw new Error('loadTradingDetails should not be called in this test')
+		},
+		loadZoltarUniverseSummary: async () => {
+			throw new Error('loadZoltarUniverseSummary should not be called in this test')
+		},
+		migrateSharesFromUniverse: async () => {
+			throw new Error('migrateSharesFromUniverse should not be called in this test')
+		},
+		redeemCompleteSetInSecurityPool: async () => {
+			throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
+		},
+		redeemSharesInSecurityPool: async () => {
+			throw new Error('redeemSharesInSecurityPool should not be called in this test')
+		},
+		...overrides,
 	}
 }
 
@@ -136,15 +171,10 @@ describe('useTradingOperations', () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
 			throw new Error('createCompleteSetInSecurityPool should not be called when the latest mint capacity has no exchange rate')
 		})
-		const createWalletWriteClient = mock(() => {
-			throw new Error('createWalletWriteClient should not be called before mint guard validation passes')
-		})
 		const onTransactionFailed = mock(() => undefined)
-		const readClient = {
-			getBalance: mock(async () => 2n * 10n ** 18n),
-		}
-		mock.module('../contracts.js', () => ({
+		const dependencies = createTradingOperationsDependencies({
 			createCompleteSetInSecurityPool,
+			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				completeSetCollateralAmount: 0n,
 				shareTokenSupply: 10n * 10n ** 18n,
@@ -153,22 +183,8 @@ describe('useTradingOperations', () => {
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
 			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
-			migrateSharesFromUniverse: mock(async () => {
-				throw new Error('migrateSharesFromUniverse should not be called in this test')
-			}),
-			redeemCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
-			}),
-			redeemSharesInSecurityPool: mock(async () => {
-				throw new Error('redeemSharesInSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient,
-		}))
+		})
 
-		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseTradingOperationsState | undefined
 		const Harness = createHarness(
 			useTradingOperations,
@@ -176,6 +192,7 @@ describe('useTradingOperations', () => {
 				hookState = state
 			},
 			onTransactionFailed,
+			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -193,30 +210,23 @@ describe('useTradingOperations', () => {
 
 		expect(onTransactionFailed).toHaveBeenCalledWith('Minting is unavailable because this pool has complete-set shares but no collateral')
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
-		expect(createWalletWriteClient).not.toHaveBeenCalled()
 	})
 
 	test('converts redeem complete-set input to share units before submitting', async () => {
 		const firstMintShareAmount = 10n ** 36n
 		let submittedRedeemAmount: bigint | undefined
-		const redeemCompleteSetInSecurityPool = mock(async (_client: unknown, securityPoolAddress: typeof SECURITY_POOL_ADDRESS, amount: bigint) => {
+		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: typeof SECURITY_POOL_ADDRESS, amount: bigint) => {
 			submittedRedeemAmount = amount
 			return {
-				action: 'redeemCompleteSet',
+				action: 'redeemCompleteSet' as const,
 				hash: zeroHash,
 				securityPoolAddress,
 				universeId: 1n,
 			}
 		})
-		const createWalletWriteClient = mock(() => ({}))
 		const onTransactionFailed = mock(() => undefined)
-		const readClient = {
-			getBalance: mock(async () => 2n * 10n ** 18n),
-		}
-		mock.module('../contracts.js', () => ({
-			createCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('createCompleteSetInSecurityPool should not be called in this test')
-			}),
+		const dependencies = createTradingOperationsDependencies({
+			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				completeSetCollateralAmount: 1n * 10n ** 18n,
 				shareTokenSupply: firstMintShareAmount,
@@ -234,20 +244,9 @@ describe('useTradingOperations', () => {
 				}),
 			),
 			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
-			migrateSharesFromUniverse: mock(async () => {
-				throw new Error('migrateSharesFromUniverse should not be called in this test')
-			}),
 			redeemCompleteSetInSecurityPool,
-			redeemSharesInSecurityPool: mock(async () => {
-				throw new Error('redeemSharesInSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient,
-		}))
+		})
 
-		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseTradingOperationsState | undefined
 		const Harness = createHarness(
 			useTradingOperations,
@@ -255,6 +254,7 @@ describe('useTradingOperations', () => {
 				hookState = state
 			},
 			onTransactionFailed,
+			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -303,23 +303,21 @@ describe('useTradingOperations', () => {
 		const universeA = createUniverseSummary({ childUniverses: [{ exists: true, forkTime: 0n, outcomeIndex: 0n, outcomeLabel: 'Invalid', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 11n }], hasForked: true, universeId: 1n })
 		const universeB = createUniverseSummary({ childUniverses: [{ exists: true, forkTime: 0n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 2n, reputationToken: zeroAddress, universeId: 22n }], hasForked: true, universeId: 2n })
 		const createCompleteSetInSecurityPool = mock(async () => await pendingResult.promise)
-		const loadTradingDetails = mock(async (_client: unknown, securityPoolAddress: string) => {
+		const loadTradingDetails = mock(async (securityPoolAddress: string) => {
 			if (securityPoolAddress === poolA) return detailsA
 			if (securityPoolAddress === poolB) return detailsB
 			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
 		})
-		const loadZoltarUniverseSummary = mock(async (_client: unknown, universeId: bigint) => {
+		const loadZoltarUniverseSummary = mock(async (universeId: bigint) => {
 			if (universeId === universeA.universeId) return universeA
 			if (universeId === universeB.universeId) return universeB
 			throw new Error(`Unexpected universe ${universeId.toString()}`)
 		})
 		const onTransactionFailed = mock(() => undefined)
-		const readClient = {
-			getBalance: mock(async () => 2n * 10n ** 18n),
-		}
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createTradingOperationsDependencies({
 			createCompleteSetInSecurityPool,
+			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				completeSetCollateralAmount: 1n * 10n ** 18n,
 				shareTokenSupply: 1n * 10n ** 18n,
@@ -328,39 +326,28 @@ describe('useTradingOperations', () => {
 			})),
 			loadTradingDetails,
 			loadZoltarUniverseSummary,
-			migrateSharesFromUniverse: mock(async () => {
-				throw new Error('migrateSharesFromUniverse should not be called in this test')
-			}),
-			redeemCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
-			}),
-			redeemSharesInSecurityPool: mock(async () => {
-				throw new Error('redeemSharesInSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseTradingOperationsState | undefined
 		let setSelectedSecurityPoolAddress: ((value: typeof poolA | typeof poolB) => void) | undefined
 		function TradingOperationsHarness() {
 			const [selectedSecurityPoolAddress, setSelectedPoolAddress] = useState<typeof poolA | typeof poolB>(poolA)
 			setSelectedSecurityPoolAddress = setSelectedPoolAddress
-			const state = useTradingOperations({
-				accountAddress: WALLET_ADDRESS,
-				deploymentStatuses: [createDeploymentStep('proxyDeployer')],
-				enabled: true,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress,
-			})
+			const state = useTradingOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					deploymentStatuses: [createDeploymentStep('proxyDeployer')],
+					enabled: true,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					selectedSecurityPoolAddress,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -428,67 +415,54 @@ describe('useTradingOperations', () => {
 			securityPoolAddress: poolA,
 			universeId: universeA.universeId,
 		}))
-		const loadTradingDetails = mock(async (_client: unknown, securityPoolAddress: string) => {
+		const loadTradingDetails = mock(async (securityPoolAddress: string) => {
 			if (securityPoolAddress === poolA) return detailsA
 			if (securityPoolAddress === poolB) return detailsB
 			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
 		})
-		const loadZoltarUniverseSummary = mock(async (_client: unknown, universeId: bigint) => {
+		const loadZoltarUniverseSummary = mock(async (universeId: bigint) => {
 			if (universeId === universeA.universeId) return universeA
 			if (universeId === universeB.universeId) return universeB
 			throw new Error(`Unexpected universe ${universeId.toString()}`)
 		})
 		const onTransactionFailed = mock(() => undefined)
-		const readClient = {
-			getBalance: mock(async () => 2n * 10n ** 18n),
-		}
 		let transactionState = createInitialTransactionTrayState()
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createTradingOperationsDependencies({
 			createCompleteSetInSecurityPool,
+			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => await deferredMintCapacity.promise),
 			loadTradingDetails,
 			loadZoltarUniverseSummary,
-			migrateSharesFromUniverse: mock(async () => {
-				throw new Error('migrateSharesFromUniverse should not be called in this test')
-			}),
-			redeemCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
-			}),
-			redeemSharesInSecurityPool: mock(async () => {
-				throw new Error('redeemSharesInSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseTradingOperationsState | undefined
 		let setSelectedSecurityPoolAddress: ((value: typeof poolA | typeof poolB) => void) | undefined
 		function TradingOperationsHarness() {
 			const [selectedSecurityPoolAddress, setSelectedPoolAddress] = useState<typeof poolA | typeof poolB>(poolA)
 			setSelectedSecurityPoolAddress = setSelectedPoolAddress
-			hookState = useTradingOperations({
-				accountAddress: WALLET_ADDRESS,
-				deploymentStatuses: [createDeploymentStep('proxyDeployer')],
-				enabled: true,
-				onTransactionCanceled: () => {
-					transactionState = markTransactionCanceled(transactionState)
+			hookState = useTradingOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					deploymentStatuses: [createDeploymentStep('proxyDeployer')],
+					enabled: true,
+					onTransactionCanceled: () => {
+						transactionState = markTransactionCanceled(transactionState)
+					},
+					onTransactionFailed,
+					onTransactionFinished: () => {
+						transactionState = markTransactionFinished(transactionState)
+					},
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: (intent: TransactionIntent) => {
+						transactionState = markTransactionRequested(transactionState, intent)
+					},
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					selectedSecurityPoolAddress,
 				},
-				onTransactionFailed,
-				onTransactionFinished: () => {
-					transactionState = markTransactionFinished(transactionState)
-				},
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: (intent: TransactionIntent) => {
-					transactionState = markTransactionRequested(transactionState, intent)
-				},
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress,
-			})
+				dependencies,
+			)
 			return <div />
 		}
 
@@ -545,13 +519,7 @@ describe('useTradingOperations', () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
 			throw new Error('createCompleteSetInSecurityPool should not be called when the active wallet account changed')
 		})
-		const readClient = {
-			getBalance: mock(async () => 2n * 10n ** 18n),
-		}
-		const createConnectedReadClient = mock(() => readClient)
-		const createWalletWriteClient = mock(() => {
-			throw new Error('createWalletWriteClient should not be called before the active wallet guard passes')
-		})
+		const getWalletEthBalance = mock(async () => 2n * 10n ** 18n)
 		const onTransactionFailed = mock(() => undefined)
 		const onTransactionRequested = mock(() => undefined)
 		const loadSecurityPoolMintCapacity = mock(async () => ({
@@ -563,27 +531,14 @@ describe('useTradingOperations', () => {
 		const loadTradingDetails = mock(async () => createTradingDetails())
 		const loadZoltarUniverseSummary = mock(async () => createUniverseSummary())
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createTradingOperationsDependencies({
 			createCompleteSetInSecurityPool,
+			getWalletEthBalance,
 			loadSecurityPoolMintCapacity,
 			loadTradingDetails,
 			loadZoltarUniverseSummary,
-			migrateSharesFromUniverse: mock(async () => {
-				throw new Error('migrateSharesFromUniverse should not be called in this test')
-			}),
-			redeemCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
-			}),
-			redeemSharesInSecurityPool: mock(async () => {
-				throw new Error('redeemSharesInSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient,
-			createWalletWriteClient,
-		}))
+		})
 
-		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseTradingOperationsState | undefined
 		const Harness = createHarness(
 			useTradingOperations,
@@ -591,11 +546,12 @@ describe('useTradingOperations', () => {
 				hookState = state
 			},
 			onTransactionFailed,
+			dependencies,
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		createConnectedReadClient.mockClear()
+		getWalletEthBalance.mockClear()
 		loadTradingDetails.mockClear()
 		loadZoltarUniverseSummary.mockClear()
 		loadSecurityPoolMintCapacity.mockClear()
@@ -613,11 +569,10 @@ describe('useTradingOperations', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
-		expect(createConnectedReadClient).not.toHaveBeenCalled()
+		expect(getWalletEthBalance).not.toHaveBeenCalled()
 		expect(loadTradingDetails).not.toHaveBeenCalled()
 		expect(loadZoltarUniverseSummary).not.toHaveBeenCalled()
 		expect(loadSecurityPoolMintCapacity).not.toHaveBeenCalled()
-		expect(createWalletWriteClient).not.toHaveBeenCalled()
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
@@ -628,13 +583,7 @@ describe('useTradingOperations', () => {
 		const migrateSharesFromUniverse = mock(async () => {
 			throw new Error('migrateSharesFromUniverse should not be called when the active wallet account changed')
 		})
-		const readClient = {
-			getBalance: mock(async () => 2n * 10n ** 18n),
-		}
-		const createConnectedReadClient = mock(() => readClient)
-		const createWalletWriteClient = mock(() => {
-			throw new Error('createWalletWriteClient should not be called before the active wallet guard passes')
-		})
+		const getWalletEthBalance = mock(async () => 2n * 10n ** 18n)
 		const onTransactionFailed = mock(() => undefined)
 		const onTransactionRequested = mock(() => undefined)
 		const loadTradingDetails = mock(async () =>
@@ -663,29 +612,13 @@ describe('useTradingOperations', () => {
 			}),
 		)
 
-		mock.module('../contracts.js', () => ({
-			createCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('createCompleteSetInSecurityPool should not be called in this test')
-			}),
-			loadSecurityPoolMintCapacity: mock(async () => {
-				throw new Error('loadSecurityPoolMintCapacity should not be called when the active wallet account changed')
-			}),
+		const dependencies = createTradingOperationsDependencies({
+			getWalletEthBalance,
 			loadTradingDetails,
 			loadZoltarUniverseSummary,
 			migrateSharesFromUniverse,
-			redeemCompleteSetInSecurityPool: mock(async () => {
-				throw new Error('redeemCompleteSetInSecurityPool should not be called in this test')
-			}),
-			redeemSharesInSecurityPool: mock(async () => {
-				throw new Error('redeemSharesInSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient,
-			createWalletWriteClient,
-		}))
+		})
 
-		const { useTradingOperations } = await import(`../hooks/useTradingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseTradingOperationsState | undefined
 		const Harness = createHarness(
 			useTradingOperations,
@@ -693,11 +626,12 @@ describe('useTradingOperations', () => {
 				hookState = state
 			},
 			onTransactionFailed,
+			dependencies,
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		createConnectedReadClient.mockClear()
+		getWalletEthBalance.mockClear()
 		loadTradingDetails.mockClear()
 		loadZoltarUniverseSummary.mockClear()
 
@@ -715,10 +649,9 @@ describe('useTradingOperations', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
-		expect(createConnectedReadClient).not.toHaveBeenCalled()
+		expect(getWalletEthBalance).not.toHaveBeenCalled()
 		expect(loadTradingDetails).not.toHaveBeenCalled()
 		expect(loadZoltarUniverseSummary).not.toHaveBeenCalled()
-		expect(createWalletWriteClient).not.toHaveBeenCalled()
 		expect(migrateSharesFromUniverse).not.toHaveBeenCalled()
 	})
 })

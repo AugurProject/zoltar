@@ -87,10 +87,6 @@ describe('useRepPrices refresh races', () => {
 				throw new Error('Unexpected REP/USDC quote call')
 			}),
 		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-		}))
-
 		installActiveEnvironmentForTesting({
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),

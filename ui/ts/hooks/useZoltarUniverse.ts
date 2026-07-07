@@ -46,7 +46,30 @@ type UseZoltarUniverseParameters = {
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
+export type UseZoltarUniverseDependencies = {
+	createConnectedReadClient: typeof createConnectedReadClient
+	createWalletWriteClient: typeof createWalletWriteClient
+	createZoltarChildUniverse: typeof createZoltarChildUniverse
+	loadAllZoltarQuestions: typeof loadAllZoltarQuestions
+	loadZoltarQuestionCount: typeof loadZoltarQuestionCount
+	loadZoltarQuestionPage: typeof loadZoltarQuestionPage
+	loadZoltarUniverseSummary: typeof loadZoltarUniverseSummary
+}
+
+const defaultUseZoltarUniverseDependencies: UseZoltarUniverseDependencies = {
+	createConnectedReadClient,
+	createWalletWriteClient,
+	createZoltarChildUniverse,
+	loadAllZoltarQuestions,
+	loadZoltarQuestionCount,
+	loadZoltarQuestionPage,
+	loadZoltarUniverseSummary,
+}
+
+export function useZoltarUniverse(
+	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters,
+	dependencies: UseZoltarUniverseDependencies = defaultUseZoltarUniverseDependencies,
+) {
 	const universeLoad = useLoadController()
 	const questionCountLoad = useLoadController()
 	const questionsLoad = useLoadController()
@@ -112,7 +135,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 					zoltarChildUniversePendingOutcomeIndex.value = undefined
 					return undefined
 				}
-				return await loadZoltarUniverseSummary(createConnectedReadClient(), requestedUniverseId)
+				return await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), requestedUniverseId)
 			},
 			onSuccess: universe => {
 				if (requestedUniverseId !== activeUniverseId) return
@@ -139,7 +162,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		const isCurrent = nextQuestionCountLoad()
 		await questionCountLoad.run({
 			isCurrent,
-			load: async () => await loadZoltarQuestionCount(createConnectedReadClient()),
+			load: async () => await dependencies.loadZoltarQuestionCount(dependencies.createConnectedReadClient()),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
@@ -155,12 +178,12 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		const isQuestionsCurrent = nextQuestionsLoad()
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const questionLoadRefreshKey = environmentRefreshKey
-		const readClient = createConnectedReadClient()
+		const readClient = dependencies.createConnectedReadClient()
 		let loadError: unknown
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
-			load: async () => await loadZoltarQuestionCount(readClient),
+			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
@@ -173,7 +196,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 
 		const questionsTask = questionsLoad.run({
 			isCurrent: isQuestionsCurrent,
-			load: async () => await loadAllZoltarQuestions(readClient),
+			load: async () => await dependencies.loadAllZoltarQuestions(readClient),
 			onSuccess: questions => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
@@ -199,12 +222,12 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		const isQuestionsCurrent = nextQuestionsLoad()
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const questionLoadRefreshKey = environmentRefreshKey
-		const readClient = createConnectedReadClient()
+		const readClient = dependencies.createConnectedReadClient()
 		let loadError: unknown
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
-			load: async () => await loadZoltarQuestionCount(readClient),
+			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
@@ -217,7 +240,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 
 		const questionsTask = questionsLoad.run({
 			isCurrent: isQuestionsCurrent,
-			load: async () => await loadZoltarQuestionPage(readClient, pageIndex, pageSize),
+			load: async () => await dependencies.loadZoltarQuestionPage(readClient, pageIndex, pageSize),
 			onSuccess: page => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadRefreshKey)) return
@@ -256,7 +279,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				onTransactionRequested(createChildUniverseTransactionIntent('zoltar'))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar needs to fork before child universes can be deployed')
-				const transaction = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, outcomeIndex)
+				const transaction = await dependencies.createZoltarChildUniverse(dependencies.createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, outcomeIndex)
 				result = {
 					action: 'createChildUniverse',
 					hash: transaction.hash,

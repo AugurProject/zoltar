@@ -10,15 +10,17 @@ import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '../hooks/useOpenOracleOperations.js'
 
-type UseOpenOracleOperations = typeof import('../hooks/useOpenOracleOperations.js')['useOpenOracleOperations']
-type UseOpenOracleOperationsState = ReturnType<UseOpenOracleOperations>
+type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
+type TestOpenOracleWriteClient = { kind: 'injected-write-client' }
 
 const OPEN_ORACLE_ADDRESS = getAddress('0x00000000000000000000000000000000000000aa')
 const REPORT_ID = 1n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000bb')
 const TOKEN1_ADDRESS = getAddress('0x00000000000000000000000000000000000000c1')
 const TOKEN2_ADDRESS = getAddress('0x00000000000000000000000000000000000000c2')
+const WETH_ADDRESS = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
 const STATE_HASH = '0x1111111111111111111111111111111111111111111111111111111111111111'
 
 function createDeferred<T>() {
@@ -52,7 +54,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		multiplier: 1n,
 		numReports: 0n,
 		openOracleAddress: OPEN_ORACLE_ADDRESS,
-		price: 4n,
+		price: 4n * 10n ** 30n,
 		protocolFee: 0n,
 		protocolFeeRecipient: zeroAddress,
 		reportId: REPORT_ID,
@@ -73,17 +75,66 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	}
 }
 
-function createHarness(useOpenOracleOperations: UseOpenOracleOperations, onRender: (state: UseOpenOracleOperationsState) => void) {
+function createOpenOracleOperationsDependencies(overrides: Partial<UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>> = {}): UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient> {
+	return {
+		approveErc20: async () => {
+			throw new Error('approveErc20 should not be called in this test')
+		},
+		createConnectedReadClient: mock(() => ({
+			getBalance: async () => 0n,
+			getBlockNumber: async () => 0n,
+			readContract: async () => 18,
+		})),
+		createOpenOracleReportInstance: async () => {
+			throw new Error('createOpenOracleReportInstance should not be called in this test')
+		},
+		createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		disputeOracleReport: async () => {
+			throw new Error('disputeOracleReport should not be called in this test')
+		},
+		loadOpenOracleInitialReportPriceResult: mock(async () => ({
+			price: 4n * 10n ** 30n,
+			priceSource: 'MOCK' as const,
+			priceSourceUrl: undefined,
+			status: 'success' as const,
+			token2Amount: 25n,
+		})),
+		loadOpenOracleReportDetails: async () => {
+			throw new Error('loadOpenOracleReportDetails should not be called in this test')
+		},
+		readOptionalMulticall: mock(async () => [
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
+		]),
+		settleOracleReport: async () => {
+			throw new Error('settleOracleReport should not be called in this test')
+		},
+		submitInitialOracleReport: async () => {
+			throw new Error('submitInitialOracleReport should not be called in this test')
+		},
+		wrapWeth: async () => {
+			throw new Error('wrapWeth should not be called in this test')
+		},
+		...overrides,
+	}
+}
+
+function createHarness(dependencies: UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>, onRender: (state: UseOpenOracleOperationsState) => void) {
 	return function OpenOracleOperationsHarness() {
-		const state = useOpenOracleOperations({
-			accountAddress: WALLET_ADDRESS,
-			enabled: true,
-			onTransactionFinished: () => undefined,
-			onTransactionPresented: () => undefined,
-			onTransactionRequested: () => undefined,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-		})
+		const state = useOpenOracleOperations(
+			{
+				accountAddress: WALLET_ADDRESS,
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			},
+			dependencies,
+		)
 
 		onRender(state)
 
@@ -121,88 +172,23 @@ describe('useOpenOracleOperations', () => {
 	test('submitInitialReport reloads token access after a successful write', async () => {
 		const reportDetails = createOpenOracleReportDetails()
 		const readOptionalMulticall = mock(async () => [
-			{ result: 100n, status: 'success' },
-			{ result: 25n, status: 'success' },
-			{ result: 100n, status: 'success' },
-			{ result: 25n, status: 'success' },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
 		])
 		const submitInitialOracleReport = mock(async () => ({
-			action: 'submitInitialReport',
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d1',
+			action: 'submitInitialReport' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d1' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails: mock(async () => reportDetails),
 			readOptionalMulticall,
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
 			submitInitialOracleReport,
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: (details: OpenOracleReportDetails) => (details.currentReporter === zeroAddress || details.reportTimestamp === 0n ? 'initial-report' : 'dispute'),
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -243,19 +229,12 @@ describe('useOpenOracleOperations', () => {
 		let tokenAccessLoadCount = 0
 		const approveErc20 = mock(async () => ({
 			action: 'approveToken1' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d7',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d7' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOpenOracleOperationsDependencies({
 			approveErc20,
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
 				if (reportId === REPORT_ID) return firstReportDetails
 				if (reportId === secondReportId) return createOpenOracleReportDetails({ reportId: secondReportId })
 				throw new Error(`Unexpected report ${reportId.toString()}`)
@@ -263,73 +242,15 @@ describe('useOpenOracleOperations', () => {
 			readOptionalMulticall: mock(async () => {
 				tokenAccessLoadCount += 1
 				return [
-					{ result: 100n, status: 'success' },
-					{ result: 25n, status: 'success' },
-					{ result: 100n, status: 'success' },
-					{ result: 25n, status: 'success' },
+					{ result: 100n, status: 'success' as const },
+					{ result: 25n, status: 'success' as const },
+					{ result: 100n, status: 'success' as const },
+					{ result: 25n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'initial-report',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -368,18 +289,20 @@ describe('useOpenOracleOperations', () => {
 	test('settleReport ignores a stale post-success refresh after the selected report changes', async () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails({
+			currentTime: 11n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: REPORT_ID,
 			reportTimestamp: 1n,
 		})
 		const secondReportDetails = createOpenOracleReportDetails({
+			currentTime: 11n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: secondReportId,
 			reportTimestamp: 1n,
 		})
 		const staleRefresh = createDeferred<OpenOracleReportDetails>()
 		let firstReportLoadCount = 0
-		const loadOpenOracleReportDetails = mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+		const loadOpenOracleReportDetails = mock(async (_openOracleAddress: Address, reportId: bigint) => {
 			if (reportId === REPORT_ID) {
 				firstReportLoadCount += 1
 				if (firstReportLoadCount <= 2) return firstReportDetails
@@ -389,88 +312,23 @@ describe('useOpenOracleOperations', () => {
 			throw new Error(`Unexpected report ${reportId.toString()}`)
 		})
 		const readOptionalMulticall = mock(async () => [
-			{ result: 100n, status: 'success' },
-			{ result: 25n, status: 'success' },
-			{ result: 100n, status: 'success' },
-			{ result: 25n, status: 'success' },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
 		])
 		const settleOracleReport = mock(async () => ({
 			action: 'settle' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d2',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d2' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails,
 			readOptionalMulticall,
 			settleOracleReport,
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'settle',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -513,18 +371,20 @@ describe('useOpenOracleOperations', () => {
 	test('settleReport blocks a stale pre-write reload after the selected report changes', async () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails({
+			currentTime: 11n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: REPORT_ID,
 			reportTimestamp: 1n,
 		})
 		const secondReportDetails = createOpenOracleReportDetails({
+			currentTime: 11n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: secondReportId,
 			reportTimestamp: 1n,
 		})
 		const stalePreflightReload = createDeferred<OpenOracleReportDetails>()
 		let firstReportLoadCount = 0
-		const loadOpenOracleReportDetails = mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+		const loadOpenOracleReportDetails = mock(async (_openOracleAddress: Address, reportId: bigint) => {
 			if (reportId === REPORT_ID) {
 				firstReportLoadCount += 1
 				if (firstReportLoadCount === 1) return firstReportDetails
@@ -534,88 +394,23 @@ describe('useOpenOracleOperations', () => {
 			throw new Error(`Unexpected report ${reportId.toString()}`)
 		})
 		const readOptionalMulticall = mock(async () => [
-			{ result: 100n, status: 'success' },
-			{ result: 25n, status: 'success' },
-			{ result: 100n, status: 'success' },
-			{ result: 25n, status: 'success' },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
+			{ result: 100n, status: 'success' as const },
+			{ result: 25n, status: 'success' as const },
 		])
 		const settleOracleReport = mock(async () => ({
 			action: 'settle' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d9',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d9' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails,
 			readOptionalMulticall,
 			settleOracleReport,
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'settle',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -653,7 +448,7 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
 		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId)
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Selected report changed. Review the current report and try again.')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Selected report changed. Review the current report and try again')
 		expect(settleOracleReport).not.toHaveBeenCalled()
 	})
 
@@ -686,20 +481,12 @@ describe('useOpenOracleOperations', () => {
 		const readClient = {
 			getBalance: mock(async () => 5n * 10n ** 18n),
 			getBlockNumber: mock(async () => 123n),
+			readContract: mock(async () => 18),
 		}
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => readClient),
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
 				if (reportId === REPORT_ID) return firstReportDetails
 				if (reportId === secondReportId) return secondReportDetails
 				throw new Error(`Unexpected report ${reportId.toString()}`)
@@ -708,77 +495,26 @@ describe('useOpenOracleOperations', () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 1) return await staleTokenAccess.promise
 				return [
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'initial-report',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 			loadOpenOracleInitialReportPriceResult: mock(async () => {
 				quoteLoadCount += 1
 				if (quoteLoadCount === 1) return await staleQuote.promise
 				return {
-					price: 7n,
-					priceSource: 'MOCK',
+					price: 7n * 10n ** 30n,
+					priceSource: 'MOCK' as const,
 					priceSourceUrl: undefined,
-					status: 'success',
+					status: 'success' as const,
 					token2Amount: 35n,
 				}
 			}),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -810,7 +546,7 @@ describe('useOpenOracleOperations', () => {
 
 		await act(async () => {
 			staleQuote.resolve({
-				price: 4n,
+				price: 4n * 10n ** 30n,
 				priceSource: 'MOCK',
 				priceSourceUrl: undefined,
 				status: 'success',
@@ -843,97 +579,41 @@ describe('useOpenOracleOperations', () => {
 		try {
 			const reportDetails = createOpenOracleReportDetails()
 			const readOptionalMulticall = mock(async () => [
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
+				{ result: 100n, status: 'success' as const },
+				{ result: 25n, status: 'success' as const },
+				{ result: 100n, status: 'success' as const },
+				{ result: 25n, status: 'success' as const },
 			])
 			const submitInitialOracleReport = mock(async (_client: unknown, _openOracleAddress: string, _reportId: bigint, _amount1: bigint, _amount2: bigint, _stateHash: string) => ({
-				action: 'submitInitialReport',
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000d3',
+				action: 'submitInitialReport' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000d3' as const,
 			}))
 			let quoteLoadCount = 0
 			const loadOpenOracleInitialReportPriceResult = mock(async () => {
 				quoteLoadCount += 1
 				const refreshedQuote = quoteLoadCount > 1
 				return {
-					price: refreshedQuote ? 5n : 4n,
-					priceSource: 'MOCK',
+					price: (refreshedQuote ? 5n : 4n) * 10n ** 30n,
+					priceSource: 'MOCK' as const,
 					priceSourceUrl: undefined,
-					status: 'success',
+					status: 'success' as const,
 					token2Amount: refreshedQuote ? 20n : 25n,
 				}
 			})
 
-			mock.module('../contracts.js', () => ({
-				approveErc20: mock(async () => {
-					throw new Error('approveErc20 should not be called in this test')
-				}),
-				createOpenOracleReportInstance: mock(async () => {
-					throw new Error('createOpenOracleReportInstance should not be called in this test')
-				}),
-				disputeOracleReport: mock(async () => {
-					throw new Error('disputeOracleReport should not be called in this test')
-				}),
-				getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+			const dependencies = createOpenOracleOperationsDependencies({
+				createConnectedReadClient: mock(() => ({
+					getBalance: async () => 0n,
+					getBlockNumber: async () => 10n,
+					readContract: async () => 18,
+				})),
 				loadOpenOracleReportDetails: mock(async () => reportDetails),
 				readOptionalMulticall,
-				settleOracleReport: mock(async () => {
-					throw new Error('settleOracleReport should not be called in this test')
-				}),
 				submitInitialOracleReport,
-				wrapWeth: mock(async () => {
-					throw new Error('wrapWeth should not be called in this test')
-				}),
-			}))
-			mock.module('../lib/clients.js', () => ({
-				createConnectedReadClient: mock(() => ({ getBlockNumber: async () => 10n, kind: 'read-client' })),
-				createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-			}))
-			mock.module('../lib/openOracle.js', () => ({
-				deriveOpenOracleDisputeSubmissionDetails: () => ({
-					blockMessage: undefined,
-					canSubmit: true,
-					expectedNewAmount1: 100n,
-					token1ContributionAmount: 0n,
-					token1Decimals: 18,
-					token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-					token2ContributionAmount: 0n,
-					token2Decimals: 18,
-					token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				}),
-				deriveOpenOracleInitialReportSubmissionDetails: (parameters: { priceInput: string }) => {
-					const amount2 = parameters.priceInput.trim() === '5' ? 20n : 25n
-					return {
-						amount1: 100n,
-						amount2,
-						blockMessage: undefined,
-						canSubmit: true,
-						hasWethWrapAction: false,
-						priceSource: parameters.priceInput.trim() === '5' ? 'MOCK' : 'Manual override',
-						priceSourceUrl: undefined,
-						requiredWethWrapAmount: 0n,
-						token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-						token1Decimals: 18,
-						token2Approval: { hasSufficientApproval: true, requiredAmount: amount2, shortfall: 0n, targetAmount: amount2 },
-						token2Decimals: 18,
-						wrapRequiredWethMessage: undefined,
-					}
-				},
-				formatOpenOracleDisputeWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-				formatOpenOracleInitialReportWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-				formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-				formatOpenOracleSettleWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-				getOpenOracleCreateGuardMessage: () => undefined,
-				getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-				getOpenOracleSelectedReportActionMode: (details: OpenOracleReportDetails) => (details.currentReporter === zeroAddress || details.reportTimestamp === 0n ? 'initial-report' : 'dispute'),
-				getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 				loadOpenOracleInitialReportPriceResult,
-			}))
-
-			const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+			})
 			let hookState: UseOpenOracleOperationsState | undefined
-			const Harness = createHarness(useOpenOracleOperations, state => {
+			const Harness = createHarness(dependencies, state => {
 				hookState = state
 			})
 			const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -982,25 +662,17 @@ describe('useOpenOracleOperations', () => {
 		let tokenAccessLoadCount = 0
 		const submitInitialOracleReport = mock(async () => ({
 			action: 'submitInitialReport' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d5',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d5' as const,
 		}))
 		const readClient = {
 			getBalance: mock(async () => 5n * 10n ** 18n),
 			getBlockNumber: mock(async () => 123n),
+			readContract: mock(async () => 18),
 		}
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => readClient),
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
 				if (reportId === REPORT_ID) return firstReportDetails
 				if (reportId === secondReportId) return secondReportDetails
 				throw new Error(`Unexpected report ${reportId.toString()}`)
@@ -1009,71 +681,23 @@ describe('useOpenOracleOperations', () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
 				return [
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
 			submitInitialOracleReport,
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-			formatOpenOracleInitialReportWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'initial-report',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 7n,
-				priceSource: 'MOCK',
+				price: 7n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
 				priceSourceUrl: undefined,
-				status: 'success',
+				status: 'success' as const,
 				token2Amount: 35n,
 			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1143,25 +767,17 @@ describe('useOpenOracleOperations', () => {
 		let tokenAccessLoadCount = 0
 		const wrapWeth = mock(async () => ({
 			action: 'wrapWeth' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d6',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d6' as const,
 		}))
 		const readClient = {
 			getBalance: mock(async () => 5n * 10n ** 18n),
 			getBlockNumber: mock(async () => 123n),
+			readContract: mock(async () => 18),
 		}
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => readClient),
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
 				if (reportId === REPORT_ID) return firstReportDetails
 				if (reportId === secondReportId) return secondReportDetails
 				throw new Error(`Unexpected report ${reportId.toString()}`)
@@ -1170,72 +786,23 @@ describe('useOpenOracleOperations', () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
 				return [
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
 			wrapWeth,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				canWrapRequiredWeth: true,
-				hasWethWrapAction: true,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 1n * 10n ** 18n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'initial-report',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 7n,
-				priceSource: 'MOCK',
+				price: 7n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
 				priceSourceUrl: undefined,
-				status: 'success',
+				status: 'success' as const,
 				token2Amount: 35n,
 			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1297,94 +864,41 @@ describe('useOpenOracleOperations', () => {
 		try {
 			const reportDetails = createOpenOracleReportDetails()
 			const readOptionalMulticall = mock(async () => [
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
+				{ result: 100n, status: 'success' as const },
+				{ result: 25n, status: 'success' as const },
+				{ result: 100n, status: 'success' as const },
+				{ result: 25n, status: 'success' as const },
 			])
 			const submitInitialOracleReport = mock(async () => ({
-				action: 'submitInitialReport',
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000d4',
+				action: 'submitInitialReport' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000d4' as const,
 			}))
 			let quoteLoadCount = 0
 			const loadOpenOracleInitialReportPriceResult = mock(async () => {
 				quoteLoadCount += 1
 				if (quoteLoadCount > 1) throw new Error('Stale quote RPC unavailable')
 				return {
-					price: 4n,
-					priceSource: 'MOCK',
+					price: 4n * 10n ** 30n,
+					priceSource: 'MOCK' as const,
 					priceSourceUrl: undefined,
-					status: 'success',
+					status: 'success' as const,
 					token2Amount: 25n,
 				}
 			})
 
-			mock.module('../contracts.js', () => ({
-				approveErc20: mock(async () => {
-					throw new Error('approveErc20 should not be called in this test')
-				}),
-				createOpenOracleReportInstance: mock(async () => {
-					throw new Error('createOpenOracleReportInstance should not be called in this test')
-				}),
-				disputeOracleReport: mock(async () => {
-					throw new Error('disputeOracleReport should not be called in this test')
-				}),
-				getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+			const dependencies = createOpenOracleOperationsDependencies({
+				createConnectedReadClient: mock(() => ({
+					getBalance: async () => 0n,
+					getBlockNumber: async () => 10n,
+					readContract: async () => 18,
+				})),
 				loadOpenOracleReportDetails: mock(async () => reportDetails),
 				readOptionalMulticall,
-				settleOracleReport: mock(async () => {
-					throw new Error('settleOracleReport should not be called in this test')
-				}),
 				submitInitialOracleReport,
-				wrapWeth: mock(async () => {
-					throw new Error('wrapWeth should not be called in this test')
-				}),
-			}))
-			mock.module('../lib/clients.js', () => ({
-				createConnectedReadClient: mock(() => ({ getBlockNumber: async () => 10n, kind: 'read-client' })),
-				createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-			}))
-			mock.module('../lib/openOracle.js', () => ({
-				deriveOpenOracleDisputeSubmissionDetails: () => ({
-					blockMessage: undefined,
-					canSubmit: true,
-					expectedNewAmount1: 100n,
-					token1ContributionAmount: 0n,
-					token1Decimals: 18,
-					token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-					token2ContributionAmount: 0n,
-					token2Decimals: 18,
-					token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				}),
-				deriveOpenOracleInitialReportSubmissionDetails: () => ({
-					amount1: 100n,
-					amount2: 25n,
-					blockMessage: undefined,
-					canSubmit: true,
-					hasWethWrapAction: false,
-					priceSource: 'MOCK',
-					priceSourceUrl: undefined,
-					requiredWethWrapAmount: 0n,
-					token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-					token1Decimals: 18,
-					token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-					token2Decimals: 18,
-					wrapRequiredWethMessage: undefined,
-				}),
-				formatOpenOracleDisputeWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-				formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-				formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-				formatOpenOracleSettleWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-				getOpenOracleCreateGuardMessage: () => undefined,
-				getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-				getOpenOracleSelectedReportActionMode: (details: OpenOracleReportDetails) => (details.currentReporter === zeroAddress || details.reportTimestamp === 0n ? 'initial-report' : 'dispute'),
-				getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 				loadOpenOracleInitialReportPriceResult,
-			}))
-
-			const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+			})
 			let hookState: UseOpenOracleOperationsState | undefined
-			const Harness = createHarness(useOpenOracleOperations, state => {
+			const Harness = createHarness(dependencies, state => {
 				hookState = state
 			})
 			const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1413,7 +927,7 @@ describe('useOpenOracleOperations', () => {
 			expect(loadOpenOracleInitialReportPriceResult).toHaveBeenCalledTimes(2)
 			expect(requireHookState(hookState).openOracleForm.price).toBe('')
 			expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
-			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Automatic price quote is stale and could not be refreshed. Refresh the quote or enter a manual price before submitting.')
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Automatic price quote is stale and could not be refreshed. Refresh the quote or enter a manual price before submitting')
 			expect(submitInitialOracleReport).not.toHaveBeenCalled()
 		} finally {
 			Date.now = originalDateNow
@@ -1423,6 +937,7 @@ describe('useOpenOracleOperations', () => {
 	test('disputeReport blocks a stale token-access refresh after the selected report changes', async () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 99n,
 			currentReporter: WALLET_ADDRESS,
 			reportTimestamp: 1n,
 		})
@@ -1439,23 +954,18 @@ describe('useOpenOracleOperations', () => {
 		let tokenAccessLoadCount = 0
 		const disputeOracleReport = mock(async () => ({
 			action: 'dispute' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d6',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d6' as const,
 		}))
 		const readClient = {
 			getBalance: mock(async () => 5n * 10n ** 18n),
 			getBlockNumber: mock(async () => 123n),
+			readContract: mock(async () => 18),
 		}
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => readClient),
 			disputeOracleReport,
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async (_client: unknown, _oracleAddress: string, reportId: bigint) => {
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
 				if (reportId === REPORT_ID) return firstReportDetails
 				if (reportId === secondReportId) return secondReportDetails
 				throw new Error(`Unexpected report ${reportId.toString()}`)
@@ -1464,73 +974,22 @@ describe('useOpenOracleOperations', () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
 				return [
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
+					{ result: 200n, status: 'success' as const },
+					{ result: 35n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'dispute',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 7n,
-				priceSource: 'MOCK',
+				price: 7n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
 				priceSourceUrl: undefined,
-				status: 'success',
+				status: 'success' as const,
 				token2Amount: 35n,
 			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1590,93 +1049,36 @@ describe('useOpenOracleOperations', () => {
 
 	test('disputeReport reloads token access after a successful write', async () => {
 		const reportDetails = createOpenOracleReportDetails({
+			currentAmount1: 149n,
 			currentReporter: WALLET_ADDRESS,
 			initialReporter: WALLET_ADDRESS,
 			reportTimestamp: 5n,
 		})
 		const readOptionalMulticall = mock(async () => [
-			{ result: 200n, status: 'success' },
-			{ result: 50n, status: 'success' },
-			{ result: 200n, status: 'success' },
-			{ result: 50n, status: 'success' },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
 		])
 		const disputeOracleReport = mock(async () => ({
-			action: 'dispute',
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d2',
+			action: 'dispute' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d2' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
+		const dependencies = createOpenOracleOperationsDependencies({
 			disputeOracleReport,
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
 			loadOpenOracleReportDetails: mock(async () => reportDetails),
 			readOptionalMulticall,
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 150n,
-				token1ContributionAmount: 50n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 50n, shortfall: 0n, targetAmount: 50n },
-				token2ContributionAmount: 10n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 10n, shortfall: 0n, targetAmount: 10n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-			formatOpenOracleInitialReportWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (_error: unknown, fallbackMessage: string) => fallbackMessage,
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: (details: OpenOracleReportDetails) => (details.currentReporter === zeroAddress || details.reportTimestamp === 0n ? 'initial-report' : 'dispute'),
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
+				price: 4n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
 				priceSourceUrl: undefined,
-				status: 'success',
+				status: 'success' as const,
 				token2Amount: 25n,
 			})),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1716,67 +1118,26 @@ describe('useOpenOracleOperations', () => {
 		const editedToken1Address = getAddress('0x00000000000000000000000000000000000000d1')
 		const editedToken2Address = getAddress('0x00000000000000000000000000000000000000d2')
 		const token1Decimals = createDeferred<number>()
-		const createOpenOracleReportInstance = mock(async (_client: unknown, submission: { exactToken1Report: string; token1Address: Address; token2Address: Address; token1Decimals: number }) => {
-			expect(submission).toEqual({
-				exactToken1Report: '10',
-				token1Address: TOKEN1_ADDRESS,
-				token1Decimals: 18,
-				token2Address: TOKEN2_ADDRESS,
-			})
+		const createOpenOracleReportInstance = mock(async (_client: unknown, submission: { exactToken1Report: bigint; token1Address: Address; token2Address: Address }) => {
+			expect(submission.exactToken1Report).toBe(10n * 10n ** 18n)
+			expect(submission.token1Address).toBe(TOKEN1_ADDRESS)
+			expect(submission.token2Address).toBe(TOKEN2_ADDRESS)
 			return {
 				action: 'createReportInstance' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000e1',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e1' as const,
 			}
 		})
-		const actualOpenOracle = await import('../lib/openOracle.js')
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance,
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async () => {
-				throw new Error('loadOpenOracleReportDetails should not be called in this test')
-			}),
-			readOptionalMulticall: mock(async () => {
-				throw new Error('readOptionalMulticall should not be called in this test')
-			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
+		const dependencies = createOpenOracleOperationsDependencies({
 			createConnectedReadClient: mock(() => ({
 				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
 				readContract: mock(async () => await token1Decimals.promise),
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			...actualOpenOracle,
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleCreateValidationMessage: () => undefined,
-			parseOpenOracleCreateFormSubmission: ({ form, token1Decimals: currentToken1Decimals }: { form: { exactToken1Report: string; token1Address: Address; token2Address: Address }; token1Decimals: number }) => ({
-				exactToken1Report: form.exactToken1Report,
-				token1Address: form.token1Address,
-				token1Decimals: currentToken1Decimals,
-				token2Address: form.token2Address,
-			}),
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+			createOpenOracleReportInstance,
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1825,95 +1186,38 @@ describe('useOpenOracleOperations', () => {
 			expect(stateHash).toBe(STATE_HASH)
 			return {
 				action: 'submitInitialReport' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000e2',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e2' as const,
 			}
 		})
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 0n,
+				getBlockNumber: async () => 123n,
+				readContract: async () => 18,
+			})),
 			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails()),
 			readOptionalMulticall: mock(async () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
 				return [
-					{ result: 100n, status: 'success' },
-					{ result: 25n, status: 'success' },
-					{ result: 100n, status: 'success' },
-					{ result: 25n, status: 'success' },
+					{ result: 100n, status: 'success' as const },
+					{ result: 25n, status: 'success' as const },
+					{ result: 100n, status: 'success' as const },
+					{ result: 25n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
 			submitInitialOracleReport,
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ getBlockNumber: async () => 123n, kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: (parameters: { priceInput: string }) => ({
-				amount1: 100n,
-				amount2: parameters.priceInput.trim() === '4' ? 25n : 20n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleCreateValidationMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'initial-report',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
 			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
+				price: 4n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
 				priceSourceUrl: undefined,
-				status: 'success',
+				status: 'success' as const,
 				token2Amount: 25n,
 			})),
-			parseOpenOracleCreateFormSubmission: () => {
-				throw new Error('parseOpenOracleCreateFormSubmission should not be called in this test')
-			},
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1966,99 +1270,41 @@ describe('useOpenOracleOperations', () => {
 		const staleTokenAccess = createDeferred<[{ result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }]>()
 		let tokenAccessLoadCount = 0
 		const wrapWeth = mock(async (_client: unknown, amount: bigint) => {
-			expect(amount).toBe(1n * 10n ** 18n)
+			expect(amount).toBe(1n)
 			return {
 				action: 'wrapWeth' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000e3',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e3' as const,
 			}
 		})
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
-			disputeOracleReport: mock(async () => {
-				throw new Error('disputeOracleReport should not be called in this test')
-			}),
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
-			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails()),
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 1_000n,
+				getBlockNumber: async () => 123n,
+				readContract: async () => 18,
+			})),
+			loadOpenOracleInitialReportPriceResult: mock(async () => ({
+				price: 4n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
+				priceSourceUrl: undefined,
+				status: 'success' as const,
+				token2Amount: 25n,
+			})),
+			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails({ token2: WETH_ADDRESS })),
 			readOptionalMulticall: mock(async () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
 				return [
-					{ result: 100n, status: 'success' },
-					{ result: 25n, status: 'success' },
-					{ result: 100n, status: 'success' },
-					{ result: 25n, status: 'success' },
+					{ result: 100n, status: 'success' as const },
+					{ result: 25n, status: 'success' as const },
+					{ result: 100n, status: 'success' as const },
+					{ result: 24n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
 			wrapWeth,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ getBlockNumber: async () => 123n, kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: () => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: 100n,
-				token1ContributionAmount: 0n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-				token2ContributionAmount: 0n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 0n, shortfall: 0n, targetAmount: 0n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: (parameters: { priceInput: string }) => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				canWrapRequiredWeth: true,
-				hasWethWrapAction: true,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: parameters.priceInput.trim() === '4' ? 1n * 10n ** 18n : 2n * 10n ** 18n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleCreateValidationMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'initial-report',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})),
-			parseOpenOracleCreateFormSubmission: () => {
-				throw new Error('parseOpenOracleCreateFormSubmission should not be called in this test')
-			},
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -2096,7 +1342,7 @@ describe('useOpenOracleOperations', () => {
 				{ result: 100n, status: 'success' },
 				{ result: 25n, status: 'success' },
 				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
+				{ result: 24n, status: 'success' },
 			])
 			await wrapPromise
 		})
@@ -2118,21 +1364,27 @@ describe('useOpenOracleOperations', () => {
 			expect(stateHash).toBe(STATE_HASH)
 			return {
 				action: 'dispute' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000e4',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e4' as const,
 			}
 		})
 
-		mock.module('../contracts.js', () => ({
-			approveErc20: mock(async () => {
-				throw new Error('approveErc20 should not be called in this test')
-			}),
-			createOpenOracleReportInstance: mock(async () => {
-				throw new Error('createOpenOracleReportInstance should not be called in this test')
-			}),
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 0n,
+				getBlockNumber: async () => 123n,
+				readContract: async () => 18,
+			})),
 			disputeOracleReport,
-			getOpenOracleAddress: () => OPEN_ORACLE_ADDRESS,
+			loadOpenOracleInitialReportPriceResult: mock(async () => ({
+				price: 4n * 10n ** 30n,
+				priceSource: 'MOCK' as const,
+				priceSourceUrl: undefined,
+				status: 'success' as const,
+				token2Amount: 25n,
+			})),
 			loadOpenOracleReportDetails: mock(async () =>
 				createOpenOracleReportDetails({
+					currentAmount1: 149n,
 					currentReporter: WALLET_ADDRESS,
 					reportTimestamp: 1n,
 				}),
@@ -2141,77 +1393,15 @@ describe('useOpenOracleOperations', () => {
 				tokenAccessLoadCount += 1
 				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
 				return [
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
-					{ result: 200n, status: 'success' },
-					{ result: 35n, status: 'success' },
+					{ result: 500n, status: 'success' as const },
+					{ result: 500n, status: 'success' as const },
+					{ result: 500n, status: 'success' as const },
+					{ result: 500n, status: 'success' as const },
 				]
 			}),
-			settleOracleReport: mock(async () => {
-				throw new Error('settleOracleReport should not be called in this test')
-			}),
-			submitInitialOracleReport: mock(async () => {
-				throw new Error('submitInitialOracleReport should not be called in this test')
-			}),
-			wrapWeth: mock(async () => {
-				throw new Error('wrapWeth should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ getBlockNumber: async () => 123n, kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-		mock.module('../lib/openOracle.js', () => ({
-			deriveOpenOracleDisputeSubmissionDetails: (parameters: { disputeNewAmount1Input: string }) => ({
-				blockMessage: undefined,
-				canSubmit: true,
-				expectedNewAmount1: parameters.disputeNewAmount1Input.trim() === '150' ? 150n : 250n,
-				token1ContributionAmount: 50n,
-				token1Decimals: 18,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 50n, shortfall: 0n, targetAmount: 50n },
-				token2ContributionAmount: 10n,
-				token2Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 10n, shortfall: 0n, targetAmount: 10n },
-			}),
-			deriveOpenOracleInitialReportSubmissionDetails: () => ({
-				amount1: 100n,
-				amount2: 25n,
-				blockMessage: undefined,
-				canSubmit: true,
-				hasWethWrapAction: false,
-				priceSource: 'Manual override',
-				priceSourceUrl: undefined,
-				requiredWethWrapAmount: 0n,
-				token1Approval: { hasSufficientApproval: true, requiredAmount: 100n, shortfall: 0n, targetAmount: 100n },
-				token1Decimals: 18,
-				token2Approval: { hasSufficientApproval: true, requiredAmount: 25n, shortfall: 0n, targetAmount: 25n },
-				token2Decimals: 18,
-				wrapRequiredWethMessage: undefined,
-			}),
-			formatOpenOracleDisputeWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOracleInitialReportWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			formatOpenOraclePriceInput: (price: bigint) => price.toString(),
-			formatOpenOracleSettleWriteErrorMessage: (error: unknown, fallbackMessage: string) => (error instanceof Error ? error.message : fallbackMessage),
-			getOpenOracleCreateGuardMessage: () => undefined,
-			getOpenOracleCreateValidationMessage: () => undefined,
-			getOpenOracleDisputeAvailability: () => ({ canAct: true, message: undefined }),
-			getOpenOracleSelectedReportActionMode: () => 'dispute',
-			getOpenOracleSettleAvailability: () => ({ canAct: true, message: undefined }),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})),
-			parseOpenOracleCreateFormSubmission: () => {
-				throw new Error('parseOpenOracleCreateFormSubmission should not be called in this test')
-			},
-		}))
-
-		const { useOpenOracleOperations } = await import(`../hooks/useOpenOracleOperations.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(useOpenOracleOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -2252,10 +1442,10 @@ describe('useOpenOracleOperations', () => {
 
 		await act(async () => {
 			staleTokenAccess.resolve([
-				{ result: 200n, status: 'success' },
-				{ result: 35n, status: 'success' },
-				{ result: 200n, status: 'success' },
-				{ result: 35n, status: 'success' },
+				{ result: 500n, status: 'success' },
+				{ result: 500n, status: 'success' },
+				{ result: 500n, status: 'success' },
+				{ result: 500n, status: 'success' },
 			])
 			await disputePromise
 		})

@@ -157,7 +157,19 @@ type UseOnchainStateOptions = {
 	enableChainClock?: boolean
 }
 
-export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true }: UseOnchainStateOptions = {}) {
+export type UseOnchainStateDependencies = {
+	getDeploymentSteps: typeof getDeploymentSteps
+	loadDeploymentStatusOracleSnapshot: typeof loadDeploymentStatusOracleSnapshot
+	loadErc20Balance: typeof loadErc20Balance
+}
+
+const defaultUseOnchainStateDependencies: UseOnchainStateDependencies = {
+	getDeploymentSteps,
+	loadDeploymentStatusOracleSnapshot,
+	loadErc20Balance,
+}
+
+export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies = defaultUseOnchainStateDependencies) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -165,7 +177,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		wethBalance: undefined,
 	})
 	const deploymentStatuses = useSignal<DeploymentStatus[]>(
-		getDeploymentSteps().map(step => ({
+		dependencies.getDeploymentSteps().map(step => ({
 			...step,
 			deployed: false,
 		})),
@@ -285,7 +297,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && readBackendMessage.value === undefined)
 			void deploymentStatusLoad.track(async () => {
 				try {
-					const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
+					const snapshot = await dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient())
 					if (!isCurrent()) return
 					augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
 					deploymentStatuses.value = snapshot.deploymentStatuses
@@ -312,7 +324,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				if (connectedAddress !== undefined) {
 					const readClient = createConnectedReadClient()
 					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
-					const wethBalancePromise = loadErc20Balance(readClient, getWethAddress(), connectedAddress)
+					const wethBalancePromise = dependencies.loadErc20Balance(readClient, getWethAddress(), connectedAddress)
 					void loadWalletState({
 						chainIdPromise: Promise.resolve(connectedChainId ?? backend.profile.chainIdHex),
 						connectedAddress,

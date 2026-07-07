@@ -10,6 +10,7 @@ import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { waitFor } from './testUtils/queries'
 import type { DeploymentStatus, MarketCreationResult } from '../types/contracts.js'
+import type { UseMarketCreationDependencies } from '../hooks/useMarketCreation.js'
 
 type UseMarketCreation = typeof import('../hooks/useMarketCreation.js')['useMarketCreation']
 type UseMarketCreationState = ReturnType<UseMarketCreation>
@@ -66,24 +67,16 @@ describe('useMarketCreation', () => {
 	})
 
 	test('blocks repeated market creation submissions while the first request is still preparing', async () => {
-		const pendingCreate = createDeferred<MarketCreationResult>()
-		const createMarketTransaction = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }) => {
-			client.onTransactionSubmitted?.('0xabc')
+		const pendingCreate = createDeferred<MarketCreationResult & { hash: Hash }>()
+		const createMarketTransaction = mock(async (_accountAddress: Address, callbacks: { onTransactionSubmitted: (hash: Hash) => void }) => {
+			callbacks.onTransactionSubmitted('0xabc')
 			return await pendingCreate.promise
 		})
 		const loadZoltarQuestions = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
-
-		mock.module('../contracts.js', () => ({
+		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted?: (hash: Hash) => void }) => ({
-				onTransactionSubmitted: options.onTransactionSubmitted,
-				walletAddress,
-			})),
-		}))
+		}
 		mock.module('../hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions,
@@ -94,18 +87,21 @@ describe('useMarketCreation', () => {
 		const { useMarketCreation } = await import(`../hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness() {
-			hookState = useMarketCreation({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 0n,
-				activeZoltarView: 'create',
-				autoLoadInitialData: false,
-				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-			})
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 
 			return <div />
 		}
@@ -137,6 +133,7 @@ describe('useMarketCreation', () => {
 
 		pendingCreate.resolve({
 			createQuestionHash: '0xabc',
+			hash: '0xabc',
 			marketType: 'binary',
 			questionId: '0x0b',
 		})
@@ -151,23 +148,16 @@ describe('useMarketCreation', () => {
 	test('clears the submission-in-progress latch after a pre-request wallet disconnect', async () => {
 		const createMarketTransaction = mock(async () => ({
 			createQuestionHash: '0xabc' as Hash,
+			hash: '0xabc' as Hash,
 			marketType: 'binary' as const,
 			questionId: '0x0b',
 		}))
 		const loadZoltarQuestions = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
 		const onTransactionRequested = mock(() => undefined)
-
-		mock.module('../contracts.js', () => ({
+		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted?: (hash: Hash) => void }) => ({
-				onTransactionSubmitted: options.onTransactionSubmitted,
-				walletAddress,
-			})),
-		}))
+		}
 		mock.module('../hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions,
@@ -178,18 +168,21 @@ describe('useMarketCreation', () => {
 		const { useMarketCreation } = await import(`../hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness() {
-			hookState = useMarketCreation({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 0n,
-				activeZoltarView: 'create',
-				autoLoadInitialData: false,
-				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-			})
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 
 			return <div />
 		}
@@ -231,26 +224,19 @@ describe('useMarketCreation', () => {
 
 	test('createMarket snapshots the submitted form before wallet preflight resolves', async () => {
 		const activeAccounts = createDeferred<readonly Address[]>()
-		const createMarketTransaction = mock(async (_client: unknown, parameters: { questionData: { title: string } }) => {
+		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, parameters: { questionData: { title: string } }) => {
 			return {
 				createQuestionHash: '0xabc' as Hash,
+				hash: '0xabc' as Hash,
 				marketType: 'binary' as const,
 				questionId: parameters.questionData.title === 'Question A' ? '0x0b' : '0x0c',
 			}
 		})
 		const loadZoltarQuestions = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
-
-		mock.module('../contracts.js', () => ({
+		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted?: (hash: Hash) => void }) => ({
-				onTransactionSubmitted: options.onTransactionSubmitted,
-				walletAddress,
-			})),
-		}))
+		}
 		mock.module('../hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions,
@@ -267,18 +253,21 @@ describe('useMarketCreation', () => {
 		const { useMarketCreation } = await import(`../hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness() {
-			hookState = useMarketCreation({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 0n,
-				activeZoltarView: 'create',
-				autoLoadInitialData: false,
-				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-			})
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 
 			return <div />
 		}
@@ -311,7 +300,7 @@ describe('useMarketCreation', () => {
 		})
 
 		expect(createMarketTransaction).toHaveBeenCalledTimes(1)
-		expect(createMarketTransaction.mock.calls[0]?.[1].questionData.title).toBe('Question A')
+		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe('Question A')
 		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})

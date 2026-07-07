@@ -6,6 +6,7 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { ReportingDetails } from '../types/contracts.js'
+import { useReportingOperations, type UseReportingOperationsDependencies } from '../hooks/useReportingOperations.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
 import type { TransactionIntent } from '../types/components.js'
@@ -13,7 +14,7 @@ import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
-type UseReportingOperations = typeof import('../hooks/useReportingOperations.js')['useReportingOperations']
+type UseReportingOperations = typeof useReportingOperations
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
 const REP = 10n ** 18n
 
@@ -79,6 +80,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 function createHarness(
 	useReportingOperations: UseReportingOperations,
 	onRender: (state: UseReportingOperationsState) => void,
+	dependencies: UseReportingOperationsDependencies,
 	{
 		onTransactionCanceled = () => undefined,
 		onTransactionFinished = () => undefined,
@@ -90,15 +92,18 @@ function createHarness(
 	} = {},
 ) {
 	return function ReportingOperationsHarness() {
-		const state = useReportingOperations({
-			accountAddress: zeroAddress,
-			onTransactionCanceled,
-			onTransactionFinished,
-			onTransactionPresented: () => undefined,
-			onTransactionRequested,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-		})
+		const state = useReportingOperations(
+			{
+				accountAddress: zeroAddress,
+				onTransactionCanceled,
+				onTransactionFinished,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			},
+			dependencies,
+		)
 
 		onRender(state)
 
@@ -110,6 +115,21 @@ function requireHookState(state: UseReportingOperationsState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 
 	return state
+}
+
+function createReportingOperationsDependencies(overrides: Partial<UseReportingOperationsDependencies>): UseReportingOperationsDependencies {
+	return {
+		loadReportingDetails: async () => {
+			throw new Error('loadReportingDetails should not be called in this test')
+		},
+		reportOutcomeInSecurityPool: async () => {
+			throw new Error('reportOutcomeInSecurityPool should not be called in this test')
+		},
+		withdrawEscalationFromSecurityPool: async () => {
+			throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
+		},
+		...overrides,
+	}
 }
 
 describe('useReportingOperations', () => {
@@ -137,31 +157,24 @@ describe('useReportingOperations', () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000c1')
 		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000c2')
 		const deferredLoads: { deferred: ReturnType<typeof createDeferred<ReportingDetails>>; securityPoolAddress: Address }[] = []
-		const loadReportingDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadReportingDetails = mock(async (securityPoolAddress: Address) => {
 			const deferred = createDeferred<ReportingDetails>()
 			deferredLoads.push({ deferred, securityPoolAddress })
 			return await deferred.promise
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool: mock(async () => {
-				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
-			}),
-			withdrawEscalationFromSecurityPool: mock(async () => {
-				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -258,23 +271,19 @@ describe('useReportingOperations', () => {
 			throw new Error('reportOutcomeInSecurityPool should not be called when the remaining selected-side threshold capacity is exhausted')
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
 			reportOutcomeInSecurityPool,
-			withdrawEscalationFromSecurityPool: mock(async () => {
-				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -308,23 +317,19 @@ describe('useReportingOperations', () => {
 			throw new Error('reportOutcomeInSecurityPool should not be called while the pool is not operational')
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
 			reportOutcomeInSecurityPool,
-			withdrawEscalationFromSecurityPool: mock(async () => {
-				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -364,23 +369,19 @@ describe('useReportingOperations', () => {
 			throw new Error('withdrawEscalationFromSecurityPool should not be called when indexes mismatch the requested side')
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool: mock(async () => {
-				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
-			}),
 			withdrawEscalationFromSecurityPool,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -417,23 +418,19 @@ describe('useReportingOperations', () => {
 			throw new Error('withdrawEscalationFromSecurityPool should not be called when the migration window has closed')
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool: mock(async () => {
-				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
-			}),
 			withdrawEscalationFromSecurityPool,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -496,7 +493,7 @@ describe('useReportingOperations', () => {
 			return response
 		})
 		const withdrawEscalationCalls: { depositIndexes: bigint[]; outcome: string; securityPoolAddress: Address }[] = []
-		const withdrawEscalationFromSecurityPool = mock(async (_client: unknown, requestedSecurityPoolAddress: Address, outcome: string, depositIndexes: bigint[]) => {
+		const withdrawEscalationFromSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, requestedSecurityPoolAddress: Address, outcome: string, depositIndexes: bigint[]) => {
 			withdrawEscalationCalls.push({
 				depositIndexes,
 				outcome,
@@ -504,30 +501,26 @@ describe('useReportingOperations', () => {
 			})
 			return {
 				action: 'withdrawEscalation' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000ef' as const,
 				outcome: 'yes' as const,
 				securityPoolAddress,
 				universeId: 1n,
 			}
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool: mock(async () => {
-				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
-			}),
 			withdrawEscalationFromSecurityPool,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -593,7 +586,7 @@ describe('useReportingOperations', () => {
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
-		const loadReportingDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadReportingDetails = mock(async (securityPoolAddress: Address) => {
 			if (securityPoolAddress === firstPoolAddress) {
 				firstPoolLoadCount += 1
 				if (firstPoolLoadCount === 1) return firstPoolDetails
@@ -604,29 +597,25 @@ describe('useReportingOperations', () => {
 		})
 		const withdrawEscalationFromSecurityPool = mock(async () => ({
 			action: 'withdrawEscalation' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000aa' as const,
 			outcome: 'yes' as const,
 			securityPoolAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool: mock(async () => {
-				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
-			}),
 			withdrawEscalationFromSecurityPool,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(useReportingOperations, state => {
-			hookState = state
 		})
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			dependencies,
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -690,39 +679,32 @@ describe('useReportingOperations', () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const stalePreflight = createDeferred<ReportingDetails>()
-		const loadReportingDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadReportingDetails = mock(async (securityPoolAddress: Address) => {
 			if (securityPoolAddress === firstPoolAddress) return await stalePreflight.promise
 			if (securityPoolAddress === secondPoolAddress) return createReportingDetails(secondPoolAddress)
 			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
 		})
 		const reportOutcomeInSecurityPool = mock(async () => ({
 			action: 'reportOutcome' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000ab' as const,
 			outcome: 'yes' as const,
 			securityPoolAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
 		let transactionState = createInitialTransactionTrayState()
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
 			reportOutcomeInSecurityPool,
-			withdrawEscalationFromSecurityPool: mock(async () => {
-				throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
-			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseReportingOperationsState | undefined
 		const Harness = createHarness(
 			useReportingOperations,
 			state => {
 				hookState = state
 			},
+			dependencies,
 			{
 				onTransactionCanceled: () => {
 					transactionState = markTransactionCanceled(transactionState)

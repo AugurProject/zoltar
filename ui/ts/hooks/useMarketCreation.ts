@@ -30,21 +30,21 @@ type UseMarketCreationParameters = {
 	refreshState: WriteOperationsParameters['refreshState']
 }
 
-export function useMarketCreation({
-	accountAddress,
-	activeUniverseId,
-	activeZoltarView,
-	autoLoadInitialData,
-	deploymentStatuses,
-	environmentRefreshKey,
-	onTransactionFailed,
-	onTransactionFinished,
-	onTransactionPresented,
-	onTransactionPrepared,
-	onTransactionRequested,
-	onTransactionSubmitted,
-	refreshState,
-}: UseMarketCreationParameters) {
+export type UseMarketCreationDependencies = {
+	createMarket: (accountAddress: Address, callbacks: { onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']; onTransactionSubmitted: (hash: Hash) => void }, parameters: ReturnType<typeof createMarketParameters>) => Promise<MarketCreationResult & { hash: Hash }>
+}
+
+const defaultUseMarketCreationDependencies: UseMarketCreationDependencies = {
+	createMarket: async (accountAddress, callbacks, parameters) => {
+		const result = await createMarketTransaction(createWalletWriteClient(accountAddress, callbacks), parameters)
+		return { ...result, hash: result.createQuestionHash }
+	},
+}
+
+export function useMarketCreation(
+	{ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters,
+	dependencies: UseMarketCreationDependencies = defaultUseMarketCreationDependencies,
+) {
 	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
@@ -94,8 +94,7 @@ export function useMarketCreation({
 				},
 				async walletAddress => {
 					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
-					const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), createMarketParameters(submittedMarketForm))
-					return { ...result, hash: result.createQuestionHash }
+					return await dependencies.createMarket(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, createMarketParameters(submittedMarketForm))
 				},
 				'Failed to create question',
 				result => {

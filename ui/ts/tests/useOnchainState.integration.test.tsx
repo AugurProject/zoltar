@@ -13,10 +13,10 @@ import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile }
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { useOnchainState, type UseOnchainStateDependencies } from '../hooks/useOnchainState.js'
 
-type UseOnchainState = typeof import('../hooks/useOnchainState.js')['useOnchainState']
-type UseOnchainStateState = ReturnType<UseOnchainState>
-type UseOnchainStateOptions = Parameters<UseOnchainState>[0]
+type UseOnchainStateState = ReturnType<typeof useOnchainState>
+type UseOnchainStateOptions = Parameters<typeof useOnchainState>[0]
 
 type UnsubCounter = {
 	subscribe: number
@@ -133,9 +133,24 @@ function createBackend({
 	return { backend, subscriptionState }
 }
 
-function createHarness(useOnchainState: UseOnchainState, onRender: (state: UseOnchainStateState) => void, options?: UseOnchainStateOptions) {
+function createOnchainStateDependencies(overrides: Partial<UseOnchainStateDependencies> = {}): UseOnchainStateDependencies {
+	return {
+		getDeploymentSteps,
+		loadDeploymentStatusOracleSnapshot: mock(async () => ({
+			augurPlaceHolderDeployed: false,
+			deploymentStatuses: getDeploymentSteps().map(step => ({
+				...step,
+				deployed: false,
+			})),
+		})),
+		loadErc20Balance: mock(async () => 0n),
+		...overrides,
+	}
+}
+
+function createHarness(dependencies: UseOnchainStateDependencies, onRender: (state: UseOnchainStateState) => void, options?: UseOnchainStateOptions) {
 	return function OnchainStateHarness() {
-		const state = useOnchainState(options)
+		const state = useOnchainState(options, dependencies)
 		onRender(state)
 
 		return h('div', {}, [
@@ -220,16 +235,14 @@ describe('useOnchainState (integration)', () => {
 		}))
 		const loadErc20Balance = mock(async () => 555n)
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -270,18 +283,16 @@ describe('useOnchainState (integration)', () => {
 		}))
 		const loadErc20Balance = mock(async () => 0n)
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		let resetEnvironment = installActiveEnvironmentForTesting(backendA)
 		let hookState: UseOnchainStateState | undefined
 		function Harness() {
 			const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
-			const state = useOnchainState({ activeEnvironmentNonce })
+			const state = useOnchainState({ activeEnvironmentNonce }, dependencies)
 			hookState = state
 			return h(
 				'button',
@@ -344,22 +355,21 @@ describe('useOnchainState (integration)', () => {
 			accountAddress: accountB,
 			readClient: createReadClient({ blockNumber: 300n, blockTimestamp: 400n }),
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
+		})
 
 		try {
-			const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
 			let resetEnvironment = installActiveEnvironmentForTesting(backendA)
 			let hookState: UseOnchainStateState | undefined
 			function Harness() {
 				const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
-				const state = useOnchainState({ activeEnvironmentNonce })
+				const state = useOnchainState({ activeEnvironmentNonce }, dependencies)
 				hookState = state
 				return h(
 					'button',
@@ -405,13 +415,11 @@ describe('useOnchainState (integration)', () => {
 			augurPlaceHolderDeployed: false,
 			deploymentStatuses,
 		}))
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const wrongChainReadClient = {
 			...createReadClient(),
 			getBlock: async () => ({ number: 999n, timestamp: 1234n }),
@@ -420,7 +428,7 @@ describe('useOnchainState (integration)', () => {
 		const { backend, subscriptionState } = createBackend({ hasWallet: false, readClient: wrongChainReadClient })
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -448,13 +456,11 @@ describe('useOnchainState (integration)', () => {
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 777n)
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const rpcBlockTimestamp = BigInt(Math.floor(Date.now() / 1000))
 		const rpcReadClient = {
 			...createReadClient({ blockNumber: 321n, blockTimestamp: rpcBlockTimestamp, ethBalance: 123n }),
@@ -468,7 +474,7 @@ describe('useOnchainState (integration)', () => {
 		backend.getChainId = async () => '0xaa36a7'
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -497,13 +503,11 @@ describe('useOnchainState (integration)', () => {
 			augurPlaceHolderDeployed: false,
 			deploymentStatuses,
 		}))
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const wrongChainReadClient = {
 			...createReadClient(),
 			getChainId: async () => 11155111,
@@ -515,7 +519,7 @@ describe('useOnchainState (integration)', () => {
 		const { backend } = createBackend({ hasWallet: false, profile, readClient: wrongChainReadClient })
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -533,18 +537,16 @@ describe('useOnchainState (integration)', () => {
 			accountAddress: account,
 			readClient: createReadClient(),
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => {
 				throw new Error('deployment status RPC failed')
 			}),
 			loadErc20Balance: mock(async () => 111n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -561,19 +563,17 @@ describe('useOnchainState (integration)', () => {
 				throw new Error('wallet connect failed')
 			},
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: true,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -588,19 +588,17 @@ describe('useOnchainState (integration)', () => {
 		const { backend } = createBackend({
 			hasWallet: false,
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -632,19 +630,17 @@ describe('useOnchainState (integration)', () => {
 			accountAddress: account,
 			readClient,
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 222n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -672,19 +668,17 @@ describe('useOnchainState (integration)', () => {
 			accountAddress: account,
 			readClient,
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 333n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -730,16 +724,14 @@ describe('useOnchainState (integration)', () => {
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 0n)
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -770,19 +762,17 @@ describe('useOnchainState (integration)', () => {
 			},
 		})
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -810,19 +800,17 @@ describe('useOnchainState (integration)', () => {
 			},
 			readClient: createReadClient({ ethBalance: 0n, blockNumber: 1n, blockTimestamp: 2n }),
 		})
-		mock.module('../contracts.js', () => ({
+		let dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const successModule = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetSuccessEnvironment = installActiveEnvironmentForTesting(backend)
 		let successState: UseOnchainStateState | undefined
-		const SuccessHarness = createHarness(successModule.useOnchainState, state => {
+		const SuccessHarness = createHarness(dependencies, state => {
 			successState = state
 		})
 		const successRender = await renderIntoDocument(h(SuccessHarness, {}))
@@ -849,19 +837,17 @@ describe('useOnchainState (integration)', () => {
 				await failureSignal.promise
 			},
 		}).backend
-		mock.module('../contracts.js', () => ({
+		dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const failureModule = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetFailureEnvironment = installActiveEnvironmentForTesting(failureBackend)
 		let failureState: UseOnchainStateState | undefined
-		const FailureHarness = createHarness(failureModule.useOnchainState, state => {
+		const FailureHarness = createHarness(dependencies, state => {
 			failureState = state
 		})
 		const failureRender = await renderIntoDocument(h(FailureHarness, {}))
@@ -889,16 +875,14 @@ describe('useOnchainState (integration)', () => {
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 0n)
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -948,16 +932,14 @@ describe('useOnchainState (integration)', () => {
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => wethBalance)
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1000,19 +982,17 @@ describe('useOnchainState (integration)', () => {
 		const { backend, subscriptionState } = createBackend({
 			readClient: createReadClient({ ethBalance: 3n }),
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1037,19 +1017,17 @@ describe('useOnchainState (integration)', () => {
 		const { backend } = createBackend({
 			readClient: createReadClient({ ethBalance: 4n }),
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps: () => deploymentStatuses,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1075,19 +1053,17 @@ describe('useOnchainState (integration)', () => {
 		const { backend } = createBackend({
 			isBootstrapped: true,
 		})
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
 				augurPlaceHolderDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
-		const Harness = createHarness(useOnchainState, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -1126,17 +1102,15 @@ describe('useOnchainState (integration)', () => {
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 654n)
-		mock.module('../contracts.js', () => ({
+		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot,
 			loadErc20Balance,
-		}))
-
-		const { useOnchainState } = await import(`../hooks/useOnchainState.js?case=${crypto.randomUUID()}`)
+		})
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 		let hookState: UseOnchainStateState | undefined
 		const Harness = createHarness(
-			useOnchainState,
+			dependencies,
 			state => {
 				hookState = state
 			},
