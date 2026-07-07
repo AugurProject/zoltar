@@ -17,10 +17,10 @@
 					escalation games and Zoltar forks.
 				</p>
 				<p>
-					If you are new to oracle mechanics, read this page in order through
-					<strong>Security Guardrails</strong>, then read
-					<strong>Attack Model and Defenses</strong>. The first sections explain
-					the operating path; the attack model explains why the path is bounded.
+					The operating path comes before the security model. Price requests,
+					settlement, and staged operations come before
+					<strong>Attack Model and Defenses</strong>, where the bounded-risk
+					argument ties those operations to the attack model.
 				</p>
 				<p>
 					In this integration, one OpenOracle price request follows a compact
@@ -31,9 +31,9 @@
 					amounts only if freshness, pending-report, and safety checks pass.
 				</p>
 				<p>
-					OpenOracle reports the onchain REP/WETH pair. These docs usually call
-					the result a REP/ETH price because WETH is the ETH-denominated leg
-					used for solvency math.
+					OpenOracle reports the onchain REP/WETH pair. Placeholder solvency
+					math treats the result as a REP/ETH price because WETH is the
+					ETH-denominated leg.
 				</p>
 				<p>
 					Relevant references:
@@ -53,8 +53,8 @@
 					<a href="./whitepaper_placeholder.html#oracle"
 						>REP/ETH Price Oracle</a
 					>
-					section. The OpenOracle Technical Details sidebar is the canonical
-					source for current oracle research, especially
+					section. Current oracle research lives in the OpenOracle Technical
+					Details sidebar, especially
 					<a href="https://docs.openoracle.org/openoracle/attack-vectors"
 						>Attack Vectors</a
 					>
@@ -580,10 +580,10 @@
 				<details class="interactive-example" id="initial-report-estimator-example" open>
 					<summary>Initial report estimator</summary>
 					<p>
-						Use this estimator to stress the formula inputs. It treats the
-						displayed equation as a continuous model so the sensitivity curves
-						are easy to read; deployment still uses the fixed-point rounding
-						rules described above.
+						The estimator stresses the formula inputs. It treats the displayed
+						equation as a continuous model so the sensitivity curves are easy to
+						read; deployment still uses the fixed-point rounding rules described
+						above.
 						The REP/ETH movement input is an adverse movement buffer during
 						settlement, not an average signed drift.
 					</p>
@@ -1062,8 +1062,8 @@
 					than the liquidation can pay.
 				</p>
 				<p>
-					First ask how far the manipulated price must move before the
-					liquidation can execute. The distance guard discounts the honest
+					The first boundary is how far the manipulated price must move before
+					the liquidation can execute. The distance guard discounts the honest
 					price, then the execution threshold and reported price error are
 					measured against that honest baseline.
 				</p>
@@ -1125,9 +1125,9 @@
 					</p>
 				</div>
 				<p>
-					Next ask what the attacker earns and what delay costs. The payoff is
-					binary: only a price strictly beyond the liquidation threshold and far
-					enough past the guarded distance unlocks
+					The attack model separates attacker payoff from delay cost. The payoff
+					is binary: only a price strictly beyond the liquidation threshold and
+					far enough past the guarded distance unlocks
 					<code>externalPayoff</code>; everything else unlocks nothing.
 					The censorship cost grows with duration, the dispute barrier, and the
 					report liquidity honest reporters can use.
@@ -1197,9 +1197,9 @@
 					</p>
 				</div>
 				<p>
-					Finally ask how long censorship would need to remain cheap for the
-					attack to be attractive. The safety duration shrinks as the censorship
-					rate and liquidity ratio grow.
+					The final bound is how long censorship would need to remain cheap for
+					the attack to be attractive. The safety duration shrinks as the
+					censorship rate and liquidity ratio grow.
 				</p>
 				<div class="equation" id="eq-openoracle-safe-censorship-duration">
 					<math
@@ -1243,9 +1243,8 @@
 				<details class="interactive-example" id="binary-censorship-example">
 					<summary>Adjust a binary censorship example</summary>
 					<p>
-						Use the inputs to see how the liquidation distance, manipulated
-						price, report liquidity, and payoff change the attacker's
-						payoff and delay cost.
+						The liquidation distance, manipulated price, report liquidity, and
+						payoff determine the attacker's payoff and delay cost.
 					</p>
 					<div class="example-grid">
 						<label>
@@ -1862,8 +1861,8 @@
 			<section id="parameters">
 				<h2>OpenOracle Parameters Used</h2>
 				<p>
-					This table summarizes the OpenOracle fields most relevant to the
-					integration. The canonical exhaustive current-value table remains the
+					The integration depends on the OpenOracle fields below. The canonical
+					exhaustive current-value table remains the
 					Placeholder whitepaper's
 					<a href="./whitepaper_placeholder.html#parameters"
 						>Current Parameters</a

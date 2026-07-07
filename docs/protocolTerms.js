@@ -2,7 +2,7 @@ const repEthPriceDefinition = 'The REP cost of 1 ETH, stored with protocol scali
 
 window.protocolTermDefinitions = Object.freeze({
 	'activation delay': 'The waiting period before a queued protocol change or operation becomes active.',
-	allowance: 'A limit on how much pool capacity an operation may use. In these docs it usually means the REP-backed exposure a vault permits.',
+	allowance: 'A limit on how much pool capacity an operation may use. For Placeholder, it usually means the REP-backed exposure a vault permits.',
 	'allowance update': 'A request to change that exposure limit. It waits for a fresh REP/ETH price before it can run.',
 	'answer option': 'One answer a question permits, such as Yes, No, Invalid, or a scalar value.',
 	'answer space': 'All answers a question permits.',
@@ -111,7 +111,7 @@ window.protocolTermDefinitions = Object.freeze({
 	NUM_OUTCOMES: 'The Placeholder constant for the three supported outcomes: Invalid, Yes, and No.',
 	NULLIFIER_DEPTH: 'The depth of the tree used to remember consumed proofs. It prevents the same carried deposit from being used twice.',
 	'number of ticks': 'The scalar-outcome denominator used to map a scalar answer onto payout numerators.',
-	oracle: 'In these docs, Zoltar is the truth/forking oracle and OpenOracle is the REP/ETH price oracle; they answer different questions.',
+	oracle: 'Zoltar is the truth/forking oracle, and OpenOracle is the REP/ETH price oracle; they answer different questions.',
 	openoracle: 'The report-and-dispute price oracle used by Placeholder for bounded REP/ETH pricing.',
 	operation: 'A protocol action, such as a liquidation, withdrawal, or allowance update.',
 	outcome: 'A possible answer or payoff branch for a question or market.',
@@ -140,7 +140,7 @@ window.protocolTermDefinitions = Object.freeze({
 	'protocol fee recipient': 'The account that receives protocol fees for an OpenOracle report instance.',
 	protocolFeeRecipient: 'The account that receives OpenOracle protocol fees for the report instance.',
 	'protocol fee': 'The fee charged by the oracle or protocol path.',
-	question: 'A Zoltar object that defines valid answers and can drive universe forks.',
+	question: 'A Zoltar object that defines valid answers. After it ends, forkUniverse can use it to define child branches for a universe fork.',
 	'question encoding': 'The on-chain representation of a question and its valid answer format.',
 	'question registry': 'The Zoltar storage that records questions and their validity metadata.',
 	recovery: 'A cleanup path for a pending report when settlement did not produce an accepted price update.',

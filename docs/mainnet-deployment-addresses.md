@@ -1,6 +1,6 @@
 # Mainnet Deployment Addresses
 
-These values are derived from the frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts. The machine-readable source for this table is `docs/mainnet-deployment-addresses.json`.
+Frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts determine the addresses and values below. `docs/mainnet-deployment-addresses.json` is the machine-readable source.
 
 ## Frozen Protocol Config
 

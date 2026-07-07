@@ -20,7 +20,7 @@
 						<b>Zoltar Oracle Layer</b>
 					</a>
 					<a class="sidebar-companion" href="./start-here.html">
-						<span>First read</span>
+						<span>Entry overview</span>
 						<b>Start Here Guide</b>
 					</a>
 					<nav aria-label="Document sections">
@@ -2714,7 +2714,7 @@
 									<th>Step</th>
 									<th>Contract area</th>
 									<th>State or check</th>
-									<th>Why readers should care</th>
+									<th>Why it matters</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -4056,7 +4056,7 @@
 									<th>Step</th>
 									<th>Function or contract area</th>
 									<th>State or proof material</th>
-									<th>Why readers should care</th>
+									<th>Why it matters</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -4653,9 +4653,9 @@
 						credited to that child. It tracks how much REP has already been
 						split for each parent-pool/outcome pair and only splits the
 						shortfall before sweeping child REP into the child pool. The
+						migration-proxy and child-backing guardrails are collected in
 						<a href="./operator-reference.md#fork-migration">Fork Migration</a>
-						reference summarizes the migration-proxy and child-backing
-						guardrails.
+						.
 					</p>
 					<figure class="diagram" id="fig-placeholder-proportional-migration">
 						<svg
@@ -6476,20 +6476,20 @@
 						<code>524288</code>), so even a tree containing every possible tick
 						has bounded height. Finalization descends aggregate tree paths and
 						does not scan every bid; individual bid settlement is paged later.
-						The
+						Bidding, refund, finalization, and settlement guardrails are
+						collected in
 						<a href="./operator-reference.md#truth-auction-operations"
 							>Truth Auction Operations</a
 						>
-						reference keeps the bidding, refund, finalization, and settlement
-						guardrails.
+						.
 					</p>
 					<div class="callout">
 						<strong>Why sell REP instead of choosing truth?</strong> The child
 						branch is already defined by Zoltar's fork. The auction's job is
 						narrower: convert some child-universe REP into ETH so the migrated
 						child pool can repair collateral and remain usable.
-						<a href="./auction-design.html">Auction design</a> explains the
-						owner, clearing, refund, and underfunded paths in implementation
+						The <a href="./auction-design.html">auction implementation</a>
+						follows owner authority, clearing, refund, and underfunded paths in
 						order.
 					</div>
 					<figure class="diagram" id="fig-placeholder-auction-operations">
@@ -6859,10 +6859,9 @@
 					<details class="interactive-example" id="underfunded-auction-example">
 						<summary>Adjust an underfunded limit-price example</summary>
 						<p>
-							Use the inputs to see how the accepted threshold ETH, REP sale
-							cap, tick price, same-tick ETH, and bidder ETH determine the
-							threshold, per-tick demand, bidder fill, and REP not purchased by
-							the displayed tick.
+							The accepted threshold ETH, REP sale cap, tick price, same-tick
+							ETH, and bidder ETH determine the threshold, per-tick demand,
+							bidder fill, and REP not purchased by the displayed tick.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -7393,9 +7392,10 @@
 						token amounts, disputers can replace a bad report with a larger one,
 						a settler finalizes the report after the timing window, and the
 						settlement callback returns the final amounts to the coordinator.
-						The dedicated
+						Request, dispute, settlement, and callback safety checks are
+						detailed in the dedicated
 						<a href="./openOracleIntegration.html">OpenOracle integration</a>
-						page expands this lifecycle and its safety checks.
+						guide.
 					</p>
 					<p>
 						If the last price is stale, solvency-sensitive operations can be
@@ -7577,7 +7577,7 @@
 									<th>Step</th>
 									<th>Function or callback</th>
 									<th>State changed</th>
-									<th>Why readers should care</th>
+									<th>Why it matters</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -8613,10 +8613,10 @@
 						>
 					</div>
 					<p>
-						Read the lifecycle as four checkpoints: pool creation, local
-						escalation, fork migration, and optional collateral repair. The
+						The lifecycle has four checkpoints: pool creation, local escalation,
+						fork migration, and optional collateral repair. The
 						<a href="#fig-placeholder-lifecycle">Lifecycle Flow figure</a> shows
-						the happy path; the migration and auction sections define the
+						the happy path; fork migration and auction repair cover the
 						exceptional cases.
 					</p>
 					<ul class="clean-list">

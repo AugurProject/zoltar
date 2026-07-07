@@ -11,12 +11,12 @@
 			<header>
 				<h1>Placeholder and Zoltar Start Here</h1>
 				<p>
-					This guide is the shortest path into the project. Read it before the
-					whitepapers if you want the actors, assets, contract boundaries, and
-					main lifecycles in one place.
+					Placeholder combines Zoltar's forkable truth layer with markets,
+					REP-backed security pools, local disputes, fork migration, auction
+					repair, and REP/ETH solvency checks.
 				</p>
 				<p>
-					Start with these words. A <em>universe</em> is a Zoltar truth branch
+					Core terms come first. A <em>universe</em> is a Zoltar truth branch
 					with its own REP token. After a fork, a holder has a
 					<em>migration balance</em>: parent-universe REP value that can be
 					reproduced into selected fork branches, with each branch receiving at
@@ -29,11 +29,11 @@
 					truth.
 				</p>
 				<p>
-					The core idea is split responsibility. <code>Zoltar</code> creates
-					forkable truth universes and child REP. Placeholder builds markets on
-					top of those universes with ETH-backed shares, REP-backed security
-					vaults, local escalation games, fork migration, truth-auction repair,
-					and a REP/ETH solvency oracle.
+					<code>Zoltar</code> owns forkable truth universes and child REP.
+					Placeholder owns market mechanics on top of those universes:
+					ETH-backed shares, REP-backed security vaults, local escalation
+					games, fork migration, truth-auction repair, and a REP/ETH solvency
+					oracle.
 				</p>
 			</header>
 
@@ -103,9 +103,9 @@
 							Market lifecycle overview
 						</title>
 						<desc id="start-here-lifecycle-desc">
-							A question becomes a pool, trades locally, escalates if needed,
-							then either resolves locally or forks into child-pool migration,
-							auction repair, and redemption.
+							A market starts from a Zoltar question, trades in a security pool,
+							enters local escalation if disputed, then either resolves locally
+							or moves through fork migration, auction repair, and redemption.
 						</desc>
 						<defs>
 							<marker
@@ -178,7 +178,7 @@
 						<tr>
 							<th>Actor or asset</th>
 							<th>What it does</th>
-							<th>Reader shortcut</th>
+							<th>Role in the flow</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -313,7 +313,7 @@
 						<tr>
 							<th>Stage</th>
 							<th>What happens</th>
-							<th>Contracts to read</th>
+							<th>Primary contracts</th>
 							<th>Why this stage exists</th>
 						</tr>
 					</thead>
@@ -378,7 +378,7 @@
 						<tr>
 							<td>Question and pool setup</td>
 							<td>Universe, question id, outcome labels, origin pool.</td>
-							<td>Zoltar stores possible answers; Placeholder decides whether the question can become a pool.</td>
+							<td>Zoltar stores possible answers; Placeholder deploys an origin pool only for eligible questions.</td>
 						</tr>
 						<tr>
 							<td>Trading and underwriting</td>
@@ -409,8 +409,8 @@
 				</table>
 			</section>
 
-			<section id="read-next">
-				<h2>Read Next</h2>
+			<section id="documentation-map">
+				<h2>Documentation Map</h2>
 				<table>
 					<thead>
 						<tr>
