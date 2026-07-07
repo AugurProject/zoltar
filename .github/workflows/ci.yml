@@ -42,7 +42,7 @@ jobs:
           version: ${{ env.FOUNDRY_VERSION }}
 
       - name: Cache Bun dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb', 'ui/bun.lock', 'ui/bun.lockb', 'solidity/bun.lock', 'solidity/bun.lockb') }}
@@ -58,7 +58,7 @@ jobs:
       - name: Verify Anvil
         run: anvil --version
       - name: Cache generated artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             shared/js
