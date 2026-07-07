@@ -178,22 +178,6 @@ export const getActiveStagedOperations = async (client: ReadClient, priceOracleM
 		args: [offset, count],
 	})
 
-export const getPriceRoundConsumedNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-		functionName: 'priceRoundConsumedNotional',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-
-export const getPriceRoundRemainingNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-		functionName: 'getPriceRoundRemainingNotional',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-
 interface ExtraReportData {
 	stateHash: Hex
 	callbackContract: Address

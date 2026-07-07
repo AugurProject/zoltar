@@ -256,7 +256,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 				{...createSecurityPoolWorkflowProps({
 					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
-						isPriceValid: true,
+						isPriceValid: false,
 						lastPrice: 3n * 10n ** 18n,
 						requestPriceEthCost: 10n * 10n ** 18n,
 					}),
@@ -308,7 +308,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 				{...createSecurityPoolWorkflowProps({
 					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
-						isPriceValid: true,
+						isPriceValid: false,
 						lastPrice: 3n * 10n ** 18n,
 						requestPriceEthCost: 10n * 10n ** 18n,
 					}),

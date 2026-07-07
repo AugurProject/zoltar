@@ -366,11 +366,7 @@ export function SecurityVaultSection({
 		selectedVaultIsOwnedByAccount,
 	})
 	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
-		amount: securityBondAllowanceAmount ?? 0n,
-		currentTargetAllowance: currentSelectedVaultDetails?.securityBondAllowance,
-		currentTargetRepDeposit: undefined,
 		managerDetails: oracleManagerDetails,
-		operation: 'setSecurityBondsAllowance',
 	})
 	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
 		bufferRequiredEthCost: setSecurityBondAllowanceFunding?.includeBuffer === true,
@@ -394,11 +390,7 @@ export function SecurityVaultSection({
 		selectedVaultIsOwnedByAccount,
 	})
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
-		amount: withdrawAmount ?? 0n,
-		currentTargetAllowance: undefined,
-		currentTargetRepDeposit: undefined,
 		managerDetails: oracleManagerDetails,
-		operation: 'withdrawRep',
 	})
 	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
 		accountAddress: accountState.address,

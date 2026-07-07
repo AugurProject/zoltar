@@ -10,7 +10,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/us
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
-import { applyLibraries } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { ORACLE_EXACT_TOKEN1_REPORT, applyLibraries } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
@@ -847,7 +847,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				bytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
-				args: [zeroAddress, 100000n, 1000000, 250n * 10n ** 18n, 480, 0, 100000, 10000, 115, true, true, client.account.address, 40000n, 100000n, 30000n, 1000n],
+				args: [zeroAddress, 100000n, 1000000, ORACLE_EXACT_TOKEN1_REPORT, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
 		await transact(

@@ -1,4 +1,5 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { ORACLE_EXACT_TOKEN1_REPORT, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE } from '@zoltar/shared/oracleInitialReport'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { bigintToAddress } from './helpers.js'
@@ -17,6 +18,8 @@ import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '../contractArtifact.js'
 
+export { ORACLE_EXACT_TOKEN1_REPORT } from '@zoltar/shared/oracleInitialReport'
+
 export const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 export const ZERO_SALT = toHex(0, { size: 32 })
 export const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
@@ -24,16 +27,11 @@ const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisf
 const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
 const ORACLE_SETTLEMENT_GAS = 1000000
-const ORACLE_EXACT_TOKEN1_REPORT = 250n * 10n ** 18n
 const ORACLE_SETTLEMENT_TIME = 40 * 12
 const ORACLE_DISPUTE_DELAY = 0
-const ORACLE_PROTOCOL_FEE = 100000
-const ORACLE_FEE_PERCENTAGE = 10000
-const ORACLE_MULTIPLIER = 115
 const ORACLE_TIME_TYPE = true
 const ORACLE_TRACK_DISPUTES = true
 const ORACLE_PROTOCOL_FEE_RECIPIENT = ORACLE_FEE_SINK_ADDRESS
-const ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS = 40000n
 const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
 const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
@@ -80,24 +78,7 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 	concatHex([
 		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 		encodeAbiParameters(
-			[
-				{ type: 'address' },
-				{ type: 'uint256' },
-				{ type: 'uint32' },
-				{ type: 'uint256' },
-				{ type: 'uint48' },
-				{ type: 'uint24' },
-				{ type: 'uint24' },
-				{ type: 'uint24' },
-				{ type: 'uint16' },
-				{ type: 'bool' },
-				{ type: 'bool' },
-				{ type: 'address' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-			],
+			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
 			[
 				MAINNET_WETH_ADDRESS,
 				ORACLE_REPORT_GAS,
@@ -111,7 +92,6 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 				ORACLE_TIME_TYPE,
 				ORACLE_TRACK_DISPUTES,
 				ORACLE_PROTOCOL_FEE_RECIPIENT,
-				ORACLE_PRICE_ROUND_BUDGET_MULTIPLIER_BPS,
 				ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 				ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 				ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,

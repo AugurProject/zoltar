@@ -220,7 +220,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransactionCanceled
 				async walletAddress => {
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
 					const amount = parseRepAmountInput(submittedLiquidation.amount, 'Liquidation amount')
-					const requiredEthValue = await loadOracleManagerQueueOperationEthValue(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, 'liquidation', targetVault, amount)
+					const requiredEthValue = await loadOracleManagerQueueOperationEthValue(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress)
 					const walletEthBalance = requiredEthValue === 0n ? undefined : await createConnectedReadClient().getBalance({ address: walletAddress })
 					if (walletEthBalance !== undefined && walletEthBalance < requiredEthValue) throw new Error(`Need ${formatCurrencyBalance(requiredEthValue - walletEthBalance)} more ETH in this wallet to queue this liquidation.`)
 					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')

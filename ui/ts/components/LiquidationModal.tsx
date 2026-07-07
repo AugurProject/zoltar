@@ -233,11 +233,7 @@ export function LiquidationModal({
 			? undefined
 			: (() => {
 					const funding = resolveOracleOperationEthFunding({
-						amount: liquidationAmountValue ?? 0n,
-						currentTargetAllowance: targetVaultSummary?.securityBondAllowance,
-						currentTargetRepDeposit: targetVaultSummary?.repDepositShare,
 						managerDetails: currentPoolOracleManagerDetails,
-						operation: 'liquidation',
 					})
 					return getOracleRequestEthGuardMessage({
 						actionLabel: 'queue this liquidation',
