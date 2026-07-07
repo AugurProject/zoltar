@@ -7101,16 +7101,11 @@
 						collateral.
 					</p>
 					<p>
-						A <span class="term" tabindex="0">price round</span>
-						starts when the coordinator accepts a settled REP/ETH price. Its
-						<span class="term" tabindex="0">price-round budget</span>
-						is the remaining ETH-denominated operation volume that price may
-						authorize. The budget is measured in
-						<span class="term" tabindex="0">ETH-notional</span>
-						terms so withdrawals, liquidations, and allowance increases can all
-						spend the same cap. Once the remaining budget is too small, the
-						operation needs a later price round instead of reusing the current
-						price indefinitely.
+						When the coordinator accepts a settled REP/ETH price, that price is
+						reusable only inside its freshness window. It does not authorize a
+						fixed amount of operation exposure. The initial OpenOracle report is
+						instead sized from dispute profitability assumptions so a wrong
+						report at the target error is profitable to challenge.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -7173,7 +7168,7 @@
 								Valid Price?
 							</text>
 							<text class="svg-small" x="470" y="113" text-anchor="middle">
-								5-minute window and budget
+								5-minute freshness window
 							</text>
 							<path
 								class="svg-line"
@@ -7255,7 +7250,7 @@
 								Consume or Replay
 							</text>
 							<text class="svg-small" x="202" y="247" text-anchor="middle">
-								expired, stale, over budget,
+								expired, stale, failed local checks,
 							</text>
 							<text class="svg-small" x="202" y="263" text-anchor="middle">
 								or executed
@@ -7340,21 +7335,21 @@
 							caller-selected validity window.
 						</p>
 					</div>
-					<figure class="diagram" id="fig-placeholder-oracle-budget-gates">
+					<figure class="diagram" id="fig-placeholder-oracle-execution-gates">
 						<svg
 							viewBox="0 0 940 330"
 							role="img"
-							aria-labelledby="oracle-budget-title oracle-budget-desc"
+							aria-labelledby="oracle-execution-title oracle-execution-desc"
 						>
-							<title id="oracle-budget-title">Oracle execution gates</title>
-							<desc id="oracle-budget-desc">
-								A staged operation needs a valid price, remaining price-round
-								budget, and liquidation-specific distance from the threshold
-								before execution.
+							<title id="oracle-execution-title">Oracle execution gates</title>
+							<desc id="oracle-execution-desc">
+								A staged operation needs a valid price and local operation
+								checks before execution. Liquidations also need sufficient
+								distance from the threshold.
 							</desc>
 							<defs>
 								<marker
-									id="arrow-oracle-budget"
+									id="arrow-oracle-execution"
 									viewBox="0 0 10 10"
 									refX="8"
 									refY="5"
@@ -7381,7 +7376,7 @@
 							</text>
 							<path
 								class="svg-line"
-								marker-end="url(#arrow-oracle-budget)"
+								marker-end="url(#arrow-oracle-execution)"
 								d="M 242 100 H 324"
 							></path>
 							<rect
@@ -7393,17 +7388,17 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="447" y="86" text-anchor="middle">
-								Price-Round
+								Operation
 							</text>
 							<text class="svg-label" x="447" y="110" text-anchor="middle">
-								Budget
+								Guards
 							</text>
 							<text class="svg-small" x="447" y="130" text-anchor="middle">
-								operation must fit remaining room
+								snapshot, effect, pool checks
 							</text>
 							<path
 								class="svg-line"
-								marker-end="url(#arrow-oracle-budget)"
+								marker-end="url(#arrow-oracle-execution)"
 								d="M 570 100 H 654"
 							></path>
 							<rect
@@ -7418,11 +7413,11 @@
 								Execute Operation
 							</text>
 							<text class="svg-small" x="764" y="116" text-anchor="middle">
-								consume budget on success
+								operation volume is unmetered
 							</text>
 							<path
 								class="svg-line"
-								marker-end="url(#arrow-oracle-budget)"
+								marker-end="url(#arrow-oracle-execution)"
 								d="M 447 138 V 208"
 							></path>
 							<rect
@@ -7441,189 +7436,111 @@
 							</text>
 							<path
 								class="svg-line"
-								marker-end="url(#arrow-oracle-budget)"
+								marker-end="url(#arrow-oracle-execution)"
 								d="M 598 244 H 694 V 138"
 							></path>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Oracle Execution Gates</span
-							>Oracle-gated operations execute only when the price is fresh, the
-							price round has enough remaining budget, and liquidations are
+							>Oracle-gated operations execute only when the price is fresh and
+							local operation checks pass; liquidations must also be
 							sufficiently far beyond their threshold.
 						</p>
 					</figure>
 					<p>
-						The budget equation below names the maximum budget
-						<code>priceRoundMaxNotional</code> and the still-available budget
-						<code>remainingNotional</code>. The coordinator subtracts
-						<code>consumedNotional</code> as successful operations use the
-						current price round. Here <code>exactToken1Report</code> is the
-						initial REP report size, <code>pricePrecision</code> is the fixed
-						scaling factor, and <code>repPerEthPrice</code> is the settled REP
-						per ETH price. REP-denominated operations are converted into
-						ETH-notional with ceiling division so a non-zero REP movement always
-						consumes at least the smallest rounded-up ETH-notional unit.
+						The initial report equation below names the configured REP-side
+						<code>exactToken1Report</code>. It is a dispute-profitability
+						parameter, not an exposure cap. The numerator estimates one dispute
+						gas cost converted into REP with a profit buffer; the denominator is
+						the target price-error room left after OpenOracle fees and expected
+						adverse REP/ETH movement during settlement.
 					</p>
-					<div class="equation" id="eq-placeholder-rep-notional-rounding">
+					<div class="equation" id="eq-placeholder-initial-report-size">
 						<math
 							display="block"
-							aria-label="REP to ETH notional equals ceiling of REP amount times price precision divided by REP per ETH price"
-							data-source="repEthNotional = ceil(repAmount \cdot pricePrecision / repPerEthPrice)"
+							aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected adverse REP ETH price move during settlement"
+							data-source="exactToken1Report = ceil(requiredDisputerProfitBuffer \cdot gasUnitsForOneDispute \cdot assumedGasPriceInEthPerGas \cdot repPerEthPrice / (((targetPriceErrorForDispute - (openOracleProtocolFeeFraction + openOracleReporterFeeFraction)) / (1 + targetPriceErrorForDispute)) - disputeReportSizeMultiplier \cdot expectedRepEthPriceMoveDuringSettlement))"
 						>
 							<mrow>
-								<mi>repEthNotional</mi>
+								<mi>exactToken1Report</mi>
 								<mo>=</mo>
 								<mi>ceil</mi>
 								<mo>(</mo>
 								<mfrac>
 									<mrow>
-										<mi>repAmount</mi>
+										<mi>requiredDisputerProfitBuffer</mi>
 										<mo>&#x22C5;</mo>
-										<mi>pricePrecision</mi>
+										<mi>gasUnitsForOneDispute</mi>
+										<mo>&#x22C5;</mo>
+										<mi>assumedGasPriceInEthPerGas</mi>
+										<mo>&#x22C5;</mo>
+										<mi>repPerEthPrice</mi>
 									</mrow>
-									<mi>repPerEthPrice</mi>
+									<mrow>
+										<mfrac>
+											<mrow>
+												<mi>targetPriceErrorForDispute</mi>
+												<mo>-</mo>
+												<mo>(</mo>
+												<mi>openOracleProtocolFeeFraction</mi>
+												<mo>+</mo>
+												<mi>openOracleReporterFeeFraction</mi>
+												<mo>)</mo>
+											</mrow>
+											<mrow>
+												<mn>1</mn>
+												<mo>+</mo>
+												<mi>targetPriceErrorForDispute</mi>
+											</mrow>
+										</mfrac>
+										<mo>-</mo>
+										<mi>disputeReportSizeMultiplier</mi>
+										<mo>&#x22C5;</mo>
+										<mi>expectedRepEthPriceMoveDuringSettlement</mi>
+									</mrow>
 								</mfrac>
 								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">REP Notional Rounding</span
-							>Withdrawals and the REP side of liquidations spend price-round
-							budget using rounded-up REP-to-ETH conversion.
+							<span class="equation-label">Initial Report Size</span>The report
+							size is independent of outside funds at risk; it only needs to make a
+							wrong report profitable to dispute under the stated assumptions.
 						</p>
 					</div>
-					<div class="equation" id="eq-placeholder-oracle-round-budget">
-						<math
-							display="block"
-							aria-label="maximum price-round budget equals floor of floor of exact token one report times price precision times price-round budget multiplier basis points divided by REP per ETH price divided by oracle budget basis points, and remaining price-round budget equals the greater of maximum price-round budget minus consumed price-round budget and zero"
-							data-source="priceRoundMaxNotional = floor(floor(exactToken1Report \cdot pricePrecision \cdot priceRoundBudgetMultiplierBps / repPerEthPrice) / oracleBudgetBps); remainingNotional = max(priceRoundMaxNotional - consumedNotional, 0)"
-						>
-							<mtable>
-								<mtr>
-									<mtd>
-										<mi>priceRoundMaxNotional</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mrow>
-												<mi>floor</mi>
-												<mo>(</mo>
-												<mfrac>
-													<mrow>
-														<mi>exactToken1Report</mi>
-														<mo>&#x22C5;</mo>
-														<mi>pricePrecision</mi>
-														<mo>&#x22C5;</mo>
-														<mi>priceRoundBudgetMultiplierBps</mi>
-													</mrow>
-													<mi>repPerEthPrice</mi>
-												</mfrac>
-												<mo>)</mo>
-											</mrow>
-											<mi>oracleBudgetBps</mi>
-										</mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>remainingNotional</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>max</mi>
-										<mo>(</mo>
-										<mi>priceRoundMaxNotional</mi>
-										<mo>-</mo>
-										<mi>consumedNotional</mi>
-										<mo>,</mo>
-										<mn>0</mn>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-							</mtable>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Oracle Price-Round Budget</span>Each
-							settled REP/ETH price authorizes only a bounded amount of notional
-							operation volume before a fresh price is required. The contract
-							performs the two divisions sequentially, so each division floors
-							its remainder.
-						</p>
-					</div>
-					<table>
-						<thead>
-							<tr>
-								<th>Variable</th>
-								<th>Meaning at first use</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td><code>priceRoundMaxNotional</code></td>
-								<td>
-									The maximum ETH-notional operation volume one settled REP/ETH
-									price can authorize.
-								</td>
-							</tr>
-							<tr>
-								<td><code>remainingNotional</code></td>
-								<td>The unused part of the current price-round budget.</td>
-							</tr>
-							<tr>
-								<td><code>consumedNotional</code></td>
-								<td>
-									The amount of price-round budget already spent by successful
-									operations.
-								</td>
-							</tr>
-							<tr>
-								<td><code>exactToken1Report</code></td>
-								<td>The initial REP amount used in the OpenOracle report.</td>
-							</tr>
-							<tr>
-								<td><code>pricePrecision</code></td>
-								<td>
-									The fixed
-									<math
-										aria-label="price precision scale"
-										data-source="pow10(18)"
-										><msup><mn>10</mn><mn>18</mn></msup></math
-									>
-									scale factor used for REP/ETH price math.
-								</td>
-							</tr>
-							<tr>
-								<td><code>priceRoundBudgetMultiplierBps</code></td>
-								<td>
-									The configured multiplier, in basis points, that expands the
-									report's ETH-notional budget.
-								</td>
-							</tr>
-							<tr>
-								<td><code>repPerEthPrice</code></td>
-								<td>The settled REP per ETH price.</td>
-							</tr>
-							<tr>
-								<td><code>oracleBudgetBps</code></td>
-								<td>
-									The basis-point denominator used by the budget multiplier.
-								</td>
-							</tr>
-						</tbody>
-					</table>
+					<p>
+						The canonical formula inputs live in
+						<code>shared/ts/oracleInitialReport.ts</code>, exported as
+						<code>@zoltar/shared/oracleInitialReport</code>. The UI deployment
+						helper and simulator deployment helper consume that shared value.
+						The current inputs are
+						<code>requiredDisputerProfitBuffer = 2x</code>,
+						<code>gasUnitsForOneDispute = 300,000 gas</code>,
+						<code>assumedGasPriceInEthPerGas = 30 gwei</code>,
+						<code>repPerEthPrice = 1,000 REP / ETH</code>,
+						<code>targetPriceErrorForDispute = 10%</code>,
+						<code>openOracleProtocolFeeFraction = 1%</code>,
+						<code>openOracleReporterFeeFraction = 0.1%</code>,
+						<code>disputeReportSizeMultiplier = 1.15x</code>, and
+						<code>expectedRepEthPriceMoveDuringSettlement = 1%</code>. Those
+						values produce a positive denominator and
+						<code>exactToken1Report = 259.332023575638507216 REP</code>
+						(<code>259332023575638507216</code> atomic REP). The helpers
+						evaluate the displayed equation with
+						<code>ORACLE_FORMULA_PRECISION = 1e18</code> fixed-point integers:
+						fee fractions, <code>disputeReportSizeMultiplier</code>,
+						<code>disputeProfitFraction</code>, and
+						<code>priceMoveFraction</code> use integer division that floors at
+						that precision, then the final report amount uses ceiling division
+						by <code>ORACLE_FORMULA_PRECISION * denominator</code>. If the
+						denominator is zero or negative, the assumptions do not leave enough
+						price-error room for profitable disputes.
+					</p>
 					<div class="equation" id="eq-placeholder-liquidation-price-distance">
 						<math
 							display="block"
-							aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times oracle budget basis points divided by current price and must be at least the minimum liquidation price distance basis points"
-							data-source="thresholdPrice = vaultRep \cdot pricePrecision / (snapshotTargetAllowance \cdot securityMultiplier); distanceBps = (currentPrice - thresholdPrice) \cdot oracleBudgetBps / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps"
+							aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times basis point denominator divided by current price and must be at least the minimum liquidation price distance basis points"
+							data-source="thresholdPrice = vaultRep \cdot pricePrecision / (snapshotTargetAllowance \cdot securityMultiplier); distanceBps = (currentPrice - thresholdPrice) \cdot basisPointDenominator / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps"
 						>
 							<mtable>
 								<mtr>
@@ -7664,7 +7581,7 @@
 												<mi>thresholdPrice</mi>
 												<mo>)</mo>
 												<mo>&#x22C5;</mo>
-												<mi>oracleBudgetBps</mi>
+												<mi>basisPointDenominator</mi>
 											</mrow>
 											<mi>currentPrice</mi>
 										</mfrac>
@@ -8172,29 +8089,27 @@
 							<tr>
 								<td>OpenOracle <code>exactToken1Report</code></td>
 								<td>
-									250 REP (<math
-										aria-label="250 times 10 to the 18 atomic REP units"
-										data-source="250 \cdot pow10(18) atomic REP units"
-										><mn>250</mn><mo>&#x22C5;</mo
-										><msup><mn>10</mn><mn>18</mn></msup></math
-									>
-									atomic REP units)
+									<code>259.332023575638507216 REP</code>
+									(<code>259332023575638507216</code> atomic REP), computed
+									from the initial report size equation.
 								</td>
 								<td>
 									Initial report liquidity parameter, stored as an ERC-20 atomic
-									REP amount.
+									REP amount and sized from dispute profitability assumptions.
 								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>escalationHalt</code></td>
 								<td>
-									2,500 REP (<math
-										aria-label="2500 times 10 to the 18 atomic REP units"
-										data-source="2500 \cdot pow10(18) atomic REP units"
-										><mn>2500</mn><mo>&#x22C5;</mo
-										><msup><mn>10</mn><mn>18</mn></msup></math
+									<code>2,593.32023575638507216 REP</code>
+									(<code>2593320235756385072160</code> atomic REP), computed as
+									<math
+										aria-label="exact token one report times escalation halt multiplier basis points divided by ten thousand"
+										data-source="exactToken1Report \cdot escalationHaltMultiplierBps / 10000"
+										><mi>exactToken1Report</mi><mo>&#x22C5;</mo
+										><mi>escalationHaltMultiplierBps</mi><mo>/</mo
+										><mn>10000</mn></math
 									>
-									atomic REP units)
 								</td>
 								<td>
 									Dynamic halt threshold for multiplicative report escalation;
@@ -8281,14 +8196,6 @@
 								<td>OpenOracle <code>protocolFeeRecipient</code></td>
 								<td><code>0x000000000000000000000000000000000000dEaD</code></td>
 								<td>Fee sink configured for protocol fees.</td>
-							</tr>
-							<tr>
-								<td><code>priceRoundBudgetMultiplierBps</code></td>
-								<td><code>40000</code></td>
-								<td>
-									Oracle price-round budget multiplier, equal to
-									<code>4x</code>.
-								</td>
 							</tr>
 							<tr>
 								<td><code>escalationHaltMultiplierBps</code></td>

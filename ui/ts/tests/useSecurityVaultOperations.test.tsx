@@ -62,7 +62,6 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingSettlementOperationIds: [],
 		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
-		priceRoundRemainingNotional: 2n * 10n ** 18n,
 		priceValidUntilTimestamp: undefined,
 		queuedOperationEthCost: 1n,
 		requestPriceEthCost: 10n,
@@ -401,7 +400,7 @@ describe('useSecurityVaultOperations', () => {
 				throw new Error('depositRepToSecurityPool should not be called in this test')
 			}),
 			loadErc20Balance: mock(async () => 0n),
-			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: true, priceRoundRemainingNotional: 2n * 10n ** 18n })),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: true })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
 			redeemRepFromSecurityPool: mock(async () => {

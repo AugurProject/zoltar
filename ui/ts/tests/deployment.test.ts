@@ -6,11 +6,13 @@ import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailab
 import { createConnectedReadClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
+import { ORACLE_EXACT_TOKEN1_REPORT } from '../contracts/deploymentHelpers.js'
 import type { DeploymentStatus, ReadClient } from '../types/contracts.js'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../solidity/ts/testsuite/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
+import { ORACLE_EXACT_TOKEN1_REPORT as SIMULATOR_ORACLE_EXACT_TOKEN1_REPORT } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -155,6 +157,11 @@ void describe('deployment helpers', () => {
 		const multicall3Step = getDeploymentSteps().find(step => step.id === 'multicall3')
 
 		expect(multicall3Step?.address).toBe(getMulticall3Address())
+	})
+
+	void test('oracle initial report size matches simulator deployment helpers', () => {
+		expect(ORACLE_EXACT_TOKEN1_REPORT).toBe(259332023575638507216n)
+		expect(SIMULATOR_ORACLE_EXACT_TOKEN1_REPORT).toBe(ORACLE_EXACT_TOKEN1_REPORT)
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {

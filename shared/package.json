@@ -31,6 +31,10 @@
 			"types": "./ts/protocolConfig.ts",
 			"default": "./js/protocolConfig.js"
 		},
+		"./oracleInitialReport": {
+			"types": "./ts/oracleInitialReport.ts",
+			"default": "./js/oracleInitialReport.js"
+		},
 		"./truthAuctionTickMath": {
 			"types": "./ts/truthAuctionTickMath.ts",
 			"default": "./js/truthAuctionTickMath.js"

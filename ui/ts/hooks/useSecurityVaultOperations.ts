@@ -413,11 +413,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (details === undefined) return undefined
 				const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
 				const funding = resolveOracleOperationEthFunding({
-					amount,
-					currentTargetAllowance: details.securityBondAllowance,
-					currentTargetRepDeposit: undefined,
 					managerDetails,
-					operation: 'setSecurityBondsAllowance',
 				})
 				const walletEthBalance = funding?.ethCost === undefined || funding.ethCost === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress })
 				const setBondAllowanceGuardMessage = getOracleRequestEthGuardMessage({
@@ -495,11 +491,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (details === undefined) return undefined
 				const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
 				const funding = resolveOracleOperationEthFunding({
-					amount,
-					currentTargetAllowance: undefined,
-					currentTargetRepDeposit: undefined,
 					managerDetails,
-					operation: 'withdrawRep',
 				})
 				const walletEthBalance = funding?.ethCost === undefined || funding.ethCost === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress })
 				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({

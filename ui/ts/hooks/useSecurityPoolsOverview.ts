@@ -43,7 +43,7 @@ export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOve
 	createConnectedReadClient: () => SecurityPoolsOverviewReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	loadAllSecurityPools: (options: LoadAllSecurityPoolsOptions) => Promise<ListedSecurityPool[]>
-	loadOracleManagerQueueOperationEthValue: (client: TWriteClient, managerAddress: Address, operation: 'liquidation', targetVault: Address, amount: bigint) => Promise<bigint>
+	loadOracleManagerQueueOperationEthValue: (client: TWriteClient, managerAddress: Address) => Promise<bigint>
 	loadSecurityPoolPage: (pageIndex: number, pageSize: number, accountAddress: Address | undefined) => Promise<SecurityPoolPage>
 	queueSecurityPoolLiquidation: (client: TWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityPoolLiquidationQueueResult>
 	waitForSecurityPoolReadBackend: () => Promise<void>
@@ -250,7 +250,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				async walletAddress => {
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
 					const amount = parseRepAmountInput(submittedLiquidation.amount, 'Liquidation amount')
-					const requiredEthValue = await dependencies.loadOracleManagerQueueOperationEthValue(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, 'liquidation', targetVault, amount)
+					const requiredEthValue = await dependencies.loadOracleManagerQueueOperationEthValue(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress)
 					const walletEthBalance = requiredEthValue === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					if (walletEthBalance !== undefined && walletEthBalance < requiredEthValue) throw new Error(`Need ${formatCurrencyBalance(requiredEthValue - walletEthBalance)} more ETH in this wallet to queue this liquidation.`)
 					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')

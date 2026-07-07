@@ -231,7 +231,6 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingSettlementOperationIds: [],
 		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
-		priceRoundRemainingNotional: 1n,
 		priceValidUntilTimestamp: 1000n,
 		queuedOperationEthCost: 1n,
 		requestPriceEthCost: 1n,
