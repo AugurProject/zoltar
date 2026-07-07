@@ -218,7 +218,7 @@
 					</p>
 					<ul class="clean-list">
 						<li><code>forkTime</code>: when the universe forked</li>
-						<li><code>forkQuestionId</code>: the question that triggered the fork</li>
+						<li><code>forkQuestionId</code>: the question id recorded by <code>forkUniverse</code> and used to define child branches</li>
 						<li><code>forkingOutcomeIndex</code>: the outcome index represented by the universe when it is a child</li>
 						<li><code>reputationToken</code>: the REP token used inside that universe</li>
 						<li><code>parentUniverseId</code>: the parent branch</li>
@@ -514,9 +514,10 @@
 						<p>
 							The fork question defines the child-branch shape for the whole universe. A child
 							branch may therefore be keyed by <code>Invalid</code>, a categorical outcome
-							index, or a scalar encoding depending on which parent-universe question caused the
-							fork. Downstream applications should treat that branch selector as universe-level
-							metadata rather than assume every child branch is binary.
+							index, or a scalar encoding depending on which parent-universe question
+							<code>forkUniverse</code> used for the fork. Downstream applications should treat
+							that branch selector as universe-level metadata rather than assume every child
+							branch is binary.
 						</p>
 					<div class="implementation-grid">
 						<div class="implementation-note">
@@ -854,11 +855,12 @@
 					</div>
 					<p>
 						Consider a universe <code>parentUniverse</code> and a question
-						<code>forkQuestion</code>, meaning the question whose unresolved outcome caused
-						<code>parentUniverse</code> to split after that question’s end time.
+						<code>forkQuestion</code>. After that question ends,
+						<code>forkUniverse</code> can record it as the fork question for
+						<code>parentUniverse</code>.
 					</p>
 					<ol class="step-list">
-						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</span></li>
+						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records <code>forkQuestion</code> as the fork question for <code>parentUniverse</code>.</span></li>
 						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
 						<li><span class="step-content">The fork initiator’s full parent-REP deposit leaves parent supply, and the post-haircut amount becomes migration balance.</span></li>
 						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>

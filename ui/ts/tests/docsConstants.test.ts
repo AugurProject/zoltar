@@ -3,6 +3,87 @@
 import { describe, expect, test } from 'bun:test'
 
 const normalizeWhitespace = (text: string) => text.replace(/\s+/g, ' ')
+const htmlToVisibleText = (text: string) =>
+	text
+		.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+		.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/&nbsp;/gi, ' ')
+		.replace(/&amp;/gi, '&')
+		.replace(/&lt;/gi, '<')
+		.replace(/&gt;/gi, '>')
+
+const discouragedDocsPatterns = [
+	{
+		name: 'meta page framing',
+		regex: /\b(?:in\s+)?(this|these)\s+(page|pages|guide|guides|reference|references|document|documents|whitepaper|whitepapers|docs|table|tables),?\s+(explains|explain|describes|describe|maps|map|lists|list|keeps|keep|is|are|summarizes|summarize|usually)\b/i,
+	},
+	{
+		name: 'these-docs framing',
+		regex: /\b(?:in\s+)?these\s+docs\b/i,
+	},
+	{
+		name: 'reader instruction',
+		regex: /\b(?:read\s+(this|it|the|next)|start\s+with\s+(these|this|the)\s+words?)\b/i,
+	},
+	{
+		name: 'use-this instruction',
+		regex: /\buse\s+(this|the inputs|the table)\b/i,
+	},
+	{
+		name: 'reader-framing label',
+		regex: /\b(contracts to read|reader shortcut|first read|why readers should care)\b/i,
+	},
+	{
+		name: 'document-subject framing',
+		regex:
+			/\b(white paper|white papers|whitepaper|whitepapers|reference|references|auction design|auction designs|guide|guides|document|documents|docs|page|pages|section|sections|sidebar|sidebars|table|tables)\s+(explains|explain|keeps|keep|summarizes|summarize|maps|map|describes|describe|lists|list|expands|expand|collects|collect|defines|define|is|are)\b/i,
+	},
+	{
+		name: 'reader-question transition',
+		regex: /\b(first|next|then|finally)\s+ask\b/i,
+	},
+	{
+		name: 'vague core-idea framing',
+		regex: /\b(the\s+)?core idea( is)?\b/i,
+	},
+	{
+		name: 'wrong question lifecycle actor',
+		regex:
+			/\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(becomes?|escalates?|forks?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(that|which|whose)\s+[^.]{0,80}\b(becomes?|escalates?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should)?\s*drive\s+[^.]{0,80}\bforks?\b|\b(question|questions|forkQuestion)\s+caused\s+[^.]{0,80}\bsplit\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't|is|are|was|were|gets?|got)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}be\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b|\b(question|questions|forkQuestion)\s+(is|are|was|were|gets?|got)\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b/i,
+	},
+]
+
+const findDiscouragedDocsWording = (path: string, text: string) => {
+	const violations: string[] = []
+	const checkLines = (label: string, checkedText: string) => {
+		const lines = checkedText.split('\n')
+		lines.forEach((line, index) => {
+			for (const pattern of discouragedDocsPatterns) {
+				if (pattern.regex.test(line)) {
+					violations.push(`${path}:${label}:${index + 1}: ${pattern.name}: ${line.trim()}`)
+				}
+			}
+		})
+	}
+	const checkNormalized = (label: string, checkedText: string) => {
+		const normalizedText = normalizeWhitespace(checkedText)
+		for (const pattern of discouragedDocsPatterns) {
+			if (pattern.regex.test(normalizedText)) {
+				violations.push(`${path}: ${label}: ${pattern.name}`)
+			}
+		}
+	}
+
+	checkLines('raw', text)
+	checkNormalized('normalized', text)
+	if (path.endsWith('.html')) {
+		const visibleText = htmlToVisibleText(text)
+		checkLines('visible', visibleText)
+		checkNormalized('visible normalized', visibleText)
+	}
+	return violations
+}
 
 describe('documented protocol constants', () => {
 	test('keeps reader-facing docs free of meta reader-instruction phrasing', async () => {
@@ -11,63 +92,10 @@ describe('documented protocol constants', () => {
 		for await (const path of docsGlob.scan('.')) {
 			paths.push(path)
 		}
-		const discouragedPatterns = [
-			{
-				name: 'meta page framing',
-				regex: /\b(?:in\s+)?(this|these)\s+(page|pages|guide|guides|reference|references|document|documents|whitepaper|whitepapers|docs|table|tables),?\s+(explains|explain|describes|describe|maps|map|lists|list|keeps|keep|is|are|summarizes|summarize|usually)\b/i,
-			},
-			{
-				name: 'these-docs framing',
-				regex: /\b(?:in\s+)?these\s+docs\b/i,
-			},
-			{
-				name: 'reader instruction',
-				regex: /\b(?:read\s+(this|it|the|next)|start\s+with\s+(these|this|the)\s+words?)\b/i,
-			},
-			{
-				name: 'use-this instruction',
-				regex: /\buse\s+(this|the inputs|the table)\b/i,
-			},
-			{
-				name: 'reader-framing label',
-				regex: /\b(contracts to read|reader shortcut|first read|why readers should care)\b/i,
-			},
-			{
-				name: 'document-subject framing',
-				regex:
-					/\b(white paper|white papers|whitepaper|whitepapers|reference|references|auction design|auction designs|guide|guides|document|documents|docs|page|pages|section|sections|sidebar|sidebars|table|tables)\s+(explains|explain|keeps|keep|summarizes|summarize|maps|map|describes|describe|lists|list|expands|expand|collects|collect|defines|define|is|are)\b/i,
-			},
-			{
-				name: 'reader-question transition',
-				regex: /\b(first|next|then|finally)\s+ask\b/i,
-			},
-			{
-				name: 'vague core-idea framing',
-				regex: /\b(the\s+)?core idea is\b/i,
-			},
-			{
-				name: 'wrong question lifecycle actor',
-				regex:
-					/\b(question|questions)\s+(can|could|may|might|must|will|should)?\s*(becomes?|escalates?|forks?|resolves?|trades?|drives?|causes?|caused)\b|\b(question|questions)\s+(can|could|may|might|must|will|should)?\s*drive\s+[^.]{0,80}\bforks?\b|\b(question|questions)\s+caused\s+[^.]{0,80}\bsplit\b/i,
-			},
-		]
 		const violations: string[] = []
 		for (const path of paths.sort()) {
 			const text = await Bun.file(path).text()
-			const lines = text.split('\n')
-			lines.forEach((line, index) => {
-				for (const pattern of discouragedPatterns) {
-					if (pattern.regex.test(line)) {
-						violations.push(`${path}:${index + 1}: ${pattern.name}: ${line.trim()}`)
-					}
-				}
-			})
-			const normalizedText = normalizeWhitespace(text)
-			for (const pattern of discouragedPatterns) {
-				if (pattern.regex.test(normalizedText)) {
-					violations.push(`${path}: normalized: ${pattern.name}`)
-				}
-			}
+			violations.push(...findDiscouragedDocsWording(path, text))
 		}
 
 		expect(violations).toEqual([])
@@ -94,13 +122,39 @@ describe('documented protocol constants', () => {
 
 	test('detects question-as-lifecycle-actor wording with modal verbs', () => {
 		const wrongQuestionLifecycleActor =
-			/\b(question|questions)\s+(can|could|may|might|must|will|should)?\s*(becomes?|escalates?|forks?|resolves?|trades?|drives?|causes?|caused)\b|\b(question|questions)\s+(can|could|may|might|must|will|should)?\s*drive\s+[^.]{0,80}\bforks?\b|\b(question|questions)\s+caused\s+[^.]{0,80}\bsplit\b/i
+			/\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(becomes?|escalates?|forks?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(that|which|whose)\s+[^.]{0,80}\b(becomes?|escalates?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should)?\s*drive\s+[^.]{0,80}\bforks?\b|\b(question|questions|forkQuestion)\s+caused\s+[^.]{0,80}\bsplit\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't|is|are|was|were|gets?|got)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}be\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b|\b(question|questions|forkQuestion)\s+(is|are|was|were|gets?|got)\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b/i
 
 		expect(wrongQuestionLifecycleActor.test('the question can become a pool')).toBe(true)
 		expect(wrongQuestionLifecycleActor.test('An ended global question can fork an unforked universe')).toBe(true)
 		expect(wrongQuestionLifecycleActor.test('question can drive universe forks')).toBe(true)
 		expect(wrongQuestionLifecycleActor.test('question drives a fork')).toBe(true)
 		expect(wrongQuestionLifecycleActor.test('question caused the universe to split')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('the question that triggered the fork')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('the question whose unresolved outcome caused parentUniverse to split')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('forkQuestion triggered a fork')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question can be resolved')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question is forked')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question gets traded')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('the question cannot settle locally')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('questions can settle after escalation')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question is already resolved')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question can later be resolved')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question cannot safely settle')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('the question that becomes a pool')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('the question which settles locally')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question eventually escalates')).toBe(true)
+		expect(wrongQuestionLifecycleActor.test('question can quickly be resolved')).toBe(true)
+	})
+
+	test('detects discouraged docs wording split by inline HTML tags', () => {
+		const html = ['<p><code>forkQuestion</code> triggered a fork.</p>', '<p>the <code>question</code> can become a pool.</p>', '<p>question <em>can</em> settle locally.</p>'].join('\n')
+
+		expect(findDiscouragedDocsWording('docs/example.html', html)).toEqual([
+			'docs/example.html:visible:1: wrong question lifecycle actor: forkQuestion  triggered a fork.',
+			'docs/example.html:visible:2: wrong question lifecycle actor: the  question  can become a pool.',
+			'docs/example.html:visible:3: wrong question lifecycle actor: question  can  settle locally.',
+			'docs/example.html: visible normalized: wrong question lifecycle actor',
+		])
 	})
 
 	test('keeps text-review guidance explicit about meta-document phrasing variants', async () => {

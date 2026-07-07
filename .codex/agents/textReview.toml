@@ -120,8 +120,10 @@ Flag documentation that is technically correct but hard to follow because:
   question becomes a pool or a question escalates when a market, security pool,
   trader, or dispute process is the actor; also flag question-driven fork
   phrasing such as "question can drive universe forks", "question drives a
-  fork", or "question caused the universe to split" when a caller, contract, or
-  fork operation is the actor
+  fork", "question caused the universe to split", "question triggered a fork",
+  "question cannot settle", or passive/modal forms such as "question can be
+  resolved" and "question is forked" when a caller, contract, market, dispute
+  process, or fork operation is the actor
 - diagrams/tables/widgets introduce concepts not prepared by the prose
 - paragraphs perform too many conceptual jobs
 - related features are described locally but not connected back to the lifecycle

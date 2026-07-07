@@ -789,7 +789,8 @@
 						<li>
 							REP vault operators can escrow vault-backed REP behind
 							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a
-							question ends to settle locally or force a non-decision.
+							question ends so the local escalation process can settle locally
+							or force a non-decision.
 						</li>
 						<li>
 							Anyone can create child pools, while vault owners and share
@@ -2537,7 +2538,7 @@
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
-							<span>Core idea</span>
+							<span>Local dispute role</span>
 							<b
 								>Escalation is a local dispute game before the protocol
 								escalates to a Zoltar fork.</b
@@ -4113,12 +4114,12 @@
 						The child-pool selector comes from the universe’s fork question, not
 						from Placeholder’s binary market shape. A binary Placeholder pool
 						can therefore spawn child pools keyed to scalar encodings or
-						multi-way categorical outcomes when some other Zoltar question
-						caused the universe fork.
+						multi-way categorical outcomes when the universe fork used a
+						different Zoltar question.
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
-							<span>Core idea</span>
+							<span>Fork branch role</span>
 							<b
 								>A Zoltar fork creates branches; Placeholder decides what pool
 								state follows each branch.</b
@@ -6192,7 +6193,7 @@
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
-							<span>Core idea</span>
+							<span>Collateral repair role</span>
 							<b
 								>The auction turns child-universe REP into the ETH needed to
 								repair child collateral.</b
@@ -7337,8 +7338,14 @@
 								>
 							</div>
 							<div>
-								<span>ETH raised</span
+								<span>ETH retained</span
 								><output data-example-output="ethRaised">12 ETH</output>
+							</div>
+							<div>
+								<span>Threshold input ETH</span
+								><output data-example-output="thresholdInputEth"
+									>not underfunded</output
+								>
 							</div>
 							<div>
 								<span>Derived underfunded threshold</span
@@ -9272,6 +9279,7 @@
 						"clearingMode",
 						`funded near ${formatFixed(clearingPrice)} ETH/REP`,
 					);
+					context.write("thresholdInputEth", "not underfunded");
 					context.write("underfundedThreshold", "not underfunded");
 				} else {
 					const totalActiveEth = accumulatedEth;
@@ -9288,6 +9296,7 @@
 						}
 					}
 					context.write("clearingMode", "underfunded tick demand");
+					context.write("thresholdInputEth", formatEth(totalActiveEth));
 					context.write(
 						"underfundedThreshold",
 						`${formatFixed(underfundedThreshold)} ETH/REP`,

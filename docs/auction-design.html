@@ -12,10 +12,11 @@
 				<h1>Uniform Price Dual Cap Batch Auction</h1>
 				<p>
 					A collateral-repair auction belongs to the fork recovery path. A
-					<em>fork</em> is the split that happens when a disputed question
-					cannot safely settle in one branch. A <em>fork branch</em> is one path
-					after that split. A <em>child pool</em> is the market pool in one fork
-					branch, and <em>child-universe REP</em> is REP minted inside that
+					<em>fork</em> is the split that happens when a market cannot safely
+					settle in one branch while tied to a disputed question.
+					A <em>fork branch</em> is one path after that split.
+					A <em>child pool</em> is the market pool in one fork branch, and
+					<em>child-universe REP</em> is REP minted inside that
 					branch. A <em>truth auction</em> is a sale that repairs a child pool
 					after a fork; it does not choose which branch is truthful.
 				</p>
@@ -373,8 +374,14 @@
 							>
 						</div>
 						<div>
-							<span>ETH raised</span
+							<span>ETH retained</span
 							><output data-example-output="ethRaised">12 ETH</output>
+						</div>
+						<div>
+							<span>Threshold input ETH</span
+							><output data-example-output="thresholdInputEth"
+								>not underfunded</output
+							>
 						</div>
 						<div>
 							<span>Threshold</span
@@ -527,6 +534,7 @@
 							}
 						}
 						write("clearingMode", `funded near ${formatFixed(clearingPrice)} ETH/REP`);
+						write("thresholdInputEth", "not underfunded");
 						write("underfundedThreshold", "not underfunded");
 					} else {
 						const totalActiveEth = activeBids.reduce((sum, bid) => sum + bid.eth, 0);
@@ -542,6 +550,7 @@
 						}
 						accumulatedEth = winningEth;
 						write("clearingMode", "underfunded tick demand");
+						write("thresholdInputEth", formatEth(totalActiveEth));
 						write("underfundedThreshold", `${formatFixed(threshold)} ETH/REP`);
 					}
 					write("ethRaised", formatEth(accumulatedEth));
