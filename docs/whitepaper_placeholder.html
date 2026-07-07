@@ -7453,12 +7453,12 @@
 						parameter, not an exposure cap. The numerator estimates one dispute
 						gas cost converted into REP with a profit buffer; the denominator is
 						the target price-error room left after OpenOracle fees and expected
-						REP/ETH movement during settlement.
+						adverse REP/ETH movement during settlement.
 					</p>
 					<div class="equation" id="eq-placeholder-initial-report-size">
 						<math
 							display="block"
-							aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected REP ETH price move during settlement"
+							aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected adverse REP ETH price move during settlement"
 							data-source="exactToken1Report = ceil(requiredDisputerProfitBuffer \cdot gasUnitsForOneDispute \cdot assumedGasPriceInEthPerGas \cdot repPerEthPrice / (((targetPriceErrorForDispute - (openOracleProtocolFeeFraction + openOracleReporterFeeFraction)) / (1 + targetPriceErrorForDispute)) - disputeReportSizeMultiplier \cdot expectedRepEthPriceMoveDuringSettlement))"
 						>
 							<mrow>
@@ -7509,11 +7509,12 @@
 						</p>
 					</div>
 					<p>
-						Current deployment helpers define the formula inputs in
-						<code>ui/ts/contracts/deploymentHelpers.ts</code> and
-						<code
-							>solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals.ts</code
-						>: <code>requiredDisputerProfitBuffer = 2x</code>,
+						The canonical formula inputs live in
+						<code>shared/ts/oracleInitialReport.ts</code>, exported as
+						<code>@zoltar/shared/oracleInitialReport</code>. The UI deployment
+						helper and simulator deployment helper consume that shared value.
+						The current inputs are
+						<code>requiredDisputerProfitBuffer = 2x</code>,
 						<code>gasUnitsForOneDispute = 300,000 gas</code>,
 						<code>assumedGasPriceInEthPerGas = 30 gwei</code>,
 						<code>repPerEthPrice = 1,000 REP / ETH</code>,

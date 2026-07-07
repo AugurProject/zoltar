@@ -430,14 +430,15 @@
 					profitability target. The numerator estimates the REP value of one
 					dispute's gas cost with a profit buffer. The denominator is the
 					price-error room left after OpenOracle reporter/protocol fees and
-					expected REP/ETH movement during settlement. If that denominator is
-					non-positive, the parameter set is unsafe because the target wrong
-					price cannot be disputed profitably under the stated assumptions.
+					expected adverse REP/ETH movement during settlement. If that
+					denominator is non-positive, the parameter set is unsafe because the
+					target wrong price cannot be disputed profitably under the stated
+					assumptions.
 				</p>
 				<div class="equation" id="eq-openoracle-initial-report-size">
 					<math
 						display="block"
-						aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected REP ETH price move during settlement"
+						aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected adverse REP ETH price move during settlement"
 						data-source="exactToken1Report = ceil(requiredDisputerProfitBuffer \cdot gasUnitsForOneDispute \cdot assumedGasPriceInEthPerGas \cdot repPerEthPrice / (((targetPriceErrorForDispute - (openOracleProtocolFeeFraction + openOracleReporterFeeFraction)) / (1 + targetPriceErrorForDispute)) - disputeReportSizeMultiplier \cdot expectedRepEthPriceMoveDuringSettlement))"
 					>
 						<mrow>
@@ -489,20 +490,20 @@
 					</p>
 				</div>
 				<p>
-					The current deployment helpers mirror this calculation in
-					<code>ui/ts/contracts/deploymentHelpers.ts</code> and
-					<code
-						>solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals.ts</code
-					>. With the current inputs, the denominator is positive and the
-					configured output is <code>259332023575638507216</code> atomic REP,
-					or <code>259.332023575638507216 REP</code>.
+					The canonical deployment calculation lives in
+					<code>shared/ts/oracleInitialReport.ts</code>, exported as
+					<code>@zoltar/shared/oracleInitialReport</code>. The UI deployment
+					helper and simulator deployment helper both consume that shared value.
+					With the current inputs, the denominator is positive and the configured
+					output is <code>259332023575638507216</code> atomic REP, or
+					<code>259.332023575638507216 REP</code>.
 				</p>
 				<table>
 					<thead>
 						<tr>
 							<th>Formula input</th>
 							<th>Current value</th>
-							<th>Deployment helper source</th>
+							<th>Canonical shared source</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -574,6 +575,406 @@
 					Those helper rounding rules produce the current atomic REP value
 					above.
 				</p>
+				<details class="interactive-example" id="initial-report-estimator-example" open>
+					<summary>Initial report estimator</summary>
+					<p>
+						Use this estimator to stress the formula inputs. It treats the
+						displayed equation as a continuous model so the sensitivity curves
+						are easy to read; deployment still uses the fixed-point rounding
+						rules described above.
+						The REP/ETH movement input is an adverse movement buffer during
+						settlement, not an average signed drift.
+					</p>
+					<div class="example-grid">
+						<label>
+							Disputer profit buffer
+							<input
+								type="range"
+								min="1"
+								max="5"
+								step="0.1"
+								value="2"
+								data-example-input="requiredDisputerProfitBuffer"
+							/>
+							<span
+								class="example-value"
+								data-example-value="requiredDisputerProfitBuffer"
+								>2.0x</span
+							>
+						</label>
+						<label>
+							Gas units for one dispute
+							<input
+								type="range"
+								min="100000"
+								max="1000000"
+								step="10000"
+								value="300000"
+								data-example-input="gasUnitsForOneDispute"
+							/>
+							<span class="example-value" data-example-value="gasUnitsForOneDispute"
+								>300,000 gas</span
+							>
+						</label>
+						<label>
+							Assumed gas price
+							<input
+								type="range"
+								min="1"
+								max="200"
+								step="1"
+								value="30"
+								data-example-input="assumedGasPriceGwei"
+							/>
+							<span class="example-value" data-example-value="assumedGasPriceGwei"
+								>30 gwei</span
+							>
+						</label>
+						<label>
+							REP per ETH
+							<input
+								type="range"
+								min="50"
+								max="5000"
+								step="50"
+								value="1000"
+								data-example-input="repPerEthPrice"
+							/>
+							<span class="example-value" data-example-value="repPerEthPrice"
+								>1,000 REP/ETH</span
+							>
+						</label>
+						<label>
+							Target wrong-price error
+							<input
+								type="range"
+								min="1"
+								max="50"
+								step="0.1"
+								value="10"
+								data-example-input="targetPriceErrorForDispute"
+							/>
+							<span
+								class="example-value"
+								data-example-value="targetPriceErrorForDispute"
+								>10.0%</span
+							>
+						</label>
+						<label>
+							OpenOracle protocol fee
+							<input
+								type="range"
+								min="0"
+								max="5"
+								step="0.05"
+								value="1"
+								data-example-input="openOracleProtocolFee"
+							/>
+							<span class="example-value" data-example-value="openOracleProtocolFee"
+								>1.00%</span
+							>
+						</label>
+						<label>
+							OpenOracle reporter fee
+							<input
+								type="range"
+								min="0"
+								max="2"
+								step="0.01"
+								value="0.1"
+								data-example-input="openOracleReporterFee"
+							/>
+							<span class="example-value" data-example-value="openOracleReporterFee"
+								>0.10%</span
+							>
+						</label>
+						<label>
+							Dispute report multiplier
+							<input
+								type="range"
+								min="1"
+								max="3"
+								step="0.05"
+								value="1.15"
+								data-example-input="disputeReportSizeMultiplier"
+							/>
+							<span
+								class="example-value"
+								data-example-value="disputeReportSizeMultiplier"
+								>1.15x</span
+							>
+						</label>
+						<label>
+							Expected adverse REP/ETH move
+							<input
+								type="range"
+								min="0"
+								max="10"
+								step="0.1"
+								value="1"
+								data-example-input="expectedRepEthPriceMove"
+							/>
+							<span
+								class="example-value"
+								data-example-value="expectedRepEthPriceMove"
+								>1.0%</span
+							>
+						</label>
+					</div>
+					<div class="example-output-grid">
+						<div>
+							<span>Estimated initial report</span
+							><output data-example-output="estimatedInitialReport"
+								>259.332024 REP</output
+							>
+						</div>
+						<div>
+							<span>Dispute gas cost</span
+							><output data-example-output="disputeGasCost">0.0090 ETH</output>
+						</div>
+						<div>
+							<span>Buffered gas cost</span
+							><output data-example-output="bufferedGasRep">18.00 REP</output>
+						</div>
+						<div>
+							<span>Effective denominator</span
+							><output data-example-output="effectiveDenominator">6.9409%</output>
+						</div>
+						<div>
+							<span>Fee drag</span
+							><output data-example-output="feeDrag">1.10%</output>
+						</div>
+						<div>
+							<span>Adverse move penalty</span
+							><output data-example-output="movePenalty">1.15%</output>
+						</div>
+						<div>
+							<span>Minimum viable target error</span
+							><output data-example-output="minimumTargetError">2.28%</output>
+						</div>
+						<div>
+							<span>Max viable adverse move</span
+							><output data-example-output="maxExpectedMove">7.04%</output>
+						</div>
+						<div>
+							<span>Safety state</span
+							><output data-example-output="estimatorSafetyState">positive denominator</output>
+						</div>
+					</div>
+					<div class="example-chart-grid">
+						<svg
+							class="example-chart"
+							viewBox="0 0 640 180"
+							role="img"
+							aria-label="Initial report size sensitivity to target price error"
+						>
+							<text class="svg-label" x="24" y="24">
+								Report size vs. target error
+							</text>
+							<rect
+								fill="#b3261e"
+								opacity="0.12"
+								x="64"
+								y="36"
+								width="0"
+								height="108"
+								data-example-unsafe-region="targetError"
+							></rect>
+							<line
+								stroke="#b3261e"
+								stroke-dasharray="4 4"
+								x1="64"
+								y1="36"
+								x2="64"
+								y2="144"
+								data-example-boundary-line="targetError"
+							></line>
+							<text
+								class="svg-small"
+								fill="#b3261e"
+								x="72"
+								y="50"
+								data-example-boundary-label="targetError"
+							>
+								unsafe below 2.28%
+							</text>
+							<text
+								class="svg-small"
+								x="58"
+								y="40"
+								text-anchor="end"
+								data-example-chart-label="targetErrorMax"
+								>max</text
+							>
+							<text
+								class="svg-small"
+								x="58"
+								y="148"
+								text-anchor="end"
+								data-example-chart-label="targetErrorMin"
+								>min</text
+							>
+							<line class="svg-line" x1="64" y1="144" x2="608" y2="144"></line>
+							<line class="svg-line" x1="64" y1="36" x2="64" y2="144"></line>
+							<polyline
+								class="svg-line"
+								fill="none"
+								points="64,132 608,48"
+								data-example-polyline="targetErrorCurve"
+							></polyline>
+							<circle
+								class="svg-red"
+								cx="164"
+								cy="92"
+								r="5"
+								data-example-marker="targetErrorMarker"
+							></circle>
+							<text
+								class="svg-small"
+								x="172"
+								y="92"
+								data-example-chart-label="targetErrorCurrent"
+								>current</text
+							>
+							<text class="svg-small" x="64" y="166">1%</text>
+							<text class="svg-small" x="608" y="166" text-anchor="end">50%</text>
+						</svg>
+						<svg
+							class="example-chart"
+							viewBox="0 0 640 180"
+							role="img"
+							aria-label="Initial report size sensitivity to gas price"
+						>
+							<text class="svg-label" x="24" y="24">
+								Report size vs. gas price
+							</text>
+							<text
+								class="svg-small"
+								x="58"
+								y="40"
+								text-anchor="end"
+								data-example-chart-label="gasPriceMax"
+								>max</text
+							>
+							<text
+								class="svg-small"
+								x="58"
+								y="148"
+								text-anchor="end"
+								data-example-chart-label="gasPriceMin"
+								>min</text
+							>
+							<line class="svg-line" x1="64" y1="144" x2="608" y2="144"></line>
+							<line class="svg-line" x1="64" y1="36" x2="64" y2="144"></line>
+							<polyline
+								class="svg-line"
+								fill="none"
+								points="64,132 608,48"
+								data-example-polyline="gasPriceCurve"
+							></polyline>
+							<circle
+								class="svg-red"
+								cx="144"
+								cy="116"
+								r="5"
+								data-example-marker="gasPriceMarker"
+							></circle>
+							<text
+								class="svg-small"
+								x="152"
+								y="116"
+								data-example-chart-label="gasPriceCurrent"
+								>current</text
+							>
+							<text class="svg-small" x="64" y="166">1 gwei</text>
+							<text class="svg-small" x="608" y="166" text-anchor="end">200 gwei</text>
+						</svg>
+						<svg
+							class="example-chart"
+							viewBox="0 0 640 180"
+							role="img"
+							aria-label="Initial report size sensitivity to expected adverse REP ETH price movement"
+						>
+							<text class="svg-label" x="24" y="24">
+								Report size vs. expected adverse REP/ETH move
+							</text>
+							<rect
+								fill="#b3261e"
+								opacity="0.12"
+								x="64"
+								y="36"
+								width="0"
+								height="108"
+								data-example-unsafe-region="priceMove"
+							></rect>
+							<line
+								stroke="#b3261e"
+								stroke-dasharray="4 4"
+								x1="64"
+								y1="36"
+								x2="64"
+								y2="144"
+								data-example-boundary-line="priceMove"
+							></line>
+							<text
+								class="svg-small"
+								fill="#b3261e"
+								x="72"
+								y="50"
+								data-example-boundary-label="priceMove"
+							>
+								unsafe above 7.04%
+							</text>
+							<text
+								class="svg-small"
+								x="58"
+								y="40"
+								text-anchor="end"
+								data-example-chart-label="priceMoveMax"
+								>max</text
+							>
+							<text
+								class="svg-small"
+								x="58"
+								y="148"
+								text-anchor="end"
+								data-example-chart-label="priceMoveMin"
+								>min</text
+							>
+							<line class="svg-line" x1="64" y1="144" x2="608" y2="144"></line>
+							<line class="svg-line" x1="64" y1="36" x2="64" y2="144"></line>
+							<polyline
+								class="svg-line"
+								fill="none"
+								points="64,132 608,48"
+								data-example-polyline="priceMoveCurve"
+							></polyline>
+							<circle
+								class="svg-red"
+								cx="118"
+								cy="102"
+								r="5"
+								data-example-marker="priceMoveMarker"
+							></circle>
+							<text
+								class="svg-small"
+								x="126"
+								y="102"
+								data-example-chart-label="priceMoveCurrent"
+								>current</text
+							>
+							<text class="svg-small" x="64" y="166">0%</text>
+							<text class="svg-small" x="608" y="166" text-anchor="end">10%</text>
+						</svg>
+					</div>
+					<p class="detail">
+						The target-error and adverse-move curves can go vertical near the
+						unsafe denominator boundary. Shaded regions show parameter values
+						where a wrong report at the target error no longer leaves enough
+						room to pay fees, absorb adverse REP/ETH movement, and still make a
+						dispute profitable.
+					</p>
+				</details>
 				<p>
 					Once a REP/ETH price is fresh, the coordinator relies on local
 					operation guards: withdrawals must have an effect, liquidations must
@@ -1110,7 +1511,7 @@
 						<code>settlementTime</code> gives reporters time to dispute, and the
 						initial report size is chosen so the target wrong price leaves an
 						honest disputer with a positive expected profit after fees, gas, and
-						expected price movement.
+						expected adverse REP/ETH movement.
 					</li>
 					<li>
 						<strong>Binary threshold attacks:</strong> staged liquidations must
@@ -1694,6 +2095,378 @@
 				}
 				return durationValue.toFixed(2);
 			};
+			const formatEstimatorRep = (repValue) => {
+				if (!Number.isFinite(repValue)) {
+					return "unsafe denominator";
+				}
+				if (repValue >= 1_000_000) {
+					return `${repValue.toExponential(2)} REP`;
+				}
+				if (repValue >= 1_000) {
+					return `${repValue.toFixed(2)} REP`;
+				}
+				return `${repValue.toFixed(6)} REP`;
+			};
+			const formatEstimatorRepCompact = (repValue) => {
+				if (!Number.isFinite(repValue)) {
+					return "unsafe";
+				}
+				if (repValue >= 1_000_000) {
+					return `${(repValue / 1_000_000).toFixed(1)}m REP`;
+				}
+				if (repValue >= 1_000) {
+					return `${(repValue / 1_000).toFixed(1)}k REP`;
+				}
+				if (repValue >= 10) {
+					return `${repValue.toFixed(1)} REP`;
+				}
+				return `${repValue.toFixed(2)} REP`;
+			};
+			const calculateInitialReportEstimate = (parameters) => {
+				const targetError = parameters.targetPriceErrorForDispute / 100;
+				const feeFraction =
+					(parameters.openOracleProtocolFee +
+						parameters.openOracleReporterFee) /
+					100;
+				const expectedMove = parameters.expectedRepEthPriceMove / 100;
+				const movePenalty =
+					parameters.disputeReportSizeMultiplier * expectedMove;
+				const targetErrorAfterFees = targetError - feeFraction;
+				const disputeProfitFraction =
+					targetErrorAfterFees / (1 + targetError);
+				const denominator = disputeProfitFraction - movePenalty;
+				const disputeGasCostEth =
+					parameters.gasUnitsForOneDispute *
+					parameters.assumedGasPriceGwei *
+					1e-9;
+				const bufferedGasRep =
+					parameters.requiredDisputerProfitBuffer *
+					disputeGasCostEth *
+					parameters.repPerEthPrice;
+				const estimatedInitialReport =
+					denominator > 0
+						? bufferedGasRep / denominator
+						: Number.POSITIVE_INFINITY;
+				const minimumTargetError =
+					movePenalty >= 1
+						? Number.POSITIVE_INFINITY
+						: (feeFraction + movePenalty) / (1 - movePenalty);
+				const maxExpectedMove =
+					parameters.disputeReportSizeMultiplier > 0
+						? Math.max(
+								disputeProfitFraction /
+									parameters.disputeReportSizeMultiplier,
+								0,
+							)
+						: Number.POSITIVE_INFINITY;
+				return {
+					bufferedGasRep,
+					denominator,
+					disputeGasCostEth,
+					estimatedInitialReport,
+					feeFraction,
+					maxExpectedMove,
+					minimumTargetError,
+					movePenalty,
+				};
+			};
+			const updateEstimatorCurve = ({
+				chartName,
+				currentX,
+				calculateY,
+				markerName,
+				maxX,
+				minX,
+				polylineName,
+				unsafeRange,
+			}) => {
+				const root = document.querySelector("#initial-report-estimator-example");
+				const polyline = root?.querySelector(
+					`[data-example-polyline="${polylineName}"]`,
+				);
+				const marker = root?.querySelector(
+					`[data-example-marker="${markerName}"]`,
+				);
+				const currentLabel = root?.querySelector(
+					`[data-example-chart-label="${chartName}Current"]`,
+				);
+				if (!(polyline instanceof SVGPolylineElement)) return;
+				const toSvgX = (xValue) =>
+					64 + ((xValue - minX) / (maxX - minX)) * 544;
+				const hideSvgElement = (element) => {
+					if (element instanceof SVGElement) {
+						element.setAttribute("visibility", "hidden");
+					}
+				};
+				const showSvgElement = (element) => {
+					if (element instanceof SVGElement) {
+						element.setAttribute("visibility", "visible");
+					}
+				};
+				const setChartLabel = (suffix, text) => {
+					const label = root?.querySelector(
+						`[data-example-chart-label="${chartName}${suffix}"]`,
+					);
+					if (label instanceof SVGTextElement) {
+						label.textContent = text;
+					}
+				};
+				const updateUnsafeRegion = () => {
+					const region = root?.querySelector(
+						`[data-example-unsafe-region="${chartName}"]`,
+					);
+					const boundaryLine = root?.querySelector(
+						`[data-example-boundary-line="${chartName}"]`,
+					);
+					const boundaryLabel = root?.querySelector(
+						`[data-example-boundary-label="${chartName}"]`,
+					);
+					if (!unsafeRange) {
+						hideSvgElement(region);
+						hideSvgElement(boundaryLine);
+						hideSvgElement(boundaryLabel);
+						return;
+					}
+					const visibleStart = Math.max(minX, unsafeRange.start);
+					const visibleEnd = Math.min(maxX, unsafeRange.end);
+					const hasVisibleRegion = visibleEnd > visibleStart;
+					if (region instanceof SVGRectElement && hasVisibleRegion) {
+						const x = toSvgX(visibleStart);
+						region.setAttribute("x", x.toFixed(1));
+						region.setAttribute(
+							"width",
+							(toSvgX(visibleEnd) - x).toFixed(1),
+						);
+						showSvgElement(region);
+					} else {
+						hideSvgElement(region);
+					}
+					const boundaryIsVisible =
+						unsafeRange.boundaryX >= minX && unsafeRange.boundaryX <= maxX;
+					if (boundaryLine instanceof SVGLineElement && boundaryIsVisible) {
+						const x = toSvgX(unsafeRange.boundaryX).toFixed(1);
+						boundaryLine.setAttribute("x1", x);
+						boundaryLine.setAttribute("x2", x);
+						showSvgElement(boundaryLine);
+					} else {
+						hideSvgElement(boundaryLine);
+					}
+					if (boundaryLabel instanceof SVGTextElement && hasVisibleRegion) {
+						const labelX = Math.min(
+							Math.max(toSvgX(visibleStart) + 8, 72),
+							520,
+						);
+						boundaryLabel.setAttribute("x", labelX.toFixed(1));
+						boundaryLabel.textContent = unsafeRange.label;
+						showSvgElement(boundaryLabel);
+					} else {
+						hideSvgElement(boundaryLabel);
+					}
+				};
+				updateUnsafeRegion();
+				const samples = [];
+				for (let index = 0; index <= 80; index += 1) {
+					const xValue = minX + ((maxX - minX) * index) / 80;
+					const yValue = calculateY(xValue);
+					if (Number.isFinite(yValue) && yValue > 0) {
+						samples.push({ xValue, yValue });
+					}
+				}
+				if (samples.length === 0) {
+					polyline.setAttribute("points", "");
+					if (marker instanceof SVGCircleElement) {
+						marker.setAttribute("visibility", "hidden");
+					}
+					hideSvgElement(currentLabel);
+					setChartLabel("Min", "unsafe");
+					setChartLabel("Max", "unsafe");
+					return;
+				}
+				const maxY = Math.max(...samples.map((sample) => sample.yValue));
+				const minY = Math.min(...samples.map((sample) => sample.yValue));
+				const yRange = Math.max(maxY - minY, maxY * 0.05, 1);
+				setChartLabel("Min", formatEstimatorRepCompact(minY));
+				setChartLabel("Max", formatEstimatorRepCompact(maxY));
+				const toPoint = ({ xValue, yValue }) => {
+					const x = toSvgX(xValue);
+					const y = 144 - ((yValue - minY) / yRange) * 108;
+					return `${x.toFixed(1)},${Math.min(Math.max(y, 36), 144).toFixed(1)}`;
+				};
+				polyline.setAttribute("points", samples.map(toPoint).join(" "));
+				if (marker instanceof SVGCircleElement) {
+					const currentY = calculateY(currentX);
+					if (!Number.isFinite(currentY) || currentY <= 0) {
+						marker.setAttribute("visibility", "hidden");
+						hideSvgElement(currentLabel);
+						return;
+					}
+					const markerPoint = toPoint({ xValue: currentX, yValue: currentY });
+					const [markerX, markerY] = markerPoint.split(",");
+					marker.setAttribute("cx", markerX);
+					marker.setAttribute("cy", markerY);
+					marker.setAttribute("visibility", "visible");
+					if (currentLabel instanceof SVGTextElement) {
+						const labelX = Math.min(Number(markerX) + 8, 520);
+						const labelY = Math.max(Number(markerY) - 8, 42);
+						currentLabel.setAttribute("x", labelX.toFixed(1));
+						currentLabel.setAttribute("y", labelY.toFixed(1));
+						currentLabel.textContent = `current ${formatEstimatorRepCompact(
+							currentY,
+						)}`;
+						showSvgElement(currentLabel);
+					}
+				}
+			};
+			bindExample("#initial-report-estimator-example", (context) => {
+				const parameters = {
+					assumedGasPriceGwei: context.read("assumedGasPriceGwei"),
+					disputeReportSizeMultiplier: context.read(
+						"disputeReportSizeMultiplier",
+					),
+					expectedRepEthPriceMove: context.read("expectedRepEthPriceMove"),
+					gasUnitsForOneDispute: context.read("gasUnitsForOneDispute"),
+					openOracleProtocolFee: context.read("openOracleProtocolFee"),
+					openOracleReporterFee: context.read("openOracleReporterFee"),
+					repPerEthPrice: context.read("repPerEthPrice"),
+					requiredDisputerProfitBuffer: context.read(
+						"requiredDisputerProfitBuffer",
+					),
+					targetPriceErrorForDispute: context.read(
+						"targetPriceErrorForDispute",
+					),
+				};
+				const estimate = calculateInitialReportEstimate(parameters);
+				context.writeValue(
+					"requiredDisputerProfitBuffer",
+					`${parameters.requiredDisputerProfitBuffer.toFixed(1)}x`,
+				);
+				context.writeValue(
+					"gasUnitsForOneDispute",
+					`${parameters.gasUnitsForOneDispute.toLocaleString()} gas`,
+				);
+				context.writeValue(
+					"assumedGasPriceGwei",
+					`${parameters.assumedGasPriceGwei.toFixed(0)} gwei`,
+				);
+				context.writeValue(
+					"repPerEthPrice",
+					`${parameters.repPerEthPrice.toLocaleString()} REP/ETH`,
+				);
+				context.writeValue(
+					"targetPriceErrorForDispute",
+					`${parameters.targetPriceErrorForDispute.toFixed(1)}%`,
+				);
+				context.writeValue(
+					"openOracleProtocolFee",
+					`${parameters.openOracleProtocolFee.toFixed(2)}%`,
+				);
+				context.writeValue(
+					"openOracleReporterFee",
+					`${parameters.openOracleReporterFee.toFixed(2)}%`,
+				);
+				context.writeValue(
+					"disputeReportSizeMultiplier",
+					`${parameters.disputeReportSizeMultiplier.toFixed(2)}x`,
+				);
+				context.writeValue(
+					"expectedRepEthPriceMove",
+					`${parameters.expectedRepEthPriceMove.toFixed(1)}%`,
+				);
+				context.writeOutput(
+					"estimatedInitialReport",
+					formatEstimatorRep(estimate.estimatedInitialReport),
+				);
+				context.writeOutput(
+					"disputeGasCost",
+					`${estimate.disputeGasCostEth.toFixed(4)} ETH`,
+				);
+				context.writeOutput(
+					"bufferedGasRep",
+					`${estimate.bufferedGasRep.toFixed(2)} REP`,
+				);
+				context.writeOutput(
+					"effectiveDenominator",
+					Number.isFinite(estimate.denominator)
+						? formatPercent(estimate.denominator)
+						: "unsafe denominator",
+				);
+				context.writeOutput("feeDrag", formatPercent(estimate.feeFraction));
+				context.writeOutput("movePenalty", formatPercent(estimate.movePenalty));
+				context.writeOutput(
+					"minimumTargetError",
+					Number.isFinite(estimate.minimumTargetError)
+						? formatPercent(estimate.minimumTargetError)
+						: "no finite safe target",
+				);
+				context.writeOutput(
+					"maxExpectedMove",
+					estimate.maxExpectedMove > 0
+						? formatPercent(estimate.maxExpectedMove)
+						: "no safe adverse move",
+				);
+				context.writeOutput(
+					"estimatorSafetyState",
+					estimate.denominator > 0
+						? "positive denominator"
+						: "unsafe: denominator is zero or negative",
+				);
+				const estimateWith = (overrides) =>
+					calculateInitialReportEstimate({ ...parameters, ...overrides })
+						.estimatedInitialReport;
+				const minimumTargetErrorPercent = Number.isFinite(
+					estimate.minimumTargetError,
+				)
+					? estimate.minimumTargetError * 100
+					: Number.POSITIVE_INFINITY;
+				const maxExpectedMovePercent = estimate.maxExpectedMove * 100;
+				updateEstimatorCurve({
+					chartName: "targetError",
+					calculateY: (targetPriceErrorForDispute) =>
+						estimateWith({ targetPriceErrorForDispute }),
+					currentX: parameters.targetPriceErrorForDispute,
+					markerName: "targetErrorMarker",
+					maxX: 50,
+					minX: 1,
+					polylineName: "targetErrorCurve",
+					unsafeRange: {
+						boundaryX: minimumTargetErrorPercent,
+						end: minimumTargetErrorPercent,
+						label: Number.isFinite(estimate.minimumTargetError)
+							? `unsafe below ${formatPercent(estimate.minimumTargetError)}`
+							: "unsafe across range",
+						start: 1,
+					},
+				});
+				updateEstimatorCurve({
+					chartName: "gasPrice",
+					calculateY: (assumedGasPriceGwei) =>
+						estimateWith({ assumedGasPriceGwei }),
+					currentX: parameters.assumedGasPriceGwei,
+					markerName: "gasPriceMarker",
+					maxX: 200,
+					minX: 1,
+					polylineName: "gasPriceCurve",
+				});
+				updateEstimatorCurve({
+					chartName: "priceMove",
+					calculateY: (expectedRepEthPriceMove) =>
+						estimateWith({ expectedRepEthPriceMove }),
+					currentX: parameters.expectedRepEthPriceMove,
+					markerName: "priceMoveMarker",
+					maxX: 10,
+					minX: 0,
+					polylineName: "priceMoveCurve",
+					unsafeRange: {
+						boundaryX: maxExpectedMovePercent,
+						end: 10,
+						label:
+							maxExpectedMovePercent > 0
+								? `unsafe above ${formatPercent(estimate.maxExpectedMove)}`
+								: "unsafe across range",
+						start: maxExpectedMovePercent,
+					},
+				});
+			});
 			bindExample("#binary-censorship-example", (context) => {
 				const honestPrice = Math.max(context.read("honestPrice"), 0.0001);
 				const manipulatedPrice = Math.max(
