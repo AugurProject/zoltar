@@ -122,10 +122,12 @@
 				</p>
 				<p>
 					For liquidations, the relevant boundary is the
-					<span class="term" tabindex="0">liquidation threshold</span>, the
-					REP/ETH price where a vault becomes liquidatable, plus the configured
-					<span class="term" tabindex="0">liquidation distance</span>, an extra
-					margin currently set by <code>minLiquidationPriceDistanceBps</code>.
+					<span class="term" tabindex="0">liquidation threshold</span>. A
+					staged liquidation can execute only when the current REP/ETH price is
+					strictly above that threshold and at least the configured
+					<span class="term" tabindex="0">liquidation distance</span> beyond it,
+					with that extra margin currently set by
+					<code>minLiquidationPriceDistanceBps</code>.
 				</p>
 				<p>
 					OpenOracle disputes scale with
@@ -1030,11 +1032,12 @@
 					price and pays for censorship until the report can settle. For linear
 					payoffs the settle payoff scales with price error, but Placeholder's
 					most relevant liquidation payoff is binary: the attacker wins a
-					fixed payoff if the manipulated REP/ETH price crosses the liquidation
-					threshold. OpenOracle's inclusion analysis notes that binary payoffs
-					therefore replace the linear settle payoff with
-					<code>externalPayoff</code>, while keeping the same
-					censorship-spend term.
+					fixed payoff only if the manipulated REP/ETH price is strictly above
+					the liquidation threshold and satisfies the configured liquidation
+					distance check. OpenOracle's inclusion analysis notes that binary
+					payoffs therefore replace the linear settle payoff with
+					<code>externalPayoff</code>, while keeping the same censorship-spend
+					term.
 				</p>
 				<p>
 					The minimal attack story is: an attacker posts a manipulated REP/ETH
@@ -1924,10 +1927,13 @@
 						</tr>
 						<tr>
 							<td><code>settlementTime</code></td>
-							<td><code>480</code></td>
+							<td><code>480 seconds (8 minutes)</code></td>
 							<td>
-								Sets the report settlement delay. Staged operations expire after
-								this delay plus their operation-specific validity window.
+								Sets the timestamp-based report settlement delay. The
+								<code>40 * 12</code> derivation assumes twelve-second blocks, but
+								the configured OpenOracle <code>timeType</code> uses seconds.
+								Staged operations expire after this delay plus their
+								operation-specific validity window.
 							</td>
 						</tr>
 						<tr>

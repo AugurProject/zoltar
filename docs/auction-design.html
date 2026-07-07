@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Uniform Price Dual Cap Batch Auction</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Uniform Price Dual Cap Batch Auction</h1>
+				<p>
+					This page explains a collateral-repair auction. A <em>fork</em> is
+					the split that happens when a disputed question cannot safely settle
+					in one branch. A <em>fork branch</em> is one path after that split. A
+					<em>child pool</em> is the market pool in one fork branch, and
+					<em>child-universe REP</em> is REP minted inside that branch. A
+					<em>truth auction</em> is a sale that repairs a child pool after a
+					fork; it does not choose which branch is truthful.
+				</p>
+				<p>
+					<code>SecurityPoolForker</code> uses this auction when a forked child
+					pool needs ETH collateral repair. The auction sells child-universe REP
+					for ETH; it does not decide which fork branch is true.
+				</p>
+				<p>
+					Read this as an implementation guide for
+					<code>UniformPriceDualCapBatchAuction</code> and the forker settlement
+					wrapper. For the broader fork-recovery story, start with the
+					<a href="./whitepaper_placeholder.html#auction">truth auction section</a>
+					in the Placeholder whitepaper.
+				</p>
+			</header>
+
+			<section id="why">
+				<h2>Why This Auction Exists</h2>
+				<p>
+					After a universe fork, a child pool can inherit less ETH collateral
+					than it needs to continue normal operation. The forker can sell some
+					child-universe REP for ETH to repair that collateral gap. This keeps
+					trader share collateral separate from the question of which branch is
+					true.
+				</p>
+				<p>
+					The design is dual-capped: it tries to raise enough ETH without
+					selling more REP than the child pool is allowed to sell. If demand is
+					weak, the auction sells only what qualifying bids demand and leaves
+					unsold REP in the pool instead of forcing a low-price full sale.
+				</p>
+			</section>
+
+			<section id="lifecycle">
+				<h2>Operational Lifecycle</h2>
+				<p>
+					The auction is owned by the coordinating
+					<code>SecurityPoolForker</code>, not by the bidder. That ownership is
+					intentional because purchased REP is credited into child-pool vault
+					accounting instead of being transferred directly from the auction to
+					the bidder.
+				</p>
+				<figure class="diagram" id="fig-auction-lifecycle">
+					<svg viewBox="0 0 880 180" role="img" aria-label="Child pool shortfall leads to forker-started auction, ETH bids, finalization, and paged settlement into vault accounting.">
+						<defs>
+							<marker id="auction-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-red" x="20" y="50" width="150" height="70" rx="8"></rect>
+						<text class="svg-label" x="95" y="80" text-anchor="middle">Shortfall</text>
+						<text class="svg-small" x="95" y="103" text-anchor="middle">child pool needs ETH</text>
+						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 170 85 H 230"></path>
+						<rect class="svg-blue" x="230" y="50" width="150" height="70" rx="8"></rect>
+						<text class="svg-label" x="305" y="80" text-anchor="middle">Start</text>
+						<text class="svg-small" x="305" y="103" text-anchor="middle">forker only</text>
+						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 380 85 H 440"></path>
+						<rect class="svg-gold" x="440" y="50" width="150" height="70" rx="8"></rect>
+						<text class="svg-label" x="515" y="80" text-anchor="middle">Bid</text>
+						<text class="svg-small" x="515" y="103" text-anchor="middle">ETH at price ticks</text>
+						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 590 85 H 650"></path>
+						<rect class="svg-green" x="650" y="50" width="190" height="70" rx="8"></rect>
+						<text class="svg-label" x="745" y="80" text-anchor="middle">Settle</text>
+						<text class="svg-small" x="745" y="103" text-anchor="middle">REP becomes vault ownership</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Auction Lifecycle</span>The owner starts
+						and finalizes the auction; anyone can later ask the forker to settle
+						paged bid results into vault accounting.
+					</p>
+				</figure>
+				<table>
+					<thead>
+						<tr>
+							<th>Action</th>
+							<th>Contract function</th>
+							<th>Who can call it</th>
+							<th>Why that boundary exists</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Start auction</td>
+							<td><code>startAuction</code></td>
+							<td>Auction owner, normally <code>SecurityPoolForker</code>.</td>
+							<td>The forker knows the child-pool repair target and REP sale cap.</td>
+						</tr>
+						<tr>
+							<td>Submit bid</td>
+							<td><code>submitBid</code></td>
+							<td>
+								Any bidder during the one-week auction window, with
+								<code>msg.value &gt;= minBidSize</code>.
+							</td>
+							<td>
+								Open bidding lets demand discover the repair price. The minimum
+								bid is
+								<code>minBidSize = max(ethRaiseCap / 100000, 1 wei)</code>, so
+								tiny spam bids are rejected.
+							</td>
+						</tr>
+						<tr>
+							<td>Finalize auction</td>
+							<td><code>finalize</code></td>
+							<td>Auction owner after the window closes.</td>
+							<td>The forker receives raised ETH and computes pool accounting rates.</td>
+						</tr>
+						<tr>
+							<td>Settle bids</td>
+							<td><code>withdrawBids</code> through the forker wrapper.</td>
+							<td>Forker calls the auction; anyone can ask the forker to settle pages.</td>
+							<td>Purchased REP becomes child-pool ownership and allowance, not a direct auction transfer.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<section id="gas-and-spam">
+				<h2>Gas and Spam Bounds</h2>
+				<p>
+					The auction intentionally does not cap total bids or active price
+					levels. A cap would let an attacker spend ETH to fill the available
+					bid slots or tick slots early, preventing later valid bidders from
+					participating.
+				</p>
+				<p>
+					Finalization remains bounded without those caps because it does not
+					iterate over raw bids. Same-tick bids append to per-tick arrays for
+					later paged withdrawal, while clearing uses aggregate ETH totals stored
+					in an AVL tree keyed by tick. The valid tick range is finite:
+					<code>[-524288, 524288]</code>, or <code>1,048,577</code> possible
+					price levels. An AVL tree containing every possible tick has maximum
+					height <code>28</code>, so <code>finalize()</code> descends bounded
+					tree paths and pruned subtrees.
+				</p>
+				<p>
+					The gas tests cover both funded and underfunded finalization over a
+					synthetic max-depth tree for the full tick domain. They assert each
+					path remains below <code>20,000,000</code> gas and print measured gas
+					values in the test output.
+				</p>
+			</section>
+
+			<section id="settlement">
+				<h2>Refund and Settlement Paths</h2>
+				<p>
+					Clearly losing bids can be refunded before finalization once current
+					demand is enough to find a clearing tick. Only ticks below that found
+					clearing tick can be withdrawn through the pre-finalization refund
+					path; binding or potentially winning bids stay in the auction.
+				</p>
+				<p>
+					In the underfunded branch, finalization computes
+					<code>underfundedThreshold</code> from aggregate accepted bid ETH, and
+					only ticks whose <code>tickToPrice</code> value is at or above that
+					threshold win.
+					The contract's stored <code>ethRaised</code> value is the threshold
+					input; <code>underfundedWinningEth</code> is the ETH actually retained
+					or sent after below-threshold bids are refunded.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Finalized case</th>
+							<th>Bid treatment</th>
+							<th>Why it works this way</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Losing bids</td>
+							<td>Receive ETH refunds.</td>
+							<td>They did not contribute to the accepted clearing demand.</td>
+						</tr>
+						<tr>
+							<td>Normal winning bids above clearing tick</td>
+							<td>Convert all accepted ETH into purchased REP at the uniform clearing price.</td>
+							<td>Higher bids should receive the same execution price as the marginal winner.</td>
+						</tr>
+						<tr>
+							<td>Normal marginal clearing tick</td>
+							<td>May be partially filled and partially refunded; same-tick bids fill FIFO by submission order.</td>
+							<td>FIFO gives deterministic marginal allocation without iterating over all same-tick bids during finalization.</td>
+						</tr>
+						<tr>
+							<td>Underfunded winning ticks</td>
+							<td>Ticks at or above <code>underfundedThreshold</code> buy only their limit-priced REP demand; same-tick bids share that demand pro rata by ETH.</td>
+							<td>Weak demand should leave REP unsold instead of forcing a lower uniform full-sale price.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					Zero-effective-price ticks are rejected when bids are submitted, so
+					underfunded settlement cannot assign REP to bids whose rounded ETH/REP
+					price is zero.
+				</p>
+				<p>
+					Both finalized allocation paths carry division dust across paged
+					withdrawals. Normal clearing carries <code>clearingRemainder</code>
+					through the uniform-price ETH-to-REP division, and underfunded clearing
+					carries a per-tick remainder through the same-tick ETH-to-REP
+					allocation. Later withdrawals at the same tick may receive remainder
+					carried from earlier integer division so bid-level withdrawals
+					reconcile to the aggregate finalized REP demanded at that tick.
+				</p>
+			</section>
+
+			<section id="worked-example">
+				<h2>Worked Clearing Example</h2>
+				<p>
+					Suppose the auction tries to raise <code>12 ETH</code> while selling
+					at most <code>4 REP</code>. Alice bids <code>3 ETH</code> near
+					<code>5 ETH/REP</code>, Bob bids <code>4 ETH</code> near
+					<code>4 ETH/REP</code>, and Carol bids <code>6 ETH</code> near
+					<code>3 ETH/REP</code>.
+				</p>
+				<div class="equation" id="eq-auction-rep-won">
+					<math
+						display="block"
+						aria-label="REP won equals filled ETH divided by clearing price"
+						data-source="repWon = filledEth / clearingPrice"
+					>
+						<mrow>
+							<mi>repWon</mi>
+							<mo>=</mo>
+							<mfrac>
+								<mi>filledEth</mi>
+								<mi>clearingPrice</mi>
+							</mfrac>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Auction Fill</span>In the funded
+						path, every filled bid settles at the same clearing price; only the
+						amount of ETH filled can differ at the marginal tick.
+					</p>
+				</div>
+				<table>
+					<thead>
+						<tr>
+							<th>Bidder</th>
+							<th>Bid</th>
+							<th>Settlement at 3 ETH/REP</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Alice</td>
+							<td><code>3 ETH</code> near <code>5 ETH/REP</code></td>
+							<td>Fully filled; receives <code>1 REP</code>.</td>
+						</tr>
+						<tr>
+							<td>Bob</td>
+							<td><code>4 ETH</code> near <code>4 ETH/REP</code></td>
+							<td>Fully filled; receives <code>4/3 REP</code>.</td>
+						</tr>
+						<tr>
+							<td>Carol</td>
+							<td><code>6 ETH</code> near <code>3 ETH/REP</code></td>
+							<td>Partially filled; receives <code>5/3 REP</code> and a <code>1 ETH</code> refund.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					The auction raises <code>12 ETH</code> and sells <code>4 REP</code>.
+					Everyone who wins receives the same effective execution price, while
+					only the marginal bid is clipped.
+				</p>
+				<details class="interactive-example" id="simple-auction-example">
+					<summary>Try a simple auction clearing run</summary>
+					<p>
+						This simplified calculator uses three fixed price levels to show
+						the same two high-level outcomes as the contract: strong demand
+						clears at a uniform price, while weak demand sells only qualifying
+						limit-priced REP demand.
+					</p>
+					<div class="example-grid">
+						<label>
+							ETH raise cap
+							<input
+								type="range"
+								min="1"
+								max="30"
+								step="1"
+								value="12"
+								data-example-input="ethRaiseCap"
+							/>
+							<span class="example-value" data-example-value="ethRaiseCap"
+								>12 ETH</span
+							>
+						</label>
+						<label>
+							REP inventory
+							<input
+								type="range"
+								min="1"
+								max="12"
+								step="1"
+								value="4"
+								data-example-input="repInventory"
+							/>
+							<span class="example-value" data-example-value="repInventory"
+								>4 REP</span
+							>
+						</label>
+						<label>
+							Alice bid near 5 ETH/REP
+							<input
+								type="range"
+								min="0"
+								max="20"
+								step="1"
+								value="3"
+								data-example-input="aliceEth"
+							/>
+							<span class="example-value" data-example-value="aliceEth"
+								>3 ETH</span
+							>
+						</label>
+						<label>
+							Bob bid near 4 ETH/REP
+							<input
+								type="range"
+								min="0"
+								max="20"
+								step="1"
+								value="4"
+								data-example-input="bobEth"
+							/>
+							<span class="example-value" data-example-value="bobEth"
+								>4 ETH</span
+							>
+						</label>
+						<label>
+							Carol bid near 3 ETH/REP
+							<input
+								type="range"
+								min="0"
+								max="20"
+								step="1"
+								value="6"
+								data-example-input="carolEth"
+							/>
+							<span class="example-value" data-example-value="carolEth"
+								>6 ETH</span
+							>
+						</label>
+					</div>
+					<div class="example-output-grid">
+						<div>
+							<span>Mode</span
+							><output data-example-output="clearingMode"
+								>funded near 3 ETH/REP</output
+							>
+						</div>
+						<div>
+							<span>ETH raised</span
+							><output data-example-output="ethRaised">12 ETH</output>
+						</div>
+						<div>
+							<span>Threshold</span
+							><output data-example-output="underfundedThreshold"
+								>not underfunded</output
+							>
+						</div>
+						<div>
+							<span>Alice REP</span
+							><output data-example-output="aliceReceives">1.00 REP</output>
+						</div>
+						<div>
+							<span>Bob REP</span
+							><output data-example-output="bobReceives">1.33 REP</output>
+						</div>
+						<div>
+							<span>Carol REP</span
+							><output data-example-output="carolReceives">1.67 REP</output>
+						</div>
+						<div>
+							<span>Refunds</span
+							><output data-example-output="refunds">1.00 ETH</output>
+						</div>
+					</div>
+				</details>
+			</section>
+		</main>
+		<script src="./protocolTerms.js"></script>
+		<script src="./termTooltips.js"></script>
+		<script>
+			const formatFixed = (value, digits = 2) => {
+				if (!Number.isFinite(value)) {
+					return "not available";
+				}
+				const rounded = value.toFixed(digits);
+				return rounded.replace(/\.?0+$/, "");
+			};
+			const formatEth = (value) => `${formatFixed(value)} ETH`;
+			const formatRep = (value) => `${formatFixed(value)} REP`;
+			const example = document.querySelector("#simple-auction-example");
+			if (example !== null) {
+				const inputs = Object.fromEntries(
+					Array.from(example.querySelectorAll("[data-example-input]")).map(
+						(inputElement) => [inputElement.dataset.exampleInput, inputElement],
+					),
+				);
+				const outputs = Object.fromEntries(
+					Array.from(example.querySelectorAll("[data-example-output]")).map(
+						(outputElement) => [
+							outputElement.dataset.exampleOutput,
+							outputElement,
+						],
+					),
+				);
+				const values = Object.fromEntries(
+					Array.from(example.querySelectorAll("[data-example-value]")).map(
+						(valueElement) => [valueElement.dataset.exampleValue, valueElement],
+					),
+				);
+				const read = (name) => {
+					const input = inputs[name];
+					if (input === undefined) {
+						return 0;
+					}
+					const value = Number(input.value);
+					return Number.isFinite(value) ? value : 0;
+				};
+				const write = (name, value) => {
+					const output = outputs[name];
+					if (output !== undefined) {
+						output.value = value;
+					}
+				};
+				const writeValue = (name, value) => {
+					const element = values[name];
+					if (element !== undefined) {
+						element.textContent = value;
+					}
+				};
+				const update = () => {
+					const ethRaiseCap = read("ethRaiseCap");
+					const repInventory = Math.max(read("repInventory"), 1);
+					const bids = [
+						{ key: "alice", eth: read("aliceEth"), price: 5 },
+						{ key: "bob", eth: read("bobEth"), price: 4 },
+						{ key: "carol", eth: read("carolEth"), price: 3 },
+					];
+					const activeBids = bids.filter((bid) => bid.eth > 0);
+					writeValue("ethRaiseCap", formatEth(ethRaiseCap));
+					writeValue("repInventory", formatRep(repInventory));
+					writeValue("aliceEth", formatEth(bids[0].eth));
+					writeValue("bobEth", formatEth(bids[1].eth));
+					writeValue("carolEth", formatEth(bids[2].eth));
+					let accumulatedEth = 0;
+					let clearingPrice = 0;
+					let ethFilledAtClearing = 0;
+					let funded = false;
+					let lastValidPrice = 0;
+					let lastValidEthAtTick = 0;
+					for (const bid of activeBids) {
+						if (
+							accumulatedEth > 0 &&
+							accumulatedEth / bid.price > repInventory
+						) {
+							funded = true;
+							clearingPrice = lastValidPrice;
+							ethFilledAtClearing = lastValidEthAtTick;
+							break;
+						}
+						const ethToTake = Math.min(
+							bid.eth,
+							Math.max(0, ethRaiseCap - accumulatedEth),
+						);
+						const newAccumulatedEth = accumulatedEth + ethToTake;
+						if (newAccumulatedEth / bid.price >= repInventory) {
+							funded = true;
+							clearingPrice = bid.price;
+							ethFilledAtClearing = Math.max(
+								0,
+								Math.min(ethToTake, repInventory * bid.price - accumulatedEth),
+							);
+							accumulatedEth += ethFilledAtClearing;
+							break;
+						}
+						if (newAccumulatedEth >= ethRaiseCap) {
+							funded = true;
+							clearingPrice = bid.price;
+							ethFilledAtClearing = ethToTake;
+							accumulatedEth = newAccumulatedEth;
+							break;
+						}
+						accumulatedEth = newAccumulatedEth;
+						lastValidPrice = bid.price;
+						lastValidEthAtTick = ethToTake;
+					}
+					let refunds = 0;
+					const repResults = { alice: 0, bob: 0, carol: 0 };
+					if (funded && clearingPrice > 0) {
+						let clearingTickEthRemaining = ethFilledAtClearing;
+						for (const bid of activeBids) {
+							if (bid.price > clearingPrice) {
+								repResults[bid.key] = bid.eth / clearingPrice;
+							} else if (bid.price === clearingPrice) {
+								const fillEth = Math.min(bid.eth, clearingTickEthRemaining);
+								clearingTickEthRemaining -= fillEth;
+								repResults[bid.key] = fillEth / clearingPrice;
+								refunds += bid.eth - fillEth;
+							} else {
+								refunds += bid.eth;
+							}
+						}
+						write("clearingMode", `funded near ${formatFixed(clearingPrice)} ETH/REP`);
+						write("underfundedThreshold", "not underfunded");
+					} else {
+						const totalActiveEth = activeBids.reduce((sum, bid) => sum + bid.eth, 0);
+						const threshold = totalActiveEth / repInventory;
+						let winningEth = 0;
+						for (const bid of activeBids) {
+							if (bid.price >= threshold) {
+								repResults[bid.key] = bid.eth / bid.price;
+								winningEth += bid.eth;
+							} else {
+								refunds += bid.eth;
+							}
+						}
+						accumulatedEth = winningEth;
+						write("clearingMode", "underfunded tick demand");
+						write("underfundedThreshold", `${formatFixed(threshold)} ETH/REP`);
+					}
+					write("ethRaised", formatEth(accumulatedEth));
+					write("aliceReceives", formatRep(repResults.alice));
+					write("bobReceives", formatRep(repResults.bob));
+					write("carolReceives", formatRep(repResults.carol));
+					write("refunds", formatEth(refunds));
+				};
+				for (const input of Object.values(inputs)) {
+					input.addEventListener("input", update);
+				}
+				update();
+			}
+		</script>
+	</body>
+</html>

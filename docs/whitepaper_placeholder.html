@@ -15,11 +15,15 @@
 					<strong>Placeholder</strong>
 					<p>Prediction market layer built on the Zoltar oracle layer.</p>
 				</div>
-				<a class="sidebar-companion" href="./whitepaper_zoltar.html">
-					<span>Companion paper</span>
-					<b>Zoltar Oracle Layer</b>
-				</a>
-				<nav aria-label="Document sections">
+					<a class="sidebar-companion" href="./whitepaper_zoltar.html">
+						<span>Companion paper</span>
+						<b>Zoltar Oracle Layer</b>
+					</a>
+					<a class="sidebar-companion" href="./start-here.html">
+						<span>First read</span>
+						<b>Start Here Guide</b>
+					</a>
+					<nav aria-label="Document sections">
 					<a href="#abstract" aria-current="location">Abstract</a>
 					<a href="#overview">System Overview</a>
 					<a href="#architecture">Architecture</a>
@@ -824,6 +828,13 @@
 						one question in one universe. Vault operators deposit REP, choose
 						bond allowance, and underwrite ETH-backed complete sets.
 					</p>
+					<div class="callout">
+						<strong>Why a per-question pool?</strong> The contract keeps market
+						collateral, REP backing, escalation state, and fork migration scoped
+						to one question and one universe. That boundary lets a fork or local
+						escalation affect the market that depends on the disputed question
+						without rewriting Zoltar's global question registry.
+					</div>
 					<p>
 						Origin pools are narrower than the general Zoltar question model.
 						The factory requires the question to exist, the universe to be
@@ -1850,7 +1861,11 @@
 						through the queued-oracle path. The contract snapshots the target
 						vault’s state at queue time and uses that snapshot when the
 						operation executes, so later target-vault manipulation cannot
-						trivially invalidate the liquidation attempt.
+						trivially invalidate the liquidation attempt. The queued liquidation
+						executes only if the fresh current REP/ETH price is strictly above
+						the computed threshold and far enough beyond it to satisfy the
+						configured <code>minLiquidationPriceDistanceBps</code> liquidation
+						distance check.
 					</p>
 					<p>
 						Economically, liquidation moves debt and corresponding REP-backed
@@ -2543,6 +2558,14 @@
 							>
 						</div>
 					</div>
+					<div class="callout">
+						<strong>Why not fork immediately?</strong> A fork asks the whole
+						universe to branch, so Placeholder first gives vault-backed REP a
+						local path to settle the question. The rising cost curve makes late
+						disagreement increasingly expensive, while the non-decision threshold
+						keeps the fork path available when competing outcomes remain
+						strongly funded.
+					</div>
 					<div class="equation" id="eq-placeholder-escalation-cost">
 						<math
 							display="block"
@@ -2595,6 +2618,64 @@
 						<li>The cost rises monotonically between those endpoints.</li>
 					</ul>
 					<p>
+						The plot below is the same curve used by
+						<code>totalCost()</code> and
+						<code>computeIterativeAttritionCost</code>: early deposits face the
+						starting bond, while sustained late disagreement approaches the
+						non-decision threshold.
+						The plotted curve is the continuous model; Solidity computes it with
+						fixed-point integer approximation using <code>SCALE = 1e6</code> and
+						clamps the endpoints.
+					</p>
+					<figure class="diagram" id="fig-placeholder-escalation-cost-curve">
+						<svg
+							viewBox="0 0 860 300"
+							role="img"
+							aria-labelledby="cost-curve-title cost-curve-desc"
+						>
+							<title id="cost-curve-title">Escalation cost curve</title>
+							<desc id="cost-curve-desc">
+								The required bond rises from the start bond to the non-decision
+								threshold over the full escalation interval.
+							</desc>
+							<line class="svg-line" x1="90" y1="230" x2="780" y2="230"></line>
+							<line class="svg-line" x1="90" y1="230" x2="90" y2="50"></line>
+							<path
+								class="svg-line"
+								d="M 90 212 C 210 205 310 186 420 150 C 540 111 650 78 780 50"
+							></path>
+							<circle class="svg-green" cx="90" cy="212" r="8"></circle>
+							<circle class="svg-red" cx="780" cy="50" r="8"></circle>
+							<text class="svg-label" x="90" y="262" text-anchor="middle">
+								activation
+							</text>
+							<text class="svg-small" x="90" y="282" text-anchor="middle">
+								starting bond
+							</text>
+							<text class="svg-label" x="780" y="262" text-anchor="middle">
+								full interval
+							</text>
+							<text class="svg-small" x="780" y="282" text-anchor="middle">
+								non-decision threshold
+							</text>
+							<text class="svg-label" x="265" y="116" text-anchor="middle">
+								rising attrition cost
+							</text>
+							<text class="svg-small" x="128" y="48" text-anchor="start">
+								required REP
+							</text>
+							<text class="svg-small" x="742" y="222" text-anchor="end">
+								elapsed time
+							</text>
+						</svg>
+						<p class="diagram-caption">
+							<span class="figure-label">Cost Curve</span>The curve makes delay
+							expensive without jumping immediately to the fork threshold. Early
+							disagreement can settle locally; sustained late disagreement
+							becomes costly enough to justify the non-decision path.
+						</p>
+					</figure>
+					<p>
 						Escalation deposits enter through
 						<code>SecurityPool.depositToEscalationGame</code>. The first valid
 						deposit after question end deploys the game, sets
@@ -2625,6 +2706,45 @@
 						tie-avoidance adjustment when a below-threshold deposit would
 						otherwise make two outcomes share the maximum balance.
 					</p>
+					<h3>Escalation Deposit Trace</h3>
+					<div class="table-wrap">
+						<table class="wide-table">
+							<thead>
+								<tr>
+									<th>Step</th>
+									<th>Contract area</th>
+									<th>State or check</th>
+									<th>Why readers should care</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Preview amount</td>
+									<td><code>EscalationGame.previewDepositOnOutcome</code></td>
+									<td>Computes accepted amount, threshold room, and tie adjustment.</td>
+									<td>The submitted maximum is not always the recorded deposit.</td>
+								</tr>
+								<tr>
+									<td>Remove vault ownership</td>
+									<td><code>SecurityPool.depositToEscalationGame</code></td>
+									<td>Burns pool ownership with round-up accounting and checks solvency.</td>
+									<td>Escalation uses existing vault-backed REP, not free wallet REP.</td>
+								</tr>
+								<tr>
+									<td>Transfer REP</td>
+									<td><code>SecurityPool</code> to <code>EscalationGame</code></td>
+									<td>Moves accepted REP into local game custody.</td>
+									<td>The game can later settle, export, or carry that locked REP.</td>
+								</tr>
+								<tr>
+									<td>Record deposit</td>
+									<td><code>EscalationGame.recordDepositFromSecurityPool</code></td>
+									<td>Updates outcome balances, unresolved totals, and deposit indexes.</td>
+									<td>Those indexes are the handles used by later withdrawal and fork paths.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
 					<details class="interactive-example" id="escalation-deposit-example">
 						<summary>
 							Adjust escalation deposit clipping and tie avoidance
@@ -3388,8 +3508,8 @@
 					<div class="equation" id="eq-placeholder-escalation-winning-payout">
 						<math
 							display="block"
-							aria-label="reward eligible cap equals binding capital plus binding capital divided by excess reward window divisor, reward bonus pool equals binding capital times three fifths, burn amount equals eligible deposit times binding capital times two fifths divided by eligible principal, amount to withdraw equals deposit amount plus eligible deposit times reward bonus pool divided by eligible principal, and scaled withdrawal equals amount to withdraw times actual fork threshold divided by non decision threshold when actual fork threshold is lower"
-							data-source="rewardEligibleCap = bindingCapital + bindingCapital / excessRewardWindowDivisor; rewardBonusPool = bindingCapital \cdot 3 / 5; burnAmount = rewardEligibleDeposit \cdot (bindingCapital \cdot 2 / 5) / rewardEligiblePrincipal; amountToWithdraw = depositAmount + rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal; scaledWithdrawal = amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold when actualForkThreshold &lt; nonDecisionThreshold"
+							aria-label="reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when actual fork threshold is lower"
+							data-source="rewardEligibleCap = bindingCapital + floor(bindingCapital / excessRewardWindowDivisor); rewardBonusPool = floor(bindingCapital \cdot 3 / 5); burnAmount = floor(rewardEligibleDeposit \cdot floor(bindingCapital \cdot 2 / 5) / rewardEligiblePrincipal); amountToWithdraw = depositAmount + floor(rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal); scaledWithdrawal = floor(amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold) when actualForkThreshold &lt; nonDecisionThreshold"
 						>
 							<mtable>
 								<mtr>
@@ -3402,10 +3522,14 @@
 									<mtd>
 										<mi>bindingCapital</mi>
 										<mo>+</mo>
-										<mfrac>
-											<mi>bindingCapital</mi>
-											<mi>excessRewardWindowDivisor</mi>
-										</mfrac>
+										<mrow>
+											<mo>floor(</mo>
+											<mfrac>
+												<mi>bindingCapital</mi>
+												<mi>excessRewardWindowDivisor</mi>
+											</mfrac>
+											<mo>)</mo>
+										</mrow>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -3416,14 +3540,18 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
-										<mfrac>
-											<mrow>
-												<mi>bindingCapital</mi>
-												<mo>&#x22C5;</mo>
-												<mn>3</mn>
-											</mrow>
-											<mn>5</mn>
-										</mfrac>
+										<mrow>
+											<mo>floor(</mo>
+											<mfrac>
+												<mrow>
+													<mi>bindingCapital</mi>
+													<mo>&#x22C5;</mo>
+													<mn>3</mn>
+												</mrow>
+												<mn>5</mn>
+											</mfrac>
+											<mo>)</mo>
+										</mrow>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -3434,21 +3562,29 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
-										<mfrac>
-											<mrow>
-												<mi>rewardEligibleDeposit</mi>
-												<mo>&#x22C5;</mo>
-												<mo>(</mo>
-												<mi>bindingCapital</mi>
-												<mo>&#x22C5;</mo>
+										<mrow>
+											<mo>floor(</mo>
+											<mfrac>
+												<mrow>
+													<mi>rewardEligibleDeposit</mi>
+													<mo>&#x22C5;</mo>
+													<mrow>
+														<mo>floor(</mo>
 												<mfrac>
-													<mn>2</mn>
+															<mrow>
+																<mi>bindingCapital</mi>
+																<mo>&#x22C5;</mo>
+																<mn>2</mn>
+															</mrow>
 													<mn>5</mn>
 												</mfrac>
-												<mo>)</mo>
-											</mrow>
-											<mi>rewardEligiblePrincipal</mi>
-										</mfrac>
+														<mo>)</mo>
+													</mrow>
+												</mrow>
+												<mi>rewardEligiblePrincipal</mi>
+											</mfrac>
+											<mo>)</mo>
+										</mrow>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -3461,14 +3597,18 @@
 									<mtd>
 										<mi>depositAmount</mi>
 										<mo>+</mo>
-										<mfrac>
-											<mrow>
-												<mi>rewardEligibleDeposit</mi>
-												<mo>&#x22C5;</mo>
-												<mi>rewardBonusPool</mi>
-											</mrow>
-											<mi>rewardEligiblePrincipal</mi>
-										</mfrac>
+										<mrow>
+											<mo>floor(</mo>
+											<mfrac>
+												<mrow>
+													<mi>rewardEligibleDeposit</mi>
+													<mo>&#x22C5;</mo>
+													<mi>rewardBonusPool</mi>
+												</mrow>
+												<mi>rewardEligiblePrincipal</mi>
+											</mfrac>
+											<mo>)</mo>
+										</mrow>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -3479,14 +3619,18 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
-										<mfrac>
-											<mrow>
-												<mi>amountToWithdraw</mi>
-												<mo>&#x22C5;</mo>
-												<mi>actualForkThreshold</mi>
-											</mrow>
-											<mi>nonDecisionThreshold</mi>
-										</mfrac>
+										<mrow>
+											<mo>floor(</mo>
+											<mfrac>
+												<mrow>
+													<mi>amountToWithdraw</mi>
+													<mo>&#x22C5;</mo>
+													<mi>actualForkThreshold</mi>
+												</mrow>
+												<mi>nonDecisionThreshold</mi>
+											</mfrac>
+											<mo>)</mo>
+										</mrow>
 										<mtext>
 											if actualForkThreshold &lt; nonDecisionThreshold</mtext
 										>
@@ -3498,7 +3642,8 @@
 							<span class="equation-label">Winning Payout</span>Reward-eligible
 							winning principal shares the 60% bonus pool pro rata, while a 40%
 							haircut amount is burned or retained by the game accounting; low
-							fork thresholds scale the payout down.
+							fork thresholds scale the payout down. All amounts are atomic REP,
+							and every Solidity division floors before the next step.
 						</p>
 					</div>
 					<ul>
@@ -3839,6 +3984,113 @@
 						position remains locked in the parent escalation game and is no
 						longer withdrawable from the parent pool.
 					</p>
+					<figure class="diagram" id="fig-placeholder-unresolved-migration">
+						<svg
+							viewBox="0 0 920 230"
+							role="img"
+							aria-labelledby="unresolved-migration-title unresolved-migration-desc"
+						>
+							<title id="unresolved-migration-title">
+								Unresolved escalation migration
+							</title>
+							<desc id="unresolved-migration-desc">
+								External fork interruption moves unresolved parent escalation
+								locks through paged export into a child continuation game.
+							</desc>
+							<defs>
+								<marker
+									id="arrow-unresolved"
+									viewBox="0 0 10 10"
+									refX="8"
+									refY="5"
+									markerWidth="7"
+									markerHeight="7"
+									orient="auto-start-reverse"
+								>
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+								</marker>
+							</defs>
+							<rect class="svg-red" x="35" y="70" width="170" height="78" rx="10"></rect>
+							<text class="svg-label" x="120" y="101" text-anchor="middle">
+								Parent Game
+							</text>
+							<text class="svg-small" x="120" y="125" text-anchor="middle">
+								unresolved locks
+							</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 205 109 H 280"></path>
+							<rect class="svg-gold" x="280" y="70" width="190" height="78" rx="10"></rect>
+							<text class="svg-label" x="375" y="101" text-anchor="middle">
+								Paged Export
+							</text>
+							<text class="svg-small" x="375" y="125" text-anchor="middle">
+								up to 64 refs
+							</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 470 109 H 545"></path>
+							<rect class="svg-blue" x="545" y="70" width="170" height="78" rx="10"></rect>
+							<text class="svg-label" x="630" y="101" text-anchor="middle">
+								Child Carry
+							</text>
+							<text class="svg-small" x="630" y="125" text-anchor="middle">
+								MMR snapshot
+							</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 715 109 H 780"></path>
+							<rect class="svg-green" x="780" y="70" width="115" height="78" rx="10"></rect>
+							<text class="svg-label" x="838" y="101" text-anchor="middle">
+								Resume
+							</text>
+							<text class="svg-small" x="838" y="125" text-anchor="middle">
+								child game
+							</text>
+						</svg>
+						<p class="diagram-caption">
+							<span class="figure-label">Unresolved Migration</span>Unresolved
+							parent locks are exported in bounded pages into child carry so the
+							continuation game can settle them later with proofs.
+						</p>
+					</figure>
+					<h3>Unresolved Escalation Migration Trace</h3>
+					<div class="table-wrap">
+						<table class="wide-table">
+							<thead>
+								<tr>
+									<th>Step</th>
+									<th>Function or contract area</th>
+									<th>State or proof material</th>
+									<th>Why readers should care</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Snapshot interruption</td>
+									<td><code>SecurityPoolForker</code></td>
+									<td>Records elapsed escalation time and unresolved outcome state.</td>
+									<td>The child continuation starts from the interrupted parent clock.</td>
+								</tr>
+								<tr>
+									<td>Export parent refs</td>
+									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
+									<td>Exports bounded batches of unresolved deposit references.</td>
+									<td>Large vault histories may require several transactions.</td>
+								</tr>
+								<tr>
+									<td>Initialize child carry</td>
+									<td>
+										<code>SecurityPool.initializeForkCarrySnapshotWithResolutionBalances</code>,
+										which forwards to
+										<code>EscalationGame.initializeForkCarrySnapshotWithResolutionBalances</code>.
+									</td>
+									<td>Materializes inherited carry peaks and totals.</td>
+									<td>Child games can verify parent deposits without copying every leaf immediately.</td>
+								</tr>
+								<tr>
+									<td>Withdraw after child resolution</td>
+									<td><code>withdrawForkedEscalationDeposits</code></td>
+									<td>Consumes proofs and advances nullifier roots.</td>
+									<td>Proof consumption prevents replaying the same inherited deposit.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
 				</section>
 
 				<section class="paper-section" id="migration">
@@ -4118,6 +4370,51 @@
 						This matters for off-chain automation because a keeper can help with
 						liveness, but it cannot migrate or claim another vault’s locked REP.
 					</p>
+					<h3>Fork Migration Contract Trace</h3>
+					<div class="table-wrap">
+						<table class="wide-table">
+							<thead>
+								<tr>
+									<th>Step</th>
+									<th>Function</th>
+									<th>State changed</th>
+									<th>Reason for the boundary</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Activate fork mode</td>
+									<td><code>initiateSecurityPoolFork</code></td>
+									<td>Parent pool enters fork handling and snapshots auctionable REP.</td>
+									<td>Normal pool accounting stops before child migration begins.</td>
+								</tr>
+								<tr>
+									<td>Create child branch</td>
+									<td><code>createChildUniverse</code></td>
+									<td>Deploys or locates the child universe and child pool.</td>
+									<td>Child pools are lazy because not every branch may be used.</td>
+								</tr>
+								<tr>
+									<td>Migrate vault</td>
+									<td><code>migrateVault</code></td>
+									<td>Moves caller vault ownership, allowance, and proportional collateral.</td>
+									<td>Only the vault owner can decide which child branch receives its position.</td>
+								</tr>
+								<tr>
+									<td>Repair shortfall</td>
+									<td><code>startTruthAuction</code>, <code>finalizeTruthAuction</code></td>
+									<td>Sells child REP for ETH and sets auction ownership rates.</td>
+									<td>Repair is optional and bounded by actual child-pool collateral needs.</td>
+								</tr>
+								<tr>
+									<td>Resume child pool</td>
+									<td>Forker-controlled pool setters</td>
+									<td>Finalizes child accounting and returns to operational mode.</td>
+									<td>Users should interact with a consistent child state after migration and repair.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
 					<figure class="diagram" id="fig-placeholder-migration-flow">
 						<svg
 							viewBox="0 0 860 330"
@@ -6186,6 +6483,15 @@
 						reference keeps the bidding, refund, finalization, and settlement
 						guardrails.
 					</p>
+					<div class="callout">
+						<strong>Why sell REP instead of choosing truth?</strong> The child
+						branch is already defined by Zoltar's fork. The auction's job is
+						narrower: convert some child-universe REP into ETH so the migrated
+						child pool can repair collateral and remain usable.
+						<a href="./auction-design.html">Auction design</a> explains the
+						owner, clearing, refund, and underfunded paths in implementation
+						order.
+					</div>
 					<figure class="diagram" id="fig-placeholder-auction-operations">
 						<svg
 							viewBox="0 0 940 300"
@@ -7263,6 +7569,51 @@
 							pending-settlement path.
 						</p>
 					</figure>
+					<h3>Oracle-Staged Operation Trace</h3>
+					<div class="table-wrap">
+						<table class="wide-table">
+							<thead>
+								<tr>
+									<th>Step</th>
+									<th>Function or callback</th>
+									<th>State changed</th>
+									<th>Why readers should care</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Request operation</td>
+									<td><code>requestPriceIfNeededAndStageOperation</code></td>
+									<td>Executes immediately if price is fresh, otherwise records a staged operation.</td>
+									<td>Fresh price cache avoids unnecessary oracle requests.</td>
+								</tr>
+								<tr>
+									<td>Create report</td>
+									<td><code>requestPrice</code></td>
+									<td>Funds one pending OpenOracle report and records callback gas/basefee bounds.</td>
+									<td>The requester pays for the contestable price path when the cache is stale.</td>
+								</tr>
+								<tr>
+									<td>Accept callback</td>
+									<td><code>openOracleCallback</code></td>
+									<td>Updates <code>lastPrice</code> only for valid non-zero settled amounts.</td>
+									<td>Bad or zero report data cannot silently refresh the solvency price.</td>
+								</tr>
+								<tr>
+									<td>Replay staged work</td>
+									<td><code>executeStagedOperation</code></td>
+									<td>Runs withdrawal, allowance update, or liquidation checks against the fresh price.</td>
+									<td>Queued operations still must pass local safety checks at execution time.</td>
+								</tr>
+								<tr>
+									<td>Consume failures</td>
+									<td>Coordinator failure paths</td>
+									<td>Expired, stale, zero-effect, or too-close operations are consumed.</td>
+									<td>Failed staged work does not retry forever and block later operations.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
 					<p>
 						When no fresh price is available, the caller funds the OpenOracle
 						request bounty. The coordinator sizes that ETH cost from the current
@@ -7823,7 +8174,10 @@
 						</div>
 						<div class="parameter-card">
 							<span>Initial Escalation Deposit</span>
-							<b><code>1 ether</code> default deployment value.</b>
+							<b
+								><code>1 REP</code> default deployment value
+								(<code>1000000000000000000</code> atomic REP units).</b
+							>
 						</div>
 						<div class="parameter-card">
 							<span>Activation Delay</span>
@@ -7877,11 +8231,12 @@
 							</tr>
 							<tr>
 								<td><code>initialEscalationGameDeposit</code></td>
-								<td><code>1 ether</code> default</td>
+								<td><code>1 REP</code> default</td>
 								<td>
 									Deployment-configured starting bond passed through
-									<code>SecurityPoolFactory</code>; deployments can override the
-									default.
+									<code>SecurityPoolFactory</code>; the default is
+									<code>1000000000000000000</code> atomic REP units, and
+									deployments can override it.
 								</td>
 							</tr>
 							<tr>
@@ -8136,7 +8491,13 @@
 										><mn>40</mn><mo>&#x22C5;</mo><mn>12</mn></math
 									>
 								</td>
-								<td>Settlement delay encoded as <code>480</code>.</td>
+								<td>
+									Timestamp-based settlement delay encoded as
+									<code>480 seconds (8 minutes)</code>. The
+									<code>40 * 12</code> derivation assumes twelve-second blocks,
+									but the configured OpenOracle <code>timeType</code> uses
+									seconds.
+								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>disputeDelay</code></td>
@@ -8301,7 +8662,8 @@
 						</li>
 						<li>
 							The escalation-game initial deposit is deployment-configured, with
-							a default of <code>1 ether</code>.
+							a default of <code>1 REP</code>
+							(<code>1000000000000000000</code> atomic REP units).
 						</li>
 						<li>
 							Retention-rate bounds and several oracle and auction parameters
@@ -8850,6 +9212,7 @@
 					{ name: "bob", eth: bobEth, price: 4 },
 					{ name: "carol", eth: carolEth, price: 3 },
 				];
+				const activeBids = bids.filter((bid) => bid.eth > 0);
 				let ethRaised = 0;
 				let refunds = 0;
 				const repResults = { alice: 0, bob: 0, carol: 0 };
@@ -8859,7 +9222,7 @@
 				let funded = false;
 				let lastValidPrice = 0;
 				let lastValidEthAtTick = 0;
-				for (const bid of bids) {
+				for (const bid of activeBids) {
 					if (accumulatedEth > 0 && accumulatedEth / bid.price > repInventory) {
 						funded = true;
 						clearingPrice = lastValidPrice;
@@ -8894,7 +9257,7 @@
 					lastValidEthAtTick = ethToTake;
 				}
 				if (funded) {
-					for (const bid of bids) {
+					for (const bid of activeBids) {
 						if (bid.price > clearingPrice) {
 							repResults[bid.name] = bid.eth / clearingPrice;
 						} else if (bid.price === clearingPrice) {
@@ -8911,14 +9274,15 @@
 					);
 					context.write("underfundedThreshold", "not underfunded");
 				} else {
-					ethRaised = accumulatedEth;
+					const totalActiveEth = accumulatedEth;
 					const underfundedThreshold =
 						repInventory === 0
 							? Number.POSITIVE_INFINITY
-							: ethRaised / repInventory;
-					for (const bid of bids) {
+							: totalActiveEth / repInventory;
+					for (const bid of activeBids) {
 						if (bid.price >= underfundedThreshold) {
 							repResults[bid.name] = bid.eth / bid.price;
+							ethRaised += bid.eth;
 						} else {
 							refunds += bid.eth;
 						}

@@ -4,11 +4,11 @@ These values are derived from the frozen mainnet protocol config, current contra
 
 ## Frozen Protocol Config
 
-| Parameter | Value |
-| --- | --- |
-| forkThresholdDivisor | 20 |
-| forkBurnDivisor | 5 |
-| initialEscalationGameDeposit | 1000000000000000000 |
+| Parameter | Value | Unit / Meaning |
+| --- | --- | --- |
+| forkThresholdDivisor | 20 | Fork threshold is `1 / 20` of theoretical REP supply. |
+| forkBurnDivisor | 5 | Fork initiator haircut is `1 / 5` of the fork threshold. |
+| initialEscalationGameDeposit | 1000000000000000000 | `1 REP`; constructor-set starting escalation bond from the frozen deployment config. |
 
 ## Deterministic Deployment Steps
 

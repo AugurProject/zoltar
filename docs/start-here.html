@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Placeholder and Zoltar Start Here</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Placeholder and Zoltar Start Here</h1>
+				<p>
+					This guide is the shortest path into the project. Read it before the
+					whitepapers if you want the actors, assets, contract boundaries, and
+					main lifecycles in one place.
+				</p>
+				<p>
+					Start with these words. A <em>universe</em> is a Zoltar truth branch
+					with its own REP token. After a fork, a holder has a
+					<em>migration balance</em>: parent-universe REP value that can be
+					reproduced into selected fork branches, with each branch receiving at
+					most that source balance. A <em>child universe</em> is one branch, and
+					<em>child REP</em> is REP minted inside that branch from the migration
+					balance. A <em>security vault</em> is a pool-specific REP account,
+					<em>local escalation</em> is the market's first dispute process,
+					<em>fork migration</em> moves state into child universes, and a
+					<em>truth auction</em> sells child REP for ETH repair without choosing
+					truth.
+				</p>
+				<p>
+					The core idea is split responsibility. <code>Zoltar</code> creates
+					forkable truth universes and child REP. Placeholder builds markets on
+					top of those universes with ETH-backed shares, REP-backed security
+					vaults, local escalation games, fork migration, truth-auction repair,
+					and a REP/ETH solvency oracle.
+				</p>
+			</header>
+
+			<section id="mental-model">
+				<h2>Mental Model</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Layer</th>
+							<th>Owns</th>
+							<th>Why it exists</th>
+							<th>Primary contracts</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Zoltar</td>
+							<td>Universes, questions, forks, and REP splitting.</td>
+							<td>
+								Truth disputes can create explicit branches instead of forcing one
+								global answer immediately.
+							</td>
+							<td>
+								<code>Zoltar</code>, <code>ZoltarQuestionData</code>,
+								<code>ReputationToken</code>
+							</td>
+						</tr>
+						<tr>
+							<td>Placeholder market layer</td>
+							<td>Security pools, shares, vault accounting, and local disputes.</td>
+							<td>
+								Most markets should settle locally; forks are the recovery path
+								when local disagreement remains economically sustained.
+							</td>
+							<td>
+								<code>SecurityPool</code>, <code>ShareToken</code>,
+								<code>EscalationGame</code>
+							</td>
+						</tr>
+						<tr>
+							<td>Fork recovery</td>
+							<td>Vault migration, child-pool setup, and collateral repair.</td>
+							<td>
+								After a fork, users need usable child pools in the branches they
+								choose to continue using.
+							</td>
+							<td><code>SecurityPoolForker</code>, child <code>SecurityPool</code></td>
+						</tr>
+						<tr>
+							<td>Solvency oracle</td>
+							<td>A fresh REP/ETH price for withdrawals, allowance updates, and liquidations.</td>
+							<td>
+								REP backs ETH-denominated obligations, so solvency checks need a
+								bounded, contestable price.
+							</td>
+							<td><code>SecurityPoolOracleCoordinator</code>, <code>OpenOracle</code></td>
+						</tr>
+					</tbody>
+				</table>
+				<figure class="diagram" id="fig-start-here-lifecycle">
+					<svg
+						viewBox="0 0 920 220"
+						role="img"
+						aria-labelledby="start-here-lifecycle-title start-here-lifecycle-desc"
+					>
+						<title id="start-here-lifecycle-title">
+							Market lifecycle overview
+						</title>
+						<desc id="start-here-lifecycle-desc">
+							A question becomes a pool, trades locally, escalates if needed,
+							then either resolves locally or forks into child-pool migration,
+							auction repair, and redemption.
+						</desc>
+						<defs>
+							<marker
+								id="arrow-start-here-lifecycle"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-blue" x="24" y="70" width="135" height="70" rx="8"></rect>
+						<text class="svg-label" x="92" y="101" text-anchor="middle">
+							Question
+						</text>
+						<text class="svg-small" x="92" y="124" text-anchor="middle">
+							Zoltar data
+						</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-lifecycle)" d="M 159 105 H 204"></path>
+						<rect class="svg-green" x="204" y="70" width="135" height="70" rx="8"></rect>
+						<text class="svg-label" x="272" y="101" text-anchor="middle">
+							Pool
+						</text>
+						<text class="svg-small" x="272" y="124" text-anchor="middle">
+							trade shares
+						</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-lifecycle)" d="M 339 105 H 384"></path>
+						<rect class="svg-gold" x="384" y="70" width="135" height="70" rx="8"></rect>
+						<text class="svg-label" x="452" y="101" text-anchor="middle">
+							Escalate
+						</text>
+						<text class="svg-small" x="452" y="124" text-anchor="middle">
+							local REP
+						</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-lifecycle)" d="M 519 94 H 564"></path>
+						<rect class="svg-green" x="564" y="32" width="135" height="62" rx="8"></rect>
+						<text class="svg-label" x="632" y="65" text-anchor="middle">
+							Resolve
+						</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-lifecycle)" d="M 519 116 H 564"></path>
+						<rect class="svg-red" x="564" y="126" width="135" height="62" rx="8"></rect>
+						<text class="svg-label" x="632" y="159" text-anchor="middle">
+							Fork
+						</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-lifecycle)" d="M 699 157 H 744"></path>
+						<rect class="svg-blue" x="744" y="126" width="150" height="62" rx="8"></rect>
+						<text class="svg-label" x="819" y="150" text-anchor="middle">
+							Migrate
+						</text>
+						<text class="svg-small" x="819" y="172" text-anchor="middle">
+							repair, redeem
+						</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Lifecycle Map</span>The normal path is
+						question, pool, escalation, and local resolution. The fork path adds
+						child-pool migration, optional auction repair, and branch-specific
+						redemption.
+					</p>
+				</figure>
+			</section>
+
+			<section id="actors">
+				<h2>Actors and Assets</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Actor or asset</th>
+							<th>What it does</th>
+							<th>Reader shortcut</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Traders</td>
+							<td>Mint and redeem complete sets of <code>Invalid</code>, <code>Yes</code>, and <code>No</code> shares.</td>
+							<td>They interact with ETH collateral and share balances.</td>
+						</tr>
+						<tr>
+							<td>REP vaults</td>
+							<td>
+								Deposit REP into a security pool and choose bond allowance, the
+								amount of REP-backed exposure they permit.
+							</td>
+							<td>They provide underwriting capacity and earn fees, but can be liquidated if under-backed.</td>
+						</tr>
+						<tr>
+							<td>Escalation depositors</td>
+							<td>Move vault-backed REP into an escalation outcome after question end.</td>
+							<td>They are trying to resolve the local market before a fork is needed.</td>
+						</tr>
+						<tr>
+							<td>Fork participants</td>
+							<td>
+								Reproduce parent-universe migration balance, the REP value
+								available after a fork, into selected child universes, with each
+								child capped by the source balance.
+							</td>
+							<td>They decide which branch they treat as useful; Zoltar does not choose for them.</td>
+						</tr>
+						<tr>
+							<td>Auction bidders</td>
+							<td>Bid ETH for child-universe REP when a child pool needs collateral repair.</td>
+							<td>The auction repairs ETH collateral; it does not select truth.</td>
+						</tr>
+						<tr>
+							<td>Reporters and disputers</td>
+							<td>Post and dispute OpenOracle REP/WETH reports.</td>
+							<td>They support solvency pricing, not market resolution.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<section id="happy-path">
+				<h2>Happy Path</h2>
+				<ol>
+					<li>A question is registered in <code>ZoltarQuestionData</code>.</li>
+					<li>A Placeholder origin pool is deployed for a binary question in an unforked universe.</li>
+					<li>Vaults deposit REP into <code>SecurityPool</code> and set security-bond allowance.</li>
+					<li>Traders mint complete sets with ETH and later redeem finalized winning shares.</li>
+					<li>After question end, local escalation picks one outcome before non-decision is reached.</li>
+				</ol>
+				<p>
+					The design tries this path first because local resolution is cheaper
+					and less disruptive than splitting the whole universe. A fork is
+					available when local capital remains split across outcomes strongly
+					enough that a single local answer would be unsafe.
+				</p>
+			</section>
+
+			<section id="fork-path">
+				<h2>Fork Path</h2>
+				<ol>
+					<li>Escalation reaches non-decision when two or more outcomes reach the fixed threshold.</li>
+					<li><code>Zoltar</code> forks the parent universe on the disputed question.</li>
+					<li>Users and pool state migrate into selected child universes.</li>
+					<li>Child pools receive proportional collateral and REP state.</li>
+					<li>If collateral is short, the truth auction sells child REP for ETH repair.</li>
+				</ol>
+				<p>
+					This path is intentionally explicit. The contracts do not declare one
+					branch canonical. They create the branches and let users, applications,
+					and future economic activity coordinate on the branch they consider
+					truthful.
+				</p>
+			</section>
+
+			<section id="oracle-path">
+				<h2>Oracle Path</h2>
+				<p>
+					The REP/ETH oracle is narrow. It gives <code>SecurityPool</code> a
+					fresh price for solvency-sensitive actions: REP withdrawal, bond
+					allowance changes, and liquidation. It does not resolve market truth.
+				</p>
+				<p>
+					The coordinator stores a scaled REP-per-ETH price. A higher value
+					means ETH is more expensive in REP terms, so more REP is required to
+					cover the same ETH-denominated obligation.
+				</p>
+			</section>
+
+			<section id="example-market">
+				<h2>One Example Market End to End</h2>
+				<p>
+					Imagine the question is <em>Will Example City receive more than 10
+					inches of rain in 2027?</em> Placeholder treats it as a binary market:
+					<code>Invalid</code>, <code>Yes</code>, and <code>No</code>.
+				</p>
+				<div class="equation" id="eq-start-here-complete-set">
+					<math
+						display="block"
+						aria-label="one complete set equals one invalid share plus one yes share plus one no share backed by one ETH"
+						data-source="1 completeSet = 1 Invalid + 1 Yes + 1 No = 1 ETH claim"
+					>
+						<mrow>
+							<mn>1</mn>
+							<mi>completeSet</mi>
+							<mo>=</mo>
+							<mn>1</mn>
+							<mi>Invalid</mi>
+							<mo>+</mo>
+							<mn>1</mn>
+							<mi>Yes</mi>
+							<mo>+</mo>
+							<mn>1</mn>
+							<mi>No</mi>
+							<mo>=</mo>
+							<mn>1</mn>
+							<mi>ETH</mi>
+							<mi>claim</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Complete Set</span>The example market
+						trades outcome shares, but the collateral unit underneath the full
+						set remains one ETH-backed claim.
+					</p>
+				</div>
+				<table>
+					<thead>
+						<tr>
+							<th>Stage</th>
+							<th>What happens</th>
+							<th>Contracts to read</th>
+							<th>Why this stage exists</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Pool creation</td>
+							<td>The question is registered and an origin security pool is deployed.</td>
+							<td><code>ZoltarQuestionData</code>, <code>SecurityPoolFactory</code></td>
+							<td>Question data lives globally; market eligibility lives in Placeholder.</td>
+						</tr>
+						<tr>
+							<td>Trading</td>
+							<td>Traders mint complete sets, while vaults deposit REP and set bond allowance.</td>
+							<td><code>SecurityPool</code>, <code>ShareToken</code></td>
+							<td>ETH backs shares; REP backs the security capacity around that ETH.</td>
+						</tr>
+						<tr>
+							<td>Escalation</td>
+							<td>After question end, vault-backed REP can be locked behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>.</td>
+							<td><code>SecurityPool.depositToEscalationGame</code>, <code>EscalationGame</code></td>
+							<td>Local capital gets a chance to settle the market before a universe fork.</td>
+						</tr>
+						<tr>
+							<td>Local resolution</td>
+							<td>If one outcome wins locally, winning shares redeem and escalation deposits settle.</td>
+							<td><code>redeemShares</code>, <code>withdrawFromEscalationGame</code></td>
+							<td>This is the cheaper happy path; no universe split is needed.</td>
+						</tr>
+						<tr>
+							<td>Fork path</td>
+							<td>If non-decision is reached, Zoltar forks and Placeholder migrates pool state into selected child pools.</td>
+							<td><code>Zoltar</code>, <code>SecurityPoolForker</code></td>
+							<td>The protocol preserves disagreement explicitly instead of forcing one branch.</td>
+						</tr>
+						<tr>
+							<td>Auction repair</td>
+							<td>If a child pool needs ETH collateral, it sells child REP through the truth auction.</td>
+							<td><code>UniformPriceDualCapBatchAuction</code></td>
+							<td>The auction repairs collateral; it does not decide truth.</td>
+						</tr>
+						<tr>
+							<td>Redemption</td>
+							<td>Users redeem or continue trading in the child branch they treat as useful.</td>
+							<td><code>SecurityPool</code>, <code>ShareToken</code></td>
+							<td>Applications and users coordinate on branches after Zoltar creates them.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<section id="lifecycle-glossary">
+				<h2>Concept Glossary by Lifecycle Stage</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Stage</th>
+							<th>Terms to know</th>
+							<th>Plain-language anchor</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Question and pool setup</td>
+							<td>Universe, question id, outcome labels, origin pool.</td>
+							<td>Zoltar stores possible answers; Placeholder decides whether the question can become a pool.</td>
+						</tr>
+						<tr>
+							<td>Trading and underwriting</td>
+							<td>Complete set, share token, vault, security-bond allowance, retention rate.</td>
+							<td>ETH backs tradable shares; REP vaults provide backing and receive fees.</td>
+						</tr>
+						<tr>
+							<td>Escalation</td>
+							<td>Start bond, activation delay, running cost, binding capital, non-decision threshold.</td>
+							<td>Vault-backed REP competes locally before the system asks Zoltar to fork.</td>
+						</tr>
+						<tr>
+							<td>Fork migration</td>
+							<td>Child universe, migration balance, migration proxy, child pool, carry snapshot.</td>
+							<td>A fork creates branches; Placeholder moves pool state into the selected branch.</td>
+						</tr>
+						<tr>
+							<td>Auction repair</td>
+							<td>ETH raise cap, REP sale cap, clearing tick, underfunded threshold.</td>
+							<td>Weak child-pool collateral can be repaired by selling some child REP for ETH.</td>
+						</tr>
+						<tr>
+							<td>Solvency oracle</td>
+							<td>REP/ETH price, staged operation, freshness window, liquidation threshold.</td>
+							<td>Operations that change REP backing or ETH exposure need a fresh contestable price.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<section id="read-next">
+				<h2>Read Next</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Goal</th>
+							<th>Document</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Understand the application layer from end to end.</td>
+							<td><a href="./whitepaper_placeholder.html">Placeholder whitepaper</a></td>
+						</tr>
+						<tr>
+							<td>Understand universes, question encoding, forks, and REP splitting.</td>
+							<td><a href="./whitepaper_zoltar.html">Zoltar whitepaper</a></td>
+						</tr>
+						<tr>
+							<td>Understand truth-auction clearing and settlement.</td>
+							<td><a href="./auction-design.html">Auction design</a></td>
+						</tr>
+						<tr>
+							<td>Understand REP/ETH price requests, staging, and attack model.</td>
+							<td><a href="./openOracleIntegration.html">OpenOracle integration</a></td>
+						</tr>
+						<tr>
+							<td>Look up edge cases and contract guardrails.</td>
+							<td><a href="./operator-reference.md">Operator reference</a></td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+		</main>
+		<script src="./protocolTerms.js"></script>
+		<script src="./termTooltips.js"></script>
+	</body>
+</html>
