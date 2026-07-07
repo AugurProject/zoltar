@@ -1,83 +1,15 @@
-import type { OracleManagerDetails, OracleQueueOperation } from '../types/contracts.js'
-import { assertNever } from './assert.js'
+import type { OracleManagerDetails } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { addOpenOracleBountyBuffer } from './openOracle.js'
-
-const ORACLE_PRICE_PRECISION = 10n ** 18n
 
 function getBufferedOracleRequestEthValue(requestPriceEthCost: bigint | undefined) {
 	if (requestPriceEthCost === undefined) return undefined
 	return addOpenOracleBountyBuffer(requestPriceEthCost)
 }
 
-function getRepToEthNotional(repAmount: bigint, price: bigint) {
-	if (repAmount <= 0n || price <= 0n) return 0n
-	const numerator = repAmount * ORACLE_PRICE_PRECISION
-	return (numerator - 1n) / price + 1n
-}
-
-function getLiquidationNotionalEth({ amount, currentTargetAllowance, currentTargetRepDeposit, managerDetails }: { amount: bigint; currentTargetAllowance: bigint | undefined; currentTargetRepDeposit: bigint | undefined; managerDetails: Pick<OracleManagerDetails, 'lastPrice'> }) {
-	if (currentTargetAllowance === undefined || currentTargetRepDeposit === undefined) return undefined
-	const debtToMove = amount > currentTargetAllowance ? currentTargetAllowance : amount
-	if (debtToMove === 0n || currentTargetAllowance === 0n) return 0n
-	const repToMove = (debtToMove * currentTargetRepDeposit) / currentTargetAllowance
-	const repEthValue = getRepToEthNotional(repToMove, managerDetails.lastPrice)
-	return debtToMove > repEthValue ? debtToMove : repEthValue
-}
-
-function getOracleOperationNotionalEth({
-	amount,
-	currentTargetAllowance,
-	currentTargetRepDeposit,
-	managerDetails,
-	operation,
-}: {
-	amount: bigint
-	currentTargetAllowance: bigint | undefined
-	currentTargetRepDeposit: bigint | undefined
-	managerDetails: Pick<OracleManagerDetails, 'lastPrice'>
-	operation: OracleQueueOperation
-}) {
-	switch (operation) {
-		case 'withdrawRep':
-			return getRepToEthNotional(amount, managerDetails.lastPrice)
-		case 'setSecurityBondsAllowance':
-			if (currentTargetAllowance === undefined) return undefined
-			return amount > currentTargetAllowance ? amount - currentTargetAllowance : 0n
-		case 'liquidation':
-			return getLiquidationNotionalEth({
-				amount,
-				currentTargetAllowance,
-				currentTargetRepDeposit,
-				managerDetails,
-			})
-		default:
-			return assertNever(operation)
-	}
-}
-
-export function resolveOracleOperationEthFunding({
-	amount,
-	currentTargetAllowance,
-	currentTargetRepDeposit,
-	managerDetails,
-	operation,
-}: {
-	amount: bigint
-	currentTargetAllowance: bigint | undefined
-	currentTargetRepDeposit: bigint | undefined
-	managerDetails: OracleManagerDetails | undefined
-	operation: OracleQueueOperation
-}) {
+export function resolveOracleOperationEthFunding({ managerDetails }: { managerDetails: OracleManagerDetails | undefined }) {
 	if (managerDetails === undefined) return undefined
-	const operationNotionalEth = getOracleOperationNotionalEth({
-		amount,
-		currentTargetAllowance,
-		currentTargetRepDeposit,
-		managerDetails,
-		operation,
-	})
-	if (operationNotionalEth !== undefined && managerDetails.isPriceValid && operationNotionalEth <= (managerDetails.priceRoundRemainingNotional ?? 0n)) {
+	if (managerDetails.isPriceValid) {
 		return {
 			ethCost: 0n,
 			includeBuffer: false,

@@ -833,12 +833,14 @@ describe('contracts helpers', () => {
 		const pendingOperationSlotId = 12n
 		const previewOperationIds = Array.from({ length: 25 }, (_, index) => 40n - BigInt(index))
 		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
+		const requestedFunctionNames: string[] = []
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
-				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) !== 'lastPrice') throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n, 1n, 3000n, 0n, 3000n]
+				for (const contract of request.contracts) {
+					requestedFunctionNames.push(getContractFunctionName(contract))
+				}
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'getActiveStagedOperations') {
@@ -884,6 +886,7 @@ describe('contracts helpers', () => {
 
 		const details = await loadOracleManagerDetails(client, managerAddress)
 
+		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationEthCost', 'getRequestPriceEthCost', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount'])
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)

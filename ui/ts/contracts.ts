@@ -65,7 +65,6 @@ import { type ContractRevertReasonParams, type WriteContractClient, readRequired
 import { getInfraContractAddresses, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 import { requireForkDataView } from './contracts/forkData.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from './contracts/securityPoolActions.js'
-import { getRepDepositShareFromPoolOwnership } from './contracts/securityPools.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
 export { createSecurityPool, loadAllSecurityPools, loadSecurityPoolPage, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
@@ -226,22 +225,7 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 	} satisfies SecurityVaultActionResult
 }
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [
-		lastPrice,
-		pendingOperationSlotId,
-		pendingSettlementOperationIds,
-		pendingSettlementQueueCapacity,
-		pendingReportId,
-		queuedOperationEthCost,
-		requestPriceEthCost,
-		rawIsPriceValid,
-		lastSettlementTimestamp,
-		activeStagedOperationCount,
-		priceRoundId,
-		priceRoundMaxNotional,
-		priceRoundConsumedNotional,
-		priceRoundRemainingNotional,
-	] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'lastPrice',
@@ -302,35 +286,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			address: managerAddress,
 			args: [],
 		},
-		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'priceRoundId',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'priceRoundMaxNotional',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'priceRoundConsumedNotional',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'getPriceRoundRemainingNotional',
-			address: managerAddress,
-			args: [],
-		},
 	])
-	const normalizedPriceRoundMaxNotional = requireBigintValue(priceRoundMaxNotional, 'price round max notional')
-	const normalizedPriceRoundConsumedNotional = requireBigintValue(priceRoundConsumedNotional, 'price round consumed notional')
-	const normalizedPriceRoundRemainingNotional = requireBigintValue(priceRoundRemainingNotional, 'price round remaining notional')
-	const normalizedPriceRoundId = requireBigintValue(priceRoundId, 'price round id')
 	const normalizedPendingSettlementOperationIds = requireBigintArray(pendingSettlementOperationIds, 'pending settlement operation ids')
 	const normalizedPendingSettlementQueueCapacity = requireBigintValue(pendingSettlementQueueCapacity, 'pending settlement queue capacity')
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationEthCost, 'queued operation ETH cost')
@@ -423,10 +379,6 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingSettlementOperationIds: normalizedPendingSettlementOperationIds,
 		pendingSettlementQueueCapacity: normalizedPendingSettlementQueueCapacity,
 		pendingReportId,
-		priceRoundConsumedNotional: normalizedPriceRoundConsumedNotional,
-		priceRoundId: normalizedPriceRoundId,
-		priceRoundMaxNotional: normalizedPriceRoundMaxNotional,
-		priceRoundRemainingNotional: normalizedPriceRoundRemainingNotional,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		queuedOperationEthCost: normalizedQueuedOperationEthCost,
 		requestPriceEthCost: normalizedRequestPriceEthCost,
@@ -750,8 +702,8 @@ async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddr
 	return addOpenOracleBountyBuffer(requestPriceEthCost)
 }
 
-export async function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'readContract'>, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint) {
-	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, priceRoundRemainingNotional] = await Promise.all([
+export async function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'readContract'>, managerAddress: Address) {
+	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
@@ -794,12 +746,6 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 			functionName: 'isPriceValid',
 			args: [],
 		}),
-		client.readContract({
-			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'getPriceRoundRemainingNotional',
-			args: [],
-		}),
 	])
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationEthCost, 'queued operation ETH cost')
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceEthCost, 'request price ETH cost')
@@ -816,62 +762,14 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		pendingSettlementOperationIds: [...pendingSettlementOperationIds],
 		pendingSettlementQueueCapacity,
 		pendingReportId,
-		priceRoundRemainingNotional,
 		priceValidUntilTimestamp: undefined,
 		queuedOperationEthCost: normalizedQueuedOperationEthCost,
 		requestPriceEthCost: normalizedRequestPriceEthCost,
 		token1: undefined,
 		token2: undefined,
 	}
-	const securityPoolAddress =
-		operation === 'withdrawRep'
-			? undefined
-			: await client.readContract({
-					address: managerAddress,
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					functionName: 'securityPool',
-					args: [],
-				})
-	const resolvedTargetVault =
-		securityPoolAddress === undefined
-			? undefined
-			: await client.readContract({
-					address: securityPoolAddress,
-					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'securityVaults',
-					args: [targetVault],
-				})
-	const resolvedCurrentTargetRepDeposit =
-		operation !== 'liquidation' || securityPoolAddress === undefined || resolvedTargetVault === undefined
-			? undefined
-			: await (async () => {
-					const [totalRepBalance, poolOwnershipDenominator] = await Promise.all([
-						client.readContract({
-							address: securityPoolAddress,
-							abi: peripherals_SecurityPool_SecurityPool.abi,
-							functionName: 'getTotalRepBalance',
-							args: [],
-						}),
-						client.readContract({
-							address: securityPoolAddress,
-							abi: peripherals_SecurityPool_SecurityPool.abi,
-							functionName: 'poolOwnershipDenominator',
-							args: [],
-						}),
-					])
-					const poolOwnership = resolvedTargetVault[0]
-					return getRepDepositShareFromPoolOwnership({
-						poolOwnership,
-						poolOwnershipDenominator,
-						totalRepBalance,
-					})
-				})()
 	const funding = resolveOracleOperationEthFunding({
-		amount,
-		currentTargetAllowance: resolvedTargetVault?.[1],
-		currentTargetRepDeposit: resolvedCurrentTargetRepDeposit,
 		managerDetails,
-		operation,
 	})
 	if (funding === undefined || funding.ethCost === 0n) return 0n
 	return funding.includeBuffer ? addOpenOracleBountyBuffer(funding.ethCost) : funding.ethCost
@@ -1556,7 +1454,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
 		args: [encodeOracleQueueOperation('liquidation'), targetVault, amount, validForSeconds],
-		value: await loadOracleManagerQueueOperationEthValue(client, managerAddress, 'liquidation', targetVault, amount),
+		value: await loadOracleManagerQueueOperationEthValue(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, 'liquidation')
@@ -1589,7 +1487,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
 		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds],
-		value: await loadOracleManagerQueueOperationEthValue(client, managerAddress, operation, targetVault, amount),
+		value: await loadOracleManagerQueueOperationEthValue(client, managerAddress),
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, operation)
