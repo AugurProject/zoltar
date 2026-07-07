@@ -15,9 +15,10 @@ import { waitFor } from './testUtils/queries'
 import type { ForkAuctionActionResult, ForkAuctionDetails, MarketDetails } from '../types/contracts.js'
 import type { SettlementSelectedBid, TransactionIntent } from '../types/components.js'
 import type { TruthAuctionMetrics } from '../types/contracts.js'
+import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '../hooks/useForkAuctionOperations.js'
 
-type UseForkAuctionOperations = typeof import('../hooks/useForkAuctionOperations.js')['useForkAuctionOperations']
-type UseForkAuctionOperationsState = ReturnType<UseForkAuctionOperations>
+type UseForkAuctionOperationsState = ReturnType<typeof useForkAuctionOperations>
+type TestForkAuctionWriteClient = { kind: 'injected-write-client' }
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
@@ -111,19 +112,76 @@ function requireHookState(state: UseForkAuctionOperationsState | undefined) {
 	return state
 }
 
-function createHarness(useForkAuctionOperations: UseForkAuctionOperations, onRender: (state: UseForkAuctionOperationsState) => void, onTransactionFailed: (message: string) => void) {
+function createForkAuctionOperationsDependencies(overrides: Partial<UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>> = {}): UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient> {
+	return {
+		buildForkCarriedEscalationProofs: async () => [],
+		createChildUniverseFromSecurityPool: async () => {
+			throw new Error('createChildUniverseFromSecurityPool should not be called in this test')
+		},
+		createConnectedReadClient: mock(() => ({
+			getBalance: async () => 0n,
+		})),
+		createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		finalizeSecurityPoolTruthAuction: async () => {
+			throw new Error('finalizeSecurityPoolTruthAuction should not be called in this test')
+		},
+		forkUniverseDirectly: async () => {
+			throw new Error('forkUniverseDirectly should not be called in this test')
+		},
+		forkZoltarWithOwnEscalation: async () => {
+			throw new Error('forkZoltarWithOwnEscalation should not be called in this test')
+		},
+		initiateSecurityPoolFork: async () => {
+			throw new Error('initiateSecurityPoolFork should not be called in this test')
+		},
+		loadForkAuctionDetails: mock(async () => createForkAuctionDetails()),
+		migrateEscalationDeposits: async () => {
+			throw new Error('migrateEscalationDeposits should not be called in this test')
+		},
+		migrateRepToZoltarFromSecurityPool: async () => {
+			throw new Error('migrateRepToZoltarFromSecurityPool should not be called in this test')
+		},
+		migrateSecurityVault: async () => {
+			throw new Error('migrateSecurityVault should not be called in this test')
+		},
+		migrateVaultWithUnresolvedEscalation: async () => {
+			throw new Error('migrateVaultWithUnresolvedEscalation should not be called in this test')
+		},
+		refundTruthAuctionBid: async () => {
+			throw new Error('refundTruthAuctionBid should not be called in this test')
+		},
+		settleTruthAuctionBids: async () => {
+			throw new Error('settleTruthAuctionBids should not be called in this test')
+		},
+		startTruthAuctionForSecurityPool: async () => {
+			throw new Error('startTruthAuctionForSecurityPool should not be called in this test')
+		},
+		submitTruthAuctionBid: async () => {
+			throw new Error('submitTruthAuctionBid should not be called in this test')
+		},
+		withdrawForkedEscalationDeposits: async () => {
+			throw new Error('withdrawForkedEscalationDeposits should not be called in this test')
+		},
+		...overrides,
+	}
+}
+
+function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>, onRender: (state: UseForkAuctionOperationsState) => void, onTransactionFailed: (message: string) => void) {
 	return function ForkAuctionOperationsHarness() {
-		const state = useForkAuctionOperations({
-			accountAddress: WALLET_ADDRESS,
-			onTransactionFailed,
-			onTransactionFinished: () => undefined,
-			onTransactionPresented: () => undefined,
-			onTransactionPrepared: () => undefined,
-			onTransactionRequested: () => undefined,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-			selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
-		})
+		const state = useForkAuctionOperations(
+			{
+				accountAddress: WALLET_ADDRESS,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionPrepared: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+			},
+			dependencies,
+		)
 		onRender(state)
 		return <div />
 	}
@@ -153,7 +211,7 @@ describe('useForkAuctionOperations', () => {
 	test('refundLosingBids preserves negative settlement ticks from the selection list', async () => {
 		const selectedBids: readonly SettlementSelectedBid[] = [{ bidIndex: 4n, tick: -3n }]
 		const onTransactionFailed = mock(() => undefined)
-		const refundTruthAuctionBid = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, batch: readonly SettlementSelectedBid[]) => {
+		const refundTruthAuctionBid = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, batch: readonly SettlementSelectedBid[] = []) => {
 			expect(securityPoolAddress).toBe(SECURITY_POOL_ADDRESS)
 			expect(universeId).toBe(1n)
 			expect(truthAuctionAddress).toBe(TRUTH_AUCTION_ADDRESS)
@@ -162,24 +220,14 @@ describe('useForkAuctionOperations', () => {
 			expect(batch).toEqual([{ bidIndex: 4n, tick: -3n }])
 			return createForkAuctionResult('refundLosingBids')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails: mock(async () => createForkAuctionDetails()),
 			refundTruthAuctionBid,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		const Harness = createHarness(
-			useForkAuctionOperations,
+			dependencies,
 			state => {
 				hookState = state
 			},
@@ -209,24 +257,14 @@ describe('useForkAuctionOperations', () => {
 			expect(refundBids).toEqual([{ bidIndex: 3n, tick: -2n }])
 			return createForkAuctionResult('claimAuctionProceeds')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails: mock(async () => createForkAuctionDetails()),
 			settleTruthAuctionBids,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		const Harness = createHarness(
-			useForkAuctionOperations,
+			dependencies,
 			state => {
 				hookState = state
 			},
@@ -253,24 +291,14 @@ describe('useForkAuctionOperations', () => {
 		const refundTruthAuctionBid = mock(async () => {
 			throw new Error('refundTruthAuctionBid should not run for placeholder-only selections')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails: mock(async () => createForkAuctionDetails()),
 			refundTruthAuctionBid,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		const Harness = createHarness(
-			useForkAuctionOperations,
+			dependencies,
 			state => {
 				hookState = state
 			},
@@ -295,24 +323,14 @@ describe('useForkAuctionOperations', () => {
 		const settleTruthAuctionBids = mock(async () => {
 			throw new Error('settleTruthAuctionBids should not run for placeholder-only selections')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails: mock(async () => createForkAuctionDetails()),
 			settleTruthAuctionBids,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		const Harness = createHarness(
-			useForkAuctionOperations,
+			dependencies,
 			state => {
 				hookState = state
 			},
@@ -335,38 +353,30 @@ describe('useForkAuctionOperations', () => {
 		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000e5')
 		const deferredLoads: { deferred: ReturnType<typeof createDeferred<ForkAuctionDetails>>; securityPoolAddress: Address }[] = []
 		const onTransactionFailed = mock(() => undefined)
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-		const loadForkAuctionDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadForkAuctionDetails = mock(async (securityPoolAddress: Address) => {
 			const deferred = createDeferred<ForkAuctionDetails>()
 			deferredLoads.push({ deferred, securityPoolAddress })
 			return await deferred.promise
 		})
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -432,9 +442,7 @@ describe('useForkAuctionOperations', () => {
 		const staleRefresh = createDeferred<ForkAuctionDetails>()
 		let firstPoolLoadCount = 0
 		const onTransactionFailed = mock(() => undefined)
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-		const loadForkAuctionDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadForkAuctionDetails = mock(async (securityPoolAddress: Address) => {
 			if (securityPoolAddress === firstPoolAddress) {
 				firstPoolLoadCount += 1
 				if (firstPoolLoadCount === 1) return createForkAuctionDetails({ securityPoolAddress: firstPoolAddress })
@@ -449,32 +457,26 @@ describe('useForkAuctionOperations', () => {
 			securityPoolAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			initiateSecurityPoolFork,
 			loadForkAuctionDetails,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -535,7 +537,7 @@ describe('useForkAuctionOperations', () => {
 			truthAuction: createTruthAuctionMetrics(),
 		})
 		const onTransactionFailed = mock(() => undefined)
-		const loadForkAuctionDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadForkAuctionDetails = mock(async (securityPoolAddress: Address) => {
 			if (securityPoolAddress === firstPoolAddress) return detailsA
 			if (securityPoolAddress === secondPoolAddress) return detailsB
 			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
@@ -546,45 +548,38 @@ describe('useForkAuctionOperations', () => {
 			securityPoolAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
 		const readClient = {
 			getBalance: mock(async () => await staleBalance.promise),
 		}
 		let transactionState = createInitialTransactionTrayState()
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
+			createConnectedReadClient: mock(() => readClient),
 			loadForkAuctionDetails,
 			submitTruthAuctionBid,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionCanceled: () => {
-					transactionState = markTransactionCanceled(transactionState)
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionCanceled: () => {
+						transactionState = markTransactionCanceled(transactionState)
+					},
+					onTransactionFailed,
+					onTransactionFinished: () => {
+						transactionState = markTransactionFinished(transactionState)
+					},
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: (intent: TransactionIntent) => {
+						transactionState = markTransactionRequested(transactionState, intent)
+					},
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
 				},
-				onTransactionFailed,
-				onTransactionFinished: () => {
-					transactionState = markTransactionFinished(transactionState)
-				},
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: (intent: TransactionIntent) => {
-					transactionState = markTransactionRequested(transactionState, intent)
-				},
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -668,37 +663,30 @@ describe('useForkAuctionOperations', () => {
 			expect(amount).toBe(expectedBidAmount)
 			return createForkAuctionResult('submitBid')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
 		const readClient = {
 			getBalance: mock(async () => await walletBalance.promise),
 		}
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
+			createConnectedReadClient: mock(() => readClient),
 			loadForkAuctionDetails,
 			submitTruthAuctionBid,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -761,34 +749,26 @@ describe('useForkAuctionOperations', () => {
 			expect(depositIndexes).toEqual([1n, 3n])
 			return createForkAuctionResult('migrateEscalationDeposits')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails,
 			migrateEscalationDeposits,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -843,34 +823,26 @@ describe('useForkAuctionOperations', () => {
 			expect(outcome).toBe('yes')
 			return createForkAuctionResult('migrateVault')
 		})
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails,
 			migrateSecurityVault,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}
@@ -916,9 +888,7 @@ describe('useForkAuctionOperations', () => {
 		const staleRefresh = createDeferred<ForkAuctionDetails>()
 		let firstPoolLoadCount = 0
 		const onTransactionFailed = mock(() => undefined)
-		const actualContracts = await import('../contracts.js')
-		const actualClients = await import('../lib/clients.js')
-		const loadForkAuctionDetails = mock(async (_client: unknown, securityPoolAddress: Address) => {
+		const loadForkAuctionDetails = mock(async (securityPoolAddress: Address) => {
 			if (securityPoolAddress === firstPoolAddress) {
 				firstPoolLoadCount += 1
 				if (firstPoolLoadCount === 1) return createForkAuctionDetails({ securityPoolAddress: firstPoolAddress })
@@ -933,32 +903,26 @@ describe('useForkAuctionOperations', () => {
 			securityPoolAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
-
-		mock.module('../contracts.js', () => ({
-			...actualContracts,
+		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails,
 			startTruthAuctionForSecurityPool,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			...actualClients,
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useForkAuctionOperations } = await import(`../hooks/useForkAuctionOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseForkAuctionOperationsState | undefined
 		function Harness() {
-			const state = useForkAuctionOperations({
-				accountAddress: WALLET_ADDRESS,
-				onTransactionFailed,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionPrepared: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: undefined,
-			})
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
 			hookState = state
 			return <div />
 		}

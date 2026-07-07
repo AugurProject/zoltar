@@ -3,9 +3,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, type Hash } from '@zoltar/shared/ethereum'
+import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { useZoltarUniverse } from '../hooks/useZoltarUniverse.js'
+import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '../hooks/useZoltarUniverse.js'
 import type { DeploymentStatus, MarketDetails } from '../types/contracts.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -59,6 +59,31 @@ function createQuestion(questionId: string): MarketDetails {
 		questionId,
 		startTime: 1n,
 		title: `Question ${questionId}`,
+	}
+}
+
+function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDependencies> = {}): UseZoltarUniverseDependencies {
+	return {
+		createConnectedReadClient: mock(() => createPublicClient({ transport: http('http://127.0.0.1:8545') })),
+		createWalletWriteClient: () => {
+			throw new Error('createWalletWriteClient should not be called in this test')
+		},
+		createZoltarChildUniverse: async () => {
+			throw new Error('createZoltarChildUniverse should not be called in this test')
+		},
+		loadAllZoltarQuestions: async () => {
+			throw new Error('loadAllZoltarQuestions should not be called in this test')
+		},
+		loadZoltarQuestionCount: async () => {
+			throw new Error('loadZoltarQuestionCount should not be called in this test')
+		},
+		loadZoltarQuestionPage: async () => {
+			throw new Error('loadZoltarQuestionPage should not be called in this test')
+		},
+		loadZoltarUniverseSummary: async () => {
+			throw new Error('loadZoltarUniverseSummary should not be called in this test')
+		},
+		...overrides,
 	}
 }
 
@@ -122,13 +147,7 @@ describe('useZoltarUniverse', () => {
 			questionCount: bigint
 			questions: MarketDetails[]
 		}>()
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({})),
-			createWalletWriteClient: mock(() => ({})),
-		}))
-		mock.module('../contracts.js', () => ({
-			createZoltarChildUniverse: mock(async () => ({ hash: TEST_HASH })),
-			loadAllZoltarQuestions: mock(async () => []),
+		const dependencies = createZoltarUniverseDependencies({
 			loadZoltarQuestionCount: mock(async () => 1n),
 			loadZoltarQuestionPage: mock(async () => await oldPage.promise),
 			loadZoltarUniverseSummary: mock(async () => ({
@@ -143,21 +162,23 @@ describe('useZoltarUniverse', () => {
 				totalTheoreticalSupply: 1000n,
 				universeId: 1n,
 			})),
-		}))
-		const { useZoltarUniverse: useTestZoltarUniverse } = await import(`../hooks/useZoltarUniverse.js?case=${crypto.randomUUID()}`)
+		})
 		let hookState: UseZoltarUniverseState | undefined
 		function Harness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
-			hookState = useTestZoltarUniverse({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 1n,
-				autoLoadInitialData: true,
-				deploymentStatuses: [createZoltarDeploymentStatus()],
-				environmentRefreshKey,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-			})
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))

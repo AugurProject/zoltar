@@ -9,9 +9,10 @@ import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { waitFor } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testUtils/securityPoolsOverviewDependencies.js'
+import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../hooks/useSecurityPoolsOverview.js'
 
-type UseSecurityPoolsOverview = typeof import('../hooks/useSecurityPoolsOverview.js')['useSecurityPoolsOverview']
-type UseSecurityPoolsOverviewState = ReturnType<UseSecurityPoolsOverview>
+type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 
 const WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 
@@ -23,16 +24,19 @@ function createDeferred<T>() {
 	return { promise, resolve }
 }
 
-function createHarness(useSecurityPoolsOverview: UseSecurityPoolsOverview, onRender: (state: UseSecurityPoolsOverviewState) => void) {
+function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void) {
 	return function SecurityPoolsOverviewHarness() {
-		const state = useSecurityPoolsOverview({
-			accountAddress: WALLET_ADDRESS,
-			onTransactionFinished: () => undefined,
-			onTransactionPresented: () => undefined,
-			onTransactionRequested: () => undefined,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-		})
+		const state = useSecurityPoolsOverview(
+			{
+				accountAddress: WALLET_ADDRESS,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			},
+			dependencies,
+		)
 
 		onRender(state)
 
@@ -69,28 +73,20 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const loadOracleManagerQueueOperationEthValueDeferred = createDeferred<bigint>()
 		const queueSecurityPoolLiquidation = mock(async () => ({
 			action: 'queueLiquidation' as const,
-			hash: '0x01',
+			hash: '0x01' as const,
 			securityPoolAddress: zeroAddress,
 		}))
 
-		mock.module('../contracts.js', () => ({
-			loadAllSecurityPools: mock(async () => []),
+		const dependencies = createSecurityPoolsOverviewDependencies({
 			loadOracleManagerQueueOperationEthValue: mock(async () => await loadOracleManagerQueueOperationEthValueDeferred.promise),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
 			}),
 			queueSecurityPoolLiquidation,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 0n,
-			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -121,8 +117,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 	test('ignores stale modal errors after the user edits the form', async () => {
 		const loadOracleManagerQueueOperationEthValueDeferred = createDeferred<bigint>()
 
-		mock.module('../contracts.js', () => ({
-			loadAllSecurityPools: mock(async () => []),
+		const dependencies = createSecurityPoolsOverviewDependencies({
 			loadOracleManagerQueueOperationEthValue: mock(async () => await loadOracleManagerQueueOperationEthValueDeferred.promise),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
@@ -130,17 +125,10 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			queueSecurityPoolLiquidation: mock(async () => {
 				throw new Error('stale queued liquidation failure')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 0n,
-			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+		})
 
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -170,30 +158,25 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 	test('skips wallet ETH balance reads for zero-cost liquidations', async () => {
 		const queueSecurityPoolLiquidation = mock(async () => ({
 			action: 'queueLiquidation' as const,
-			hash: '0x02',
+			hash: '0x02' as const,
 			securityPoolAddress: zeroAddress,
 		}))
 
-		mock.module('../contracts.js', () => ({
-			loadAllSecurityPools: mock(async () => []),
-			loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
-			loadSecurityPoolPage: mock(async () => {
-				throw new Error('loadSecurityPoolPage should not be called in this test')
-			}),
-			queueSecurityPoolLiquidation,
-		}))
-		mock.module('../lib/clients.js', () => ({
+		const dependencies = createSecurityPoolsOverviewDependencies({
 			createConnectedReadClient: mock(() => ({
 				getBalance: async () => {
 					throw new Error('wallet ETH balance should not be loaded')
 				},
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+			loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
+			loadSecurityPoolPage: mock(async () => {
+				throw new Error('loadSecurityPoolPage should not be called in this test')
+			}),
+			queueSecurityPoolLiquidation,
+		})
 
-		const { useSecurityPoolsOverview } = await import(`../hooks/useSecurityPoolsOverview.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(useSecurityPoolsOverview, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))

@@ -10,9 +10,10 @@ import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { waitFor } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import type { OracleManagerDetails, SecurityVaultDetails } from '../types/contracts.js'
+import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '../hooks/useSecurityVaultOperations.js'
 
-type UseSecurityVaultOperations = typeof import('../hooks/useSecurityVaultOperations.js')['useSecurityVaultOperations']
-type UseSecurityVaultOperationsState = ReturnType<UseSecurityVaultOperations>
+type UseSecurityVaultOperationsState = ReturnType<typeof useSecurityVaultOperations>
+type TestSecurityVaultWriteClient = { kind: 'injected-write-client' }
 
 const WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECURITY_POOL_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
@@ -70,19 +71,53 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 	}
 }
 
-function createHarness(useSecurityVaultOperations: UseSecurityVaultOperations, onRender: (state: UseSecurityVaultOperationsState) => void, overrides: Partial<Parameters<UseSecurityVaultOperations>[0]> = {}) {
+function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient>> = {}): UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient> {
+	return {
+		approveErc20: async () => {
+			throw new Error('approveErc20 should not be called in this test')
+		},
+		createConnectedReadClient: mock(() => ({
+			getBalance: async () => 0n,
+		})),
+		createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		depositRepToSecurityPool: async () => {
+			throw new Error('depositRepToSecurityPool should not be called in this test')
+		},
+		loadErc20Balance: mock(async () => 0n),
+		loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
+		loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
+		queueOracleManagerOperation: async () => {
+			throw new Error('queueOracleManagerOperation should not be called in this test')
+		},
+		redeemRepFromSecurityPool: async () => {
+			throw new Error('redeemRepFromSecurityPool should not be called in this test')
+		},
+		redeemSecurityVaultFees: async () => {
+			throw new Error('redeemSecurityVaultFees should not be called in this test')
+		},
+		updateSecurityVaultFees: async () => {
+			throw new Error('updateSecurityVaultFees should not be called in this test')
+		},
+		...overrides,
+	}
+}
+
+function createHarness(dependencies: UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient>, onRender: (state: UseSecurityVaultOperationsState) => void, overrides: Partial<Parameters<typeof useSecurityVaultOperations>[0]> = {}) {
 	return function SecurityVaultOperationsHarness() {
-		const state = useSecurityVaultOperations({
-			accountAddress: WALLET_ADDRESS,
-			enabled: true,
-			onTransactionFinished: () => undefined,
-			onTransactionPresented: () => undefined,
-			onTransactionRequested: () => undefined,
-			onTransactionSubmitted: () => undefined,
-			refreshState: async () => undefined,
-			selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
-			...overrides,
-		})
+		const state = useSecurityVaultOperations(
+			{
+				accountAddress: WALLET_ADDRESS,
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+				...overrides,
+			},
+			dependencies,
+		)
 		onRender(state)
 		return h('div', {})
 	}
@@ -117,10 +152,10 @@ describe('useSecurityVaultOperations', () => {
 		const loadSecurityVaultDetailsDeferred = createDeferred<SecurityVaultDetails>()
 		const approveErc20 = mock(async () => ({
 			action: 'approveRep' as const,
-			hash: '0x01',
+			hash: '0x01' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20,
 			depositRepToSecurityPool: mock(async () => {
 				throw new Error('depositRepToSecurityPool should not be called in this test')
@@ -140,17 +175,13 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
 			createConnectedReadClient: mock(() => ({
 				getBalance: async () => 0n,
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -185,10 +216,10 @@ describe('useSecurityVaultOperations', () => {
 		const loadSecurityVaultDetailsDeferred = createDeferred<SecurityVaultDetails>()
 		const queueOracleManagerOperation = mock(async () => ({
 			action: 'queueWithdrawRep' as const,
-			hash: '0x02',
+			hash: '0x02' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -208,17 +239,13 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
 			createConnectedReadClient: mock(() => ({
 				getBalance: async () => 0n,
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -254,10 +281,10 @@ describe('useSecurityVaultOperations', () => {
 	test('setSecurityBondAllowance can stage a fresh attached operation without a currently valid price', async () => {
 		const queueOracleManagerOperation = mock(async () => ({
 			action: 'queueSetSecurityBondAllowance' as const,
-			hash: '0x03',
+			hash: '0x03' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -277,17 +304,13 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
 			createConnectedReadClient: mock(() => ({
 				getBalance: async () => 20n,
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -312,10 +335,10 @@ describe('useSecurityVaultOperations', () => {
 	test('withdrawRep can stage a fresh attached operation without a currently valid price', async () => {
 		const queueOracleManagerOperation = mock(async () => ({
 			action: 'queueWithdrawRep' as const,
-			hash: '0x04',
+			hash: '0x04' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -335,17 +358,13 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
 			createConnectedReadClient: mock(() => ({
 				getBalance: async () => 20n,
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -370,10 +389,10 @@ describe('useSecurityVaultOperations', () => {
 	test('withdrawRep skips wallet ETH balance reads for zero-cost immediate executions', async () => {
 		const queueOracleManagerOperation = mock(async () => ({
 			action: 'queueWithdrawRep' as const,
-			hash: '0x05',
+			hash: '0x05' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -393,19 +412,15 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
 			createConnectedReadClient: mock(() => ({
 				getBalance: async () => {
 					throw new Error('wallet ETH balance should not be loaded')
 				},
 			})),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -432,10 +447,10 @@ describe('useSecurityVaultOperations', () => {
 		let balanceLoads = 0
 		const depositRepToSecurityPool = mock(async () => ({
 			action: 'depositRep' as const,
-			hash: '0x06',
+			hash: '0x06' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -459,15 +474,13 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 0n,
+			})),
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -507,14 +520,14 @@ describe('useSecurityVaultOperations', () => {
 		const activeAccounts = createDeferred<readonly Address[]>()
 		const updateSecurityVaultFees = mock(async () => ({
 			action: 'updateVaultFees' as const,
-			hash: '0x07',
+			hash: '0x07' as const,
 		}))
 		const redeemSecurityVaultFees = mock(async () => ({
 			action: 'redeemFees' as const,
-			hash: '0x08',
+			hash: '0x08' as const,
 		}))
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -532,21 +545,19 @@ describe('useSecurityVaultOperations', () => {
 			}),
 			redeemSecurityVaultFees,
 			updateSecurityVaultFees,
-		}))
-		mock.module('../lib/clients.js', () => ({
-			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 0n,
+			})),
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 
 		restoreActiveEnvironment?.()
 		restoreActiveEnvironment = installActiveEnvironmentForTesting({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			getAccounts: async () => await activeAccounts.promise,
 		})
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
@@ -576,13 +587,13 @@ describe('useSecurityVaultOperations', () => {
 	test('withdrawRep ignores a stale preflight oracle request after the selected vault changes', async () => {
 		const staleWalletBalance = createDeferred<bigint>()
 		const queueOracleManagerOperation = mock(async () => ({
-			hash: '0x09',
+			hash: '0x09' as const,
 		}))
 		const readClient = {
 			getBalance: mock(async () => await staleWalletBalance.promise),
 		}
 
-		mock.module('../contracts.js', () => ({
+		const dependencies = createSecurityVaultOperationsDependencies({
 			approveErc20: mock(async () => {
 				throw new Error('approveErc20 should not be called in this test')
 			}),
@@ -602,15 +613,11 @@ describe('useSecurityVaultOperations', () => {
 			updateSecurityVaultFees: mock(async () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
-		}))
-		mock.module('../lib/clients.js', () => ({
 			createConnectedReadClient: mock(() => readClient),
-			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
-		}))
-
-		const { useSecurityVaultOperations } = await import(`../hooks/useSecurityVaultOperations.js?case=${crypto.randomUUID()}`)
+			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
+		})
 		let hookState: UseSecurityVaultOperationsState | undefined
-		const Harness = createHarness(useSecurityVaultOperations, state => {
+		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
