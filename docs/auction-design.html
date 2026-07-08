@@ -11,17 +11,24 @@
 				<header>
 					<h1>Truth Auction</h1>
 					<p>
-						A truth auction is held only after a fork. If a disputed market
-						cannot resolve locally, Placeholder migrates it into child pools for
-						the valid fork branches that users want to keep using.
+						A truth auction is held only after a fork. That fork can happen
+						because the market's own escalation game reaches non-decision, or
+						because some other market forks Zoltar first and this pool is later
+						migrated as part of the same child-universe split. After either
+						path, Placeholder migrates it into child pools for the valid fork
+						branches that users want to keep using.
 					</p>
 					<p>
 						Fork migration preserves disagreement by splitting one parent market
-						into multiple child branches, but it does not guarantee every child
-						pool inherits enough ETH to honor its migrated accounting cleanly on
-						day one. When a child pool comes out short, the protocol can sell
-						some child-universe REP for ETH. The truth auction repairs that
-						collateral gap; it does not decide which branch is true.
+						into multiple child branches, but ETH does not get copied into every
+						child pool in full. Each branch inherits only the ETH implied by the
+						parent collateral and REP state that actually migrate into that
+						branch, so a child pool can end up with valid migrated accounting
+						but too little ETH to reopen cleanly on day one. When that happens,
+						the protocol attempts to sell some child-universe REP for ETH so the
+						missing collateral can be restored and open-interest holders can be
+						made whole. The truth auction repairs that collateral gap; it does
+						not decide which branch is true.
 					</p>
 					<p>
 						Placeholder implements the truth auction with
