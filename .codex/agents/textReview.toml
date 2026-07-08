@@ -110,6 +110,13 @@ Prefer explanation before inventory. A page should first tell the reader what is
 Prefer motivation before mechanism when both are needed. A reader should learn
 why a fork, auction, oracle request, threshold, timeout, or ownership boundary
 exists before being asked to memorize the exact mechanics.
+Prefer cause-and-effect over definition-and-detail.
+Say what problem the mechanism solves before naming formulas or contract calls.
+Use one paragraph for one job.
+Let tables hold precision; keep surrounding prose conceptual.
+Avoid transition sentences about the document itself.
+When a section has two branches, name the branches first.
+When a mechanism is not a truth mechanism, repeat that clearly.
 
 Watch for "spec-optimized but human-hostile" writing. Report Medium or High issues when a page is technically careful but reads like audit notes, assertion tables, or compressed changelog prose instead of explanatory documentation.
 

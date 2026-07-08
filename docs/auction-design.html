@@ -42,28 +42,23 @@
 						results back into pool ownership instead of paying out direct token
 						transfers.
 					</p>
-						<p>
-							The auction begins when a child pool starts it, then clears bids
-							and feeds settlement back into child-pool accounting. The
-							Placeholder whitepaper covers the surrounding fork migration and
-							collateral-repair context.
-						</p>
 				</header>
 
 			<section id="why">
 				<h2>Why This Auction Exists</h2>
 				<p>
 					After a universe fork, a child pool can inherit less ETH collateral
-					than it needs to continue normal operation. The forker can sell some
-					child-universe REP for ETH to repair that collateral gap. This keeps
-					trader share collateral separate from the question of which branch is
-					true.
+					than it needs to continue normal operation even when its migrated
+					shares, vault state, and child-universe REP backing are correct. The shortfall comes from proportional migration. The child receives only
+					the ETH and REP implied by migrated parent positions, so a branch that
+					lands below the repair denominator can inherit too little ETH.
 				</p>
 				<p>
-					The shortfall comes from proportional migration: the child receives
-					only the ETH and REP implied by migrated parent positions, so a branch
-					that lands below the repair denominator can inherit too little ETH even
-					when its migrated accounting is otherwise valid.
+					That shortfall is collateral damage, not a truth
+					decision. The forker can then sell some child-universe REP for ETH to
+					repair that collateral gap and attempt to make open-interest holders
+					whole, while keeping trader share collateral separate from the
+					question of which branch is true.
 				</p>
 				<p>
 					The design is dual-capped: it tries to raise enough ETH without
@@ -76,21 +71,18 @@
 			<section id="lifecycle">
 				<h2>Operational Lifecycle</h2>
 				<p>
-					The normal control flow is: the auction starts after migration ends,
-					bidders supply ETH directly to the auction, and settlement later feeds
-					the results back into child-pool accounting.
+					The auction is a repair step between fork migration and normal child
+					pool operation. A truth auction can start only for a child pool in
+					<code>ForkMigration</code> after the parent migration window has ended,
+					and only if the migrated branch is still short of ETH. If enough REP
+					migrated to the child pool already, the forker can finalize the
+					repair path without starting an auction.
 				</p>
 				<p>
-					Purchased REP is credited into child-pool vault accounting instead of
-					being transferred directly from the auction to the bidder. That is why
-					settlement flows through the child-pool repair path rather than a
-					simple token payout.
-				</p>
-				<p>
-					A truth auction can start only for a child pool in
-					<code>ForkMigration</code> after the parent migration window has ended.
-					If enough REP migrated to the child pool already, the forker can
-					finalize the repair path without starting an auction.
+					Once the repair path is open, bidders supply ETH directly to the
+					auction. Settlement then credits purchased REP into child-pool vault
+					accounting instead of transferring tokens directly to the bidder, so
+					the repair result feeds back into the pool rather than bypassing it.
 				</p>
 				<figure class="diagram" id="fig-auction-lifecycle">
 					<svg viewBox="0 0 880 180" role="img" aria-label="Child pool shortfall leads to forker-started auction, ETH bids, finalization, and paged settlement into vault accounting.">
@@ -183,10 +175,9 @@
 			<section id="gas-and-spam">
 				<h2>Gas and Spam Bounds</h2>
 				<p>
-					The auction intentionally does not cap total bids or active price
-					levels. A cap would let an attacker spend ETH to fill the available
-					bid slots or tick slots early, preventing later valid bidders from
-					participating.
+					The main spam risk is a bidder trying to fill bid slots or tick levels
+					cheaply enough to block later demand. The auction avoids that failure
+					mode by not capping total bids or active price levels at all.
 				</p>
 				<p>
 					Finalization remains bounded without those caps because it does not
@@ -207,19 +198,24 @@
 			</section>
 
 			<section id="settlement">
-				<h2>Refund and Settlement Paths</h2>
+				<h2>Settlement Modes</h2>
+				<p>
+					Finalization has two branches. In the funded branch, demand is strong
+					enough to clear at one uniform price, so all winning bids settle at
+					that price and only the marginal bid may be clipped. In the
+					underfunded branch, demand is too weak to buy the full REP inventory,
+					so the auction accepts only limit-priced demand at or above the
+					threshold and leaves the rest of the REP unsold.
+				</p>
 				<p>
 					Clearly losing bids can be refunded before finalization once current
 					demand is enough to find a clearing tick. Only ticks below that found
 					clearing tick can be withdrawn through the pre-finalization refund
-					path; binding or potentially winning bids stay in the auction.
-				</p>
-				<p>
-					In the underfunded branch, finalization computes
+					path; binding or potentially winning bids stay in the auction. In the
+					underfunded branch, finalization computes
 					<code>underfundedThreshold</code> from aggregate accepted bid ETH, and
 					only ticks whose <code>tickToPrice</code> value is at or above that
-					threshold win.
-					The contract's stored <code>ethRaised</code> value is the threshold
+					threshold win. The contract's stored <code>ethRaised</code> value is the threshold
 					input; <code>underfundedWinningEth</code> is the ETH actually retained
 					or sent after below-threshold bids are refunded.
 				</p>
@@ -304,9 +300,10 @@
 			<section id="worked-example">
 				<h2>Worked Clearing Example</h2>
 				<p>
-					Suppose the auction tries to raise <code>12 ETH</code> while selling
-					at most <code>4 REP</code>. Alice bids <code>3 ETH</code> near
-					<code>5 ETH/REP</code>, Bob bids <code>4 ETH</code> near
+					The simplest funded outcome is a uniform-price sale with one marginal
+					bidder. Suppose the auction tries to raise <code>12 ETH</code> while
+					selling at most <code>4 REP</code>. Alice bids <code>3 ETH</code>
+					near <code>5 ETH/REP</code>, Bob bids <code>4 ETH</code> near
 					<code>4 ETH/REP</code>, and Carol bids <code>6 ETH</code> near
 					<code>3 ETH/REP</code>.
 				</p>
@@ -359,8 +356,9 @@
 				</table>
 				<p>
 					The auction raises <code>12 ETH</code> and sells <code>4 REP</code>.
-					Everyone who wins receives the same effective execution price, while
-					only the marginal bid is clipped.
+					Alice and Bob clear fully, Carol sets the marginal tick and is
+					partially refunded, and everyone who wins receives the same effective
+					execution price.
 				</p>
 				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>
