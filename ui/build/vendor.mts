@@ -3,6 +3,12 @@ import * as url from 'url'
 import { promises as fs } from 'fs'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 type FileType = 'file' | 'directory'
+type VendorBuildSteps = {
+	readonly clearVendorOutput: () => Promise<void>
+	readonly bundleTevm: () => Promise<void>
+	readonly vendorDependencies: () => Promise<void>
+	readonly copyProjectArtifacts: () => Promise<void>
+}
 
 async function recursiveDirectoryCopy(source: string, destination: string, inclusionPredicate: (path: string, fileType: FileType) => boolean | Promise<boolean>, rewriteCallback?: (sourcePath: string, destinationPath: string) => Promise<void>): Promise<void> {
 	await fs.mkdir(destination, { recursive: true })
@@ -105,14 +111,31 @@ async function bundleTevm() {
 	])
 }
 
-const vendor = async () => {
-	await bundleTevm()
-	await vendorDependencies()
-	await copyProjectArtifacts()
+const defaultVendorBuildSteps: VendorBuildSteps = {
+	clearVendorOutput,
+	bundleTevm,
+	vendorDependencies,
+	copyProjectArtifacts,
 }
 
-vendor().catch(error => {
-	console.error(error)
-	debugger
-	process.exit(1)
-})
+export async function vendor(steps: VendorBuildSteps = defaultVendorBuildSteps) {
+	await steps.clearVendorOutput()
+	await steps.bundleTevm()
+	await steps.vendorDependencies()
+	await steps.copyProjectArtifacts()
+}
+
+export async function clearVendorOutput(vendorOutputPath = VENDOR_OUTPUT_PATH) {
+	await fs.rm(vendorOutputPath, { recursive: true, force: true })
+}
+
+const currentScriptPath = url.fileURLToPath(import.meta.url)
+const invokedScriptPath = process.argv[1]
+
+if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+	vendor().catch(error => {
+		console.error(error)
+		debugger
+		process.exit(1)
+	})
+}
