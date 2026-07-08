@@ -236,6 +236,10 @@ describe('OverviewPanels', () => {
 
 		expect(documentQueries.getByText('Simulation')).toBeDefined()
 		expect(document.body.textContent ?? '').toContain('Simulation mode uses browser-local contract state.')
+		expect(documentQueries.queryByText('Write Network')).toBeNull()
+		expect(documentQueries.queryByText('Read Source')).toBeNull()
+		expect(documentQueries.queryByText('Browser simulation')).toBeNull()
+		expect(documentQueries.queryByText('browser simulation · provider via default @ 12')).toBeNull()
 	})
 
 	test('shows the parent universe metric for child universes', async () => {
@@ -257,37 +261,6 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.queryByText('Parent Universe')).toBeNull()
-	})
-
-	test('labels provider-mode reads as the wallet provider instead of the fallback RPC host', async () => {
-		const documentQueries = await renderOverviewPanels({
-			readBackendStatus: {
-				blockNumber: 100n,
-				blockTimestamp: undefined,
-				rpcSource: 'default',
-				rpcUrl: 'https://ethereum.dark.florist',
-				transportMode: 'provider',
-			},
-		})
-
-		const readSource = documentQueries.getByText('wallet provider reads @ 100')
-		expect(readSource.getAttribute('title')).toBe('Reads are using the connected wallet provider. Configured fallback RPC: https://ethereum.dark.florist')
-		expect(document.body.textContent?.includes('ethereum.dark.florist')).toBe(false)
-	})
-
-	test('keeps browser-simulation reads labeled as browser simulation', async () => {
-		const documentQueries = await renderOverviewPanels({
-			readBackendStatus: {
-				blockNumber: 12n,
-				blockTimestamp: undefined,
-				rpcSource: 'default',
-				rpcUrl: 'browser-simulation',
-				transportMode: 'provider',
-			},
-		})
-
-		expect(documentQueries.getByText('browser simulation · provider via default @ 12')).toBeDefined()
-		expect(document.body.textContent?.includes('wallet provider')).toBe(false)
 	})
 
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
