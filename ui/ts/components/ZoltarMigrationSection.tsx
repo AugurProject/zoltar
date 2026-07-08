@@ -174,7 +174,7 @@ export function ZoltarMigrationSection({
 
 	return (
 		<>
-			<SectionBlock title='Migrate REP' description='Prepare REP into your migration balance, choose target universes, and split migration REP across outcomes.'>
+			<SectionBlock title='Migrate REP'>
 				<DataGrid>
 					<MetricField label='Migration REP Balance'>
 						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalance === undefined} value={zoltarMigrationPreparedRepBalance} suffix='REP' />

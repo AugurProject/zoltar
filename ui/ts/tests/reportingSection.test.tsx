@@ -286,6 +286,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Workflow' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(false)
 		expect(document.body.textContent?.includes('Reporting is the dispute game that locks vault REP behind an outcome until the market finalizes or forks.')).toBe(false)
+		expect(document.body.textContent?.includes('These values show how much stake is required, how long the current dispute window lasts, and whether the question is close to finalization.')).toBe(false)
 		expect(document.body.textContent?.includes('Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()

@@ -523,7 +523,7 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock className='reporting-metrics-section' title='Escalation Metrics' variant='embedded' description='These values show how much stake is required, how long the current dispute window lasts, and whether the question is close to finalization.'>
+				<SectionBlock className='reporting-metrics-section' title='Escalation Metrics' variant='embedded'>
 					<div className='escalation-metrics'>
 						<MetricField label='Non-decision threshold'>
 							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
@@ -540,7 +540,7 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock className='reporting-outcome-section' title='Report Outcome' variant='embedded' description='Choose the side you believe should become final. Reporting locks REP behind that outcome until the question finalizes or moves into fork migration.'>
+				<SectionBlock className='reporting-outcome-section' title='Report Outcome' variant='embedded'>
 					<div className='escalation-sides-shell'>
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
@@ -654,7 +654,7 @@ export function ReportingSection({
 			) : undefined}
 
 			{showSettlementSection ? (
-				<SectionBlock className='reporting-settlement-section' title='Settle Escalation Deposits' variant='embedded' description='After finalization, settle your deposits to unlock balances or claim the final payout for the winning side.'>
+				<SectionBlock className='reporting-settlement-section' title='Settle Escalation Deposits' variant='embedded'>
 					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>The migration window for these unresolved escalation deposits has closed.</p> : undefined}

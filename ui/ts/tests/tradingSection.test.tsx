@@ -269,6 +269,8 @@ void describe('TradingSection', () => {
 		expect(documentQueries.queryByText('Share Workflow')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Your Holdings' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Shares' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Balances are shown as complete-set amounts for the selected pool.')).toBe(false)
+		expect(document.body.textContent?.includes('Placeholder does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.')).toBe(false)
 		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()

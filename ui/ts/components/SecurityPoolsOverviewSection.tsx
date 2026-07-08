@@ -194,18 +194,6 @@ export function SecurityPoolsOverviewSection({
 					/>
 				}
 			>
-				<div className='workflow-summary-strip workflow-guide'>
-					<div className='workflow-guide-intro'>
-						<strong>Each pool backs one binary question with REP security.</strong>
-						<p className='detail'>Use the state badge and the guidance line on each card to decide whether you are browsing an active pool, a reporting state, or a fork workflow.</p>
-					</div>
-					<div className='workflow-summary-strip-steps'>
-						<span className='current'>1. Find the question</span>
-						<span>2. Check pool health</span>
-						<span>3. Open the next workflow</span>
-					</div>
-				</div>
-
 				<ErrorNotice message={securityPoolOverviewError} />
 				{securityPoolOverviewError === undefined ? undefined : (
 					<div className='actions pool-registry-recovery-actions'>
@@ -239,7 +227,6 @@ export function SecurityPoolsOverviewSection({
 						</select>
 					</label>
 				</div>
-				{pagedSecurityPools.length > 0 ? <p className='detail'>Filters apply only to the currently loaded page. Use pagination to inspect other pools.</p> : undefined}
 				{pagedSecurityPools.length > 0 ? (
 					<p className='detail'>
 						{filteredSecurityPools.length.toString()} of {pagedSecurityPools.length.toString()} pools shown on this page.
