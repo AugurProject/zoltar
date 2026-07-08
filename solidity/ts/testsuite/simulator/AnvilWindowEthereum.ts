@@ -35,10 +35,6 @@ type RpcTransactionReceipt = {
 	readonly contractAddress?: string
 }
 
-type RpcTransaction = {
-	readonly blockNumber?: string
-}
-
 type RpcTransactionRequest = {
 	readonly from?: string
 	readonly to?: string
@@ -58,6 +54,9 @@ type EthCallCoverageRequest = {
 }
 
 const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1c9c380'
+const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 60_000
+const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 10
+const SEND_TRANSACTION_RECEIPT_MINE_INTERVAL_MS = 1_000
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -136,13 +135,6 @@ function parseTransactionReceiptStatus(value: unknown): string | undefined {
 	if (typeof value !== 'object' || value === null || !('status' in value)) return undefined
 	const { status } = value as RpcTransactionReceipt
 	return typeof status === 'string' ? status : undefined
-}
-
-function parseTransactionBlockNumber(value: unknown): bigint | undefined {
-	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) return undefined
-	const { blockNumber } = value as RpcTransaction
-	if (typeof blockNumber !== 'string') return undefined
-	return BigInt(blockNumber)
 }
 
 function parseTransactionInput(value: unknown): string | undefined {
@@ -255,32 +247,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (args.method === 'anvil_reset' || args.method === 'anvil_revert') resetSolidityBytecodeCoverageAddressCache()
 		if (args.method === 'anvil_setCode' && typeof params[0] === 'string') invalidateSolidityBytecodeCoverageAddressCache(params[0])
 
-		const waitForReceiptStatus = async (hash: string) => {
-			let transactionBlockNumber: bigint | undefined
-			for (let attempt = 0; attempt < 100; attempt++) {
-				const receipt = await request({
-					method: 'eth_getTransactionReceipt',
-					params: [hash],
-				})
-				const status = parseTransactionReceiptStatus(receipt)
-				if (status !== undefined) return { receipt, status }
-
-				if (transactionBlockNumber === undefined) {
-					const transaction = await request({
-						method: 'eth_getTransactionByHash',
-						params: [hash],
-					})
-					transactionBlockNumber = parseTransactionBlockNumber(transaction)
-				}
-				await new Promise(resolve => setTimeout(resolve, 10))
-			}
-
-			if (transactionBlockNumber !== undefined) return undefined
-			return undefined
-		}
-		const waitForReceiptWithMiningFallback = async (hash: string) => {
-			const firstAttempt = await waitForReceiptStatus(hash)
-			if (firstAttempt !== undefined) return firstAttempt
+		const minePendingTransactions = async () => {
 			try {
 				await request({
 					method: 'evm_mine',
@@ -289,7 +256,26 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			} catch (error: unknown) {
 				if (!isEvmMineUnsupported(error)) throw error
 			}
-			return await waitForReceiptStatus(hash)
+		}
+		const waitForReceiptStatus = async (hash: string) => {
+			const deadline = Date.now() + SEND_TRANSACTION_RECEIPT_TIMEOUT_MS
+			let lastMineAttempt = 0
+			while (Date.now() < deadline) {
+				const receipt = await request({
+					method: 'eth_getTransactionReceipt',
+					params: [hash],
+				})
+				const status = parseTransactionReceiptStatus(receipt)
+				if (status !== undefined) return { receipt, status }
+
+				const now = Date.now()
+				if (now - lastMineAttempt >= SEND_TRANSACTION_RECEIPT_MINE_INTERVAL_MS) {
+					lastMineAttempt = now
+					await minePendingTransactions()
+				}
+				await new Promise(resolve => setTimeout(resolve, SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS))
+			}
+			return undefined
 		}
 
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
@@ -302,8 +288,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 		}
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
-			const receiptResult = await waitForReceiptWithMiningFallback(json.result)
-			const parsedReceipt = receiptResult === undefined ? undefined : parseTransactionReceipt(receiptResult.receipt)
+			const receiptResult = await waitForReceiptStatus(json.result)
+			if (receiptResult === undefined) throw new Error(`Anvil did not return a receipt for sent transaction ${json.result} within ${SEND_TRANSACTION_RECEIPT_TIMEOUT_MS.toString()}ms.`)
+			const parsedReceipt = parseTransactionReceipt(receiptResult.receipt)
 			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
 			let transactionData = transaction !== undefined && typeof transaction.data === 'string' ? transaction.data : undefined
 			if (transactionData === undefined) {

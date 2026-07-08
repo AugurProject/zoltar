@@ -109,6 +109,90 @@ test('normalizeAnvilTransactionParams leaves non-object params unchanged', () =>
 	expect(normalizeAnvilTransactionParams(params)).toEqual(params)
 })
 
+test('send transaction waits for a delayed receipt and mines pending Anvil transactions', async () => {
+	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
+	const observedMethods: string[] = []
+	const transactionHash = `0x${'12'.repeat(32)}`
+	let receiptRequestCount = 0
+
+	const mockedFetch = createMockedFetch(async (_input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
+		if (typeof init?.body !== 'string') throw new Error('Expected a JSON-RPC string body')
+		const request = JSON.parse(init.body) as JsonRpcRequest
+		observedMethods.push(request.method)
+
+		if (request.method === 'anvil_reset' || request.method === 'anvil_setNextBlockBaseFeePerGas' || request.method === 'evm_setNextBlockTimestamp' || request.method === 'evm_mine') return createJsonRpcResponse(request, { result: '0x1' })
+		if (request.method === 'eth_getBlockByNumber') return createJsonRpcResponse(request, { result: { timestamp: '0x0' } })
+		if (request.method === 'eth_sendTransaction') return createJsonRpcResponse(request, { result: transactionHash })
+		if (request.method === 'eth_getTransactionReceipt') {
+			receiptRequestCount += 1
+			if (receiptRequestCount === 1) return createJsonRpcResponse(request, { result: null })
+			return createJsonRpcResponse(request, {
+				result: {
+					contractAddress: null,
+					status: '0x1',
+					to: '0x0000000000000000000000000000000000000002',
+				},
+			})
+		}
+		throw new Error(`Unexpected JSON-RPC method: ${request.method}`)
+	})
+	globalThis.fetch = mockedFetch
+
+	const anvilWindow = await getMockedEthSimulateWindowEthereum()
+	await expect(
+		anvilWindow.request({
+			method: 'eth_sendTransaction',
+			params: [
+				{
+					data: '0xabcd',
+					from: '0x0000000000000000000000000000000000000001',
+					to: '0x0000000000000000000000000000000000000002',
+				},
+			],
+		}),
+	).resolves.toBe(transactionHash)
+	expect(receiptRequestCount).toBe(2)
+	expect(observedMethods).toContain('evm_mine')
+})
+
+test('send transaction throws a targeted error when Anvil never returns a receipt', async () => {
+	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
+	const originalDateNow = Date.now
+	const clockValues = [0, 1, 60_001, 60_002]
+	const transactionHash = `0x${'34'.repeat(32)}`
+
+	const mockedFetch = createMockedFetch(async (_input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
+		if (typeof init?.body !== 'string') throw new Error('Expected a JSON-RPC string body')
+		const request = JSON.parse(init.body) as JsonRpcRequest
+
+		if (request.method === 'anvil_reset' || request.method === 'anvil_setNextBlockBaseFeePerGas' || request.method === 'evm_setNextBlockTimestamp' || request.method === 'evm_mine') return createJsonRpcResponse(request, { result: '0x1' })
+		if (request.method === 'eth_getBlockByNumber') return createJsonRpcResponse(request, { result: { timestamp: '0x0' } })
+		if (request.method === 'eth_sendTransaction') return createJsonRpcResponse(request, { result: transactionHash })
+		if (request.method === 'eth_getTransactionReceipt') return createJsonRpcResponse(request, { result: null })
+		throw new Error(`Unexpected JSON-RPC method: ${request.method}`)
+	})
+	globalThis.fetch = mockedFetch
+
+	Date.now = () => clockValues.shift() ?? 60_002
+	try {
+		const anvilWindow = await getMockedEthSimulateWindowEthereum()
+		await expect(
+			anvilWindow.request({
+				method: 'eth_sendTransaction',
+				params: [
+					{
+						data: '0xabcd',
+						from: '0x0000000000000000000000000000000000000001',
+						to: '0x0000000000000000000000000000000000000002',
+					},
+				],
+			}),
+		).rejects.toThrow(`Anvil did not return a receipt for sent transaction ${transactionHash} within 60000ms.`)
+	} finally {
+		Date.now = originalDateNow
+	}
+})
+
 test('ordinary eth_call requests do not trigger debug traces when Solidity bytecode coverage is disabled', async () => {
 	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
 	const observedMethods: string[] = []
