@@ -480,10 +480,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where the child universe is finalized.')).toBeNull()
 		const truthAuctionBadge = auctionPoolCardQueries.getByText('Truth Auction')
 		expect(truthAuctionBadge.getAttribute('aria-label')).toBe('Truth Auction')
-		const truthAuctionTooltipId = truthAuctionBadge.parentElement?.getAttribute('aria-describedby')
-		expect(truthAuctionTooltipId).not.toBeNull()
-		const truthAuctionTooltip = truthAuctionTooltipId === null || truthAuctionTooltipId === undefined ? null : document.getElementById(truthAuctionTooltipId)
-		expect(truthAuctionTooltip?.textContent).toBe('Open the pool to review auction state and any child-universe follow-up actions.')
+		expect(truthAuctionBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 	})
 
 	test('shows Fork Finalized for child pools with completed fork history', async () => {
@@ -515,10 +512,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const childPoolCardQueries = within(childPoolCard)
 		const forkFinalizedBadge = childPoolCardQueries.getByText('Fork Finalized')
 		expect(forkFinalizedBadge.getAttribute('aria-label')).toBe('Fork Finalized')
-		const forkFinalizedTooltipId = forkFinalizedBadge.parentElement?.getAttribute('aria-describedby')
-		expect(forkFinalizedTooltipId).not.toBeNull()
-		const forkFinalizedTooltip = forkFinalizedTooltipId === null || forkFinalizedTooltipId === undefined ? null : document.getElementById(forkFinalizedTooltipId)
-		expect(forkFinalizedTooltip?.textContent).toBe('Open the pool to review final child-universe state and any remaining balances.')
+		expect(forkFinalizedBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 		expect(childPoolCardQueries.queryByText('This parent pool has already gone through a fork lifecycle and now acts as a historical reference point.')).toBeNull()
 	})
 

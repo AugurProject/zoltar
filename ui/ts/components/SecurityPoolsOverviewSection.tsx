@@ -30,34 +30,6 @@ import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
-function getSecurityPoolGuidance({ hasKnownForkActivity, lifecycleState, questionOutcome, vaultCount }: { hasKnownForkActivity: boolean; lifecycleState: SecurityPoolLifecycleState | undefined; questionOutcome: string | undefined; vaultCount: bigint }) {
-	if (lifecycleState === 'forkTruthAuction')
-		return {
-			nextStep: 'Open the pool to review auction state and any child-universe follow-up actions.',
-		}
-	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration')
-		return {
-			nextStep: 'Open the pool to continue REP or deposit migration before the fork window closes.',
-		}
-	if (lifecycleState === 'ended') {
-		if (questionOutcome === undefined || questionOutcome === 'none')
-			return {
-				nextStep: 'Open the pool to review reporting, stake balances, and escalation timing.',
-			}
-
-		return {
-			nextStep: vaultCount > 0n ? 'Open the pool to review vault exits, withdrawals, or any remaining settlement actions.' : 'Open the pool to review the finalized outcome and any post-resolution state.',
-		}
-	}
-	if (lifecycleState === 'operational' && hasKnownForkActivity)
-		return {
-			nextStep: 'Open the pool to review final child-universe state and any remaining balances.',
-		}
-	return {
-		nextStep: vaultCount > 0n ? 'Open the pool to inspect vault health, price context, or reporting readiness.' : 'Open the pool to add the first vault or review how this pool is collateralized.',
-	}
-}
-
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
@@ -258,12 +230,6 @@ export function SecurityPoolsOverviewSection({
 								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
 								const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
-								const poolGuidance = getSecurityPoolGuidance({
-									hasKnownForkActivity,
-									lifecycleState: displayState,
-									questionOutcome: pool.questionOutcome,
-									vaultCount: pool.vaultCount,
-								})
 								const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({
 									hasForkActivity: hasKnownForkActivity,
 									questionOutcome: pool.questionOutcome,
@@ -275,7 +241,6 @@ export function SecurityPoolsOverviewSection({
 
 									return 'warning'
 								})()
-								const guidanceTooltipId = `security-pool-guidance-${pool.securityPoolAddress.slice(2).toLowerCase()}`
 								return (
 									<EntityCard
 										key={pool.securityPoolAddress}
@@ -283,16 +248,9 @@ export function SecurityPoolsOverviewSection({
 										title={getQuestionTitle(pool.marketDetails)}
 										variant='record'
 										badge={
-											<span className='security-pool-status-badge'>
-												<span aria-describedby={guidanceTooltipId} className='security-pool-status-badge-trigger' tabIndex={0}>
-													<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
-														{statusBadgeLabel}
-													</Badge>
-												</span>
-												<span className='security-pool-status-badge-tooltip' id={guidanceTooltipId} role='tooltip'>
-													{poolGuidance.nextStep}
-												</span>
-											</span>
+											<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
+												{statusBadgeLabel}
+											</Badge>
 										}
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (

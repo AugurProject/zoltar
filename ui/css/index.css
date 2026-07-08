@@ -5369,50 +5369,6 @@ button:focus-visible {
 	min-width: 0;
 }
 
-.security-pool-status-badge {
-	position: relative;
-	display: inline-flex;
-	align-items: flex-start;
-}
-
-.security-pool-status-badge-trigger {
-	display: inline-flex;
-	border-radius: 4px;
-	outline: none;
-}
-
-.security-pool-status-badge-trigger:focus-visible {
-	box-shadow: 0 0 0 2px rgba(56, 213, 255, 0.28);
-}
-
-.security-pool-status-badge-tooltip {
-	position: absolute;
-	top: calc(100% + 0.45rem);
-	right: 0;
-	z-index: 3;
-	width: min(18rem, 70vw);
-	padding: 0.7rem 0.8rem;
-	border: 1px solid var(--border-emphasis);
-	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.96);
-	box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
-	color: var(--text);
-	font-size: var(--font-caption);
-	line-height: 1.45;
-	opacity: 0;
-	pointer-events: none;
-	transform: translateY(-0.15rem);
-	transition:
-		opacity 120ms ease,
-		transform 120ms ease;
-}
-
-.security-pool-status-badge:hover .security-pool-status-badge-tooltip,
-.security-pool-status-badge:focus-within .security-pool-status-badge-tooltip {
-	opacity: 1;
-	transform: translateY(0);
-}
-
 .security-pool-strip-question .question-preview-meta {
 	display: none;
 }
