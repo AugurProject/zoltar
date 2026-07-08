@@ -449,9 +449,38 @@ export function SecurityVaultSection({
 		return undefined
 	})()
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? 'This vault does not exist.' : undefined
-	const repExitLauncherBlocker = loadedVaultMissingBlocker
-	const bondAllowanceLauncherBlocker = loadedVaultMissingBlocker
-	const claimFeesLauncherBlocker = loadedVaultMissingBlocker
+	const getVaultLauncherBlocker = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance') => {
+		if (!hasConnectedWallet) {
+			if (action === 'claim-fees') return 'Connect a wallet before claiming fees.'
+			if (action === 'deposit-rep') return 'Connect a wallet before depositing REP.'
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Connect a wallet before redeeming REP.' : 'Connect a wallet before withdrawing REP.'
+			return 'Connect a wallet before setting the security bond allowance.'
+		}
+		if (!isMainnet) {
+			if (action === 'claim-fees') return 'Switch to Ethereum mainnet before claiming fees.'
+			if (action === 'deposit-rep') return 'Switch to Ethereum mainnet before depositing REP.'
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Switch to Ethereum mainnet before redeeming REP.' : 'Switch to Ethereum mainnet before withdrawing REP.'
+			return 'Switch to Ethereum mainnet before setting the security bond allowance.'
+		}
+		if (!selectedVaultIsOwnedByAccount) {
+			if (action === 'claim-fees') return 'Select your own vault to claim fees.'
+			if (action === 'deposit-rep') return 'Select your own vault to deposit REP.'
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Select your own vault to redeem REP.' : 'Select your own vault to withdraw REP.'
+			return 'Select your own vault to set the security bond allowance.'
+		}
+		if (!hasLoadedSelectedVaultDetails) {
+			if (action === 'claim-fees') return 'Refresh the vault before claiming fees.'
+			if (action === 'deposit-rep') return 'Refresh the vault before depositing REP.'
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Refresh the vault before redeeming REP.' : 'Refresh the vault before withdrawing REP.'
+			return 'Refresh the vault before setting the security bond allowance.'
+		}
+		if (action === 'deposit-rep') return undefined
+		return loadedVaultMissingBlocker
+	}
+	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep')
+	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit')
+	const bondAllowanceLauncherBlocker = getVaultLauncherBlocker('set-bond-allowance')
+	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees')
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
@@ -469,6 +498,7 @@ export function SecurityVaultSection({
 			safetyId: getSecurityVaultActionSafetyId('depositRep'),
 			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(depositLauncherBlocker === undefined ? {} : { blocker: depositLauncherBlocker }),
 			title: 'Deposit REP',
 		},
 		{

@@ -108,8 +108,11 @@ child-pool creation, REP splitting, and child outcome selection.
 
 ## Truth Auction Operations
 
-This table gives the exact ownership, bidding-window, and settlement rules for
-collateral repair auctions.
+Collateral-repair auctions have three operator-critical boundaries: forker
+ownership, a one-week bidding window, and paged settlement into vault
+accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
+auction finalization is allowed at <code>&gt;=</code> that boundary, but the
+public forker wrapper requires the boundary to have passed.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

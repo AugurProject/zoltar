@@ -295,7 +295,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Claim Fees')
 	})
 
-	test('keeps modal-first vault actions silently disabled when the wallet is disconnected', async () => {
+	test('shows explicit modal-first vault blockers when the wallet is disconnected', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -313,11 +313,11 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: undefined })
-		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: undefined })
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: 'Connect a wallet before depositing REP.' })
+		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: 'Connect a wallet before claiming fees.' })
 	})
 
-	test('keeps modal-first vault actions silently disabled for a vault owned by another account', async () => {
+	test('shows explicit modal-first vault blockers for a vault owned by another account', async () => {
 		const otherVaultAddress = '0x00000000000000000000000000000000000000a9'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -339,8 +339,8 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: undefined })
-		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: undefined })
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: 'Select your own vault to deposit REP.' })
+		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: 'Select your own vault to claim fees.' })
 	})
 
 	test('keeps the deposit modal in create-vault mode for an empty selected vault', async () => {
@@ -584,5 +584,23 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Redeem REP', 'Settle escalation deposits before redeeming REP.')
+	})
+
+	test('disables modal-first vault launchers when a guard blocker is present', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: undefined }),
+					modalFirst: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('Connect a wallet before depositing REP.')
 	})
 })

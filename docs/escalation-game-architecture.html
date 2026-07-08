@@ -43,6 +43,58 @@
 					the proof verifier stays outside that ladder because it should never
 					write live game state.
 				</p>
+				<figure class="diagram" id="fig-escalation-game-module-split" aria-labelledby="module-split-title">
+					<svg viewBox="0 0 920 320" role="img" aria-labelledby="module-split-title module-split-desc">
+						<title id="module-split-title">EscalationGame module split between state-owning modules and the external proof verifier</title>
+						<desc id="module-split-desc">A left-hand inheritance chain runs from state into calculations, carry, escrow, settlement, and the public game contract. Shared types sit outside that chain as imported definitions, while a separate proof verifier sits to the right and feeds verified math back into the mutable stack without inheriting storage.</desc>
+						<defs>
+							<marker id="escalation-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect x="40" y="122" width="150" height="54" rx="10" class="svg-slate"></rect>
+						<text x="115" y="155" text-anchor="middle" class="svg-label">Types</text>
+						<rect x="220" y="122" width="150" height="54" rx="10" class="svg-blue"></rect>
+						<text x="295" y="155" text-anchor="middle" class="svg-label">State</text>
+						<rect x="400" y="122" width="150" height="54" rx="10" class="svg-green"></rect>
+						<text x="475" y="155" text-anchor="middle" class="svg-label">Calculations</text>
+						<rect x="580" y="122" width="120" height="54" rx="10" class="svg-green"></rect>
+						<text x="640" y="155" text-anchor="middle" class="svg-label">Carry</text>
+						<rect x="400" y="222" width="150" height="54" rx="10" class="svg-green"></rect>
+						<text x="475" y="255" text-anchor="middle" class="svg-label">Escrow</text>
+						<rect x="580" y="222" width="120" height="54" rx="10" class="svg-green"></rect>
+						<text x="640" y="255" text-anchor="middle" class="svg-label">Settlement</text>
+						<rect x="760" y="172" width="120" height="54" rx="10" class="svg-amber"></rect>
+						<text x="820" y="205" text-anchor="middle" class="svg-label">EscalationGame</text>
+						<rect x="720" y="122" width="160" height="54" rx="10" class="svg-rose"></rect>
+						<text x="800" y="155" text-anchor="middle" class="svg-label">ProofVerifier</text>
+						<line x1="370" y1="149" x2="400" y2="149" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="550" y1="149" x2="580" y2="149" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="620" y1="176" x2="520" y2="222" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="550" y1="249" x2="580" y2="249" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="700" y1="249" x2="760" y2="205" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="190" y1="122" x2="250" y2="92" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="190" y1="149" x2="400" y2="149" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="190" y1="176" x2="610" y2="222" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="720" y1="149" x2="690" y2="149" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<text x="115" y="104" text-anchor="middle" class="svg-note">shared structs and constants</text>
+						<text x="804" y="105" text-anchor="middle" class="svg-note">storage-free proof math</text>
+						<text x="548" y="294" text-anchor="middle" class="svg-note">one inheritance chain shares the mutable state surface</text>
+					</svg>
+					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span><code>EscalationGameState</code>, <code>EscalationGameCalculations</code>, <code>EscalationGameCarry</code>, <code>EscalationGameEscrow</code>, <code>EscalationGameSettlement</code>, and <code>EscalationGame</code> form one inheritance chain that shares the mutable state surface. <code>EscalationGameTypes</code> is shared type and constant material, and the proof verifier stays separate so proof math can be reused without acquiring authority to mutate live game state.</p>
+				</figure>
+				<div class="equation" id="eq-escalation-game-outcome-carry">
+					<math display="block" aria-label="Current carry total equals inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = inheritedUnresolvedTotal + localUnresolvedTotal">
+						<mrow>
+							<mi>currentCarryTotal</mi>
+							<mo>=</mo>
+							<mi>inheritedUnresolvedTotal</mi>
+							<mo>+</mo>
+							<mi>localUnresolvedTotal</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="equation-label">Carry Ownership Boundary</span>The split only stays safe while every module preserves the rule that an outcome's live carry equals inherited unresolved exposure plus unresolved local exposure.</p>
+				</div>
 				<table>
 					<thead>
 						<tr>
@@ -215,19 +267,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>26,939</code> bytes</td>
+							<td><code>26,627</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>23,858</code> bytes</td>
+							<td><code>23,574</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>142</code> bytes below <code>24,000</code></td>
+							<td><code>426</code> bytes below <code>24,000</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>718</code> bytes below <code>24,576</code></td>
+							<td><code>1,002</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

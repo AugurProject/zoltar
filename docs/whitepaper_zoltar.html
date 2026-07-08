@@ -118,8 +118,9 @@
 						Zoltar supports both categorical and scalar questions, treats
 						<code>Invalid</code> as a legitimate answer state, and keeps market
 						collateral, trading, and underwriting logic out of the oracle layer.
-						Throughout this paper, <code>Invalid</code> is a valid answer branch
-						for a well-formed question, while <code>Malformed</code> means an encoded answer option is rejected before it can become a branch or
+						In Zoltar terminology, <code>Invalid</code> is a valid answer branch
+						for a well-formed question, while <code>Malformed</code> means an
+						encoded answer option is rejected before it can become a branch or
 						final answer.
 					</p>
 				</section>
@@ -130,8 +131,8 @@
 							<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
 						</div>
 						<p>
-							Zoltar's lifecycle has six contract-visible steps. The later
-							sections unpack those same steps in more detail.
+							Zoltar's lifecycle has six contract-visible steps, from question
+							registration through post-fork coordination.
 						</p>
 						<div class="timeline-grid">
 						<div class="timeline-card">
@@ -183,8 +184,9 @@
 						<p>
 							In practice, that means an application can hand Zoltar a question,
 							later trigger a fork if disagreement persists, and then consume the
-							child-universe structure that Zoltar defines. The paper covers
-							those objects in that order.
+							child-universe structure that Zoltar defines. Applications
+							therefore depend on the same order in operation: question,
+							disagreement, fork, then child-universe state.
 						</p>
 
 					<h3>Core Contract Map</h3>

@@ -12,6 +12,7 @@ type ActionLauncherCardProps = {
 
 export function ActionLauncherCard({ action, children, pending = false, pendingLabel = 'Opening...', tone = 'secondary' }: ActionLauncherCardProps) {
 	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
+	const disabled = action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined
 	return (
 		<section className={`action-launcher-card ${action.readiness}`} data-action-safety-id={action.safetyId}>
 			<div className='action-launcher-card-copy'>
@@ -20,7 +21,7 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 				{children}
 			</div>
 			<div className='action-launcher-card-actions'>
-				<ActionLauncherButton safetyId={action.safetyId} idleLabel={action.actionLabel} pendingLabel={pendingLabel} onClick={() => action.onAction?.()} pending={pending} tone={tone} availability={{ disabled: action.onAction === undefined, reason: action.blocker }} showDisabledReason />
+				<ActionLauncherButton safetyId={action.safetyId} idleLabel={action.actionLabel} pendingLabel={pendingLabel} onClick={() => action.onAction?.()} pending={pending} tone={tone} availability={{ disabled, reason: action.blocker }} showDisabledReason />
 			</div>
 		</section>
 	)

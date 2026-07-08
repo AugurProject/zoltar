@@ -19,7 +19,9 @@
 					</p>
 					<p>
 						Only the hard cases leave that local path. If escalation cannot pick
-						a single answer safely, Zoltar creates explicit child universes, and
+						a single answer safely, Zoltar records the fork and defines explicit
+						child branches. Child universes materialize only when migration or
+						<code>deployChild</code> first uses one of those branches, and
 						Placeholder migrates the market into whichever branches users choose
 						to keep using.
 					</p>
@@ -33,8 +35,9 @@
 					<p>
 						A normal market begins in one pool, forks only after sustained local
 						non-decision, and then resumes in whichever child branches users keep
-						using. The later sections walk through that sequence and point to the
-						deeper whitepapers and reference pages.
+						using. That same sequence drives the rest of Placeholder: pool
+						creation, trading, escalation, fork migration, then repair or
+						redemption.
 					</p>
 					<p>
 						Keep one distinction in mind throughout: Zoltar decides how
@@ -270,13 +273,23 @@
 			<section id="fork-path">
 				<h2>Fork Path</h2>
 				<p>
-					This path starts only when local escalation cannot safely collapse the
-					dispute into one answer. A fork preserves the disagreement instead of
+					Fork handling has two entry branches. One branch starts when local
+					escalation cannot safely collapse the dispute into one answer. The
+					other starts when another market has already forked the universe first,
+					so this pool must migrate into the child branches that fork has now
+					defined. In both cases, a fork preserves disagreement instead of
 					hiding it.
 				</p>
+				<p>
+					In the own-escalation branch, the local escalation game reaches
+					non-decision when two or more outcomes cross the fixed threshold, and
+					then <code>Zoltar</code> forks the parent universe on the disputed
+					question. In the external-fork branch, another market or caller has
+					already forked the universe first, so this pool enters migration
+					through that existing fork without requiring its own local escalation
+					game to reach non-decision.
+				</p>
 				<ol>
-					<li>Escalation reaches non-decision when two or more outcomes reach the fixed threshold.</li>
-					<li><code>Zoltar</code> forks the parent universe on the disputed question.</li>
 					<li>
 						Callers create child pools and split pool REP for selected valid
 						branches. Vault owners and share holders migrate their own positions
@@ -408,8 +421,9 @@
 			<section id="lifecycle-glossary">
 				<h2>Concept Glossary by Lifecycle Stage</h2>
 				<p>
-					The glossary works best after the example, because the terms are
-					grouped by the stage where they become useful.
+					The terms stay grouped by the stage where they first become useful, so
+					the same lifecycle order keeps the vocabulary anchored to the mechanism
+					that needs it.
 				</p>
 				<table>
 					<thead>
@@ -457,8 +471,8 @@
 			<section id="documentation-map">
 				<h2>Documentation Map</h2>
 				<p>
-					Once the high-level lifecycle is clear, use these pages for the next
-					level of detail.
+					Each link below follows one part of the lifecycle into contract-level
+					detail.
 				</p>
 				<table>
 					<thead>

@@ -38,4 +38,55 @@ describe('ActionLauncherCard', () => {
 		expect((documentQueries.getByRole('heading', { name: 'Blocked Action' }) as HTMLElement).closest('.action-launcher-card.blocked')).not.toBeNull()
 		expect(document.body.querySelectorAll('.warning-surface.action-launcher-card')).toHaveLength(0)
 	})
+
+	test('disables a launcher when blocker text is present even if an action handler exists', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ActionLauncherCard
+				action={{
+					actionLabel: 'Blocked Ready Action',
+					blocker: 'Connect your wallet.',
+					description: 'Blocked details.',
+					key: 'blocked-ready',
+					onAction: () => undefined,
+					readiness: 'ready',
+					safetyId: 'open-oracle.submitInitialReport',
+					title: 'Blocked Ready Action',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Blocked Ready Action' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected a launcher button')
+		expect(button.disabled).toBe(true)
+		expect(documentQueries.getByText('Connect your wallet.')).not.toBeNull()
+	})
+
+	test('disables a blocked launcher even when a handler exists and no blocker text is set', async () => {
+		let actionCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			<ActionLauncherCard
+				action={{
+					actionLabel: 'Blocked Without Copy',
+					description: 'Blocked details.',
+					key: 'blocked-without-copy',
+					onAction: () => {
+						actionCalls += 1
+					},
+					readiness: 'blocked',
+					safetyId: 'open-oracle.submitInitialReport',
+					title: 'Blocked Without Copy',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Blocked Without Copy' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected a launcher button')
+		expect(button.disabled).toBe(true)
+		button.click()
+		expect(actionCalls).toBe(0)
+	})
 })
