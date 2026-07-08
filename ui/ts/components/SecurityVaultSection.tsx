@@ -487,7 +487,10 @@ export function SecurityVaultSection({
 		return undefined
 	})()
 	const vaultMissingBlocker = vaultExistsOnchain ? undefined : 'This vault does not exist yet.'
-	const repExitLauncherBlocker = vaultActionLauncherBlocker ?? vaultMissingBlocker
+	const depositActionLauncherBlocker = depositLauncherBlocker ?? (depositRepEnabled ? undefined : 'Deposit REP is not available in the current pool state.')
+	const repExitLauncherBlocker = vaultActionLauncherBlocker ?? vaultMissingBlocker ?? (repExitEnabled ? undefined : `${repExitActionLabel} is not available in the current pool state.`)
+	const bondAllowanceLauncherBlocker = vaultActionLauncherBlocker ?? vaultMissingBlocker ?? (bondAllowanceEnabled ? undefined : 'Set Bond Allowance is not available in the current pool state.')
+	const claimFeesLauncherBlocker = vaultActionLauncherBlocker ?? vaultMissingBlocker ?? claimFeesGuardMessage ?? (claimFeesEnabled ? undefined : 'Claim Fees is not available in the current pool state.')
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (accountState.address === undefined) return
@@ -503,9 +506,9 @@ export function SecurityVaultSection({
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
 			safetyId: getSecurityVaultActionSafetyId('depositRep'),
-			...(depositRepEnabled && depositLauncherBlocker === undefined ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
-			readiness: depositRepEnabled && depositLauncherBlocker === undefined ? 'ready' : 'blocked',
-			...(depositLauncherBlocker === undefined ? {} : { blocker: depositLauncherBlocker }),
+			...(depositRepEnabled && depositActionLauncherBlocker === undefined ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
+			readiness: depositRepEnabled && depositActionLauncherBlocker === undefined ? 'ready' : 'blocked',
+			...(depositActionLauncherBlocker === undefined ? {} : { blocker: depositActionLauncherBlocker }),
 			title: 'Deposit REP',
 		},
 		{
@@ -525,7 +528,7 @@ export function SecurityVaultSection({
 			safetyId: getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance'),
 			...(bondAllowanceEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
 			readiness: bondAllowanceEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain ? 'ready' : 'blocked',
-			...(repExitLauncherBlocker === undefined ? {} : { blocker: repExitLauncherBlocker }),
+			...(bondAllowanceLauncherBlocker === undefined ? {} : { blocker: bondAllowanceLauncherBlocker }),
 			title: 'Set Security Bond Allowance',
 		},
 		{
@@ -533,9 +536,9 @@ export function SecurityVaultSection({
 			description: 'Review claimable fees and confirm the fee redemption for the selected vault.',
 			key: 'claim-fees',
 			safetyId: getSecurityVaultActionSafetyId('redeemFees'),
-			...(claimFeesEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
-			readiness: claimFeesEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain ? 'ready' : 'blocked',
-			...(repExitLauncherBlocker === undefined ? {} : { blocker: repExitLauncherBlocker }),
+			...(claimFeesEnabled && claimFeesLauncherBlocker === undefined && vaultExistsOnchain ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
+			readiness: claimFeesEnabled && claimFeesLauncherBlocker === undefined && vaultExistsOnchain ? 'ready' : 'blocked',
+			...(claimFeesLauncherBlocker === undefined ? {} : { blocker: claimFeesLauncherBlocker }),
 			title: 'Claim Fees',
 		},
 		...extraReadinessActions,

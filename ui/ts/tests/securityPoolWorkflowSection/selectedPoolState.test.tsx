@@ -501,6 +501,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 		expectTransactionButtonDisabled(document.body, 'Review Liquidation')
+		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).title).toBe('Deposit REP is not available in the current pool state.')
+		expect(documentQueries.getByRole('button', { name: 'Review Liquidation' }).title).toBe('Review Liquidation is not available in the current pool state.')
 	})
 
 	test('shows a vault-missing notice and hides the embedded summary for an empty selected vault', async () => {

@@ -186,6 +186,48 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 	})
 
+	test('blocks the modal-first claim fees launcher when an existing vault has no claimable fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						unpaidEthFees: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim Fees' })
+
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
+		fireEvent.click(claimFeesButton)
+		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
+	})
+
+	test('shows a pool-state blocker when modal-first claim fees is disabled by lifecycle gating', async () => {
+		const endedPoolState = createEndedPoolState()
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: {
+						...endedPoolState,
+						actions: {
+							...endedPoolState.actions,
+							redeemFees: { enabled: false },
+						},
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Claim Fees is not available in the current pool state.')
+	})
+
 	test('keeps the deposit modal in create-vault mode for an empty selected vault', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection

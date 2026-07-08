@@ -833,7 +833,7 @@ export function SecurityPoolWorkflowSection({
 															if (selectedPool === undefined || selectedVaultDetails === undefined) return 'Refresh the selected vault first.'
 															if (selectedVaultAddress === '') return 'Select a pool and vault first.'
 															if (!selectedVaultExistsOnchain) return 'This vault does not exist yet.'
-
+															if (!liquidationEnabled) return 'Review Liquidation is not available in the current pool state.'
 															return undefined
 														})()
 
