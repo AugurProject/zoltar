@@ -49,28 +49,8 @@ export function OverviewPanels({
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
-	const isProviderReadBackend = effectiveReadBackendStatus.transportMode === 'provider' && !isBrowserSimulationReadBackend
 	const walletOnMainnet = isMainnetChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
-	const readBackendHost = (() => {
-		if (isBrowserSimulationReadBackend) return 'browser simulation'
-		if (isProviderReadBackend) return 'wallet provider'
-		try {
-			return new URL(effectiveReadBackendStatus.rpcUrl).host
-		} catch (error) {
-			if (!(error instanceof TypeError)) throw error
-			return effectiveReadBackendStatus.rpcUrl
-		}
-	})()
-	const readBackendLabel = isProviderReadBackend ? 'wallet provider reads' : `${effectiveReadBackendStatus.transportMode} via ${effectiveReadBackendStatus.rpcSource}`
-	const readBackendTitle = isProviderReadBackend ? `Reads are using the connected wallet provider. Configured fallback RPC: ${effectiveReadBackendStatus.rpcUrl}` : effectiveReadBackendStatus.rpcUrl
-	const readBackendSummary = isProviderReadBackend ? readBackendLabel : `${readBackendHost} · ${readBackendLabel}`
-	const writeNetworkLabel = (() => {
-		if (isBrowserSimulationReadBackend) return 'Browser simulation'
-		if (accountState.address === undefined) return 'No wallet connected'
-		if (walletOnMainnet) return 'Ethereum mainnet'
-		return `Wallet chain ${accountState.chainId ?? 'unknown'}`
-	})()
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>Simulation</Badge>
 		if (hasWrongWalletNetwork) return <Badge tone='danger'>Wrong Network</Badge>
@@ -166,13 +146,6 @@ export function OverviewPanels({
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>
-					<MetricField label='Write Network'>{writeNetworkLabel}</MetricField>
-					<MetricField label='Read Source'>
-						<span title={readBackendTitle}>
-							{readBackendSummary}
-							{effectiveReadBackendStatus.blockNumber === undefined ? '' : ` @ ${effectiveReadBackendStatus.blockNumber.toString()}`}
-						</span>
-					</MetricField>
 					{shouldShowParentUniverse ? (
 						<MetricField label='Parent Universe'>
 							<UniverseLink universeId={parentUniverseId} />
