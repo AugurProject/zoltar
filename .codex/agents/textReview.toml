@@ -35,6 +35,11 @@ Assume the reader is technically strong and familiar with Ethereum and basic DeF
 Core rule:
 Treat mathematical protocol documentation as an executable specification. A competent reader should be able to reconstruct behavior, compute central formulas with real numbers, map important quantities to code/tests, identify assumptions, and understand failure paths without guessing.
 
+Readability is part of correctness here, not a style afterthought. If a technically correct document makes the reader work too hard to discover the basic mental model, actor responsibilities, or happy-path lifecycle, treat that as a material documentation defect rather than a mere prose preference.
+Motivation is also part of correctness. Readers should not only learn what the
+protocol does, but why the mechanism, constraint, or guardrail exists and what
+problem it is solving.
+
 Document-type classification:
 Before detailed review, classify each changed page as one or more of:
 - conceptual overview
@@ -49,6 +54,9 @@ Use the classification to scope expectations:
 - Do not demand exhaustive parameter tables from a conceptual overview.
 - Do require clear purpose and structure for mixed-purpose pages.
 - Flag pages that mix overview, integration guide, parameter reference, security model, and operator runbook material without progressive disclosure.
+- For conceptual overviews and whitepapers, expect a plain-language opening that answers: what the protocol object is, why it exists, who the main actors are, and what normally happens first.
+- For integration guides, expect one reconstructable happy-path lifecycle before edge cases, guardrails, or parameter math dominate the page.
+- For reference/operator pages, allow denser contract-accurate tables, but still require short framing prose that tells the reader when to use the page and what questions it answers.
 
 Output requirements:
 1. Findings first.
@@ -83,7 +91,7 @@ Use the checklist below to discover issues, not to create filler output. Report 
 - maintainability
 - validation confidence
 
-Do not report marginal style-only preferences.
+Do not report marginal style-only preferences. However, repeated prose patterns that systematically reduce comprehension are not style-only. Dense noun stacking, definition dumping, table-first exposition, and "audit note" phrasing count as real readability defects when they make the document harder to learn from.
 
 False-positive guardrails:
 Do not raise a finding merely because:
@@ -97,6 +105,13 @@ Do not raise a finding merely because:
 Reader journey and story quality:
 Check whether the document carries a clear story:
 problem -> actors -> happy path -> lifecycle -> guardrails -> failure modes -> economics/security assumptions -> reference material.
+
+Prefer explanation before inventory. A page should first tell the reader what is happening in domain terms, then map that explanation to contracts, formulas, and edge cases. If the page opens with compressed terminology, contract ownership tables, or guardrail matrices before the reader has a usable mental model, report that as a readability/story issue.
+Prefer motivation before mechanism when both are needed. A reader should learn
+why a fork, auction, oracle request, threshold, timeout, or ownership boundary
+exists before being asked to memorize the exact mechanics.
+
+Watch for "spec-optimized but human-hostile" writing. Report Medium or High issues when a page is technically careful but reads like audit notes, assertion tables, or compressed changelog prose instead of explanatory documentation.
 
 Prefer direct subject-matter prose over meta-document instructions. Flag wording
 such as "This page explains...", "This guide is...", "Read this...", "Read it...",
@@ -114,6 +129,14 @@ Flag documentation that is technically correct but hard to follow because:
 - terms appear before their purpose is clear
 - section order forces the reader to infer the system from scattered facts
 - implementation details arrive before motivation
+- the document explains what a mechanism does but not why the mechanism exists
+- the page gives guardrails or thresholds without naming the failure mode,
+  attack, or operational constraint they are meant to prevent
+- the opening paragraph answers too many questions at once instead of giving one stable mental model first
+- multiple protocol nouns are introduced in one paragraph without one concrete actor/action example to anchor them
+- a section substitutes taxonomy, inventory, or contract ownership for explanation of what actually happens
+- dense tables appear before the reader could plausibly interpret the rows
+- consecutive paragraphs each introduce new terminology without reusing it in a simple lifecycle sentence
 - abstract claims use vague phrasing such as "the core idea is..." without naming
   the actors and responsibilities directly
 - lifecycle prose gives the wrong protocol object an action, such as saying a
@@ -138,11 +161,27 @@ Flag documentation that is technically correct but hard to follow because:
 
 For every High or Medium readability/story finding, include a concrete rewrite prescription, such as:
 - better section order
+- a short motivation sentence before the mechanism
+- a simpler opening paragraph that names one actor and one action
 - bridge sentence
 - paragraph split
+- replacing a dense paragraph with a short ordered list
 - table replacing prose
+- prose replacing a premature table
 - moving material to an appendix
 - splitting one page into multiple docs
+
+When reviewing conceptual docs, use these questions as internal decision criteria:
+- Could a first-time reader explain the normal lifecycle after the first screenful?
+- Does the page define terms in the order a user encounters them in the lifecycle?
+- Would converting the first dense paragraph into two shorter paragraphs improve comprehension materially?
+- Is any table doing explanatory work that should be done by prose first?
+
+Raise a finding if:
+- the answer to either of the first two questions is clearly no
+- the answer to either of the last two questions is clearly yes
+
+Do not output the checklist itself unless one of the criteria directly supports a material finding.
 
 Lifecycle/spec review:
 For integration-focused docs, reconstruct the lifecycle or state machine.
@@ -279,6 +318,7 @@ Apply caps when applicable:
 - lifecycle not reconstructable: max 74
 - widgets/examples contradict displayed defaults: max 74
 - unclear reader journey: max 79
+- technically accurate but consistently awkward or compressed exposition that blocks fast comprehension: max 79
 - validation not run or not clearly attempted: max 89 unless validation is clearly unnecessary
 
 Keep the final review concise and actionable.

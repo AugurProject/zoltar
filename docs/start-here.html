@@ -8,41 +8,50 @@
 	</head>
 	<body class="doc-openoracle">
 		<main>
-			<header>
-				<h1>Placeholder and Zoltar Start Here</h1>
-				<p>
-					Traders mint ETH-backed shares, REP vaults underwrite those shares,
-					local escalation tries to settle disputed outcomes inside one pool,
-					and unresolved disputes move into Zoltar's forkable truth layer.
-				</p>
-				<p>
-					Two ideas anchor the lifecycle. Zoltar universes are truth branches
-					with their own REP. Placeholder security vaults are pool-specific REP
-					accounts used for local escalation before a fork is needed.
-				</p>
-				<p>
-					After a fork, a holder can have <em>migration balance</em> by
-					initiating the fork or adding parent REP after the fork. That balance
-					can be reproduced into selected fork branches. Reproduction mints
-					<em>child REP</em> inside each child universe, with each branch
-					receiving at most the source balance.
-				</p>
-				<p>
-					Fork migration moves pool state into child universes. If a child pool
-					lacks ETH collateral after migration, a truth auction sells child REP
-					for ETH repair without choosing truth.
-				</p>
-				<p>
-					<code>Zoltar</code> owns forkable truth universes and child REP.
-					Placeholder owns market mechanics on top of those universes:
-					ETH-backed shares, REP-backed security vaults, local escalation
-					games, fork migration, truth-auction repair, and a REP/ETH solvency
-					oracle.
-				</p>
-			</header>
+				<header>
+					<h1>Placeholder and Zoltar Start Here</h1>
+					<p>
+						Placeholder is the market layer. Zoltar is the forkable oracle layer
+						underneath it. A normal market stays inside one security pool:
+						Traders mint ETH-backed shares, REP vaults provide backing, and
+						local escalation tries to settle disputes without forking the wider
+						system.
+					</p>
+					<p>
+						Only the hard cases leave that local path. If escalation cannot pick
+						a single answer safely, Zoltar creates explicit child universes, and
+						Placeholder migrates the market into whichever branches users choose
+						to keep using.
+					</p>
+					<p>
+						After a fork, a holder can build <em>migration balance</em> by
+						initiating the fork or adding parent REP after the fork.
+						Calling <code>splitMigrationRep</code> mints <em>child REP</em> in
+						each selected fork branch, with each branch receiving at most the
+						source balance.
+					</p>
+					<p>
+						A normal market begins in one pool, forks only after sustained local
+						non-decision, and then resumes in whichever child branches users keep
+						using. The later sections walk through that sequence and point to the
+						deeper whitepapers and reference pages.
+					</p>
+					<p>
+						Keep one distinction in mind throughout: Zoltar decides how
+						disagreement is represented, while Placeholder decides how a market
+						is collateralized, disputed, migrated, and repaired around that
+						oracle layer.
+					</p>
+				</header>
 
 			<section id="mental-model">
 				<h2>Mental Model</h2>
+				<p>
+					The stack has four layers. Zoltar defines the question and the
+					possible branches of truth. Placeholder runs the market inside one
+					branch until disagreement becomes strong enough that the branch itself
+					has to split.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -177,6 +186,11 @@
 
 			<section id="actors">
 				<h2>Actors and Assets</h2>
+				<p>
+					These are the recurring roles in the lifecycle. If you only want the
+					basic picture, focus on traders, REP vaults, and fork participants
+					first.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -229,6 +243,10 @@
 
 			<section id="happy-path">
 				<h2>Happy Path</h2>
+				<p>
+					Most markets are supposed to end here. The market stays in one
+					universe, uses one pool, and resolves locally without a fork.
+				</p>
 				<ol>
 					<li>A question is registered in <code>ZoltarQuestionData</code>.</li>
 					<li>A Placeholder origin pool is deployed for a binary question in an unforked universe.</li>
@@ -251,6 +269,11 @@
 
 			<section id="fork-path">
 				<h2>Fork Path</h2>
+				<p>
+					This path starts only when local escalation cannot safely collapse the
+					dispute into one answer. A fork preserves the disagreement instead of
+					hiding it.
+				</p>
 				<ol>
 					<li>Escalation reaches non-decision when two or more outcomes reach the fixed threshold.</li>
 					<li><code>Zoltar</code> forks the parent universe on the disputed question.</li>
@@ -273,9 +296,10 @@
 			<section id="oracle-path">
 				<h2>Oracle Path</h2>
 				<p>
-					The REP/ETH oracle is narrow. It gives <code>SecurityPool</code> a
-					fresh price for solvency-sensitive actions: REP withdrawal, bond
-					allowance changes, and liquidation. It does not resolve market truth.
+					The REP/ETH oracle is a side system, not a truth system. It gives
+					<code>SecurityPool</code> a fresh price for solvency-sensitive
+					actions: REP withdrawal, bond allowance changes, and liquidation. It
+					does not resolve market truth.
 				</p>
 				<p>
 					The coordinator stores a scaled REP-per-ETH price. A higher value
@@ -290,6 +314,11 @@
 					Imagine the question is <em>Will Example City receive more than 10
 					inches of rain in 2027?</em> Placeholder treats it as a binary market:
 					<code>Invalid</code>, <code>Yes</code>, and <code>No</code>.
+				</p>
+				<p>
+					The example below walks through the same lifecycle in one place so the
+					terms from the earlier sections appear in the order a user encounters
+					them.
 				</p>
 				<div class="equation" id="eq-start-here-complete-set">
 					<math
@@ -378,6 +407,10 @@
 
 			<section id="lifecycle-glossary">
 				<h2>Concept Glossary by Lifecycle Stage</h2>
+				<p>
+					The glossary works best after the example, because the terms are
+					grouped by the stage where they become useful.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -423,6 +456,10 @@
 
 			<section id="documentation-map">
 				<h2>Documentation Map</h2>
+				<p>
+					Once the high-level lifecycle is clear, use these pages for the next
+					level of detail.
+				</p>
 				<table>
 					<thead>
 						<tr>

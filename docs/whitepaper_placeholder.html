@@ -105,15 +105,16 @@
 						>
 					</div>
 					<p class="lede">
-						Augur Placeholder is a prediction-market and oracle-security
-						protocol built on top of Zoltar. Zoltar supplies the truth/forking
-						oracle layer: forkable universes, question registration, outcome
-						encoding, and post-fork REP splitting. Placeholder adds
-						question-specific security pools, ETH-collateralized complete sets,
-						local escalation resolution, and a fork-recovery path that can
-						repair missing child collateral through a truth auction. Despite the
-						name, a truth auction repairs child-pool ETH collateral instead of
-						choosing the truthful branch.
+						Augur Placeholder is the market layer built on top of Zoltar. It
+						creates one security pool per question, lets traders mint and redeem
+						ETH-backed shares, lets REP vaults provide underwriting, and tries to
+						settle disputes locally before asking Zoltar to fork.
+					</p>
+					<p>
+						If a fork does happen, Placeholder migrates the market into child
+						pools and can repair missing child-pool ETH collateral through a
+						truth auction. Despite the name, that auction repairs collateral; it
+						does not choose the truthful branch.
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
@@ -150,8 +151,8 @@
 							>#</a
 						>
 					</div>
-					<p>
-						The stack has two protocol identities. <code>Zoltar</code> is the
+						<p>
+							The stack has two protocol identities. <code>Zoltar</code> is the
 						base truth/forking oracle layer for universes, questions, scalar
 						math, and REP branching. <code>Augur Placeholder</code> is the
 						application layer that adds market collateral, underwriting, local
@@ -159,18 +160,20 @@
 						layer, see
 						<a href="./whitepaper_zoltar.html">whitepaper_zoltar.html</a>.
 					</p>
-					<p>
-						Placeholder uses two oracle paths, and they answer different
-						questions. Zoltar represents unresolved market-truth disputes by
-						creating child universes. It records the branch set without picking
-						the winning branch. Users and applications decide which branch they
-						treat as truthful.
-						OpenOracle only supplies a bounded REP/ETH solvency price: the
-						coordinator requests a REP/WETH report, a reporter posts amounts,
-						disputers may replace a bad report, settlement finalizes the report,
-						and the callback lets the coordinator accept the resulting REP/ETH
-						price for withdrawals, allowance updates, and liquidations.
-					</p>
+						<p>
+							Placeholder's lifecycle starts by creating one pool for one
+							question, letting traders and REP vaults use that pool, trying to
+							resolve disputes locally, and only then turning to fork and
+							collateral-repair machinery. The overview sequence below follows
+							that same order.
+						</p>
+						<p>
+							Placeholder also depends on two different oracle paths that answer
+							different questions. Zoltar represents unresolved market-truth
+							disputes by creating child universes. OpenOracle supplies only a
+							bounded REP/ETH solvency price for withdrawals, allowance updates,
+							and liquidations.
+						</p>
 					<ol>
 						<li>
 							A question is registered in Zoltar and a Placeholder security pool
@@ -194,10 +197,10 @@
 							sell child-universe REP through a truth auction to repair that
 							collateral gap.
 						</li>
-						<li>
-							The child pool in the economically dominant child universe resumes
-							operation and users settle or redeem positions there.
-						</li>
+							<li>
+								The child pool in the branch users choose to keep using resumes
+								operation and users settle or redeem positions there.
+							</li>
 					</ol>
 					<figure class="diagram" id="fig-placeholder-lifecycle">
 						<svg
@@ -7084,8 +7087,10 @@
 							the maximum REP inventory the child pool will sell.
 						</li>
 						<li>
-							Only the owner, which is the <code>SecurityPoolForker</code> for
-							child-pool truth auctions, can start and finalize the auction.
+							The direct <code>startAuction</code> and <code>finalize</code>
+							calls are owner-only. Anyone can reach those steps through
+							<code>SecurityPoolForker.startTruthAuction</code> and
+							<code>SecurityPoolForker.finalizeTruthAuction</code>.
 						</li>
 						<li>
 							Bids are accepted only after start, before finalization, and

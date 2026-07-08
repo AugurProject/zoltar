@@ -3,41 +3,39 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Uniform Price Dual Cap Batch Auction</title>
+		<title>Truth Auction</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
-			<header>
-				<h1>Uniform Price Dual Cap Batch Auction</h1>
-				<p>
-					Auction repair happens after fork migration. If a disputed market
-					cannot resolve in the parent universe, callers can create
-					<em>child pools</em> for selected valid fork branches.
-				</p>
-				<p>
-					Each child pool uses REP from its child universe. A truth auction
-					sells that REP for ETH so the child pool can repair collateral. The
-					auction repairs solvency. It does not decide which branch is true.
-				</p>
-				<p>
-					At that point, the parent pool has stopped in migration, callers can
-					ask the forker to create child pools for selected valid outcomes, and
-					the auction is the optional ETH-repair phase for a child pool that
-					still needs collateral.
-				</p>
-				<p>
-					<code>SecurityPoolForker</code> uses this auction when a forked child
-					pool needs ETH collateral repair.
-				</p>
-				<p>
-					The implementation path centers on
-					<code>UniformPriceDualCapBatchAuction</code> and the forker settlement
-					wrapper. The broader fork-recovery story lives in the
-					<a href="./whitepaper_placeholder.html#auction">truth auction section</a>
-					in the Placeholder whitepaper.
-				</p>
-			</header>
+				<header>
+					<h1>Truth Auction</h1>
+					<p>
+						A truth auction is held only after a fork. If a disputed market
+						cannot resolve locally, Placeholder migrates it into child pools for
+						the valid fork branches that users want to keep using.
+					</p>
+					<p>
+						Fork migration preserves disagreement by splitting one parent market
+						into multiple child branches, but it does not guarantee every child
+						pool inherits enough ETH to honor its migrated accounting cleanly on
+						day one. When a child pool comes out short, the protocol can sell
+						some child-universe REP for ETH. The truth auction repairs that
+						collateral gap; it does not decide which branch is true.
+					</p>
+					<p>
+						Placeholder implements the truth auction with
+						<code>UniformPriceDualCapBatchAuction</code>. The mechanism below
+						shows when it starts, how bids clear, and how winning bids become
+						pool ownership instead of direct token transfers.
+					</p>
+						<p>
+							The broader fork-recovery story lives in the
+							<a href="./whitepaper_placeholder.html#auction">truth auction section</a>
+							in the Placeholder whitepaper. The auction mechanics that follow
+							focus on start, bidding, clearing, and settlement.
+						</p>
+				</header>
 
 			<section id="why">
 				<h2>Why This Auction Exists</h2>
@@ -47,6 +45,12 @@
 					child-universe REP for ETH to repair that collateral gap. This keeps
 					trader share collateral separate from the question of which branch is
 					true.
+				</p>
+				<p>
+					The shortfall comes from proportional migration: the child receives
+					only the ETH and REP implied by migrated parent positions, so a branch
+					that lands below the repair denominator can inherit too little ETH even
+					when its migrated accounting is otherwise valid.
 				</p>
 				<p>
 					The design is dual-capped: it tries to raise enough ETH without
@@ -59,11 +63,15 @@
 			<section id="lifecycle">
 				<h2>Operational Lifecycle</h2>
 				<p>
-					The auction is owned by the coordinating
-					<code>SecurityPoolForker</code>, not by the bidder. That ownership is
-					intentional because purchased REP is credited into child-pool vault
-					accounting instead of being transferred directly from the auction to
-					the bidder.
+					The normal control flow is: the auction starts after migration ends,
+					bidders supply ETH directly to the auction, and settlement later feeds
+					the results back into child-pool accounting.
+				</p>
+				<p>
+					Purchased REP is credited into child-pool vault accounting instead of
+					being transferred directly from the auction to the bidder. That is why
+					settlement flows through the child-pool repair path rather than a
+					simple token payout.
 				</p>
 				<p>
 					A truth auction can start only for a child pool in
@@ -84,7 +92,7 @@
 						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 170 85 H 230"></path>
 						<rect class="svg-blue" x="230" y="50" width="150" height="70" rx="8"></rect>
 						<text class="svg-label" x="305" y="80" text-anchor="middle">Start</text>
-						<text class="svg-small" x="305" y="103" text-anchor="middle">forker only</text>
+						<text class="svg-small" x="305" y="103" text-anchor="middle">public wrapper call</text>
 						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 380 85 H 440"></path>
 						<rect class="svg-gold" x="440" y="50" width="150" height="70" rx="8"></rect>
 						<text class="svg-label" x="515" y="80" text-anchor="middle">Bid</text>
@@ -95,9 +103,10 @@
 						<text class="svg-small" x="745" y="103" text-anchor="middle">REP becomes vault ownership</text>
 					</svg>
 					<p class="diagram-caption">
-						<span class="figure-label">Auction Lifecycle</span>The owner starts
-						and finalizes the auction; anyone can later ask the forker to settle
-						paged bid results into vault accounting.
+						<span class="figure-label">Auction Lifecycle</span>Anyone can call
+						the wrapper that triggers the forker-owned auction start or finalize
+						step, and anyone can later ask the forker to settle paged bid
+						results into vault accounting.
 					</p>
 				</figure>
 				<table>
@@ -111,13 +120,13 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							<td>Start auction</td>
-							<td><code>startTruthAuction</code></td>
-							<td><code>startAuction</code></td>
-							<td>Auction owner, normally <code>SecurityPoolForker</code>.</td>
-							<td>The forker knows the child-pool repair target and REP sale cap.</td>
-						</tr>
+							<tr>
+								<td>Start auction</td>
+								<td><code>startTruthAuction</code></td>
+								<td><code>startAuction</code></td>
+								<td>Anyone can call <code>startTruthAuction</code>; the forker then invokes owner-only <code>startAuction</code>.</td>
+								<td>The forker knows the child-pool repair target and REP sale cap.</td>
+							</tr>
 						<tr>
 							<td>Submit bid</td>
 							<td>Bidder calls the auction directly</td>
@@ -133,13 +142,13 @@
 								tiny spam bids are rejected.
 							</td>
 						</tr>
-						<tr>
-							<td>Finalize auction</td>
-							<td><code>finalizeTruthAuction</code></td>
-							<td><code>finalize</code></td>
-							<td>Auction owner after the window closes.</td>
-							<td>The forker receives raised ETH and computes pool accounting rates.</td>
-						</tr>
+							<tr>
+								<td>Finalize auction</td>
+								<td><code>finalizeTruthAuction</code></td>
+								<td><code>finalize</code></td>
+								<td>Anyone can call <code>finalizeTruthAuction</code> after the window closes; the forker then invokes owner-only <code>finalize</code>.</td>
+								<td>The forker receives raised ETH and computes pool accounting rates.</td>
+							</tr>
 						<tr>
 							<td>Refund losing bids before finalization</td>
 							<td><code>settleAuctionBids</code></td>
