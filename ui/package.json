@@ -41,8 +41,8 @@
 		"build": "bun run shared && bun run refresh:shared-dependency && tsc && bun run build:workers",
 		"build:prod": "bun run shared && bun run refresh:shared-dependency && bun ./build/production.mts",
 		"build:tests": "bun run shared && bun run refresh:shared-dependency && bun ./build/tests.mts",
-		"watch": "cd .. && bun run ensure-shared-build && cd ui && bun run check:shared-dependency && tsc --watch",
-		"serve": "cd .. && bun run ensure-shared-build && cd ui && bun run check:shared-dependency && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
+		"watch": "cd .. && bun run generate && cd ui && bun run check:shared-dependency && tsc --watch",
+		"serve": "cd .. && bun run generate && cd ui && bun run check:shared-dependency && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
 		"vendor": "bun run generate:vendor"
 	}
 }

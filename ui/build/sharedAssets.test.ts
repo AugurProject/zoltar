@@ -1,9 +1,11 @@
 import { expect, test } from 'bun:test'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
 import { sharedBrowserArtifactRelativePaths } from '../../scripts/sharedBrowserArtifacts.ts'
+import { clearVendorOutput, vendor } from './vendor.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
@@ -16,6 +18,7 @@ const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
 const uiWatchBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'watch.mts')
+const uiPackageJsonPath = path.join(repositoryRootPath, 'ui', 'package.json')
 const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
@@ -347,15 +350,51 @@ test('development import map maps browser dependency subpaths', () => {
 	const vendorBuildSource = fs.readFileSync(uiVendorBuildPath, 'utf8')
 	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
 	const watchBuildSourceFile = parseModule(uiWatchBuildPath, watchBuildSource)
+	const uiPackageJson = JSON.parse(fs.readFileSync(uiPackageJsonPath, 'utf8')) as { scripts?: Record<string, string | undefined> }
 
 	for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
 		expect(imports[specifier]).toBe(mappedPath)
 	}
+	expect(uiPackageJson.scripts?.watch).toStartWith('cd .. && bun run generate && cd ui')
+	expect(uiPackageJson.scripts?.serve).toStartWith('cd .. && bun run generate && cd ui')
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
 	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
 	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
 	expect(watchBuildSource).toContain('const BUN_EXECUTABLE_PATH = process.execPath')
 	expect(collectBareBunStringLiterals(watchBuildSourceFile)).toEqual([])
+})
+
+test('vendor cleanup removes stale generated output before regeneration', async () => {
+	const temporaryVendorPath = fs.mkdtempSync(path.join(os.tmpdir(), 'zoltar-vendor-'))
+	const staleFilePath = path.join(temporaryVendorPath, '@noble', 'curves', 'stale.js')
+	fs.mkdirSync(path.dirname(staleFilePath), { recursive: true })
+	fs.writeFileSync(staleFilePath, 'stale')
+
+	await clearVendorOutput(temporaryVendorPath)
+
+	expect(fs.existsSync(staleFilePath)).toBe(false)
+	expect(fs.existsSync(temporaryVendorPath)).toBe(false)
+})
+
+test('vendor build clears generated output before rebuilding assets', async () => {
+	const completedSteps: string[] = []
+
+	await vendor({
+		clearVendorOutput: async () => {
+			completedSteps.push('clearVendorOutput')
+		},
+		bundleTevm: async () => {
+			completedSteps.push('bundleTevm')
+		},
+		vendorDependencies: async () => {
+			completedSteps.push('vendorDependencies')
+		},
+		copyProjectArtifacts: async () => {
+			completedSteps.push('copyProjectArtifacts')
+		},
+	})
+
+	expect(completedSteps).toEqual(['clearVendorOutput', 'bundleTevm', 'vendorDependencies', 'copyProjectArtifacts'])
 })
 
 test('development import map resolves all static imports reachable from the dev entrypoint', () => {
