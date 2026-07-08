@@ -82,23 +82,23 @@ export function SecurityPoolSummaryMetrics({
 			{showCollateralizationGauge ? <CollateralizationCircle className='security-pool-hero-collateralization' collateralizationPercent={collateralizationPercent} size='medium' targetCollateralizationPercent={targetCollateralizationPercent} /> : undefined}
 			<div className='security-pool-hero-ribbon'>
 				<div className='security-pool-ribbon-stat'>
-					<span>Vault Count</span>
-					<strong>{pool.vaultCount.toString()}</strong>
+					<span className='security-pool-ribbon-stat-label'>Vault Count</span>
+					<strong className='security-pool-ribbon-stat-value'>{pool.vaultCount.toString()}</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span>Security Multiplier</span>
-					<strong>{pool.securityMultiplier.toString()}x</strong>
+					<span className='security-pool-ribbon-stat-label'>Security Multiplier</span>
+					<strong className='security-pool-ribbon-stat-value'>{pool.securityMultiplier.toString()}x</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span>Annual Fee</span>
-					<strong>
+					<span className='security-pool-ribbon-stat-label'>Annual Fee</span>
+					<strong className='security-pool-ribbon-stat-value'>
 						<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 					</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span>Total REP Backing</span>
-					<strong>
-						<CurrencyValue value={pool.totalRepDeposit} suffix='REP' />
+					<span className='security-pool-ribbon-stat-label'>Total REP Backing</span>
+					<strong className='security-pool-ribbon-stat-value'>
+						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalRepDeposit} suffix='REP' />
 					</strong>
 				</div>
 			</div>
