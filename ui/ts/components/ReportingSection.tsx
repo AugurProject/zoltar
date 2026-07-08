@@ -489,10 +489,9 @@ export function ReportingSection({
 	const sections = (
 		<>
 			{showFullReporting ? (
-				<SectionBlock className='reporting-workflow-section' title='Reporting Workflow' density='compact' variant='plain' description='Reporting is the dispute game that locks vault REP behind an outcome until the market finalizes or forks.'>
+				<SectionBlock className='reporting-workflow-section' title='Reporting Workflow' density='compact' variant='plain'>
 					<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
 						<div className='workflow-guide-intro'>
-							<strong>Current guidance</strong>
 							<p className='detail'>{reportingWorkflowSummary}</p>
 						</div>
 						<div className='workflow-summary-strip-steps'>
