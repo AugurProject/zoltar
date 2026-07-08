@@ -103,23 +103,31 @@ async function loadComputedManifest(): Promise<MainnetDeploymentManifest> {
 	}
 }
 
-function renderMarkdown(manifest: MainnetDeploymentManifest) {
-	const configRows = [
-		['forkThresholdDivisor', manifest.protocolConfig.forkThresholdDivisor],
-		['forkBurnDivisor', manifest.protocolConfig.forkBurnDivisor],
-		['initialEscalationGameDeposit', manifest.protocolConfig.initialEscalationGameDeposit],
-	]
-	const configTable = configRows.map(([name, value]) => `| ${name} | ${value} |`).join('\n')
+function getProtocolConfigMeaning(name: keyof ManifestProtocolConfig, value: string) {
+	if (name === 'forkThresholdDivisor') return `Fork threshold is \`1 / ${value}\` of theoretical REP supply.`
+	if (name === 'forkBurnDivisor') return `Fork initiator haircut is \`1 / ${value}\` of the fork threshold.`
+	if (name === 'initialEscalationGameDeposit') {
+		if (value === '1000000000000000000') {
+			return '`1 REP`; constructor-set starting escalation bond from the frozen deployment config.'
+		}
+		return `\`${value}\` atomic REP units; constructor-set starting escalation bond from the frozen deployment config.`
+	}
+	throw new Error(`Unknown protocol config key: ${name}`)
+}
+
+export function renderMarkdown(manifest: MainnetDeploymentManifest) {
+	const configRows = [['forkThresholdDivisor', manifest.protocolConfig.forkThresholdDivisor] as const, ['forkBurnDivisor', manifest.protocolConfig.forkBurnDivisor] as const, ['initialEscalationGameDeposit', manifest.protocolConfig.initialEscalationGameDeposit] as const]
+	const configTable = configRows.map(([name, value]) => `| ${name} | ${value} | ${getProtocolConfigMeaning(name, value)} |`).join('\n')
 	const addressTable = manifest.deploymentSteps.map(step => `| ${step.id} | ${step.label} | \`${step.address}\` |`).join('\n')
 	const derivedAddressTable = manifest.derivedContracts.map(contract => `| ${contract.id} | ${contract.label} | \`${contract.address}\` |`).join('\n')
 	return `# Mainnet Deployment Addresses
 
-These values are derived from the frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts. The machine-readable source for this table is \`docs/mainnet-deployment-addresses.json\`.
+Frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts determine the addresses and values below. \`docs/mainnet-deployment-addresses.json\` is the machine-readable source.
 
 ## Frozen Protocol Config
 
-| Parameter | Value |
-| --- | --- |
+| Parameter | Value | Unit / Meaning |
+| --- | --- | --- |
 ${configTable}
 
 ## Deterministic Deployment Steps
@@ -176,6 +184,11 @@ export async function assertMainnetDeploymentManifestFresh(): Promise<void> {
 	const computed = normalizeManifest(computedManifest)
 	if (expected !== computed) {
 		throw new Error(`Mainnet deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.`)
+	}
+	const expectedMarkdown = renderMarkdown(expectedManifest)
+	const currentMarkdown = await fs.readFile(markdownPath, 'utf8')
+	if (expectedMarkdown !== currentMarkdown) {
+		throw new Error(`Mainnet deployment Markdown is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.`)
 	}
 }
 

@@ -17,10 +17,9 @@
 					escalation games and Zoltar forks.
 				</p>
 				<p>
-					If you are new to oracle mechanics, read this page in order through
-					<strong>Security Guardrails</strong>, then read
-					<strong>Attack Model and Defenses</strong>. The first sections explain
-					the operating path; the attack model explains why the path is bounded.
+					A stale or missing price sends solvency-sensitive operations into
+					staging. Settlement either refreshes the coordinator price or leaves
+					recovery work for users and operators.
 				</p>
 				<p>
 					In this integration, one OpenOracle price request follows a compact
@@ -31,9 +30,10 @@
 					amounts only if freshness, pending-report, and safety checks pass.
 				</p>
 				<p>
-					OpenOracle reports the onchain REP/WETH pair. These docs usually call
-					the result a REP/ETH price because WETH is the ETH-denominated leg
-					used for solvency math.
+					The OpenOracle report instance uses REP as <code>token1</code> and
+					WETH as <code>token2</code>. Placeholder solvency math treats the
+					settled ratio as a REP/ETH price because WETH is the ETH-denominated
+					leg.
 				</p>
 				<p>
 					Relevant references:
@@ -53,8 +53,8 @@
 					<a href="./whitepaper_placeholder.html#oracle"
 						>REP/ETH Price Oracle</a
 					>
-					section. The OpenOracle Technical Details sidebar is the canonical
-					source for current oracle research, especially
+					section. Current oracle research lives in the OpenOracle Technical
+					Details sidebar, especially
 					<a href="https://docs.openoracle.org/openoracle/attack-vectors"
 						>Attack Vectors</a
 					>
@@ -122,10 +122,12 @@
 				</p>
 				<p>
 					For liquidations, the relevant boundary is the
-					<span class="term" tabindex="0">liquidation threshold</span>, the
-					REP/ETH price where a vault becomes liquidatable, plus the configured
-					<span class="term" tabindex="0">liquidation distance</span>, an extra
-					margin currently set by <code>minLiquidationPriceDistanceBps</code>.
+					<span class="term" tabindex="0">liquidation threshold</span>. A
+					staged liquidation can execute only when the current REP/ETH price is
+					strictly above that threshold and at least the configured
+					<span class="term" tabindex="0">liquidation distance</span> beyond it,
+					with that extra margin currently set by
+					<code>minLiquidationPriceDistanceBps</code>.
 				</p>
 				<p>
 					OpenOracle disputes scale with
@@ -315,8 +317,8 @@
 					Liquidation and withdrawal amounts must be non-zero, allowance updates
 					may set zero, <code>validForSeconds</code> must be positive and no
 					more than five minutes, non-liquidation operations must target the
-					caller's own vault, and staging is disabled after the escalation
-					question is already resolved.
+					caller's own vault, and staging is disabled after the security pool's
+					local escalation has already resolved.
 				</p>
 				<p>
 					Report funding is caller supplied. The coordinator computes
@@ -578,10 +580,10 @@
 				<details class="interactive-example" id="initial-report-estimator-example" open>
 					<summary>Initial report estimator</summary>
 					<p>
-						Use this estimator to stress the formula inputs. It treats the
-						displayed equation as a continuous model so the sensitivity curves
-						are easy to read; deployment still uses the fixed-point rounding
-						rules described above.
+						The estimator stresses the formula inputs. It treats the displayed
+						equation as a continuous model so the sensitivity curves are easy to
+						read; deployment still uses the fixed-point rounding rules described
+						above.
 						The REP/ETH movement input is an adverse movement buffer during
 						settlement, not an average signed drift.
 					</p>
@@ -984,7 +986,7 @@
 				<h2>Callback Rejection and Recovery</h2>
 				<p>
 					OpenOracle settles with a low-level callback and emits whether that
-					callback succeeded; it does not automatically undo settlement when the
+					callback succeeded. It does not automatically undo settlement when the
 					callback returns
 					<code>false</code>. The coordinator accepts callbacks only from the
 					configured <code>OpenOracle</code> and only for the current pending
@@ -1009,9 +1011,12 @@
 					already settled but the coordinator is still pending because the
 					low-level callback did not complete, anyone can call
 					<code>recoverSettledPendingReport</code>. Recovery clears the pending
-					report, resets the settlement base-fee cap, and consumes the single
-					pending-operation slot without treating it as a successful price
-					update.
+					report, resets the settlement base-fee cap, and consumes only
+					<code>pendingOperationSlotId</code> without treating it as a successful
+					price update. Queue bookkeeping can still leave other staged
+					operations active; those operations need a later valid price path, for
+					example a direct <code>requestPrice()</code> call followed by
+					successful settlement.
 				</p>
 			</section>
 
@@ -1030,11 +1035,12 @@
 					price and pays for censorship until the report can settle. For linear
 					payoffs the settle payoff scales with price error, but Placeholder's
 					most relevant liquidation payoff is binary: the attacker wins a
-					fixed payoff if the manipulated REP/ETH price crosses the liquidation
-					threshold. OpenOracle's inclusion analysis notes that binary payoffs
-					therefore replace the linear settle payoff with
-					<code>externalPayoff</code>, while keeping the same
-					censorship-spend term.
+					fixed payoff only if the manipulated REP/ETH price is strictly above
+					the liquidation threshold and satisfies the configured liquidation
+					distance check. OpenOracle's inclusion analysis notes that binary
+					payoffs therefore replace the linear settle payoff with
+					<code>externalPayoff</code>, while keeping the same censorship-spend
+					term.
 				</p>
 				<p>
 					The minimal attack story is: an attacker posts a manipulated REP/ETH
@@ -1059,10 +1065,13 @@
 					than the liquidation can pay.
 				</p>
 				<p>
-					First ask how far the manipulated price must move before the
-					liquidation can execute. The distance guard discounts the honest
+					The first boundary is how far the manipulated price must move before
+					the liquidation can execute. The distance guard discounts the honest
 					price, then the execution threshold and reported price error are
-					measured against that honest baseline.
+					measured against that honest baseline. The formulas in this attack
+					model are continuous approximations for reasoning about payoff and
+					censorship cost; the contract guard below them shows the integer
+					check that actually gates staged liquidation execution.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-threshold">
 					<math
@@ -1118,13 +1127,71 @@
 					<p class="equation-caption">
 						<span class="equation-label">Execution Error Threshold</span>The
 						manipulated price only creates liquidation payoff when its
-						fractional error crosses the guarded liquidation threshold.
+						fractional error meets the guarded liquidation threshold.
+					</p>
+				</div>
+				<div class="equation" id="eq-openoracle-contract-liquidation-guard">
+					<math
+						display="block"
+						aria-label="contract liquidation guard uses floored threshold price and floored distance basis points"
+						data-source="thresholdPrice = floor(vaultRep * PRICE_PRECISION / (snapshotTargetAllowance * securityMultiplier)); currentPrice > thresholdPrice; floor((currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice) >= minLiquidationPriceDistanceBps"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>thresholdPrice</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>floor</mi><mo>(</mo
+									><mfrac
+										><mrow
+											><mi>vaultRep</mi><mo>&#x22C5;</mo
+											><mi>PRICE_PRECISION</mi></mrow
+										><mrow
+											><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo
+											><mi>securityMultiplier</mi></mrow
+										></mfrac
+									><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>currentPrice</mi></mtd>
+								<mtd><mo>&gt;</mo></mtd>
+								<mtd><mi>thresholdPrice</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>distanceBps</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>floor</mi><mo>(</mo
+									><mfrac
+										><mrow
+											><mo>(</mo><mi>currentPrice</mi><mo>-</mo
+											><mi>thresholdPrice</mi><mo>)</mo><mo>&#x22C5;</mo
+											><mi>BPS_DENOMINATOR</mi></mrow
+										><mi>currentPrice</mi></mfrac
+									><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>distanceBps</mi></mtd>
+								<mtd><mo>&ge;</mo></mtd>
+								<mtd><mi>minLiquidationPriceDistanceBps</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Contract Liquidation Guard</span
+						><code>SecurityPool</code> first requires the scaled solvency
+						inequality to be strictly liquidatable. The coordinator then floors
+						the threshold and distance calculations. Equality passes only at the
+						distance check; <code>currentPrice</code> must still be strictly
+						above <code>thresholdPrice</code>.
 					</p>
 				</div>
 				<p>
-					Next ask what the attacker earns and what delay costs. The payoff is
-					binary: only a price strictly beyond the liquidation threshold and far
-					enough past the guarded distance unlocks
+					The attack model separates attacker payoff from delay cost. The payoff
+					is binary: only a price strictly above the liquidation threshold and
+					far enough past the guarded distance unlocks
 					<code>externalPayoff</code>; everything else unlocks nothing.
 					The censorship cost grows with duration, the dispute barrier, and the
 					report liquidity honest reporters can use.
@@ -1194,9 +1261,9 @@
 					</p>
 				</div>
 				<p>
-					Finally ask how long censorship would need to remain cheap for the
-					attack to be attractive. The safety duration shrinks as the censorship
-					rate and liquidity ratio grow.
+					The final bound is how long censorship would need to remain cheap for
+					the attack to be attractive. The safety duration shrinks as the
+					censorship rate and liquidity ratio grow.
 				</p>
 				<div class="equation" id="eq-openoracle-safe-censorship-duration">
 					<math
@@ -1240,9 +1307,8 @@
 				<details class="interactive-example" id="binary-censorship-example">
 					<summary>Adjust a binary censorship example</summary>
 					<p>
-						Use the inputs to see how the liquidation distance, manipulated
-						price, report liquidity, and payoff change the attacker's
-						payoff and delay cost.
+						The liquidation distance, manipulated price, report liquidity, and
+						payoff determine the attacker's payoff and delay cost.
 					</p>
 					<div class="example-grid">
 						<label>
@@ -1557,7 +1623,7 @@
 					tradeoff, not a drop-in Placeholder proof. For a simplified binary
 					censorship bound, replace the linear price-error payoff with a
 					thresholded payoff that only pays after the manipulated report is
-					strictly beyond the liquidation threshold and far enough past the
+					strictly above the liquidation threshold and far enough past the
 					guarded distance. A full binary-delay model also needs state for
 					distance to threshold, price evolution, and continuation value.
 					Locally, OpenOracle escalation is also capped: once
@@ -1859,8 +1925,8 @@
 			<section id="parameters">
 				<h2>OpenOracle Parameters Used</h2>
 				<p>
-					This table summarizes the OpenOracle fields most relevant to the
-					integration. The canonical exhaustive current-value table remains the
+					The integration depends on the OpenOracle fields below. The canonical
+					exhaustive current-value table remains the
 					Placeholder whitepaper's
 					<a href="./whitepaper_placeholder.html#parameters"
 						>Current Parameters</a
@@ -1924,10 +1990,13 @@
 						</tr>
 						<tr>
 							<td><code>settlementTime</code></td>
-							<td><code>480</code></td>
+							<td><code>480 seconds (8 minutes)</code></td>
 							<td>
-								Sets the report settlement delay. Staged operations expire after
-								this delay plus their operation-specific validity window.
+								Sets the timestamp-based report settlement delay. The
+								<code>40 * 12</code> derivation assumes twelve-second blocks, but
+								the configured OpenOracle <code>timeType</code> uses seconds.
+								Staged operations expire after this delay plus their
+								operation-specific validity window.
 							</td>
 						</tr>
 						<tr>

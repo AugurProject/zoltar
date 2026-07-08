@@ -98,10 +98,39 @@ Reader journey and story quality:
 Check whether the document carries a clear story:
 problem -> actors -> happy path -> lifecycle -> guardrails -> failure modes -> economics/security assumptions -> reference material.
 
+Prefer direct subject-matter prose over meta-document instructions. Flag wording
+such as "This page explains...", "This guide is...", "Read this...", "Read it...",
+"Use this...", "these docs", "reference summarizes...", "auction design explains...",
+"document lists...", "next ask...", "first ask...", "finally ask...", "sidebar is...",
+"Start with these words...",
+or similar reader-instruction framing when the sentence can instead name the actual
+protocol object, lifecycle stage, example, or concept. Document titles should not be
+grammatical subjects when the protocol object can be the subject. This is a
+Low readability issue by default, and Medium when it delays the first explanation
+of an application-specific term or makes the document rely on tooltips for the
+actual definition.
+
 Flag documentation that is technically correct but hard to follow because:
 - terms appear before their purpose is clear
 - section order forces the reader to infer the system from scattered facts
 - implementation details arrive before motivation
+- abstract claims use vague phrasing such as "the core idea is..." without naming
+  the actors and responsibilities directly
+- lifecycle prose gives the wrong protocol object an action, such as saying a
+  question becomes a pool or a question escalates when a market, security pool,
+  trader, or dispute process is the actor; also flag question-driven fork
+  phrasing such as "question can drive universe forks", "question drives a
+  fork", "question caused the universe to split", "question triggered a fork",
+  "question cannot settle", or passive/modal forms such as "question can be
+  resolved" and "question is forked" when a caller, contract, market, dispute
+  process, or fork operation is the actor
+- definition pileups introduce several new protocol terms before showing the
+  lifecycle action or consequence that makes them useful. Flag paragraphs with
+  repeated "A ... is", "An ... is", or "... means ..." constructions, more than
+  two newly emphasized terms, or semicolon-compressed definitions such as
+  "after a fork; it does not..." when the paragraph would teach better as a
+  short lifecycle sentence followed by one or two definitions in encounter
+  order
 - diagrams/tables/widgets introduce concepts not prepared by the prose
 - paragraphs perform too many conceptual jobs
 - related features are described locally but not connected back to the lifecycle
