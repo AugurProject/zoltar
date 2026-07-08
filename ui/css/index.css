@@ -790,6 +790,9 @@ button.currency-value.copyable {
 	cursor: copy;
 	text-align: inherit;
 	touch-action: manipulation;
+	overflow: visible;
+	text-overflow: clip;
+	white-space: normal;
 }
 
 button.currency-value.copyable:hover:not(:disabled) {
