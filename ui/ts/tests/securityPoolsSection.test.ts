@@ -536,6 +536,8 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
+		expect(document.body.textContent?.includes('Use the state badge and the guidance line on each card to decide whether you are browsing an active pool, a reporting state, or a fork workflow.')).toBe(false)
+		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
 	})
 
 	void test('auto-loads pool browse data once when opening the browse view without loaded pools', async () => {

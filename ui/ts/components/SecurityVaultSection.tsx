@@ -1047,7 +1047,7 @@ export function SecurityVaultSection({
 	)
 	if (compactLayout) return sections
 	return (
-		<RouteWorkflowPanel description='Browse vaults for the selected security pool, then manage REP, fees, and redemptions for the selected vault.' showHeader={showHeader} title='Security Vault'>
+		<RouteWorkflowPanel showHeader={showHeader} title='Security Vault'>
 			{sections}
 		</RouteWorkflowPanel>
 	)

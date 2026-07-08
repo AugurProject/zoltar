@@ -135,7 +135,9 @@ describe('SecurityPoolSection', () => {
 		expect(documentQueries.getByText('Initial Open Interest Fee / Year')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Before You Deploy' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
+		expect(document.body.textContent?.includes('Pool creation turns a binary question into a collateralized trading surface.')).toBe(false)
+		expect(document.body.textContent?.includes('Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.')).toBe(false)
 	})
 
 	test('keeps the security multiplier field label concise while associating helper text', async () => {

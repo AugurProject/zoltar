@@ -122,26 +122,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Create Pool' variant='plain' description='Choose the exact binary Yes / No question and security multiplier before deploying the pool that will back trading and reporting for that question.'>
-						<div className='workflow-summary-strip workflow-guide'>
-							<div className='workflow-guide-intro'>
-								<strong>Pool creation turns a binary question into a collateralized trading surface.</strong>
-								<p className='detail'>Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.</p>
-							</div>
-							<div className='workflow-summary-strip-steps'>
-								<span className='current'>1. Enter a binary question</span>
-								<span>2. Choose collateral strength</span>
-								<span>3. Deploy the pool</span>
-							</div>
-						</div>
-
-						<SectionBlock headingLevel={4} title='Before You Deploy' variant='embedded'>
-							<ul className='requirements-checklist'>
-								<li>Make sure the question title and description are strong enough for users to trust how it will resolve.</li>
-								<li>Security pools only work with binary questions.</li>
-								<li>Higher security multipliers require more REP backing per unit of open interest and create a thicker safety buffer.</li>
-							</ul>
-						</SectionBlock>
+					<SectionBlock title='Create Pool' variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
 								<LookupFieldRow label='Question ID' value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder='0x...' />

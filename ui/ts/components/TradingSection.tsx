@@ -288,7 +288,7 @@ export function TradingSection({
 			)}
 
 			{selectedPool === undefined ? undefined : (
-				<SectionBlock title='Your Holdings' description='Balances are shown as complete-set amounts for the selected pool.'>
+				<SectionBlock title='Your Holdings'>
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
 							<span>Redeemable Complete Sets</span>
@@ -343,7 +343,7 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			<SectionBlock title='Shares' description='Placeholder does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.'>
+			<SectionBlock title='Shares'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />

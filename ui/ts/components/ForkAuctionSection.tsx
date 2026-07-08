@@ -1666,7 +1666,7 @@ export function ForkAuctionSection({
 	)
 	if (embedInCard) return content
 	return (
-		<RouteWorkflowPanel description='Open a pool to inspect fork progress, migration, and the truth auction.' showHeader={showHeader} title='Fork & Truth Auction'>
+		<RouteWorkflowPanel showHeader={showHeader} title='Fork & Truth Auction'>
 			{content}
 		</RouteWorkflowPanel>
 	)
