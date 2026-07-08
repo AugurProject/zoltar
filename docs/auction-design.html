@@ -21,6 +21,12 @@
 					auction repairs solvency. It does not decide which branch is true.
 				</p>
 				<p>
+					At that point, the parent pool has stopped in migration, callers can
+					ask the forker to create child pools for selected valid outcomes, and
+					the auction is the optional ETH-repair phase for a child pool that
+					still needs collateral.
+				</p>
+				<p>
 					<code>SecurityPoolForker</code> uses this auction when a forked child
 					pool needs ETH collateral repair.
 				</p>
@@ -59,6 +65,12 @@
 					accounting instead of being transferred directly from the auction to
 					the bidder.
 				</p>
+				<p>
+					A truth auction can start only for a child pool in
+					<code>ForkMigration</code> after the parent migration window has ended.
+					If enough REP migrated to the child pool already, the forker can
+					finalize the repair path without starting an auction.
+				</p>
 				<figure class="diagram" id="fig-auction-lifecycle">
 					<svg viewBox="0 0 880 180" role="img" aria-label="Child pool shortfall leads to forker-started auction, ETH bids, finalization, and paged settlement into vault accounting.">
 						<defs>
@@ -92,7 +104,8 @@
 					<thead>
 						<tr>
 							<th>Action</th>
-							<th>Contract function</th>
+							<th>External forker call</th>
+							<th>Auction call it invokes</th>
 							<th>Who can call it</th>
 							<th>Why that boundary exists</th>
 						</tr>
@@ -100,12 +113,14 @@
 					<tbody>
 						<tr>
 							<td>Start auction</td>
+							<td><code>startTruthAuction</code></td>
 							<td><code>startAuction</code></td>
 							<td>Auction owner, normally <code>SecurityPoolForker</code>.</td>
 							<td>The forker knows the child-pool repair target and REP sale cap.</td>
 						</tr>
 						<tr>
 							<td>Submit bid</td>
+							<td>Bidder calls the auction directly</td>
 							<td><code>submitBid</code></td>
 							<td>
 								Any bidder during the one-week auction window, with
@@ -120,13 +135,22 @@
 						</tr>
 						<tr>
 							<td>Finalize auction</td>
+							<td><code>finalizeTruthAuction</code></td>
 							<td><code>finalize</code></td>
 							<td>Auction owner after the window closes.</td>
 							<td>The forker receives raised ETH and computes pool accounting rates.</td>
 						</tr>
 						<tr>
-							<td>Settle bids</td>
-							<td><code>withdrawBids</code> through the forker wrapper.</td>
+							<td>Refund losing bids before finalization</td>
+							<td><code>settleAuctionBids</code></td>
+							<td><code>refundLosingBidsFor</code></td>
+							<td>Anyone can ask the forker to refund pages for a bidder.</td>
+							<td>Clearly losing bids can exit before the final settlement state is fixed.</td>
+						</tr>
+						<tr>
+							<td>Settle bids after finalization</td>
+							<td><code>claimAuctionProceeds</code> or <code>settleAuctionBids</code></td>
+							<td><code>withdrawBids</code></td>
 							<td>Forker calls the auction; anyone can ask the forker to settle pages.</td>
 							<td>Purchased REP becomes child-pool ownership and allowance, not a direct auction transfer.</td>
 						</tr>
@@ -177,6 +201,37 @@
 					input; <code>underfundedWinningEth</code> is the ETH actually retained
 					or sent after below-threshold bids are refunded.
 				</p>
+				<div class="equation" id="eq-auction-underfunded-threshold">
+					<math
+						display="block"
+						aria-label="underfunded threshold equals floor eth raised times price precision divided by maximum rep being sold"
+						data-source="underfundedThreshold = floor(ethRaised * PRICE_PRECISION / maxRepBeingSold)"
+					>
+						<mrow>
+							<mi>underfundedThreshold</mi>
+							<mo>=</mo>
+							<mi>floor</mi>
+							<mo>(</mo>
+							<mfrac>
+								<mrow>
+									<mi>ethRaised</mi>
+									<mo>&#x22C5;</mo>
+									<mi>PRICE_PRECISION</mi>
+								</mrow>
+								<mi>maxRepBeingSold</mi>
+							</mfrac>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Underfunded Threshold</span
+						><code>PRICE_PRECISION = 1e18</code>. A tick wins when
+						<code>tickToPrice(tick) &gt;= underfundedThreshold</code>, so
+						equality wins. Solidity division floors the threshold, REP demand,
+						and per-bid allocation; remainder values carry forward so paged
+						withdrawals reconcile to the aggregate tick result.
+					</p>
+				</div>
 				<table>
 					<thead>
 						<tr>
@@ -291,7 +346,9 @@
 						This simplified calculator uses three fixed price levels to show
 						the same two high-level outcomes as the contract: strong demand
 						clears at a uniform price, while weak demand sells only qualifying
-						limit-priced REP demand.
+						limit-priced REP demand. It uses real-number arithmetic for
+						readability; the contract floors fixed-point divisions and carries
+						remainders during paged withdrawals.
 					</p>
 					<div class="example-grid">
 						<label>

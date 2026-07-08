@@ -17,10 +17,9 @@
 					escalation games and Zoltar forks.
 				</p>
 				<p>
-					The operating path comes before the security model. Price requests,
-					settlement, and staged operations come before
-					<strong>Attack Model and Defenses</strong>, where the bounded-risk
-					argument ties those operations to the attack model.
+					A stale or missing price sends solvency-sensitive operations into
+					staging. Settlement either refreshes the coordinator price or leaves
+					recovery work for users and operators.
 				</p>
 				<p>
 					In this integration, one OpenOracle price request follows a compact
@@ -31,9 +30,10 @@
 					amounts only if freshness, pending-report, and safety checks pass.
 				</p>
 				<p>
-					OpenOracle reports the onchain REP/WETH pair. Placeholder solvency
-					math treats the result as a REP/ETH price because WETH is the
-					ETH-denominated leg.
+					The OpenOracle report instance uses REP as <code>token1</code> and
+					WETH as <code>token2</code>. Placeholder solvency math treats the
+					settled ratio as a REP/ETH price because WETH is the ETH-denominated
+					leg.
 				</p>
 				<p>
 					Relevant references:
@@ -1011,9 +1011,12 @@
 					already settled but the coordinator is still pending because the
 					low-level callback did not complete, anyone can call
 					<code>recoverSettledPendingReport</code>. Recovery clears the pending
-					report, resets the settlement base-fee cap, and consumes the single
-					pending-operation slot without treating it as a successful price
-					update.
+					report, resets the settlement base-fee cap, and consumes only
+					<code>pendingOperationSlotId</code> without treating it as a successful
+					price update. Queue bookkeeping can still leave other staged
+					operations active; those operations need a later valid price path, for
+					example a direct <code>requestPrice()</code> call followed by
+					successful settlement.
 				</p>
 			</section>
 
@@ -1065,7 +1068,10 @@
 					The first boundary is how far the manipulated price must move before
 					the liquidation can execute. The distance guard discounts the honest
 					price, then the execution threshold and reported price error are
-					measured against that honest baseline.
+					measured against that honest baseline. The formulas in this attack
+					model are continuous approximations for reasoning about payoff and
+					censorship cost; the contract guard below them shows the integer
+					check that actually gates staged liquidation execution.
 				</p>
 				<div class="equation" id="eq-openoracle-binary-threshold">
 					<math
@@ -1121,12 +1127,70 @@
 					<p class="equation-caption">
 						<span class="equation-label">Execution Error Threshold</span>The
 						manipulated price only creates liquidation payoff when its
-						fractional error crosses the guarded liquidation threshold.
+						fractional error meets the guarded liquidation threshold.
+					</p>
+				</div>
+				<div class="equation" id="eq-openoracle-contract-liquidation-guard">
+					<math
+						display="block"
+						aria-label="contract liquidation guard uses floored threshold price and floored distance basis points"
+						data-source="thresholdPrice = floor(vaultRep * PRICE_PRECISION / (snapshotTargetAllowance * securityMultiplier)); currentPrice > thresholdPrice; floor((currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice) >= minLiquidationPriceDistanceBps"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>thresholdPrice</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>floor</mi><mo>(</mo
+									><mfrac
+										><mrow
+											><mi>vaultRep</mi><mo>&#x22C5;</mo
+											><mi>PRICE_PRECISION</mi></mrow
+										><mrow
+											><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo
+											><mi>securityMultiplier</mi></mrow
+										></mfrac
+									><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>currentPrice</mi></mtd>
+								<mtd><mo>&gt;</mo></mtd>
+								<mtd><mi>thresholdPrice</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>distanceBps</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>floor</mi><mo>(</mo
+									><mfrac
+										><mrow
+											><mo>(</mo><mi>currentPrice</mi><mo>-</mo
+											><mi>thresholdPrice</mi><mo>)</mo><mo>&#x22C5;</mo
+											><mi>BPS_DENOMINATOR</mi></mrow
+										><mi>currentPrice</mi></mfrac
+									><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>distanceBps</mi></mtd>
+								<mtd><mo>&ge;</mo></mtd>
+								<mtd><mi>minLiquidationPriceDistanceBps</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Contract Liquidation Guard</span
+						><code>SecurityPool</code> first requires the scaled solvency
+						inequality to be strictly liquidatable. The coordinator then floors
+						the threshold and distance calculations. Equality passes only at the
+						distance check; <code>currentPrice</code> must still be strictly
+						above <code>thresholdPrice</code>.
 					</p>
 				</div>
 				<p>
 					The attack model separates attacker payoff from delay cost. The payoff
-					is binary: only a price strictly beyond the liquidation threshold and
+					is binary: only a price strictly above the liquidation threshold and
 					far enough past the guarded distance unlocks
 					<code>externalPayoff</code>; everything else unlocks nothing.
 					The censorship cost grows with duration, the dispute barrier, and the
@@ -1559,7 +1623,7 @@
 					tradeoff, not a drop-in Placeholder proof. For a simplified binary
 					censorship bound, replace the linear price-error payoff with a
 					thresholded payoff that only pays after the manipulated report is
-					strictly beyond the liquidation threshold and far enough past the
+					strictly above the liquidation threshold and far enough past the
 					guarded distance. A full binary-delay model also needs state for
 					distance to threshold, price evolution, and continuation value.
 					Locally, OpenOracle escalation is also capped: once

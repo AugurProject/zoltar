@@ -11,9 +11,9 @@
 			<header>
 				<h1>Placeholder and Zoltar Start Here</h1>
 				<p>
-					Placeholder combines Zoltar's forkable truth layer with markets,
-					REP-backed security pools, local disputes, fork migration, auction
-					repair, and REP/ETH solvency checks.
+					Traders mint ETH-backed shares, REP vaults underwrite those shares,
+					local escalation tries to settle disputed outcomes inside one pool,
+					and unresolved disputes move into Zoltar's forkable truth layer.
 				</p>
 				<p>
 					Two ideas anchor the lifecycle. Zoltar universes are truth branches
@@ -234,7 +234,12 @@
 					<li>A Placeholder origin pool is deployed for a binary question in an unforked universe.</li>
 					<li>Vaults deposit REP into <code>SecurityPool</code> and set security-bond allowance.</li>
 					<li>Traders mint complete sets with ETH and later redeem finalized winning shares.</li>
-					<li>After question end, local escalation picks one outcome before non-decision is reached.</li>
+					<li>
+						After the question end time, local escalation can resolve to a
+						strict leading outcome. If every outcome has no deposits,
+						<code>Invalid</code> wins; if multiple outcomes remain strongly
+						contested, the game stays unresolved instead of choosing one.
+					</li>
 				</ol>
 				<p>
 					The design tries this path first because local resolution is cheaper
@@ -249,7 +254,11 @@
 				<ol>
 					<li>Escalation reaches non-decision when two or more outcomes reach the fixed threshold.</li>
 					<li><code>Zoltar</code> forks the parent universe on the disputed question.</li>
-					<li>Users and pool state migrate into selected child universes.</li>
+					<li>
+						Callers create child pools and split pool REP for selected valid
+						branches. Vault owners and share holders migrate their own positions
+						into the child branch they choose.
+					</li>
 					<li>Child pools receive proportional collateral and REP state.</li>
 					<li>If collateral is short, the truth auction sells child REP for ETH repair.</li>
 				</ol>
@@ -285,8 +294,8 @@
 				<div class="equation" id="eq-start-here-complete-set">
 					<math
 						display="block"
-						aria-label="one complete set equals one invalid share plus one yes share plus one no share backed by one ETH"
-						data-source="1 completeSet = 1 Invalid + 1 Yes + 1 No = 1 ETH claim"
+						aria-label="one complete set mints one invalid share plus one yes share plus one no share at the current collateral per share rate"
+						data-source="1 completeSet = 1 Invalid + 1 Yes + 1 No at current sharesToCash rate"
 					>
 						<mrow>
 							<mn>1</mn>
@@ -300,16 +309,15 @@
 							<mo>+</mo>
 							<mn>1</mn>
 							<mi>No</mi>
-							<mo>=</mo>
-							<mn>1</mn>
-							<mi>ETH</mi>
-							<mi>claim</mi>
 						</mrow>
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Complete Set</span>The example market
-						trades outcome shares, but the collateral unit underneath the full
-						set remains one ETH-backed claim.
+						trades outcome shares. Deposited ETH mints complete sets through
+						<code>cashToShares</code>, and redemption converts winning shares
+						back to ETH through <code>sharesToCash</code> at the pool's current
+						collateral-per-share rate. A one-ETH claim is only the initial
+						simplifying case before fees or collateral changes alter that rate.
 					</p>
 				</div>
 				<table>

@@ -1496,28 +1496,42 @@
 					<div class="equation" id="eq-placeholder-utilization">
 						<math
 							display="block"
-							aria-label="utilization equals complete set collateral amount divided by total security bond allowance"
-							data-source="utilization = completeSetCollateralAmount / totalSecurityBondAllowance"
+							aria-label="scaled utilization equals complete set collateral amount times price precision divided by total security bond allowance"
+							data-source="utilizationScaled = floor(completeSetCollateralAmount * PRICE_PRECISION / totalSecurityBondAllowance)"
 						>
 							<mrow>
-								<mi>utilization</mi>
+								<mi>utilizationScaled</mi>
 								<mo>=</mo>
+								<mi>floor</mi>
+								<mo>(</mo>
 								<mfrac>
-									<mi>completeSetCollateralAmount</mi>
+									<mrow>
+										<mi>completeSetCollateralAmount</mi>
+										<mo>&#x22C5;</mo>
+										<mi>PRICE_PRECISION</mi>
+									</mrow>
 									<mi>totalSecurityBondAllowance</mi>
 								</mfrac>
+								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Utilization</span>The retention curve
-							uses open collateral divided by total underwriting allowance.
+							uses open collateral divided by total underwriting allowance as
+							18-decimal fixed-point integer math. Below the dip, the contract
+							then computes
+							<code
+								>utilizationRatio = floor(utilizationScaled * PRICE_PRECISION /
+								RETENTION_RATE_DIP)</code
+							>
+							before applying the linear slope.
 						</p>
 					</div>
 					<div class="equation" id="eq-placeholder-retention-rate">
 						<math
 							display="block"
-							aria-label="retention rate equals max retention rate when bond allowance is zero, otherwise max minus slope span times utilization over retention rate dip until the dip, otherwise minimum retention rate"
-							data-source="retentionRate = totalSecurityBondAllowance == 0 ? maxRetentionRate : utilization &lt;= retentionRateDip ? maxRetentionRate - (maxRetentionRate - minRetentionRate) \cdot utilization / retentionRateDip : minRetentionRate"
+							aria-label="retention rate equals max retention rate when bond allowance is zero, otherwise max minus floored slope span times utilization ratio until the dip, otherwise minimum retention rate"
+							data-source="utilizationRatio = floor(utilizationScaled * PRICE_PRECISION / RETENTION_RATE_DIP); retentionRate = totalSecurityBondAllowance == 0 ? MAX_RETENTION_RATE : utilizationScaled &lt;= RETENTION_RATE_DIP ? MAX_RETENTION_RATE - floor((MAX_RETENTION_RATE - MIN_RETENTION_RATE) * utilizationRatio / PRICE_PRECISION) : MIN_RETENTION_RATE"
 						>
 							<mrow>
 								<mi>retentionRate</mi>
@@ -1526,7 +1540,7 @@
 								<mtable>
 									<mtr>
 										<mtd>
-											<mi>maxRetentionRate</mi>
+											<mi>MAX_RETENTION_RATE</mi>
 										</mtd>
 										<mtd>
 											<mtext>if totalSecurityBondAllowance = 0</mtext>
@@ -1534,28 +1548,31 @@
 									</mtr>
 									<mtr>
 										<mtd>
-											<mi>maxRetentionRate</mi>
+											<mi>MAX_RETENTION_RATE</mi>
 											<mo>-</mo>
+											<mi>floor</mi>
+											<mo>(</mo>
 											<mfrac>
 												<mrow>
 													<mo>(</mo>
-													<mi>maxRetentionRate</mi>
+													<mi>MAX_RETENTION_RATE</mi>
 													<mo>-</mo>
-													<mi>minRetentionRate</mi>
+													<mi>MIN_RETENTION_RATE</mi>
 													<mo>)</mo>
 													<mo>&#x22C5;</mo>
-													<mi>utilization</mi>
+													<mi>utilizationRatio</mi>
 												</mrow>
-												<mi>retentionRateDip</mi>
+												<mi>PRICE_PRECISION</mi>
 											</mfrac>
+											<mo>)</mo>
 										</mtd>
 										<mtd>
-											<mtext>if utilization &lt;= retentionRateDip</mtext>
+											<mtext>if utilizationScaled &lt;= RETENTION_RATE_DIP</mtext>
 										</mtd>
 									</mtr>
 									<mtr>
 										<mtd>
-											<mi>minRetentionRate</mi>
+											<mi>MIN_RETENTION_RATE</mi>
 										</mtd>
 										<mtd>
 											<mtext>otherwise</mtext>
@@ -6773,8 +6790,8 @@
 					<div class="equation" id="eq-placeholder-auction-fill-math">
 						<math
 							display="block"
-							aria-label="filled REP equals ETH used times price precision divided by clearing price, underfunded threshold equals accepted bid ETH for threshold times price precision divided by max REP being sold, tick REP demand equals tick total ETH times price precision divided by tick price, and underfunded REP share equals bid ETH times tick REP demand divided by tick total ETH"
-							data-source="filledRep = ethUsed \cdot pricePrecision / clearingPrice; underfundedThreshold = acceptedBidEthForThreshold \cdot pricePrecision / maxRepBeingSold; tickRepDemand = tickTotalEth \cdot pricePrecision / tickPrice; underfundedRepShare = bidEth \cdot tickRepDemand / tickTotalEth"
+							aria-label="filled REP equals floor ETH used times price precision divided by clearing price, underfunded threshold equals floor accepted bid ETH for threshold times price precision divided by max REP being sold, tick REP demand equals floor tick total ETH times price precision divided by tick price, and underfunded REP share equals floor bid ETH times tick REP demand divided by tick total ETH"
+							data-source="filledRep = floor(ethUsed \cdot pricePrecision / clearingPrice); underfundedThreshold = floor(acceptedBidEthForThreshold \cdot pricePrecision / maxRepBeingSold); tickRepDemand = floor(tickTotalEth \cdot pricePrecision / tickPrice); underfundedRepShare = floor(bidEth \cdot tickRepDemand / tickTotalEth)"
 						>
 							<mtable>
 								<mtr>
@@ -6785,6 +6802,8 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mi>ethUsed</mi>
@@ -6793,6 +6812,7 @@
 											</mrow>
 											<mi>clearingPrice</mi>
 										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -6803,6 +6823,8 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mi>acceptedBidEthForThreshold</mi>
@@ -6811,6 +6833,7 @@
 											</mrow>
 											<mi>maxRepBeingSold</mi>
 										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -6821,6 +6844,8 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mi>tickTotalEth</mi>
@@ -6829,6 +6854,7 @@
 											</mrow>
 											<mi>tickPrice</mi>
 										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -6839,6 +6865,8 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mi>bidEth</mi>
@@ -6847,6 +6875,7 @@
 											</mrow>
 											<mi>tickTotalEth</mi>
 										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 							</mtable>
@@ -6855,7 +6884,8 @@
 							<span class="equation-label">Auction Fill Math</span>Normal
 							clearing converts filled ETH at the uniform clearing price;
 							underfunded clearing sets a threshold price and sells each winning
-							tick only the REP demanded at that tick's bid limit.
+							tick only the REP demanded at that tick's bid limit. Underfunded
+							ticks qualify at or above the floored threshold.
 						</p>
 					</div>
 					<details class="interactive-example" id="underfunded-auction-example">
@@ -6931,20 +6961,20 @@
 							<li>
 								Underfunded threshold:
 								<output data-example-output="underfundedThreshold"
-									>0 ETH/REP</output
+									>0.1000 ETH/REP</output
 								>
 							</li>
 							<li>
 								Tick REP demand:
-								<output data-example-output="tickRepDemand">0 REP</output>
+								<output data-example-output="tickRepDemand">2.0000 REP</output>
 							</li>
 							<li>
 								Bidder REP fill:
-								<output data-example-output="underfundedRepShare">0 REP</output>
+								<output data-example-output="underfundedRepShare">0.8000 REP</output>
 							</li>
 							<li>
 								REP outside this tick:
-								<output data-example-output="repOutsideTick">0 REP</output>
+								<output data-example-output="repOutsideTick">98.0000 REP</output>
 							</li>
 						</ul>
 					</details>
@@ -7073,23 +7103,23 @@
 						<li>
 							In an underfunded auction, the contract computes
 							<math
-								aria-label="underfunded threshold equals accepted bid ETH for threshold times price precision divided by max REP being sold"
-								data-source="underfundedThreshold = acceptedBidEthForThreshold \cdot PRICE_PRECISION / maxRepBeingSold"
+								aria-label="underfunded threshold equals floor accepted bid ETH for threshold times price precision divided by max REP being sold"
+								data-source="underfundedThreshold = floor(acceptedBidEthForThreshold \cdot PRICE_PRECISION / maxRepBeingSold)"
 								><mi>underfundedThreshold</mi><mo>=</mo
-								><mfrac
+								><mi>floor</mi><mo>(</mo><mfrac
 									><mrow
 										><mi>acceptedBidEthForThreshold</mi><mo>&#x22C5;</mo
 										><mi>PRICE_PRECISION</mi></mrow
 									><mi>maxRepBeingSold</mi></mfrac
-								></math
+								><mo>)</mo></math
 							>, where <code>acceptedBidEthForThreshold</code> is the contract's
 							aggregate <code>ethRaised</code> threshold input, not the final
 							<code>underfundedWinningEth</code> sent after refunds.
 						</li>
 						<li>
-							Only bids at or above that underfunded threshold count as winners;
-							each winning tick buys only the REP demanded at that tick's bid
-							limit.
+							Only bids whose <code>tickToPrice(tick)</code> is at or above the
+							floored underfunded threshold count as winners; each winning tick
+							buys only the REP demanded at that tick's bid limit.
 						</li>
 						<li>
 							Normal clearing carries division dust through
@@ -7614,6 +7644,19 @@
 									<td>Queued operations still must pass local safety checks at execution time.</td>
 								</tr>
 								<tr>
+									<td>Recover settled report</td>
+									<td><code>recoverSettledPendingReport</code></td>
+									<td>
+										Clears the pending report and consumes only
+										<code>pendingOperationSlotId</code>; other active staged
+										operations can remain queued.
+									</td>
+									<td>
+										Remaining operations need a later valid price path, such as a
+										direct <code>requestPrice()</code> followed by settlement.
+									</td>
+								</tr>
+								<tr>
 									<td>Consume failures</td>
 									<td>Coordinator failure paths</td>
 									<td>Expired, stale, zero-effect, or too-close operations are consumed.</td>
@@ -7898,8 +7941,8 @@
 					<div class="equation" id="eq-placeholder-liquidation-price-distance">
 						<math
 							display="block"
-							aria-label="liquidation threshold price equals vault REP times price precision divided by snapshot target allowance times security multiplier, and liquidation distance basis points equals current price minus threshold price times basis point denominator divided by current price and must be at least the minimum liquidation price distance basis points"
-							data-source="thresholdPrice = vaultRep \cdot pricePrecision / (snapshotTargetAllowance \cdot securityMultiplier); distanceBps = (currentPrice - thresholdPrice) \cdot basisPointDenominator / currentPrice; distanceBps &gt;= minLiquidationPriceDistanceBps"
+							aria-label="liquidation threshold price equals floor vault REP times price precision divided by snapshot target allowance times security multiplier, current price must be greater than threshold price, and floored liquidation distance basis points must be at least the minimum liquidation price distance basis points"
+							data-source="thresholdPrice = floor(vaultRep \cdot pricePrecision / (snapshotTargetAllowance \cdot securityMultiplier)); currentPrice &gt; thresholdPrice; distanceBps = floor((currentPrice - thresholdPrice) \cdot basisPointDenominator / currentPrice); distanceBps &gt;= minLiquidationPriceDistanceBps"
 						>
 							<mtable>
 								<mtr>
@@ -7910,6 +7953,8 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mi>vaultRep</mi>
@@ -7922,6 +7967,18 @@
 												<mi>securityMultiplier</mi>
 											</mrow>
 										</mfrac>
+										<mo>)</mo>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd>
+										<mi>currentPrice</mi>
+									</mtd>
+									<mtd>
+										<mo>&gt;</mo>
+									</mtd>
+									<mtd>
+										<mi>thresholdPrice</mi>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -7932,6 +7989,8 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mo>(</mo>
@@ -7944,6 +8003,7 @@
 											</mrow>
 											<mi>currentPrice</mi>
 										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -7961,8 +8021,9 @@
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Liquidation Price Distance</span>A
-							staged liquidation must remain a configured basis-point distance
-							beyond the computed liquidation threshold before it can execute.
+							staged liquidation must be strictly above the computed threshold,
+							then remain at least the configured floored basis-point distance
+							beyond it before it can execute.
 						</p>
 					</div>
 					<p>
@@ -8220,12 +8281,17 @@
 						</div>
 					</div>
 					<h3>Escalation Parameters</h3>
+					<p>
+						Rows marked as deployment-configured are constructor or factory
+						inputs for a deployment. Rows marked as constants come from the
+						named Solidity constant and require a contract change to modify.
+					</p>
 					<table>
 						<thead>
 							<tr>
 								<th>Parameter</th>
 								<th>Current value</th>
-								<th>Meaning</th>
+								<th>Meaning and source / mutability</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -8234,7 +8300,8 @@
 								<td><code>3</code></td>
 								<td>
 									Placeholder complete sets mint <code>Invalid</code>,
-									<code>Yes</code>, and <code>No</code> shares.
+									<code>Yes</code>, and <code>No</code> shares. Protocol
+									constant for the current Placeholder market shape.
 								</td>
 							</tr>
 							<tr>
@@ -8252,7 +8319,8 @@
 								<td><code>3 days</code></td>
 								<td>
 									Delay between game start and the escalation clock beginning to
-									accrue cost.
+									accrue cost. Deployment-configured
+									<code>EscalationGame</code> parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8262,17 +8330,19 @@
 									Deployed as
 									<math
 										aria-label="REP token total theoretical supply divided by fork threshold divisor times 2"
-										data-source="repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR \cdot 2)"
+										data-source="repToken.getTotalTheoreticalSupply() / (forkThresholdDivisor \cdot 2)"
 										><mfrac
 											><mrow
 												><mi>repToken.getTotalTheoreticalSupply</mi><mo>(</mo
 												><mo>)</mo></mrow
 											><mrow
-												><mi>FORK_THRESHOLD_DIVISOR</mi><mo>&#x22C5;</mo
+												><mi>forkThresholdDivisor</mi><mo>&#x22C5;</mo
 												><mn>2</mn></mrow
 											></mfrac
 										></math
 									>.
+									Deployment-derived threshold using the REP token's theoretical
+									supply and the configured fork threshold divisor.
 								</td>
 							</tr>
 							<tr>
@@ -8314,26 +8384,33 @@
 							<tr>
 								<th>Parameter</th>
 								<th>Current value</th>
-								<th>Meaning</th>
+								<th>Meaning and source / mutability</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr>
 								<td><code>MIGRATION_TIME</code></td>
 								<td><code>8 weeks</code></td>
-								<td>Fork-migration window before truth auction can start.</td>
+								<td>
+									Fork-migration window before truth auction can start. Solidity
+									constant in <code>SecurityPoolUtils</code>.
+								</td>
 							</tr>
 							<tr>
 								<td><code>AUCTION_TIME</code></td>
 								<td><code>1 week</code></td>
-								<td>Truth-auction duration.</td>
+								<td>
+									Truth-auction duration. Solidity constant in
+									<code>SecurityPoolUtils</code>.
+								</td>
 							</tr>
 							<tr>
 								<td><code>MAX_AUCTION_VAULT_HAIRCUT_DIVISOR</code></td>
 								<td><code>1000000</code></td>
 								<td>
 									Small haircut divisor used when reserving a tiny amount of REP
-									from auction sale.
+									from auction sale. Solidity constant in
+									<code>SecurityPoolUtils</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8341,20 +8418,25 @@
 								<td><code>-524288</code> to <code>524288</code></td>
 								<td>
 									Inclusive discrete ETH/REP price-tick range accepted by the
-									truth auction.
+									truth auction. Solidity constants in
+									<code>UniformPriceDualCapBatchAuction</code>.
 								</td>
 							</tr>
 							<tr>
 								<td><code>minBidSize</code></td>
 								<td><code>max(ethRaiseCap / 100000, 1 wei)</code></td>
-								<td>Minimum bid size computed at auction start.</td>
+								<td>
+									Minimum bid size computed at auction start from that auction's
+									ETH raise cap.
+								</td>
 							</tr>
 							<tr>
 								<td>Maximum AVL height over full tick domain</td>
 								<td><code>28</code></td>
 								<td>
 									Derived gas bound for an AVL tree containing every possible
-									auction tick.
+									auction tick. Derived from the finite tick-domain constants,
+									not a stored contract parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8368,6 +8450,7 @@
 								</td>
 								<td>
 									Fixed-point precision for REP/ETH and retention-rate math.
+									Solidity constant in <code>SecurityPoolUtils</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8375,7 +8458,8 @@
 								<td><code>999999996848000000</code></td>
 								<td>
 									Upper retention-rate bound, annotated in code as approximately
-									<code>90%</code> yearly retention.
+									<code>90%</code> yearly retention. Solidity constant in
+									<code>SecurityPoolUtils</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8383,7 +8467,8 @@
 								<td><code>999999977880000000</code></td>
 								<td>
 									Lower retention-rate bound, annotated in code as approximately
-									<code>50%</code> yearly retention.
+									<code>50%</code> yearly retention. Solidity constant in
+									<code>SecurityPoolUtils</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8391,18 +8476,24 @@
 								<td><code>80%</code> / <code>800000000000000000</code></td>
 								<td>
 									Scaled utilization point where the retention curve reaches its
-									minimum.
+									minimum. Solidity constant in <code>SecurityPoolUtils</code>.
 								</td>
 							</tr>
 							<tr>
 								<td><code>MIN_SECURITY_BOND_DEBT</code></td>
 								<td><code>1 ether</code></td>
-								<td>Minimum non-zero bond allowance a vault can carry.</td>
+								<td>
+									Minimum non-zero bond allowance a vault can carry. Solidity
+									constant in <code>SecurityPoolUtils</code>.
+								</td>
 							</tr>
 							<tr>
 								<td><code>MIN_REP_DEPOSIT</code></td>
 								<td><code>10 ether</code></td>
-								<td>Minimum REP backing for a non-empty vault.</td>
+								<td>
+									Minimum REP backing for a non-empty vault. Solidity constant in
+									<code>SecurityPoolUtils</code>.
+								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -8412,25 +8503,32 @@
 							<tr>
 								<th>Parameter</th>
 								<th>Current value</th>
-								<th>Meaning</th>
+								<th>Meaning and source / mutability</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr>
 								<td><code>PRICE_VALID_FOR_SECONDS</code></td>
 								<td><code>5 minutes</code></td>
-								<td>How long a settled REP/ETH price remains valid.</td>
+								<td>
+									How long a settled REP/ETH price remains valid. Solidity
+									constant in <code>SecurityPoolOracleCoordinator</code>.
+								</td>
 							</tr>
 							<tr>
 								<td><code>gasConsumedOpenOracleReportPrice</code></td>
 								<td><code>100000</code></td>
-								<td>Coordinator gas estimate for report submission.</td>
+								<td>
+									Coordinator gas estimate for report submission.
+									Deployment-configured coordinator parameter.
+								</td>
 							</tr>
 							<tr>
 								<td><code>gasConsumedSettlement</code></td>
 								<td><code>1000000</code></td>
 								<td>
 									Per-operation settlement gas estimate used by the coordinator.
+									Deployment-configured coordinator parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8438,7 +8536,8 @@
 								<td><code>4</code></td>
 								<td>
 									Maximum staged operations executed from one OpenOracle
-									settlement callback.
+									settlement callback. Solidity constant in
+									<code>SecurityPoolOracleCoordinator</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8446,7 +8545,8 @@
 								<td><code>5 minutes</code></td>
 								<td>
 									Maximum self-service validity window for staged oracle-gated
-									operations.
+									operations. Solidity constant in
+									<code>SecurityPoolOracleCoordinator</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8459,6 +8559,7 @@
 								<td>
 									Initial report liquidity parameter, stored as an ERC-20 atomic
 									REP amount and sized from dispute profitability assumptions.
+									Derived deployment parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8476,7 +8577,8 @@
 								</td>
 								<td>
 									Dynamic halt threshold for multiplicative report escalation;
-									later reports add one atomic REP unit at a time.
+									later reports add one atomic REP unit at a time. Derived from
+									the deployment report size and escalation-halt multiplier.
 								</td>
 							</tr>
 							<tr>
@@ -8490,7 +8592,10 @@
 										><mi>gasConsumedOpenOracleReportPrice</mi></math
 									>
 								</td>
-								<td>Dynamic ETH reward paid to settler.</td>
+								<td>
+									Dynamic ETH reward paid to settler, derived from current
+									<code>block.basefee</code> and report gas configuration.
+								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>settlementTime</code></td>
@@ -8504,20 +8609,20 @@
 									<code>480 seconds (8 minutes)</code>. The
 									<code>40 * 12</code> derivation assumes twelve-second blocks,
 									but the configured OpenOracle <code>timeType</code> uses
-									seconds.
+									seconds. Deployment-configured OpenOracle parameter.
 								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>disputeDelay</code></td>
 								<td><code>0</code></td>
-								<td>No extra waiting period after each report.</td>
+								<td>Deployment-configured OpenOracle parameter; no extra waiting period after each report.</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>protocolFee</code></td>
 								<td><code>100000</code></td>
 								<td>
 									Protocol fee sent to the configured fee sink, equal to
-									<code>1%</code>.
+									<code>1%</code>. Deployment-configured OpenOracle parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8530,7 +8635,7 @@
 										data-source="gasConsumedSettlement \cdot MAX_PENDING_SETTLEMENT_OPERATIONS"
 										><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo
 										><mi>MAX_PENDING_SETTLEMENT_OPERATIONS</mi></math
-									>.
+									>. Derived deployment parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8538,7 +8643,8 @@
 								<td><code>10000</code></td>
 								<td>
 									Fee paid to previous reporter, annotated in code as
-									<code>0.1%</code>.
+									<code>0.1%</code>. Deployment-configured OpenOracle
+									parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8546,25 +8652,27 @@
 								<td><code>115</code></td>
 								<td>
 									New report amount must be <code>1.15x</code> the prior amount
-									until the escalation halt.
+									until the escalation halt. Deployment-configured OpenOracle
+									parameter.
 								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>timeType</code></td>
 								<td><code>true</code></td>
 								<td>
-									OpenOracle uses block timestamps rather than block numbers.
+									Deployment-configured OpenOracle parameter; OpenOracle uses
+									block timestamps rather than block numbers.
 								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>trackDisputes</code></td>
 								<td><code>true</code></td>
-								<td>Dispute history is stored for these reports.</td>
+								<td>Deployment-configured OpenOracle parameter; dispute history is stored for these reports.</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>protocolFeeRecipient</code></td>
 								<td><code>0x000000000000000000000000000000000000dEaD</code></td>
-								<td>Fee sink configured for protocol fees.</td>
+								<td>Deployment-configured OpenOracle parameter; fee sink configured for protocol fees.</td>
 							</tr>
 							<tr>
 								<td><code>escalationHaltMultiplierBps</code></td>
@@ -8572,6 +8680,7 @@
 								<td>
 									Multiplier used to derive the OpenOracle escalation halt from
 									<code>exactToken1Report</code>, equal to <code>10x</code>.
+									Deployment-configured coordinator parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8579,7 +8688,8 @@
 								<td><code>30000</code></td>
 								<td>
 									Maximum settlement base-fee multiplier accepted by the
-									coordinator, equal to <code>3x</code>.
+									coordinator, equal to <code>3x</code>. Deployment-configured
+									coordinator parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8587,24 +8697,29 @@
 								<td><code>1000</code></td>
 								<td>
 									Minimum liquidation distance required before executing a
-									staged liquidation:
+									staged liquidation. The current REP/ETH price must first be
+									strictly above the floored threshold price; then
 									<math
-										aria-label="current price minus threshold price divided by current price"
-										data-source="(currentPrice - thresholdPrice) / currentPrice"
+										aria-label="floor current price minus threshold price times basis point denominator divided by current price"
+										data-source="floor((currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice)"
+										><mi>distanceBps</mi><mo>=</mo><mi>floor</mi><mo>(</mo
 										><mfrac
 											><mrow
-												><mi>currentPrice</mi><mo>-</mo
-												><mi>thresholdPrice</mi></mrow
+												><mo>(</mo><mi>currentPrice</mi><mo>-</mo
+												><mi>thresholdPrice</mi><mo>)</mo><mo>&#x22C5;</mo
+												><mi>BPS_DENOMINATOR</mi></mrow
 											><mi>currentPrice</mi></mfrac
-										></math
+										><mo>)</mo></math
 									>
-									must be at least <code>10%</code>.
+									must be at least <code>10%</code>, so
+									<code>distanceBps &gt;= minLiquidationPriceDistanceBps</code>.
+									Deployment-configured coordinator parameter.
 								</td>
 							</tr>
 							<tr>
 								<td>Coordinator <code>WETH</code></td>
 								<td><code>0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2</code></td>
-								<td>Mainnet WETH address used in REP/ETH price reports.</td>
+								<td>Mainnet immutable token address used in REP/ETH price reports.</td>
 							</tr>
 						</tbody>
 					</table>
