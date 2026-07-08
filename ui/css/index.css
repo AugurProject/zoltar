@@ -1712,16 +1712,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 	line-height: 1.45;
 }
 
-.question-context-note {
-	padding: 0.65rem 0.8rem;
-	border: 1px solid var(--warning-border);
-	border-radius: var(--radius-control);
-	background: rgba(245, 200, 106, 0.08);
-	font-size: var(--font-caption);
-	line-height: 1.5;
-	color: var(--text-secondary);
-}
-
 .question-summary-header {
 	gap: 0.45rem;
 }
@@ -2175,8 +2165,8 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .security-pool-card {
-	padding: 0.28rem 0.85rem;
-	gap: 0.32rem;
+	padding: 0.68rem 0.95rem 0.9rem;
+	gap: 0.45rem;
 }
 
 .security-pool-card .entity-card-body {
@@ -2185,6 +2175,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .security-pool-card .entity-card-header {
 	gap: 0.3rem;
+	padding: 0 0.1rem;
 }
 
 .security-pool-card-title-copy {
@@ -5378,29 +5369,6 @@ button:focus-visible {
 	min-width: 0;
 }
 
-.security-pool-card-guidance {
-	display: grid;
-	gap: 0.45rem;
-	padding: 0.85rem 0.95rem;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.4);
-}
-
-.security-pool-card-guidance-summary {
-	color: var(--text-secondary);
-}
-
-.security-pool-card-guidance-next {
-	display: grid;
-	gap: 0.2rem;
-}
-
-.security-pool-card-guidance-next strong {
-	font-size: var(--font-body);
-	line-height: 1.4;
-}
-
 .security-pool-strip-question .question-preview-meta {
 	display: none;
 }
@@ -5454,6 +5422,11 @@ button:focus-visible {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 	gap: 0.8rem;
+}
+
+.security-pool-card-inline-details {
+	padding-top: 0.1rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .security-pool-card-vault-preview {
@@ -5988,7 +5961,6 @@ button:focus-visible {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.security-pool-card-guidance,
 	.loaded-question-preview {
 		padding: 0.85rem;
 	}

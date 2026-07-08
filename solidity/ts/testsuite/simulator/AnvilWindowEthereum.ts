@@ -54,7 +54,9 @@ type EthCallCoverageRequest = {
 }
 
 const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1c9c380'
-const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 60_000
+// CI can keep Anvil receipts pending well past a minute when multiple shards
+// are driving simulator-backed transactions concurrently.
+const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 180_000
 const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 10
 const SEND_TRANSACTION_RECEIPT_MINE_INTERVAL_MS = 1_000
 

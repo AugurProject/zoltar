@@ -637,7 +637,7 @@ describe('MarketSection', () => {
 		expect(selectedViews).toEqual(['fork'])
 	})
 
-	test('shows immutable questions without an edit-style missing context notice', async () => {
+	test('shows immutable questions without missing-context helper copy', async () => {
 		const question = createBinaryForkQuestion()
 		question.description = ''
 		const renderedComponent = await renderIntoDocument(
@@ -657,7 +657,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No resolution notes or supporting context provided.')).not.toBeNull()
+		expect(documentQueries.queryByText('No resolution notes or supporting context provided.')).toBeNull()
 		expect(documentQueries.queryByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBeNull()
 	})
 

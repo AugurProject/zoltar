@@ -322,7 +322,7 @@ export function applySelectedPoolWorkflowState(
 	}
 }
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
-	if (selectedPoolUniverseMismatch) return 'Switch to the same universe before managing this pool.'
+	if (selectedPoolUniverseMismatch) return undefined
 	if (selectedPoolLookupState === 'loading') return 'Wait for this pool to finish loading.'
 	if (selectedPoolLookupState === 'missing') return 'Load a valid pool before using pool actions.'
 	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool before using pool actions.'
@@ -331,10 +331,9 @@ export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, se
 export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
 	if (selectedPoolUniverseMismatch)
 		return {
-			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, share, reporting, and fork actions.',
+			detail: 'This pool does not exist.',
 			key: 'unavailable',
 		}
 	if (selectedPoolLookupState === 'loading')

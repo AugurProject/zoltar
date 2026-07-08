@@ -35,6 +35,11 @@ export function isSecurityVaultDepositBelowMinimum(currentRepDeposit: bigint | u
 	return (currentRepDeposit ?? 0n) === 0n && depositAmount < MIN_SECURITY_VAULT_REP_DEPOSIT
 }
 
+export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
+	if (securityVaultDetails === undefined) return false
+	return securityVaultDetails.repDepositShare > 0n || securityVaultDetails.securityBondAllowance > 0n || securityVaultDetails.unpaidEthFees > 0n || securityVaultDetails.escalationEscrowedRep > 0n
+}
+
 function divideBigintRoundUp(value: bigint, divisor: bigint) {
 	if (divisor <= 0n) throw new Error('Divisor must be greater than zero')
 	return (value + divisor - 1n) / divisor

@@ -476,8 +476,11 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const auctionPoolCard = getSecurityPoolCard(auctionPoolTitle)
 		const auctionPoolCardQueries = within(auctionPoolCard)
-		expect(auctionPoolCardQueries.getByText('Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.')).not.toBeNull()
+		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.')).toBeNull()
 		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where the child universe is finalized.')).toBeNull()
+		const truthAuctionBadge = auctionPoolCardQueries.getByText('Truth Auction')
+		expect(truthAuctionBadge.getAttribute('aria-label')).toBe('Truth Auction')
+		expect(truthAuctionBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 	})
 
 	test('shows Fork Finalized for child pools with completed fork history', async () => {
@@ -507,7 +510,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(badgeTexts).toContain('Fork Finalized')
 		const childPoolCard = getSecurityPoolCard(childPoolTitle)
 		const childPoolCardQueries = within(childPoolCard)
-		expect(childPoolCardQueries.getByText('This pool has already gone through a fork lifecycle and now acts as a historical reference point.')).not.toBeNull()
+		const forkFinalizedBadge = childPoolCardQueries.getByText('Fork Finalized')
+		expect(forkFinalizedBadge.getAttribute('aria-label')).toBe('Fork Finalized')
+		expect(forkFinalizedBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 		expect(childPoolCardQueries.queryByText('This parent pool has already gone through a fork lifecycle and now acts as a historical reference point.')).toBeNull()
 	})
 
@@ -840,7 +845,8 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(deferredPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getByText('Open this pool to load 2 vaults.')).not.toBeNull()
+		expect(poolCardQueries.queryByText('Open this pool to load 2 vaults.')).toBeNull()
+		expect(poolCardQueries.getByText('Vault preview unavailable.')).not.toBeNull()
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
 	})
 
@@ -883,6 +889,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCard = getSecurityPoolCard(previewPoolTitle)
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
+		expect(poolCardQueries.queryByText('Pool Details')).toBeNull()
+		expect(poolCardQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
 		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
 		const liquidationReviewButton = poolCardQueries.getByRole('button', { name: 'Review Liquidation' })
 		expect(liquidationReviewButton).not.toBeNull()
@@ -896,7 +904,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			maxAmount: 5n,
 		})
 		expect(poolCardQueries.getByText('Showing 1 of 5 active vaults in this preview, newest activity first.')).not.toBeNull()
-		expect(poolCardQueries.getByText('+4 more vaults')).not.toBeNull()
+		expect(poolCardQueries.queryByText('+4 more vaults')).toBeNull()
 	})
 
 	test('preserves the loader-provided vault preview order instead of re-ranking by allowance', async () => {
@@ -1001,6 +1009,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.getAllByRole('button', { name: `Copy address ${viewerVaultAddress}` }).length).toBeGreaterThan(0)
 		expect(poolCardQueries.getByText('Showing 4 of 6 active vaults in this preview, newest activity first.')).not.toBeNull()
-		expect(poolCardQueries.getByText('+2 more vaults')).not.toBeNull()
+		expect(poolCardQueries.queryByText('+2 more vaults')).toBeNull()
 	})
 })

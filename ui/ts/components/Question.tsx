@@ -11,7 +11,6 @@ type QuestionProps = {
 	className?: string
 	loading?: boolean
 	question: MarketDetails | undefined
-	showMissingContextNote?: boolean
 	showTitle?: boolean
 	variant?: 'full' | 'preview'
 }
@@ -32,14 +31,10 @@ export function getQuestionTitle(question: MarketDetails) {
 	return question.title.trim() === '' ? 'Untitled question' : question.title
 }
 
-const missingQuestionContextNote = 'Add resolution notes, evidence sources, and edge-case handling before users rely on this question.'
-
 function getQuestionDescription(question: MarketDetails) {
-	return question.description.trim() === '' ? 'No resolution notes or supporting context provided.' : question.description
-}
-
-function hasQuestionContext(question: MarketDetails) {
-	return question.description.trim() !== ''
+	// Empty question descriptions are intentionally silent in the UI. These screens are read-only,
+	// and users cannot add resolution notes from here.
+	return question.description.trim()
 }
 
 function getQuestionTypeLabel(question: MarketDetails) {
@@ -55,10 +50,6 @@ function getQuestionTypeLabel(question: MarketDetails) {
 	}
 }
 
-function getQuestionContextLabel(question: MarketDetails) {
-	return hasQuestionContext(question) ? 'Context provided' : 'Needs context'
-}
-
 function getDisplayedOutcomes(question: MarketDetails) {
 	const outcomes = question.outcomeLabels.length === 0 ? ['Scalar'] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
@@ -71,7 +62,6 @@ function getDisplayRange(question: MarketDetails) {
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
 		{ kind: 'text', label: 'Question Type', value: getQuestionTypeLabel(question) },
-		{ kind: 'text', label: 'Context', value: getQuestionContextLabel(question) },
 		{ kind: 'text', label: 'Question ID', value: question.questionId },
 		{ kind: 'timestamp', label: 'Created', value: question.createdAt },
 		{ kind: 'timestamp', label: 'End Time', value: question.endTime },
@@ -98,7 +88,7 @@ function renderQuestionSummaryField(field: QuestionSummaryField) {
 	)
 }
 
-export function Question({ className = '', loading = false, question, showMissingContextNote = true, showTitle = true, variant = 'full' }: QuestionProps) {
+export function Question({ className = '', loading = false, question, showTitle = true, variant = 'full' }: QuestionProps) {
 	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
@@ -110,7 +100,8 @@ export function Question({ className = '', loading = false, question, showMissin
 
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)
-	const missingContext = showMissingContextNote && !hasQuestionContext(question)
+	const showHeading = showTitle || description !== ''
+	const descriptionNode = description === '' ? undefined : <p className='detail'>{description}</p>
 	const summaryFields = getQuestionSummaryFields(question)
 	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
 		key: outcome,
@@ -134,11 +125,12 @@ export function Question({ className = '', loading = false, question, showMissin
 	if (variant === 'preview')
 		return (
 			<div className={`question-summary question-summary-preview ${className}`.trim()}>
-				<div className='question-summary-heading'>
-					{showTitle ? <strong>{title}</strong> : null}
-					<p className='detail'>{description}</p>
-				</div>
-				{missingContext ? <p className='question-context-note'>{missingQuestionContextNote}</p> : null}
+				{!showHeading ? undefined : (
+					<div className='question-summary-heading'>
+						{showTitle ? <strong>{title}</strong> : null}
+						{descriptionNode}
+					</div>
+				)}
 				<OutcomeChipRow items={outcomeItems} />
 				<div className='question-preview-timeline' role='list' aria-label='Question timeline'>
 					<div className='question-preview-timeline-item' role='listitem'>
@@ -174,12 +166,11 @@ export function Question({ className = '', loading = false, question, showMissin
 			{showTitle ? (
 				<div className='question-summary-heading'>
 					<strong>{title}</strong>
-					<p className='detail'>{description}</p>
+					{descriptionNode}
 				</div>
 			) : (
-				<p className='detail'>{description}</p>
+				descriptionNode
 			)}
-			{missingContext ? <p className='question-context-note'>{missingQuestionContextNote}</p> : null}
 			<MetricGrid variant='question'>{summaryFields.map(renderQuestionSummaryField)}</MetricGrid>
 		</div>
 	)

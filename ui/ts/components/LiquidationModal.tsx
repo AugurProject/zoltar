@@ -140,8 +140,7 @@ function renderQueuedLiquidationStatusCard({
 			/>
 		)
 	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title='Liquidation Executed' badge={<Badge tone='ok'>Executed</Badge>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
-	if (queuedLiquidationStatus === 'missing')
-		return <TransactionStatusCard title='Liquidation Submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
+	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard title='Liquidation Submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='The transaction succeeded, but the latest manager state is not available yet.' />
 	return <TransactionStatusCard title='Refreshing Liquidation State' badge={<Badge tone='muted'>Refreshing</Badge>} detail='Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.' />
 }
 export function LiquidationModal({
@@ -243,9 +242,8 @@ export function LiquidationModal({
 					})
 				})()
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
+	const canUseLiquidationAction = accountAddress !== undefined && isMainnet
 	const liquidationActionReason = pickFirstReason(
-		accountAddress === undefined ? 'Connect a wallet before liquidating.' : undefined,
-		!isMainnet ? 'Switch to Ethereum mainnet before liquidating.' : undefined,
 		liquidationExecutionMode === 'refreshing' ? 'Refreshing Open Oracle validity before liquidation.' : undefined,
 		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? 'Reload the selected pool before liquidating.' : undefined,
 		trimmedLiquidationTargetVault === '' ? 'Select a target vault first.' : undefined,
@@ -429,7 +427,10 @@ export function LiquidationModal({
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
 						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
-						availability={{ disabled: !liquidationEnabled || liquidationActionReason !== undefined, reason: liquidationEnabled ? liquidationActionReason : undefined }}
+						availability={{
+							disabled: !liquidationEnabled || !canUseLiquidationAction || liquidationActionReason !== undefined,
+							reason: liquidationEnabled && canUseLiquidationAction ? liquidationActionReason : undefined,
+						}}
 						showDisabledReason={liquidationExecutionMode !== 'queue'}
 					/>
 				</div>
