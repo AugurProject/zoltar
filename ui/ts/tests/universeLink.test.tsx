@@ -76,4 +76,13 @@ describe('UniverseLink', () => {
 		expect(link.getAttribute('href')).toBe(expectedHref)
 		expect(popstateCount).toBe(0)
 	})
+
+	test('renders the universe id in hex when requested', async () => {
+		const renderedComponent = await renderIntoDocument(<UniverseLink format='hex' universeId={15n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const link = documentQueries.getByRole('link', { name: '0xf' }) as HTMLAnchorElement
+		expect(link.getAttribute('href')).toBe(getUniverseLinkHref(15n))
+	})
 })

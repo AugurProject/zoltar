@@ -11,7 +11,7 @@ type ActionLauncherCardProps = {
 }
 
 export function ActionLauncherCard({ action, children, pending = false, pendingLabel = 'Opening...', tone = 'secondary' }: ActionLauncherCardProps) {
-	if (action.onAction === undefined && action.blocker === undefined) return undefined
+	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 	return (
 		<section className={`action-launcher-card ${action.readiness}`} data-action-safety-id={action.safetyId}>
 			<div className='action-launcher-card-copy'>

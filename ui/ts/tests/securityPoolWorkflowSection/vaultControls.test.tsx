@@ -8,7 +8,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, expectTransactionButtonEnabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } =
 		fixture
 
-	test('opens vault launchers even before a selected vault is loaded', async () => {
+	test('keeps vault launchers silently disabled while the selected vault auto-loads', async () => {
+		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -16,6 +17,51 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 					securityPoolAddress: zeroAddress,
 					securityPools: [createSelectedPool()],
 					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: vaultAddress => {
+							loadSecurityVaultCalls.push(vaultAddress)
+						},
+						securityVaultForm: {
+							depositAmount: '10',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '1',
+							securityPoolAddress: zeroAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		const depositLauncherButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncherButton instanceof HTMLElement)) throw new Error('Expected deposit launcher button')
+
+		expect(depositLauncherButton.hasAttribute('disabled')).toBe(true)
+		expect(depositLauncherButton.getAttribute('title')).toBeNull()
+		expect(loadSecurityVaultCalls).toContain(undefined)
+
+		await act(() => {
+			fireEvent.click(depositLauncherButton)
+		})
+
+		expect(documentQueries.queryByRole('dialog', { name: 'Deposit REP' })).toBeNull()
+	})
+
+	test('does not auto-load a vault when no vault is selected and the wallet is disconnected', async () => {
+		const loadSecurityVaultCalls: Array<string | undefined> = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ address: undefined }),
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: vaultAddress => {
+							loadSecurityVaultCalls.push(vaultAddress)
+						},
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
@@ -30,18 +76,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		const documentQueries = within(document.body)
-		const depositLauncherButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
-		if (!(depositLauncherButton instanceof HTMLElement)) throw new Error('Expected deposit launcher button')
-
-		expect(depositLauncherButton.hasAttribute('disabled')).toBe(false)
-
-		await act(() => {
-			fireEvent.click(depositLauncherButton)
-		})
-
-		const dialog = documentQueries.getByRole('dialog')
-		expect(within(dialog).getByText('Refresh the selected vault before depositing REP.')).not.toBeNull()
+		expect(loadSecurityVaultCalls.every(vaultAddress => vaultAddress === undefined)).toBe(true)
+		expect(within(document.body).queryByText('Enter a vault address or connect a wallet to inspect vault details.')).toBeNull()
 	})
 
 	test('keeps REP approval guidance inside the approval control in the deposit modal', async () => {

@@ -10,6 +10,10 @@ export function formatUniverseLabel(universeId: bigint) {
 	return universeId === 0n ? 'Genesis (0)' : `Universe ${universeId.toString()}`
 }
 
+export function formatUniverseIdHex(universeId: bigint) {
+	return `0x${universeId.toString(16)}`
+}
+
 export function getUniverseLinkHref(universeId: bigint) {
 	const nextSearch = writeUniverseQueryParam(getRouteHashSearch(), universeId)
 	return buildRouteHref(getCurrentRouteHash(), nextSearch)
