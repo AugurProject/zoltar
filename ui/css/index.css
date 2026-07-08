@@ -5238,15 +5238,17 @@ button:focus-visible {
 }
 
 .question-preview-timeline {
-	grid-template-columns: repeat(2, minmax(0, max-content));
-	gap: 1rem 1.5rem;
+	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+	gap: 0.75rem;
 }
 
 .question-preview-timeline-item {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 0.45rem;
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 0.95rem;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
 }
 
 .question-preview-timeline-label,
@@ -5262,6 +5264,16 @@ button:focus-visible {
 	font-size: var(--font-caption);
 	font-weight: 600;
 	color: var(--text-secondary);
+}
+
+.question-preview-timeline-value .timestamp-value {
+	display: grid;
+	gap: 0.18rem;
+}
+
+.question-preview-timeline-value .timestamp-value-relative {
+	font-size: var(--font-label);
+	color: var(--muted);
 }
 
 .question-preview-meta {
@@ -5660,6 +5672,39 @@ button:focus-visible {
 	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.security-pool-ribbon-stat {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 1rem;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+}
+
+.security-pool-ribbon-stat-label {
+	font-size: var(--font-label);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.security-pool-ribbon-stat-value {
+	display: block;
+	font-size: var(--font-h4);
+	line-height: 1.2;
+	color: var(--text-primary);
+}
+
+.security-pool-ribbon-stat-value .currency-value-wrap,
+.security-pool-ribbon-stat-value .currency-value {
+	max-width: 100%;
+}
+
+.security-pool-ribbon-stat-value .currency-value {
+	font-size: inherit;
+	font-weight: inherit;
+}
+
 .security-pool-hero-main {
 	display: grid;
 	gap: 1rem;
@@ -5832,6 +5877,13 @@ button:focus-visible {
 .vault-preview-meta .metric-field,
 .vault-detail-meta .metric-field {
 	min-width: 0;
+}
+
+.security-pool-secondary-facts .metric-field {
+	padding: 0.8rem 0.9rem;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 0.95rem;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
 }
 
 .trading-holdings-stage {

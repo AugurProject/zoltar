@@ -69,4 +69,21 @@ describe('Question component', () => {
 		expect(document.body.textContent?.includes('No resolution notes or supporting context provided.')).toBe(true)
 		expect(document.body.textContent?.includes('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBe(true)
 	})
+
+	test('renders preview timestamps as separate timeline cards with relative sublabels', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={240n}>
+				<Question question={createQuestion()} variant='preview' />
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const timelineItems = document.body.querySelectorAll('.question-preview-timeline-item')
+		const relativeValues = document.body.querySelectorAll('.question-preview-timeline-value .timestamp-value-relative')
+
+		expect(timelineItems).toHaveLength(2)
+		expect(relativeValues).toHaveLength(2)
+		expect(relativeValues[0]?.textContent).toContain('2m ago')
+		expect(relativeValues[1]?.textContent).toContain('1m ago')
+	})
 })
