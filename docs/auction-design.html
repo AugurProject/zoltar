@@ -16,31 +16,37 @@
 						because some other market forks Zoltar first and this pool is later
 						migrated as part of the same child-universe split. After either
 						path, Placeholder migrates it into child pools for the valid fork
-						branches that users want to keep using.
+						branches that users want to keep using. Each migrated child pool can
+						then run its own separate truth auction inside that child universe
+						if that branch still needs collateral repair.
 					</p>
 					<p>
 						Fork migration preserves disagreement by splitting one parent market
 						into multiple child branches, but ETH does not get copied into every
 						child pool in full. Each branch inherits only the ETH implied by the
-						parent collateral and REP state that actually migrate into that
-						branch, so a child pool can end up with valid migrated accounting
-						but too little ETH to reopen cleanly on day one. When that happens,
-						the protocol attempts to sell some child-universe REP for ETH so the
-						missing collateral can be restored and open-interest holders can be
-						made whole. The truth auction repairs that collateral gap; it does
-						not decide which branch is true.
+						parent collateral and migrated REP state that actually move into
+						that branch, with parent-universe REP backing converted into the REP
+						of the child universe. A child pool can therefore inherit the
+						correct migrated share balances, vault state, and REP-backed
+						obligations, yet still hold too little ETH to reopen cleanly on day
+						one. When that happens, the protocol attempts to sell some
+						child-universe REP for ETH so the missing collateral can be
+						restored and open-interest holders can be made whole. The truth
+						auction repairs that collateral gap; it does not decide which
+						branch is true.
 					</p>
 					<p>
-						Placeholder implements the truth auction with
-						<code>UniformPriceDualCapBatchAuction</code>. The mechanism below
-						shows when it starts, how bids clear, and how winning bids become
-						pool ownership instead of direct token transfers.
+						Placeholder implements the truth auction with the
+						<code>UniformPriceDualCapBatchAuction</code> contract. After
+						migration, that auction opens, clears bids, and feeds winning
+						results back into pool ownership instead of paying out direct token
+						transfers.
 					</p>
 						<p>
-							The broader fork-recovery story lives in the
-							<a href="./whitepaper_placeholder.html#auction">truth auction section</a>
-							in the Placeholder whitepaper. The auction mechanics that follow
-							focus on start, bidding, clearing, and settlement.
+							The auction begins when a child pool starts it, then clears bids
+							and feeds settlement back into child-pool accounting. The
+							Placeholder whitepaper covers the surrounding fork migration and
+							collateral-repair context.
 						</p>
 				</header>
 
