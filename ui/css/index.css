@@ -778,9 +778,10 @@ button .loading-value {
 }
 
 button.currency-value.copyable {
-	display: inline-flex;
-	align-items: center;
+	display: inline-block;
 	min-height: 2rem;
+	max-width: 100%;
+	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
 	margin: -0.2rem -0.25rem;
