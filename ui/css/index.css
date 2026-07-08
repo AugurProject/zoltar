@@ -778,9 +778,10 @@ button .loading-value {
 }
 
 button.currency-value.copyable {
-	display: inline-flex;
-	align-items: center;
+	display: inline-block;
 	min-height: 2rem;
+	max-width: 100%;
+	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
 	margin: -0.2rem -0.25rem;
@@ -789,6 +790,9 @@ button.currency-value.copyable {
 	cursor: copy;
 	text-align: inherit;
 	touch-action: manipulation;
+	overflow: visible;
+	text-overflow: clip;
+	white-space: normal;
 }
 
 button.currency-value.copyable:hover:not(:disabled) {
