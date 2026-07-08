@@ -431,7 +431,8 @@ export function SecurityVaultSection({
 	const depositLauncherBlocker = (() => {
 		if (accountState.address === undefined) return 'Connect wallet to continue.'
 		if (!isMainnet) return 'Switch to Ethereum mainnet.'
-		if (selectedVaultAddress !== undefined && selectedVaultAddress !== '' && !selectedVaultIsOwnedByAccount) return 'Select your own vault to unlock actions.'
+		if (normalizedSecurityVaultForm.selectedVaultAddress.trim() !== '' && currentSelectedVaultDetails === undefined) return 'Refresh the selected vault first.'
+		if (normalizedSecurityVaultForm.selectedVaultAddress.trim() !== '' && !selectedVaultIsOwnedByAccount) return 'Select your own vault to unlock actions.'
 		return undefined
 	})()
 	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
