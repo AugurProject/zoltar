@@ -1,8 +1,9 @@
 # Placeholder Operator Reference
 
-This reference maps implementation guardrails to their contract sources for
-operators, indexers, reviewers, and UI maintainers. The white paper explains the
-protocol flow; this page keeps the operational edge cases in one place.
+Implementation guardrails map to their contract sources for operators, indexers,
+reviewers, and UI maintainers. Protocol flow belongs to the white paper;
+security-pool guardrails, share migration, escalation edge cases, fork
+migration, oracle operations, and launch checks are collected here.
 
 ## Immutable Protocol Release Posture
 

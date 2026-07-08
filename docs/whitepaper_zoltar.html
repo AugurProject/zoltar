@@ -19,6 +19,10 @@
 					<span>Companion paper</span>
 					<b>Placeholder Market Layer</b>
 				</a>
+				<a class="sidebar-companion" href="./start-here.html">
+					<span>Entry overview</span>
+					<b>Start Here Guide</b>
+				</a>
 					<nav aria-label="Document sections">
 						<a href="#abstract" aria-current="location">Abstract</a>
 						<a href="#timeline">Lifecycle Timeline</a>
@@ -28,7 +32,7 @@
 					<a href="#splitting">REP Splitting</a>
 					<a href="#security">Security Model</a>
 					<a href="#questions">Question Encoding</a>
-					<a href="#market-types">Market Types</a>
+					<a href="#question-types">Question Types</a>
 					<a href="#invalid">Invalid vs Malformed</a>
 					<a href="#lifecycle">Fork Lifecycle</a>
 					<a href="#thesis">Design Thesis</a>
@@ -111,6 +115,11 @@
 						as a legitimate answer state, and branches protocol state without embedding a
 						higher-level market design directly into the core layer.
 					</p>
+					<p>
+						<code>Invalid</code> is a valid answer branch for a well-formed question.
+						<code>Malformed</code> means an encoded answer option is rejected before it
+						can become a branch or final answer.
+					</p>
 				</section>
 
 				<section class="paper-section" id="timeline">
@@ -125,7 +134,7 @@
 						</div>
 						<div class="timeline-card">
 							<b>2. Disagreement persists</b>
-							<p>After the question ends, unresolved disagreement can force a fork threshold deposit.</p>
+							<p>After the question end time, any caller with threshold REP can call <code>forkUniverse</code>; applications decide when disagreement justifies doing so.</p>
 						</div>
 						<div class="timeline-card">
 							<b>3. Parent universe forks</b>
@@ -214,7 +223,7 @@
 					</p>
 					<ul class="clean-list">
 						<li><code>forkTime</code>: when the universe forked</li>
-						<li><code>forkQuestionId</code>: the question that triggered the fork</li>
+						<li><code>forkQuestionId</code>: the question id recorded by <code>forkUniverse</code> and used to define child branches</li>
 						<li><code>forkingOutcomeIndex</code>: the outcome index represented by the universe when it is a child</li>
 						<li><code>reputationToken</code>: the REP token used inside that universe</li>
 						<li><code>parentUniverseId</code>: the parent branch</li>
@@ -313,7 +322,7 @@
 					</p>
 					<figure class="diagram" id="fig-zoltar-question-registry-boundary" aria-labelledby="global-question-title">
 						<p class="diagram-title" id="global-question-title">Question Registry vs Application Binding</p>
-						<svg viewBox="0 0 920 330" role="img" aria-label="An ended global question can fork an unforked universe, while applications enforce their own binding rules.">
+						<svg viewBox="0 0 920 330" role="img" aria-label="forkUniverse can fork an unforked universe using an ended global question, while applications enforce their own binding rules.">
 							<defs>
 								<marker id="arrow-global-question" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
@@ -346,63 +355,64 @@
 					</div>
 					<p>
 						The threshold is a REP commitment large enough to force branch creation, but it
-						is not itself a choice of the winning branch. The current fork threshold is:
+						is not itself a choice of the winning branch. The constructor stores
+						<code>forkThresholdDivisor</code>; the current deployment default is
+						<code>20</code>.
 					</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
-						<math display="block" aria-label="fork threshold equals total theoretical REP supply divided by 20" data-source="forkThreshold = totalTheoreticalRepSupply / 20">
+						<math display="block" aria-label="fork threshold equals floor total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = floor(totalTheoreticalRepSupply / forkThresholdDivisor)">
 							<mrow>
 								<mi>forkThreshold</mi>
 								<mo>=</mo>
+								<mi>floor</mi>
+								<mo>(</mo>
 								<mfrac>
 									<mi>totalTheoreticalRepSupply</mi>
-									<mn>20</mn>
+									<mi>forkThresholdDivisor</mi>
 								</mfrac>
+								<mo>)</mo>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Fork Threshold</span>The default fork threshold is one twentieth of theoretical REP supply.</p>
+						<p class="equation-caption"><span class="equation-label">Fork Threshold</span>With the default divisor of <code>20</code>, the threshold is one twentieth of theoretical REP supply, rounded down by Solidity integer division.</p>
 					</div>
 						<p>
-							Initiating a fork requires supplying REP equal to 5% of the universe’s total
-							theoretical supply. The full threshold deposit leaves the parent universe:
+							Initiating a fork requires supplying the computed threshold. With the
+							default divisor, that is 5% of the universe's theoretical supply before
+							integer flooring. The full threshold deposit leaves the parent universe:
 							<code>forkUniverse</code> burns or transfers that entire parent-REP amount and
 							reduces the parent theoretical supply by the full threshold. The burn divisor
 							then controls how much child-REP minting credit the initiator receives. Under
-							the current constants, one fifth of the threshold is an uncredited haircut and
-							the remaining four fifths becomes the initiator’s migration balance.
+							the current deployment default <code>forkBurnDivisor = 5</code>, one fifth of
+							the threshold is an uncredited haircut and the remaining four fifths becomes
+							the initiator's migration balance.
 						</p>
 						<div class="equation" id="eq-zoltar-fork-burn">
-							<math display="block" aria-label="uncredited fork haircut equals fork threshold divided by 5" data-source="uncreditedForkHaircut = forkThreshold / 5">
+							<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = floor(forkThreshold / forkBurnDivisor)">
 								<mrow>
 									<mi>uncreditedForkHaircut</mi>
 									<mo>=</mo>
+									<mi>floor</mi>
+									<mo>(</mo>
 									<mfrac>
 										<mi>forkThreshold</mi>
-									<mn>5</mn>
-								</mfrac>
+										<mi>forkBurnDivisor</mi>
+									</mfrac>
+									<mo>)</mo>
 								</mrow>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit; the full parent-REP threshold is still burned or transferred out of the parent universe.</p>
+							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit, rounded down; the full parent-REP threshold is still burned or transferred out of the parent universe.</p>
 						</div>
 						<div class="equation" id="eq-zoltar-initiator-migration-balance">
-							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut, equal to 4 times fork threshold divided by 5" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut = 4 \cdot forkThreshold / 5">
+							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut">
 								<mrow>
 									<mi>forkInitiatorMigrationBalance</mi>
 									<mo>=</mo>
 									<mi>forkThreshold</mi>
 									<mo>-</mo>
 									<mi>uncreditedForkHaircut</mi>
-								<mo>=</mo>
-								<mfrac>
-									<mrow>
-										<mn>4</mn>
-										<mo>&#x22C5;</mo>
-										<mi>forkThreshold</mi>
-									</mrow>
-									<mn>5</mn>
-								</mfrac>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>The default remaining four fifths becomes the initiator's migration balance.</p>
+						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives the threshold minus the floored one-fifth haircut.</p>
 					</div>
 					<div class="implementation-grid">
 							<div class="implementation-note">
@@ -475,14 +485,14 @@
 									<td>Burn sink used for genesis REP</td>
 								</tr>
 								<tr>
-									<td><code>FORK_THRESHOLD_DIVISOR</code></td>
+									<td><code>forkThresholdDivisor</code></td>
 									<td><code>20</code></td>
-									<td>Fork threshold is <code>totalTheoreticalRepSupply / 20</code>, or 5% of supply</td>
+									<td>Constructor immutable. Fork threshold is <code>floor(totalTheoreticalRepSupply / forkThresholdDivisor)</code>; the default deployment value makes it about 5% of supply.</td>
 								</tr>
 									<tr>
-										<td><code>FORK_BURN_DIVISOR</code></td>
+										<td><code>forkBurnDivisor</code></td>
 										<td><code>5</code></td>
-										<td>The uncredited migration haircut is <code>forkThreshold / 5</code>, or 20% of the threshold; the full threshold parent-REP amount still leaves parent supply</td>
+										<td>Constructor immutable. The uncredited migration haircut is <code>floor(forkThreshold / forkBurnDivisor)</code>; the full threshold parent-REP amount still leaves parent supply.</td>
 									</tr>
 							</tbody>
 						</table>
@@ -510,9 +520,10 @@
 						<p>
 							The fork question defines the child-branch shape for the whole universe. A child
 							branch may therefore be keyed by <code>Invalid</code>, a categorical outcome
-							index, or a scalar encoding depending on which parent-universe question caused the
-							fork. Downstream applications should treat that branch selector as universe-level
-							metadata rather than assume every child branch is binary.
+							index, or a scalar encoding depending on which parent-universe question
+							<code>forkUniverse</code> used for the fork. Downstream applications should treat
+							that branch selector as universe-level metadata rather than assume every child
+							branch is binary.
 						</p>
 					<div class="implementation-grid">
 						<div class="implementation-note">
@@ -605,9 +616,11 @@
 					<p>
 						A fork only creates branches. If users and future activity concentrate in the
 						branch they regard as truthful, the value of child-universe REP also
-						concentrates there. Rational REP holders are therefore pushed toward the branch
-						they expect the market to keep using, because migrating into a branch they expect
-						others to abandon destroys the long-term value of the REP they receive there.
+						concentrates there. Holders can reproduce a migration balance into multiple
+						valid child universes, subject to the per-child cap and the gas and coordination
+						costs of doing so. The economic pressure is therefore value concentration:
+						REP in an abandoned branch may keep existing, but it is expected to have little
+						long-term value compared with REP in the branch that markets keep using.
 					</p>
 				</section>
 
@@ -760,37 +773,46 @@
 						range:
 					</p>
 					<div class="equation" id="eq-zoltar-scalar-display-value">
-						<math display="block" aria-label="displayed value equals display value min plus second payout numerator divided by num ticks times display value max minus display value min" data-source="displayedValue = displayValueMin + secondPayoutNumerator / numTicks \cdot (displayValueMax - displayValueMin)">
+						<math display="block" aria-label="displayed atomic value equals display value min plus floor second payout numerator times display range divided by num ticks" data-source="displayedAtomic = displayValueMin + floor(secondPayoutNumerator * (displayValueMax - displayValueMin) / numTicks)">
 							<mrow>
-								<mi>displayedValue</mi>
+								<mi>displayedAtomic</mi>
 								<mo>=</mo>
 								<mi>displayValueMin</mi>
 								<mo>+</mo>
+								<mi>floor</mi>
+								<mo>(</mo>
 								<mfrac>
-									<mi>secondPayoutNumerator</mi>
+									<mrow>
+										<mi>secondPayoutNumerator</mi>
+										<mo>&#x22C5;</mo>
+										<mo>(</mo>
+										<mi>displayValueMax</mi>
+										<mo>-</mo>
+										<mi>displayValueMin</mi>
+										<mo>)</mo>
+									</mrow>
 									<mi>numTicks</mi>
 								</mfrac>
-								<mo>&#x22C5;</mo>
-								<mo>(</mo>
-								<mi>displayValueMax</mi>
-								<mo>-</mo>
-								<mi>displayValueMin</mi>
 								<mo>)</mo>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Scalar Display Value</span>The second payout numerator interpolates the human-readable value inside the scalar range.</p>
+						<p class="equation-caption"><span class="equation-label">Scalar Display Value</span>The contract interpolates the scalar answer with <code>mulDiv</code>, so uneven divisions round down before the value is formatted.</p>
 					</div>
 					<p>
-						The contract implementation performs this interpolation with fixed-point integer
-						math and formats the result with 18 decimal places, trimming trailing zeroes for
-						display.
+						<code>displayValueMin</code> and <code>displayValueMax</code> are stored
+						as 18-decimal fixed-point display bounds. Formatting divides the atomic
+						result by <code>1e18</code> and trims trailing zeroes. For example, with
+						<code>displayValueMin = 0</code>, <code>displayValueMax = 10e18</code>,
+						<code>numTicks = 6</code>, and <code>secondPayoutNumerator = 1</code>,
+						the atomic value is <code>floor(10e18 / 6)</code>, which displays as
+						<code>1.666666666666666666</code> rather than an unrounded real number.
 					</p>
 				</section>
 
-				<section class="paper-section" id="market-types">
+				<section class="paper-section" id="question-types">
 					<div class="section-heading">
-						<h2>7. Market Types Supported by Zoltar</h2>
-						<a class="anchor-link" href="#market-types" aria-label="Link to Market Types Supported by Zoltar">#</a>
+						<h2>7. Question Types Supported by Zoltar</h2>
+						<a class="anchor-link" href="#question-types" aria-label="Link to Question Types Supported by Zoltar">#</a>
 					</div>
 					<p>
 						At the Zoltar layer, market type support comes from how questions and outcomes
@@ -850,11 +872,12 @@
 					</div>
 					<p>
 						Consider a universe <code>parentUniverse</code> and a question
-						<code>forkQuestion</code>, meaning the question whose unresolved outcome caused
-						<code>parentUniverse</code> to split after that question’s end time.
+						<code>forkQuestion</code>. After that question ends,
+						<code>forkUniverse</code> can record it as the fork question for
+						<code>parentUniverse</code>.
 					</p>
 					<ol class="step-list">
-						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records that <code>forkQuestion</code> triggered a fork in <code>parentUniverse</code>.</span></li>
+						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records <code>forkQuestion</code> as the fork question for <code>parentUniverse</code>.</span></li>
 						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
 						<li><span class="step-content">The fork initiator’s full parent-REP deposit leaves parent supply, and the post-haircut amount becomes migration balance.</span></li>
 						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>

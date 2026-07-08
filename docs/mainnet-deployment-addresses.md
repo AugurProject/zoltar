@@ -1,14 +1,14 @@
 # Mainnet Deployment Addresses
 
-These values are derived from the frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts. The machine-readable source for this table is `docs/mainnet-deployment-addresses.json`.
+Frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts determine the addresses and values below. `docs/mainnet-deployment-addresses.json` is the machine-readable source.
 
 ## Frozen Protocol Config
 
-| Parameter | Value |
-| --- | --- |
-| forkThresholdDivisor | 20 |
-| forkBurnDivisor | 5 |
-| initialEscalationGameDeposit | 1000000000000000000 |
+| Parameter | Value | Unit / Meaning |
+| --- | --- | --- |
+| forkThresholdDivisor | 20 | Fork threshold is `1 / 20` of theoretical REP supply. |
+| forkBurnDivisor | 5 | Fork initiator haircut is `1 / 5` of the fork threshold. |
+| initialEscalationGameDeposit | 1000000000000000000 | `1 REP`; constructor-set starting escalation bond from the frozen deployment config. |
 
 ## Deterministic Deployment Steps
 
