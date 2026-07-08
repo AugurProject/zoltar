@@ -124,6 +124,13 @@ Flag documentation that is technically correct but hard to follow because:
   "question cannot settle", or passive/modal forms such as "question can be
   resolved" and "question is forked" when a caller, contract, market, dispute
   process, or fork operation is the actor
+- definition pileups introduce several new protocol terms before showing the
+  lifecycle action or consequence that makes them useful. Flag paragraphs with
+  repeated "A ... is", "An ... is", or "... means ..." constructions, more than
+  two newly emphasized terms, or semicolon-compressed definitions such as
+  "after a fork; it does not..." when the paragraph would teach better as a
+  short lifecycle sentence followed by one or two definitions in encounter
+  order
 - diagrams/tables/widgets introduce concepts not prepared by the prose
 - paragraphs perform too many conceptual jobs
 - related features are described locally but not connected back to the lifecycle

@@ -13,6 +13,23 @@ const htmlToVisibleText = (text: string) =>
 		.replace(/&lt;/gi, '<')
 		.replace(/&gt;/gi, '>')
 
+const htmlParagraphBodies = (text: string) => {
+	const paragraphs: string[] = []
+	for (const match of text.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)) {
+		const paragraph = match[1]
+		if (paragraph !== undefined) {
+			paragraphs.push(paragraph)
+		}
+	}
+	return paragraphs
+}
+
+const markdownParagraphBodies = (text: string) =>
+	text
+		.split(/\n{2,}/)
+		.map(paragraph => paragraph.trim())
+		.filter(paragraph => paragraph.length > 0)
+
 const discouragedDocsPatterns = [
 	{
 		name: 'meta page framing',
@@ -52,6 +69,14 @@ const discouragedDocsPatterns = [
 		regex:
 			/\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(becomes?|escalates?|forks?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(that|which|whose)\s+[^.]{0,80}\b(becomes?|escalates?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should)?\s*drive\s+[^.]{0,80}\bforks?\b|\b(question|questions|forkQuestion)\s+caused\s+[^.]{0,80}\bsplit\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't|is|are|was|were|gets?|got)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}be\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b|\b(question|questions|forkQuestion)\s+(is|are|was|were|gets?|got)\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b/i,
 	},
+	{
+		name: 'exhaustive child-pool creation',
+		regex: /\bfor each fork branch\b/i,
+	},
+	{
+		name: 'passive migration-balance grant',
+		regex: /\bholder receives a\s+(?:migration balance|<em>migration balance<\/em>)\b/i,
+	},
 ]
 
 const findDiscouragedDocsWording = (path: string, text: string) => {
@@ -85,6 +110,33 @@ const findDiscouragedDocsWording = (path: string, text: string) => {
 	return violations
 }
 
+const findDefinitionPileups = (path: string, text: string) => {
+	if (!path.endsWith('.html') && !path.endsWith('.md')) {
+		return []
+	}
+	const violations: string[] = []
+	const paragraphs = path.endsWith('.html') ? htmlParagraphBodies(text).map(paragraph => ({ raw: paragraph, visible: htmlToVisibleText(paragraph) })) : markdownParagraphBodies(text).map(paragraph => ({ raw: paragraph, visible: paragraph }))
+	paragraphs.forEach((paragraph, index) => {
+		const visibleText = normalizeWhitespace(paragraph.visible).trim()
+		const emphasizedTerms = (paragraph.raw.match(/<em\b/gi)?.length ?? 0) + (paragraph.raw.match(/(?:^|[^*])\*[^*\n]+\*/g)?.length ?? 0)
+		const definitionOpeners = visibleText.match(/\b(?:A|An|The)\s+[^.]{1,80}\s+(?:is|means|belongs to)\b/g)?.length ?? 0
+		const semicolonCompression = /;\s+(?:it|this|they)\b/i.test(visibleText)
+		const hasDefinitionPileup = definitionOpeners >= 4 || (emphasizedTerms >= 4 && definitionOpeners >= 2) || (emphasizedTerms >= 3 && definitionOpeners >= 1 && semicolonCompression)
+		if (hasDefinitionPileup) {
+			violations.push(`${path}:paragraph ${index + 1}: definition pileup: ${visibleText.slice(0, 160)}`)
+		}
+	})
+	return violations
+}
+
+const violationNames = (violations: string[]) =>
+	violations.map(violation => {
+		const match = violation.match(/: ([^:]+):/)
+		return match?.[1] ?? violation
+	})
+
+const hasViolation = (violations: string[], name: string) => violationNames(violations).includes(name) || violations.some(violation => violation.includes(`: ${name}`))
+
 describe('documented protocol constants', () => {
 	test('keeps reader-facing docs free of meta reader-instruction phrasing', async () => {
 		const docsGlob = new Bun.Glob('docs/**/*.{html,js,md}')
@@ -96,54 +148,82 @@ describe('documented protocol constants', () => {
 		for (const path of paths.sort()) {
 			const text = await Bun.file(path).text()
 			violations.push(...findDiscouragedDocsWording(path, text))
+			violations.push(...findDefinitionPileups(path, text))
 		}
 
 		expect(violations).toEqual([])
 	})
 
 	test('detects discouraged docs wording across wrapped whitespace', () => {
-		const wrappedText = normalizeWhitespace('This\npage explains the lifecycle.')
-		const metaPageFraming = /\b(?:in\s+)?(this|these)\s+(page|guide|reference|document|whitepaper|docs|table),?\s+(explains|describes|maps|lists|keeps|is|summarizes|usually)\b/i
-		const theseDocsFraming = /\b(?:in\s+)?these\s+docs\b/i
+		const cases = [
+			{
+				text: 'This\npage explains the lifecycle.',
+				name: 'meta page framing',
+			},
+			{
+				text: 'These\ndocs describe the lifecycle.',
+				name: 'these-docs framing',
+			},
+			{
+				text: 'In\nthese docs, allowance means exposure.',
+				name: 'these-docs framing',
+			},
+		]
 
-		expect(metaPageFraming.test(wrappedText)).toBe(true)
-		expect(theseDocsFraming.test(normalizeWhitespace('These\ndocs describe the lifecycle.'))).toBe(true)
-		expect(theseDocsFraming.test(normalizeWhitespace('In\nthese docs, allowance means exposure.'))).toBe(true)
+		for (const testCase of cases) {
+			expect(hasViolation(findDiscouragedDocsWording('docs/example.md', testCase.text), testCase.name)).toBe(true)
+		}
 	})
 
 	test('detects discouraged plural document-subject wording', () => {
-		const pluralMetaFraming = /\b(?:in\s+)?(this|these)\s+(page|pages|guide|guides|reference|references|document|documents|whitepaper|whitepapers|docs|table|tables),?\s+(explains|explain|describes|describe|maps|map|lists|list|keeps|keep|is|are|summarizes|summarize|usually)\b/i
-		const pluralDocumentSubjectFraming =
-			/\b(white paper|white papers|whitepaper|whitepapers|reference|references|auction design|auction designs|guide|guides|document|documents|docs|page|pages|section|sections|sidebar|sidebars|table|tables)\s+(explains|explain|keeps|keep|summarizes|summarize|maps|map|describes|describe|lists|list|expands|expand|collects|collect|defines|define|is|are)\b/i
+		const cases = [
+			{
+				text: 'These documents explain the lifecycle.',
+				name: 'meta page framing',
+			},
+			{
+				text: 'References summarize the guardrails.',
+				name: 'document-subject framing',
+			},
+		]
 
-		expect(pluralMetaFraming.test('These documents explain the lifecycle.')).toBe(true)
-		expect(pluralDocumentSubjectFraming.test('References summarize the guardrails.')).toBe(true)
+		for (const testCase of cases) {
+			expect(hasViolation(findDiscouragedDocsWording('docs/example.md', testCase.text), testCase.name)).toBe(true)
+		}
 	})
 
 	test('detects question-as-lifecycle-actor wording with modal verbs', () => {
-		const wrongQuestionLifecycleActor =
-			/\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(becomes?|escalates?|forks?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(that|which|whose)\s+[^.]{0,80}\b(becomes?|escalates?|resolves?|trades?|settles?|settled|drives?|causes?|caused|triggers?|triggered)\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should)?\s*drive\s+[^.]{0,80}\bforks?\b|\b(question|questions|forkQuestion)\s+caused\s+[^.]{0,80}\bsplit\b|\b(question|questions|forkQuestion)\s+(can|could|may|might|must|will|should|cannot|can't|is|are|was|were|gets?|got)?\s*(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}be\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b|\b(question|questions|forkQuestion)\s+(is|are|was|were|gets?|got)\s+(?:(?:already|later|safely|locally|globally|cleanly|\w+ly)\s+){0,3}(resolved|forked|traded|escalated|settled)\b/i
+		const cases = [
+			'the question can become a pool',
+			'An ended global question can fork an unforked universe',
+			'question can drive universe forks',
+			'question drives a fork',
+			'question caused the universe to split',
+			'the question that triggered the fork',
+			'the question whose unresolved outcome caused parentUniverse to split',
+			'forkQuestion triggered a fork',
+			'question can be resolved',
+			'question is forked',
+			'question gets traded',
+			'the question cannot settle locally',
+			'questions can settle after escalation',
+			'question is already resolved',
+			'question can later be resolved',
+			'question cannot safely settle',
+			'the question that becomes a pool',
+			'the question which settles locally',
+			'question eventually escalates',
+			'question can quickly be resolved',
+		]
 
-		expect(wrongQuestionLifecycleActor.test('the question can become a pool')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('An ended global question can fork an unforked universe')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question can drive universe forks')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question drives a fork')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question caused the universe to split')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('the question that triggered the fork')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('the question whose unresolved outcome caused parentUniverse to split')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('forkQuestion triggered a fork')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question can be resolved')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question is forked')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question gets traded')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('the question cannot settle locally')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('questions can settle after escalation')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question is already resolved')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question can later be resolved')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question cannot safely settle')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('the question that becomes a pool')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('the question which settles locally')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question eventually escalates')).toBe(true)
-		expect(wrongQuestionLifecycleActor.test('question can quickly be resolved')).toBe(true)
+		for (const text of cases) {
+			expect(hasViolation(findDiscouragedDocsWording('docs/example.md', text), 'wrong question lifecycle actor')).toBe(true)
+		}
+	})
+
+	test('detects contract-inaccurate fork migration shortcuts', () => {
+		expect(hasViolation(findDiscouragedDocsWording('docs/example.md', 'Placeholder creates one child pool for each fork branch.'), 'exhaustive child-pool creation')).toBe(true)
+		expect(hasViolation(findDiscouragedDocsWording('docs/example.html', '<p>After a fork, a holder receives a <em>migration balance</em>.</p>'), 'passive migration-balance grant')).toBe(true)
 	})
 
 	test('detects discouraged docs wording split by inline HTML tags', () => {
@@ -155,6 +235,35 @@ describe('documented protocol constants', () => {
 			'docs/example.html:visible:3: wrong question lifecycle actor: question  can  settle locally.',
 			'docs/example.html: visible normalized: wrong question lifecycle actor',
 		])
+	})
+
+	test('detects definition pileups before lifecycle action', () => {
+		const html = `
+			<p>
+				A <em>fork</em> is a split. A <em>fork branch</em> is one path.
+				A <em>child pool</em> is a pool in that branch. A
+				<em>truth auction</em> is a repair sale after a fork; it does not
+				choose truth.
+			</p>
+		`
+		const htmlWithManyTerms = `
+			<p>
+				Core terms come first. A <em>universe</em> is a truth branch. A
+				<em>migration balance</em> means forked REP value. A
+				<em>security vault</em> is a pool account, while
+				<em>local escalation</em>, <em>fork migration</em>, and a
+				<em>truth auction</em> complete the path.
+			</p>
+		`
+		const markdown = `
+			A *fork* is a split. A *fork branch* is one path. A *child pool*
+			is a pool in that branch. A *truth auction* is a repair sale after
+			a fork; it does not choose truth.
+		`
+
+		expect(findDefinitionPileups('docs/example.html', html)).toEqual(['docs/example.html:paragraph 1: definition pileup: A fork is a split. A fork branch is one path. A child pool is a pool in that branch. A truth auction is a repair sale after a fork; it does not choose truth.'])
+		expect(findDefinitionPileups('docs/example.html', htmlWithManyTerms)[0]).toStartWith('docs/example.html:paragraph 1: definition pileup: Core terms come first.')
+		expect(findDefinitionPileups('docs/example.md', markdown)[0]).toStartWith('docs/example.md:paragraph 1: definition pileup: A *fork* is a split. A *fork branch* is one path.')
 	})
 
 	test('keeps text-review guidance explicit about meta-document phrasing variants', async () => {
@@ -241,19 +350,23 @@ describe('documented protocol constants', () => {
 		expect(startHere).not.toContain('id="read-next"')
 		expect(startHere).not.toContain('Reader shortcut')
 		expect(startHere).not.toContain('Contracts to read')
-		expect(startHere).toContain('Core terms come first')
-		expect(startHere).toContain('A <em>universe</em> is a Zoltar truth branch')
+		expect(startHere).toContain('Two ideas anchor the lifecycle')
+		expect(startHere).toContain('Zoltar universes are truth branches')
+		expect(startHere).toContain('After a fork, a holder can have <em>migration balance</em>')
+		expect(startHere).toContain('initiating the fork or adding parent REP after the fork')
+		expect(startHere).not.toContain('After a fork, a holder receives a <em>migration balance</em>')
 		expect(startHere).toContain('<code>Zoltar</code> owns forkable truth universes and child REP')
 		expect(startHere).toContain('Placeholder owns market mechanics on top of those universes')
-		expect(startHere.indexOf('Core terms come first')).toBeLessThan(startHere.indexOf('<code>Zoltar</code> owns forkable truth universes'))
+		expect(startHere.indexOf('Two ideas anchor the lifecycle')).toBeLessThan(startHere.indexOf('<code>Zoltar</code> owns forkable truth universes'))
 		expect(startHere).not.toContain('The core idea is split responsibility')
 		expect(startHere).not.toContain('A question becomes a pool')
 		expect(startHere).not.toContain('escalates if needed')
 		expect(startHere).not.toContain('This guide is')
 		expect(startHere).not.toContain('Read it before')
-		expect(startHere.indexOf('<em>migration balance</em>')).toBeLessThan(startHere.indexOf('<em>child REP</em> is REP minted'))
-		expect(startHere).toContain('reproduced into selected fork branches')
-		expect(startHere).toMatch(/each branch receiving at\s+most that source balance/)
+		const childRepMint = startHere.search(/Reproduction mints\s+<em>child REP<\/em>/)
+		expect(startHere.indexOf('<em>migration balance</em>')).toBeLessThan(childRepMint)
+		expect(startHere).toMatch(/reproduced into selected fork\s+branches/)
+		expect(startHere).toMatch(/each branch\s+receiving at\s+most the source balance/)
 		expect(startHere).toMatch(/Reproduce parent-universe migration balance[\s\S]*each\s+child capped by the source balance/)
 		expect(startHere).toMatch(/the\s+amount of REP-backed exposure they permit/)
 		expect(startHere).toMatch(/the REP value\s+available after a fork/)
@@ -262,16 +375,19 @@ describe('documented protocol constants', () => {
 		expect(startHere).toContain('Why it exists')
 		expect(auctionDesign).toContain('Uniform Price Dual Cap Batch Auction')
 		expect(auctionDesign).toContain('Why This Auction Exists')
-		expect(auctionDesign).toContain('A collateral-repair auction belongs to the fork recovery path')
+		expect(auctionDesign).toContain('Auction repair happens after fork migration')
+		expect(auctionDesign).toContain('callers can create')
+		expect(auctionDesign).toContain('<em>child pools</em> for selected valid fork branches')
+		expect(auctionDesign).toContain('Each child pool uses REP from its child universe')
+		expect(auctionDesign).not.toContain('Placeholder creates one')
+		expect(auctionDesign).not.toContain('for each fork branch')
 		expect(auctionDesign).not.toContain('This page explains')
 		expect(auctionDesign).not.toContain('Read this as')
-		expect(auctionDesign).toMatch(/A\s+<em>fork<\/em> is\s+the split/)
-		expect(auctionDesign).toMatch(/A\s+<em>child pool<\/em> is\s+the market pool in one fork\s+branch/)
-		expect(auctionDesign).toMatch(/A\s+<em>truth auction<\/em> is a sale that repairs a child pool\s+after a fork/)
-		expect(auctionDesign.search(/A\s+<em>fork<\/em>/)).toBeLessThan(auctionDesign.search(/A\s+<em>fork branch<\/em>/))
-		expect(auctionDesign.search(/A\s+<em>child pool<\/em>/)).toBeLessThan(auctionDesign.search(/A\s+<em>truth auction<\/em>/))
-		expect(auctionDesign.search(/A\s+<em>truth auction<\/em>/)).toBeLessThan(auctionDesign.indexOf('<code>SecurityPoolForker</code> uses this auction'))
-		expect(auctionDesign).toMatch(/<em>child-universe REP<\/em> is REP minted inside that\s+branch/)
+		expect(auctionDesign).not.toContain('A <em>fork</em> is')
+		expect(auctionDesign).not.toContain('A <em>truth auction</em> is a sale')
+		expect(auctionDesign.indexOf('Auction repair happens after fork migration')).toBeLessThan(auctionDesign.indexOf('Each child pool uses REP from its child universe'))
+		expect(auctionDesign.indexOf('Each child pool uses REP from its child universe')).toBeLessThan(auctionDesign.indexOf('<code>SecurityPoolForker</code> uses this auction'))
+		expect(auctionDesign).not.toContain('<em>child-universe REP</em> is REP minted')
 		expect(auctionDesign).toContain('same-tick bids fill FIFO by submission order')
 		expect(auctionDesign).toContain('Try a simple auction clearing run')
 		expect(auctionDesign).toContain('fig-auction-lifecycle')

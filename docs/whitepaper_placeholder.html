@@ -112,8 +112,8 @@
 						question-specific security pools, ETH-collateralized complete sets,
 						local escalation resolution, and a fork-recovery path that can
 						repair missing child collateral through a truth auction. Despite the
-						name, a truth auction repairs child-pool ETH collateral; it does not
-						choose the truthful branch.
+						name, a truth auction repairs child-pool ETH collateral instead of
+						choosing the truthful branch.
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
@@ -162,8 +162,9 @@
 					<p>
 						Placeholder uses two oracle paths, and they answer different
 						questions. Zoltar represents unresolved market-truth disputes by
-						creating child universes; it does not pick the winning branch. Users
-						and applications decide which branch they treat as truthful.
+						creating child universes. It records the branch set without picking
+						the winning branch. Users and applications decide which branch they
+						treat as truthful.
 						OpenOracle only supplies a bounded REP/ETH solvency price: the
 						coordinator requests a REP/WETH report, a reporter posts amounts,
 						disputers may replace a bad report, settlement finalizes the report,
@@ -2292,9 +2293,9 @@
 							The migration call burns the full parent token balance and
 							reproduces that same balance into each selected child outcome. The
 							contract accepts any non-empty, strictly increasing list of valid
-							non-malformed fork-question outcome indexes; this compact diagram
-							caps the displayed branches at three to show why migration is not
-							a pro-rata split.
+							non-malformed fork-question outcome indexes. The compact diagram
+							caps the displayed branches at three, which shows why migration is
+							not a pro-rata split.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -7169,7 +7170,7 @@
 						<summary>Adjust funded and underfunded auction clearing</summary>
 						<p>
 							The auction sells REP at a uniform clearing price when demand is
-							strong enough. The contract input is an integer tick; this example
+							strong enough. The contract input is an integer tick. This example
 							uses a three-level tick-derived ladder displayed near
 							<code>5</code>, <code>4</code>, and <code>3 ETH/REP</code> to keep
 							the arithmetic readable. If qualifying demand is below the ETH

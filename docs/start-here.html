@@ -16,17 +16,21 @@
 					repair, and REP/ETH solvency checks.
 				</p>
 				<p>
-					Core terms come first. A <em>universe</em> is a Zoltar truth branch
-					with its own REP token. After a fork, a holder has a
-					<em>migration balance</em>: parent-universe REP value that can be
-					reproduced into selected fork branches, with each branch receiving at
-					most that source balance. A <em>child universe</em> is one branch, and
-					<em>child REP</em> is REP minted inside that branch from the migration
-					balance. A <em>security vault</em> is a pool-specific REP account,
-					<em>local escalation</em> is the market's first dispute process,
-					<em>fork migration</em> moves state into child universes, and a
-					<em>truth auction</em> sells child REP for ETH repair without choosing
-					truth.
+					Two ideas anchor the lifecycle. Zoltar universes are truth branches
+					with their own REP. Placeholder security vaults are pool-specific REP
+					accounts used for local escalation before a fork is needed.
+				</p>
+				<p>
+					After a fork, a holder can have <em>migration balance</em> by
+					initiating the fork or adding parent REP after the fork. That balance
+					can be reproduced into selected fork branches. Reproduction mints
+					<em>child REP</em> inside each child universe, with each branch
+					receiving at most the source balance.
+				</p>
+				<p>
+					Fork migration moves pool state into child universes. If a child pool
+					lacks ETH collateral after migration, a truth auction sells child REP
+					for ETH repair without choosing truth.
 				</p>
 				<p>
 					<code>Zoltar</code> owns forkable truth universes and child REP.
@@ -212,7 +216,7 @@
 						<tr>
 							<td>Auction bidders</td>
 							<td>Bid ETH for child-universe REP when a child pool needs collateral repair.</td>
-							<td>The auction repairs ETH collateral; it does not select truth.</td>
+							<td>The auction repairs ETH collateral instead of selecting truth.</td>
 						</tr>
 						<tr>
 							<td>Reporters and disputers</td>
@@ -352,7 +356,7 @@
 							<td>Auction repair</td>
 							<td>If a child pool needs ETH collateral, it sells child REP through the truth auction.</td>
 							<td><code>UniformPriceDualCapBatchAuction</code></td>
-							<td>The auction repairs collateral; it does not decide truth.</td>
+							<td>The auction repairs collateral instead of deciding truth.</td>
 						</tr>
 						<tr>
 							<td>Redemption</td>

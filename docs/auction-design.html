@@ -11,19 +11,18 @@
 			<header>
 				<h1>Uniform Price Dual Cap Batch Auction</h1>
 				<p>
-					A collateral-repair auction belongs to the fork recovery path. A
-					<em>fork</em> is the split that happens when a market cannot safely
-					settle in one branch while tied to a disputed question.
-					A <em>fork branch</em> is one path after that split.
-					A <em>child pool</em> is the market pool in one fork branch, and
-					<em>child-universe REP</em> is REP minted inside that
-					branch. A <em>truth auction</em> is a sale that repairs a child pool
-					after a fork; it does not choose which branch is truthful.
+					Auction repair happens after fork migration. If a disputed market
+					cannot resolve in the parent universe, callers can create
+					<em>child pools</em> for selected valid fork branches.
+				</p>
+				<p>
+					Each child pool uses REP from its child universe. A truth auction
+					sells that REP for ETH so the child pool can repair collateral. The
+					auction repairs solvency. It does not decide which branch is true.
 				</p>
 				<p>
 					<code>SecurityPoolForker</code> uses this auction when a forked child
-					pool needs ETH collateral repair. The auction sells child-universe REP
-					for ETH; it does not decide which fork branch is true.
+					pool needs ETH collateral repair.
 				</p>
 				<p>
 					The implementation path centers on
