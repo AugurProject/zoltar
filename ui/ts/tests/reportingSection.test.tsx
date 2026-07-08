@@ -282,18 +282,17 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Workflow' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(true)
-		expect(document.body.textContent?.includes('Available now')).toBe(true)
-		expect(document.body.textContent?.includes('Blocked')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
 		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
 	})
 
-	test('renders active reporting with a lifecycle banner and no reporting context card', async () => {
+	test('renders active reporting without the lifecycle banner and no reporting context card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -309,7 +308,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Active' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
+		expect(document.body.querySelector('.reporting-header-stack')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Min to take the lead' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
@@ -690,7 +690,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Active' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.')).toBe(false)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})

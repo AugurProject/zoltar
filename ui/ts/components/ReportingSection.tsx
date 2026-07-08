@@ -483,8 +483,9 @@ export function ReportingSection({
 				reportingDetails: effectiveReportingDetails,
 			})
 		: undefined
+	const reportingStageBanner = reportingStage?.key === 'escalation-active' ? undefined : reportingStage
 	const reportingWorkflowSummary = reportingStage?.detail ?? 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.'
-	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined || reportingOpenNotice !== undefined)
+	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
 		<>
 			{showFullReporting ? (
@@ -518,7 +519,7 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStage} /> : <p className='notice success'>{reportingOpenNotice}</p>}
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStageBanner} /> : <p className='notice success'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 
