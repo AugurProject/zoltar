@@ -57,35 +57,42 @@
 					<code>15 REP</code> migrates into the <code>YES</code> universe, then
 					that child receives <code>15 / 20 * 10 = 7.5 ETH</code>. The missing
 					<code>2.5 ETH</code> stays behind relative to the full parent-pool
-					collateral picture, so a branch that lands below the repair denominator
-					can still need a complete vault state to reopen. The same logic applies
-					to the <code>NO</code>
+					collateral picture, so the child can inherit the migrated shares, pool
+					ownership, and security-bond allowance it needs to account for, yet
+					still have too little ETH to reopen. The same logic applies to the <code>NO</code>
 					universe: if the remaining <code>5 REP</code> migrates there, that
 					child receives only <code>5 / 20 * 10 = 2.5 ETH</code>.
 				</p>
 				<p>
-					The auction exists because proportional migration can leave a child
-					pool with less ETH than it needs to reopen. In the same example, the
-					<code>YES</code> child needs to recover <code>2.5 ETH</code>, so REP is
-					offered for sale inside the <code>YES</code> universe to raise it. The
-					<code>NO</code> child is short by the same logic and also needs to
-					raise the ETH implied by its own proportional migration result, so it
-					runs its own separate auction inside the <code>NO</code> universe.
+					To close that gap, REP is offered for sale inside the child universe.
+					In the same example, the <code>YES</code> child needs to recover
+					<code>2.5 ETH</code>, so REP is offered for sale inside the
+					<code>YES</code> universe to raise it. The <code>NO</code> child is
+					short by the same logic and also needs to raise the ETH implied by its
+					own proportional migration result, so it runs its own separate auction
+					inside the <code>NO</code> universe.
 				</p>
 				<p>
-					The design is dual-capped: it tries to raise enough ETH without
-					selling more REP than the child pool is allowed to sell. If demand is
-					weak, the auction sells only what qualifying bids demand and leaves
-					unsold REP in the pool instead of forcing a low-price full sale.
+					The design is dual-capped because the auction has two limits at once:
+					it is trying to raise a fixed amount of ETH, and it is not allowed to
+					sell more than a fixed amount of child-universe REP. For example, if a
+					child pool needs <code>5 ETH</code> and can sell at most
+					<code>20 REP</code>, strong demand might reach the full
+					<code>5 ETH</code> target before all <code>20 REP</code> is needed.
+					Then the auction clears at one price and stops because the ETH target
+					has been met. If demand is weak, bids might support buying only
+					<code>8 REP</code> while still pricing the branch above the
+					underfunded threshold. In that case the auction sells only those
+					<code>8 REP</code>, raises less than <code>5 ETH</code>, and leaves the
+					other <code>12 REP</code> unsold instead of forcing a full
+					<code>20 REP</code> sale at a worse price.
 				</p>
 			</section>
 
 			<section id="lifecycle">
 				<h2>Operational Lifecycle</h2>
 				<p>
-					The auction is a repair step between fork migration and normal child
-					pool operation. The truth auction starts only after the migration
-					window has ended. That window lasts
+					The truth auction starts only after the migration window has ended. That window lasts
 					<code>SecurityPoolUtils.MIGRATION_TIME</code>, currently one week,
 					measured from the parent universe fork time. If the migrated branch is
 					still short of ETH after that window, the auction opens. If enough REP
@@ -199,6 +206,15 @@
 					it loses in full, and bids at the clearing tick share the last fill.
 					In the funded branch that last fill is FIFO within the tick, so earlier
 					same-tick bids are consumed before later ones.
+				</p>
+				<p>
+					The tick math follows the contract's <code>tickToPrice</code>
+					function. Tick <code>0</code> means <code>1 ETH/REP</code>. Each step
+					up multiplies price by roughly <code>1.0001</code>, and each step down
+					divides by the same factor, so the price at tick <code>t</code> is
+					approximately <code>1.0001^t ETH/REP</code>. In other words, a higher
+					tick means the bidder is willing to pay more ETH per REP, which is why
+					higher ticks are evaluated first during clearing.
 				</p>
 				<p>
 					Two caps define the funded stopping point. The first cap is

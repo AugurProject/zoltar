@@ -399,7 +399,7 @@ describe('documented protocol constants', () => {
 		expect(auctionDesign).toContain('Fork migration preserves disagreement by splitting one parent market')
 		expect(auctionDesign).toContain('Placeholder implements the truth auction with')
 		expect(auctionDesign).toContain('The shortfall comes from proportional migration')
-		expect(auctionDesign).toContain('below the repair denominator')
+		expect(auctionDesign).toContain('security-bond allowance it needs to account for')
 		expect(auctionDesign).toContain('public wrapper call')
 		expect(auctionDesign).toMatch(/Anyone can call\s+the wrapper that triggers the forker-owned auction start or finalize\s+step/)
 		expect(auctionDesign).not.toContain('Placeholder creates one')
