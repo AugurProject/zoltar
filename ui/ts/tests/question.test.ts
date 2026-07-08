@@ -32,16 +32,11 @@ void describe('question helpers', () => {
 	void test('builds binary question summary fields with clarity labels', () => {
 		const fields = getQuestionSummaryFields(questionBase)
 
-		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Context', 'Question ID', 'Created', 'End Time', 'Outcomes'])
+		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Question ID', 'Created', 'End Time', 'Outcomes'])
 		expect(fields.find(field => field.label === 'Question Type')).toEqual({
 			kind: 'text',
 			label: 'Question Type',
 			value: 'Binary',
-		})
-		expect(fields.find(field => field.label === 'Context')).toEqual({
-			kind: 'text',
-			label: 'Context',
-			value: 'Provided',
 		})
 		expect(fields.find(field => field.label === 'Outcomes')).toEqual({
 			kind: 'text',
@@ -61,7 +56,7 @@ void describe('question helpers', () => {
 			outcomeLabels: [],
 		})
 
-		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Context', 'Question ID', 'Created', 'End Time', 'Outcomes', 'Ticks', 'Display Range', 'Answer Unit'])
+		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Question ID', 'Created', 'End Time', 'Outcomes', 'Ticks', 'Display Range', 'Answer Unit'])
 		expect(fields.find(field => field.label === 'Question Type')).toEqual({
 			kind: 'text',
 			label: 'Question Type',

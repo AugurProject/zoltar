@@ -50,10 +50,6 @@ function getQuestionTypeLabel(question: MarketDetails) {
 	}
 }
 
-function getQuestionContextLabel(question: MarketDetails) {
-	return getQuestionDescription(question) === '' ? 'Not provided' : 'Provided'
-}
-
 function getDisplayedOutcomes(question: MarketDetails) {
 	const outcomes = question.outcomeLabels.length === 0 ? ['Scalar'] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
@@ -66,7 +62,6 @@ function getDisplayRange(question: MarketDetails) {
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
 		{ kind: 'text', label: 'Question Type', value: getQuestionTypeLabel(question) },
-		{ kind: 'text', label: 'Context', value: getQuestionContextLabel(question) },
 		{ kind: 'text', label: 'Question ID', value: question.questionId },
 		{ kind: 'timestamp', label: 'Created', value: question.createdAt },
 		{ kind: 'timestamp', label: 'End Time', value: question.endTime },

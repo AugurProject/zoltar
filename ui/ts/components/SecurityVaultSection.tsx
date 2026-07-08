@@ -360,7 +360,6 @@ export function SecurityVaultSection({
 		if (hasValidOraclePrice) return 'Withdrawable REP'
 		return 'REP Available To Queue'
 	})()
-	const claimFeesGuardMessage = undefined
 	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 	})
@@ -450,7 +449,6 @@ export function SecurityVaultSection({
 		return undefined
 	})()
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? 'This vault does not exist.' : undefined
-	const depositActionLauncherBlocker = undefined
 	const repExitLauncherBlocker = loadedVaultMissingBlocker
 	const bondAllowanceLauncherBlocker = loadedVaultMissingBlocker
 	const claimFeesLauncherBlocker = loadedVaultMissingBlocker
@@ -469,9 +467,8 @@ export function SecurityVaultSection({
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
 			safetyId: getSecurityVaultActionSafetyId('depositRep'),
-			...(depositRepEnabled && depositActionLauncherBlocker === undefined && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
-			readiness: depositRepEnabled && depositActionLauncherBlocker === undefined && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(depositActionLauncherBlocker === undefined ? {} : { blocker: depositActionLauncherBlocker }),
+			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
+			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			title: 'Deposit REP',
 		},
 		{
@@ -806,7 +803,7 @@ export function SecurityVaultSection({
 						pendingLabel='Claiming fees...'
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees || claimFeesGuardMessage !== undefined, reason: canUseLoadedVaultActions ? claimFeesGuardMessage : undefined }}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }}
 					/>
 				</div>
 			</OperationModal>
@@ -830,7 +827,7 @@ export function SecurityVaultSection({
 						pendingLabel='Claiming fees...'
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees || claimFeesGuardMessage !== undefined, reason: canUseLoadedVaultActions ? claimFeesGuardMessage : undefined }}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }}
 					/>
 				</div>
 			</SectionBlock>

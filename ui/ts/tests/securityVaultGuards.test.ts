@@ -124,7 +124,6 @@ describe('security vault guards', () => {
 				walletEthBalance: 1n,
 			}),
 		).toBe('Reduce the security bond allowance to 5 ETH or less.')
-
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {
