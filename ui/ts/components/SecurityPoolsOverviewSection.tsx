@@ -25,7 +25,6 @@ import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../lib/trading.js'
-import { formatUniverseIdHex } from '../lib/universe.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -321,7 +320,7 @@ export function SecurityPoolsOverviewSection({
 												</MetricField>
 												<MetricField label='Question ID'>{pool.questionId}</MetricField>
 												<MetricField label='Universe'>
-													<UniverseLink universeId={pool.universeId}>{formatUniverseIdHex(pool.universeId)}</UniverseLink>
+													<UniverseLink format='hex' universeId={pool.universeId} />
 												</MetricField>
 											</div>
 											<div className='security-pool-browse-vaults'>
@@ -331,7 +330,9 @@ export function SecurityPoolsOverviewSection({
 														{pool.vaultCount.toString()} vault{pool.vaultCount === 1n ? '' : 's'}
 													</div>
 												</div>
-												{pool.hasLoadedVaults === false ? undefined : (
+												{pool.hasLoadedVaults === false ? (
+													<StateHint presentation={{ key: 'empty', badgeLabel: 'Unavailable', badgeTone: 'muted', detail: 'Vault preview unavailable.' }} />
+												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (
 															<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />

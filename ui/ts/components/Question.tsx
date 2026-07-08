@@ -32,6 +32,8 @@ export function getQuestionTitle(question: MarketDetails) {
 }
 
 function getQuestionDescription(question: MarketDetails) {
+	// Empty question descriptions are intentionally silent in the UI. These screens are read-only,
+	// and users cannot add resolution notes from here.
 	return question.description.trim()
 }
 

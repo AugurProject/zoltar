@@ -3,37 +3,7 @@ import { formatCurrencyBalance } from './formatters.js'
 import { getOracleRequestEthGuardMessage } from './oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from './securityVault.js'
 
-export function getVaultApprovalGuardMessage({ accountAddress, isMainnet, selectedVaultDetailsLoaded, selectedVaultIsOwnedByAccount }: { accountAddress: Address | undefined; isMainnet: boolean; selectedVaultDetailsLoaded: boolean; selectedVaultIsOwnedByAccount: boolean }) {
-	if (accountAddress === undefined) return 'Connect wallet to continue.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet.'
-	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
-	if (!selectedVaultDetailsLoaded) return 'Refresh the vault first.'
-	return undefined
-}
-
-export function getVaultDepositGuardMessage({
-	accountAddress,
-	approvalSatisfied,
-	depositAmount,
-	isDepositBelowMinimum,
-	isMainnet,
-	repBalanceGap,
-	selectedVaultDetailsLoaded,
-	selectedVaultIsOwnedByAccount,
-}: {
-	accountAddress: Address | undefined
-	approvalSatisfied: boolean
-	depositAmount: bigint | undefined
-	isDepositBelowMinimum: boolean
-	isMainnet: boolean
-	repBalanceGap: bigint | undefined
-	selectedVaultDetailsLoaded: boolean
-	selectedVaultIsOwnedByAccount: boolean
-}) {
-	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to deposit REP.'
-	if (accountAddress === undefined) return 'Connect a wallet before depositing REP.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before depositing REP.'
-	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before depositing REP.'
+export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, isDepositBelowMinimum, repBalanceGap }: { approvalSatisfied: boolean; depositAmount: bigint | undefined; isDepositBelowMinimum: boolean; repBalanceGap: bigint | undefined }) {
 	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
 	if (depositAmount <= 0n) return 'Enter a REP deposit amount greater than zero.'
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
@@ -43,29 +13,20 @@ export function getVaultDepositGuardMessage({
 }
 
 export function getVaultWithdrawGuardMessage({
-	accountAddress,
 	bufferRequiredEthCost = false,
-	isMainnet,
 	requiredEthCost,
-	selectedVaultIsOwnedByAccount,
 	stagedOperationTimeoutMinutes,
 	withdrawAmount,
 	withdrawableRepAmount,
 	walletEthBalance,
 }: {
-	accountAddress: Address | undefined
 	bufferRequiredEthCost?: boolean | undefined
-	isMainnet: boolean
 	requiredEthCost: bigint | undefined
-	selectedVaultIsOwnedByAccount: boolean
 	stagedOperationTimeoutMinutes: bigint | undefined
 	withdrawAmount: bigint | undefined
 	withdrawableRepAmount: bigint | undefined
 	walletEthBalance: bigint | undefined
 }) {
-	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to withdraw REP.'
-	if (accountAddress === undefined) return 'Connect a wallet before withdrawing REP.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing REP.'
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
 	if (withdrawAmount <= 0n) return 'Enter a REP withdraw amount greater than zero.'
 	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return 'No REP is currently withdrawable from this vault.'
@@ -84,28 +45,19 @@ export function getVaultWithdrawGuardMessage({
 
 export function getVaultSetSecurityBondAllowanceGuardMessage({
 	bufferRequiredEthCost = false,
-	isMainnet,
 	maxSecurityBondAllowanceAmount,
 	requiredEthCost,
 	securityBondAllowanceAmount,
-	selectedVaultDetailsLoaded,
-	selectedVaultIsOwnedByAccount,
 	stagedOperationTimeoutMinutes,
 	walletEthBalance,
 }: {
 	bufferRequiredEthCost?: boolean | undefined
-	isMainnet: boolean
 	maxSecurityBondAllowanceAmount: bigint | undefined
 	requiredEthCost: bigint | undefined
 	securityBondAllowanceAmount: bigint | undefined
-	selectedVaultDetailsLoaded: boolean
-	selectedVaultIsOwnedByAccount: boolean
 	stagedOperationTimeoutMinutes: bigint | undefined
 	walletEthBalance: bigint | undefined
 }) {
-	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to set the security bond allowance.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before setting the security bond allowance.'
-	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before setting the security bond allowance.'
 	if (securityBondAllowanceAmount === undefined || securityBondAllowanceAmount < 0n) return 'Enter a valid security bond allowance.'
 	if (securityBondAllowanceAmount !== 0n && securityBondAllowanceAmount < MIN_SECURITY_BOND_ALLOWANCE) return `Enter at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH for a non-zero allowance.`
 	if (maxSecurityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > maxSecurityBondAllowanceAmount) return `Reduce the security bond allowance to ${formatCurrencyBalance(maxSecurityBondAllowanceAmount)} ETH or less.`
@@ -121,32 +73,12 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 	return undefined
 }
 
-export function getVaultClaimFeesGuardMessage({ hasClaimableFees, isMainnet, selectedVaultIsOwnedByAccount }: { hasClaimableFees: boolean; isMainnet: boolean; selectedVaultIsOwnedByAccount: boolean }) {
-	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to claim fees.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before claiming fees.'
+export function getVaultClaimFeesGuardMessage({ hasClaimableFees }: { hasClaimableFees: boolean }) {
 	if (!hasClaimableFees) return 'No claimable fees are available for this vault.'
 	return undefined
 }
 
-export function getVaultRedeemRepGuardMessage({
-	accountAddress,
-	isMainnet,
-	escalationEscrowedRep,
-	redeemableRepAmount,
-	selectedVaultDetailsLoaded,
-	selectedVaultIsOwnedByAccount,
-}: {
-	accountAddress: Address | undefined
-	isMainnet: boolean
-	escalationEscrowedRep: bigint | undefined
-	redeemableRepAmount: bigint | undefined
-	selectedVaultDetailsLoaded: boolean
-	selectedVaultIsOwnedByAccount: boolean
-}) {
-	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to redeem REP.'
-	if (accountAddress === undefined) return 'Connect a wallet before redeeming REP.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming REP.'
-	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before redeeming REP.'
+export function getVaultRedeemRepGuardMessage({ escalationEscrowedRep, redeemableRepAmount }: { escalationEscrowedRep: bigint | undefined; redeemableRepAmount: bigint | undefined }) {
 	if (escalationEscrowedRep !== undefined && escalationEscrowedRep > 0n) return 'Settle escalation deposits before redeeming REP.'
 	if (redeemableRepAmount === undefined || redeemableRepAmount <= 0n) return 'No redeemable REP is available for this vault.'
 	return undefined

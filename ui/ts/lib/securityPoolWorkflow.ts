@@ -333,7 +333,7 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 		return {
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'This pool is unavailable in the current universe.',
+			detail: 'This pool does not exist.',
 			key: 'unavailable',
 		}
 	if (selectedPoolLookupState === 'loading')

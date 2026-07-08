@@ -846,6 +846,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCard = getSecurityPoolCard(deferredPoolTitle)
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByText('Open this pool to load 2 vaults.')).toBeNull()
+		expect(poolCardQueries.getByText('Vault preview unavailable.')).not.toBeNull()
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
 	})
 
