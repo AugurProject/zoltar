@@ -1,15 +1,16 @@
 import type { ComponentChildren } from 'preact'
-import { formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '../lib/universe.js'
+import { formatUniverseIdHex, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '../lib/universe.js'
 
 type UniverseLinkProps = {
 	children?: ComponentChildren
 	className?: string
+	format?: 'default' | 'hex'
 	universeId: bigint
 }
 
-export function UniverseLink({ children, className = '', universeId }: UniverseLinkProps) {
+export function UniverseLink({ children, className = '', format = 'default', universeId }: UniverseLinkProps) {
 	const href = getUniverseLinkHref(universeId)
-	const label = children ?? formatUniverseLabel(universeId)
+	const label = children ?? (format === 'hex' ? formatUniverseIdHex(universeId) : formatUniverseLabel(universeId))
 
 	return (
 		<a

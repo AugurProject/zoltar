@@ -14,7 +14,6 @@ import { PaginationControls } from './PaginationControls.js'
 import { ProgressMeter } from './ProgressMeter.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { Question, getQuestionTitle } from './Question.js'
-import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
@@ -29,40 +28,6 @@ import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } fro
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
-
-function getSecurityPoolGuidance({ hasKnownForkActivity, lifecycleState, questionOutcome, vaultCount }: { hasKnownForkActivity: boolean; lifecycleState: SecurityPoolLifecycleState | undefined; questionOutcome: string | undefined; vaultCount: bigint }) {
-	if (lifecycleState === 'forkTruthAuction')
-		return {
-			nextStep: 'Open the pool to review auction state and any child-universe follow-up actions.',
-			summary: 'Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.',
-		}
-	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration')
-		return {
-			nextStep: 'Open the pool to continue REP or deposit migration before the fork window closes.',
-			summary: 'This pool is in fork migration. Parent balances and unresolved deposits may need to move into a child universe.',
-		}
-	if (lifecycleState === 'ended') {
-		if (questionOutcome === undefined || questionOutcome === 'none')
-			return {
-				nextStep: 'Open the pool to review reporting, stake balances, and escalation timing.',
-				summary: 'The question has ended, but the final outcome is still being disputed or finalized.',
-			}
-
-		return {
-			nextStep: vaultCount > 0n ? 'Open the pool to review vault exits, withdrawals, or any remaining settlement actions.' : 'Open the pool to review the finalized outcome and any post-resolution state.',
-			summary: 'The question is finalized. Remaining actions are now about settlement, vault exits, or historical review.',
-		}
-	}
-	if (lifecycleState === 'operational' && hasKnownForkActivity)
-		return {
-			nextStep: 'Open the pool to review final child-universe state and any remaining balances.',
-			summary: 'This pool has already gone through a fork lifecycle and now acts as a historical reference point.',
-		}
-	return {
-		nextStep: vaultCount > 0n ? 'Open the pool to inspect vault health, price context, or reporting readiness.' : 'Open the pool to add the first vault or review how this pool is collateralized.',
-		summary: 'This pool is active and can back trading, vault collateral, and reporting for its question.',
-	}
-}
 
 export function SecurityPoolsOverviewSection({
 	accountState,
@@ -178,7 +143,6 @@ export function SecurityPoolsOverviewSection({
 			<SectionBlock
 				density='compact'
 				title='Security Pools'
-				description='Browse the pools that back binary questions, compare their health, and open one to manage vaults, reporting, or fork actions.'
 				actions={
 					<PaginationControls
 						hasNextPage={hasNextPage}
@@ -265,11 +229,10 @@ export function SecurityPoolsOverviewSection({
 								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
 								const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
-								const poolGuidance = getSecurityPoolGuidance({
-									hasKnownForkActivity,
-									lifecycleState: displayState,
+								const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({
+									hasForkActivity: hasKnownForkActivity,
 									questionOutcome: pool.questionOutcome,
-									vaultCount: pool.vaultCount,
+									lifecycleState: displayState,
 								})
 								const badgeTone = (() => {
 									if (displayState === 'operational') return 'ok'
@@ -284,12 +247,8 @@ export function SecurityPoolsOverviewSection({
 										title={getQuestionTitle(pool.marketDetails)}
 										variant='record'
 										badge={
-											<Badge tone={badgeTone}>
-												{getSecurityPoolStatusBadgeLabel({
-													hasForkActivity: hasKnownForkActivity,
-													questionOutcome: pool.questionOutcome,
-													lifecycleState: displayState,
-												})}
+											<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
+												{statusBadgeLabel}
 											</Badge>
 										}
 										actions={
@@ -307,13 +266,6 @@ export function SecurityPoolsOverviewSection({
 											<div className='security-pool-strip'>
 												<div className='security-pool-strip-story'>
 													<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
-													<div className='security-pool-card-guidance'>
-														<p className='security-pool-card-guidance-summary'>{poolGuidance.summary}</p>
-														<p className='security-pool-card-guidance-next'>
-															<span className='panel-label'>Next step</span>
-															<strong>{poolGuidance.nextStep}</strong>
-														</p>
-													</div>
 													<div className='security-pool-strip-stats'>
 														<div>
 															<span>Vaults</span>
@@ -359,20 +311,18 @@ export function SecurityPoolsOverviewSection({
 													</div>
 												</div>
 											</div>
-											<ReadOnlyDetailAccordion title='Pool Details'>
-												<div className='security-pool-detail-rail'>
-													<MetricField label='Pool Address'>
-														<AddressValue address={pool.securityPoolAddress} />
-													</MetricField>
-													<MetricField label='Manager Address'>
-														<AddressValue address={pool.managerAddress} />
-													</MetricField>
-													<MetricField label='Question ID'>{pool.questionId}</MetricField>
-													<MetricField label='Universe'>
-														<UniverseLink universeId={pool.universeId} />
-													</MetricField>
-												</div>
-											</ReadOnlyDetailAccordion>
+											<div className='security-pool-detail-rail security-pool-card-inline-details'>
+												<MetricField label='Pool Address'>
+													<AddressValue address={pool.securityPoolAddress} />
+												</MetricField>
+												<MetricField label='Manager Address'>
+													<AddressValue address={pool.managerAddress} />
+												</MetricField>
+												<MetricField label='Question ID'>{pool.questionId}</MetricField>
+												<MetricField label='Universe'>
+													<UniverseLink format='hex' universeId={pool.universeId} />
+												</MetricField>
+											</div>
 											<div className='security-pool-browse-vaults'>
 												<div className='security-pool-browse-vaults-head'>
 													<h4>Vaults</h4>
@@ -381,14 +331,7 @@ export function SecurityPoolsOverviewSection({
 													</div>
 												</div>
 												{pool.hasLoadedVaults === false ? (
-													<StateHint
-														presentation={{
-															key: 'action_needed',
-															badgeLabel: 'Deferred',
-															badgeTone: 'muted',
-															detail: `Open this pool to load ${pool.vaultCount.toString()} vault${pool.vaultCount === 1n ? '' : 's'}.`,
-														}}
-													/>
+													<StateHint presentation={{ key: 'empty', badgeLabel: 'Unavailable', badgeTone: 'muted', detail: 'Vault preview unavailable.' }} />
 												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (
@@ -450,12 +393,6 @@ export function SecurityPoolsOverviewSection({
 														) : undefined}
 													</div>
 												)}
-												{pool.vaultCount > BigInt(pool.vaults.length) ? (
-													<p className='detail'>
-														+{(pool.vaultCount - BigInt(pool.vaults.length)).toString()} more vault
-														{pool.vaultCount - BigInt(pool.vaults.length) === 1n ? '' : 's'}
-													</p>
-												) : undefined}
 											</div>
 										</div>
 									</EntityCard>

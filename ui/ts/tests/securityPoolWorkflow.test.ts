@@ -447,7 +447,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'ready',
 				selectedPoolUniverseMismatch: true,
 			}),
-		).toBe('Switch to the same universe before managing this pool.')
+		).toBeUndefined()
 	})
 
 	void test('keeps a stable locked-workflow presentation before a pool resolves', () => {
@@ -496,10 +496,9 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolUniverseMismatch: true,
 			}),
 		).toEqual({
-			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
 			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, share, reporting, and fork actions.',
+			detail: 'This pool does not exist.',
 			key: 'unavailable',
 		})
 	})

@@ -158,7 +158,7 @@ test('send transaction waits for a delayed receipt and mines pending Anvil trans
 test('send transaction throws a targeted error when Anvil never returns a receipt', async () => {
 	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
 	const originalDateNow = Date.now
-	const clockValues = [0, 1, 60_001, 60_002]
+	const clockValues = [0, 1, 180_001, 180_002]
 	const transactionHash = `0x${'34'.repeat(32)}`
 
 	const mockedFetch = createMockedFetch(async (_input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
@@ -173,7 +173,7 @@ test('send transaction throws a targeted error when Anvil never returns a receip
 	})
 	globalThis.fetch = mockedFetch
 
-	Date.now = () => clockValues.shift() ?? 60_002
+	Date.now = () => clockValues.shift() ?? 180_002
 	try {
 		const anvilWindow = await getMockedEthSimulateWindowEthereum()
 		await expect(
@@ -187,7 +187,7 @@ test('send transaction throws a targeted error when Anvil never returns a receip
 					},
 				],
 			}),
-		).rejects.toThrow(`Anvil did not return a receipt for sent transaction ${transactionHash} within 60000ms.`)
+		).rejects.toThrow(`Anvil did not return a receipt for sent transaction ${transactionHash} within 180000ms.`)
 	} finally {
 		Date.now = originalDateNow
 	}

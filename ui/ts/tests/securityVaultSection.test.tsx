@@ -10,7 +10,7 @@ import type { SecurityVaultDetails } from '../types/contracts.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -81,7 +81,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 	}
 }
 
-function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
+function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVaultSectionProps['oracleManagerDetails']>> = {}): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
 	return {
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
@@ -100,6 +100,7 @@ function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['or
 		requestPriceEthCost: 0n,
 		token1: undefined,
 		token2: undefined,
+		...overrides,
 	}
 }
 
@@ -161,8 +162,211 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
-		expect(documentQueries.getByText('Refresh the vault to inspect claimable fees.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
+		expect(documentQueries.getAllByText('Selected vault details are unavailable.').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByText('Refresh the vault to inspect claimable fees.')).toBeNull()
+		expect(documentQueries.queryByText('Refresh the vault before setting a security bond allowance.')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+	})
+
+	test('keeps fee-claim actions available when a zeroed vault still has claimable fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						escalationEscrowedRep: 0n,
+						repDepositShare: 0n,
+						securityBondAllowance: 0n,
+						unpaidEthFees: 1n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
+		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+	})
+
+	test('blocks the modal-first claim fees launcher when an existing vault has no claimable fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						unpaidEthFees: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim Fees' })
+
+		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+		fireEvent.click(claimFeesButton)
+		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
+	})
+
+	test('uses neutral missing-state copy when a queued withdrawal succeeds before manager state is visible', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					oracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
+						pendingOperation: undefined,
+					}),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+					securityVaultResult: {
+						action: 'queueWithdrawRep',
+						hash: '0x01',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
+	})
+
+	test('uses neutral missing-state copy when a bond allowance update succeeds before manager state is visible', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					oracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
+						pendingOperation: undefined,
+					}),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+					securityVaultResult: {
+						action: 'queueSetSecurityBondAllowance',
+						hash: '0x02',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Set Bond Allowance' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
+	})
+
+	test('keeps the modal-first claim fees launcher silently disabled when lifecycle gating blocks it', async () => {
+		const endedPoolState = createEndedPoolState()
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: {
+						...endedPoolState,
+						actions: {
+							...endedPoolState.actions,
+							redeemFees: { enabled: false },
+						},
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+	})
+
+	test('keeps modal-first vault actions silently disabled when the wallet is disconnected', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: undefined }),
+					modalFirst: true,
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: undefined })
+		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: undefined })
+	})
+
+	test('keeps modal-first vault actions silently disabled for a vault owned by another account', async () => {
+		const otherVaultAddress = '0x00000000000000000000000000000000000000a9'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: zeroAddress }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						vaultAddress: otherVaultAddress,
+					}),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: otherVaultAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: undefined })
+		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: undefined })
+	})
+
+	test('keeps the deposit modal in create-vault mode for an empty selected vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						escalationEscrowedRep: 0n,
+						repDepositShare: 0n,
+						securityBondAllowance: 0n,
+						unpaidEthFees: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+
+		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		const depositDialogQueries = within(depositDialog)
+		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
+		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
+		expect(depositDialogQueries.getByText('REP Collateral Amount')).not.toBeNull()
 	})
 
 	test('fills the security bond allowance input from the backed Max amount', async () => {

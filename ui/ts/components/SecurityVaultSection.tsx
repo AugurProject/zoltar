@@ -30,10 +30,11 @@ import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.j
 import { isMainnetChain } from '../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
-import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
+import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
+	doesSecurityVaultExistOnchain,
 	doesLoadedSecurityVaultMatchSelection,
 	getSecurityVaultMaxBondAllowanceAmount,
 	getStagedOperationTimeoutSeconds,
@@ -315,6 +316,7 @@ export function SecurityVaultSection({
 	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
 	const stagedOperationTimeoutSeconds = getStagedOperationTimeoutSeconds(stagedOperationTimeoutMinutes)
 	const securityBondAllowance = currentSelectedVaultDetails?.securityBondAllowance ?? 0n
+	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
@@ -339,7 +341,10 @@ export function SecurityVaultSection({
 	const hasClaimableFees = currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.unpaidEthFees > 0n
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
+	const hasPositiveDepositAmount = depositAmount !== undefined && depositAmount > 0n
+	const hasPositiveWithdrawAmount = withdrawAmount !== undefined && withdrawAmount > 0n
 	const redeemableRepAmount = currentSelectedVaultDetails?.repDepositShare
+	const hasWithdrawableRep = queuedWithdrawRepLimit !== undefined && queuedWithdrawRepLimit > 0n
 	const depositRepEnabled = poolState?.actions.depositRep.enabled ?? true
 	const queueWithdrawRepEnabled = poolState?.actions.queueWithdrawRep.enabled ?? true
 	const redeemRepEnabled = poolState?.actions.redeemRep.enabled === true
@@ -355,73 +360,44 @@ export function SecurityVaultSection({
 		if (hasValidOraclePrice) return 'Withdrawable REP'
 		return 'REP Available To Queue'
 	})()
-	const repExitRefreshMessage = (() => {
-		if (effectiveRepExitMode === 'redeem') return 'Refresh to see redeemable REP.'
-		if (hasValidOraclePrice) return 'Refresh to see withdrawable REP.'
-		return 'Refresh to see how much REP can be queued while the oracle price is stale.'
-	})()
-	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
-		hasClaimableFees,
-		isMainnet,
-		selectedVaultIsOwnedByAccount,
-	})
 	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 	})
 	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
 		bufferRequiredEthCost: setSecurityBondAllowanceFunding?.includeBuffer === true,
-		isMainnet,
 		maxSecurityBondAllowanceAmount: hasValidOraclePrice ? maxSecurityBondAllowanceAmount : undefined,
 		requiredEthCost: setSecurityBondAllowanceFunding?.ethCost,
 		securityBondAllowanceAmount,
-		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
 		stagedOperationTimeoutMinutes,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const depositGuardMessage = getVaultDepositGuardMessage({
-		accountAddress: accountState.address,
 		approvalSatisfied: hasSufficientDepositAllowance,
 		depositAmount,
 		isDepositBelowMinimum,
-		isMainnet,
 		repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
-		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
 	})
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 	})
 	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
-		accountAddress: accountState.address,
 		bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
-		isMainnet,
 		requiredEthCost: withdrawRepFunding?.ethCost,
-		selectedVaultIsOwnedByAccount,
 		stagedOperationTimeoutMinutes,
 		withdrawAmount,
 		withdrawableRepAmount: queuedWithdrawRepLimit,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const redeemRepGuardMessage = getVaultRedeemRepGuardMessage({
-		accountAddress: accountState.address,
-		isMainnet,
 		escalationEscrowedRep: currentSelectedVaultDetails?.escalationEscrowedRep,
 		redeemableRepAmount,
-		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
 	})
 	const repExitGuardMessage = effectiveRepExitMode === 'redeem' ? redeemRepGuardMessage : withdrawRepGuardMessage
-	const approvalGuardMessage = getVaultApprovalGuardMessage({
-		accountAddress: accountState.address,
-		isMainnet,
-		selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
-	})
-	const effectiveDepositBlocker = depositGuardMessage ?? (depositRepEnabled ? undefined : 'Deposit REP is not available right now.')
-	const effectiveRepExitBlocker = repExitGuardMessage ?? (repExitEnabled ? undefined : `${repExitActionLabel} is not available right now.`)
-	const effectiveBondAllowanceBlocker = setSecurityBondAllowanceGuardMessage ?? (bondAllowanceEnabled ? undefined : 'Set Security Bond Allowance is not available right now.')
-	const effectiveClaimFeesBlocker = claimFeesGuardMessage ?? (claimFeesEnabled ? undefined : 'Claim Fees is not available right now.')
+	const hasConnectedWallet = accountState.address !== undefined
+	const canUseOwnedVaultActions = selectedVaultIsOwnedByAccount && hasConnectedWallet
+	const hasLoadedSelectedVaultDetails = currentSelectedVaultDetails !== undefined
+	const canUseLoadedVaultActions = canUseOwnedVaultActions && hasLoadedSelectedVaultDetails && isMainnet
+	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
@@ -472,24 +448,27 @@ export function SecurityVaultSection({
 
 		return undefined
 	})()
+	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? 'This vault does not exist.' : undefined
+	const repExitLauncherBlocker = loadedVaultMissingBlocker
+	const bondAllowanceLauncherBlocker = loadedVaultMissingBlocker
+	const claimFeesLauncherBlocker = loadedVaultMissingBlocker
 	useEffect(() => {
 		if (!autoLoadVault) return
-		if (accountState.address === undefined) return
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
+		if (selectedVaultAddress === undefined || selectedVaultAddress === '') return
 		if (hasLoadedCurrentVault || loadingSecurityVault) return
 		if (lastAutoLoadKey.current === autoLoadKey) return
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
-	}, [accountState.address, autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault])
+	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultAddress])
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: 'Deposit REP',
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
 			safetyId: getSecurityVaultActionSafetyId('depositRep'),
-			...(depositRepEnabled ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
-			readiness: depositRepEnabled ? 'ready' : 'blocked',
-			...(effectiveDepositBlocker === undefined ? {} : { blocker: effectiveDepositBlocker }),
+			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
+			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			title: 'Deposit REP',
 		},
 		{
@@ -497,9 +476,9 @@ export function SecurityVaultSection({
 			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal now, or let it execute immediately when a valid oracle price is already available.',
 			key: 'rep-exit',
 			safetyId: effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep'),
-			...(repExitEnabled ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
-			readiness: repExitEnabled ? 'ready' : 'blocked',
-			...(effectiveRepExitBlocker === undefined ? {} : { blocker: effectiveRepExitBlocker }),
+			...(repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
+			readiness: repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(repExitLauncherBlocker === undefined ? {} : { blocker: repExitLauncherBlocker }),
 			title: repExitActionLabel,
 		},
 		{
@@ -507,9 +486,9 @@ export function SecurityVaultSection({
 			description: 'Queue a new security bond allowance using the current oracle price context.',
 			key: 'set-bond-allowance',
 			safetyId: getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance'),
-			...(bondAllowanceEnabled ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
-			readiness: bondAllowanceEnabled ? 'ready' : 'blocked',
-			...(effectiveBondAllowanceBlocker === undefined ? {} : { blocker: effectiveBondAllowanceBlocker }),
+			...(bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
+			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(bondAllowanceLauncherBlocker === undefined ? {} : { blocker: bondAllowanceLauncherBlocker }),
 			title: 'Set Security Bond Allowance',
 		},
 		{
@@ -517,9 +496,9 @@ export function SecurityVaultSection({
 			description: 'Review claimable fees and confirm the fee redemption for the selected vault.',
 			key: 'claim-fees',
 			safetyId: getSecurityVaultActionSafetyId('redeemFees'),
-			...(claimFeesEnabled && claimFeesGuardMessage === undefined ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
-			readiness: claimFeesEnabled && claimFeesGuardMessage === undefined ? 'ready' : 'blocked',
-			...(effectiveClaimFeesBlocker === undefined ? {} : { blocker: effectiveClaimFeesBlocker }),
+			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
+			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(claimFeesLauncherBlocker === undefined ? {} : { blocker: claimFeesLauncherBlocker }),
 			title: 'Claim Fees',
 		},
 		...extraReadinessActions,
@@ -527,6 +506,7 @@ export function SecurityVaultSection({
 	const actionSections = modalFirst ? (
 		<>
 			<SectionBlock title='Vault Actions'>
+				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: 'Vault missing', badgeTone: 'muted', detail: 'This vault does not exist. Deposit REP to create it.' }} /> : undefined}
 				<div className='vault-action-launcher-grid'>
 					{vaultReadinessActions.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />
@@ -535,19 +515,23 @@ export function SecurityVaultSection({
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
 			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP'>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before depositing REP.</p> : null}
+				{currentSelectedVaultDetails === undefined ? <p className='detail'>Selected vault details are unavailable.</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
-						<SelectedVaultSummarySection
-							repPerEthPrice={repPerEthPrice}
-							repPerEthSource={repPerEthSource}
-							repPerEthSourceUrl={repPerEthSourceUrl}
-							securityBondAllowance={currentSelectedVaultDetails.securityBondAllowance}
-							securityVaultDetails={currentSelectedVaultDetails}
-							selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
-							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-							variant='embedded'
-						/>
+						{vaultExistsOnchain ? (
+							<SelectedVaultSummarySection
+								repPerEthPrice={repPerEthPrice}
+								repPerEthSource={repPerEthSource}
+								repPerEthSourceUrl={repPerEthSourceUrl}
+								securityBondAllowance={currentSelectedVaultDetails.securityBondAllowance}
+								securityVaultDetails={currentSelectedVaultDetails}
+								selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
+								selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
+								variant='embedded'
+							/>
+						) : (
+							<StateHint presentation={{ key: 'not_found', badgeLabel: 'Vault missing', badgeTone: 'muted', detail: 'This vault does not exist. Deposit REP to create it.' }} />
+						)}
 						<label className='field'>
 							<span>REP Collateral Amount</span>
 							<div className='field-inline'>
@@ -575,7 +559,7 @@ export function SecurityVaultSection({
 							allowanceError={securityVaultRepApproval.error}
 							allowanceLoading={securityVaultRepApproval.loading}
 							approvedAmount={securityVaultRepApproval.value}
-							guardMessage={approveRepEnabled ? approvalGuardMessage : undefined}
+							guardMessage={undefined}
 							onApprove={amount => onApproveRep(amount)}
 							pending={securityVaultActiveAction === 'approveRep'}
 							pendingLabel='Approving REP...'
@@ -584,7 +568,7 @@ export function SecurityVaultSection({
 							safetyId={getSecurityVaultActionSafetyId('approveRep')}
 							tokenSymbol='REP'
 							tokenUnits={18}
-							disabled={!approveRepEnabled}
+							disabled={!approveRepEnabled || !canUseLoadedVaultActions}
 						/>
 						<RequirementsChecklist
 							items={[
@@ -603,7 +587,7 @@ export function SecurityVaultSection({
 								pendingLabel='Depositing REP...'
 								onClick={onDepositRep}
 								pending={securityVaultActiveAction === 'depositRep'}
-								availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
+								availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -616,7 +600,7 @@ export function SecurityVaultSection({
 				title={repExitActionLabel}
 				description={effectiveRepExitMode === 'redeem' ? 'Redeem the remaining REP collateral from this ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal after reviewing the current vault collateral and oracle status.'}
 			>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>{effectiveRepExitMode === 'redeem' ? 'Refresh the selected vault before redeeming REP.' : 'Refresh the selected vault before withdrawing REP.'}</p> : null}
+				{currentSelectedVaultDetails === undefined ? <p className='detail'>Selected vault details are unavailable.</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : (
@@ -625,7 +609,7 @@ export function SecurityVaultSection({
 								executedTitle='REP Withdrawal Executed'
 								failedTitle='REP Withdrawal Failed'
 								manualQueuedDescription='The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
-								missingDescription='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.'
+								missingDescription='The transaction succeeded, but the latest manager state is not available yet.'
 								missingTitle='REP Withdrawal Submitted'
 								onViewStagedOperations={onViewStagedOperations}
 								queuedTitle='REP Withdrawal Queued'
@@ -727,7 +711,10 @@ export function SecurityVaultSection({
 								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 								pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 								tone='secondary'
-								availability={{ disabled: !repExitEnabled || repExitGuardMessage !== undefined, reason: repExitEnabled ? repExitGuardMessage : undefined }}
+								availability={{
+									disabled: !repExitEnabled || !canUseLoadedVaultActions || (effectiveRepExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
+									reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
+								}}
 							/>
 						</div>
 					</>
@@ -735,7 +722,7 @@ export function SecurityVaultSection({
 			</OperationModal>
 
 			<OperationModal isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title='Set Bond Allowance' description='Queue a new bond allowance using the latest valid oracle price for the selected vault.'>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before changing its bond allowance.</p> : null}
+				{currentSelectedVaultDetails === undefined ? <p className='detail'>Selected vault details are unavailable.</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						<VaultQueuedOperationStatusCard
@@ -743,7 +730,7 @@ export function SecurityVaultSection({
 							executedTitle='Bond Allowance Executed'
 							failedTitle='Bond Allowance Failed'
 							manualQueuedDescription='The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
-							missingDescription='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.'
+							missingDescription='The transaction succeeded, but the latest manager state is not available yet.'
 							missingTitle='Bond Allowance Submitted'
 							onViewStagedOperations={onViewStagedOperations}
 							queuedTitle='Bond Allowance Queued'
@@ -788,7 +775,7 @@ export function SecurityVaultSection({
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
-								availability={{ disabled: !bondAllowanceEnabled || setSecurityBondAllowanceGuardMessage !== undefined, reason: bondAllowanceEnabled ? setSecurityBondAllowanceGuardMessage : undefined }}
+								availability={{ disabled: !bondAllowanceEnabled || !canUseLoadedVaultActions || setSecurityBondAllowanceGuardMessage !== undefined, reason: canUseLoadedVaultActions ? setSecurityBondAllowanceGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -816,7 +803,7 @@ export function SecurityVaultSection({
 						pendingLabel='Claiming fees...'
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }}
 					/>
 				</div>
 			</OperationModal>
@@ -825,7 +812,7 @@ export function SecurityVaultSection({
 		<>
 			<SectionBlock title='Claim Fees'>
 				{currentSelectedVaultDetails === undefined ? (
-					<p className='detail'>Refresh the vault to inspect claimable fees.</p>
+					<p className='detail'>Selected vault details are unavailable.</p>
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label='Claimable Fees'>
@@ -840,7 +827,7 @@ export function SecurityVaultSection({
 						pendingLabel='Claiming fees...'
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }}
 					/>
 				</div>
 			</SectionBlock>
@@ -868,7 +855,7 @@ export function SecurityVaultSection({
 					allowanceError={securityVaultRepApproval.error}
 					allowanceLoading={securityVaultRepApproval.loading}
 					approvedAmount={securityVaultRepApproval.value}
-					guardMessage={approveRepEnabled ? approvalGuardMessage : undefined}
+					guardMessage={undefined}
 					onApprove={amount => onApproveRep(amount)}
 					pending={securityVaultActiveAction === 'approveRep'}
 					pendingLabel='Approving REP...'
@@ -877,7 +864,7 @@ export function SecurityVaultSection({
 					safetyId={getSecurityVaultActionSafetyId('approveRep')}
 					tokenSymbol='REP'
 					tokenUnits={18}
-					disabled={!approveRepEnabled}
+					disabled={!approveRepEnabled || !canUseLoadedVaultActions}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -886,7 +873,7 @@ export function SecurityVaultSection({
 						pendingLabel='Depositing REP...'
 						onClick={onDepositRep}
 						pending={securityVaultActiveAction === 'depositRep'}
-						availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
+						availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositGuardMessage : undefined }}
 					/>
 				</div>
 				{(() => {
@@ -904,7 +891,7 @@ export function SecurityVaultSection({
 
 			<SectionBlock title='Set Security Bond Allowance'>
 				{currentSelectedVaultDetails === undefined ? (
-					<p className='detail'>Refresh the vault before setting a security bond allowance.</p>
+					<p className='detail'>Selected vault details are unavailable.</p>
 				) : (
 					<>
 						<div className='entity-metric-grid'>
@@ -935,7 +922,7 @@ export function SecurityVaultSection({
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
-								availability={{ disabled: !bondAllowanceEnabled || setSecurityBondAllowanceGuardMessage !== undefined, reason: bondAllowanceEnabled ? setSecurityBondAllowanceGuardMessage : undefined }}
+								availability={{ disabled: !bondAllowanceEnabled || !canUseLoadedVaultActions || setSecurityBondAllowanceGuardMessage !== undefined, reason: canUseLoadedVaultActions ? setSecurityBondAllowanceGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -944,7 +931,7 @@ export function SecurityVaultSection({
 
 			<SectionBlock title={repExitActionLabel}>
 				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit) === undefined ? (
-					<p className='detail'>{repExitRefreshMessage}</p>
+					<p className='detail'>Selected vault details are unavailable.</p>
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={repExitAmountLabel}>
@@ -995,7 +982,10 @@ export function SecurityVaultSection({
 						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 						pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 						tone='secondary'
-						availability={{ disabled: !repExitEnabled || repExitGuardMessage !== undefined, reason: repExitEnabled ? repExitGuardMessage : undefined }}
+						availability={{
+							disabled: !repExitEnabled || !canUseLoadedVaultActions || (effectiveRepExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
+							reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
+						}}
 					/>
 				</div>
 				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.escalationEscrowedRep !== undefined && currentSelectedVaultDetails.escalationEscrowedRep > 0n ? <p className='detail'>Withdraw escalation deposits before redeeming REP.</p> : undefined}
@@ -1026,11 +1016,10 @@ export function SecurityVaultSection({
 							<FormInput value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
 						</label>
 					) : undefined}
-					{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Select your own vault to unlock actions.</p>}
 				</SectionBlock>
 			) : undefined}
 
-			{showSummarySection && currentSelectedVaultDetails !== undefined ? (
+			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? (
 				<SelectedVaultSummarySection
 					repPerEthPrice={repPerEthPrice}
 					repPerEthSource={repPerEthSource}

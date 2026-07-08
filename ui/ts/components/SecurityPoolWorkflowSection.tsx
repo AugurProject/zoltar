@@ -65,9 +65,9 @@ import { getReportingLockedUntilMessage, hasReportingOpened } from '../lib/repor
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
-import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
-import { formatUniverseLabel } from '../lib/universe.js'
+import { formatUniverseIdHex } from '../lib/universe.js'
 import { useForkWorkflowSelectionState } from '../hooks/useForkWorkflowSelectionState.js'
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
@@ -316,6 +316,7 @@ export function SecurityPoolWorkflowSection({
 	})
 		? securityVault.securityVaultDetails
 		: undefined
+	const selectedVaultExistsOnchain = doesSecurityVaultExistOnchain(selectedVaultDetails)
 	const currentSecurityVaultResult = selectedVaultDetails === undefined ? undefined : securityVault.securityVaultResult
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
@@ -385,6 +386,7 @@ export function SecurityPoolWorkflowSection({
 		resolvedPendingOperationId,
 	})
 	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
+	const canUseOracleActions = accountState.address !== undefined && isMainnet
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
 	const pendingSettlementOperationIds = currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? []
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
@@ -660,10 +662,10 @@ export function SecurityPoolWorkflowSection({
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, reporting.onLoadReporting, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails, view])
 	const selectedPoolViewOptions = SELECTED_POOL_VIEWS.map(selectedPoolUiView => ({
-		disabled: selectedPoolWorkflowGuardMessage !== undefined,
+		disabled: selectedPoolUniverseMismatch || selectedPoolWorkflowGuardMessage !== undefined,
 		id: `selected-pool-view-${selectedPoolUiView}`,
 		label: getSelectedPoolViewLabel(selectedPoolUiView),
-		...(selectedPoolWorkflowGuardMessage === undefined ? {} : { reason: selectedPoolWorkflowGuardMessage }),
+		...(selectedPoolUniverseMismatch || selectedPoolWorkflowGuardMessage === undefined ? {} : { reason: selectedPoolWorkflowGuardMessage }),
 		value: selectedPoolUiView,
 	}))
 	return (
@@ -709,9 +711,8 @@ export function SecurityPoolWorkflowSection({
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
 				<SectionBlock title='Universe Mismatch' tone='critical'>
 					<p className='detail'>
-						This pool belongs to <UniverseLink universeId={selectedPool.universeId} /> but the app is currently set to {formatUniverseLabel(activeUniverseId)}.
+						This pool belongs to <UniverseLink format='hex' universeId={selectedPool.universeId} /> but the app is currently set to {formatUniverseIdHex(activeUniverseId)}. This pool does not exist.
 					</p>
-					<p className='detail'>Switch to the same universe before using this pool.</p>
 				</SectionBlock>
 			)}
 
@@ -736,7 +737,7 @@ export function SecurityPoolWorkflowSection({
 					<div className='selected-pool-workflow-content'>
 						{!showSelectedPoolWorkflowDetails ? (
 							<SectionBlock title={selectedPoolLookupState === 'missing' ? 'Pool not found' : 'Manage Pool'} variant='plain'>
-								{selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
+								{selectedPoolUniverseMismatch || selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
 							</SectionBlock>
 						) : (
 							<>
@@ -764,8 +765,7 @@ export function SecurityPoolWorkflowSection({
 													</button>
 												}
 											/>
-											{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Select your own vault to unlock actions.</p>}
-											{vaultView === 'selected-vault' && selectedVaultDetails !== undefined ? (
+											{vaultView === 'selected-vault' && selectedVaultDetails !== undefined && selectedVaultExistsOnchain ? (
 												<SelectedVaultSummarySection
 													repPerEthPrice={repPerEthPrice}
 													repPerEthSource={repPerEthSource}
@@ -829,11 +829,10 @@ export function SecurityPoolWorkflowSection({
 												compactLayout
 												extraReadinessActions={[
 													(() => {
+														const canUseSelectedVaultActions = accountState.address !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isMainnet
+														const loadedVaultMissing = selectedVaultDetails !== undefined && !selectedVaultExistsOnchain
 														const liquidationBlocker = (() => {
-															if (selectedPool === undefined || selectedVaultDetails === undefined) return 'Refresh the selected vault first.'
-															if (selectedVaultAddress === '') return 'Select a pool and vault first.'
-															if (!liquidationEnabled) return 'Liquidation is not available right now.'
-
+															if (loadedVaultMissing) return 'This vault does not exist.'
 															return undefined
 														})()
 
@@ -842,10 +841,10 @@ export function SecurityPoolWorkflowSection({
 															...(liquidationBlocker === undefined ? {} : { blocker: liquidationBlocker }),
 															description: 'Inspect the liquidation quote, timeout, and execution path before queueing liquidation.',
 															key: 'liquidate-vault',
-															readiness: liquidationEnabled ? 'ready' : 'blocked',
+															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
 															safetyId: 'security-pool.queueLiquidation',
 															title: 'Review Liquidation',
-															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled
+															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
 																: {
 																		onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.securityBondAllowance),
@@ -853,6 +852,7 @@ export function SecurityPoolWorkflowSection({
 														}
 													})(),
 												]}
+												autoLoadVault
 												modalFirst
 												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 												oracleManagerDetails={currentPoolOracleManagerDetails}
@@ -974,8 +974,8 @@ export function SecurityPoolWorkflowSection({
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
 													tone='secondary'
 													availability={{
-														disabled: !selectedPoolStateModel.actions.executeStagedOperation.enabled || executePendingOperationGuardMessage !== undefined,
-														reason: selectedPoolStateModel.actions.executeStagedOperation.enabled ? executePendingOperationGuardMessage : undefined,
+														disabled: !selectedPoolStateModel.actions.executeStagedOperation.enabled || !canUseOracleActions || executePendingOperationGuardMessage !== undefined,
+														reason: selectedPoolStateModel.actions.executeStagedOperation.enabled && canUseOracleActions ? executePendingOperationGuardMessage : undefined,
 													}}
 												/>
 											)}
@@ -1020,8 +1020,8 @@ export function SecurityPoolWorkflowSection({
 												pending={poolOracleActiveAction === 'requestPrice'}
 												tone='secondary'
 												availability={{
-													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || requestPriceGuardMessage !== undefined,
-													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
+													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceGuardMessage !== undefined,
+													reason: selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions ? requestPriceGuardMessage : undefined,
 												}}
 											/>
 										</div>

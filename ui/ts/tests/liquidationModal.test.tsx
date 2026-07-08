@@ -13,7 +13,7 @@ import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+import { expectTransactionButtonDisabled, getTransactionButtonState } from './testUtils/transactionActionButton.js'
 
 const ETH = 10n ** 18n
 
@@ -208,6 +208,26 @@ describe('LiquidationModal', () => {
 		expect(document.body.textContent?.includes('This queued staged operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
+	test('uses neutral missing-state copy after a queued liquidation succeeds without visible manager state', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+				pendingOperation: undefined,
+			}),
+			securityPoolOverviewResult: {
+				action: 'queueLiquidation',
+				hash: '0x03',
+				securityPoolAddress: zeroAddress,
+			} satisfies SecurityPoolOverviewActionResult,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' })).not.toBeNull()
+		expect(documentQueries.getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
+	})
+
 	test('requires a queued liquidation timeout of at least 1 minute', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -218,6 +238,19 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Enter a liquidation timeout of at least 1 minute.')
+	})
+
+	test('keeps liquidation silently disabled off mainnet', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+			}),
+			isMainnet: false,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Execute Liquidation')).toEqual({ disabled: true, reason: undefined })
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet before liquidating.')).toBe(false)
 	})
 
 	test('traps focus while open and restores it when closed', async () => {
