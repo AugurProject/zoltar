@@ -64,13 +64,13 @@
 					child receives only <code>5 / 20 * 10 = 2.5 ETH</code>.
 				</p>
 				<p>
-					The auction exists because that branch may still need more ETH than
-					proportional migration delivered. In the same example, if the
-					<code>YES</code> child needs to recover <code>2.5 ETH</code>, the
-					forker can offer up to the branch's full auctionable REP inventory for
-					sale to raise it. If the <code>NO</code> child is also short by its own
-					proportional calculation, it runs its own separate auction inside the
-					<code>NO</code> universe on the same logic.
+					The auction exists because proportional migration can leave a child
+					pool with less ETH than it needs to reopen. In the same example, the
+					<code>YES</code> child needs to recover <code>2.5 ETH</code>, so REP is
+					offered for sale inside the <code>YES</code> universe to raise it. The
+					<code>NO</code> child is short by the same logic and also needs to
+					raise the ETH implied by its own proportional migration result, so it
+					runs its own separate auction inside the <code>NO</code> universe.
 				</p>
 				<p>
 					The design is dual-capped: it tries to raise enough ETH without
@@ -84,11 +84,13 @@
 				<h2>Operational Lifecycle</h2>
 				<p>
 					The auction is a repair step between fork migration and normal child
-					pool operation. A truth auction can start only for a child pool in
-					<code>ForkMigration</code> after the parent migration window has ended,
-					and only if the migrated branch is still short of ETH. If enough REP
-					migrated to the child pool already, the forker can finalize the
-					repair path without starting an auction.
+					pool operation. The truth auction starts only after the migration
+					window has ended. That window lasts
+					<code>SecurityPoolUtils.MIGRATION_TIME</code>, currently one week,
+					measured from the parent universe fork time. If the migrated branch is
+					still short of ETH after that window, the auction opens. If enough REP
+					migrated to the child pool already, the repair path can finalize
+					without starting an auction.
 				</p>
 				<p>
 					Once the repair path is open, bidders supply ETH directly to the
