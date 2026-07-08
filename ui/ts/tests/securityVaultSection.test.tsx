@@ -165,6 +165,53 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
 	})
 
+	test('keeps fee-claim actions available when a zeroed vault still has claimable fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						escalationEscrowedRep: 0n,
+						repDepositShare: 0n,
+						securityBondAllowance: 0n,
+						unpaidEthFees: 1n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('This vault does not exist yet. Deposit REP to create it.')).toBeNull()
+		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+	})
+
+	test('keeps the deposit modal in create-vault mode for an empty selected vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						escalationEscrowedRep: 0n,
+						repDepositShare: 0n,
+						securityBondAllowance: 0n,
+						unpaidEthFees: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+
+		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		const depositDialogQueries = within(depositDialog)
+		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
+		expect(depositDialogQueries.getByText('This vault does not exist yet. Deposit REP to create it.')).not.toBeNull()
+		expect(depositDialogQueries.getByText('REP Collateral Amount')).not.toBeNull()
+	})
+
 	test('fills the security bond allowance input from the backed Max amount', async () => {
 		const formChanges: Partial<SecurityVaultSectionProps['securityVaultForm']>[] = []
 		const renderedComponent = await renderIntoDocument(

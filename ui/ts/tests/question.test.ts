@@ -41,7 +41,7 @@ void describe('question helpers', () => {
 		expect(fields.find(field => field.label === 'Context')).toEqual({
 			kind: 'text',
 			label: 'Context',
-			value: 'Context provided',
+			value: 'Provided',
 		})
 		expect(fields.find(field => field.label === 'Outcomes')).toEqual({
 			kind: 'text',

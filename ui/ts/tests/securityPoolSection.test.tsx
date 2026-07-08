@@ -171,7 +171,7 @@ describe('SecurityPoolSection', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Load Question' })).toBeNull()
 	})
 
-	test('shows only the shared missing-context warning when a loaded question lacks description details', async () => {
+	test('omits missing-context helper copy when a loaded question lacks description details', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolSection,
@@ -185,8 +185,8 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No resolution notes or supporting context provided.')).not.toBeNull()
-		expect(documentQueries.getAllByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toHaveLength(1)
+		expect(documentQueries.queryByText('No resolution notes or supporting context provided.')).toBeNull()
+		expect(documentQueries.queryByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBeNull()
 		expect(documentQueries.queryByText('This question needs more context before users can trust a pool built on top of it. Add resolution notes or recreate it with a stronger description.')).toBeNull()
 	})
 

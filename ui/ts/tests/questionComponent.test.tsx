@@ -54,20 +54,27 @@ describe('Question component', () => {
 		expect(document.body.textContent?.includes('(1m ago)')).toBe(true)
 	})
 
-	test('shows a trust note when the question has no resolution context', async () => {
+	test('omits description copy when the question has no resolution context', async () => {
 		const renderedComponent = await renderIntoDocument(<Question question={createQuestion({ description: '' })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('No resolution notes or supporting context provided.')).toBe(true)
-		expect(document.body.textContent?.includes('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBe(true)
+		expect(document.body.textContent?.includes('No resolution notes or supporting context provided.')).toBe(false)
+		expect(document.body.textContent?.includes('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBe(false)
 	})
 
-	test('shows a trust note in preview mode when the question has no resolution context', async () => {
+	test('omits description copy in preview mode when the question has no resolution context', async () => {
 		const renderedComponent = await renderIntoDocument(<Question question={createQuestion({ description: '' })} variant='preview' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('No resolution notes or supporting context provided.')).toBe(true)
-		expect(document.body.textContent?.includes('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBe(true)
+		expect(document.body.textContent?.includes('No resolution notes or supporting context provided.')).toBe(false)
+		expect(document.body.textContent?.includes('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBe(false)
+	})
+
+	test('does not render an empty preview heading when title and description are both hidden', async () => {
+		const renderedComponent = await renderIntoDocument(<Question question={createQuestion({ description: '' })} showTitle={false} variant='preview' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.querySelector('.question-summary-heading')).toBeNull()
 	})
 
 	test('renders preview timestamps as separate timeline cards with relative sublabels', async () => {
