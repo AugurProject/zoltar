@@ -30,7 +30,7 @@ import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.j
 import { isMainnetChain } from '../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
-import { getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
+import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
@@ -341,7 +341,10 @@ export function SecurityVaultSection({
 	const hasClaimableFees = currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.unpaidEthFees > 0n
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
+	const hasPositiveDepositAmount = depositAmount !== undefined && depositAmount > 0n
+	const hasPositiveWithdrawAmount = withdrawAmount !== undefined && withdrawAmount > 0n
 	const redeemableRepAmount = currentSelectedVaultDetails?.repDepositShare
+	const hasWithdrawableRep = queuedWithdrawRepLimit !== undefined && queuedWithdrawRepLimit > 0n
 	const depositRepEnabled = poolState?.actions.depositRep.enabled ?? true
 	const queueWithdrawRepEnabled = poolState?.actions.queueWithdrawRep.enabled ?? true
 	const redeemRepEnabled = poolState?.actions.redeemRep.enabled === true
@@ -357,9 +360,7 @@ export function SecurityVaultSection({
 		if (hasValidOraclePrice) return 'Withdrawable REP'
 		return 'REP Available To Queue'
 	})()
-	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
-		hasClaimableFees,
-	})
+	const claimFeesGuardMessage = undefined
 	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 	})
@@ -397,10 +398,6 @@ export function SecurityVaultSection({
 	const canUseOwnedVaultActions = selectedVaultIsOwnedByAccount && hasConnectedWallet
 	const hasLoadedSelectedVaultDetails = currentSelectedVaultDetails !== undefined
 	const canUseLoadedVaultActions = canUseOwnedVaultActions && hasLoadedSelectedVaultDetails && isMainnet
-	const vaultActionLauncherBlocker = (() => {
-		if (selectedVaultAddress === undefined || selectedVaultAddress === '') return 'Select a pool and vault first.'
-		return undefined
-	})()
 	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
@@ -453,10 +450,10 @@ export function SecurityVaultSection({
 		return undefined
 	})()
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? 'This vault does not exist.' : undefined
-	const depositActionLauncherBlocker = depositRepEnabled ? undefined : 'Deposit REP is not available in the current pool state.'
-	const repExitLauncherBlocker = vaultActionLauncherBlocker ?? loadedVaultMissingBlocker ?? (repExitEnabled ? undefined : `${repExitActionLabel} is not available in the current pool state.`)
-	const bondAllowanceLauncherBlocker = vaultActionLauncherBlocker ?? loadedVaultMissingBlocker ?? (bondAllowanceEnabled ? undefined : 'Set Bond Allowance is not available in the current pool state.')
-	const claimFeesLauncherBlocker = vaultActionLauncherBlocker ?? loadedVaultMissingBlocker ?? (hasLoadedSelectedVaultDetails ? claimFeesGuardMessage : undefined) ?? (claimFeesEnabled ? undefined : 'Claim Fees is not available in the current pool state.')
+	const depositActionLauncherBlocker = undefined
+	const repExitLauncherBlocker = loadedVaultMissingBlocker
+	const bondAllowanceLauncherBlocker = loadedVaultMissingBlocker
+	const claimFeesLauncherBlocker = loadedVaultMissingBlocker
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
@@ -482,8 +479,8 @@ export function SecurityVaultSection({
 			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal now, or let it execute immediately when a valid oracle price is already available.',
 			key: 'rep-exit',
 			safetyId: effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep'),
-			...(repExitEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
-			readiness: repExitEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
+			readiness: repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(repExitLauncherBlocker === undefined ? {} : { blocker: repExitLauncherBlocker }),
 			title: repExitActionLabel,
 		},
@@ -492,8 +489,8 @@ export function SecurityVaultSection({
 			description: 'Queue a new security bond allowance using the current oracle price context.',
 			key: 'set-bond-allowance',
 			safetyId: getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance'),
-			...(bondAllowanceEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
-			readiness: bondAllowanceEnabled && vaultActionLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
+			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(bondAllowanceLauncherBlocker === undefined ? {} : { blocker: bondAllowanceLauncherBlocker }),
 			title: 'Set Security Bond Allowance',
 		},
@@ -502,8 +499,8 @@ export function SecurityVaultSection({
 			description: 'Review claimable fees and confirm the fee redemption for the selected vault.',
 			key: 'claim-fees',
 			safetyId: getSecurityVaultActionSafetyId('redeemFees'),
-			...(claimFeesEnabled && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
-			readiness: claimFeesEnabled && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
+			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(claimFeesLauncherBlocker === undefined ? {} : { blocker: claimFeesLauncherBlocker }),
 			title: 'Claim Fees',
 		},
@@ -593,7 +590,7 @@ export function SecurityVaultSection({
 								pendingLabel='Depositing REP...'
 								onClick={onDepositRep}
 								pending={securityVaultActiveAction === 'depositRep'}
-								availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || depositGuardMessage !== undefined, reason: depositRepEnabled && canUseLoadedVaultActions ? depositGuardMessage : undefined }}
+								availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -717,7 +714,10 @@ export function SecurityVaultSection({
 								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 								pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 								tone='secondary'
-								availability={{ disabled: !repExitEnabled || !canUseLoadedVaultActions || repExitGuardMessage !== undefined, reason: repExitEnabled && canUseLoadedVaultActions ? repExitGuardMessage : undefined }}
+								availability={{
+									disabled: !repExitEnabled || !canUseLoadedVaultActions || (effectiveRepExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
+									reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
+								}}
 							/>
 						</div>
 					</>
@@ -778,7 +778,7 @@ export function SecurityVaultSection({
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
-								availability={{ disabled: !bondAllowanceEnabled || !canUseLoadedVaultActions || setSecurityBondAllowanceGuardMessage !== undefined, reason: bondAllowanceEnabled && canUseLoadedVaultActions ? setSecurityBondAllowanceGuardMessage : undefined }}
+								availability={{ disabled: !bondAllowanceEnabled || !canUseLoadedVaultActions || setSecurityBondAllowanceGuardMessage !== undefined, reason: canUseLoadedVaultActions ? setSecurityBondAllowanceGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -806,7 +806,7 @@ export function SecurityVaultSection({
 						pendingLabel='Claiming fees...'
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled && canUseLoadedVaultActions ? claimFeesGuardMessage : undefined }}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees || claimFeesGuardMessage !== undefined, reason: canUseLoadedVaultActions ? claimFeesGuardMessage : undefined }}
 					/>
 				</div>
 			</OperationModal>
@@ -830,7 +830,7 @@ export function SecurityVaultSection({
 						pendingLabel='Claiming fees...'
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled && canUseLoadedVaultActions ? claimFeesGuardMessage : undefined }}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees || claimFeesGuardMessage !== undefined, reason: canUseLoadedVaultActions ? claimFeesGuardMessage : undefined }}
 					/>
 				</div>
 			</SectionBlock>
@@ -876,7 +876,7 @@ export function SecurityVaultSection({
 						pendingLabel='Depositing REP...'
 						onClick={onDepositRep}
 						pending={securityVaultActiveAction === 'depositRep'}
-						availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || depositGuardMessage !== undefined, reason: depositRepEnabled && canUseLoadedVaultActions ? depositGuardMessage : undefined }}
+						availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositGuardMessage : undefined }}
 					/>
 				</div>
 				{(() => {
@@ -925,7 +925,7 @@ export function SecurityVaultSection({
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
-								availability={{ disabled: !bondAllowanceEnabled || !canUseLoadedVaultActions || setSecurityBondAllowanceGuardMessage !== undefined, reason: bondAllowanceEnabled && canUseLoadedVaultActions ? setSecurityBondAllowanceGuardMessage : undefined }}
+								availability={{ disabled: !bondAllowanceEnabled || !canUseLoadedVaultActions || setSecurityBondAllowanceGuardMessage !== undefined, reason: canUseLoadedVaultActions ? setSecurityBondAllowanceGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -985,7 +985,10 @@ export function SecurityVaultSection({
 						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 						pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 						tone='secondary'
-						availability={{ disabled: !repExitEnabled || !canUseLoadedVaultActions || repExitGuardMessage !== undefined, reason: repExitEnabled && canUseLoadedVaultActions ? repExitGuardMessage : undefined }}
+						availability={{
+							disabled: !repExitEnabled || !canUseLoadedVaultActions || (effectiveRepExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
+							reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
+						}}
 					/>
 				</div>
 				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.escalationEscrowedRep !== undefined && currentSelectedVaultDetails.escalationEscrowedRep > 0n ? <p className='detail'>Withdraw escalation deposits before redeeming REP.</p> : undefined}

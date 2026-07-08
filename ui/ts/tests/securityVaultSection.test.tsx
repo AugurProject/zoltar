@@ -205,7 +205,7 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim Fees' })
 
-		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
+		expectTransactionButtonDisabled(document.body, 'Claim Fees')
 		fireEvent.click(claimFeesButton)
 		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
 	})
@@ -274,7 +274,7 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
-	test('shows a pool-state blocker when modal-first claim fees is disabled by lifecycle gating', async () => {
+	test('keeps the modal-first claim fees launcher silently disabled when lifecycle gating blocks it', async () => {
 		const endedPoolState = createEndedPoolState()
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -292,7 +292,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Claim Fees is not available in the current pool state.')
+		expectTransactionButtonDisabled(document.body, 'Claim Fees')
 	})
 
 	test('keeps modal-first vault actions silently disabled when the wallet is disconnected', async () => {

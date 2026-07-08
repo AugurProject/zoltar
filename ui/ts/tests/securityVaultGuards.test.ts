@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
+import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 
 const ETH = 10n ** 18n
 
@@ -24,7 +24,7 @@ describe('security vault guards', () => {
 				isDepositBelowMinimum: false,
 				repBalanceGap: undefined,
 			}),
-		).toBe('Enter a REP deposit amount greater than zero.')
+		).toBeUndefined()
 
 		expect(
 			getVaultDepositGuardMessage({
@@ -73,7 +73,7 @@ describe('security vault guards', () => {
 				withdrawableRepAmount: 2_500n * 10n ** 18n,
 				walletEthBalance: 1n,
 			}),
-		).toBe('Enter a REP withdraw amount greater than zero.')
+		).toBeUndefined()
 
 		expect(
 			getVaultWithdrawGuardMessage({
@@ -125,11 +125,6 @@ describe('security vault guards', () => {
 			}),
 		).toBe('Reduce the security bond allowance to 5 ETH or less.')
 
-		expect(
-			getVaultClaimFeesGuardMessage({
-				hasClaimableFees: false,
-			}),
-		).toBe('No claimable fees are available for this vault.')
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {

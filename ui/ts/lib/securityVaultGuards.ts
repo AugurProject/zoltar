@@ -5,7 +5,7 @@ import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_BOND_ALLOWANCE, MIN_
 
 export function getVaultDepositGuardMessage({ approvalSatisfied, depositAmount, isDepositBelowMinimum, repBalanceGap }: { approvalSatisfied: boolean; depositAmount: bigint | undefined; isDepositBelowMinimum: boolean; repBalanceGap: bigint | undefined }) {
 	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
-	if (depositAmount <= 0n) return 'Enter a REP deposit amount greater than zero.'
+	if (depositAmount <= 0n) return undefined
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
 	if (repBalanceGap !== undefined && repBalanceGap > 0n) return `Need ${formatCurrencyBalance(repBalanceGap)} more REP in this wallet.`
 	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP in the first deposit.`
@@ -28,8 +28,8 @@ export function getVaultWithdrawGuardMessage({
 	walletEthBalance: bigint | undefined
 }) {
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
-	if (withdrawAmount <= 0n) return 'Enter a REP withdraw amount greater than zero.'
-	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return 'No REP is currently withdrawable from this vault.'
+	if (withdrawAmount <= 0n) return undefined
+	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmount) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmount)} REP or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
@@ -70,11 +70,6 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 		walletEthBalance,
 	})
 	if (ethGuardMessage !== undefined) return ethGuardMessage
-	return undefined
-}
-
-export function getVaultClaimFeesGuardMessage({ hasClaimableFees }: { hasClaimableFees: boolean }) {
-	if (!hasClaimableFees) return 'No claimable fees are available for this vault.'
 	return undefined
 }
 

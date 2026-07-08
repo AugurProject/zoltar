@@ -832,10 +832,7 @@ export function SecurityPoolWorkflowSection({
 														const canUseSelectedVaultActions = accountState.address !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isMainnet
 														const loadedVaultMissing = selectedVaultDetails !== undefined && !selectedVaultExistsOnchain
 														const liquidationBlocker = (() => {
-															if (selectedPool === undefined) return 'Select a pool and vault first.'
-															if (selectedVaultAddress === '') return 'Select a pool and vault first.'
 															if (loadedVaultMissing) return 'This vault does not exist.'
-															if (!liquidationEnabled) return 'Review Liquidation is not available in the current pool state.'
 															return undefined
 														})()
 
