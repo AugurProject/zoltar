@@ -17,6 +17,11 @@ Protocol documentation lives in `docs/`:
 - [Augur Placeholder visual whitepaper](./docs/whitepaper_placeholder.html)
 - [Truth auction design](./docs/auction-design.html)
 
+Deterministic deployment outputs live in
+[`docs/mainnet-deployment-addresses.json`](./docs/mainnet-deployment-addresses.json).
+The repo keeps that file as generated source-of-truth data instead of maintaining
+a separate prose page for the same addresses.
+
 ## Prerequisites
 
 - Bun 1.3+

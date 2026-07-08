@@ -116,7 +116,6 @@ Use one paragraph for one job.
 Let tables hold precision; keep surrounding prose conceptual.
 Avoid transition sentences about the document itself.
 When a section has two branches, name the branches first.
-When a mechanism is not a truth mechanism, repeat that clearly.
 
 Watch for "spec-optimized but human-hostile" writing. Report Medium or High issues when a page is technically careful but reads like audit notes, assertion tables, or compressed changelog prose instead of explanatory documentation.
 

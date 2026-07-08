@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>EscalationGame Architecture</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>EscalationGame Architecture</h1>
+				<p>
+					<code>EscalationGame</code> is split so storage ownership, settlement
+					accounting, and proof math do not blur together inside one contract
+					body. The point of the split is not stylistic. Contributors need to
+					know which module is allowed to mutate live game state, which module is
+					only reconstructing proof-derived values, and which invariants a
+					refactor must preserve.
+				</p>
+				<p>
+					The main boundary is simple. The game stack owns storage, counters,
+					escrow, carry state, and settlement effects. The external
+					<code>EscalationGameProofVerifier</code> owns storage-free proof and
+					logarithm helpers. That separation keeps verification math reusable and
+					testable without giving it authority to consume deposits, advance
+					nullifiers, or move accounting totals.
+				</p>
+				<p>
+					Refactors usually hit four pressure points: storage ownership,
+					accounting invariants, interface drift, and bytecode headroom. Those
+					are the places where the contract split has to stay explicit or the
+					architecture stops buying clarity.
+				</p>
+			</header>
+
+			<section id="module-split">
+				<h2>Module Split</h2>
+				<p>
+					The first question in this stack is always ownership: which file is
+					allowed to mutate which part of the game. The state-owning modules form
+					one inheritance ladder under <code>EscalationGameState</code>, while
+					the proof verifier stays outside that ladder because it should never
+					write live game state.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Module</th>
+							<th>Owns</th>
+							<th>Why that boundary exists</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>EscalationGameTypes.sol</code></td>
+							<td>Constants and structs shared across the stack.</td>
+							<td>Common types stay stable even when execution modules move.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameState.sol</code></td>
+							<td>Storage layout, events, constructor wiring, access control, and primitive escrow and unresolved counters.</td>
+							<td>All inherited modules need one authoritative storage surface.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameCalculations.sol</code></td>
+							<td>Pure and view attrition, resolution, accepted-deposit, and payout math.</td>
+							<td>Readers can review formulas without reading mutation paths at the same time.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameCarry.sol</code></td>
+							<td>Fork carry snapshots, Merkle Mountain Range state, nullifier roots, proof verification calls, and local carry consumption.</td>
+							<td>Carry logic is where proof-derived history starts affecting live state.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameEscrow.sol</code></td>
+							<td>Forked escrow records, vault export cursors, batch export bounds, and child REP accounting.</td>
+							<td>Escrow export has its own mutation surface and batching risks.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameSettlement.sol</code></td>
+							<td>Claim, withdraw, proof-backed settlement, residual sweeping, and public deposit pagination.</td>
+							<td>Settlement is the place where user-visible balances actually move.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGame.sol</code></td>
+							<td>Start and resume entrypoints plus local deposit intake from <code>SecurityPool</code>.</td>
+							<td>The top-level contract should stay small enough to show the public surface clearly.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameProofVerifier.sol</code></td>
+							<td>Storage-free Merkle Mountain Range, nullifier proof, and logarithm helpers.</td>
+							<td>Proof and attrition helpers can be reused and audited separately because they do not mutate game state.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					This order matters. New modules should join the inheritance ladder only
+					when they truly need the full state surface. If a helper can compute a
+					value without touching storage, it belongs in the proof verifier, a
+					free function, or a test helper instead of widening the mutable stack.
+				</p>
+			</section>
+
+			<section id="accounting-invariants">
+				<h2>Accounting Invariants</h2>
+				<p>
+					Safe refactors keep the local REP and unresolved-deposit counters in
+					sync. The shortest mental model is that every active lock must still
+					appear in both its vault-local counter and the corresponding global
+					total until settlement, claim, or export consumes it.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Invariant</th>
+							<th>What must remain true</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Escrow totals</td>
+							<td><code>totalEscrowedRep</code> equals the sum of active REP locks, and <code>escrowedRepByVault[vault]</code> is that vault's local component.</td>
+						</tr>
+						<tr>
+							<td>Local unresolved totals</td>
+							<td><code>totalLocalUnresolvedRep</code> equals the sum of unresolved local deposits, and <code>unresolvedRepByVault[vault]</code> is that vault's local component.</td>
+						</tr>
+						<tr>
+							<td>Outcome carry</td>
+							<td>For each outcome, <code>currentCarryTotal == inheritedUnresolvedTotal + localUnresolvedTotal</code>.</td>
+						</tr>
+						<tr>
+							<td>Active local deposit</td>
+							<td>A local deposit stays active while <code>Deposit.amount &gt; 0</code>.</td>
+						</tr>
+						<tr>
+							<td>Local deposit consumption</td>
+							<td>Settlement, claim, or export must zero the amount, mark the stable parent deposit index consumed, reduce unresolved totals, and update the current carry snapshot.</td>
+						</tr>
+						<tr>
+							<td>Inherited settlement order</td>
+							<td>Proof-backed settlement consumes <code>inheritedUnresolvedTotal</code> first and only then uses local unresolved total for any remainder.</td>
+						</tr>
+						<tr>
+							<td>Forked escrow bounds</td>
+							<td>Forked escrow settlement releases child REP proportionally against source principal, and claimed counters never exceed recorded principal or child REP.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					The highest-risk paths already have regression coverage. Scenario tests
+					exercise consumed local carry leaves and bounded unresolved-vault
+					export, while
+					<code>escalationGameInterfaceRegression.test.ts</code> snapshots the
+					inherited storage layout so refactors do not silently move live slots.
+				</p>
+			</section>
+
+			<section id="interface-drift">
+				<h2>Interface Drift</h2>
+				<p>
+					Public-surface changes need an explicit review trail because a split
+					architecture makes accidental ABI drift easy to miss. The ABI snapshot
+					and bytecode snapshot are there to prove that a surface change was
+					intentional rather than an unnoticed side effect of refactoring one of
+					the modules.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Artifact</th>
+							<th>Location</th>
+							<th>Refresh command</th>
+							<th>Why it matters</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>ABI snapshot</td>
+							<td><code>solidity/ts/tests/fixtures/escalationGameAbi.snapshot</code></td>
+							<td><code>bun run update:escalation-game-abi-snapshot</code></td>
+							<td>Detects intentional or accidental changes to public functions, events, errors, and tuple shapes.</td>
+						</tr>
+						<tr>
+							<td>Runtime bytecode snapshot</td>
+							<td><code>solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json</code></td>
+							<td><code>bun run update:escalation-game-bytecode-snapshot</code></td>
+							<td>Shows whether executable behavior changed after metadata is stripped from the runtime hash.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					Review the snapshot diff together with the Solidity diff. If the
+					change was not deliberate, fix the contract rather than normalizing the
+					drift by updating the fixture.
+				</p>
+			</section>
+
+			<section id="deployment-bytecode">
+				<h2>Deployment and Bytecode</h2>
+				<p>
+					The proof verifier split also exists because bytecode headroom is
+					tight. Keeping proof math outside the state-owning contract preserves
+					room for revert strings, event payloads, and future execution logic
+					without collapsing the public game contract into an unreviewable blob.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Measurement</th>
+							<th>Current value</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Creation bytecode</td>
+							<td><code>26,939</code> bytes</td>
+						</tr>
+						<tr>
+							<td>Deployed bytecode</td>
+							<td><code>23,858</code> bytes</td>
+						</tr>
+						<tr>
+							<td>Project deployed-bytecode budget headroom</td>
+							<td><code>142</code> bytes below <code>24,000</code></td>
+						</tr>
+						<tr>
+							<td>EIP-170 headroom</td>
+							<td><code>718</code> bytes below <code>24,576</code></td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					Any Solidity change can also move deterministic deployment addresses,
+					because address derivation uses init code. After contract changes,
+					regenerate and review deployment outputs with the normal artifact
+					workflow, and keep
+					<code>docs/mainnet-deployment-addresses.json</code> aligned when those
+					addresses intentionally change.
+				</p>
+				<p>
+					For gas-sensitive work, measure instead of assuming. Scenario tests are
+					the first line of defense, and <code>bun run gas-costs</code> is the
+					follow-up when deployment or settlement costs are part of the change.
+				</p>
+			</section>
+
+			<section id="future-extraction">
+				<h2>Future Extraction Criteria</h2>
+				<p>
+					A module should be extracted only when the ownership boundary becomes
+					clearer after the split. File count by itself is not a reason. The
+					question is whether the new boundary would reduce review risk by making
+					state mutation, proof math, or settlement authority easier to see.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Possible extraction</th>
+							<th>Only do it when</th>
+							<th>Do not do it when</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>More math helpers</td>
+							<td>The logic is storage-free and can be tested independently.</td>
+							<td>The helper still needs <code>outcomeState</code>, <code>securityPool</code>, or live mutation context.</td>
+						</tr>
+						<tr>
+							<td>More proof helpers</td>
+							<td>The caller still owns nullifier advancement, consumed-index accounting, and escrow or carry mutations.</td>
+							<td>The helper would start deciding which proof effects are consumed onchain.</td>
+						</tr>
+						<tr>
+							<td>Separate deployed escrow or settlement contracts</td>
+							<td>A concrete bytecode-limit or upgradeability need appears.</td>
+							<td>The split would create extra trust, approval, or accounting surfaces without solving a live constraint.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+		</main>
+		<script src="./protocolTerms.js"></script>
+		<script src="./termTooltips.js"></script>
+	</body>
+</html>
