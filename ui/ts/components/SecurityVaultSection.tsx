@@ -428,6 +428,12 @@ export function SecurityVaultSection({
 		if (!isMainnet) return 'Switch to Ethereum mainnet.'
 		return undefined
 	})()
+	const depositLauncherBlocker = (() => {
+		if (accountState.address === undefined) return 'Connect wallet to continue.'
+		if (!isMainnet) return 'Switch to Ethereum mainnet.'
+		if (selectedVaultAddress !== undefined && selectedVaultAddress !== '' && !selectedVaultIsOwnedByAccount) return 'Select your own vault to unlock actions.'
+		return undefined
+	})()
 	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
@@ -496,9 +502,9 @@ export function SecurityVaultSection({
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
 			safetyId: getSecurityVaultActionSafetyId('depositRep'),
-			...(depositRepEnabled && vaultActionLauncherBlocker === undefined ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
-			readiness: depositRepEnabled && vaultActionLauncherBlocker === undefined ? 'ready' : 'blocked',
-			...(vaultActionLauncherBlocker === undefined ? {} : { blocker: vaultActionLauncherBlocker }),
+			...(depositRepEnabled && depositLauncherBlocker === undefined ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
+			readiness: depositRepEnabled && depositLauncherBlocker === undefined ? 'ready' : 'blocked',
+			...(depositLauncherBlocker === undefined ? {} : { blocker: depositLauncherBlocker }),
 			title: 'Deposit REP',
 		},
 		{
