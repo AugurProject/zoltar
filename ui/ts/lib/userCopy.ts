@@ -183,6 +183,5 @@ export function getPageNotFoundPresentation() {
 		actionHint: UI_STRINGS.userCopy.pageNotFound.actionHint,
 		badgeLabel: UI_STRINGS.userCopy.pageNotFound.badgeLabel,
 		badgeTone: 'blocked',
-		detail: UI_STRINGS.userCopy.pageNotFound.detail,
 	})
 }

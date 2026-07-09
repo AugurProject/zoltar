@@ -42,6 +42,18 @@ describe('security pool creation guards', () => {
 			getSecurityPoolCreateDisabledReason({
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
+				duplicateOriginPoolExists: false,
+				isMainnet: false,
+				marketDetails: createMarketDetails(),
+				securityPoolCreating: false,
+				zoltarUniverseHasForked: false,
+			}),
+		).toBeUndefined()
+
+		expect(
+			getSecurityPoolCreateDisabledReason({
+				accountAddress: zeroAddress,
+				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: true,
 				isMainnet: true,
 				marketDetails: createMarketDetails(),

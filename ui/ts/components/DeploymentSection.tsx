@@ -9,7 +9,7 @@ import { UI_STRINGS } from '../lib/uiStrings.js'
 type StepStatus = {
 	badgeTone: BadgeTone
 	label: string | undefined
-	detail: string
+	detail?: string
 	buttonLabel: string
 }
 
@@ -41,7 +41,6 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		if (!isMainnet)
 			return {
 				badgeTone: 'pending',
-				detail: UI_STRINGS.deploymentSection.ethereumMainnetRequiredDetail,
 				label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
 				buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
 			}
@@ -86,7 +85,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 									<h3>{step.label}</h3>
 								</div>
 								<p className='address'>{step.address}</p>
-								<p className='detail'>{stepStatus.detail}</p>
+								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
 							<TransactionActionButton safetyId={getDeploymentStepSafetyId(step.id)} idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRINGS.deploymentSection.deployingPendingLabel} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>

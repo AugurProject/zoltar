@@ -485,8 +485,8 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).accountState).toMatchObject({
 			address: account,
 			chainId: '0xaa36a7',
-			ethBalance: 123n,
-			wethBalance: 777n,
+			ethBalance: undefined,
+			wethBalance: undefined,
 		})
 		expect(requireHookState(hookState).readBackendMessage).toBeUndefined()
 		expect(requireHookState(hookState).currentBlockNumber).toBe(321n)

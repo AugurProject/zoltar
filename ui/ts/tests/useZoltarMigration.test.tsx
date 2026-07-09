@@ -120,7 +120,7 @@ describe('useZoltarMigration', () => {
 			await requireHookState(hookState).prepareRepForMigration()
 		})
 
-		expect(transactionFailures).toEqual(['Zoltar has not forked yet'])
+		expect(transactionFailures).toEqual(['Migration is unavailable because this universe has not forked'])
 		expect(requireHookState(hookState).zoltarMigrationError).toBeUndefined()
 		expect(refreshState).not.toHaveBeenCalled()
 		expect(refreshZoltarUniverse).not.toHaveBeenCalled()

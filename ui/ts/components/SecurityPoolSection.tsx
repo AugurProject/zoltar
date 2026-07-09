@@ -47,7 +47,7 @@ export function SecurityPoolSection({
 		securityPoolCreating,
 		zoltarUniverseHasForked,
 	})
-	const isCreateDisabled = createDisabledReason !== undefined
+	const isCreateDisabled = !isMainnet || createDisabledReason !== undefined
 	let createdQuestionDetails = undefined
 	if (securityPoolResult !== undefined)
 		if (marketDetails?.questionId === securityPoolResult.questionId) {

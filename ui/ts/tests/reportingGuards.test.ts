@@ -240,7 +240,7 @@ describe('reporting guards', () => {
 				isMainnet: false,
 				reportingStatus: 'active',
 			}),
-		).toBe('Switch to Ethereum mainnet before settling escalation deposits.')
+		).toBeUndefined()
 
 		expect(
 			getReportingWithdrawGuardMessage({

@@ -238,7 +238,7 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
@@ -270,7 +270,7 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Set Bond Allowance' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
-		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
@@ -629,5 +629,79 @@ describe('SecurityVaultSection', () => {
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
 		expect(depositLauncher.title).toBe('Connect a wallet before depositing REP.')
+	})
+
+	test('keeps modal-first vault launchers silently disabled off mainnet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					modalFirst: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('')
+	})
+
+	test('keeps modal-first vault launchers silently disabled off mainnet when the selected vault is owned by another account', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						vaultAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: '0x00000000000000000000000000000000000000a1',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('')
+	})
+
+	test('keeps modal-first vault launchers silently disabled off mainnet when selected vault details are not loaded', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('')
 	})
 })

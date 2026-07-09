@@ -31,7 +31,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -42,7 +41,7 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.queryByText(/^Last transaction:/)).toBeNull()
 	})
 
-	test('shows the wrong network notice in the page-level notice stack', async () => {
+	test('does not render wrong-network notices in the page-level notice stack', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
@@ -50,17 +49,14 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: 'Switch to Ethereum mainnet.',
 				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
-		expect(
-			documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Switch the connected wallet network to Ethereum mainnet to continue. Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.'),
-		).not.toBeNull()
+		expect(documentQueries.queryByText('Wrong network')).toBeNull()
+		expect(documentQueries.queryByText('This interface only enables contract interactions on Ethereum mainnet. Switch the connected wallet network to Ethereum mainnet to continue.')).toBeNull()
 	})
 
 	test('shows a simulation bootstrap failure notice', async () => {
@@ -71,7 +67,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: 'Anvil boot failed',
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -90,7 +85,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -116,7 +110,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -142,7 +135,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -173,7 +165,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -184,7 +175,7 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Ignored local storage RPC override (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
 	})
 
-	test('shows deployment setup and custom wrong-network guidance together', async () => {
+	test('shows deployment setup and top-level errors without a wrong-network notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: 'Top-level error',
@@ -192,7 +183,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: true,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: 'Chain ID mismatch.',
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -200,9 +190,8 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Setup incomplete')).not.toBeNull()
-		expect(documentQueries.getByText('Finish setup in Deploy before using the app.')).not.toBeNull()
-		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
-		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Chain ID mismatch. Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.')).not.toBeNull()
+		expect(documentQueries.getByText('Required application contracts are not deployed.')).not.toBeNull()
+		expect(documentQueries.queryByText('Wrong network')).toBeNull()
 		expect(documentQueries.getByText('Error')).not.toBeNull()
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
 	})
@@ -215,7 +204,6 @@ describe('AppStatusNotices', () => {
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: true,
 				simulationBootstrapError: undefined,
-				wrongNetworkMessage: undefined,
 				zoltarUniverse: {
 					childUniverses: [],
 					forkThreshold: 1000n,

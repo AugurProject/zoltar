@@ -90,6 +90,15 @@ describe('app route effects', () => {
 	test('resets the selected vault only when the selected pool changes on the security-pools route', () => {
 		expect(
 			getSelectedVaultAddressForRoutePoolChange({
+				accountAddress: undefined,
+				lastSecurityPoolAddress: '0x1111111111111111111111111111111111111111',
+				route: 'security-pools',
+				securityPoolAddress: '0x2222222222222222222222222222222222222222',
+			}),
+		).toBe('')
+
+		expect(
+			getSelectedVaultAddressForRoutePoolChange({
 				accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 				lastSecurityPoolAddress: '0x1111111111111111111111111111111111111111',
 				route: 'security-pools',

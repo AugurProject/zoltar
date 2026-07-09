@@ -236,6 +236,23 @@ function TradingSectionWithMutableForm({ initialTradingForm = {}, tradingForkUni
 	)
 }
 
+function TradingSectionNetworkHarness() {
+	const [accountState, setAccountState] = useState(createAccountState())
+
+	return (
+		<>
+			<button type='button' onClick={() => setAccountState(createAccountState({ chainId: '0xaa36a7' }))}>
+				Switch Test Network
+			</button>
+			<TradingSection
+				{...createTradingSectionProps({
+					accountState,
+				})}
+			/>
+		</>
+	)
+}
+
 void describe('TradingSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -422,6 +439,32 @@ void describe('TradingSection', () => {
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
 		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+	})
+
+	void test('keeps minting disabled off mainnet without showing a switch-network message after the modal is already open', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSectionNetworkHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button')
+		expect(mintSubmitButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch Test Network' }))
+		})
+
+		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button after network switch')
+		expect(mintSubmitButton.disabled).toBe(true)
+		expect(mintSubmitButton.title).toBe('')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
 	})
 
 	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {

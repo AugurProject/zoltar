@@ -29,7 +29,7 @@ import { getAppPageTitle } from './lib/appPageTitle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from './lib/chainTimestamp.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
-import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
+import { getWalletScopedAccountAddress, isSupportedAppChain } from './lib/network.js'
 import { applyReportingFormUpdate } from './lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
@@ -96,6 +96,8 @@ export function App() {
 	} = useOnchainState({ activeEnvironmentNonce, enableChainClock: route !== 'deploy' })
 	const readBackendReady = readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady
+	const isMainnet = isSupportedAppChain(accountState.chainId)
+	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
 	const baseHookConfig = {
 		accountAddress: accountState.address,
 		onTransactionCanceled,
@@ -106,6 +108,10 @@ export function App() {
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,
+	}
+	const walletScopedHookConfig = {
+		...baseHookConfig,
+		accountAddress: walletScopedAccountAddress,
 	}
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
 	const {
@@ -151,10 +157,10 @@ export function App() {
 		zoltarQuestions,
 		zoltarUniverse,
 		zoltarUniverseMissing,
-	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	} = useMarketCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
-		...baseHookConfig,
+		...walletScopedHookConfig,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
 		zoltarUniverseHasForked,
@@ -177,7 +183,7 @@ export function App() {
 		setSecurityBondAllowance,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations({ ...baseHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
+	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const {
 		approveToken1,
 		approveToken2,
@@ -201,12 +207,12 @@ export function App() {
 		settleReport,
 		submitInitialReport,
 		wrapWethForInitialReport,
-	} = useOpenOracleOperations({ ...baseHookConfig, enabled: route === 'open-oracle' && canReadOnchainData })
-	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({ ...baseHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
+	} = useOpenOracleOperations({ ...walletScopedHookConfig, enabled: route === 'open-oracle' && canReadOnchainData })
+	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		setReportingForm(current => applyReportingFormUpdate(current, update))
 	}
-	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
+	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
@@ -234,9 +240,9 @@ export function App() {
 		securityPools,
 		setLiquidationAmount,
 		setLiquidationTimeoutMinutes,
-	} = useSecurityPoolsOverview(baseHookConfig)
+	} = useSecurityPoolsOverview(walletScopedHookConfig)
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
-		...baseHookConfig,
+		...walletScopedHookConfig,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
 		selectedSecurityPoolAddress: securityPoolAddress,
@@ -264,7 +270,7 @@ export function App() {
 		settleForkedEscalation,
 		startTruthAuction,
 		submitBid,
-	} = useForkAuctionOperations({ ...baseHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
+	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices({ enabled: route !== 'deploy' })
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
@@ -281,8 +287,6 @@ export function App() {
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const isMainnet = isSupportedAppChain(accountState.chainId)
-	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? getWrongNetworkMessage() : undefined
 	const augurPlaceHolderDeploymentMissing = canReadOnchainData && augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
@@ -392,7 +396,7 @@ export function App() {
 		void loadZoltarForkAccess()
 	}, [loadZoltarForkAccess, poolPriceOracleResult])
 	useAppRouteEffects({
-		accountAddress: accountState.address,
+		accountAddress: walletScopedAccountAddress,
 		augurPlaceHolderDeploymentMissing,
 		environmentReady: canReadOnchainData,
 		activeEnvironmentNonce,
@@ -764,7 +768,6 @@ export function App() {
 							simulationBootstrapError={environmentBootstrapError}
 							showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 							showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-							wrongNetworkMessage={wrongNetworkMessage}
 							zoltarUniverse={zoltarUniverse}
 						/>
 						<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
@@ -773,7 +776,7 @@ export function App() {
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
 								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
+									<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
 								</fieldset>
 							</TransactionActionButtonLockProvider>
 						</div>

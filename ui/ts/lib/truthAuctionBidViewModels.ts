@@ -111,7 +111,7 @@ export function buildViewerTruthAuctionBidRows({
 						bidKey: settlementBidKey,
 						checked: isSettlementBidActions ? selectedBidKeys.includes(settlementBidKey) : false,
 						disabled: !isSettlementBidActions || !isSettlementBidSelectable,
-						title: isSettlementBidActions ? 'Select bid for settlement' : 'This bid is not yet settlement-eligible',
+						title: isSettlementBidActions ? 'Select bid for settlement' : 'This bid is not settlement-eligible',
 					}
 				: undefined,
 			statusLabel,

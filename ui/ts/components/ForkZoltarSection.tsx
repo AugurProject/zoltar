@@ -69,7 +69,7 @@ export function ForkZoltarSection({
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet: true })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
 		if (hasForked) return 'Zoltar is already forked.'
@@ -79,7 +79,7 @@ export function ForkZoltarSection({
 		accountAddress === undefined
 			? 'Connect a wallet before forking Zoltar.'
 			: (() => {
-					if (!isMainnet) return 'Switch to Ethereum mainnet before forking Zoltar.'
+					if (!isMainnet) return undefined
 					if (rootUniverse === undefined) return 'Refresh universe data before forking Zoltar.'
 
 					return (() => {
@@ -118,6 +118,7 @@ export function ForkZoltarSection({
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
+						disabled={!isMainnet}
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}

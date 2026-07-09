@@ -44,7 +44,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 	const deployReason = (() => {
 		if (accountAddress === undefined) return UI_STRINGS.scalarDeploymentSection.connectWalletBeforeDeployingChildUniverseReason
-		if (!isMainnet) return UI_STRINGS.scalarDeploymentSection.switchToMainnetBeforeDeployingChildUniverseReason
+		if (!isMainnet) return undefined
 
 		return (() => {
 			if (!hasForked) return UI_STRINGS.scalarDeploymentSection.forkBeforeDeployingChildUniversesReason
@@ -57,7 +57,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const scalarDeployRequirements = [
 		{ key: 'forked', label: UI_STRINGS.scalarDeploymentSection.universeIsForkedLabel, resolved: hasForked, ...(hasForked ? {} : { detail: UI_STRINGS.scalarDeploymentSection.forkBeforeDeployingChildUniversesReason }) },
 		{ key: 'wallet', label: UI_STRINGS.scalarDeploymentSection.walletConnectedLabel, resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: UI_STRINGS.scalarDeploymentSection.connectWalletBeforeDeployingChildUniverseReason }) },
-		{ key: 'mainnet', label: UI_STRINGS.scalarDeploymentSection.ethereumMainnetSelectedLabel, resolved: isMainnet, ...(isMainnet ? {} : { detail: UI_STRINGS.scalarDeploymentSection.switchToMainnetBeforeDeployingChildUniverseReason }) },
 		{ key: 'exists', label: UI_STRINGS.scalarDeploymentSection.childUniverseNotAlreadyDeployedLabel, resolved: !selectedScalarChildExists, ...(selectedScalarChildExists ? { detail: UI_STRINGS.scalarDeploymentSection.childUniverseAlreadyDeployedDetail } : {}) },
 	]
 	useEffect(() => {

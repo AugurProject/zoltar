@@ -47,11 +47,11 @@ export function OverviewPanels({
 	}
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
-	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
 	const walletOnMainnet = isMainnetChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
+	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{UI_STRINGS.overviewPanels.simulationBadgeLabel}</Badge>
 		if (hasWrongWalletNetwork) return <Badge tone='danger'>{UI_STRINGS.overviewPanels.wrongNetworkBadgeLabel}</Badge>
@@ -60,8 +60,6 @@ export function OverviewPanels({
 	})()
 	const environmentDescription = (() => {
 		if (isBrowserSimulationReadBackend) return UI_STRINGS.overviewPanels.simulationDescription
-		if (hasWrongWalletNetwork) return UI_STRINGS.overviewPanels.walletWrongNetworkDescription
-		if (accountState.address === undefined) return UI_STRINGS.overviewPanels.readOnlyDescription
 		return undefined
 	})()
 	const operationsHeaderDescription = (() => {
