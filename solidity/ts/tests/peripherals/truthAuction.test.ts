@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../../types/contractArtifact'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getMaxRepBeingSold, getMinBidSize } from '../../testsuite/simulator/utils/contracts/auction'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
@@ -1187,7 +1187,7 @@ describe('Peripherals: truth auction', () => {
 					.map(log => {
 						try {
 							return decodeEventLog({
-								abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+								abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 								data: log.data,
 								topics: log.topics,
 							})
