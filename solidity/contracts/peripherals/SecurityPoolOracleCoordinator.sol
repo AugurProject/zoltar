@@ -102,8 +102,6 @@ contract SecurityPoolOracleCoordinator {
 		bool isPendingSlot
 	);
 	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
-	event OracleFeeCreditAdded(address sponsor, address payer, uint256 amount, uint256 oracleFeeCredit);
-	event OracleFeeCreditWithdrawn(address sponsor, uint256 amount);
 
 	// This is not a FIFO queue. We keep append-only operation records plus a bounded
 	// pending settlement list that auto-executes once a fresh oracle price arrives.
@@ -117,7 +115,6 @@ contract SecurityPoolOracleCoordinator {
 	mapping(uint256 => uint256) private newerActiveStagedOperationIds;
 	mapping(uint256 => bool) private isActiveStagedOperation;
 	uint256[] private pendingSettlementOperationIds;
-	mapping(address => uint256) public oracleFeeCredits;
 
 	constructor(
 		OpenOracle _openOracle,
@@ -184,8 +181,8 @@ contract SecurityPoolOracleCoordinator {
 		return ethCost;
 	}
 
-	function getQueuedOperationEthCost() public view returns (uint256) {
-		return block.basefee * 4 * uint256(gasConsumedSettlement) + 1;
+	function getQueuedOperationEthCost() public pure returns (uint256) {
+		return 0;
 	}
 
 	function getSettlementCallbackGasLimit() public view returns (uint32) {
@@ -204,15 +201,6 @@ contract SecurityPoolOracleCoordinator {
 			(bool sent, ) = payable(msg.sender).call{ value: excess }('');
 			require(sent, 'Oracle coordinator failed to refund excess ETH bounty');
 		}
-	}
-
-	function withdrawOracleFeeCredits() public {
-		uint256 credit = oracleFeeCredits[msg.sender];
-		require(credit > 0, 'No oracle fee credits available');
-		oracleFeeCredits[msg.sender] = 0;
-		(bool sent, ) = payable(msg.sender).call{ value: credit }('');
-		require(sent, 'Oracle coordinator failed to withdraw oracle fee credits');
-		emit OracleFeeCreditWithdrawn(msg.sender, credit);
 	}
 
 	function _requestPrice(address sponsor, uint256 ethCost) private {
@@ -356,6 +344,12 @@ contract SecurityPoolOracleCoordinator {
 			!securityPool.isEscalationResolved(),
 			'question already resolved, so staged operations are unavailable'
 		);
+		if (pendingReportId != 0) {
+			require(
+				msg.sender == pendingReportSponsor,
+				'Only the pending report sponsor can queue more operations until settlement'
+			);
+		}
 		if (operation == OperationType.WithdrawRep) {
 			(, uint256 withdrawRepAmount) = _previewWithdrawRep(msg.sender, amount);
 			require(withdrawRepAmount > 0, 'Withdraw amount has no effect');
@@ -403,14 +397,6 @@ contract SecurityPoolOracleCoordinator {
 				require(msg.value >= ethCost, 'Not enough ETH was provided to request a fresh oracle price');
 				retained += ethCost;
 				_requestPrice(msg.sender, ethCost);
-			} else if (pendingReportId != 0 && isPendingSettlementOperationId) {
-				uint256 queuedOperationEthCost = getQueuedOperationEthCost();
-				require(
-					msg.value >= queuedOperationEthCost,
-					'Not enough ETH was provided to join the pending oracle settlement queue'
-				);
-				retained += queuedOperationEthCost;
-				_creditPendingReportSponsor(msg.sender, queuedOperationEthCost);
 			}
 		}
 
@@ -563,14 +549,6 @@ contract SecurityPoolOracleCoordinator {
 		} catch (bytes memory) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_UNKNOWN);
 		}
-	}
-
-	function _creditPendingReportSponsor(address payer, uint256 amount) private {
-		address sponsor = pendingReportSponsor;
-		require(sponsor != address(0), 'Pending report sponsor missing');
-		uint256 nextCredit = oracleFeeCredits[sponsor] + amount;
-		oracleFeeCredits[sponsor] = nextCredit;
-		emit OracleFeeCreditAdded(sponsor, payer, amount, nextCredit);
 	}
 
 	function _emitStagedOperationQueued(uint256 operationId, bool isPendingSlot) private {

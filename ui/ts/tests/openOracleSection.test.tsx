@@ -251,11 +251,13 @@ function createOpenOracleDisputeSubmission({
 
 function renderInitialReportActionSection({
 	accountState = createAccountState(),
+	isMainnet = true,
 	openOracleForm = createOpenOracleForm(),
 	openOracleInitialReportState = createOpenOracleInitialReportState(),
 	openOracleReportDetails = createOpenOracleReportDetails(),
 }: {
 	accountState?: AccountState
+	isMainnet?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleInitialReportState?: OpenOracleSectionProps['openOracleInitialReportState']
 	openOracleReportDetails?: OpenOracleReportDetails
@@ -287,6 +289,7 @@ function renderInitialReportActionSection({
 		disputeSubmission: undefined,
 		initialReportSubmission,
 		isConnected: accountState.address !== undefined,
+		isMainnet,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
@@ -306,6 +309,7 @@ function renderInitialReportActionSection({
 
 function renderDisputeActionSection({
 	accountState = createAccountState(),
+	isMainnet = true,
 	openOracleForm = createOpenOracleForm(),
 	openOracleInitialReportState = createOpenOracleInitialReportState(),
 	openOracleReportDetails = createOpenOracleReportDetails({
@@ -314,6 +318,7 @@ function renderDisputeActionSection({
 	}),
 }: {
 	accountState?: AccountState
+	isMainnet?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleInitialReportState?: OpenOracleSectionProps['openOracleInitialReportState']
 	openOracleReportDetails?: OpenOracleReportDetails
@@ -349,6 +354,7 @@ function renderDisputeActionSection({
 			walletEthBalance: undefined,
 		}),
 		isConnected: accountState.address !== undefined,
+		isMainnet,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
@@ -368,6 +374,7 @@ function renderDisputeActionSection({
 
 function renderSettleActionSection({
 	accountState = createAccountState(),
+	isMainnet = true,
 	openOracleForm = createOpenOracleForm(),
 	openOracleReportDetails = createOpenOracleReportDetails({
 		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
@@ -378,6 +385,7 @@ function renderSettleActionSection({
 	}),
 }: {
 	accountState?: AccountState
+	isMainnet?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
@@ -406,6 +414,7 @@ function renderSettleActionSection({
 			walletEthBalance: undefined,
 		}),
 		isConnected: accountState.address !== undefined,
+		isMainnet,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
@@ -524,7 +533,7 @@ void describe('OpenOracleSection', () => {
 
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(findButton(section, 'Settle Report')).toBeUndefined()
-		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute yet.')
+		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute.')
 		expect(getTextContent(section).includes('Blocked:')).toBe(false)
 		expect(getSectionTitles(section)).toContain('Current Report State')
 		expect(getSectionTitles(section)).toContain('Dispute Report')
@@ -617,5 +626,84 @@ void describe('OpenOracleSection', () => {
 		const disputeButton = findButton(section, 'Dispute & Swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabledReason(disputeButton)).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
+	})
+
+	void test('keeps create and selected-report actions silently disabled off mainnet', () => {
+		const initialReportSection = renderInitialReportActionSection({ isMainnet: false })
+		const submitButton = findButton(initialReportSection, 'Submit Initial Report')
+		if (submitButton === undefined) throw new Error('Expected initial report controls to render')
+		expect(getButtonDisabled(submitButton)).toBe(true)
+		expect(getButtonDisabledReason(submitButton)).not.toBe('Switch to Ethereum mainnet.')
+
+		const disputeSection = renderDisputeActionSection({ isMainnet: false })
+		const disputeButton = findButton(disputeSection, 'Dispute & Swap')
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabledReason(disputeButton)).not.toBe('Switch to Ethereum mainnet.')
+
+		const settleSection = renderSettleActionSection({ isMainnet: false })
+		const settleButton = findButton(settleSection, 'Settle Report')
+		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		expect(getButtonDisabled(settleButton)).toBe(true)
+		expect(getButtonDisabledReason(settleButton)).not.toBe('Switch to Ethereum mainnet.')
+	})
+
+	void test('keeps downstream selected-report blocker copy hidden off mainnet', () => {
+		const invalidInitialReportSection = renderInitialReportActionSection({
+			isMainnet: false,
+			openOracleForm: createOpenOracleForm({ price: '' }),
+		})
+		const invalidSubmitButton = findButton(invalidInitialReportSection, 'Submit Initial Report')
+		if (invalidSubmitButton === undefined) throw new Error('Expected initial report controls to render')
+		expect(getButtonDisabled(invalidSubmitButton)).toBe(true)
+		expect(getButtonDisabledReason(invalidSubmitButton)).toBeUndefined()
+		expect(getTextContent(invalidInitialReportSection)).not.toContain('Enter a valid')
+
+		const invalidDisputeSection = renderDisputeActionSection({
+			isMainnet: false,
+			openOracleForm: createOpenOracleForm({ reportId: '' }),
+		})
+		const disputeButton = findButton(invalidDisputeSection, 'Dispute & Swap')
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabledReason(disputeButton)).toBeUndefined()
+		expect(getTextContent(invalidDisputeSection)).not.toContain('Load a report first.')
+
+		const invalidSettleSection = renderSettleActionSection({
+			isMainnet: false,
+			openOracleForm: createOpenOracleForm({ reportId: '' }),
+			openOracleReportDetails: createOpenOracleReportDetails({
+				currentTime: 100n,
+				reportTimestamp: 100n,
+				settlementTime: 60n,
+			}),
+		})
+		const settleButton = findButton(invalidSettleSection, 'Settle Report')
+		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		expect(getButtonDisabled(settleButton)).toBe(true)
+		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
+		expect(getTextContent(invalidSettleSection)).not.toContain('Load a report first.')
+	})
+
+	void test('keeps disconnected-wallet reasons for selected-report actions', () => {
+		const disconnectedAccount = createAccountState({ address: undefined })
+
+		const initialReportSection = renderInitialReportActionSection({ accountState: disconnectedAccount })
+		const submitButton = findButton(initialReportSection, 'Submit Initial Report')
+		if (submitButton === undefined) throw new Error('Expected initial report controls to render')
+		expect(getButtonDisabled(submitButton)).toBe(true)
+		expect(getButtonDisabledReason(submitButton)).toBe('Connect a wallet before submitting the initial report.')
+
+		const disputeSection = renderDisputeActionSection({ accountState: disconnectedAccount })
+		const disputeButton = findButton(disputeSection, 'Dispute & Swap')
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabledReason(disputeButton)).toBe('Connect a wallet before disputing the report.')
+
+		const settleSection = renderSettleActionSection({ accountState: disconnectedAccount })
+		const settleButton = findButton(settleSection, 'Settle Report')
+		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		expect(getButtonDisabled(settleButton)).toBe(true)
+		expect(getButtonDisabledReason(settleButton)).toBe('Connect a wallet before settling the report.')
 	})
 })

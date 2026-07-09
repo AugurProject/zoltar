@@ -112,7 +112,7 @@ function getReportingStagePresentation({
 	if (!hasReportingOpened(marketDetails.endTime, effectiveCurrentTimestamp))
 		return {
 			availableActions: [],
-			blockedActions: UI_STRINGS.reportingSection.reportingStageNotEnabledBlockedActions,
+			blockedActions: [],
 			detail: getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp),
 			key: 'reporting-not-enabled',
 			label: UI_STRINGS.reportingSection.reportingNotEnabledTitle,
@@ -120,8 +120,8 @@ function getReportingStagePresentation({
 		}
 	if (reportingDetails === undefined)
 		return {
-			availableActions: UI_STRINGS.reportingSection.reportingStageOpenAvailableActions,
-			blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+			availableActions: [],
+			blockedActions: [],
 			detail: UI_STRINGS.reportingSection.reportingOpenDetail,
 			key: 'reporting-open',
 			label: UI_STRINGS.reportingSection.reportingOpenTitle,
@@ -129,8 +129,8 @@ function getReportingStagePresentation({
 		}
 	if (isPoolQuestionFinalized(reportingDetails))
 		return {
-			availableActions: UI_STRINGS.reportingSection.reportingStageResolvedAvailableActions,
-			blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+			availableActions: [],
+			blockedActions: [],
 			detail: UI_STRINGS.reportingSection.reportingResolvedDetailLabel(getResolvedReportingOutcomeLabel(reportingDetails)),
 			key: 'escalation-resolved',
 			label: UI_STRINGS.reportingSection.resolvedTitle,
@@ -143,8 +143,8 @@ function getReportingStagePresentation({
 			return undefined
 		case 'Active':
 			return {
-				availableActions: UI_STRINGS.reportingSection.reportingStageActiveAvailableActions,
-				blockedActions: UI_STRINGS.reportingSection.reportingStageActiveBlockedActions,
+				availableActions: [],
+				blockedActions: [],
 				detail: UI_STRINGS.reportingSection.reportingActiveDetail,
 				key: 'escalation-active',
 				label: UI_STRINGS.reportingSection.activeTitle,
@@ -152,8 +152,8 @@ function getReportingStagePresentation({
 			}
 		case 'Fork Triggered':
 			return {
-				availableActions: [forkAlreadyTriggered ? UI_STRINGS.reportingSection.continueInForkAndMigrationLabel : UI_STRINGS.reportingSection.triggerZoltarForkLabel],
-				blockedActions: UI_STRINGS.reportingSection.reportingStageForkTriggeredBlockedActions,
+				availableActions: [],
+				blockedActions: [],
 				detail: forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON,
 				key: 'escalation-fork-triggered',
 				label: UI_STRINGS.reportingSection.forkTriggeredTitle,
@@ -161,8 +161,8 @@ function getReportingStagePresentation({
 			}
 		case 'Timed Out':
 			return {
-				availableActions: UI_STRINGS.reportingSection.reportingStageTimedOutAvailableActions,
-				blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+				availableActions: [],
+				blockedActions: [],
 				detail: UI_STRINGS.reportingSection.reportingTimedOutDetail,
 				key: 'escalation-timed-out',
 				label: UI_STRINGS.reportingSection.timedOutTitle,
@@ -170,8 +170,8 @@ function getReportingStagePresentation({
 			}
 		case 'Resolved':
 			return {
-				availableActions: UI_STRINGS.reportingSection.reportingStageResolvedAvailableActions,
-				blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+				availableActions: [],
+				blockedActions: [],
 				detail: UI_STRINGS.reportingSection.reportingResolvedDetailLabel(getResolvedReportingOutcomeLabel(reportingDetails)),
 				key: 'escalation-resolved',
 				label: UI_STRINGS.reportingSection.resolvedTitle,
@@ -691,7 +691,7 @@ export function ReportingSection({
 							pendingLabel={UI_STRINGS.reportingSection.submitReportPendingLabel}
 							onClick={onReportOutcome}
 							pending={reportingActiveAction === 'reportOutcome'}
-							availability={{ disabled: !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
+							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
 						/>
 					</div>
 					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
@@ -768,7 +768,7 @@ export function ReportingSection({
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												tone='secondary'
-												availability={{ disabled: !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
 											/>
 											<TransactionActionButton
 												safetyId={getReportingActionSafetyId('withdrawEscalation')}
@@ -778,7 +778,7 @@ export function ReportingSection({
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												tone='secondary'
-												availability={{ disabled: !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
 											/>
 										</div>
 									</SectionBlock>

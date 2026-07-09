@@ -19,7 +19,7 @@ void describe('user copy helpers', () => {
 		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('Load security pools to check what is available in this universe.')
 		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBeUndefined()
 		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('empty')
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('No security pools are available in this universe yet.')
+		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('No security pools are available in this universe.')
 		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBe('Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.')
 	})
 

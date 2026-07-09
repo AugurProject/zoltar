@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from './testUtils/queries'
+import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
@@ -209,6 +209,38 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Oracle Action' })).toBeNull()
 	})
 
+	test('keeps standalone create silently disabled off mainnet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					openOracleCreateForm: {
+						disputeDelay: '3600',
+						escalationHalt: '0.5',
+						ethValue: '1',
+						exactToken1Report: '1',
+						feePercentage: '0',
+						multiplier: '2',
+						protocolFee: '0',
+						settlementTime: '7200',
+						settlerReward: '0.1',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+					openOracleInitialReportState: {
+						...createOpenOracleSectionProps().openOracleInitialReportState,
+						ethBalance: 2n * ETH,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
 	test('renders selected report actions without readiness cards or visible blocker copy', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -233,7 +265,42 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Actions' })).not.toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute yet.')
+		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
+	})
+
+	test('keeps selected-report approvals silently disabled off mainnet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					activeView: 'selected-report',
+					openOracleReportDetails: createOpenOracleReportDetails({
+						currentReporter: zeroAddress,
+						currentTime: 100n,
+						disputeDelay: 10n,
+						reportTimestamp: 0n,
+						settlementTime: 60n,
+					}),
+					openOracleInitialReportState: {
+						...createOpenOracleSectionProps().openOracleInitialReportState,
+						token1Approval: {
+							error: undefined,
+							loading: false,
+							value: 0n,
+						},
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Initial Report' }))
+		const approveButton = documentQueries.getAllByRole('button').find(button => button.textContent?.startsWith('Approve ') === true)
+		if (approveButton === undefined) throw new Error('Expected approval button')
+		expect(approveButton.hasAttribute('disabled')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
 	})
 
 	test('disables create when the wallet lacks enough ETH for the attached value', async () => {
@@ -345,7 +412,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(disputeDelayInput.getAttribute('inputmode')).toBe('numeric')
 		expect(protocolFeeInput.getAttribute('inputmode')).toBe('decimal')
 		expect(documentQueries.getByText('Token1 amount to report, entered as a decimal value for the token1 address.')).not.toBeNull()
-		expect(documentQueries.getByText('ETH paid to the account that settles the report, entered as a decimal ETH value.')).not.toBeNull()
+		expect(documentQueries.getByText('ETH paid to the account that settles the report.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH sent with creation; must cover required funding and the settler reward.')).not.toBeNull()
 		expect(documentQueries.getByText('Fee charged during dispute economics, entered as a percentage.')).not.toBeNull()
 		expect(documentQueries.getByText('Delay in seconds after the initial report before settlement can begin.')).not.toBeNull()

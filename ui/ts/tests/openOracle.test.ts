@@ -1087,7 +1087,7 @@ describe('Open Oracle helpers', () => {
 		const beforeDisputeDelay = createOpenOracleLifecycleReport({ currentTime: 109n })
 		expect(getOpenOracleDisputeAvailability(beforeDisputeDelay)).toEqual({
 			canAct: false,
-			message: 'This report is not ready to dispute yet.',
+			message: 'This report is not ready to dispute.',
 		})
 		expect(getOpenOracleSettleAvailability(beforeDisputeDelay)).toEqual({
 			canAct: false,
@@ -1172,9 +1172,9 @@ describe('Open Oracle helpers', () => {
 
 	test('maps dispute and settle write failures into friendly guidance', () => {
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle yet.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('Submit an initial report before settling this report.')
-		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute yet.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle Report instead.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
 	})
@@ -1260,22 +1260,20 @@ describe('Open Oracle helpers', () => {
 		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setSecurityBondsAllowance'])
 	})
 
-	test('queueOracleManagerOperation lets another wallet join a pending report with the buffered queued operation fee', async () => {
+	test('queueOracleManagerOperation only lets the pending report sponsor add more queued operations', async () => {
 		const secondAddress = addressString(TEST_ADDRESSES[1])
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBeGreaterThan(0n)
-		expect(managerDetails.queuedOperationEthCost).toBeGreaterThan(0n)
-		expect(addOpenOracleBountyBuffer(managerDetails.requestPriceEthCost)).toBeGreaterThan(managerDetails.queuedOperationEthCost)
-		expect(addOpenOracleBountyBuffer(managerDetails.queuedOperationEthCost)).toBeGreaterThan(managerDetails.queuedOperationEthCost)
+		expect(managerDetails.queuedOperationEthCost).toBe(0n)
 
-		await mockWindow.setBalance(secondAddress, addOpenOracleBountyBuffer(managerDetails.queuedOperationEthCost))
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		installInjectedEthereum(mockWindow, secondAddress)
 		const secondUiWriteClient = createWalletWriteClient(secondAddress)
-		const queuedResult = await queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
+		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(queuedResult.queuedOperation).toBeDefined()
 		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(true)

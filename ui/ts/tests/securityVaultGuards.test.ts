@@ -131,12 +131,33 @@ describe('security vault guards', () => {
 			getVaultRequestPriceGuardMessage({
 				accountAddress: zeroAddress,
 				hasLoadedSelectedPool: true,
+				isMainnet: false,
+				pendingReportId: 0n,
+				requiredEthCost: 1n,
+				walletEthBalance: 1n,
+			}),
+		).toBeUndefined()
+
+		expect(
+			getVaultRequestPriceGuardMessage({
+				accountAddress: zeroAddress,
+				hasLoadedSelectedPool: true,
 				isMainnet: true,
 				pendingReportId: 9n,
 				requiredEthCost: 1n,
 				walletEthBalance: 1n,
 			}),
 		).toBe('A pending price report already exists for this pool.')
+
+		expect(
+			getVaultExecutePendingOperationGuardMessage({
+				accountAddress: zeroAddress,
+				hasLoadedOracleManager: true,
+				isMainnet: false,
+				isPriceValid: true,
+				resolvedPendingOperationId: 1n,
+			}),
+		).toBeUndefined()
 
 		expect(
 			getVaultExecutePendingOperationGuardMessage({

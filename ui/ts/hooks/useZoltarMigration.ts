@@ -101,7 +101,7 @@ export function useZoltarMigration({
 				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
-				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')
+				if (!universe.hasForked) throw new Error('Migration is unavailable because this universe has not forked.')
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
 				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)

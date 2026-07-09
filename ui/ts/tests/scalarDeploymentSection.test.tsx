@@ -98,7 +98,7 @@ describe('ScalarDeploymentSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No deployed child universes yet.')).not.toBeNull()
+		expect(documentQueries.getByText('No deployed child universes.')).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Create child universe')
 
 		const slider = documentQueries.getByRole('slider') as HTMLInputElement
@@ -130,7 +130,7 @@ describe('ScalarDeploymentSection', () => {
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonDisabled(document.body, 'Create child universe', 'Fork Zoltar before deploying child universes.')
+		expectTransactionButtonDisabled(document.body, 'Create child universe', 'Child universes are unavailable because this universe has not forked.')
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Create child universe' }))
 		})
@@ -154,7 +154,7 @@ describe('ScalarDeploymentSection', () => {
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonDisabled(document.body, 'Deployed', 'This child universe is already deployed.')
+		expectTransactionButtonDisabled(document.body, 'Deployed', 'Child universe already deployed.')
 		expect(within(document.body).queryByRole('button', { name: 'Deployed' })).not.toBeNull()
 	})
 })

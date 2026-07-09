@@ -236,7 +236,7 @@ void describe('trading helpers', () => {
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
-		).toBe('Switch to Ethereum mainnet before minting complete sets.')
+		).toBeUndefined()
 	})
 
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
@@ -590,7 +590,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: false,
 			}),
-		).toBe('Switch to Ethereum mainnet before redeeming shares.')
+		).toBeUndefined()
 
 		expect(
 			getTradingRedeemSharesGuardMessage({

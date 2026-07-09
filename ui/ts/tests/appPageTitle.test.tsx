@@ -35,7 +35,7 @@ describe('app page titles', () => {
 			{ input: { ...baseInput, route: 'deploy' }, title: 'Deploy Contracts' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Questions & Markets' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
-			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Oracle' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Zoltar' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'browse' }, title: 'Security Pools' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'create' }, title: 'Create Security Pool' },

@@ -964,6 +964,129 @@ describe('ForkAuctionSection', () => {
 		expect(submitBidButton.disabled).toBe(true)
 	})
 
+	test('keeps fork-auction actions disabled off mainnet without showing a switch-network message', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7', ethBalance: 10n ** 18n }),
+					currentStageView: 'auction',
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+							underfundedThreshold: 0n,
+							underfundedWinningEth: 0n,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					forkAuctionForm: createForkAuctionForm({
+						submitBidAmount: '1',
+						submitBidPrice: '1',
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		expect(submitBidButton.disabled).toBe(true)
+		expect(submitBidButton.title).toBe('')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
+	test('keeps fork-auction downstream blocker copy hidden off mainnet', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7', ethBalance: 10n ** 18n }),
+					currentStageView: 'auction',
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+							underfundedThreshold: 0n,
+							underfundedWinningEth: 0n,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					forkAuctionForm: createForkAuctionForm({
+						submitBidAmount: '1',
+						submitBidPrice: '9'.repeat(2_048),
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		expect(submitBidButton.disabled).toBe(true)
+		expect(submitBidButton.title).toBe('')
+	})
+
 	test('shows a missing-universe notice without a creation button', async () => {
 		const onCreateChildUniverse = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(

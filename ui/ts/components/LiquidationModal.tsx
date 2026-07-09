@@ -85,7 +85,7 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	switch (executionMode) {
 		case 'execute':
-			return { idle: UI_STRINGS.liquidationModal.executeLiquidationIdleLabel, pending: UI_STRINGS.liquidationModal.executeLiquidationPendingLabel }
+			return { idle: UI_STRINGS.liquidationModal.executeVaultLiquidationTitle, pending: UI_STRINGS.liquidationModal.executeLiquidationPendingLabel }
 		case 'queue':
 			return { idle: UI_STRINGS.liquidationModal.queueLiquidationIdleLabel, pending: UI_STRINGS.liquidationModal.queueLiquidationPendingLabel }
 		case 'refreshing':

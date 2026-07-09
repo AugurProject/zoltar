@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { getChangedUiTsxFiles, lintSourceText } from './lint-ui-tsx-strings.mts'
+import { getChangedLineNumbers, getChangedUiTsxFiles, lintSourceText } from './lint-ui-tsx-strings.mts'
 
 test('lint-ui-tsx-strings rejects interpolated template literals in user-facing props', () => {
 	const failures = lintSourceText('ui/ts/components/TestComponent.tsx', 'export function TestComponent({ source }: { source: string }) { return <Notice detail={`Ignored ${source} RPC override`} /> }')
@@ -203,6 +203,50 @@ test('lint-ui-tsx-strings includes committed branch changes from origin/main', (
 	})
 
 	expect(changedFiles).toEqual(['ui/ts/components/CommittedBranchFile.tsx'])
+})
+
+test('lint-ui-tsx-strings only reports direct copy on changed lines for tracked files', () => {
+	const failures = lintSourceText('ui/ts/components/TestChangedLines.tsx', ['export function TestChangedLines() {', "\treturn <Panel title='Legacy Title' detail='Changed detail' />", '}'].join('\n'), new Set([2]))
+
+	expect(failures).toHaveLength(2)
+	expect(failures.every(failure => failure.startsWith('ui/ts/components/TestChangedLines.tsx:2:'))).toBe(true)
+})
+
+test('lint-ui-tsx-strings reports multiline JSX text when a later tracked line changes', () => {
+	const failures = lintSourceText('ui/ts/components/TestMultilineJsxText.tsx', ['export function TestMultilineJsxText() {', '\treturn <span>', '\t\tLegacy', '\t\tCopy', '\t</span>', '}'].join('\n'), new Set([4]))
+
+	expect(failures).toHaveLength(1)
+	expect(failures[0]).toContain('JSX text must come from UI_STRINGS')
+})
+
+test('lint-ui-tsx-strings reports multiline template literals when a later tracked line changes', () => {
+	const failures = lintSourceText('ui/ts/components/TestMultilineTemplate.tsx', ['export function TestMultilineTemplate() {', '\treturn <Panel detail={`Legacy', '\t\tCopy`} />', '}'].join('\n'), new Set([3]))
+
+	expect(failures).toHaveLength(1)
+	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+})
+
+test('lint-ui-tsx-strings scans all lines for untracked files', () => {
+	const changedLines = getChangedLineNumbers('ui/ts/components/NewComponent.tsx', args => {
+		if (args[0] === 'ls-files') return 'ui/ts/components/NewComponent.tsx'
+		return ''
+	})
+
+	expect(changedLines).toBeUndefined()
+})
+
+test('lint-ui-tsx-strings derives tracked changed lines from the merge-base diff against the current worktree', () => {
+	const changedLines = getChangedLineNumbers('ui/ts/components/TestTrackedComponent.tsx', args => {
+		if (args[0] === 'ls-files') return ''
+		if (args[0] === 'merge-base') return 'abc123'
+		if (args[0] === 'diff') {
+			expect(args).toEqual(['diff', '--no-color', '--unified=0', 'abc123', '--', 'ui/ts/components/TestTrackedComponent.tsx'])
+			return '@@ -10,0 +14,2 @@\n'
+		}
+		throw new Error(`unexpected git args: ${args.join(' ')}`)
+	})
+
+	expect(changedLines).toEqual(new Set([14, 15]))
 })
 
 test('lint-ui-tsx-strings rejects user-facing object properties and array literals', () => {

@@ -436,7 +436,7 @@ export function MarketCreateQuestionSection({
 									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
 									reason: (() => {
 										if (accountAddress === undefined) return UI_STRINGS.marketCreateQuestionSection.walletRequiredReason
-										if (!isMainnet) return UI_STRINGS.marketCreateQuestionSection.mainnetRequiredReason
+										if (!isMainnet) return undefined
 
 										return marketFormValidation.notice
 									})(),

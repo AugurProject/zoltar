@@ -1,3 +1,4 @@
+import type { Address } from '@zoltar/shared/ethereum'
 import { getActiveNetworkProfile } from './activeEnvironment.js'
 import { UI_STRINGS } from './uiStrings.js'
 
@@ -8,6 +9,11 @@ export function isSupportedAppChain(chainId: string | undefined) {
 
 export function isMainnetChain(chainId: string | undefined) {
 	return isSupportedAppChain(chainId)
+}
+
+export function getWalletScopedAccountAddress(accountAddress: Address | undefined, chainId: string | undefined) {
+	if (accountAddress === undefined || chainId === undefined) return undefined
+	return isSupportedAppChain(chainId) ? accountAddress : undefined
 }
 
 export function getWrongNetworkMessage() {
