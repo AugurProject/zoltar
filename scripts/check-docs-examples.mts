@@ -91,7 +91,7 @@ async function checkDefaultFundedClearing(scenario: AuctionExampleScenario): Pro
 		assertEqual(example.output('bindingCondition'), scenario.defaultBindingCondition, `${scenario.filePath} default binding condition`)
 		assertEqual(example.labelFor('ethRaised'), 'ETH retained', `${scenario.filePath} ETH retained label`)
 		assertEqual(example.output('ethRaised'), '12 ETH', `${scenario.filePath} default retained ETH`)
-		assertEqual(example.labelFor('thresholdInputEth'), 'Threshold input ETH', `${scenario.filePath} threshold input label`)
+		assertEqual(example.labelFor('thresholdInputEth'), 'Winning ETH kept', `${scenario.filePath} threshold input label`)
 		assertEqual(example.output('thresholdInputEth'), 'not underfunded', `${scenario.filePath} default threshold input ETH`)
 		assertEqual(example.output('aliceReceives'), scenario.defaultAliceReceives, `${scenario.filePath} Alice REP`)
 		assertEqual(example.output('bobReceives'), scenario.defaultBobReceives, `${scenario.filePath} Bob REP`)
@@ -129,13 +129,14 @@ async function checkUnderfundedPath(scenario: AuctionExampleScenario): Promise<v
 		example.setInput('bobEth', 0)
 		example.setInput('carolEth', 0)
 
-		assertEqual(example.output('clearingMode'), 'underfunded tick demand', `${scenario.filePath} underfunded clearing mode`)
+		assertEqual(example.output('clearingMode'), 'underfunded synthetic uniform', `${scenario.filePath} underfunded clearing mode`)
+		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} underfunded binding condition`)
 		assertEqual(example.labelFor('ethRaised'), 'ETH retained', `${scenario.filePath} underfunded ETH retained label`)
 		assertEqual(example.output('ethRaised'), '16 ETH', `${scenario.filePath} underfunded retained ETH`)
-		assertEqual(example.labelFor('thresholdInputEth'), 'Threshold input ETH', `${scenario.filePath} underfunded threshold label`)
+		assertEqual(example.labelFor('thresholdInputEth'), 'Winning ETH kept', `${scenario.filePath} underfunded threshold label`)
 		assertEqual(example.output('thresholdInputEth'), '16 ETH', `${scenario.filePath} underfunded threshold input ETH`)
 		assertEqual(example.output('underfundedThreshold'), '4 ETH/REP', `${scenario.filePath} underfunded threshold`)
-		assertEqual(example.output('aliceReceives'), scenario.filePath.endsWith('whitepaper_placeholder.html') ? '3.20 REP' : '3.2 REP', `${scenario.filePath} underfunded Alice REP`)
+		assertEqual(example.output('aliceReceives'), '4 REP', `${scenario.filePath} underfunded Alice REP`)
 		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} underfunded Bob REP`)
 		assertEqual(example.output('carolReceives'), '0 REP', `${scenario.filePath} underfunded Carol REP`)
 		assertEqual(example.output('refunds'), '0 ETH', `${scenario.filePath} underfunded refunds`)
@@ -153,10 +154,11 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 		example.setInput('bobEth', 0)
 		example.setInput('carolEth', 0)
 
-		assertEqual(example.output('clearingMode'), 'underfunded tick demand', `${scenario.filePath} zero-bid clearing mode`)
+		assertEqual(example.output('clearingMode'), 'underfunded synthetic uniform', `${scenario.filePath} zero-bid clearing mode`)
+		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} zero-bid binding condition`)
 		assertEqual(example.output('ethRaised'), '0 ETH', `${scenario.filePath} zero-bid retained ETH`)
 		assertEqual(example.output('thresholdInputEth'), '0 ETH', `${scenario.filePath} zero-bid threshold input ETH`)
-		assertEqual(example.output('underfundedThreshold'), '0 ETH/REP', `${scenario.filePath} zero-bid threshold`)
+		assertEqual(example.output('underfundedThreshold'), 'no winning ETH', `${scenario.filePath} zero-bid threshold`)
 		assertEqual(example.output('aliceReceives'), '0 REP', `${scenario.filePath} zero-bid Alice REP`)
 		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} zero-bid Bob REP`)
 		assertEqual(example.output('carolReceives'), '0 REP', `${scenario.filePath} zero-bid Carol REP`)
@@ -169,7 +171,8 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourceSnippets: string[]): Promise<void> {
 	const html = await readFile(filePath, 'utf8')
 	assert.match(html, /<span>ETH retained<\/span/, `${filePath} should label retained ETH explicitly`)
-	assert.match(html, /<span>Threshold input ETH<\/span/, `${filePath} should label threshold input ETH explicitly`)
+	assert.match(html, /<span>Winning ETH kept<\/span/, `${filePath} should label winning ETH kept explicitly`)
+	assert.match(html, /<code>&gt;= clearingTick<\/code>/, `${filePath} should describe the underfunded winner boundary with clearingTick`)
 	for (const snippet of requiredSourceSnippets) {
 		assert.match(html, new RegExp(escapeRegExp(snippet)), `${filePath} is missing expected source snippet: ${snippet}`)
 	}
@@ -227,6 +230,36 @@ async function checkCollateralRepairExample(): Promise<void> {
 	assert.match(html, />2\.5 ETH<\/span/, 'collateral repair auction-raised default should remain 2.5 ETH')
 }
 
+async function checkUnderfundedPrefixExample(): Promise<void> {
+	const example = await loadAuctionExample({
+		defaultBindingCondition: '',
+		defaultAliceReceives: '',
+		defaultBobReceives: '',
+		defaultCarolReceives: '',
+		filePath: 'docs/whitepaper_placeholder.html',
+		exampleId: 'underfunded-auction-example',
+	})
+
+	try {
+		assertEqual(example.output('tickStatus'), 'inputs are consistent with a winning-prefix bid', 'underfunded prefix example default status')
+		assertEqual(example.output('underfundedThreshold'), '0.1000 ETH/REP', 'underfunded prefix example default threshold')
+		assertEqual(example.output('underfundedRepShare'), '40.0000 REP', 'underfunded prefix example default REP share')
+		assertEqual(example.output('repAssignedElsewhere'), '60.0000 REP', 'underfunded prefix example default remainder allocation')
+
+		example.setInput('maxRepBeingSold', 4)
+		example.setInput('underfundedWinningEth', 8)
+		example.setInput('tickPrice', 1)
+		example.setInput('bidEth', 3)
+
+		assertEqual(example.output('tickStatus'), 'synthetic price exceeds this tick limit', 'underfunded prefix example inconsistent status')
+		assertEqual(example.output('underfundedThreshold'), '2.0000 ETH/REP', 'underfunded prefix example inconsistent threshold')
+		assertEqual(example.output('underfundedRepShare'), 'not applicable', 'underfunded prefix example inconsistent REP share')
+		assertEqual(example.output('repAssignedElsewhere'), 'not applicable', 'underfunded prefix example inconsistent remainder allocation')
+	} finally {
+		example.close()
+	}
+}
+
 function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -257,8 +290,55 @@ for (const scenario of scenarios) {
 	await checkAllZeroBids(scenario)
 }
 
-await checkSourceLabelsAndThresholdText('docs/auction-design.html', ['write("thresholdInputEth", formatEth(totalActiveEth))', 'let winningEth = 0', 'winningEth += bid.eth', 'accumulatedEth = winningEth'])
+await checkSourceLabelsAndThresholdText('docs/auction-design.html', ['write("clearingMode", "underfunded synthetic uniform")', 'write("bindingCondition", "underfunded")', 'write("thresholdInputEth", formatEth(winningEth))', 'let winningEth = 0', 'winningEth = candidateWinningEth', 'accumulatedEth = winningEth'])
 
-await checkSourceLabelsAndThresholdText('docs/whitepaper_placeholder.html', ['const activeBids = bids.filter((bid) => bid.eth > 0)', 'const totalActiveEth = accumulatedEth', 'context.write("thresholdInputEth", formatEth(totalActiveEth))', 'ethRaised += bid.eth'])
+await checkSourceLabelsAndThresholdText('docs/whitepaper_placeholder.html', [
+	'const activeBids = bids.filter((bid) => bid.eth > 0)',
+	'context.write("clearingMode", "underfunded synthetic uniform")',
+	'context.write("bindingCondition", "underfunded")',
+	'context.write("thresholdInputEth", formatEth(winningEth))',
+	'ethRaised += winningBid.eth',
+])
 
 await checkCollateralRepairExample()
+await checkUnderfundedPrefixExample()
+
+const auctionDesignHtml = await readFile('docs/auction-design.html', 'utf8')
+assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
+assert.doesNotMatch(auctionDesignHtml, /weak demand leaves some REP unsold/i, 'auction design should not describe underfunded settlement as leaving REP unsold')
+assert.match(auctionDesignHtml, /non-empty winning prefix/i, 'auction design should qualify full-cap underfunded settlement with a non-empty winning prefix')
+assert.match(auctionDesignHtml, /underfundedWinningEth\s*&gt;\s*0/i, 'auction design should qualify the underfunded winner rule with a positive winning prefix')
+assert.match(auctionDesignHtml, /type\(uint256\)\.max/i, 'auction design should document the no-winning-prefix underfunded threshold sentinel')
+assert.match(auctionDesignHtml, /refunds every bid/i, 'auction design should document the no-winning-prefix refund branch')
+assert.match(auctionDesignHtml, /ceilings the\s+synthetic underfunded threshold/i, 'auction design calculator copy should describe ceiling division for the synthetic underfunded threshold')
+assert.match(auctionDesignHtml, /floors\s+REP allocations/i, 'auction design calculator copy should distinguish threshold ceil from REP allocation floors')
+assert.doesNotMatch(auctionDesignHtml, /data-source="underfundedThreshold = ceil\(underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold\)"/i, 'auction design should not present the underfunded threshold formula as unconditional')
+assert.match(auctionDesignHtml, /data-source="underfundedThreshold = if underfundedWinningEth > 0 then ceil\(underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold\) else type\(uint256\)\.max"/i, 'auction design should present the underfunded threshold formula as piecewise')
+
+const operatorReferenceMarkdown = await readFile('docs/operator-reference.md', 'utf8')
+assert.match(
+	operatorReferenceMarkdown,
+	/underfunded auctions with a non-empty winning prefix reuse that remainder while dividing the full REP cap across winning ETH, while the no-winning-prefix sentinel allocates no REP and refunds every bid\./i,
+	'operator reference should qualify underfunded dust handling with the no-winning-prefix sentinel',
+)
+
+const placeholderHtml = await readFile('docs/whitepaper_placeholder.html', 'utf8')
+assert.doesNotMatch(placeholderHtml, /whether the tick qualifies/i, 'whitepaper underfunded widget should not present threshold-only winner membership')
+assert.doesNotMatch(placeholderHtml, /refunded below threshold/i, 'whitepaper underfunded widget should not present threshold-only refunds')
+assert.doesNotMatch(placeholderHtml, /below-threshold bids/i, 'whitepaper truth-auction math should not describe underfunded losers as threshold-filtered bids')
+assert.doesNotMatch(placeholderHtml, /data-source="underfundedThreshold = ceil\(underfundedWinningEth \\cdot PRICE_PRECISION \/ maxRepBeingSold\)"/i, 'whitepaper should not present the underfunded threshold formula as unconditional')
+assert.match(placeholderHtml, /When\s*<code>underfundedWinningEth\s*&gt;\s*0<\/code>,\s*the stored\s*<code>clearingTick<\/code>/i, 'whitepaper quick-reference bullet should qualify clearingTick winners with a positive winning prefix')
+assert.match(placeholderHtml, /underfundedWinningEth\s*&gt;\s*0/i, 'whitepaper underfunded prose should qualify the winner rule with a positive winning prefix')
+assert.match(placeholderHtml, /type\(uint256\)\.max/i, 'whitepaper underfunded prose should document the no-winning-prefix threshold sentinel')
+assert.match(placeholderHtml, /every bid refunds/i, 'whitepaper underfunded prose should document the no-winning-prefix refund branch')
+assert.match(placeholderHtml, /finalization finds a non-empty\s+winning\s+prefix/i, 'whitepaper underfunded summary should qualify full-cap settlement with a non-empty winning prefix')
+assert.match(placeholderHtml, /data-source="underfundedThreshold = if underfundedWinningEth > 0 then ceil\(underfundedWinningEth \\cdot PRICE_PRECISION \/ maxRepBeingSold\) else type\(uint256\)\.max"/i, 'whitepaper quick-reference formula should present the underfunded threshold as piecewise')
+assert.match(placeholderHtml, /<mi>underfundedThreshold<\/mi>[\s\S]*?<mtext>type\(uint256\)\.max<\/mtext>/i, 'whitepaper fill-math equation should visibly present the no-winning-prefix threshold branch')
+assert.match(
+	placeholderHtml,
+	/data-source="filledRep = floor\(ethUsed \\cdot pricePrecision \/ clearingPrice\); underfundedThreshold = if underfundedWinningEth > 0 then ceil\(underfundedWinningEth \\cdot pricePrecision \/ maxRepBeingSold\) else type\(uint256\)\.max; underfundedRepShare = if underfundedWinningEth > 0 then floor\(\(bidEth \\cdot maxRepBeingSold \+ clearingRemainderIn\) \/ underfundedWinningEth\) else not applicable; clearingRemainderOut = if underfundedWinningEth > 0 then \(bidEth \\cdot maxRepBeingSold \+ clearingRemainderIn\) mod underfundedWinningEth else not applicable"/i,
+	'whitepaper fill-math data-source should make the no-winning-prefix share branch explicit',
+)
+assert.match(placeholderHtml, /<mi>underfundedRepShare<\/mi>[\s\S]*?<mtext>not applicable<\/mtext>/i, 'whitepaper fill-math equation should visibly mark the no-winning-prefix REP-share branch as not applicable')
+assert.match(placeholderHtml, /<mi>clearingRemainderOut<\/mi>[\s\S]*?<mtext>not applicable<\/mtext>/i, 'whitepaper fill-math equation should visibly mark the no-winning-prefix remainder branch as not applicable')
+assert.match(placeholderHtml, /share and remainder rows are\s+not applicable,\s+and every bid refunds/i, 'whitepaper fill-math caption should explain the no-winning-prefix share behavior')

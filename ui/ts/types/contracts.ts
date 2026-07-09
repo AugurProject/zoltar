@@ -454,6 +454,8 @@ export type TruthAuctionMetrics = {
 	timeRemaining: bigint | undefined
 	totalRepPurchased: bigint
 	underfunded: boolean
+	underfundedThreshold: bigint | undefined
+	underfundedWinningEth: bigint
 }
 
 export type TruthAuctionTickSummary = {
