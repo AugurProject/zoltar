@@ -3,6 +3,7 @@ const COMMON_ANSWER_UNIT_LABEL = 'Answer Unit'
 const COMMON_ALREADY_FORKED_LABEL = 'Already Forked'
 const COMMON_CLAIM_FEES_LABEL = 'Claim Fees'
 const COMMON_CONNECT_WALLET_LABEL = 'Connect wallet'
+const COMMON_CONNECT_WALLET_TO_CONTINUE_DETAIL = 'Connect wallet to continue.'
 const COMMON_CONNECTING_LABEL = 'Connecting...'
 const COMMON_CREATE_QUESTION_LABEL = 'Create Question'
 const COMMON_CREATE_POOL_LABEL = 'Create Pool'
@@ -113,6 +114,7 @@ export const UI_STRINGS = {
 	common: {
 		cancelLabel: 'Cancel',
 		closeLabel: COMMON_CLOSE_LABEL,
+		connectWalletToContinueDetail: COMMON_CONNECT_WALLET_TO_CONTINUE_DETAIL,
 		hexValuePlaceholder: COMMON_HEX_VALUE_PLACEHOLDER,
 		failedBadgeLabel: 'Failed',
 		loadingBadgeLabel: COMMON_LOADING_BADGE_LABEL,
@@ -166,9 +168,6 @@ export const UI_STRINGS = {
 		universeForkedOnDetailSuffix: 'has forked on',
 		universeForkedTitle: 'Universe forked',
 		urlProvidedReadRpcTitle: 'URL-provided read RPC',
-		wrongNetworkDetailPrefix: 'This interface only enables contract interactions on Ethereum mainnet.',
-		wrongNetworkMainnetInstruction: 'Switch the connected wallet network to Ethereum mainnet to continue.',
-		wrongNetworkTitle: COMMON_WRONG_NETWORK_LABEL,
 	},
 	truthAuctionMarketViewSection: {
 		currentFormPriceBadgeLabel: 'Current form price',
@@ -189,7 +188,7 @@ export const UI_STRINGS = {
 	deploymentSection: {
 		canDeployNowDetail: 'Can deploy now.',
 		codeFoundAtExpectedAddressDetail: 'Code found at expected address.',
-		connectWalletToContinueDetail: 'Connect wallet to continue.',
+		connectWalletToContinueDetail: COMMON_CONNECT_WALLET_TO_CONTINUE_DETAIL,
 		deployedBadgeLabel: 'Deployed',
 		deployButtonLabel: COMMON_DEPLOY_LABEL,
 		deployingBadgeLabel: 'Deploying...',
@@ -917,7 +916,7 @@ export const UI_STRINGS = {
 		insufficientRepBalanceDetail: (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount} REP.`,
 		loadingVaultDetail: 'Loading vault...',
 		missingVaultBlockerDetail: 'This vault does not exist.',
-		vaultLauncherBlockerReason: (action: 'claim-fees' | 'deposit-rep' | 'rep-exit-redeem' | 'rep-exit-withdraw' | 'set-bond-allowance', blocker: 'connect-wallet' | 'missing-vault' | 'refresh-vault' | 'select-own-vault' | 'switch-mainnet') => {
+		vaultLauncherBlockerReason: (action: 'claim-fees' | 'deposit-rep' | 'rep-exit-redeem' | 'rep-exit-withdraw' | 'set-bond-allowance', blocker: 'connect-wallet' | 'missing-vault' | 'refresh-vault' | 'select-own-vault') => {
 			if (blocker === 'missing-vault') return 'This vault does not exist.'
 
 			if (blocker === 'connect-wallet') {
@@ -926,10 +925,6 @@ export const UI_STRINGS = {
 				if (action === 'rep-exit-redeem') return 'Connect a wallet before redeeming REP.'
 				if (action === 'rep-exit-withdraw') return 'Connect a wallet before withdrawing REP.'
 				return 'Connect a wallet before setting the security bond allowance.'
-			}
-
-			if (blocker === 'switch-mainnet') {
-				return undefined
 			}
 
 			if (blocker === 'select-own-vault') {

@@ -2,6 +2,7 @@ import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { sameAddress } from './address.js'
+import { getWalletConnectionMainnetGuardState } from './actionGuards.js'
 import { assertNever } from './assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
@@ -155,8 +156,12 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
-	if (!walletConnected) return 'Connect a wallet before creating a standalone Open Oracle game.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletConnectionMainnetGuardState({
+		isMainnet,
+		walletConnected,
+		walletRequiredReason: 'Connect a wallet before creating a standalone Open Oracle game.',
+	})
+	if (walletGuardState.blocked) return walletGuardState.reason
 	const ethValue = tryParseDecimalInput(ethValueInput)
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
 	const settlerReward = tryParseDecimalInput(settlerRewardInput)

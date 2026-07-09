@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
+import { getWalletMainnetGuardState } from './actionGuards.js'
 import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { tryParseBigIntListInput } from './inputs.js'
@@ -165,8 +166,8 @@ export function getTradingMintGuardMessage({
 	totalSecurityBondAllowance: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before minting.'
-	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
@@ -212,8 +213,8 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	shareTokenSupply: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
-	if (accountAddress === undefined) return 'Connect a wallet before redeeming complete sets.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
 	const maxRedeemableCompleteSets = getMaxRedeemableCompleteSets(shareBalances)
@@ -257,8 +258,8 @@ export function getTradingMigrateSharesGuardMessage({
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
-	if (accountAddress === undefined) return 'Connect a wallet before migrating shares.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before migrating shares.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
 
@@ -276,7 +277,7 @@ export function getTradingMigrateSharesGuardMessage({
 
 export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isMainnet }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isMainnet: boolean }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming shares.'
-	if (accountAddress === undefined) return 'Connect a wallet before redeeming shares.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	return undefined
 }

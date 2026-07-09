@@ -1,3 +1,4 @@
+import { getWalletMainnetActionAvailability } from './actionGuards.js'
 import type { ActionAvailability } from '../types/components.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
@@ -55,8 +56,8 @@ export function getDeploymentStepAvailability({
 }): ActionAvailability {
 	if (step.deployed) return { disabled: true, reason: 'Already deployed.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
-	if (accountAddress === undefined) return { disabled: true, reason: 'Connect wallet to deploy this contract.' }
-	if (!isMainnet) return { disabled: true, reason: undefined }
+	const walletAvailability = getWalletMainnetActionAvailability({ accountAddress, isMainnet, walletRequiredReason: 'Connect wallet to deploy this contract.' })
+	if (walletAvailability !== undefined) return walletAvailability
 	if (prerequisiteLabel !== undefined) return { disabled: true, reason: `Waiting for ${prerequisiteLabel}.` }
 	return { disabled: false, reason: undefined }
 }
@@ -76,8 +77,8 @@ export function getDeployNextMissingAvailability({
 }): ActionAvailability {
 	if (deployNextMissingPending) return { disabled: true, reason: 'Deployment in progress.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: 'Another deployment is already in progress.' }
-	if (accountAddress === undefined) return { disabled: true, reason: 'Connect wallet to continue.' }
-	if (!isMainnet) return { disabled: true, reason: undefined }
+	const walletAvailability = getWalletMainnetActionAvailability({ accountAddress, isMainnet })
+	if (walletAvailability !== undefined) return walletAvailability
 	if (nextMissingStep === undefined) return { disabled: true, reason: 'All deterministic contracts are already deployed.' }
 	return { disabled: false, reason: undefined }
 }

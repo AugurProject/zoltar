@@ -1,5 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ReportingOutcomeKey } from '../types/contracts.js'
+import { getWalletMainnetGuardState } from './actionGuards.js'
 import { formatCurrencyBalance } from './formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
@@ -29,8 +30,8 @@ export function getReportingReportGuardMessage({
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
 }) {
-	if (accountAddress === undefined) return 'Connect a wallet before reporting on a market.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before reporting on a market.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'
 	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a market.'
 	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
@@ -48,8 +49,8 @@ export function getReportingReportGuardMessage({
 }
 
 export function getReportingWithdrawGuardMessage({ accountAddress, isMainnet, reportingStatus }: { accountAddress: Address | undefined; isMainnet: boolean; reportingStatus: ReportingStatus }) {
-	if (accountAddress === undefined) return 'Connect a wallet before settling escalation deposits.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Load reporting details before settling escalation deposits.'
 	return undefined
 }

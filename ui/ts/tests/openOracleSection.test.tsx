@@ -648,6 +648,43 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(settleButton)).not.toBe('Switch to Ethereum mainnet.')
 	})
 
+	void test('keeps downstream selected-report blocker copy hidden off mainnet', () => {
+		const invalidInitialReportSection = renderInitialReportActionSection({
+			isMainnet: false,
+			openOracleForm: createOpenOracleForm({ price: '' }),
+		})
+		const invalidSubmitButton = findButton(invalidInitialReportSection, 'Submit Initial Report')
+		if (invalidSubmitButton === undefined) throw new Error('Expected initial report controls to render')
+		expect(getButtonDisabled(invalidSubmitButton)).toBe(true)
+		expect(getButtonDisabledReason(invalidSubmitButton)).toBeUndefined()
+		expect(getTextContent(invalidInitialReportSection)).not.toContain('Enter a valid')
+
+		const invalidDisputeSection = renderDisputeActionSection({
+			isMainnet: false,
+			openOracleForm: createOpenOracleForm({ reportId: '' }),
+		})
+		const disputeButton = findButton(invalidDisputeSection, 'Dispute & Swap')
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabledReason(disputeButton)).toBeUndefined()
+		expect(getTextContent(invalidDisputeSection)).not.toContain('Load a report first.')
+
+		const invalidSettleSection = renderSettleActionSection({
+			isMainnet: false,
+			openOracleForm: createOpenOracleForm({ reportId: '' }),
+			openOracleReportDetails: createOpenOracleReportDetails({
+				currentTime: 100n,
+				reportTimestamp: 100n,
+				settlementTime: 60n,
+			}),
+		})
+		const settleButton = findButton(invalidSettleSection, 'Settle Report')
+		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		expect(getButtonDisabled(settleButton)).toBe(true)
+		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
+		expect(getTextContent(invalidSettleSection)).not.toContain('Load a report first.')
+	})
+
 	void test('keeps disconnected-wallet reasons for selected-report actions', () => {
 		const disconnectedAccount = createAccountState({ address: undefined })
 

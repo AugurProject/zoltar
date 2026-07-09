@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
+import { getWalletMainnetGuardState } from './actionGuards.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { getOracleRequestEthGuardMessage } from './oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from './securityVault.js'
@@ -96,8 +97,8 @@ export function getVaultRequestPriceGuardMessage({
 	requiredEthCost: bigint | undefined
 	walletEthBalance: bigint | undefined
 }) {
-	if (accountAddress === undefined) return 'Connect a wallet before requesting a new price.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before requesting a new price.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedSelectedPool) return 'Load a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
@@ -123,8 +124,8 @@ export function getVaultExecutePendingOperationGuardMessage({
 	isPriceValid: boolean | undefined
 	resolvedPendingOperationId: bigint | undefined
 }) {
-	if (accountAddress === undefined) return 'Connect a wallet before executing a staged operation.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before executing a staged operation.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Load the price oracle before executing a staged operation.'
 	if (isPriceValid === false) return 'Wait for a valid oracle price before executing a staged operation.'
 	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation id.'

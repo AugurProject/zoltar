@@ -29,7 +29,7 @@ import { getAppPageTitle } from './lib/appPageTitle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from './lib/chainTimestamp.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
-import { getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
+import { getWalletScopedAccountAddress, isSupportedAppChain } from './lib/network.js'
 import { applyReportingFormUpdate } from './lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
@@ -287,7 +287,6 @@ export function App() {
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? getWrongNetworkMessage() : undefined
 	const augurPlaceHolderDeploymentMissing = canReadOnchainData && augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
@@ -777,7 +776,7 @@ export function App() {
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
 								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
+									<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
 								</fieldset>
 							</TransactionActionButtonLockProvider>
 						</div>

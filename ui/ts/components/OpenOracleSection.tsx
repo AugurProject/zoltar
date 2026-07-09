@@ -202,6 +202,24 @@ export function renderSelectedReportActionSection({
 	const settleAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleSettleAvailability(openOracleReportDetails)
 	switch (actionMode) {
 		case 'initial-report':
+			const token2ApprovalGuardMessage = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletApprovalReason(token2Symbol)
+				if (!isMainnet) return undefined
+				if (initialReportSubmission.amount2 === undefined) return UI_STRINGS.openOracleSection.enterValidPriceBeforeApprovingReason(token1Symbol, token2Symbol)
+				return undefined
+			})()
+			const wrapDisabledReason = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletWrapEthReason
+				if (!isMainnet) return undefined
+				if (initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible') return initialReportSubmission.wrapRequiredWethMessage.message
+				return undefined
+			})()
+			const submitInitialReportDisabledReason = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletSubmitInitialReportReason
+				if (!isMainnet) return undefined
+				if (initialReportSubmission.blockMessage?.kind === 'visible') return initialReportSubmission.blockMessage.message
+				return undefined
+			})()
 			return (
 				<SectionBlock headingLevel={4} title={UI_STRINGS.openOracleSection.initialReportTitle} variant='embedded'>
 					<div className='form-grid'>
@@ -253,12 +271,7 @@ export function renderSelectedReportActionSection({
 								allowanceLoading={openOracleInitialReportState.token2Approval.loading}
 								approvedAmount={openOracleInitialReportState.token2Approval.value}
 								disabled={!isConnected || !isMainnet}
-								guardMessage={(() => {
-									if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletApprovalReason(token2Symbol)
-									if (initialReportSubmission.amount2 === undefined) return UI_STRINGS.openOracleSection.enterValidPriceBeforeApprovingReason(token1Symbol, token2Symbol)
-
-									return undefined
-								})()}
+								guardMessage={token2ApprovalGuardMessage}
 								onApprove={amount => onApproveToken2(amount)}
 								pending={openOracleActiveAction === 'approveToken2'}
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token2Symbol)}
@@ -274,8 +287,8 @@ export function renderSelectedReportActionSection({
 								{UI_STRINGS.openOracleSection.requiredWethWrapDetailPrefix} <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix={UI_STRINGS.common.wethSuffix} copyable={false} /> {UI_STRINGS.openOracleSection.requiredWethWrapDetailSuffix}
 							</p>
 						)}
-						{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
-						{initialReportSubmission.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.blockMessage.message}</p>}
+						{!isMainnet || initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
+						{!isMainnet || initialReportSubmission.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							{!initialReportSubmission.hasWethWrapAction ? undefined : (
 								<TransactionActionButton
@@ -287,12 +300,7 @@ export function renderSelectedReportActionSection({
 									tone='secondary'
 									availability={{
 										disabled: !isConnected || !isMainnet || !initialReportSubmission.canWrapRequiredWeth,
-										reason: (() => {
-											if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletWrapEthReason
-											if (initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible') return initialReportSubmission.wrapRequiredWethMessage.message
-
-											return undefined
-										})(),
+										reason: wrapDisabledReason,
 									}}
 								/>
 							)}
@@ -304,12 +312,7 @@ export function renderSelectedReportActionSection({
 								pending={openOracleActiveAction === 'submitInitialReport'}
 								availability={{
 									disabled: !isConnected || !isMainnet || !initialReportSubmission.canSubmit,
-									reason: (() => {
-										if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletSubmitInitialReportReason
-										if (initialReportSubmission.blockMessage?.kind === 'visible') return initialReportSubmission.blockMessage.message
-
-										return undefined
-									})(),
+									reason: submitInitialReportDisabledReason,
 								}}
 							/>
 						</div>
@@ -333,6 +336,21 @@ export function renderSelectedReportActionSection({
 				if (disputeSubmission?.token2ContributionAmount === undefined) return UI_STRINGS.openOracleSection.enterValidDisputeAmountsBeforeApprovingReason(token2Symbol)
 
 				return undefined
+			})()
+			const disputeToken1ApprovalGuardMessage = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletApprovalReason(token1Symbol)
+				if (!isMainnet) return undefined
+				return token1ApprovalGuardMessage
+			})()
+			const disputeToken2ApprovalGuardMessage = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletApprovalReason(token2Symbol)
+				if (!isMainnet) return undefined
+				return token2ApprovalGuardMessage
+			})()
+			const disputeActionDisabledReason = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletDisputeReason
+				if (!isMainnet) return undefined
+				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
 			return (
 				<SectionBlock headingLevel={4} title={UI_STRINGS.openOracleSection.disputeReportTitle} variant='embedded'>
@@ -366,7 +384,7 @@ export function renderSelectedReportActionSection({
 								allowanceLoading={openOracleInitialReportState.token1Approval.loading}
 								approvedAmount={openOracleInitialReportState.token1Approval.value}
 								disabled={!isConnected || !isMainnet}
-								guardMessage={!isConnected ? UI_STRINGS.openOracleSection.disconnectedWalletApprovalReason(token1Symbol) : token1ApprovalGuardMessage}
+								guardMessage={disputeToken1ApprovalGuardMessage}
 								onApprove={amount => onApproveToken1(amount)}
 								pending={openOracleActiveAction === 'approveToken1'}
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token1Symbol)}
@@ -384,7 +402,7 @@ export function renderSelectedReportActionSection({
 								allowanceLoading={openOracleInitialReportState.token2Approval.loading}
 								approvedAmount={openOracleInitialReportState.token2Approval.value}
 								disabled={!isConnected || !isMainnet}
-								guardMessage={!isConnected ? UI_STRINGS.openOracleSection.disconnectedWalletApprovalReason(token2Symbol) : token2ApprovalGuardMessage}
+								guardMessage={disputeToken2ApprovalGuardMessage}
 								onApprove={amount => onApproveToken2(amount)}
 								pending={openOracleActiveAction === 'approveToken2'}
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token2Symbol)}
@@ -395,7 +413,7 @@ export function renderSelectedReportActionSection({
 								tokenUnits={disputeSubmission?.token2Decimals ?? 18}
 							/>
 						</SectionBlock>
-						{disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
+						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
 								safetyId={getOpenOracleActionSafetyId('dispute')}
@@ -406,7 +424,7 @@ export function renderSelectedReportActionSection({
 								tone='secondary'
 								availability={{
 									disabled: !isConnected || !isMainnet || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
-									reason: !isConnected ? UI_STRINGS.openOracleSection.disconnectedWalletDisputeReason : (disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)),
+									reason: disputeActionDisabledReason,
 								}}
 							/>
 						</div>
@@ -419,6 +437,11 @@ export function renderSelectedReportActionSection({
 				if (openOracleForm.reportId.trim() === '') return UI_STRINGS.openOracleSection.loadReportFirstReason
 
 				return settleAvailability.message
+			})()
+			const settleActionDisabledReason = (() => {
+				if (!isConnected) return UI_STRINGS.openOracleSection.disconnectedWalletSettleReason
+				if (!isMainnet) return undefined
+				return settleDisabledMessage
 			})()
 			return (
 				<SectionBlock headingLevel={4} title={UI_STRINGS.openOracleSection.settleReportTitle} variant='embedded'>
@@ -441,7 +464,7 @@ export function renderSelectedReportActionSection({
 								tone='secondary'
 								availability={{
 									disabled: !isConnected || !isMainnet || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
-									reason: !isConnected ? UI_STRINGS.openOracleSection.disconnectedWalletSettleReason : settleDisabledMessage,
+									reason: settleActionDisabledReason,
 								}}
 							/>
 						</div>

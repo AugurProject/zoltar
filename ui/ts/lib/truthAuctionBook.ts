@@ -1,5 +1,6 @@
 import { findTruthAuctionMinSupportedTick, tickToPrice, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/truthAuctionTickMath'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../types/contracts.js'
+import { getWalletMainnetGuardState } from './actionGuards.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from './marketForm.js'
 
@@ -551,8 +552,8 @@ export function getTruthAuctionBidGuardMessage({
 	truthAuction: TruthAuctionMetrics | undefined
 	walletEthBalance: bigint | undefined
 }) {
-	if (accountAddress === undefined) return 'Connect a wallet before submitting a truth auction bid.'
-	if (!isMainnet) return undefined
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before submitting a truth auction bid.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (truthAuction === undefined) return 'Load the truth auction before bidding.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'
 	const auctionHasEndedByTimestamp = currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt

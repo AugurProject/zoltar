@@ -986,7 +986,7 @@ export function ForkAuctionSection({
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		const disabledReason = interactionDisabledReason ?? resolvedAvailability.reason
+		const disabledReason = !isMainnet ? undefined : (interactionDisabledReason ?? resolvedAvailability.reason)
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
