@@ -279,15 +279,16 @@
 					weak-demand path.
 				</p>
 				<p>
-					This is intentional behavior. In the underfunded branch, the contract
-					is not trying to sell only the fraction of REP that matches the ETH
-					raised so far. It is trying to find the largest high-to-low winning
-					prefix whose members can all accept one synthetic all-REP price, then
-					clear the full REP cap against that prefix. This branch only applies
-					while normal funded clearing still fails. If adding a lower positive
-					bid would make the REP cap bind at that lower tick, the contract does
-					not stay underfunded with a narrower winner set. It switches into the
-					normal funded-clearing branch at that lower tick instead.
+					Under weak demand, the auction is designed to maximize retained ETH
+					while still clearing the full REP cap. In the underfunded branch, the
+					contract does not sell only the fraction of REP matched by submitted
+					ETH. It finds the largest high-to-low winning prefix whose members can
+					all accept one synthetic all-REP price, then clears the full REP cap
+					against that prefix. This branch only applies while normal funded
+					clearing still fails. If adding a lower positive bid would make the
+					REP cap bind at that lower tick, the contract does not stay
+					underfunded with a narrower winner set. It switches into the normal
+					funded-clearing branch at that lower tick instead.
 				</p>
 				<table>
 					<thead>
@@ -605,15 +606,15 @@
 				</p>
 				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>
-					<p>
-						This simplified calculator uses three fixed price levels to show
-						the same two high-level outcomes as the contract: strong demand
-						clears at a uniform price, while weak demand still settles the
-						qualifying winner set at one synthetic uniform price. It uses
-						real-number arithmetic for readability; the contract ceilings the
-						synthetic underfunded threshold, floors REP allocations, and carries
-						remainders during paged withdrawals.
-					</p>
+						<p>
+							The simplified calculator uses three fixed price levels to show
+							the same two high-level outcomes as the contract: strong demand
+							clears at a uniform price, while weak demand still settles the
+							qualifying winner set at one synthetic uniform price. It uses
+							real-number arithmetic for readability; the contract ceilings the
+							synthetic underfunded threshold, floors REP allocations, and carries
+							remainders during paged withdrawals.
+						</p>
 					<div class="example-grid">
 						<label>
 							ETH raise cap
