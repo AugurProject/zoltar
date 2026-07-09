@@ -131,6 +131,16 @@ Low readability issue by default, and Medium when it delays the first explanatio
 of an application-specific term or makes the document rely on tooltips for the
 actual definition.
 
+Prefer mechanism-first prose over defensive meta-commentary about the mechanism.
+Flag openings such as "This is intentional behavior", "this is by design",
+"this is not a bug", "that outcome is expected", or similar rebuttal-style
+phrasing when the sentence can instead directly state the rule, objective,
+branch condition, or lifecycle action first. Treat this as a Low readability
+issue by default because it sounds defensive and leaves "this" underspecified.
+Raise it to Medium when the phrasing delays the first clear statement of the
+mechanism, objective, or actor responsibility, or when the paragraph reads like
+an argument with the reader instead of explanatory protocol documentation.
+
 Flag documentation that is technically correct but hard to follow because:
 - terms appear before their purpose is clear
 - section order forces the reader to infer the system from scattered facts
