@@ -28,7 +28,6 @@ import {
 	getPendingSettlementOperationIds,
 	getQueuedOperationEthCost,
 	getRequestPriceEthCost,
-	getOracleFeeCredit,
 	getStagedOperation,
 	openOracleSettle,
 	openOracleSettleWithGasPrice,
@@ -37,7 +36,6 @@ import {
 	requestPrice,
 	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
-	withdrawOracleFeeCredits,
 	wrapWeth,
 } from '../testsuite/simulator/utils/contracts/peripherals'
 import { depositRep, getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
@@ -144,22 +142,6 @@ const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
 			}
 		})
 		.find(log => log?.eventName === 'PriceReportRejected')
-
-const findOracleFeeCreditWithdrawnLog = (logs: TransactionReceiptLogs) =>
-	logs
-		.map(log => {
-			try {
-				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		.find(log => log?.eventName === 'OracleFeeCreditWithdrawn')
 
 const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -551,10 +533,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.ok(recoveryPendingReportId > 0n, 'oracle state should recover after an invalid settled report clears the pending request')
 	})
 
-	test('joining a pending report charges the queued operation fee and credits the report sponsor', async () => {
+	test('only the pending report sponsor can queue more operations while settlement is pending', async () => {
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
-		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const sponsorAllowance = repDeposit / 4n
 		const counterpartyAllowance = repDeposit / 5n
 
@@ -564,9 +545,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
 
 		const pendingReportIdBeforeJoin = await getPendingReportId(client, priceOracle)
-		const sponsorCreditBeforeJoin = await getOracleFeeCredit(client, priceOracle, client.account.address)
-		const counterpartyEthBeforeJoin = await getETHBalance(counterpartyClient, counterpartyClient.account.address)
-		const zeroFeeJoinRejected = await counterpartyClient
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
+		const zeroCostJoinRejected = await counterpartyClient
 			.simulateContract({
 				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
@@ -578,33 +558,76 @@ describe('Price Oracle Refund Security Tests', () => {
 				() => false,
 				error => {
 					if (!(error instanceof Error)) throw error
-					return error.message.includes('pending oracle settlement queue')
+					return error.message.includes('Only the pending report sponsor can queue more operations until settlement')
 				},
 			)
 
-		await requestPriceIfNeededAndStageOperationWithValue(counterpartyClient, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
 
 		const pendingReportIdAfterJoin = await getPendingReportId(client, priceOracle)
-		const sponsorCreditAfterJoin = await getOracleFeeCredit(client, priceOracle, client.account.address)
-		const counterpartyEthAfterJoin = await getETHBalance(counterpartyClient, counterpartyClient.account.address)
-		const sponsorEthBeforeWithdraw = await getETHBalance(client, client.account.address)
 
-		const withdrawHash = await withdrawOracleFeeCredits(client, priceOracle)
-		const withdrawReceipt = await client.waitForTransactionReceipt({ hash: withdrawHash })
+		assert.strictEqual(queuedOperationEthCost, 0n, 'queued operation joins should no longer charge an ETH fee')
+		assert.strictEqual(pendingReportIdAfterJoin, pendingReportIdBeforeJoin, 'the sponsor should reuse the existing oracle request')
+		assert.strictEqual(zeroCostJoinRejected, true, 'non-sponsors should be rejected while a pending oracle settlement is in flight')
+		assert.strictEqual((await getPendingSettlementOperationIds(client, priceOracle)).length, 2, 'the sponsor should still be able to queue additional pending operations without paying a join fee')
+	})
 
-		const sponsorCreditAfterWithdraw = await getOracleFeeCredit(client, priceOracle, client.account.address)
-		const sponsorEthAfterWithdraw = await getETHBalance(client, client.account.address)
-		const withdrawLog = findOracleFeeCreditWithdrawnLog(withdrawReceipt.logs)
-		if (withdrawLog === undefined) throw new Error('missing OracleFeeCreditWithdrawn log')
+	test('only the pending report sponsor can queue overflow operations while settlement is pending', async () => {
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 
-		assert.strictEqual(pendingReportIdAfterJoin, pendingReportIdBeforeJoin, 'joining a pending report should reuse the existing oracle request')
-		assert.strictEqual(zeroFeeJoinRejected, true, 'joining a pending report without the queued-operation fee should be rejected even when basefee is zero')
-		assert.strictEqual(sponsorCreditAfterJoin - sponsorCreditBeforeJoin, queuedOperationEthCost, 'queued joiners should credit the report sponsor by the per-operation oracle fee')
-		assert.strictEqual(counterpartyEthBeforeJoin - counterpartyEthAfterJoin, queuedOperationEthCost, 'queued joiners should pay the per-operation oracle fee')
-		assert.strictEqual(sponsorCreditAfterWithdraw, 0n, 'withdrawing oracle fee credits should clear the sponsor credit balance')
-		assert.strictEqual(sponsorEthAfterWithdraw - sponsorEthBeforeWithdraw, queuedOperationEthCost, 'withdrawing oracle fee credits should pay the full credited amount to the sponsor')
-		assert.strictEqual(withdrawLog.args.sponsor, client.account.address, 'withdraw event should identify the sponsor')
-		assert.strictEqual(withdrawLog.args.amount, queuedOperationEthCost, 'withdraw event should report the full credited amount')
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await fillPendingSettlementOperationList(ethCost, queuedOperationEthCost, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+
+		const overflowRejected = await counterpartyClient
+			.simulateContract({
+				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				functionName: 'requestPriceIfNeededAndStageOperation',
+				address: priceOracle,
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+				account: counterpartyClient.account,
+			})
+			.then(
+				() => false,
+				error => {
+					if (!(error instanceof Error)) throw error
+					return error.message.includes('Only the pending report sponsor can queue more operations until settlement')
+				},
+			)
+
+		assert.strictEqual(overflowRejected, true, 'non-sponsors should not be able to add overflow staged operations while a pending report exists')
+	})
+
+	test('only the pending report sponsor can queue operations while a pending report exists and the cached price is still valid', async () => {
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await requestPrice(client, priceOracle)
+		await settlePendingReportWithPrice(10n ** 18n)
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'test setup should seed a fresh cached oracle price')
+
+		await requestPrice(client, priceOracle)
+
+		const validPriceRejected = await counterpartyClient
+			.simulateContract({
+				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				functionName: 'requestPriceIfNeededAndStageOperation',
+				address: priceOracle,
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
+				account: counterpartyClient.account,
+			})
+			.then(
+				() => false,
+				error => {
+					if (!(error instanceof Error)) throw error
+					return error.message.includes('Only the pending report sponsor can queue more operations until settlement')
+				},
+			)
+
+		assert.strictEqual(validPriceRejected, true, 'a valid cached price must not let non-sponsors bypass the pending-report queue ownership check')
 	})
 
 	test('expired pending auto-execute slots do not block later valid oracle settlements', async () => {

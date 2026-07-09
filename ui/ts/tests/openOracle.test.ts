@@ -1260,22 +1260,20 @@ describe('Open Oracle helpers', () => {
 		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setSecurityBondsAllowance'])
 	})
 
-	test('queueOracleManagerOperation lets another wallet join a pending report with the buffered queued operation fee', async () => {
+	test('queueOracleManagerOperation only lets the pending report sponsor add more queued operations', async () => {
 		const secondAddress = addressString(TEST_ADDRESSES[1])
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBeGreaterThan(0n)
-		expect(managerDetails.queuedOperationEthCost).toBeGreaterThan(0n)
-		expect(addOpenOracleBountyBuffer(managerDetails.requestPriceEthCost)).toBeGreaterThan(managerDetails.queuedOperationEthCost)
-		expect(addOpenOracleBountyBuffer(managerDetails.queuedOperationEthCost)).toBeGreaterThan(managerDetails.queuedOperationEthCost)
+		expect(managerDetails.queuedOperationEthCost).toBe(0n)
 
-		await mockWindow.setBalance(secondAddress, addOpenOracleBountyBuffer(managerDetails.queuedOperationEthCost))
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		installInjectedEthereum(mockWindow, secondAddress)
 		const secondUiWriteClient = createWalletWriteClient(secondAddress)
-		const queuedResult = await queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
+		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
+		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(queuedResult.queuedOperation).toBeDefined()
 		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(true)

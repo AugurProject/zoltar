@@ -3,12 +3,11 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadOracleManagerQueueOperationEthValue } from '../contracts.js'
-import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
 
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 
 describe('oracle manager queue funding helpers', () => {
-	test('buffers queued-operation fees for pending-report joins', async () => {
+	test('uses zero ETH when reusing a pending-report join slot', async () => {
 		const readContract: Parameters<typeof loadOracleManagerQueueOperationEthValue>[0]['readContract'] = async request => {
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'lastPrice') return (10n ** 18n) as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'getPendingSettlementOperationIds') return [1n] as never
@@ -23,6 +22,6 @@ describe('oracle manager queue funding helpers', () => {
 
 		const ethValue = await loadOracleManagerQueueOperationEthValue(client, MANAGER_ADDRESS)
 
-		expect(ethValue).toBe(addOpenOracleBountyBuffer(2n))
+		expect(ethValue).toBe(0n)
 	})
 })

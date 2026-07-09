@@ -29,7 +29,7 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 }
 
 describe('oracle request ETH funding', () => {
-	test('uses the queued-op fee when joining a pending report', () => {
+	test('uses no ETH when reusing a pending report queue slot', () => {
 		expect(
 			resolveOracleOperationEthFunding({
 				managerDetails: createOracleManagerDetails({
@@ -38,8 +38,8 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 2n,
-			includeBuffer: true,
+			ethCost: 0n,
+			includeBuffer: false,
 		})
 	})
 
@@ -91,8 +91,8 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 2n,
-			includeBuffer: true,
+			ethCost: 0n,
+			includeBuffer: false,
 		})
 	})
 

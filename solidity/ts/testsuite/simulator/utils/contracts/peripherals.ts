@@ -76,17 +76,6 @@ export const requestPriceWithValue = async (client: WriteClient, priceOracleMana
 		}),
 	)
 
-export const withdrawOracleFeeCredits = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await writeContractAndWait(client, () =>
-		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'withdrawOracleFeeCredits',
-			address: priceOracleManagerAndOperatorQueuer,
-			args: [],
-			gas: 2_000_000n,
-		}),
-	)
-
 export const recoverSettledPendingReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
@@ -261,14 +250,6 @@ export const getQueuedOperationEthCost = async (client: ReadClient, priceOracleM
 		functionName: 'getQueuedOperationEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
-	})
-
-export const getOracleFeeCredit = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address, sponsor: Address) =>
-	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-		functionName: 'oracleFeeCredits',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [sponsor],
 	})
 
 export const wrapWeth = async (client: WriteClient, amount: bigint) => {
