@@ -7102,7 +7102,7 @@
 					<details class="interactive-example" id="underfunded-auction-example">
 						<summary>Adjust an underfunded synthetic uniform example</summary>
 						<p>
-							This widget assumes the bid is already inside the finalized
+							The widget assumes the bid is already inside the finalized
 							winning prefix. The winning ETH, REP sale cap, and bidder ETH then
 							determine the synthetic execution price, the bidder's REP fill,
 							and the REP assigned to the rest of the winning prefix. The tick
@@ -7594,7 +7594,7 @@
 					</div>
 					<p>
 						The REP/ETH oracle is narrow in purpose.
-						<code>SecurityPoolOracleCoordinator</code> uses
+						<code>OpenOraclePriceCoordinator</code> uses
 						<code>OpenOracle</code> to obtain a fresh REP/ETH price for
 						liquidation, REP withdrawal, and bond-allowance updates. A stale
 						price also blocks <code>depositToEscalationGame</code> whenever the
@@ -8694,7 +8694,7 @@
 								<td><code>5 minutes</code></td>
 								<td>
 									How long a settled REP/ETH price remains valid. Solidity
-									constant in <code>SecurityPoolOracleCoordinator</code>.
+									constant in <code>OpenOraclePriceCoordinator</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8719,7 +8719,7 @@
 								<td>
 									Maximum staged operations executed from one OpenOracle
 									settlement callback. Solidity constant in
-									<code>SecurityPoolOracleCoordinator</code>.
+									<code>OpenOraclePriceCoordinator</code>.
 								</td>
 							</tr>
 							<tr>
@@ -8728,7 +8728,7 @@
 								<td>
 									Maximum self-service validity window for staged oracle-gated
 									operations. Solidity constant in
-									<code>SecurityPoolOracleCoordinator</code>.
+									<code>OpenOraclePriceCoordinator</code>.
 								</td>
 							</tr>
 							<tr>

@@ -12,7 +12,7 @@ export const DEPLOYMENT_ACTION_SAFETY_ENTRIES = [
 	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.zoltarQuestionData, 'Zoltar Question Data', createReasonedActionSafetyFixtures('Zoltar Question Data')),
 	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.zoltar, 'Zoltar', createReasonedActionSafetyFixtures('Zoltar')),
 	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.shareTokenFactory, 'Share Token Factory', createReasonedActionSafetyFixtures('Share Token Factory')),
-	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.priceOracleManagerAndOperatorQueuerFactory, 'Price Oracle Manager And Operator Queuer Factory', createReasonedActionSafetyFixtures('Price Oracle Manager And Operator Queuer Factory')),
+	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.priceOracleManagerAndOperatorQueuerFactory, 'OpenOracle Price Coordinator Factory', createReasonedActionSafetyFixtures('OpenOracle Price Coordinator Factory')),
 	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.securityPoolForker, 'Security Pool Forker', createReasonedActionSafetyFixtures('Security Pool Forker')),
 	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.escalationGameFactory, 'Escalation Game Factory', createReasonedActionSafetyFixtures('Escalation Game Factory')),
 	createReasonedActionSafetyEntry(DEPLOYMENT_STEP_SAFETY_IDS.securityPoolFactory, 'Security Pool Factory', createReasonedActionSafetyFixtures('Security Pool Factory')),

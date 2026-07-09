@@ -32,7 +32,7 @@ struct StagedOperation {
 	uint256 snapshotDenominator;
 }
 
-contract SecurityPoolOracleCoordinator {
+contract OpenOraclePriceCoordinator {
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
 	string private constant STAGED_OPERATION_EXECUTION_OK = '';
 	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'staged operation expired';

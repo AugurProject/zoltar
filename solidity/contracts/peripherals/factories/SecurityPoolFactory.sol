@@ -10,7 +10,7 @@ import { UniformPriceDualCapBatchAuctionFactory } from './UniformPriceDualCapBat
 import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuction.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuerFactory } from './PriceOracleManagerAndOperatorQueuerFactory.sol';
-import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
+import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
@@ -33,7 +33,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event DeploySecurityPool(
 		ISecurityPool securityPool,
 		UniformPriceDualCapBatchAuction truthAuction,
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
 		ISecurityPool parent,
 		uint248 universeId,
@@ -101,7 +101,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(msg.sender == address(securityPoolForker), 'Only the security pool forker can deploy child pools');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
 		truthAuction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(
@@ -161,7 +161,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
 		// sharetoken has different salt as sharetoken address does not change in forks
@@ -216,7 +216,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function deploySecurityPool(
 		IShareToken shareToken,
 		ISecurityPool parent,
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		uint248 universeId,
 		uint256 questionId,
 		uint256 securityMultiplier,

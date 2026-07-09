@@ -6,7 +6,7 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
-import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
+import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 
 contract PriceOracleManagerAndOperatorQueuerFactory {
 	IWeth9 public immutable weth;
@@ -63,9 +63,9 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		OpenOracle _openOracle,
 		ReputationToken _reputationToken,
 		bytes32 salt
-	) external returns (SecurityPoolOracleCoordinator) {
+	) external returns (OpenOraclePriceCoordinator) {
 		return
-			new SecurityPoolOracleCoordinator{ salt: keccak256(abi.encode(msg.sender, salt)) }(
+			new OpenOraclePriceCoordinator{ salt: keccak256(abi.encode(msg.sender, salt)) }(
 				_openOracle,
 				_reputationToken,
 				weth,

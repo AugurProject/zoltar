@@ -47,8 +47,8 @@
 						>OpenOracle contract</a
 					>, the
 					<a
-						href="../solidity/contracts/peripherals/SecurityPoolOracleCoordinator.sol"
-						>SecurityPoolOracleCoordinator integration</a
+						href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+						>OpenOraclePriceCoordinator integration</a
 					>, and the Placeholder whitepaper's
 					<a href="./whitepaper_placeholder.html#oracle"
 						>REP/ETH Price Oracle</a
@@ -157,7 +157,7 @@
 					pool instead of sharing one global queue across the protocol.
 				</p>
 				<p>
-					<code>SecurityPoolOracleCoordinator</code> is deployed with an
+					<code>OpenOraclePriceCoordinator</code> is deployed with an
 					immutable <code>OpenOracle</code> address. A security pool stages
 					liquidation, REP-withdrawal, and security-bond-allowance operations
 					through the coordinator when a fresh REP/ETH price is needed.
@@ -173,6 +173,11 @@
 					and execute through the coordinator. Child pools inherit the parent's
 					last price as a starting value, but freshness is still controlled by
 					the coordinator's settlement timestamp and validity window.
+				</p>
+				<p>
+					The factory contract still uses its older internal name, but it is the
+					active deployment path for <code>OpenOraclePriceCoordinator</code>
+					instances.
 				</p>
 				<figure class="diagram" id="fig-openoracle-integration-flow">
 					<svg
@@ -2231,7 +2236,7 @@
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>
-							<td><code>SecurityPoolOracleCoordinator</code></td>
+							<td><code>OpenOraclePriceCoordinator</code></td>
 							<td>
 								Routes settled amounts back into Placeholder's price cache and
 								staged-operation executor.
