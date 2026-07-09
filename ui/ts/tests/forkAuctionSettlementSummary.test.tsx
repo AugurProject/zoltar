@@ -127,6 +127,8 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		timeRemaining: 0n,
 		totalRepPurchased: 4n * ONE_UNIT,
 		underfunded: false,
+		underfundedThreshold: undefined,
+		underfundedWinningEth: 0n,
 		...overrides,
 	}
 }
@@ -395,5 +397,82 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Review Finalized Refund Settlement' })).not.toBeNull()
 		expect(documentQueries.getByText('Review the selected finalized refund rows before settling them through the child-pool settlement path.')).not.toBeNull()
+	})
+
+	test('does not render a winning-threshold metric for finalized underfunded auctions with no winning prefix', async () => {
+		const truthAuction = createTruthAuction({
+			clearingPrice: undefined,
+			clearingTick: 0n,
+			ethRaised: ONE_UNIT,
+			finalized: true,
+			hitCap: false,
+			totalRepPurchased: 0n,
+			underfunded: true,
+			underfundedThreshold: 2n ** 256n - 1n,
+			underfundedWinningEth: 0n,
+		})
+		const childPool = createChildPool()
+		mockedForkAuctionDetails = createForkAuctionDetails({
+			truthAuction,
+		})
+		mockedSecurityPools = [childPool]
+
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress(CONNECTED_WALLET),
+					}),
+					currentTimestamp: 700_000n,
+					forkAuctionDetails: mockedForkAuctionDetails,
+					previewPool: childPool,
+					securityPools: [childPool],
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Winning Threshold')).toBeNull()
+	})
+
+	test('does not render the legacy per-tick-denominator warning when synthetic underfunded estimates are available', async () => {
+		const truthAuction = createTruthAuction({
+			ethRaised: 4n * ONE_UNIT,
+			finalized: true,
+			hitCap: false,
+			maxRepBeingSold: 8n * ONE_UNIT,
+			totalRepPurchased: 8n * ONE_UNIT,
+			underfunded: true,
+			underfundedThreshold: HALF_UNIT,
+			underfundedWinningEth: 4n * ONE_UNIT,
+		})
+		const childPool = createChildPool()
+		mockedForkAuctionDetails = createForkAuctionDetails({
+			truthAuction,
+		})
+		mockedSecurityPools = [childPool]
+		mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([createSettlementRow(createBid({ bidIndex: 1n, tick: 0n }), truthAuction)])
+
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress(CONNECTED_WALLET),
+					}),
+					currentTimestamp: 700_000n,
+					forkAuctionDetails: mockedForkAuctionDetails,
+					previewPool: childPool,
+					securityPools: [childPool],
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Estimated REP Claimed')).not.toBeNull()
+		expect(documentQueries.queryByText(/per-tick ETH denominator/i)).toBeNull()
 	})
 })
