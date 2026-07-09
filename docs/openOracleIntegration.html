@@ -437,10 +437,10 @@
 						budgets inside one callback.
 					</p>
 				</figure>
-				<figure class="equation" id="eq-openoracle-request-price-live-example">
+				<figure class="equation" id="eq-openoracle-request-price-snapshot-example">
 					<math
 						display="block"
-						aria-label="request price ETH cost equals sixty nine million five hundred ninety four thousand four hundred three times four times four million one hundred thousand plus one hundred one equals one quadrillion one hundred forty one trillion three hundred forty eight billion two hundred nine million two hundred thousand one hundred one wei"
+						aria-label="Worked request bounty calculation using the snapshot base fee"
 						data-source="requestPriceEthCost = 69,594,403 \cdot 4 \cdot (4,000,000 + 100,000) + 101 = 1,141,348,209,200,101 wei"
 					>
 						<mrow>
@@ -476,10 +476,10 @@
 					<code>259.332023575638507216 REP</code>, plus the matching WETH side
 					at the chosen report price. Using the same market snapshot:
 				</p>
-				<figure class="equation" id="eq-openoracle-initial-report-live-example">
+				<figure class="equation" id="eq-openoracle-initial-report-snapshot-example">
 					<math
 						display="block"
-						aria-label="amount two equals two hundred fifty nine point three three two zero two three five seven five six three eight five zero seven two one six times zero point zero zero zero four five two three one equals zero point one one seven two nine eight four six seven five eight three four nine seven zero six ETH"
+						aria-label="Worked WETH stake approximation from REP stake and the snapshot ETH-per-REP quote"
 						data-source="amount2 = 259.332023575638507216 \cdot 0.00045231 = 0.11729846758349706 ETH"
 					>
 						<mrow>
@@ -507,10 +507,10 @@
 					WETH amounts to the current reporter. The ETH bounty is split between
 					the initial reporter reward and the settler reward:
 				</p>
-				<figure class="equation" id="eq-openoracle-payout-live-example">
+				<figure class="equation" id="eq-openoracle-payout-snapshot-example">
 					<math
 						display="block"
-						aria-label="settler reward equals sixty nine million five hundred ninety four thousand four hundred three times two times one hundred thousand equals thirteen trillion nine hundred eighteen billion eight hundred eighty million six hundred thousand wei, reporter reward equals one quadrillion one hundred forty one trillion three hundred forty eight billion two hundred nine million two hundred thousand one hundred one minus thirteen trillion nine hundred eighteen billion eight hundred eighty million six hundred thousand equals one quadrillion one hundred twenty seven trillion four hundred twenty nine billion three hundred twenty eight million six hundred thousand one hundred one wei"
+						aria-label="Worked no-dispute payout split showing settler reward and reporter reward in wei"
 						data-source="settlerReward = 69,594,403 \cdot 2 \cdot 100,000 = 13,918,880,600,000 wei; reporterReward = 1,141,348,209,200,101 - 13,918,880,600,000 = 1,127,429,328,600,101 wei"
 					>
 						<mtable>
