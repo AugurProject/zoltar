@@ -10,7 +10,6 @@ type AppStatusNoticesProps = {
 	errorMessage: string | undefined
 	readBackendMessage: string | undefined
 	readBackendStatus?: ReadBackendStatus | undefined
-	wrongNetworkMessage: string | undefined
 	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
 	showZoltarUniverseForkedWarning: boolean
@@ -63,7 +62,7 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, wrongNetworkMessage, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: UI_STRINGS.appStatusNotices.simulationBootstrapFailedTitle })
@@ -79,13 +78,6 @@ export function AppStatusNotices({ errorMessage, readBackendMessage, readBackend
 			title: UI_STRINGS.appStatusNotices.universeForkedTitle,
 		})
 	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: UI_STRINGS.appStatusNotices.finishSetupBeforeUsingAppDetail, id: 'setup-incomplete', tone: 'blocking', title: UI_STRINGS.appStatusNotices.setupIncompleteTitle })
-	if (wrongNetworkMessage !== undefined)
-		items.push({
-			detail: `${UI_STRINGS.appStatusNotices.wrongNetworkDetailPrefix} ${wrongNetworkMessage === UI_STRINGS.userCopy.wallet.switchToMainnetDetail ? UI_STRINGS.appStatusNotices.wrongNetworkMainnetInstruction : wrongNetworkMessage}`,
-			id: 'wrong-network',
-			tone: 'blocking',
-			title: UI_STRINGS.appStatusNotices.wrongNetworkTitle,
-		})
 	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: UI_STRINGS.appStatusNotices.readRpcMismatchTitle })
 	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: UI_STRINGS.appStatusNotices.appErrorTitle })
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)

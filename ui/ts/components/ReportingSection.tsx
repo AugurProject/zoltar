@@ -691,7 +691,7 @@ export function ReportingSection({
 							pendingLabel={UI_STRINGS.reportingSection.submitReportPendingLabel}
 							onClick={onReportOutcome}
 							pending={reportingActiveAction === 'reportOutcome'}
-							availability={{ disabled: !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
+							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
 						/>
 					</div>
 					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
@@ -768,7 +768,7 @@ export function ReportingSection({
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												tone='secondary'
-												availability={{ disabled: !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
 											/>
 											<TransactionActionButton
 												safetyId={getReportingActionSafetyId('withdrawEscalation')}
@@ -778,7 +778,7 @@ export function ReportingSection({
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												tone='secondary'
-												availability={{ disabled: !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
 											/>
 										</div>
 									</SectionBlock>

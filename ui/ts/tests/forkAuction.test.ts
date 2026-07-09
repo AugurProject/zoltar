@@ -261,7 +261,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 100n,
 			}),
-		).toBe('Switch to Ethereum mainnet before submitting a truth auction bid.')
+		).toBeUndefined()
 
 		expect(
 			getTruthAuctionBidGuardMessage({

@@ -18,8 +18,8 @@ type Props = {
 }
 
 export function shouldRenderRouteContent({ readBackendMessage, route, wrongNetworkMessage }: Pick<Props, 'readBackendMessage' | 'route' | 'wrongNetworkMessage'>) {
-	if (wrongNetworkMessage !== undefined) return false
 	if (route !== 'deploy' && readBackendMessage !== undefined) return false
+	if (wrongNetworkMessage !== undefined) return true
 	return true
 }
 

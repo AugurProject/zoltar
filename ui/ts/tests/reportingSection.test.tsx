@@ -621,6 +621,52 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 	})
 
+	test('keeps reporting disabled off mainnet without showing a switch-network message', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					reportingForm: createReportingForm({
+						reportAmount: '1',
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report Yes')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
+	test('keeps escalation settlement disabled off mainnet without showing a switch-network message', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					mode: 'withdraw-only',
+					reportingDetails: createReportingDetails({
+						questionOutcome: 'yes',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
+					}),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
 	test('shows a locked-settlement reason before withdrawals unlock in active reporting', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

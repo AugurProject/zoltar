@@ -41,7 +41,6 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 		{ key: 'forked', label: UI_STRINGS.marketOverviewSection.universeIsForkedLabel, resolved: hasForked, ...(hasForked ? {} : { detail: UI_STRINGS.marketOverviewSection.childUniversesUnavailableReason }) },
 		{ key: 'selection', label: 'Child universe selected', resolved: selectedChildUniverse !== undefined, ...(selectedChildUniverse === undefined ? { detail: 'Select a child universe to deploy.' } : {}) },
 		{ key: 'wallet', label: 'Wallet connected', resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: 'Connect a wallet before deploying a child universe.' }) },
-		{ key: 'mainnet', label: UI_STRINGS.marketOverviewSection.ethereumMainnetSelectedLabel, resolved: isMainnet },
 		{ key: 'exists', label: UI_STRINGS.marketOverviewSection.childUniverseNotAlreadyDeployedLabel, resolved: selectedChildUniverse?.exists !== true, ...(selectedChildUniverse?.exists === true ? { detail: UI_STRINGS.marketOverviewSection.childUniverseAlreadyDeployedReason } : {}) },
 	]
 	if (universeMissing) {

@@ -767,7 +767,7 @@ export function ForkAuctionSection({
 	}
 	const interactionDisabledReason = (() => {
 		if (accountState.address === undefined) return 'Connect a wallet before using fork and auction actions.'
-		if (!isMainnet) return 'Switch to Ethereum mainnet before using fork and auction actions.'
+		if (!isMainnet) return undefined
 
 		return undefined
 	})()
@@ -997,7 +997,7 @@ export function ForkAuctionSection({
 				pending={isPending}
 				tone={tone}
 				availability={{
-					disabled: !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
+					disabled: !isMainnet || !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
 					reason: disabledReason,
 				}}
 			/>

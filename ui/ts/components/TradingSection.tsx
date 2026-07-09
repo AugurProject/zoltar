@@ -378,7 +378,7 @@ export function TradingSection({
 						pendingLabel={UI_STRINGS.tradingSection.mintCompleteSetsPendingLabel}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={{ disabled: !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }}
 					/>
 				</div>
 			</OperationModal>
@@ -410,7 +410,7 @@ export function TradingSection({
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
 						tone='secondary'
-						availability={{ disabled: !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: redeemCompleteSetsEnabled ? redeemCompleteSetGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: redeemCompleteSetsEnabled ? redeemCompleteSetGuardMessage : undefined }}
 					/>
 				</div>
 			</OperationModal>
@@ -438,7 +438,7 @@ export function TradingSection({
 						onClick={onMigrateShares}
 						pending={tradingActiveAction === 'migrateShares'}
 						tone='secondary'
-						availability={{ disabled: !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: migrateSharesEnabled ? migrateSharesGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: migrateSharesEnabled ? migrateSharesGuardMessage : undefined }}
 					/>
 				</div>
 			</OperationModal>
@@ -453,7 +453,7 @@ export function TradingSection({
 						onClick={onRedeemShares}
 						pending={tradingActiveAction === 'redeemShares'}
 						tone='secondary'
-						availability={{ disabled: !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: redeemSharesEnabled ? redeemSharesGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: redeemSharesEnabled ? redeemSharesGuardMessage : undefined }}
 					/>
 				</div>
 			</OperationModal>

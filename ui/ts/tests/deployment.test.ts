@@ -85,7 +85,7 @@ void describe('deployment helpers', () => {
 				isMainnet: false,
 				nextMissingStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet to continue.' })
+		).toEqual({ disabled: true, reason: undefined })
 	})
 
 	void test('getDeploymentStepAvailability blocks undeployed steps behind prerequisites and allows ready steps', () => {

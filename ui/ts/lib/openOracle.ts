@@ -156,7 +156,7 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 }
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
 	if (!walletConnected) return 'Connect a wallet before creating a standalone Open Oracle game.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before creating a standalone Open Oracle game.'
+	if (!isMainnet) return undefined
 	const ethValue = tryParseDecimalInput(ethValueInput)
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
 	const settlerReward = tryParseDecimalInput(settlerRewardInput)

@@ -769,7 +769,6 @@ export function App() {
 							simulationBootstrapError={environmentBootstrapError}
 							showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 							showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-							wrongNetworkMessage={wrongNetworkMessage}
 							zoltarUniverse={zoltarUniverse}
 						/>
 						<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />

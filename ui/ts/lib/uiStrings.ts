@@ -195,7 +195,6 @@ export const UI_STRINGS = {
 		deployingBadgeLabel: 'Deploying...',
 		deployingDetail: 'Deployment in progress.',
 		deployingPendingLabel: 'Deploying...',
-		ethereumMainnetRequiredDetail: 'Switch to Ethereum mainnet.',
 		notDeployedBadgeLabel: 'Not Deployed',
 		waitingBadgeLabel: 'Waiting',
 		waitingForPrerequisiteDetail: (prerequisiteLabel: string) => `Waiting for ${prerequisiteLabel}.`,
@@ -367,7 +366,6 @@ export const UI_STRINGS = {
 		childUniverseAlreadyDeployedReason: 'Child universe already deployed.',
 		childUniverseNotAlreadyDeployedLabel: 'Child universe not already deployed',
 		childUniversesUnavailableReason: 'Child universes are unavailable because this universe has not forked.',
-		ethereumMainnetSelectedLabel: 'Ethereum mainnet selected',
 		universeIsForkedLabel: 'Universe is forked',
 	},
 	marketCreateQuestionSection: {
@@ -395,7 +393,6 @@ export const UI_STRINGS = {
 		endTimeFieldLabel: COMMON_END_TIME_LABEL,
 		immediatelyAfterCreationLabel: 'Immediately after creation',
 		lowTrustUntilContextAddedLabel: 'Low trust until context is added',
-		mainnetRequiredReason: 'Switch to Ethereum mainnet before creating a question.',
 		outcomeFieldLabelPrefix: 'Outcome',
 		outcomesFieldLabel: COMMON_OUTCOMES_LABEL,
 		addOutcomeLabel: 'Add Outcome',
@@ -504,6 +501,11 @@ export const UI_STRINGS = {
 		disputeDelayLabel: COMMON_DISPUTE_DELAY_LABEL,
 		disputeOccurredLabel: 'Dispute Occurred',
 		disputeReportActionLabel: COMMON_DISPUTE_AND_SWAP_LABEL,
+		disconnectedWalletApprovalReason: (tokenSymbol: string) => `Connect a wallet before approving ${tokenSymbol}.`,
+		disconnectedWalletDisputeReason: 'Connect a wallet before disputing the report.',
+		disconnectedWalletSettleReason: 'Connect a wallet before settling the report.',
+		disconnectedWalletSubmitInitialReportReason: 'Connect a wallet before submitting the initial report.',
+		disconnectedWalletWrapEthReason: 'Connect a wallet before wrapping ETH.',
 		disputeReportTitle: 'Dispute Report',
 		economicsTitle: 'Economics',
 		enterValidDisputeAmountsBeforeApprovingReason: (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`,
@@ -633,8 +635,12 @@ export const UI_STRINGS = {
 		},
 	},
 	zoltarMigrationSection: {
+		prepareRepIdleLabel: 'Prepare REP',
+		preparingRepPendingLabel: 'Preparing REP...',
 		repMigrationUnavailableReason: 'REP migration is unavailable because this universe has not forked.',
 		repPreparationUnavailableReason: 'REP preparation is unavailable because this universe has not forked.',
+		splitRepIdleLabel: 'Split REP',
+		splittingRepPendingLabel: 'Splitting REP...',
 	},
 	overviewPanels: {
 		addressLabel: 'Address',
@@ -705,7 +711,6 @@ export const UI_STRINGS = {
 		selectedTickInvalidReason: 'Selected tick is invalid',
 		universeIsForkedLabel: 'Universe is forked',
 		walletConnectedLabel: 'Wallet connected',
-		ethereumMainnetSelectedLabel: 'Ethereum mainnet selected',
 	},
 	shareMigrationTargetsSection: {
 		addTargetLabel: 'Add Target',
@@ -924,11 +929,7 @@ export const UI_STRINGS = {
 			}
 
 			if (blocker === 'switch-mainnet') {
-				if (action === 'claim-fees') return 'Switch to Ethereum mainnet before claiming fees.'
-				if (action === 'deposit-rep') return 'Switch to Ethereum mainnet before depositing REP.'
-				if (action === 'rep-exit-redeem') return 'Switch to Ethereum mainnet before redeeming REP.'
-				if (action === 'rep-exit-withdraw') return 'Switch to Ethereum mainnet before withdrawing REP.'
-				return 'Switch to Ethereum mainnet before setting the security bond allowance.'
+				return undefined
 			}
 
 			if (blocker === 'select-own-vault') {

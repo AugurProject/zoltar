@@ -97,7 +97,7 @@ export function getVaultRequestPriceGuardMessage({
 	walletEthBalance: bigint | undefined
 }) {
 	if (accountAddress === undefined) return 'Connect a wallet before requesting a new price.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before requesting a new price.'
+	if (!isMainnet) return undefined
 	if (!hasLoadedSelectedPool) return 'Load a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
@@ -124,7 +124,7 @@ export function getVaultExecutePendingOperationGuardMessage({
 	resolvedPendingOperationId: bigint | undefined
 }) {
 	if (accountAddress === undefined) return 'Connect a wallet before executing a staged operation.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before executing a staged operation.'
+	if (!isMainnet) return undefined
 	if (!hasLoadedOracleManager) return 'Load the price oracle before executing a staged operation.'
 	if (isPriceValid === false) return 'Wait for a valid oracle price before executing a staged operation.'
 	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation id.'

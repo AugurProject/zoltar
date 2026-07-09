@@ -24,7 +24,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 describe('zoltar migration guards', () => {
 	test('blocks migration when wallet or network prerequisites are missing', () => {
 		expect(getMigrationGuardMessage(undefined, true, createUniverse(), false, true, false, 'Fork first.')).toBe('Connect wallet to continue.')
-		expect(getMigrationGuardMessage(zeroAddress, false, createUniverse(), false, true, false, 'Fork first.')).toBe('Switch to Ethereum mainnet.')
+		expect(getMigrationGuardMessage(zeroAddress, false, createUniverse(), false, true, false, 'Fork first.')).toBeUndefined()
 	})
 
 	test('waits for root universe and fork state before migration actions can proceed', () => {

@@ -422,7 +422,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create Question', 'Switch to Ethereum mainnet before creating a question.')
+		expectTransactionButtonDisabled(document.body, 'Create Question')
 	})
 
 	test('calls create market handler when validation passes', async () => {

@@ -56,7 +56,7 @@ export function getDeploymentStepAvailability({
 	if (step.deployed) return { disabled: true, reason: 'Already deployed.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
 	if (accountAddress === undefined) return { disabled: true, reason: 'Connect wallet to deploy this contract.' }
-	if (!isMainnet) return { disabled: true, reason: 'Switch to Ethereum mainnet to deploy this contract.' }
+	if (!isMainnet) return { disabled: true, reason: undefined }
 	if (prerequisiteLabel !== undefined) return { disabled: true, reason: `Waiting for ${prerequisiteLabel}.` }
 	return { disabled: false, reason: undefined }
 }
@@ -77,7 +77,7 @@ export function getDeployNextMissingAvailability({
 	if (deployNextMissingPending) return { disabled: true, reason: 'Deployment in progress.' }
 	if (busyStepId !== undefined) return { disabled: true, reason: 'Another deployment is already in progress.' }
 	if (accountAddress === undefined) return { disabled: true, reason: 'Connect wallet to continue.' }
-	if (!isMainnet) return { disabled: true, reason: 'Switch to Ethereum mainnet to continue.' }
+	if (!isMainnet) return { disabled: true, reason: undefined }
 	if (nextMissingStep === undefined) return { disabled: true, reason: 'All deterministic contracts are already deployed.' }
 	return { disabled: false, reason: undefined }
 }

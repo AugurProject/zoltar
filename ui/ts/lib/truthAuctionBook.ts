@@ -552,7 +552,7 @@ export function getTruthAuctionBidGuardMessage({
 	walletEthBalance: bigint | undefined
 }) {
 	if (accountAddress === undefined) return 'Connect a wallet before submitting a truth auction bid.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before submitting a truth auction bid.'
+	if (!isMainnet) return undefined
 	if (truthAuction === undefined) return 'Load the truth auction before bidding.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'
 	const auctionHasEndedByTimestamp = currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt

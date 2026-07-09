@@ -207,6 +207,7 @@ export function ZoltarMigrationSection({
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
+						disabled={!isMainnet}
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}
@@ -232,8 +233,23 @@ export function ZoltarMigrationSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton safetyId='zoltar-migration.prepareRep' idleLabel='Prepare REP' pendingLabel='Preparing REP...' onClick={onPrepareRepForMigration} pending={zoltarMigrationActiveAction === 'prepare'} tone='secondary' availability={{ disabled: !canPrepare, reason: prepareHintMessage }} />
-						<TransactionActionButton safetyId='zoltar-migration.splitRep' idleLabel='Split REP' pendingLabel='Splitting REP...' onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: splitHintMessage }} />
+						<TransactionActionButton
+							safetyId='zoltar-migration.prepareRep'
+							idleLabel={UI_STRINGS.zoltarMigrationSection.prepareRepIdleLabel}
+							pendingLabel={UI_STRINGS.zoltarMigrationSection.preparingRepPendingLabel}
+							onClick={onPrepareRepForMigration}
+							pending={zoltarMigrationActiveAction === 'prepare'}
+							tone='secondary'
+							availability={{ disabled: !canPrepare, reason: isMainnet ? prepareHintMessage : undefined }}
+						/>
+						<TransactionActionButton
+							safetyId='zoltar-migration.splitRep'
+							idleLabel={UI_STRINGS.zoltarMigrationSection.splitRepIdleLabel}
+							pendingLabel={UI_STRINGS.zoltarMigrationSection.splittingRepPendingLabel}
+							onClick={onMigrateInternalRep}
+							pending={zoltarMigrationActiveAction === 'split'}
+							availability={{ disabled: !canSplit, reason: isMainnet ? splitHintMessage : undefined }}
+						/>
 					</div>
 				</div>
 			</SectionBlock>
