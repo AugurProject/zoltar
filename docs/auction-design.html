@@ -8,185 +8,208 @@
 	</head>
 	<body class="doc-openoracle">
 		<main>
-				<header>
-					<h1>Truth Auction</h1>
-					<p>
-						A truth auction is held only after a fork. That fork can happen
-						because the market's own escalation game reaches non-decision, or
-						because some other market forks Zoltar first and this pool is later
-						migrated as part of the same child-universe split. After either
-						path, Placeholder migrates it into child pools for the valid fork
-						branches that users want to keep using. Each migrated child pool can
-						then run its own separate truth auction inside that child universe
-						if that branch still needs collateral repair.
-					</p>
-					<p>
-						Fork migration preserves disagreement by splitting one parent market
-						into multiple child branches, but ETH does not get copied into every
-						child pool in full. Each branch inherits only the ETH implied by the
-						parent collateral and migrated REP state that actually move into
-						that branch, with parent-universe REP backing converted into the REP
-						of the child universe. A child pool can therefore inherit the
-						correct migrated share balances, vault state, and REP-backed
-						obligations, yet still hold too little ETH to reopen cleanly on day
-						one. When that happens, the protocol attempts to sell some
-						child-universe REP for ETH so the missing collateral can be
-						restored and open-interest holders can be made whole. The truth
-						auction repairs that collateral gap; it does not decide which
-						branch is true.
-					</p>
-					<p>
-						Placeholder implements the truth auction with the
-						<code>UniformPriceDualCapBatchAuction</code> contract. After
-						migration, that auction opens, clears bids, and feeds winning
-						results back into vault state instead of paying out direct token
-						transfers. A winning claim becomes child-pool ownership plus the
-						matching share of auctioned security-bond allowance, so bidders are
-						buying into the repaired child vault state rather than receiving a
-						bare REP transfer.
-					</p>
-				</header>
+			<header>
+				<h1>Truth Auction</h1>
+				<p>
+					When Zoltar forks, Placeholder evaluates each resulting child universe
+					after migration. If a child pool lacks the ETH needed to fully collateralize
+					its open interest, Placeholder initiates a truth auction for that pool. The
+					fork may have been triggered either by a direct Zoltar fork or by the
+					Placeholder Escalation Game.
+				</p>
 
-			<section id="why">
-				<h2>Why This Auction Exists</h2>
 				<p>
-					After a universe fork, a child pool can inherit less ETH collateral
-					than it needs to continue normal operation even when its migrated
-					shares, vault state, and child-universe REP backing are correct. The
-					shortfall comes from proportional migration. ETH moves into each child
-					branch in the same ratio as migrated REP, not as a full copy of the
-					parent pool's collateral. A child can therefore inherit the migrated
-					shares, pool ownership, and security-bond allowance it needs to
-					account for, yet still have too little ETH to reopen because only the
-					proportional slice of parent collateral followed that branch.
+					During the migration period, security vault holders choose which child
+					universe to support by migrating their positions into the corresponding
+					child security vault. This preserves disagreement by splitting the parent
+					market into separate branches. However, ETH is not duplicated across those
+					branches. Each child pool receives only the collateral, migrated REP state,
+					and converted child-universe REP backing that actually move into it.
 				</p>
+
 				<p>
-					To close that gap, REP is offered for sale inside the child universe.
-					Each child computes its own ETH shortfall from the parent collateral
-					that migrated with its REP. If a child remains short after migration,
-					that child runs its own separate auction inside its own universe.
+					Because collateral follows migration rather than being copied in full, a
+					child pool may inherit the correct share balances, vault state, and
+					REP-backed obligations while still lacking enough ETH to reopen cleanly.
+					When that happens, the protocol sells child-universe REP for ETH through a
+					truth auction, using the proceeds to restore the collateral shortfall and
+					make open-interest holders whole. The auction repairs the pool’s funding
+					gap; it does not determine which branch is true.
 				</p>
+
 				<p>
-					The design is dual-capped because the auction has two limits at once:
-					it is trying to raise a fixed amount of ETH, and it is not allowed to
-					sell more than a fixed amount of child-universe REP. Strong demand
-					can hit the ETH target first, or it can bind the REP sale cap first.
-					In that REP-capped case, the next accepted price would sell at or
-					beyond the REP limit, so final purchased REP can land at or just below
-					the cap because ticks and Solidity division are discrete. Weak demand
-					can leave the sale underfunded, in which case some REP remains unsold
-					instead of being forced out at a worse price. The interactive example
-					below is where those funded and underfunded outcomes become concrete.
+					Placeholder runs this process through the
+					<code>UniformPriceDualCapBatchAuction</code> contract. Once the auction
+					clears, winning bids are written back into vault state rather than paid out
+					as simple token transfers. A winning claim gives the bidder ownership in
+					the repaired child pool, along with the matching share of security-bond allowance.
+					In effect, bidders buy into the repaired vault
+					instead of merely receiving REP.
 				</p>
-			</section>
+
+			</header>
 
 			<section id="lifecycle">
-				<h2>Operational Lifecycle</h2>
-				<p>
-					The truth auction starts only after the migration window has ended. That window lasts
-					<code>SecurityPoolUtils.MIGRATION_TIME (8 weeks)</code>,
-					measured from the parent universe fork time. If the migrated branch is
-					still short of ETH after that window, the auction opens. If the child
-					pool has no remaining ETH collateral gap after migration, the repair
-					path can finalize without starting an auction.
+			<h2>Operational Lifecycle</h2>
+
+			<p>
+				For any child pool with a collateral shortfall, the truth auction can
+				only begin after fork migration has closed. The migration window lasts
+				<code>SecurityPoolUtils.MIGRATION_TIME</code> — 8 weeks from the parent
+				universe fork time. Until that window ends, vault holders can still choose
+				which child universe to support, so the protocol cannot know the final
+				collateral shortfall.
+			</p>
+
+			<p>
+				After migration closes, anyone may call <code>startTruthAuction</code>.
+				The forker then starts the underlying auction for the affected child pool,
+				using the pool’s ETH repair target and REP sale cap. Bidders submit ETH
+				directly to the auction during the one-week bidding window.
+			</p>
+
+			<p>
+				When bidding ends, anyone may call <code>finalizeTruthAuction</code>.
+				Finalization clears the batch auction, sends the raised ETH into the
+				repair path, and computes the accounting rates used to settle bidders.
+			</p>
+
+			<p>
+				After finalization, winning bids are written into child-pool vault accounting.
+				Winners receive ownership in the repaired child pool plus their proportional share of the
+				auctioned security-bond allowance, rather than a direct REP token transfer.
+			</p>
+
+			<figure class="diagram" id="fig-auction-lifecycle">
+				<svg viewBox="0 0 880 180" role="img" aria-label="Migration closes, child pool shortfall is detected, auction starts, ETH bids are submitted, auction finalizes, and results settle into vault accounting.">
+					<defs>
+						<marker id="auction-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+							<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+						</marker>
+					</defs>
+
+					<rect class="svg-red" x="20" y="50" width="150" height="70" rx="8"></rect>
+					<text class="svg-label" x="95" y="80" text-anchor="middle">Shortfall</text>
+					<text class="svg-small" x="95" y="103" text-anchor="middle">child pool lacks ETH</text>
+
+					<path class="svg-line" marker-end="url(#auction-arrow)" d="M 170 85 H 230"></path>
+
+					<rect class="svg-blue" x="230" y="50" width="150" height="70" rx="8"></rect>
+					<text class="svg-label" x="305" y="80" text-anchor="middle">Start Auction</text>
+					<text class="svg-small" x="305" y="103" text-anchor="middle">repair target set</text>
+
+					<path class="svg-line" marker-end="url(#auction-arrow)" d="M 380 85 H 440"></path>
+
+					<rect class="svg-gold" x="440" y="50" width="150" height="70" rx="8"></rect>
+					<text class="svg-label" x="515" y="80" text-anchor="middle">Bid</text>
+					<text class="svg-small" x="515" y="103" text-anchor="middle">ETH supplied</text>
+
+					<path class="svg-line" marker-end="url(#auction-arrow)" d="M 590 85 H 650"></path>
+
+					<rect class="svg-green" x="650" y="50" width="190" height="70" rx="8"></rect>
+					<text class="svg-label" x="745" y="80" text-anchor="middle">Settle</text>
+					<text class="svg-small" x="745" y="103" text-anchor="middle">vault accounting repaired</text>
+				</svg>
+
+				<p class="diagram-caption">
+					<span class="figure-label">Auction Lifecycle</span>
+					After migration closes, a child-pool shortfall can be repaired through auction. ETH bids restore collateral, while winning
+					claims are settled into vault accounting. REP doesn't leave the system.
 				</p>
-				<p>
-					Once the repair path is open, bidders supply ETH directly to the
-					auction. Settlement then credits purchased REP into child-pool vault
-					accounting instead of transferring tokens directly to the bidder, so
-					the repair result feeds back into the pool rather than bypassing it.
-					The same settlement also assigns a proportional slice of the
-					auctioned security-bond allowance, which is the debt-bearing side of
-					the migrated vault accounting that did not follow REP cleanly into the
-					child branch.
-				</p>
-				<figure class="diagram" id="fig-auction-lifecycle">
-					<svg viewBox="0 0 880 180" role="img" aria-label="Child pool shortfall leads to forker-started auction, ETH bids, finalization, and paged settlement into vault accounting.">
-						<defs>
-							<marker id="auction-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<rect class="svg-red" x="20" y="50" width="150" height="70" rx="8"></rect>
-						<text class="svg-label" x="95" y="80" text-anchor="middle">Shortfall</text>
-						<text class="svg-small" x="95" y="103" text-anchor="middle">child pool needs ETH</text>
-						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 170 85 H 230"></path>
-						<rect class="svg-blue" x="230" y="50" width="150" height="70" rx="8"></rect>
-						<text class="svg-label" x="305" y="80" text-anchor="middle">Start</text>
-						<text class="svg-small" x="305" y="103" text-anchor="middle">public wrapper call</text>
-						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 380 85 H 440"></path>
-						<rect class="svg-gold" x="440" y="50" width="150" height="70" rx="8"></rect>
-						<text class="svg-label" x="515" y="80" text-anchor="middle">Bid</text>
-						<text class="svg-small" x="515" y="103" text-anchor="middle">ETH at price ticks</text>
-						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 590 85 H 650"></path>
-						<rect class="svg-green" x="650" y="50" width="190" height="70" rx="8"></rect>
-						<text class="svg-label" x="745" y="80" text-anchor="middle">Settle</text>
-						<text class="svg-small" x="745" y="103" text-anchor="middle">ownership plus allowance</text>
-					</svg>
-					<p class="diagram-caption">
-						<span class="figure-label">Auction Lifecycle</span>Anyone can call
-						the wrapper that triggers the forker-owned auction start or finalize
-						step, and anyone can later ask the forker to settle paged bid
-						results into vault accounting.
-					</p>
-				</figure>
-				<table>
-					<thead>
-						<tr>
-							<th>Action</th>
-							<th>External forker call</th>
-							<th>Auction call it invokes</th>
-							<th>Who can call it</th>
-							<th>Why that boundary exists</th>
-						</tr>
-					</thead>
-					<tbody>
-							<tr>
-								<td>Start auction</td>
-								<td><code>startTruthAuction</code></td>
-								<td><code>startAuction</code></td>
-								<td>Anyone can call <code>startTruthAuction</code>; the forker then invokes owner-only <code>startAuction</code>.</td>
-								<td>The forker knows the child-pool repair target and REP sale cap.</td>
-							</tr>
-						<tr>
-							<td>Submit bid</td>
-							<td>Bidder calls the auction directly</td>
-							<td><code>submitBid</code></td>
-							<td>
-								Any bidder during the one-week auction window, with
-								<code>msg.value &gt;= minBidSize</code>.
-							</td>
-							<td>
-								Open bidding lets demand discover the repair price. The minimum
-								bid is
-								<code>minBidSize = max(ethRaiseCap / 100000, 1 wei)</code>, so
-								tiny spam bids are rejected.
-							</td>
-						</tr>
-							<tr>
-								<td>Finalize auction</td>
-								<td><code>finalizeTruthAuction</code></td>
-								<td><code>finalize</code></td>
-								<td>Bids close at <code>auctionStarted + AUCTION_TIME</code>. The direct auction <code>finalize</code> path allows <code>&gt;=</code> that boundary, but the public <code>finalizeTruthAuction</code> wrapper requires <code>block.timestamp &gt; truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME</code>; the forker then invokes owner-only <code>finalize</code>.</td>
-								<td>The forker receives raised ETH and computes pool accounting rates.</td>
-							</tr>
-						<tr>
-							<td>Refund losing bids before finalization</td>
-							<td><code>settleAuctionBids</code></td>
-							<td><code>refundLosingBidsFor</code></td>
-							<td>Anyone can ask the forker to refund pages for a bidder.</td>
-							<td>Currently losing bids can exit before the final settlement state is fixed.</td>
-						</tr>
-						<tr>
-							<td>Settle bids after finalization</td>
-							<td><code>claimAuctionProceeds</code> or <code>settleAuctionBids</code></td>
-							<td><code>withdrawBids</code></td>
-							<td>Forker calls the auction; anyone can ask the forker to settle pages.</td>
-							<td>Purchased REP becomes child-pool ownership and proportional auctioned security-bond allowance, not a direct auction transfer.</td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
+			</figure>
+
+			<table>
+				<thead>
+					<tr>
+						<th>Phase</th>
+						<th>External call</th>
+						<th>Auction call</th>
+						<th>Who can call it</th>
+						<th>Effect</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Start auction</td>
+						<td><code>startTruthAuction</code></td>
+						<td><code>startAuction</code></td>
+						<td>
+							Anyone may call the wrapper; the forker calls the owner-only
+							auction function.
+						</td>
+						<td>
+							Opens the auction using the child pool’s repair target and REP
+							sale cap.
+						</td>
+					</tr>
+
+					<tr>
+						<td>Submit bid</td>
+						<td>Bidder calls the auction directly</td>
+						<td><code>submitBid</code></td>
+						<td>
+							Any bidder during the one-week auction window, with
+							<code>msg.value &gt;= minBidSize</code>.
+						</td>
+						<td>
+							Supplies ETH demand for the repair. The minimum bid is
+							<code>max(ethRaiseCap / 100000, 1 wei)</code>.
+						</td>
+					</tr>
+
+					<tr>
+						<td>Finalize auction</td>
+						<td><code>finalizeTruthAuction</code></td>
+						<td><code>finalize</code></td>
+						<td>
+							Anyone may call the wrapper after the auction window has passed;
+							the forker calls the owner-only auction function.
+						</td>
+						<td>
+							Clears the auction, routes raised ETH into the repair path, and
+							computes bidder settlement rates.
+						</td>
+					</tr>
+
+					<tr>
+						<td>Refund losing bids</td>
+						<td><code>settleAuctionBids</code></td>
+						<td><code>refundLosingBidsFor</code></td>
+						<td>
+							Anyone may ask the forker to refund bid pages for a bidder.
+						</td>
+						<td>
+							Allows currently losing bids to exit before the auction is
+							finalized.
+						</td>
+					</tr>
+
+					<tr>
+						<td>Settle winning bids</td>
+						<td>
+							<code>claimAuctionProceeds</code> or
+							<code>settleAuctionBids</code>
+						</td>
+						<td><code>withdrawBids</code></td>
+						<td>
+							Anyone may ask the forker to settle bid pages.
+						</td>
+						<td>
+							Writes winning claims into child-pool vault accounting as pool
+							ownership plus proportional security-bond allowance.
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<p>
+				The direct auction <code>finalize</code> path allows finalization at
+				<code>auctionStarted + AUCTION_TIME</code>. The public
+				<code>finalizeTruthAuction</code> wrapper is slightly stricter and
+				requires the timestamp to be greater than
+				<code>truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME</code>.
+			</p>
+		</section>
 
 			<section id="clearing">
 				<h2>How Clearing Works</h2>
