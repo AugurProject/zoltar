@@ -57,6 +57,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readNumberField(record: Record<string, unknown>, fieldName: string): number {
 	const value = Reflect.get(record, fieldName)
-	assert.equal(typeof value, 'number', `Escalation game bytecode snapshot field ${fieldName} must be a number`)
+	if (typeof value !== 'number') {
+		throw new Error(`Escalation game bytecode snapshot field ${fieldName} must be a number`)
+	}
 	return value
 }
