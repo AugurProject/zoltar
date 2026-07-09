@@ -3,73 +3,102 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Uniform Price Dual Cap Batch Auction</title>
+		<title>Truth Auction</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
-			<header>
-				<h1>Uniform Price Dual Cap Batch Auction</h1>
-				<p>
-					Auction repair happens after fork migration. If a disputed market
-					cannot resolve in the parent universe, callers can create
-					<em>child pools</em> for selected valid fork branches.
-				</p>
-				<p>
-					Each child pool uses REP from its child universe. A truth auction
-					sells that REP for ETH so the child pool can repair collateral. The
-					auction repairs solvency. It does not decide which branch is true.
-				</p>
-				<p>
-					At that point, the parent pool has stopped in migration, callers can
-					ask the forker to create child pools for selected valid outcomes, and
-					the auction is the optional ETH-repair phase for a child pool that
-					still needs collateral.
-				</p>
-				<p>
-					<code>SecurityPoolForker</code> uses this auction when a forked child
-					pool needs ETH collateral repair.
-				</p>
-				<p>
-					The implementation path centers on
-					<code>UniformPriceDualCapBatchAuction</code> and the forker settlement
-					wrapper. The broader fork-recovery story lives in the
-					<a href="./whitepaper_placeholder.html#auction">truth auction section</a>
-					in the Placeholder whitepaper.
-				</p>
-			</header>
+				<header>
+					<h1>Truth Auction</h1>
+					<p>
+						A truth auction is held only after a fork. That fork can happen
+						because the market's own escalation game reaches non-decision, or
+						because some other market forks Zoltar first and this pool is later
+						migrated as part of the same child-universe split. After either
+						path, Placeholder migrates it into child pools for the valid fork
+						branches that users want to keep using. Each migrated child pool can
+						then run its own separate truth auction inside that child universe
+						if that branch still needs collateral repair.
+					</p>
+					<p>
+						Fork migration preserves disagreement by splitting one parent market
+						into multiple child branches, but ETH does not get copied into every
+						child pool in full. Each branch inherits only the ETH implied by the
+						parent collateral and migrated REP state that actually move into
+						that branch, with parent-universe REP backing converted into the REP
+						of the child universe. A child pool can therefore inherit the
+						correct migrated share balances, vault state, and REP-backed
+						obligations, yet still hold too little ETH to reopen cleanly on day
+						one. When that happens, the protocol attempts to sell some
+						child-universe REP for ETH so the missing collateral can be
+						restored and open-interest holders can be made whole. The truth
+						auction repairs that collateral gap; it does not decide which
+						branch is true.
+					</p>
+					<p>
+						Placeholder implements the truth auction with the
+						<code>UniformPriceDualCapBatchAuction</code> contract. After
+						migration, that auction opens, clears bids, and feeds winning
+						results back into vault state instead of paying out direct token
+						transfers. A winning claim becomes child-pool ownership plus the
+						matching share of auctioned security-bond allowance, so bidders are
+						buying into the repaired child vault state rather than receiving a
+						bare REP transfer.
+					</p>
+				</header>
 
 			<section id="why">
 				<h2>Why This Auction Exists</h2>
 				<p>
 					After a universe fork, a child pool can inherit less ETH collateral
-					than it needs to continue normal operation. The forker can sell some
-					child-universe REP for ETH to repair that collateral gap. This keeps
-					trader share collateral separate from the question of which branch is
-					true.
+					than it needs to continue normal operation even when its migrated
+					shares, vault state, and child-universe REP backing are correct. The
+					shortfall comes from proportional migration. ETH moves into each child
+					branch in the same ratio as migrated REP, not as a full copy of the
+					parent pool's collateral. A child can therefore inherit the migrated
+					shares, pool ownership, and security-bond allowance it needs to
+					account for, yet still have too little ETH to reopen because only the
+					proportional slice of parent collateral followed that branch.
 				</p>
 				<p>
-					The design is dual-capped: it tries to raise enough ETH without
-					selling more REP than the child pool is allowed to sell. If demand is
-					weak, the auction sells only what qualifying bids demand and leaves
-					unsold REP in the pool instead of forcing a low-price full sale.
+					To close that gap, REP is offered for sale inside the child universe.
+					Each child computes its own ETH shortfall from the parent collateral
+					that migrated with its REP. If a child remains short after migration,
+					that child runs its own separate auction inside its own universe.
+				</p>
+				<p>
+					The design is dual-capped because the auction has two limits at once:
+					it is trying to raise a fixed amount of ETH, and it is not allowed to
+					sell more than a fixed amount of child-universe REP. Strong demand
+					can hit the ETH target first, or it can bind the REP sale cap first.
+					In that REP-capped case, the next accepted price would sell at or
+					beyond the REP limit, so final purchased REP can land at or just below
+					the cap because ticks and Solidity division are discrete. Weak demand
+					can leave the sale underfunded, in which case some REP remains unsold
+					instead of being forced out at a worse price. The interactive example
+					below is where those funded and underfunded outcomes become concrete.
 				</p>
 			</section>
 
 			<section id="lifecycle">
 				<h2>Operational Lifecycle</h2>
 				<p>
-					The auction is owned by the coordinating
-					<code>SecurityPoolForker</code>, not by the bidder. That ownership is
-					intentional because purchased REP is credited into child-pool vault
-					accounting instead of being transferred directly from the auction to
-					the bidder.
+					The truth auction starts only after the migration window has ended. That window lasts
+					<code>SecurityPoolUtils.MIGRATION_TIME (8 weeks)</code>,
+					measured from the parent universe fork time. If the migrated branch is
+					still short of ETH after that window, the auction opens. If the child
+					pool has no remaining ETH collateral gap after migration, the repair
+					path can finalize without starting an auction.
 				</p>
 				<p>
-					A truth auction can start only for a child pool in
-					<code>ForkMigration</code> after the parent migration window has ended.
-					If enough REP migrated to the child pool already, the forker can
-					finalize the repair path without starting an auction.
+					Once the repair path is open, bidders supply ETH directly to the
+					auction. Settlement then credits purchased REP into child-pool vault
+					accounting instead of transferring tokens directly to the bidder, so
+					the repair result feeds back into the pool rather than bypassing it.
+					The same settlement also assigns a proportional slice of the
+					auctioned security-bond allowance, which is the debt-bearing side of
+					the migrated vault accounting that did not follow REP cleanly into the
+					child branch.
 				</p>
 				<figure class="diagram" id="fig-auction-lifecycle">
 					<svg viewBox="0 0 880 180" role="img" aria-label="Child pool shortfall leads to forker-started auction, ETH bids, finalization, and paged settlement into vault accounting.">
@@ -84,7 +113,7 @@
 						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 170 85 H 230"></path>
 						<rect class="svg-blue" x="230" y="50" width="150" height="70" rx="8"></rect>
 						<text class="svg-label" x="305" y="80" text-anchor="middle">Start</text>
-						<text class="svg-small" x="305" y="103" text-anchor="middle">forker only</text>
+						<text class="svg-small" x="305" y="103" text-anchor="middle">public wrapper call</text>
 						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 380 85 H 440"></path>
 						<rect class="svg-gold" x="440" y="50" width="150" height="70" rx="8"></rect>
 						<text class="svg-label" x="515" y="80" text-anchor="middle">Bid</text>
@@ -92,12 +121,13 @@
 						<path class="svg-line" marker-end="url(#auction-arrow)" d="M 590 85 H 650"></path>
 						<rect class="svg-green" x="650" y="50" width="190" height="70" rx="8"></rect>
 						<text class="svg-label" x="745" y="80" text-anchor="middle">Settle</text>
-						<text class="svg-small" x="745" y="103" text-anchor="middle">REP becomes vault ownership</text>
+						<text class="svg-small" x="745" y="103" text-anchor="middle">ownership plus allowance</text>
 					</svg>
 					<p class="diagram-caption">
-						<span class="figure-label">Auction Lifecycle</span>The owner starts
-						and finalizes the auction; anyone can later ask the forker to settle
-						paged bid results into vault accounting.
+						<span class="figure-label">Auction Lifecycle</span>Anyone can call
+						the wrapper that triggers the forker-owned auction start or finalize
+						step, and anyone can later ask the forker to settle paged bid
+						results into vault accounting.
 					</p>
 				</figure>
 				<table>
@@ -111,13 +141,13 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							<td>Start auction</td>
-							<td><code>startTruthAuction</code></td>
-							<td><code>startAuction</code></td>
-							<td>Auction owner, normally <code>SecurityPoolForker</code>.</td>
-							<td>The forker knows the child-pool repair target and REP sale cap.</td>
-						</tr>
+							<tr>
+								<td>Start auction</td>
+								<td><code>startTruthAuction</code></td>
+								<td><code>startAuction</code></td>
+								<td>Anyone can call <code>startTruthAuction</code>; the forker then invokes owner-only <code>startAuction</code>.</td>
+								<td>The forker knows the child-pool repair target and REP sale cap.</td>
+							</tr>
 						<tr>
 							<td>Submit bid</td>
 							<td>Bidder calls the auction directly</td>
@@ -133,26 +163,103 @@
 								tiny spam bids are rejected.
 							</td>
 						</tr>
-						<tr>
-							<td>Finalize auction</td>
-							<td><code>finalizeTruthAuction</code></td>
-							<td><code>finalize</code></td>
-							<td>Auction owner after the window closes.</td>
-							<td>The forker receives raised ETH and computes pool accounting rates.</td>
-						</tr>
+							<tr>
+								<td>Finalize auction</td>
+								<td><code>finalizeTruthAuction</code></td>
+								<td><code>finalize</code></td>
+								<td>Bids close at <code>auctionStarted + AUCTION_TIME</code>. The direct auction <code>finalize</code> path allows <code>&gt;=</code> that boundary, but the public <code>finalizeTruthAuction</code> wrapper requires <code>block.timestamp &gt; truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME</code>; the forker then invokes owner-only <code>finalize</code>.</td>
+								<td>The forker receives raised ETH and computes pool accounting rates.</td>
+							</tr>
 						<tr>
 							<td>Refund losing bids before finalization</td>
 							<td><code>settleAuctionBids</code></td>
 							<td><code>refundLosingBidsFor</code></td>
 							<td>Anyone can ask the forker to refund pages for a bidder.</td>
-							<td>Clearly losing bids can exit before the final settlement state is fixed.</td>
+							<td>Currently losing bids can exit before the final settlement state is fixed.</td>
 						</tr>
 						<tr>
 							<td>Settle bids after finalization</td>
 							<td><code>claimAuctionProceeds</code> or <code>settleAuctionBids</code></td>
 							<td><code>withdrawBids</code></td>
 							<td>Forker calls the auction; anyone can ask the forker to settle pages.</td>
-							<td>Purchased REP becomes child-pool ownership and allowance, not a direct auction transfer.</td>
+							<td>Purchased REP becomes child-pool ownership and proportional auctioned security-bond allowance, not a direct auction transfer.</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<section id="clearing">
+				<h2>How Clearing Works</h2>
+				<p>
+					Bidders submit ETH at discrete price ticks, where each tick encodes an
+					ETH-per-REP limit price. The auction then walks demand from the highest
+					price downward. A bid above the clearing tick wins in full, a bid below
+					it loses in full, and bids at the clearing tick share the last fill.
+					In the uniform-clearing branch that last fill is First in First Out
+					within the tick, so earlier same-tick bids are consumed before later
+					ones.
+				</p>
+				<p>
+					The tick math follows the contract's <code>tickToPrice</code>
+					function. Tick <code>0</code> means <code>1 ETH/REP</code>. Each step
+					up multiplies price by roughly <code>1.0001</code>, and each step down
+					divides by the same factor, so the price at tick
+					<code>tickIndex</code> is approximately
+					<code>1.0001<sup>tickIndex</sup> ETH/REP</code>. In other words, a higher tick
+					means the bidder is willing to pay more ETH per REP, which is why
+					higher ticks are evaluated first during clearing.
+				</p>
+				<p>
+					Two caps define the uniform-clearing stopping point. The first cap is
+					<code>ethRaiseCap</code>, the amount of ETH the child pool is trying to
+					restore. The second cap is <code>maxRepBeingSold</code>, the maximum
+					child-universe REP inventory the pool is willing to sell. As soon as
+					cumulative demand is enough to hit either cap at some price, that price
+					becomes the clearing tick and all winning bids settle from it at one
+					price. That is a valid uniform clearing even when the REP cap binds
+					before the ETH repair target is fully met. The contract finds that
+					result by descending aggregate subtree totals, not by looping over
+					every bid one by one.
+				</p>
+				<p>
+					When demand never reaches a full clearing price, the auction switches
+					into the underfunded branch. It computes one threshold price from total
+					accepted ETH and available REP, then only bids at or above that
+					threshold win. Those winning ticks buy only the REP they demanded at
+					their own limit prices, which is why weak demand leaves some REP unsold
+					instead of forcing a lower uniform full-sale price.
+				</p>
+				<p>
+					The interactive example below is where those branches become
+					concrete. The <code>Binding condition</code> output reports one of four
+					outcomes: <code>ETH cap</code>, <code>REP cap</code>,
+					<code>both caps</code>, or <code>underfunded</code>. The first three
+					are uniform-clearing outcomes, while <code>underfunded</code> is the
+					weak-demand path.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Bid position</th>
+							<th>Uniform-clearing branch</th>
+							<th>Underfunded branch</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Above the binding level</td>
+							<td>Wins in full at the uniform clearing price.</td>
+							<td>Wins only if its own tick price is at or above <code>underfundedThreshold</code>.</td>
+						</tr>
+						<tr>
+							<td>At the binding level</td>
+							<td>Shares the marginal fill FIFO inside that tick.</td>
+							<td>Shares that tick's REP demand pro rata by ETH.</td>
+						</tr>
+						<tr>
+							<td>Below the binding level</td>
+							<td>Loses and is refunded.</td>
+							<td>Loses and is refunded.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -161,45 +268,52 @@
 			<section id="gas-and-spam">
 				<h2>Gas and Spam Bounds</h2>
 				<p>
-					The auction intentionally does not cap total bids or active price
-					levels. A cap would let an attacker spend ETH to fill the available
-					bid slots or tick slots early, preventing later valid bidders from
-					participating.
+					The main spam risk is a bidder trying to fill bid slots or tick levels
+					cheaply enough to block later demand. The auction avoids that failure
+					mode by not capping total bids or active price levels at all.
 				</p>
 				<p>
 					Finalization remains bounded without those caps because it does not
 					iterate over raw bids. Same-tick bids append to per-tick arrays for
 					later paged withdrawal, while clearing uses aggregate ETH totals stored
-					in an AVL tree keyed by tick. The valid tick range is finite:
+					in an AVL tree keyed by tick. The tree exists so the contract can keep
+					all valid price levels open during bidding, yet still find the highest
+					winning region by descending aggregate subtree totals instead of
+					scanning every submitted bid. Finalization therefore pays for tree
+					descent across the finite tick domain rather than for the total number
+					of bids in the auction. The valid tick range is finite:
 					<code>[-524288, 524288]</code>, or <code>1,048,577</code> possible
 					price levels. An AVL tree containing every possible tick has maximum
 					height <code>28</code>, so <code>finalize()</code> descends bounded
-					tree paths and pruned subtrees.
+					tree paths and pruned subtrees instead of risking an out-of-gas loop
+					over every submitted bid.
 				</p>
 				<p>
 					The gas tests cover both funded and underfunded finalization over a
 					synthetic max-depth tree for the full tick domain. They assert each
 					path remains below <code>20,000,000</code> gas and print measured gas
-					values in the test output.
+					values in the test output, so the documented worst case is a max-depth
+					AVL-tree finalization path that still stays under that bound.
 				</p>
 			</section>
 
 			<section id="settlement">
-				<h2>Refund and Settlement Paths</h2>
+				<h2>Settlement Modes</h2>
 				<p>
-					Clearly losing bids can be refunded before finalization once current
+					Currently losing bids can be refunded before finalization once current
 					demand is enough to find a clearing tick. Only ticks below that found
 					clearing tick can be withdrawn through the pre-finalization refund
-					path; binding or potentially winning bids stay in the auction.
-				</p>
-				<p>
-					In the underfunded branch, finalization computes
-					<code>underfundedThreshold</code> from aggregate accepted bid ETH, and
-					only ticks whose <code>tickToPrice</code> value is at or above that
-					threshold win.
-					The contract's stored <code>ethRaised</code> value is the threshold
+					path; binding or potentially winning bids stay in the auction. In the
+					underfunded branch, finalization computes
+					<code>underfundedThreshold</code> from aggregate bid ETH still in the
+					tree at finalization time, and only ticks whose
+					<code>tickToPrice</code> value is at or above that threshold win. The
+					contract's stored <code>ethRaised</code> value is that threshold
 					input; <code>underfundedWinningEth</code> is the ETH actually retained
-					or sent after below-threshold bids are refunded.
+					or sent after below-threshold bids are refunded. This is not a
+					self-correcting fixed point: low-price bids can push the threshold up
+					only by locking ETH that may later be refunded, which the mechanism
+					treats as an accepted capital-lock tradeoff.
 				</p>
 				<div class="equation" id="eq-auction-underfunded-threshold">
 					<math
@@ -253,8 +367,8 @@
 						</tr>
 						<tr>
 							<td>Normal marginal clearing tick</td>
-							<td>May be partially filled and partially refunded; same-tick bids fill FIFO by submission order.</td>
-							<td>FIFO gives deterministic marginal allocation without iterating over all same-tick bids during finalization.</td>
+							<td>May be partially filled and partially refunded; same-tick bids fill in First in First Out submission order.</td>
+							<td>First in First Out gives deterministic marginal allocation without iterating over all same-tick bids during finalization.</td>
 						</tr>
 						<tr>
 							<td>Underfunded winning ticks</td>
@@ -263,6 +377,15 @@
 						</tr>
 					</tbody>
 				</table>
+				<p>
+					That settlement is why a winning bid buys more than a token transfer.
+					The forker withdraws finalized bid results, converts purchased REP into
+					pool ownership with <code>auctionPoolOwnershipPerRep</code>, and adds
+					the matching slice of <code>auctionedSecurityBondAllowance</code> to
+					the bidder's vault. In other words, the bidder is buying a share of the
+					repaired child-pool vault state, including the debt-bearing allowance
+					that still has to be backed.
+				</p>
 				<p>
 					Zero-effective-price ticks are rejected when bids are submitted, so
 					underfunded settlement cannot assign REP to bids whose rounded ETH/REP
@@ -279,66 +402,12 @@
 				</p>
 			</section>
 
-			<section id="worked-example">
-				<h2>Worked Clearing Example</h2>
+			<section id="interactive-example">
+				<h2>Interactive Clearing Example</h2>
 				<p>
-					Suppose the auction tries to raise <code>12 ETH</code> while selling
-					at most <code>4 REP</code>. Alice bids <code>3 ETH</code> near
-					<code>5 ETH/REP</code>, Bob bids <code>4 ETH</code> near
-					<code>4 ETH/REP</code>, and Carol bids <code>6 ETH</code> near
-					<code>3 ETH/REP</code>.
-				</p>
-				<div class="equation" id="eq-auction-rep-won">
-					<math
-						display="block"
-						aria-label="REP won equals filled ETH divided by clearing price"
-						data-source="repWon = filledEth / clearingPrice"
-					>
-						<mrow>
-							<mi>repWon</mi>
-							<mo>=</mo>
-							<mfrac>
-								<mi>filledEth</mi>
-								<mi>clearingPrice</mi>
-							</mfrac>
-						</mrow>
-					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Auction Fill</span>In the funded
-						path, every filled bid settles at the same clearing price; only the
-						amount of ETH filled can differ at the marginal tick.
-					</p>
-				</div>
-				<table>
-					<thead>
-						<tr>
-							<th>Bidder</th>
-							<th>Bid</th>
-							<th>Settlement at 3 ETH/REP</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Alice</td>
-							<td><code>3 ETH</code> near <code>5 ETH/REP</code></td>
-							<td>Fully filled; receives <code>1 REP</code>.</td>
-						</tr>
-						<tr>
-							<td>Bob</td>
-							<td><code>4 ETH</code> near <code>4 ETH/REP</code></td>
-							<td>Fully filled; receives <code>4/3 REP</code>.</td>
-						</tr>
-						<tr>
-							<td>Carol</td>
-							<td><code>6 ETH</code> near <code>3 ETH/REP</code></td>
-							<td>Partially filled; receives <code>5/3 REP</code> and a <code>1 ETH</code> refund.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p>
-					The auction raises <code>12 ETH</code> and sells <code>4 REP</code>.
-					Everyone who wins receives the same effective execution price, while
-					only the marginal bid is clipped.
+					The slider example shows the uniform-clearing path, the underfunded
+					path, and how the same bid ladder reacts when the ETH cap, REP cap,
+					and bid sizes change.
 				</p>
 				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>
@@ -426,8 +495,12 @@
 						<div>
 							<span>Mode</span
 							><output data-example-output="clearingMode"
-								>funded near 3 ETH/REP</output
+								>uniform clearing near 3 ETH/REP</output
 							>
+						</div>
+						<div>
+							<span>Binding condition</span
+							><output data-example-output="bindingCondition">both caps</output>
 						</div>
 						<div>
 							<span>ETH retained</span
@@ -589,7 +662,20 @@
 								refunds += bid.eth;
 							}
 						}
-						write("clearingMode", `funded near ${formatFixed(clearingPrice)} ETH/REP`);
+						const repSold = Object.values(repResults).reduce(
+							(sum, repAmount) => sum + repAmount,
+							0,
+						);
+						const hitEthCap = Math.abs(accumulatedEth - ethRaiseCap) < 1e-9;
+						const hitRepCap = Math.abs(repSold - repInventory) < 1e-9;
+						let bindingCondition = "REP cap";
+						if (hitEthCap && hitRepCap) {
+							bindingCondition = "both caps";
+						} else if (hitEthCap) {
+							bindingCondition = "ETH cap";
+						}
+						write("clearingMode", `uniform clearing near ${formatFixed(clearingPrice)} ETH/REP`);
+						write("bindingCondition", bindingCondition);
 						write("thresholdInputEth", "not underfunded");
 						write("underfundedThreshold", "not underfunded");
 					} else {
@@ -606,6 +692,7 @@
 						}
 						accumulatedEth = winningEth;
 						write("clearingMode", "underfunded tick demand");
+						write("bindingCondition", "underfunded");
 						write("thresholdInputEth", formatEth(totalActiveEth));
 						write("underfundedThreshold", `${formatFixed(threshold)} ETH/REP`);
 					}

@@ -89,12 +89,10 @@
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Zoltar is a forkable truth oracle layer centered on universes, question
-						encoding, and REP branching. It implements the branching model described in
-						<a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins.md</a>:
-						unresolved disagreement becomes explicit child universes, and REP holders
-						convert post-fork migration balances into child-universe REP across one or more
-						selected branches.
+						Zoltar is the base oracle layer in this repository. It does not run a
+						market. It registers questions, records forks, and lets REP holders
+						move value from a parent universe into one or more child universes
+						after a fork.
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
@@ -110,24 +108,33 @@
 							<b>Market collateral, trading, and underwriting mechanics.</b>
 						</div>
 					</div>
+						<p>
+							Zoltar preserves disagreement explicitly. Instead of picking one
+							winner onchain when a dispute becomes irresolvable inside one
+							branch, Zoltar creates the valid child branches and lets later
+							coordination determine which branch matters economically.
+						</p>
 					<p>
-						Zoltar supports both categorical and scalar questions, treats <code>Invalid</code>
-						as a legitimate answer state, and branches protocol state without embedding a
-						higher-level market design directly into the core layer.
-					</p>
-					<p>
-						<code>Invalid</code> is a valid answer branch for a well-formed question.
-						<code>Malformed</code> means an encoded answer option is rejected before it
-						can become a branch or final answer.
+						Zoltar supports both categorical and scalar questions, treats
+						<code>Invalid</code> as a legitimate answer state, and keeps market
+						collateral, trading, and underwriting logic out of the oracle layer.
+						In Zoltar terminology, <code>Invalid</code> is a valid answer branch
+						for a well-formed question, while <code>Malformed</code> means an
+						encoded answer option is rejected before it can become a branch or
+						final answer.
 					</p>
 				</section>
 
-				<section class="paper-section" id="timeline">
-					<div class="section-heading">
-						<h2>Lifecycle Timeline</h2>
-						<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
-					</div>
-					<div class="timeline-grid">
+					<section class="paper-section" id="timeline">
+						<div class="section-heading">
+							<h2>Lifecycle Timeline</h2>
+							<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
+						</div>
+						<p>
+							Zoltar's lifecycle has six contract-visible steps, from question
+							registration through post-fork coordination.
+						</p>
+						<div class="timeline-grid">
 						<div class="timeline-card">
 							<b>1. Register question</b>
 							<p><code>ZoltarQuestionData</code> stores the question and defines its valid answer space.</p>
@@ -160,18 +167,27 @@
 						<h2>1. System Overview</h2>
 						<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
 					</div>
-					<p>
-						Zoltar is the base truth/forking oracle layer in this repository. It does not
-						implement the full market, collateral, or underwriting system built on top of it
-						elsewhere in the repo. Its role is narrower and more fundamental:
-					</p>
-					<ul class="clean-list">
-							<li>register questions</li>
-							<li>encode valid answer spaces</li>
-							<li>represent forks as child universes</li>
-							<li>mint and burn child-universe REP</li>
-							<li>turn migration balances into selected child REP</li>
-						</ul>
+						<p>
+							Zoltar has one job: define the truth-layer objects that higher-level
+							applications can rely on. It does not implement the market,
+							collateral, or underwriting system built on top of it elsewhere in
+							the repo. Its role is narrower and more fundamental:
+						</p>
+						<ul class="clean-list">
+								<li>register questions</li>
+								<li>encode valid answer spaces</li>
+								<li>represent forks as child universes</li>
+								<li>mint and burn child-universe REP</li>
+								<li>turn migration balances into selected child REP</li>
+							</ul>
+
+						<p>
+							In practice, that means an application can hand Zoltar a question,
+							later trigger a fork if disagreement persists, and then consume the
+							child-universe structure that Zoltar defines. Applications
+							therefore depend on the same order in operation: question,
+							disagreement, fork, then child-universe state.
+						</p>
 
 					<h3>Core Contract Map</h3>
 					<ul class="contract-list">
@@ -217,10 +233,12 @@
 						<h2>2. Universe Model</h2>
 						<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
 					</div>
-					<p>
-						<a href="../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a>
-						stores the data for one branch of protocol state:
-					</p>
+						<p>
+							A universe is one branch of protocol state. The
+							<a href="../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a>
+							struct stores the minimum data needed to identify that branch and
+							connect it to its parent:
+						</p>
 					<ul class="clean-list">
 						<li><code>forkTime</code>: when the universe forked</li>
 						<li><code>forkQuestionId</code>: the question id recorded by <code>forkUniverse</code> and used to define child branches</li>

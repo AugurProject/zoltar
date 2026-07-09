@@ -24,8 +24,6 @@ type MainnetDeploymentManifest = {
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..')
 const manifestPath = path.join(repositoryRootPath, 'docs', 'mainnet-deployment-addresses.json')
-const markdownPath = path.join(repositoryRootPath, 'docs', 'mainnet-deployment-addresses.md')
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
@@ -103,55 +101,9 @@ async function loadComputedManifest(): Promise<MainnetDeploymentManifest> {
 	}
 }
 
-function getProtocolConfigMeaning(name: keyof ManifestProtocolConfig, value: string) {
-	if (name === 'forkThresholdDivisor') return `Fork threshold is \`1 / ${value}\` of theoretical REP supply.`
-	if (name === 'forkBurnDivisor') return `Fork initiator haircut is \`1 / ${value}\` of the fork threshold.`
-	if (name === 'initialEscalationGameDeposit') {
-		if (value === '1000000000000000000') {
-			return '`1 REP`; constructor-set starting escalation bond from the frozen deployment config.'
-		}
-		return `\`${value}\` atomic REP units; constructor-set starting escalation bond from the frozen deployment config.`
-	}
-	throw new Error(`Unknown protocol config key: ${name}`)
-}
-
-export function renderMarkdown(manifest: MainnetDeploymentManifest) {
-	const configRows = [['forkThresholdDivisor', manifest.protocolConfig.forkThresholdDivisor] as const, ['forkBurnDivisor', manifest.protocolConfig.forkBurnDivisor] as const, ['initialEscalationGameDeposit', manifest.protocolConfig.initialEscalationGameDeposit] as const]
-	const configTable = configRows.map(([name, value]) => `| ${name} | ${value} | ${getProtocolConfigMeaning(name, value)} |`).join('\n')
-	const addressTable = manifest.deploymentSteps.map(step => `| ${step.id} | ${step.label} | \`${step.address}\` |`).join('\n')
-	const derivedAddressTable = manifest.derivedContracts.map(contract => `| ${contract.id} | ${contract.label} | \`${contract.address}\` |`).join('\n')
-	return `# Mainnet Deployment Addresses
-
-Frozen mainnet protocol config, current contract artifacts, the proxy deployer, and CREATE2 salts determine the addresses and values below. \`docs/mainnet-deployment-addresses.json\` is the machine-readable source.
-
-## Frozen Protocol Config
-
-| Parameter | Value | Unit / Meaning |
-| --- | --- | --- |
-${configTable}
-
-## Deterministic Deployment Steps
-
-| ID | Label | Expected Address |
-| --- | --- | --- |
-${addressTable}
-
-## Derived Side-Effect Contracts
-
-These contracts are deployed by one of the deterministic deployment steps and are not separate user-triggered deployment steps.
-
-| ID | Label | Expected Address |
-| --- | --- | --- |
-${derivedAddressTable}
-
-Security pool deployments are deterministic per pool input rather than globally fixed. Their addresses are derived from the deployed factory set plus parent universe, universe ID, question ID, and security multiplier.
-`
-}
-
 async function writeManifest(manifest: MainnetDeploymentManifest) {
 	await fs.mkdir(path.dirname(manifestPath), { recursive: true })
 	await fs.writeFile(manifestPath, normalizeManifest(manifest))
-	await fs.writeFile(markdownPath, renderMarkdown(manifest))
 }
 
 async function readManifest(): Promise<MainnetDeploymentManifest> {
@@ -184,11 +136,6 @@ export async function assertMainnetDeploymentManifestFresh(): Promise<void> {
 	const computed = normalizeManifest(computedManifest)
 	if (expected !== computed) {
 		throw new Error(`Mainnet deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.`)
-	}
-	const expectedMarkdown = renderMarkdown(expectedManifest)
-	const currentMarkdown = await fs.readFile(markdownPath, 'utf8')
-	if (expectedMarkdown !== currentMarkdown) {
-		throw new Error(`Mainnet deployment Markdown is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.`)
 	}
 }
 

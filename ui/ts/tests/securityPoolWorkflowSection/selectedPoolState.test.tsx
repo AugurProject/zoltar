@@ -488,10 +488,11 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonDisabled(document.body, 'Claim Fees')
-		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set Bond Allowance', 'Claim Fees', 'Review Liquidation']) {
-			const actionButton = documentQueries.getByRole('button', { name: actionLabel }) as HTMLButtonElement
-			expect(actionButton.title).toBe('')
-		}
+		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).title).toBe('Refresh the vault before depositing REP.')
+		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).title).toBe('Refresh the vault before withdrawing REP.')
+		expect((documentQueries.getByRole('button', { name: 'Set Bond Allowance' }) as HTMLButtonElement).title).toBe('Refresh the vault before setting the security bond allowance.')
+		expect((documentQueries.getByRole('button', { name: 'Claim Fees' }) as HTMLButtonElement).title).toBe('Refresh the vault before claiming fees.')
+		expect((documentQueries.getByRole('button', { name: 'Review Liquidation' }) as HTMLButtonElement).title).toBe('')
 	})
 
 	test('shows an Ended badge, allows REP redemption, and blocks ended-pool collateral actions in the vault workflow', async () => {

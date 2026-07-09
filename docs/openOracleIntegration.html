@@ -8,37 +8,37 @@
 	</head>
 	<body class="doc-openoracle">
 		<main>
-			<header>
-				<h1>OpenOracle Integration</h1>
-				<p>
-					Augur Placeholder uses <code>OpenOracle</code> as a bounded, on-demand
-					REP/ETH price source for solvency-sensitive operations. It does not
-					use OpenOracle to resolve market truth; truth remains with Placeholder
-					escalation games and Zoltar forks.
-				</p>
-				<p>
-					A stale or missing price sends solvency-sensitive operations into
-					staging. Settlement either refreshes the coordinator price or leaves
-					recovery work for users and operators.
-				</p>
-				<p>
-					In this integration, one OpenOracle price request follows a compact
-					lifecycle: the coordinator requests a REP/WETH report, a reporter
-					posts token amounts, other reporters may dispute with a larger report,
-					the report settles after its timing window, and settlement calls the
-					coordinator back with the final amounts. The coordinator accepts those
-					amounts only if freshness, pending-report, and safety checks pass.
-				</p>
-				<p>
-					The OpenOracle report instance uses REP as <code>token1</code> and
-					WETH as <code>token2</code>. Placeholder solvency math treats the
-					settled ratio as a REP/ETH price because WETH is the ETH-denominated
-					leg.
-				</p>
-				<p>
-					Relevant references:
-					<a href="https://docs.openoracle.org">OpenOracle documentation</a>,
-					the
+				<header>
+					<h1>OpenOracle Integration</h1>
+					<p>
+						Placeholder uses <code>OpenOracle</code> for one narrow job: getting
+						a fresh REP/ETH price when a pool needs to check solvency. It does
+						not use OpenOracle to decide market truth; truth still comes from
+						local escalation and, if necessary, Zoltar forks.
+					</p>
+					<p>
+						The core lifecycle is simple. A user stages a liquidation,
+						withdrawal, or allowance update with the pool's coordinator. The
+						coordinator requests OpenOracle when needed, and after settlement it
+						either executes the restricted pool action with that fresh price or
+						leaves a recovery path if execution conditions no longer hold.
+					</p>
+					<p>
+						A stale or missing price sends solvency-sensitive operations into
+						staging because Placeholder would rather delay a withdrawal,
+						liquidation, or allowance change than let an old REP/ETH quote
+						distort pool solvency checks.
+					</p>
+					<p>
+						The OpenOracle report instance uses REP as <code>token1</code> and
+						WETH as <code>token2</code>. The coordinator converts the settled
+						amounts into a REP-per-ETH price because WETH is the
+						ETH-denominated leg of the report.
+					</p>
+					<p>
+						The contract and research context lives in:
+						<a href="https://docs.openoracle.org">OpenOracle documentation</a>,
+						the
 					<a
 						href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971"
 						>OpenOracle paper</a
@@ -66,8 +66,12 @@
 				</p>
 			</header>
 
-			<section id="openoracle-role">
-				<h2>OpenOracle Role</h2>
+				<section id="openoracle-role">
+					<h2>OpenOracle Role</h2>
+					<p>
+						The generic oracle lifecycle comes first. Placeholder's coordinator
+						is only a consumer of the report that OpenOracle settles.
+					</p>
 				<p>
 					OpenOracle creates report instances for a token pair. Reporters submit
 					token amounts, later reporters can dispute by posting a larger report,
@@ -106,16 +110,21 @@
 						settled WETH amount.
 					</p>
 				</figure>
-				<p id="integration-terms">
-					After the coordinator accepts a settlement, that accepted REP/WETH
-					report becomes a REP/ETH coordinator price. The price is reusable only
-					while it remains inside the freshness window; operation volume is not
-					metered by the accepted report.
-				</p>
-				<p>
-					A <span class="term" tabindex="0">staged operation</span> is a
-					liquidation, REP withdrawal, or allowance update queued behind the
-					coordinator until it can use a
+					<p id="integration-terms">
+						After the coordinator accepts a settlement, that accepted REP/WETH
+						report becomes a REP/ETH coordinator price. The price is reusable only
+						while it remains inside the freshness window; operation volume is not
+						metered by the accepted report.
+					</p>
+					<p>
+						Four coordinator terms drive the rest of the integration behavior:
+						staged operation, fresh price, liquidation threshold, and report
+						liquidity.
+					</p>
+					<p>
+						A <span class="term" tabindex="0">staged operation</span> is a
+						liquidation, REP withdrawal, or allowance update queued behind the
+						coordinator until it can use a
 					<span class="term" tabindex="0">fresh price</span>, meaning a settled
 					coordinator price still inside <code>PRICE_VALID_FOR_SECONDS</code>,
 					currently a five-minute cache window.
@@ -142,6 +151,11 @@
 
 			<section id="placeholder-integration">
 				<h2>Placeholder Integration</h2>
+				<p>
+					In Placeholder, every pool gets its own coordinator. That keeps
+					pending operations, freshness windows, and callback state local to one
+					pool instead of sharing one global queue across the protocol.
+				</p>
 				<p>
 					<code>SecurityPoolOracleCoordinator</code> is deployed with an
 					immutable <code>OpenOracle</code> address. A security pool stages

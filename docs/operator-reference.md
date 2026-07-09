@@ -1,9 +1,16 @@
 # Placeholder Operator Reference
 
-Implementation guardrails map to their contract sources for operators, indexers,
-reviewers, and UI maintainers. Protocol flow belongs to the white paper;
-security-pool guardrails, share migration, escalation edge cases, fork
-migration, oracle operations, and launch checks are collected here.
+Operators, indexers, reviewers, and UI maintainers consult this reference for
+contract-accurate guardrails, launch procedures, and edge-case behavior in one
+subsystem at a time. The whitepapers carry the full protocol story.
+
+Each section answers a different operational question: how the immutable launch
+posture constrains releases, what a security pool or escalation game will and
+will not accept, how fork migration behaves, how auction settlement works, and
+how the REP/ETH coordinator stages or recovers operations.
+
+Implementation guardrails map to their contract sources so operators can check
+each rule against the exact Solidity implementation.
 
 ## Immutable Protocol Release Posture
 
@@ -33,6 +40,9 @@ simulation prices.
 
 ## Security Pool Guardrails
 
+Pool creation, minting, withdrawal, and direct-ETH rules are collected here in
+contract-first form.
+
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
 | Origin pool shape | Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: `Yes`, then `No`. Placeholder adds `Invalid` as the third trading and resolution outcome. | [SecurityPoolFactory.sol](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol), [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol), [BinaryOutcomes.sol](../solidity/contracts/peripherals/BinaryOutcomes.sol) |
@@ -49,6 +59,9 @@ simulation prices.
 
 ## Share Migration
 
+Share migration after a fork is user-facing asset migration, not vault REP
+migration.
+
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
 | Full-balance burn | `ShareToken.migrate` burns the caller's entire balance of the parent token id; callers cannot migrate only part of that token id. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |
@@ -57,6 +70,9 @@ simulation prices.
 | Malformed outcomes | Malformed fork outcomes are rejected using Zoltar question-data validation. | [ZoltarQuestionData.sol](../solidity/contracts/ZoltarQuestionData.sol) |
 
 ## Escalation Resolution and Deposits
+
+Accepted deposits, edge-case resolution results, and carry-proof or residual-REP
+consumption all live in this section.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
@@ -75,6 +91,9 @@ simulation prices.
 
 ## Fork Migration
 
+Pool-level migration mechanics after a universe fork live here: proxies,
+child-pool creation, REP splitting, and child outcome selection.
+
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
 | Pool-specific migration identity | The forker lazily deploys one deterministic `SecurityPoolMigrationProxy` per parent pool. The proxy is the stable `msg.sender` for Zoltar migration accounting. | [SecurityPoolForker.sol](../solidity/contracts/peripherals/SecurityPoolForker.sol), [SecurityPoolMigrationProxy.sol](../solidity/contracts/peripherals/SecurityPoolMigrationProxy.sol) |
@@ -89,9 +108,15 @@ simulation prices.
 
 ## Truth Auction Operations
 
+Collateral-repair auctions have three operator-critical boundaries: forker
+ownership, a one-week bidding window, and paged settlement into vault
+accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
+auction finalization is allowed at <code>&gt;=</code> that boundary, but the
+public forker wrapper requires the boundary to have passed.
+
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
-| Owner | Child-pool truth auctions are owned by `SecurityPoolForker`, which starts and finalizes the auction and settles bid pages into vault accounting. | [UniformPriceDualCapBatchAuction.sol](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol), [SecurityPoolForker.sol](../solidity/contracts/peripherals/SecurityPoolForker.sol) |
+| Owner | Child-pool truth auctions are owned by `SecurityPoolForker`. The direct auction `startAuction` and `finalize` calls are owner-only, while anyone can reach them through `startTruthAuction` and `finalizeTruthAuction`. | [UniformPriceDualCapBatchAuction.sol](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol), [SecurityPoolForker.sol](../solidity/contracts/peripherals/SecurityPoolForker.sol) |
 | REP sale cap | The truth auction cap is the pool auctionable REP at fork minus `migratedRep / MAX_AUCTION_VAULT_HAIRCUT_DIVISOR`; if that haircut reaches the baseline, no REP is sold. | [SecurityPoolForker.sol](../solidity/contracts/peripherals/SecurityPoolForker.sol), [SecurityPoolUtils.sol](../solidity/contracts/peripherals/SecurityPoolUtils.sol) |
 | Bidding window and price floor | Bids are accepted only after start, before finalization, before `auctionStarted + 1 week`, and at ticks whose effective `tickToPrice` value is nonzero. | [UniformPriceDualCapBatchAuction.sol](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol) |
 | No bid or tick cap | The auction intentionally has no total bid cap and no active-tick cap; finalization uses aggregate ETH totals in an AVL tree keyed by tick. | [UniformPriceDualCapBatchAuction.sol](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol) |
@@ -102,6 +127,9 @@ simulation prices.
 | Auction withdrawal dust | Funded auctions carry uniform-price division dust through `clearingRemainder`; underfunded auctions carry per-tick division dust through same-tick remainder accounting. Both reconcile bid-level withdrawals to finalized aggregate REP. | [UniformPriceDualCapBatchAuction.sol](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol) |
 
 ## REP/ETH Oracle Operations
+
+The coordinator quick reference below covers request cost, staging limits,
+callback behavior, stale-operation handling, and liquidation boundaries.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

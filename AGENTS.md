@@ -291,3 +291,9 @@ This test-driven approach ensures:
 - On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for the full local install. For UI-only work, `bun install --frozen-lockfile && bun run ui:build` is sufficient and will also regenerate `shared/js/` and `ui/ts/contractArtifact.ts`.
 - Do not assume `bun run tsc` regenerates contract artifacts unless the script definition has been updated to do so. Root `bun run tsc` remains a pure typecheck. For UI-only changes that need emitted JS for the watcher, use `cd ui && bun x tsc --project tsconfig.json`.
 - Never edit files directly in any `js/` directory. Changes may be overwritten by TypeScript compilation. Always use the corresponding `.ts` or `.tsx` source files.
+
+## Documentation Test Policy
+
+- Documentation should not have standalone test files when the test is only checking prose, tables, anchors, generated examples, or structural documentation rules.
+- Validate documentation with direct check scripts such as `bun run docs:check-html`, linting, formatting, or targeted executable checks instead of wrapping those checks in test files.
+- The only exception is JavaScript that lives inside documentation and has behavior that needs runtime verification. In that case, tests may exist for that embedded JavaScript.

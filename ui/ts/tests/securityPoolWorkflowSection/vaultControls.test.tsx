@@ -8,7 +8,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, expectTransactionButtonEnabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } =
 		fixture
 
-	test('keeps vault launchers silently disabled while the selected vault auto-loads', async () => {
+	test('shows an explicit vault-refresh blocker while the selected vault auto-loads', async () => {
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -39,7 +39,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		if (!(depositLauncherButton instanceof HTMLElement)) throw new Error('Expected deposit launcher button')
 
 		expect(depositLauncherButton.hasAttribute('disabled')).toBe(true)
-		expect(depositLauncherButton.getAttribute('title')).toBeNull()
+		expect(depositLauncherButton.getAttribute('title')).toBe('Refresh the vault before depositing REP.')
 		expect(loadSecurityVaultCalls).toContain(undefined)
 
 		await act(() => {
