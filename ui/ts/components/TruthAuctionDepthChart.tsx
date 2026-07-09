@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
 import type { TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type TruthAuctionDepthChartProps = {
 	clearingTick?: bigint
@@ -21,7 +22,7 @@ const CHART_PADDING = {
 let nextDepthGradientId = 0
 
 function formatTruthAuctionPriceLabel(price: bigint) {
-	return `${formatRoundedCurrencyBalance(price, 18, 4)} ETH / REP`
+	return TSX_STRINGS.componentsTruthAuctionDepthChart.copy001(formatRoundedCurrencyBalance(price, 18, 4))
 }
 
 function getDepthRatio(value: bigint, maxDepth: bigint) {
@@ -119,22 +120,22 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 		<>
 			<div className='truth-auction-depth-frame'>
 				<div className='truth-auction-depth-y-axis'>
-					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>Loaded Depth (ETH)</span>
+					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>{TSX_STRINGS.componentsTruthAuctionDepthChart.copy002}</span>
 					<div className='truth-auction-depth-y-ticks' aria-hidden='true'>
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-max' style={{ top: `${(getDepthYPosition(maxLoadedDepth) / CHART_HEIGHT) * 100}%` }}>
-							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix='ETH' />
+							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix={TSX_STRINGS.componentsTruthAuctionDepthChart.copy003} />
 						</span>
 						{midpointDepth === undefined ? undefined : (
 							<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-mid' style={{ top: `${(getDepthYPosition(midpointDepth) / CHART_HEIGHT) * 100}%` }}>
-								<CurrencyValue copyable={false} value={midpointDepth} suffix='ETH' />
+								<CurrencyValue copyable={false} value={midpointDepth} suffix={TSX_STRINGS.componentsTruthAuctionDepthChart.copy004} />
 							</span>
 						)}
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-min' style={{ top: `${(getDepthYPosition(0n) / CHART_HEIGHT) * 100}%` }}>
-							0 ETH
+							{TSX_STRINGS.componentsTruthAuctionDepthChart.copy005}
 						</span>
 					</div>
 				</div>
-				<div className='truth-auction-depth-chart' role='group' aria-label='Truth auction visible depth chart'>
+				<div className='truth-auction-depth-chart' role='group' aria-label={TSX_STRINGS.componentsTruthAuctionDepthChart.copy006}>
 					<svg aria-hidden='true' viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio='none'>
 						<defs>
 							<linearGradient id={gradientId} x1='0%' x2='100%' y1='0%' y2='0%'>
@@ -149,7 +150,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 					<div className='truth-auction-depth-hit-targets'>
 						{points.map((point, index) => (
 							<button
-								aria-label={`Select price ${formatCurrencyInputBalance(point.price)} ETH / REP from depth chart`}
+								aria-label={TSX_STRINGS.componentsTruthAuctionDepthChart.copy007(formatCurrencyInputBalance(point.price))}
 								aria-pressed={point.isSelected}
 								className='truth-auction-depth-hit-target'
 								key={point.tick.toString()}
@@ -173,7 +174,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 				{midpointPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-mid'>{formatTruthAuctionPriceLabel(midpointPrice)}</span>}
 				{lowestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-min'>{formatTruthAuctionPriceLabel(lowestLoadedPrice)}</span>}
 			</div>
-			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>Price (ETH / REP)</div>
+			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>{TSX_STRINGS.componentsTruthAuctionDepthChart.copy008}</div>
 		</>
 	)
 }

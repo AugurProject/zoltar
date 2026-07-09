@@ -6,6 +6,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '../lib/pagination.js'
 import { getImportedEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
 import type { ActiveReportingDetails, EscalationSide, ReportingOutcomeKey } from '../types/contracts.js'
+import { CURATED_TSX_STRINGS, TSX_STRINGS } from '../lib/uiStrings.js'
 
 const IMPORTED_FORK_SETTLEMENT_PAGE_SIZE = 25
 
@@ -44,10 +45,12 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 	const pageStartIndex = resolvedPageIndex * IMPORTED_FORK_SETTLEMENT_PAGE_SIZE
 	const pageEndIndex = Math.min(side.importedUserDeposits.length, pageStartIndex + IMPORTED_FORK_SETTLEMENT_PAGE_SIZE)
 	const visibleDeposits = useMemo(() => side.importedUserDeposits.slice(pageStartIndex, pageEndIndex), [pageEndIndex, pageStartIndex, side.importedUserDeposits])
-	const paginationSummary = side.importedUserDeposits.length > IMPORTED_FORK_SETTLEMENT_PAGE_SIZE ? `Showing parent deposits ${(pageStartIndex + 1).toString()}-${pageEndIndex.toString()} of ${side.importedUserDeposits.length.toString()}. ${formatPaginationSummary(resolvedPageIndex, pageCount) ?? ''}` : undefined
+	const paginationPageSummary = formatPaginationSummary(resolvedPageIndex, pageCount)
+	const paginationSummary =
+		side.importedUserDeposits.length > IMPORTED_FORK_SETTLEMENT_PAGE_SIZE && paginationPageSummary !== undefined ? CURATED_TSX_STRINGS.importedForkSettlementSection.paginationSummary((pageStartIndex + 1).toString(), pageEndIndex.toString(), side.importedUserDeposits.length.toString(), paginationPageSummary) : undefined
 	const settlementGuardMessage = (() => {
-		if (!resolved) return 'Fork-carried escalation deposits can be settled after this child pool finalizes.'
-		if (selectedDepositIndexes.length === 0) return `Select at least one ${side.label.toLowerCase()} fork-carried deposit to settle.`
+		if (!resolved) return TSX_STRINGS.componentsImportedForkSettlementSection.copy001
+		if (selectedDepositIndexes.length === 0) return TSX_STRINGS.componentsImportedForkSettlementSection.copy002(side.label.toLowerCase())
 		return undefined
 	})()
 
@@ -58,7 +61,7 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 	return (
 		<SectionBlock density='compact' headingLevel={4} key={side.key} title={side.label} variant='embedded'>
 			<div className='field'>
-				<span>Imported from parent universe</span>
+				<span>{TSX_STRINGS.componentsImportedForkSettlementSection.copy003}</span>
 				<div className='escalation-selection-list'>
 					{visibleDeposits.map(deposit => {
 						const selected = selectedDepositIndexes.includes(deposit.parentDepositIndex)
@@ -67,21 +70,27 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 							<label className='escalation-selection-item' key={deposit.parentDepositIndex.toString()}>
 								<input checked={selected} disabled={disabled} onChange={event => onDepositSelectionChange(side.key, deposit.parentDepositIndex, event.currentTarget.checked)} type='checkbox' />
 								<div className='escalation-selection-item-copy'>
-									<strong>Parent deposit #{deposit.parentDepositIndex.toString()}</strong>
+									<strong>
+										{TSX_STRINGS.componentsImportedForkSettlementSection.copy004}
+										{deposit.parentDepositIndex.toString()}
+									</strong>
 									<span>
-										Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+										{TSX_STRINGS.componentsImportedForkSettlementSection.copy005}
+										<CurrencyValue value={deposit.amount} suffix={TSX_STRINGS.componentsImportedForkSettlementSection.copy006} />
 									</span>
 									<span>
 										{claimAmount === undefined ? (
-											'Worth now: Pending final settlement'
+											TSX_STRINGS.componentsImportedForkSettlementSection.copy007
 										) : (
 											<>
-												Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
+												{TSX_STRINGS.componentsImportedForkSettlementSection.copy008}
+												<CurrencyValue value={claimAmount} suffix={TSX_STRINGS.componentsImportedForkSettlementSection.copy009} />
 											</>
 										)}
 									</span>
 									<span>
-										Imported entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+										{TSX_STRINGS.componentsImportedForkSettlementSection.copy010}
+										<CurrencyValue value={deposit.cumulativeAmount} suffix={TSX_STRINGS.componentsImportedForkSettlementSection.copy011} />
 									</span>
 								</div>
 							</label>
@@ -92,10 +101,10 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 					<PaginationControls
 						hasNextPage={hasNextPage}
 						hasPreviousPage={hasPreviousPage}
-						nextLabel='Next Parent Deposits'
+						nextLabel={TSX_STRINGS.componentsImportedForkSettlementSection.copy012}
 						onNextPage={() => setPageIndex(currentPageIndex => currentPageIndex + 1)}
 						onPreviousPage={() => setPageIndex(currentPageIndex => Math.max(0, currentPageIndex - 1))}
-						previousLabel='Previous Parent Deposits'
+						previousLabel={TSX_STRINGS.componentsImportedForkSettlementSection.copy013}
 						summary={paginationSummary}
 					/>
 				)}
@@ -115,9 +124,9 @@ export function ImportedForkSettlementSection({ activeReportingDetails, disabled
 	if (sides.length === 0) return undefined
 
 	return (
-		<SectionBlock density='compact' title='Settle Fork-Carried Escalation Deposits'>
-			<p className='detail'>Imported from the parent universe. Settle these positions in this child pool after finalization.</p>
-			{resolved ? undefined : <p className='detail'>Fork-carried escalation deposits can be settled after this child pool finalizes.</p>}
+		<SectionBlock density='compact' title={TSX_STRINGS.componentsImportedForkSettlementSection.copy014}>
+			<p className='detail'>{TSX_STRINGS.componentsImportedForkSettlementSection.copy015}</p>
+			{resolved ? undefined : <p className='detail'>{TSX_STRINGS.componentsImportedForkSettlementSection.copy016}</p>}
 			{sides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}

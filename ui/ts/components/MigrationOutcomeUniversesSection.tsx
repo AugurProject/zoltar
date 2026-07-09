@@ -2,6 +2,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type MigrationOutcomeUniversesSectionProps = {
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -42,15 +43,15 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 			badge={
 				isScalarFork ? (
 					<button className='quiet' type='button' onClick={onAddNextOutcome} disabled={disabled || !hasAddableOutcome}>
-						Add another universe
+						{TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy001}
 					</button>
 				) : undefined
 			}
 			className='migration-outcome-section'
-			title='Outcome Universes'
+			title={TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy002}
 		>
 			{childUniverses.length === 0 ? (
-				<p className='detail'>No outcome universes available.</p>
+				<p className='detail'>{TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy003}</p>
 			) : (
 				<OutcomeSelectionList
 					items={childUniverses.map(child => {
@@ -61,15 +62,16 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 							details: (
 								<>
 									<span>
-										Your balance:{' '}
+										{TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy004}{' '}
 										<strong>
-											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' />
+											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy005} />
 										</strong>
 									</span>
 									<span>
-										Already migrated:{' '}
+										{TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy006}{' '}
 										<strong>
-											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix='REP' />
+											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy007} /> /{' '}
+											<CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={TSX_STRINGS.componentsMigrationOutcomeUniversesSection.copy008} />
 										</strong>
 									</span>
 								</>

@@ -2,6 +2,7 @@ import type { JSX } from 'preact'
 import { CurrencyValue } from './CurrencyValue.js'
 import { Badge } from './Badge.js'
 import type { EscalationDeposit } from '../types/contracts.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type EscalationSideDisplay = {
 	balance: bigint | undefined
@@ -81,8 +82,8 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 						<span className='panel-label'>{side.label}</span>
 						{isLeading || isSelected ? (
 							<div className='escalation-side-badges'>
-								{isSelected ? <Badge className='escalation-side-selected-badge'>Selected</Badge> : undefined}
-								{isLeading ? <Badge tone='ok'>Leading</Badge> : undefined}
+								{isSelected ? <Badge className='escalation-side-selected-badge'>{TSX_STRINGS.componentsEscalationSide.copy001}</Badge> : undefined}
+								{isLeading ? <Badge tone='ok'>{TSX_STRINGS.componentsEscalationSide.copy002}</Badge> : undefined}
 							</div>
 						) : undefined}
 					</div>
@@ -96,12 +97,12 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				</div>
 				<div className='escalation-side-values'>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>Total stake</span>
-						<CurrencyValue copyable={false} value={side.balance} suffix='REP' />
+						<span className='metric-label'>{TSX_STRINGS.componentsEscalationSide.copy003}</span>
+						<CurrencyValue copyable={false} value={side.balance} suffix={TSX_STRINGS.componentsEscalationSide.copy004} />
 					</div>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>Your stake</span>
-						<CurrencyValue copyable={false} value={side.userStake} suffix='REP' />
+						<span className='metric-label'>{TSX_STRINGS.componentsEscalationSide.copy005}</span>
+						<CurrencyValue copyable={false} value={side.userStake} suffix={TSX_STRINGS.componentsEscalationSide.copy006} />
 					</div>
 				</div>
 			</div>

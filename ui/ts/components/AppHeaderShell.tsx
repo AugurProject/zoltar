@@ -4,6 +4,7 @@ import { TabNavigation } from './TabNavigation.js'
 import type { OverviewPanelsProps, TabNavigationProps } from '../types/components.js'
 import type { SimulationController } from '../simulation/controller.js'
 import type { ComponentChildren } from 'preact'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type AppHeaderShellProps = {
 	overview: OverviewPanelsProps
@@ -24,7 +25,7 @@ export function AppHeaderShell({ overview, simulationController, subNavigation, 
 		<>
 			{simulationController === undefined ? undefined : (
 				<button className='skip-link' type='button' onClick={focusAppContent}>
-					Skip simulation controls
+					{TSX_STRINGS.componentsAppHeaderShell.copy001}
 				</button>
 			)}
 			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />}

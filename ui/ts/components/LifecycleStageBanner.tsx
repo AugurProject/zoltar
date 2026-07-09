@@ -1,5 +1,6 @@
 import type { LifecycleStagePresentation } from '../types/components.js'
 import { WarningSurface } from './WarningSurface.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type LifecycleStageBannerProps = {
 	stage: LifecycleStagePresentation | undefined
@@ -27,8 +28,8 @@ export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 	const hasActions = stage.availableActions.length > 0 || stage.blockedActions.length > 0
 	const actions = !hasActions ? undefined : (
 		<div className='lifecycle-stage-banner-actions'>
-			{renderStageActionGroup('Available now', stage.availableActions, 'available')}
-			{renderStageActionGroup('Blocked', stage.blockedActions, 'blocked')}
+			{renderStageActionGroup(TSX_STRINGS.componentsLifecycleStageBanner.copy001, stage.availableActions, 'available')}
+			{renderStageActionGroup(TSX_STRINGS.componentsLifecycleStageBanner.copy002, stage.blockedActions, 'blocked')}
 		</div>
 	)
 	if (stage.tone === 'warning')

@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { SectionBlock } from './SectionBlock.js'
 import { AUCTIONED_BOND_ALLOWANCE_LABEL } from '../lib/forkAuction.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type TruthAuctionSummaryCardProps = {
 	auctionedBondAllowanceDisplay?: ComponentChildren | undefined
@@ -22,14 +23,14 @@ type TruthAuctionSummaryCardProps = {
 
 export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, clearingPriceDisplay, displayedEthRaised, displayedRepSold, endsDisplay, ethRaiseCap, ethRaisedProgress, maxRepBeingSold, minBidSize, repSoldProgress, startedDisplay, winningThresholdPriceDisplay }: TruthAuctionSummaryCardProps) {
 	return (
-		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title='Truth Auction'>
+		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy001}>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary truth-auction-summary-primary'>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>ETH Raised</span>
+							<span>{TSX_STRINGS.componentsTruthAuctionSummaryCard.copy002}</span>
 							<strong>
-								<CurrencyValue value={displayedEthRaised} suffix='ETH' /> / <CurrencyValue value={ethRaiseCap} suffix='ETH' />
+								<CurrencyValue value={displayedEthRaised} suffix={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy003} /> / <CurrencyValue value={ethRaiseCap} suffix={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy004} />
 							</strong>
 						</div>
 						<div className='truth-auction-progress-track'>
@@ -38,9 +39,9 @@ export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, 
 					</div>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>REP Sold</span>
+							<span>{TSX_STRINGS.componentsTruthAuctionSummaryCard.copy005}</span>
 							<strong>
-								<CurrencyValue value={displayedRepSold} suffix='REP' /> / <CurrencyValue value={maxRepBeingSold} suffix='REP' />
+								<CurrencyValue value={displayedRepSold} suffix={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy006} /> / <CurrencyValue value={maxRepBeingSold} suffix={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy007} />
 							</strong>
 						</div>
 						<div className='truth-auction-progress-track'>
@@ -49,12 +50,12 @@ export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, 
 					</div>
 				</div>
 				<div className='fork-workflow-summary-metrics'>
-					<MetricField label='Starts'>{startedDisplay}</MetricField>
-					<MetricField label='Clearing Price'>{clearingPriceDisplay}</MetricField>
+					<MetricField label={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy008}>{startedDisplay}</MetricField>
+					<MetricField label={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy009}>{clearingPriceDisplay}</MetricField>
 					{auctionedBondAllowanceDisplay === undefined ? undefined : <MetricField label={AUCTIONED_BOND_ALLOWANCE_LABEL}>{auctionedBondAllowanceDisplay}</MetricField>}
-					<MetricField label='Min Bid'>{<CurrencyValue value={minBidSize} suffix='ETH' />}</MetricField>
-					<MetricField label='Ends'>{endsDisplay}</MetricField>
-					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label='Winning Threshold'>{winningThresholdPriceDisplay}</MetricField>}
+					<MetricField label={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy010}>{<CurrencyValue value={minBidSize} suffix={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy011} />}</MetricField>
+					<MetricField label={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy012}>{endsDisplay}</MetricField>
+					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={TSX_STRINGS.componentsTruthAuctionSummaryCard.copy013}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>
 		</SectionBlock>

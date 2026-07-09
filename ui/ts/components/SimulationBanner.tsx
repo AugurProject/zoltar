@@ -12,13 +12,14 @@ import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
 import { Badge } from './Badge.js'
 import type { BadgeTone } from '../types/components.js'
+import { CURATED_TSX_STRINGS, TSX_STRINGS } from '../lib/uiStrings.js'
 
 const SIMULATION_TIME_PRESETS = [
-	{ label: '+1 hour', seconds: 60n * 60n },
-	{ label: '+1 day', seconds: 24n * 60n * 60n },
-	{ label: '+1 week', seconds: 7n * 24n * 60n * 60n },
-	{ label: '+1 month', seconds: 30n * 24n * 60n * 60n },
-	{ label: '+1 year', seconds: 365n * 24n * 60n * 60n },
+	{ label: TSX_STRINGS.componentsSimulationBanner.copy001, seconds: 60n * 60n },
+	{ label: TSX_STRINGS.componentsSimulationBanner.copy002, seconds: 24n * 60n * 60n },
+	{ label: TSX_STRINGS.componentsSimulationBanner.copy003, seconds: 7n * 24n * 60n * 60n },
+	{ label: TSX_STRINGS.componentsSimulationBanner.copy004, seconds: 30n * 24n * 60n * 60n },
+	{ label: TSX_STRINGS.componentsSimulationBanner.copy005, seconds: 365n * 24n * 60n * 60n },
 ] as const
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
@@ -65,25 +66,25 @@ function hasSavedSimulationStateRoute() {
 }
 
 function getSimulationAccountOptionLabel(account: string) {
-	return `QA ${account}`
+	return TSX_STRINGS.componentsSimulationBanner.copy006(account)
 }
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
 	if (parameters.bootstrapError !== undefined) {
 		return {
 			badgeTone: 'blocked',
-			label: 'Error',
+			label: TSX_STRINGS.componentsSimulationBanner.copy007,
 		}
 	}
 	if (parameters.isBootstrapped) {
 		return {
 			badgeTone: 'ok',
-			label: 'Ready',
+			label: TSX_STRINGS.componentsSimulationBanner.copy008,
 		}
 	}
 	return {
 		badgeTone: 'pending',
-		label: 'Bootstrapping',
+		label: TSX_STRINGS.componentsSimulationBanner.copy009,
 	}
 }
 
@@ -179,7 +180,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		try {
 			await work()
 		} catch (error) {
-			savedStateError.value = getErrorMessage(error, 'Failed to update the saved simulation state')
+			savedStateError.value = getErrorMessage(error, CURATED_TSX_STRINGS.simulationBanner.updateSavedStateError)
 		} finally {
 			busy.value = false
 		}
@@ -208,13 +209,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		try {
 			exportStateText.value = await controller.exportState(nextName)
 		} catch (error) {
-			savedStateError.value = getErrorMessage(error, 'Failed to export the current simulation state')
+			savedStateError.value = getErrorMessage(error, CURATED_TSX_STRINGS.simulationBanner.exportStateError)
 		}
 	}
 
 	let scenarioDetail = bootstrapError.value
 	if (scenarioDetail === undefined) {
-		scenarioDetail = currentSource.value.kind === 'saved-state' ? `Custom state "${currentSource.value.name}" based on ${getSimulationScenarioLabel(currentSource.value.baseScenario)}. Saved ${new Date(currentSource.value.savedAt).toLocaleString()}.` : getSimulationScenarioDescription(currentScenario.value)
+		scenarioDetail = currentSource.value.kind === 'saved-state' ? TSX_STRINGS.componentsSimulationBanner.copy010(currentSource.value.name, getSimulationScenarioLabel(currentSource.value.baseScenario), new Date(currentSource.value.savedAt).toLocaleString()) : getSimulationScenarioDescription(currentScenario.value)
 	}
 	const scenarioStatus = getScenarioStatus({
 		bootstrapError: bootstrapError.value,
@@ -225,8 +226,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		<section className='panel contract-panel simulation-banner'>
 			<div className='contract-panel-header simulation-banner-header'>
 				<div>
-					<h2>Simulation Mode</h2>
-					<p className='detail'>Browser Simulation</p>
+					<h2>{TSX_STRINGS.componentsSimulationBanner.copy011}</h2>
+					<p className='detail'>{TSX_STRINGS.componentsSimulationBanner.copy012}</p>
 				</div>
 			</div>
 			<div className='contract-list simulation-banner-list'>
@@ -234,14 +235,14 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					<div className='contract-copy'>
 						<div className='contract-topline'>
 							<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
-							<h3>Scenario</h3>
+							<h3>{TSX_STRINGS.componentsSimulationBanner.copy013}</h3>
 						</div>
 						<p className='detail'>{scenarioDetail}</p>
 						{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 						{bootstrapError.value === undefined && isBootstrapping.value ? (
 							<p className='detail'>
 								<span className='spinner' aria-hidden='true' />
-								{bootstrapLabel.value ?? 'Preparing the selected simulation scenario in the background.'}
+								{bootstrapLabel.value ?? TSX_STRINGS.componentsSimulationBanner.copy014}
 							</p>
 						) : undefined}
 						{isBootstrapping.value ? (
@@ -252,7 +253,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</div>
 					<select
 						className='simulation-control-select'
-						aria-label='Simulation scenario'
+						aria-label={TSX_STRINGS.componentsSimulationBanner.copy015}
 						value={currentSource.value.kind === 'saved-state' ? `saved:${currentSource.value.stateId}` : `scenario:${currentScenario.value}`}
 						disabled={busy.value || isBootstrapping.value}
 						onChange={event => {
@@ -268,7 +269,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}}
 					>
-						<optgroup label='Built-in scenarios'>
+						<optgroup label={TSX_STRINGS.componentsSimulationBanner.copy016}>
 							{SIMULATION_SCENARIOS.map(scenario => (
 								<option key={scenario} value={`scenario:${scenario}`}>
 									{getSimulationScenarioLabel(scenario)}
@@ -276,7 +277,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							))}
 						</optgroup>
 						{savedStateRecords.value.length === 0 ? undefined : (
-							<optgroup label='Saved states'>
+							<optgroup label={TSX_STRINGS.componentsSimulationBanner.copy017}>
 								{savedStateRecords.value.map(record => (
 									<option key={record.id} value={`saved:${record.id}`}>
 										{record.name}
@@ -289,13 +290,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<Badge tone='ok'>Active</Badge>
-							<h3>QA account</h3>
+							<Badge tone='ok'>{TSX_STRINGS.componentsSimulationBanner.copy018}</Badge>
+							<h3>{TSX_STRINGS.componentsSimulationBanner.copy019}</h3>
 						</div>
 					</div>
 					<select
 						className='simulation-control-select'
-						aria-label='Simulation QA account'
+						aria-label={TSX_STRINGS.componentsSimulationBanner.copy020}
 						value={selectedAccount.value}
 						disabled={busy.value || !isBootstrapped.value}
 						onChange={event => {
@@ -315,29 +316,29 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				</div>
 				<div className='simulation-banner-stats'>
 					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>Blocks</span>
+						<span className='simulation-stat-label'>{TSX_STRINGS.componentsSimulationBanner.copy021}</span>
 						<strong>{blockCountSinceReset.value.toString()}</strong>
 					</div>
 					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>Transactions</span>
+						<span className='simulation-stat-label'>{TSX_STRINGS.componentsSimulationBanner.copy022}</span>
 						<strong>{transactionCountSinceReset.value.toString()}</strong>
 					</div>
 					<div className='simulation-stat-card simulation-stat-card-wide'>
-						<span className='simulation-stat-label'>Blockchain time</span>
+						<span className='simulation-stat-label'>{TSX_STRINGS.componentsSimulationBanner.copy023}</span>
 						<strong>
 							<TimestampValue currentTimestamp={currentTimestamp.value} timestamp={currentTimestamp.value} />
 						</strong>
 					</div>
 				</div>
 				<details className='simulation-advanced-controls'>
-					<summary>QA controls, prices, and time travel</summary>
+					<summary>{TSX_STRINGS.componentsSimulationBanner.copy024}</summary>
 					<div className='simulation-banner-controls'>
 						<div className='contract-copy'>
-							<h3>Controls</h3>
-							<p className='detail'>Use these controls for repeatable manual UI QA without a wallet extension.</p>
+							<h3>{TSX_STRINGS.componentsSimulationBanner.copy025}</h3>
+							<p className='detail'>{TSX_STRINGS.componentsSimulationBanner.copy026}</p>
 							<div className='simulation-delay-grid'>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>Query delay (ms)</span>
+									<span className='simulation-delay-label'>{TSX_STRINGS.componentsSimulationBanner.copy027}</span>
 									<input
 										className='simulation-control-input'
 										type='number'
@@ -355,7 +356,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>REP / ETH mock price</span>
+									<span className='simulation-delay-label'>{TSX_STRINGS.componentsSimulationBanner.copy028}</span>
 									<input
 										className='simulation-control-input'
 										type='text'
@@ -378,7 +379,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>REP / USDC mock price</span>
+									<span className='simulation-delay-label'>{TSX_STRINGS.componentsSimulationBanner.copy029}</span>
 									<input
 										className='simulation-control-input'
 										type='text'
@@ -401,7 +402,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
+									<span className='simulation-delay-label'>{TSX_STRINGS.componentsSimulationBanner.copy030}</span>
 									<input
 										className='simulation-control-input'
 										type='number'
@@ -419,20 +420,20 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 							</div>
-							<p className='detail'>Query delay slows simulation reads. The REP / ETH and REP / USDC mocks apply to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
+							<p className='detail'>{TSX_STRINGS.componentsSimulationBanner.copy031}</p>
 						</div>
 						<div className='simulation-control-groups'>
 							<div className='simulation-control-group'>
-								<span className='simulation-control-group-label'>Actions</span>
+								<span className='simulation-control-group-label'>{TSX_STRINGS.componentsSimulationBanner.copy032}</span>
 								<div className='button-row simulation-button-row'>
 									<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
-										Reset scenario
+										{TSX_STRINGS.componentsSimulationBanner.copy033}
 									</button>
 									<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
-										Mine block
+										{TSX_STRINGS.componentsSimulationBanner.copy034}
 									</button>
 									<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
-										Mint 1 million REP
+										{TSX_STRINGS.componentsSimulationBanner.copy035}
 									</button>
 									<button
 										className='secondary'
@@ -443,10 +444,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										}}
 										disabled={busy.value || !isBootstrapped.value}
 									>
-										Save state
+										{TSX_STRINGS.componentsSimulationBanner.copy036}
 									</button>
 									<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
-										Export state
+										{TSX_STRINGS.componentsSimulationBanner.copy037}
 									</button>
 									<button
 										className='secondary'
@@ -457,7 +458,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										}}
 										disabled={busy.value}
 									>
-										Import state
+										{TSX_STRINGS.componentsSimulationBanner.copy038}
 									</button>
 									{savedStateStorageWarning.value === undefined ? undefined : (
 										<button
@@ -468,7 +469,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 											}}
 											disabled={busy.value}
 										>
-											Remove corrupted saves
+											{TSX_STRINGS.componentsSimulationBanner.copy039}
 										</button>
 									)}
 									{currentSource.value.kind !== 'saved-state' ? undefined : (
@@ -480,13 +481,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 											}}
 											disabled={busy.value}
 										>
-											Delete save
+											{TSX_STRINGS.componentsSimulationBanner.copy040}
 										</button>
 									)}
 								</div>
 							</div>
 							<div className='simulation-control-group'>
-								<span className='simulation-control-group-label'>Time travel</span>
+								<span className='simulation-control-group-label'>{TSX_STRINGS.componentsSimulationBanner.copy041}</span>
 								<div className='button-row simulation-button-row simulation-time-travel-row'>
 									{SIMULATION_TIME_PRESETS.map(preset => (
 										<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
@@ -499,9 +500,9 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</div>
 				</details>
 			</div>
-			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title='Save Simulation State'>
+			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title={TSX_STRINGS.componentsSimulationBanner.copy042}>
 				<div className='field'>
-					<label htmlFor='simulation-save-name'>State name</label>
+					<label htmlFor='simulation-save-name'>{TSX_STRINGS.componentsSimulationBanner.copy043}</label>
 					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} onInput={event => (saveName.value = event.currentTarget.value)} />
 				</div>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
@@ -514,17 +515,17 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						Save
+						{TSX_STRINGS.componentsSimulationBanner.copy044}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title='Export Simulation State'>
+			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title={TSX_STRINGS.componentsSimulationBanner.copy045}>
 				<div className='field'>
-					<label htmlFor='simulation-export-name'>Export name</label>
+					<label htmlFor='simulation-export-name'>{TSX_STRINGS.componentsSimulationBanner.copy046}</label>
 					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} onInput={event => (exportName.value = event.currentTarget.value)} />
 				</div>
 				<div className='field'>
-					<label htmlFor='simulation-export-json'>JSON state</label>
+					<label htmlFor='simulation-export-json'>{TSX_STRINGS.componentsSimulationBanner.copy047}</label>
 					<textarea id='simulation-export-json' rows={14} value={exportStateText.value} readOnly />
 				</div>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
@@ -538,16 +539,16 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						Refresh export
+						{TSX_STRINGS.componentsSimulationBanner.copy048}
 					</button>
 					<button type='button' className='secondary' disabled={exportStateText.value.trim() === ''} onClick={() => void copyText(exportStateText.value)}>
-						{copied.value ? 'Copied' : 'Copy JSON'}
+						{copied.value ? TSX_STRINGS.componentsSimulationBanner.copy049 : TSX_STRINGS.componentsSimulationBanner.copy050}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title='Import Simulation State'>
+			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title={TSX_STRINGS.componentsSimulationBanner.copy051}>
 				<div className='field'>
-					<label htmlFor='simulation-import-json'>JSON state</label>
+					<label htmlFor='simulation-import-json'>{TSX_STRINGS.componentsSimulationBanner.copy052}</label>
 					<textarea id='simulation-import-json' rows={14} value={importStateText.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
 				</div>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
@@ -560,12 +561,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						Import and load
+						{TSX_STRINGS.componentsSimulationBanner.copy053}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title='Delete Saved Simulation State'>
-				<p className='detail'>{currentSource.value.kind === 'saved-state' ? `Delete the saved state "${currentSource.value.name}" from browser storage. Built-in scenarios are not affected.` : 'Built-in scenarios cannot be deleted.'}</p>
+			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title={TSX_STRINGS.componentsSimulationBanner.copy054}>
+				<p className='detail'>{currentSource.value.kind === 'saved-state' ? TSX_STRINGS.componentsSimulationBanner.copy055(currentSource.value.name) : TSX_STRINGS.componentsSimulationBanner.copy056}</p>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
 				<div className='actions'>
 					<button
@@ -575,7 +576,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 						onClick={() =>
 							void runNavigationControl(async () => {
 								if (currentSource.value.kind !== 'saved-state') return
-								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(`Saved simulation state "${currentSource.value.name}" no longer exists`)
+								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(CURATED_TSX_STRINGS.simulationBanner.missingSavedStateError(currentSource.value.name))
 								const baseScenario = currentSource.value.baseScenario
 								reloadSavedStateRecords()
 								navigateToBuiltInScenario(baseScenario)
@@ -583,12 +584,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						Delete save
+						{TSX_STRINGS.componentsSimulationBanner.copy057}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title='Remove Corrupted Saved States'>
-				<p className='detail'>Remove saved simulation state entries that are no longer readable from browser storage. Valid saved states will be kept.</p>
+			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title={TSX_STRINGS.componentsSimulationBanner.copy058}>
+				<p className='detail'>{TSX_STRINGS.componentsSimulationBanner.copy059}</p>
 				{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
 				<div className='actions'>
@@ -600,7 +601,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							savedStateStorageWarning.value = undefined
 							void runNavigationControl(async () => {
 								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
-								if (removedCount === 0) throw new Error('No corrupted saved simulation states were found')
+								if (removedCount === 0) throw new Error(CURATED_TSX_STRINGS.simulationBanner.noCorruptedSavedStatesFoundError)
 								clearSavedStateStorageWarning()
 								if (hasSavedSimulationStateRoute()) {
 									navigateToBuiltInScenario(currentScenario.value)
@@ -610,7 +611,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}}
 					>
-						Remove corrupted saves
+						{TSX_STRINGS.componentsSimulationBanner.copy060}
 					</button>
 				</div>
 			</OperationModal>

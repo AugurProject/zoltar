@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '../lib/pagination.js'
 import type { EscalationDeposit } from '../types/contracts.js'
 import { PaginationControls } from './PaginationControls.js'
+import { CURATED_TSX_STRINGS, TSX_STRINGS } from '../lib/uiStrings.js'
 
 const ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE = 25
 
@@ -27,7 +28,8 @@ export function EscalationDepositSelectionList({ disabled = false, items, onSele
 	const pageStartIndex = resolvedPageIndex * ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE
 	const pageEndIndex = Math.min(items.length, pageStartIndex + ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE)
 	const visibleItems = useMemo(() => items.slice(pageStartIndex, pageEndIndex), [items, pageEndIndex, pageStartIndex])
-	const paginationSummary = items.length > ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE ? `Showing deposits ${(pageStartIndex + 1).toString()}-${pageEndIndex.toString()} of ${items.length.toString()}. ${formatPaginationSummary(resolvedPageIndex, pageCount) ?? ''}` : undefined
+	const paginationPageSummary = formatPaginationSummary(resolvedPageIndex, pageCount)
+	const paginationSummary = items.length > ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE && paginationPageSummary !== undefined ? CURATED_TSX_STRINGS.escalationDepositSelectionList.paginationSummary((pageStartIndex + 1).toString(), pageEndIndex.toString(), items.length.toString(), paginationPageSummary) : undefined
 
 	useEffect(() => {
 		if (resolvedPageIndex !== pageIndex) setPageIndex(resolvedPageIndex)
@@ -52,7 +54,10 @@ export function EscalationDepositSelectionList({ disabled = false, items, onSele
 								}}
 							/>
 							<span className='withdraw-deposit-copy'>
-								<strong>Deposit #{deposit.depositIndex.toString()}</strong>
+								<strong>
+									{TSX_STRINGS.componentsEscalationDepositSelectionList.copy001}
+									{deposit.depositIndex.toString()}
+								</strong>
 								{details.map((detail, detailIndex) => (
 									<span key={`${deposit.depositIndex.toString()}:${detailIndex.toString()}`}>{detail}</span>
 								))}
@@ -65,10 +70,10 @@ export function EscalationDepositSelectionList({ disabled = false, items, onSele
 				<PaginationControls
 					hasNextPage={hasNextPage}
 					hasPreviousPage={hasPreviousPage}
-					nextLabel='Next Deposits'
+					nextLabel={TSX_STRINGS.componentsEscalationDepositSelectionList.copy002}
 					onNextPage={() => setPageIndex(currentPageIndex => currentPageIndex + 1)}
 					onPreviousPage={() => setPageIndex(currentPageIndex => Math.max(0, currentPageIndex - 1))}
-					previousLabel='Previous Deposits'
+					previousLabel={TSX_STRINGS.componentsEscalationDepositSelectionList.copy003}
 					summary={paginationSummary}
 				/>
 			)}

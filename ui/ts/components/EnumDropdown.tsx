@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 export type EnumDropdownOption<T extends string> = {
 	label: string
@@ -19,7 +20,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 	const rootRef = useRef<HTMLDivElement | null>(null)
 	const selectedOption = value === undefined ? undefined : options.find(option => option.value === value)
 	const triggerLabel = selectedOption?.label ?? value ?? placeholder ?? ''
-	const accessibleTriggerLabel = ariaLabel === undefined || triggerLabel === '' ? ariaLabel : `${ariaLabel}: ${triggerLabel}`
+	const accessibleTriggerLabel = ariaLabel === undefined || triggerLabel === '' ? ariaLabel : TSX_STRINGS.componentsEnumDropdown.copy001(ariaLabel, triggerLabel)
 
 	const focusMenuOptionAt = (currentTarget: HTMLButtonElement | null, direction: -1 | 1) => {
 		if (rootRef.current === null || currentTarget === null) return
@@ -80,7 +81,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
 			{open ? (
-				<div className='enum-dropdown-menu' role='listbox' aria-label='Dropdown options'>
+				<div className='enum-dropdown-menu' role='listbox' aria-label={TSX_STRINGS.componentsEnumDropdown.copy002}>
 					{options.map(option => (
 						<button
 							key={option.value}

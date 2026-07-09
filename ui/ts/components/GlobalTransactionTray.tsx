@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { Badge } from './Badge.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type GlobalTransactionTrayProps = {
 	transaction: GlobalTransactionPresentation | undefined
@@ -14,12 +15,12 @@ function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
 }
 
 function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { label: string; tone: BadgeTone } {
-	if (tone === 'preparing') return { tone: 'pending', label: 'Preparing' }
-	if (tone === 'awaiting-wallet') return { tone: 'pending', label: 'Awaiting Wallet' }
-	if (tone === 'pending') return { tone: 'pending', label: 'Pending' }
-	if (tone === 'success') return { tone: 'ok', label: 'Confirmed' }
-	if (tone === 'error') return { tone: 'danger', label: 'Failed' }
-	return { tone: 'warning', label: 'Attention' }
+	if (tone === 'preparing') return { tone: 'pending', label: TSX_STRINGS.componentsGlobalTransactionTray.copy001 }
+	if (tone === 'awaiting-wallet') return { tone: 'pending', label: TSX_STRINGS.componentsGlobalTransactionTray.copy002 }
+	if (tone === 'pending') return { tone: 'pending', label: TSX_STRINGS.componentsGlobalTransactionTray.copy003 }
+	if (tone === 'success') return { tone: 'ok', label: TSX_STRINGS.componentsGlobalTransactionTray.copy004 }
+	if (tone === 'error') return { tone: 'danger', label: TSX_STRINGS.componentsGlobalTransactionTray.copy005 }
+	return { tone: 'warning', label: TSX_STRINGS.componentsGlobalTransactionTray.copy006 }
 }
 
 export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProps) {
@@ -81,7 +82,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 							setDismissedKey(transactionDismissKey)
 						}}
 					>
-						Dismiss
+						{TSX_STRINGS.componentsGlobalTransactionTray.copy007}
 					</button>
 				)}
 			</div>

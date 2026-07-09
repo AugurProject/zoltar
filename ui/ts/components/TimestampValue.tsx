@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type TimestampValueProps = {
 	className?: string
@@ -16,7 +17,7 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 
-	if (loading) return <span className={`timestamp-value loading ${className}`}>Loading...</span>
+	if (loading) return <span className={`timestamp-value loading ${className}`}>{TSX_STRINGS.componentsTimestampValue.copy001}</span>
 
 	if (timestamp === undefined) return <span className={`timestamp-value unavailable ${className}`}>{undefinedText}</span>
 
