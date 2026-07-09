@@ -278,6 +278,17 @@
 					are uniform-clearing outcomes, while <code>underfunded</code> is the
 					weak-demand path.
 				</p>
+				<p>
+					This is intentional behavior. In the underfunded branch, the contract
+					is not trying to sell only the fraction of REP that matches the ETH
+					raised so far. It is trying to find the largest high-to-low winning
+					prefix whose members can all accept one synthetic all-REP price, then
+					clear the full REP cap against that prefix. This branch only applies
+					while normal funded clearing still fails. If adding a lower positive
+					bid would make the REP cap bind at that lower tick, the contract does
+					not stay underfunded with a narrower winner set. It switches into the
+					normal funded-clearing branch at that lower tick instead.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -302,9 +313,125 @@
 							<td>Loses and is refunded.</td>
 							<td>Loses and is refunded.</td>
 						</tr>
-					</tbody>
-				</table>
-			</section>
+						</tbody>
+					</table>
+					<h3>Worked Underfunded Examples</h3>
+					<p>
+						The examples below use the intended weak-demand rule: sell all REP
+						to the largest feasible high-to-low winning prefix, then settle that
+						prefix pro rata by winning ETH. In all three examples,
+						<code>maxRepBeingSold = 100 REP</code> and
+						<code>ethRaiseCap = 1,000 ETH</code>, so the ETH cap never binds and
+						the auction stays underfunded only if cumulative demand remains below
+						the REP cap at every active tick.
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th>Example</th>
+								<th>Bid ladder</th>
+								<th>Feasible winning prefix</th>
+								<th>Outcome</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Two-bidder underfunded prefix</td>
+								<td>
+									Bob: <code>6 ETH @ 4 ETH/REP</code>
+									<br />
+									Alice: <code>4 ETH @ 2 ETH/REP</code>
+								</td>
+								<td>
+									At Bob's higher tick, cumulative demand is
+									<code>6 / 4 = 1.5 REP</code>, so the REP cap is not reached.
+									<br />
+									At Alice's lower tick, cumulative demand is
+									<code>10 / 2 = 5 REP</code>, so funded clearing still fails.
+									<br />
+									The final synthetic all-REP price is
+									<code>10 / 100 = 0.10 ETH/REP</code>, which stays below both
+									winning limits.
+								</td>
+								<td>
+									The system keeps <code>10 ETH</code>.
+									<br />
+									Bob and Alice share all <code>100 REP</code> pro rata by
+									winning ETH.
+									<br />
+									Bob receives <code>60 REP</code> and Alice receives
+									<code>40 REP</code>.
+								</td>
+							</tr>
+							<tr>
+								<td>Three-bidder underfunded prefix</td>
+								<td>
+									Alice: <code>5 ETH @ 5 ETH/REP</code>
+									<br />
+									Bob: <code>3 ETH @ 3 ETH/REP</code>
+									<br />
+									Carol: <code>2 ETH @ 2 ETH/REP</code>
+								</td>
+								<td>
+									At the active ticks, cumulative demand is
+									<code>5 / 5 = 1 REP</code>, then
+									<code>8 / 3 ≈ 2.67 REP</code>, then
+									<code>10 / 2 = 5 REP</code>.
+									<br />
+									All of those remain below the <code>100 REP</code> cap, so
+									the funded branch never triggers.
+									<br />
+									The final synthetic all-REP price is again
+									<code>10 / 100 = 0.10 ETH/REP</code>, which all three bids
+									accept.
+								</td>
+								<td>
+									The system keeps <code>10 ETH</code>.
+									<br />
+									Alice, Bob, and Carol share all <code>100 REP</code> pro rata
+									by winning ETH.
+									<br />
+									Alice receives <code>50 REP</code>, Bob <code>30 REP</code>,
+									and Carol <code>20 REP</code>.
+								</td>
+							</tr>
+							<tr>
+								<td>Tiny-demand edge case</td>
+								<td>
+									Alice: <code>1 ETH @ 0.10 ETH/REP</code>
+									<br />
+									No other positive-price bids.
+								</td>
+								<td>
+									At Alice's tick, cumulative demand is
+									<code>1 / 0.10 = 10 REP</code>, so funded clearing still
+									fails.
+									<br />
+									Alice alone is feasible because
+									<code>1 / 100 = 0.01 ETH/REP</code>, which stays below her
+									<code>0.10</code> limit.
+								</td>
+								<td>
+									The system keeps <code>1 ETH</code>.
+									<br />
+									Alice receives all <code>100 REP</code>.
+									<br />
+									That extreme result is still intended: once the auction is
+									underfunded, the rule is to clear the full REP cap at the best
+									feasible all-REP price, not to leave unsold REP behind.
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						Boundary note: if a lower positive bid would make cumulative demand
+						reach the REP cap at that lower tick, the auction no longer stays in
+						the underfunded branch. It becomes a normal funded clearing at that
+						tick, with the marginal lower-price tick filled only up to the REP
+						cap. If that tick contributes more ETH than the cap accepts, the
+						unfilled remainder is refunded.
+					</p>
+				</section>
 
 			<section id="gas-and-spam">
 				<h2>Gas and Spam Bounds</h2>
