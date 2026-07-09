@@ -33,7 +33,7 @@
 					REP-backed obligations while still lacking enough ETH to reopen cleanly.
 					When that happens, the protocol sells child-universe REP for ETH through a
 					truth auction, using the proceeds to restore the collateral shortfall and
-					make open-interest holders whole. The auction repairs the pool’s funding
+					make open-interest holders whole. The auction repairs the pool's funding
 					gap; it does not determine which branch is true.
 				</p>
 
@@ -55,7 +55,7 @@
 			<p>
 				For any child pool with a collateral shortfall, the truth auction can
 				only begin after fork migration has closed. The migration window lasts
-				<code>SecurityPoolUtils.MIGRATION_TIME</code> — 8 weeks from the parent
+				<code>SecurityPoolUtils.MIGRATION_TIME</code> - 8 weeks from the parent
 				universe fork time. Until that window ends, vault holders can still choose
 				which child universe to support, so the protocol cannot know the final
 				collateral shortfall.
@@ -64,7 +64,7 @@
 			<p>
 				After migration closes, anyone may call <code>startTruthAuction</code>.
 				The forker then starts the underlying auction for the affected child pool,
-				using the pool’s ETH repair target and REP sale cap. Bidders submit ETH
+				using the pool's ETH repair target and REP sale cap. Bidders submit ETH
 				directly to the auction during the one-week bidding window.
 			</p>
 
@@ -138,7 +138,7 @@
 							auction function.
 						</td>
 						<td>
-							Opens the auction using the child pool’s repair target and REP
+							Opens the auction using the child pool's repair target and REP
 							sale cap.
 						</td>
 					</tr>
@@ -176,7 +176,11 @@
 						<td><code>settleAuctionBids</code></td>
 						<td><code>refundLosingBidsFor</code></td>
 						<td>
-							Anyone may ask the forker to refund bid pages for a bidder.
+							Anyone may fetch a bounded bid page with
+							<code>getBidderBidPage</code> or <code>getBidPageAtTick</code>,
+							then filter those results down to one bidder or vault and pass the
+							selected <code>(tick, bidIndex)</code> references into the
+							forker's refund batch.
 						</td>
 						<td>
 							Allows currently losing bids to exit before the auction is
@@ -192,7 +196,10 @@
 						</td>
 						<td><code>withdrawBids</code></td>
 						<td>
-							Anyone may ask the forker to settle bid pages.
+							Anyone may fetch bounded bid pages, group the returned bids for
+							one bidder or vault, then settle the selected
+							<code>(tick, bidIndex)</code> entries in one or more bounded
+							batches instead of settling the entire bid set at once.
 						</td>
 						<td>
 							Writes winning claims into child-pool vault accounting as pool
@@ -298,13 +305,17 @@
 				<p>
 					Finalization remains bounded without those caps because it does not
 					iterate over raw bids. Same-tick bids append to per-tick arrays for
-					later paged withdrawal, while clearing uses aggregate ETH totals stored
-					in an AVL tree keyed by tick. The tree exists so the contract can keep
-					all valid price levels open during bidding, yet still find the highest
-					winning region by descending aggregate subtree totals instead of
-					scanning every submitted bid. Finalization therefore pays for tree
-					descent across the finite tick domain rather than for the total number
-					of bids in the auction. The valid tick range is finite:
+					later batched withdrawal. Read helpers expose bounded offset/limit
+					slices of bids at one tick or for one bidder, and settlement later
+					uses selected <code>TickIndex</code> references from those reads to
+					process bids in bounded batches. Clearing itself uses aggregate ETH
+					totals stored in an AVL tree keyed by tick. The tree exists so the
+					contract can keep all valid price levels open during bidding, yet
+					still find the highest winning region by descending aggregate subtree
+					totals instead of scanning every submitted bid. Finalization
+					therefore pays for tree descent across the finite tick domain rather
+					than for the total
+					number of bids in the auction. The valid tick range is finite:
 					<code>[-524288, 524288]</code>, or <code>1,048,577</code> possible
 					price levels. An AVL tree containing every possible tick has maximum
 					height <code>28</code>, so <code>finalize()</code> descends bounded
@@ -365,8 +376,9 @@
 						><code>PRICE_PRECISION = 1e18</code>. A tick wins when
 						<code>tickToPrice(tick) &gt;= underfundedThreshold</code>, so
 						equality wins. Solidity division floors the threshold, REP demand,
-						and per-bid allocation; remainder values carry forward so paged
-						withdrawals reconcile to the aggregate tick result.
+						and per-bid allocation; remainder values carry forward so later
+						batched withdrawals over selected <code>TickIndex</code>
+						references still reconcile to the aggregate tick result.
 					</p>
 				</div>
 				<table>
@@ -415,13 +427,14 @@
 					price is zero.
 				</p>
 				<p>
-					Both finalized allocation paths carry division dust across paged
-					withdrawals. Normal clearing carries <code>clearingRemainder</code>
-					through the uniform-price ETH-to-REP division, and underfunded clearing
-					carries a per-tick remainder through the same-tick ETH-to-REP
-					allocation. Later withdrawals at the same tick may receive remainder
-					carried from earlier integer division so bid-level withdrawals
-					reconcile to the aggregate finalized REP demanded at that tick.
+					Both finalized allocation paths carry division dust across batched
+					withdrawals. Normal clearing carries
+					<code>clearingRemainder</code> through the uniform-price ETH-to-REP
+					division, and underfunded clearing carries a per-tick remainder
+					through the same-tick ETH-to-REP allocation. Later withdrawals at the
+					same tick may receive remainder carried from earlier integer division
+					so bid-level withdrawals reconcile to the aggregate finalized REP
+					demanded at that tick.
 				</p>
 			</section>
 
@@ -440,7 +453,7 @@
 						clears at a uniform price, while weak demand sells only qualifying
 						limit-priced REP demand. It uses real-number arithmetic for
 						readability; the contract floors fixed-point divisions and carries
-						remainders during paged withdrawals.
+						remainders during batched withdrawals.
 					</p>
 					<div class="example-grid">
 						<label>
