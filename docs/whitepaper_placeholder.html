@@ -1496,6 +1496,135 @@
 							then flat at the minimum retention rate.
 						</p>
 					</figure>
+					<p>
+						Read as a user-facing metric, that retention curve becomes the
+						annualized open-interest fee shown in the UI. At zero utilization,
+						the constants imply roughly a <code>10%</code> yearly fee. Once
+						utilization reaches the <code>80%</code> dip, the annualized fee is
+						roughly <code>50%</code> and then stays flat because the on-chain
+						retention rate is already pinned to its minimum. The plotted line
+						below follows the same annualization the UI uses:
+						<code
+							>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code
+						>.
+					</p>
+					<figure class="diagram" id="fig-placeholder-open-interest-fee-curve">
+						<svg
+							viewBox="0 0 860 330"
+							role="img"
+							aria-labelledby="open-interest-fee-title open-interest-fee-desc"
+						>
+							<title id="open-interest-fee-title">
+								Open-interest fee per year
+							</title>
+							<desc id="open-interest-fee-desc">
+								The annualized open-interest fee starts near ten percent at zero
+								utilization, rises as utilization increases, reaches roughly
+								fifty percent at eighty percent utilization, and then stays flat.
+							</desc>
+							<defs>
+								<marker
+									id="arrow-open-interest-fee"
+									viewBox="0 0 10 10"
+									refX="8"
+									refY="5"
+									markerWidth="7"
+									markerHeight="7"
+									orient="auto-start-reverse"
+								>
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+								</marker>
+							</defs>
+							<line
+								class="svg-line"
+								x1="92"
+								y1="250"
+								x2="780"
+								y2="250"
+								marker-end="url(#arrow-open-interest-fee)"
+							></line>
+							<line
+								class="svg-line"
+								x1="92"
+								y1="250"
+								x2="92"
+								y2="58"
+								marker-end="url(#arrow-open-interest-fee)"
+							></line>
+							<text class="svg-small" x="430" y="296" text-anchor="middle">
+								utilization
+							</text>
+							<text
+								class="svg-small"
+								x="28"
+								y="154"
+								text-anchor="middle"
+								transform="rotate(-90 28 154)"
+							>
+								open interest fee / year
+							</text>
+							<line class="svg-line" x1="92" y1="214" x2="154" y2="214"></line>
+							<text class="svg-small" x="174" y="219">10%</text>
+							<line class="svg-line" x1="92" y1="82" x2="718" y2="82"></line>
+							<text class="svg-small" x="738" y="87">50%</text>
+							<line
+								class="svg-line"
+								x1="642"
+								y1="250"
+								x2="642"
+								y2="82"
+								stroke-dasharray="7 7"
+							></line>
+							<text class="svg-small" x="92" y="276">0%</text>
+							<text class="svg-small" x="642" y="276" text-anchor="middle">
+								80%
+							</text>
+							<text class="svg-small" x="780" y="276" text-anchor="end">
+								100%
+							</text>
+							<path
+								class="svg-line"
+								d="M 118 216 L 184 194 L 249 174 L 315 156 L 380 139 L 446 123 L 511 108 L 577 94 L 642 81 L 760 81"
+							></path>
+							<circle class="svg-green" cx="118" cy="214" r="9"></circle>
+							<circle class="svg-red" cx="642" cy="82" r="9"></circle>
+							<rect
+								class="svg-blue"
+								x="182"
+								y="110"
+								width="252"
+								height="64"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="308" y="137" text-anchor="middle">
+								Annualized fee rises
+							</text>
+							<text class="svg-small" x="308" y="158" text-anchor="middle">
+								utilization makes underwriting more expensive
+							</text>
+							<rect
+								class="svg-box"
+								x="582"
+								y="118"
+								width="198"
+								height="58"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="681" y="142" text-anchor="middle">
+								Fee cap reached
+							</text>
+							<text class="svg-small" x="681" y="162" text-anchor="middle">
+								retention floor keeps the fee flat
+							</text>
+						</svg>
+						<p class="diagram-caption">
+							<span class="figure-label">Open Interest Fee Curve</span>The
+							retention constants translate into an annualized open-interest fee
+							that rises from about <code>10%</code> per year to about
+							<code>50%</code> per year, then flattens once the utilization dip
+							is reached.
+						</p>
+					</figure>
 					<div class="equation" id="eq-placeholder-utilization">
 						<math
 							display="block"
