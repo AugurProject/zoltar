@@ -7720,13 +7720,13 @@
 						base fee, the callback gas limit, and the configured gas budget for
 						reporting the price.
 					</p>
-					<p>
-						A later caller that joins the same pending settlement slot pays
-						<code>getQueuedOperationEthCost()</code> instead of funding another
-						report. The coordinator records that payment in
-						<code>oracleFeeCredits</code> for the original pending report
-						sponsor, who can later call <code>withdrawOracleFeeCredits()</code>.
-					</p>
+						<p>
+							While a report remains pending, only the original pending report
+							sponsor can queue more staged operations against that settlement.
+							Those follow-up queues pay no extra ETH join fee; other callers
+							must wait until the pending report settles before they can stage
+							their own operations.
+						</p>
 					<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math
 							display="block"
