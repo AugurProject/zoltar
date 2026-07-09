@@ -5,6 +5,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { TruthAuctionDepthChart } from './TruthAuctionDepthChart.js'
 import { getTruthAuctionDispositionClassName, type TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 
 type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined
@@ -25,29 +26,29 @@ function clampPercentage(value: bigint, maxValue: bigint) {
 
 export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
-		<SectionBlock title='Market View'>
+		<SectionBlock title={UI_STRINGS.truthAuctionMarketViewSection.marketViewTitle}>
 			{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
 			<div className='truth-auction-market-board'>
 				<div className='truth-auction-market-section truth-auction-depth-panel'>
 					<div className='truth-auction-depth-header'>
 						<div>
-							<h4>Visible Depth</h4>
+							<h4>{UI_STRINGS.truthAuctionMarketViewSection.visibleDepthTitle}</h4>
 						</div>
 					</div>
-					{loadingTruthAuctionBook ? <p className='detail'>Loading order book…</p> : undefined}
-					{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>No live price levels are currently active for this auction.</p> : undefined}
+					{loadingTruthAuctionBook ? <p className='detail'>{UI_STRINGS.truthAuctionMarketViewSection.loadingOrderBookDetail}</p> : undefined}
+					{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{UI_STRINGS.truthAuctionMarketViewSection.noLivePriceLevelsDetail}</p> : undefined}
 					{truthAuctionDepthPoints.length === 0 ? undefined : <TruthAuctionDepthChart onSelectTick={onSelectTick} points={truthAuctionDepthPoints} {...(showDepthClearingTick && clearingTick !== undefined ? { clearingTick } : {})} />}
 				</div>
 				<div className='truth-auction-market-detail-grid'>
 					<div className='truth-auction-market-section'>
 						<div className='truth-auction-panel-header'>
 							<div>
-								<h4>Price Ladder</h4>
+								<h4>{UI_STRINGS.truthAuctionMarketViewSection.priceLadderTitle}</h4>
 							</div>
 						</div>
 						<div className='truth-auction-ladder'>
-							{loadingTruthAuctionBook ? <p className='detail'>Loading price levels…</p> : undefined}
-							{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>No active levels are visible yet.</p> : undefined}
+							{loadingTruthAuctionBook ? <p className='detail'>{UI_STRINGS.truthAuctionMarketViewSection.loadingPriceLevelsDetail}</p> : undefined}
+							{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{UI_STRINGS.truthAuctionMarketViewSection.noActiveLevelsDetail}</p> : undefined}
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}
@@ -61,27 +62,27 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 										<div className='truth-auction-price-row-main'>
 											<div>
 												<strong>{renderPriceValue(point.price)}</strong>
-												<span className='truth-auction-price-row-price'>Price level</span>
+												<span className='truth-auction-price-row-price'>{UI_STRINGS.truthAuctionMarketViewSection.priceLevelLabel}</span>
 											</div>
 											<div className='truth-auction-price-row-badges'>
-												{clearingTick === point.tick ? <span className='truth-auction-ladder-helper'>Clearing level</span> : undefined}
-												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>Current form price</span> : undefined}
+												{clearingTick === point.tick ? <span className='truth-auction-ladder-helper'>{UI_STRINGS.truthAuctionMarketViewSection.clearingLevelBadgeLabel}</span> : undefined}
+												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{UI_STRINGS.truthAuctionMarketViewSection.currentFormPriceBadgeLabel}</span> : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
 											</div>
 										</div>
 										<div className='truth-auction-price-row-meta'>
 											<span>
-												Current size <CurrencyValue value={point.currentTotalEth} suffix='ETH' />
+												{UI_STRINGS.truthAuctionMarketViewSection.currentSizeLabel} <CurrencyValue value={point.currentTotalEth} suffix={UI_STRINGS.common.ethSuffix} />
 											</span>
 											<span className='truth-auction-ladder-row-cumulative'>
-												Loaded depth <CurrencyValue value={point.cumulativeEth} suffix='ETH' />
+												{UI_STRINGS.truthAuctionMarketViewSection.loadedDepthLabel} <CurrencyValue value={point.cumulativeEth} suffix={UI_STRINGS.common.ethSuffix} />
 											</span>
-											<span>{point.submissionCount.toString()} submissions</span>
+											<span>{UI_STRINGS.truthAuctionMarketViewSection.submissionsLabel(point.submissionCount.toString())}</span>
 										</div>
 									</div>
 								</button>
 							))}
-							{hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} onLoadMore={onLoadNextTickPage} loadMoreLabel='Load More Price Levels' /> : undefined}
+							{hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} onLoadMore={onLoadNextTickPage} loadMoreLabel={UI_STRINGS.truthAuctionMarketViewSection.loadMorePriceLevelsLabel} /> : undefined}
 						</div>
 					</div>
 				</div>
