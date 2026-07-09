@@ -1,10 +1,11 @@
 import type { CollateralizationCircleProps } from '../types/components.js'
 import { formatCollateralizationCompactPercentLabel, getCollateralizationVisualPercent, getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 const MAX_RING_COLLATERALIZATION_PERCENT = 999n * 10n ** 18n
 const MAX_RING_COLLATERALIZATION_LABEL = '999%+'
 
-export function CollateralizationCircle({ collateralizationPercent, className = '', label = 'Collateralization', size = 'medium', successThreshold = 1, targetCollateralizationPercent, tone, warningThreshold = 0.65 }: CollateralizationCircleProps) {
+export function CollateralizationCircle({ collateralizationPercent, className = '', label = TSX_STRINGS.componentsCollateralizationCircle.copy001, size = 'medium', successThreshold = 1, targetCollateralizationPercent, tone, warningThreshold = 0.65 }: CollateralizationCircleProps) {
 	const toneRatio = getVisualRatio({ value: collateralizationPercent, maxValue: targetCollateralizationPercent })
 	const resolvedTone =
 		tone ??
@@ -24,7 +25,7 @@ export function CollateralizationCircle({ collateralizationPercent, className = 
 	const strokeDashoffset = circumference - circumference * (clampedCollateralizationVisualPercent / 100)
 	const displayValueFitsInRing = collateralizationPercent === undefined || collateralizationPercent <= MAX_RING_COLLATERALIZATION_PERCENT
 	const ringDisplayValue = displayValueFitsInRing ? displayValue : MAX_RING_COLLATERALIZATION_LABEL
-	const exactValueTitle = collateralizationPercent === undefined ? `${label} unavailable` : `${label}: ${displayValue}`
+	const exactValueTitle = collateralizationPercent === undefined ? TSX_STRINGS.componentsCollateralizationCircle.copy002(label) : TSX_STRINGS.componentsCollateralizationCircle.copy003(label, displayValue)
 
 	return (
 		<div className={['collateralization-gauge', `collateralization-gauge-size-${size}`, resolvedTone === undefined ? '' : `tone-${resolvedTone}`, className].filter(Boolean).join(' ').trim()} title={exactValueTitle}>

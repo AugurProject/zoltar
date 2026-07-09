@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatAddress } from '../lib/addresses.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type AddressValueProps = {
 	address: string | undefined
@@ -62,8 +63,8 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 	const displayValue = shouldShorten ? formatAddress(address) : address
 
 	return (
-		<button ref={buttonRef} type='button' className={`address-value copyable ${className}`} title={address} aria-label={`Copy address ${address}`} onClick={() => copyText(address)}>
-			{copied.value ? 'Copied' : displayValue}
+		<button ref={buttonRef} type='button' className={`address-value copyable ${className}`} title={address} aria-label={TSX_STRINGS.componentsAddressValue.copy001(address)} onClick={() => copyText(address)}>
+			{copied.value ? TSX_STRINGS.componentsAddressValue.copy002 : displayValue}
 			<span ref={measureRef} aria-hidden='true' className='address-value-measure'>
 				{address}
 			</span>

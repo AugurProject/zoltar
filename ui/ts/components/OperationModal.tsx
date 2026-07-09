@@ -1,6 +1,7 @@
 import { useId, useRef } from 'preact/hooks'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 
 export function OperationModal({ children, description, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
@@ -25,7 +26,7 @@ export function OperationModal({ children, description, isOpen, onClose, title }
 					<div className='modal-header-title'>
 						<h3 id={titleId}>{title}</h3>
 					</div>
-					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label='Close' title='Close' onClick={onClose}>
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={UI_STRINGS.common.closeLabel} title={UI_STRINGS.common.closeLabel} onClick={onClose}>
 						×
 					</button>
 				</div>

@@ -6,6 +6,7 @@ import { MetricField } from './MetricField.js'
 import { PaginationControls } from './PaginationControls.js'
 import { SectionBlock } from './SectionBlock.js'
 import type { TruthAuctionBidRowViewModel, ViewerTruthAuctionBidRowViewModel } from '../lib/truthAuctionBidViewModels.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type TruthAuctionBidsSectionProps = {
 	aggregatedAuctionBidCountForLoadedTicks: bigint
@@ -31,11 +32,11 @@ type ViewerTruthAuctionBidsSectionProps = {
 function AuctionBidsHeader() {
 	return (
 		<div className='truth-auction-bid-row is-wide is-no-actions is-header'>
-			<span className='truth-auction-bid-row-label'>Price (ETH / REP)</span>
-			<span>Bidder</span>
-			<span>Bid Amount (ETH)</span>
-			<span>Loaded Depth (ETH)</span>
-			<span className='truth-auction-bid-row-status'>Status</span>
+			<span className='truth-auction-bid-row-label'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy001}</span>
+			<span>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy002}</span>
+			<span>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy003}</span>
+			<span>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy004}</span>
+			<span className='truth-auction-bid-row-status'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy005}</span>
 		</div>
 	)
 }
@@ -43,25 +44,25 @@ function AuctionBidsHeader() {
 function ViewerBidsHeader({ showActions }: { showActions: boolean }) {
 	return (
 		<div className={`truth-auction-bid-row is-wallet ${showActions ? '' : 'is-no-actions'} is-header`}>
-			{showActions ? <span>Selected</span> : undefined}
-			<span className='truth-auction-bid-row-label'>Price (ETH / REP)</span>
-			<span>Bid Amount (ETH)</span>
-			<span className='truth-auction-bid-row-status'>Status</span>
+			{showActions ? <span>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy006}</span> : undefined}
+			<span className='truth-auction-bid-row-label'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy007}</span>
+			<span>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy008}</span>
+			<span className='truth-auction-bid-row-status'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy009}</span>
 		</div>
 	)
 }
 
 export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTicks, hasMoreAggregatedAuctionBids, loadedTickCount, loadingAggregatedAuctionBids, onLoadNextAuctionBidPage, renderPriceValue, rows }: TruthAuctionBidsSectionProps) {
 	return (
-		<SectionBlock title='Truth Auction Bids'>
+		<SectionBlock title={TSX_STRINGS.componentsTruthAuctionBidsSection.copy010}>
 			<div className='truth-auction-bid-coverage-summary'>
-				<MetricField label='Loaded Levels'>{loadedTickCount.toString()}</MetricField>
-				<MetricField label='Loaded Bids'>{rows.length.toString()}</MetricField>
-				<MetricField label='Coverage'>{`Showing ${rows.length.toString()} of ${aggregatedAuctionBidCountForLoadedTicks.toString()} bids across loaded levels`}</MetricField>
+				<MetricField label={TSX_STRINGS.componentsTruthAuctionBidsSection.copy011}>{loadedTickCount.toString()}</MetricField>
+				<MetricField label={TSX_STRINGS.componentsTruthAuctionBidsSection.copy012}>{rows.length.toString()}</MetricField>
+				<MetricField label={TSX_STRINGS.componentsTruthAuctionBidsSection.copy013}>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy014(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</MetricField>
 			</div>
-			{loadingAggregatedAuctionBids ? <p className='detail'>Loading auction bids…</p> : undefined}
-			{!loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>No active prices are currently visible for this auction.</p> : undefined}
-			{!loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>No bids are currently indexed for the loaded prices.</p> : undefined}
+			{loadingAggregatedAuctionBids ? <p className='detail'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy015}</p> : undefined}
+			{!loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy016}</p> : undefined}
+			{!loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy017}</p> : undefined}
 			{rows.length === 0 ? undefined : (
 				<div className='truth-auction-bid-table'>
 					<AuctionBidsHeader />
@@ -72,10 +73,10 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 								<AddressValue address={row.bidder} />
 							</div>
 							<span>
-								<CurrencyValue value={row.ethAmount} suffix='ETH' />
+								<CurrencyValue value={row.ethAmount} suffix={TSX_STRINGS.componentsTruthAuctionBidsSection.copy018} />
 							</span>
 							<span>
-								<CurrencyValue value={row.cumulativeEth} suffix='ETH' />
+								<CurrencyValue value={row.cumulativeEth} suffix={TSX_STRINGS.componentsTruthAuctionBidsSection.copy019} />
 							</span>
 							<span className='truth-auction-bid-row-status'>
 								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
@@ -84,17 +85,17 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 					))}
 				</div>
 			)}
-			{hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel='Load More Truth Auction Bids' /> : undefined}
+			{hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={TSX_STRINGS.componentsTruthAuctionBidsSection.copy020} /> : undefined}
 		</SectionBlock>
 	)
 }
 
 export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBids, loadingTruthAuctionBook, onLoadNextViewerBidPage, onSettlementBidSelectionChange, renderPriceValue, rows, showSettlementActionColumn }: ViewerTruthAuctionBidsSectionProps) {
 	return (
-		<SectionBlock title='My Bids'>
-			{accountAddress === undefined ? <p className='detail'>Connect a wallet to inspect your submitted truth auction bids.</p> : undefined}
-			{accountAddress !== undefined && loadingTruthAuctionBook ? <p className='detail'>Loading your bids…</p> : undefined}
-			{accountAddress !== undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>No bids from this wallet are indexed for the current auction.</p> : undefined}
+		<SectionBlock title={TSX_STRINGS.componentsTruthAuctionBidsSection.copy021}>
+			{accountAddress === undefined ? <p className='detail'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy022}</p> : undefined}
+			{accountAddress !== undefined && loadingTruthAuctionBook ? <p className='detail'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy023}</p> : undefined}
+			{accountAddress !== undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{TSX_STRINGS.componentsTruthAuctionBidsSection.copy024}</p> : undefined}
 			{rows.length === 0 ? undefined : (
 				<div className='truth-auction-bid-table'>
 					<ViewerBidsHeader showActions={showSettlementActionColumn} />
@@ -111,7 +112,7 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBid
 							) : undefined}
 							<span className='truth-auction-bid-row-label'>{renderPriceValue(row.price)}</span>
 							<span>
-								<CurrencyValue value={row.ethAmount} suffix='ETH' />
+								<CurrencyValue value={row.ethAmount} suffix={TSX_STRINGS.componentsTruthAuctionBidsSection.copy025} />
 							</span>
 							<span className='truth-auction-bid-row-status'>
 								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
@@ -120,7 +121,7 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBid
 					))}
 				</div>
 			)}
-			{accountAddress !== undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} onLoadMore={onLoadNextViewerBidPage} loadMoreLabel='Load More Of My Bids' /> : undefined}
+			{accountAddress !== undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} onLoadMore={onLoadNextViewerBidPage} loadMoreLabel={TSX_STRINGS.componentsTruthAuctionBidsSection.copy026} /> : undefined}
 		</SectionBlock>
 	)
 }

@@ -14,6 +14,7 @@ import { resolveLoadableValueState, type LoadableValueState } from '../lib/loadS
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	hasLoadedZoltarQuestions: boolean
@@ -72,23 +73,23 @@ export function ForkZoltarSection({
 		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet: true })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
-		if (hasForked) return 'Zoltar is already forked.'
+		if (hasForked) return TSX_STRINGS.componentsForkZoltarSection.copy001
 		return undefined
 	})()
 	const forkGuardMessage =
 		accountAddress === undefined
-			? 'Connect a wallet before forking Zoltar.'
+			? TSX_STRINGS.componentsForkZoltarSection.copy002
 			: (() => {
 					if (!isMainnet) return undefined
-					if (rootUniverse === undefined) return 'Refresh universe data before forking Zoltar.'
+					if (rootUniverse === undefined) return TSX_STRINGS.componentsForkZoltarSection.copy003
 
 					return (() => {
-						if (hasForked) return 'Zoltar is already forked.'
-						if (selectedQuestion === undefined) return 'Select a valid fork question before forking Zoltar.'
+						if (hasForked) return TSX_STRINGS.componentsForkZoltarSection.copy004
+						if (selectedQuestion === undefined) return TSX_STRINGS.componentsForkZoltarSection.copy005
 
 						return (() => {
-							if (!hasEnoughRep) return 'Insufficient REP to meet the fork threshold.'
-							if (!hasEnoughApproval) return 'Approve enough REP before forking Zoltar.'
+							if (!hasEnoughRep) return TSX_STRINGS.componentsForkZoltarSection.copy006
+							if (!hasEnoughApproval) return TSX_STRINGS.componentsForkZoltarSection.copy007
 
 							return undefined
 						})()
@@ -98,7 +99,7 @@ export function ForkZoltarSection({
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
-				{presentation === undefined ? undefined : <StateHint presentation={presentation} title='Fork Zoltar' />}
+				{presentation === undefined ? undefined : <StateHint presentation={presentation} title={TSX_STRINGS.componentsForkZoltarSection.copy008} />}
 				<ErrorNotice message={zoltarForkError} />
 			</>
 		)
@@ -106,15 +107,15 @@ export function ForkZoltarSection({
 	return (
 		<>
 			<DataGrid>
-				<MetricField label='Fork Threshold'>
-					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
+				<MetricField label={TSX_STRINGS.componentsForkZoltarSection.copy009}>
+					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix={TSX_STRINGS.componentsForkZoltarSection.copy010} />
 				</MetricField>
 			</DataGrid>
 
 			<div className='form-grid'>
 				{hasForked ? undefined : (
 					<TokenApprovalControl
-						actionLabel='forking Zoltar'
+						actionLabel={TSX_STRINGS.componentsForkZoltarSection.copy011}
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
@@ -122,7 +123,7 @@ export function ForkZoltarSection({
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}
-						pendingLabel='Approving REP Threshold...'
+						pendingLabel={TSX_STRINGS.componentsForkZoltarSection.copy012}
 						requiredAmount={rootUniverse?.forkThreshold}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
 						safetyId='zoltar.approveForkRep'
@@ -132,12 +133,12 @@ export function ForkZoltarSection({
 				)}
 
 				<label className='field'>
-					<span>Fork Question ID</span>
-					<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
+					<span>{TSX_STRINGS.componentsForkZoltarSection.copy013}</span>
+					<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={TSX_STRINGS.componentsForkZoltarSection.copy014} disabled={hasForked || zoltarForkPending} />
 				</label>
 
 				{selectedQuestion === undefined ? undefined : (
-					<WorkflowSubsection title='Question'>
+					<WorkflowSubsection title={TSX_STRINGS.componentsForkZoltarSection.copy015}>
 						<Question question={selectedQuestion} />
 					</WorkflowSubsection>
 				)}
@@ -146,8 +147,8 @@ export function ForkZoltarSection({
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId='zoltar.forkZoltar'
-						idleLabel='Fork Zoltar'
-						pendingLabel='Forking Zoltar...'
+						idleLabel={TSX_STRINGS.componentsForkZoltarSection.copy016}
+						pendingLabel={TSX_STRINGS.componentsForkZoltarSection.copy017}
 						onClick={() => {
 							if (selectedQuestionId === '') return
 							onForkZoltar()

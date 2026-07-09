@@ -10,6 +10,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
+import { CURATED_TSX_STRINGS, TSX_STRINGS } from '../lib/uiStrings.js'
 type TokenApprovalControlProps = {
 	actionLabel: string
 	allowanceError: string | undefined
@@ -48,10 +49,10 @@ function resolveApprovalButtonLabel({
 	tokenUnits: number
 }) {
 	if (pending) return <LoadingText>{pendingLabel}</LoadingText>
-	if (guardMessage !== undefined || nextApprovalAmount === undefined) return `Approve ${tokenSymbol}`
-	if (requirementSatisfied && !isCustomAmount && !isMaxAmount) return 'Approval Satisfied'
-	if (isMaxAmount) return `Approve Max ${tokenSymbol}`
-	return `Approve ${formatCurrencyBalance(nextApprovalAmount, tokenUnits)} ${tokenSymbol}`
+	if (guardMessage !== undefined || nextApprovalAmount === undefined) return TSX_STRINGS.componentsTokenApprovalControl.copy001(tokenSymbol)
+	if (requirementSatisfied && !isCustomAmount && !isMaxAmount) return TSX_STRINGS.componentsTokenApprovalControl.copy002
+	if (isMaxAmount) return TSX_STRINGS.componentsTokenApprovalControl.copy003(tokenSymbol)
+	return TSX_STRINGS.componentsTokenApprovalControl.copy004(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
 }
 export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, safetyId, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
@@ -61,10 +62,10 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	}, [resetKey])
 	const parsedAmount = useMemo(() => {
 		try {
-			return parseTokenApprovalAmountInput(draftAmount, 'Approval amount', tokenUnits)
+			return parseTokenApprovalAmountInput(draftAmount, CURATED_TSX_STRINGS.tokenApprovalControl.approvalAmountLabel, tokenUnits)
 		} catch (error) {
 			return {
-				error: error instanceof Error ? error.message : 'Approval amount must be a decimal number',
+				error: error instanceof Error ? error.message : CURATED_TSX_STRINGS.tokenApprovalControl.approvalAmountDecimalError,
 				kind: 'invalid' as const,
 			}
 		}
@@ -116,20 +117,20 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	return (
 		<div className='form-grid'>
 			<MetricGrid>
-				<MetricField label={`Required ${tokenSymbol}`}>
+				<MetricField label={TSX_STRINGS.componentsTokenApprovalControl.copy005(tokenSymbol)}>
 					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
-				<MetricField label={`Approved ${tokenSymbol}`}>
+				<MetricField label={TSX_STRINGS.componentsTokenApprovalControl.copy006(tokenSymbol)}>
 					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 			</MetricGrid>
 
 			<label className='field approval-amount-field'>
-				<span className='approval-amount-label'>{`${tokenSymbol} Approval Amount`}</span>
+				<span className='approval-amount-label'>{TSX_STRINGS.componentsTokenApprovalControl.copy007(tokenSymbol)}</span>
 				<div className='field-inline approval-amount-controls'>
-					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder='Leave blank for required total' invalid={amountValidationMessage !== undefined} disabled={controlsDisabled} />
+					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder={TSX_STRINGS.componentsTokenApprovalControl.copy008} invalid={amountValidationMessage !== undefined} disabled={controlsDisabled} />
 					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={controlsDisabled}>
-						Max
+						{TSX_STRINGS.componentsTokenApprovalControl.copy009}
 					</button>
 				</div>
 			</label>

@@ -1,7 +1,8 @@
 import type { RankedBarListProps } from '../types/components.js'
 import { clampVisualRatio, getVisualRatio, takeTopRankedItems } from '../lib/visualMetrics.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
-export function RankedBarList({ className = '', emptyMessage = 'Nothing to show.', items }: RankedBarListProps) {
+export function RankedBarList({ className = '', emptyMessage = TSX_STRINGS.componentsRankedBarList.copy001, items }: RankedBarListProps) {
 	if (items.length === 0) return <p className={['ranked-bar-list-empty', className].filter(Boolean).join(' ')}>{emptyMessage}</p>
 
 	const rankedItems = takeTopRankedItems({ items, limit: items.length })

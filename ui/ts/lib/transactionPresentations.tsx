@@ -20,6 +20,7 @@ import type {
 	ZoltarForkActionResult,
 	ZoltarMigrationActionResult,
 } from '../types/contracts.js'
+import { TSX_STRINGS, UI_STRINGS } from './uiStrings.js'
 
 function buildPresentation({ detail, hash, rows, title, tone }: { detail: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
 	return {
@@ -72,29 +73,29 @@ function getPreviewAccountAddress(account: Account | string | undefined) {
 function formatPreviewArgument(value: unknown): string {
 	if (typeof value === 'bigint') return value.toString()
 	if (Array.isArray(value)) return `[${value.map(formatPreviewArgument).join(', ')}]`
-	if (value === undefined) return 'undefined'
-	if (value === null) return 'null'
+	if (value === undefined) return TSX_STRINGS.libTransactionPresentations.copy001
+	if (value === null) return TSX_STRINGS.libTransactionPresentations.copy002
 	return String(value)
 }
 
 function formatPreviewData(data: string) {
 	const byteLength = Math.max(0, (data.length - 2) / 2)
 	if (data.length <= 74) return data
-	return `${data.slice(0, 66)}... (${byteLength.toString()} bytes)`
+	return TSX_STRINGS.libTransactionPresentations.copy003(data.slice(0, 66), byteLength.toString())
 }
 
 function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
 	const senderAddress = getPreviewAccountAddress(preview.account)
 	return [
 		...(intent.rows ?? []),
-		...(senderAddress === undefined ? [] : [{ label: 'Sender', value: senderAddress }]),
-		...(preview.chainName === undefined ? [] : [{ label: 'Chain', value: preview.chainName }]),
-		...(preview.contractAddress === undefined ? [] : [{ label: 'Contract', value: preview.contractAddress }]),
-		...(preview.to === undefined ? [] : [{ label: 'To', value: preview.to }]),
-		{ label: 'Function', value: preview.functionName },
-		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: 'ETH Value', value: `${formatCurrencyBalance(preview.value)} ETH` }]),
-		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? 'Calldata', value: formatPreviewData(preview.data) }]),
-		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: 'Arguments', value: preview.args.map(formatPreviewArgument).join(', ') }]),
+		...(senderAddress === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy004, value: senderAddress }]),
+		...(preview.chainName === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy005, value: preview.chainName }]),
+		...(preview.contractAddress === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy006, value: preview.contractAddress }]),
+		...(preview.to === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy007, value: preview.to }]),
+		{ label: TSX_STRINGS.libTransactionPresentations.copy008, value: preview.functionName },
+		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy009, value: `${formatCurrencyBalance(preview.value)} ${UI_STRINGS.common.ethSuffix}` }]),
+		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? TSX_STRINGS.libTransactionPresentations.copy010, value: formatPreviewData(preview.data) }]),
+		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy011, value: preview.args.map(formatPreviewArgument).join(', ') }]),
 	]
 }
 
@@ -102,16 +103,16 @@ export function createDeploymentTransactionIntent(stepLabel: string) {
 	return buildIntent({
 		action: 'deploy',
 		source: 'deployment',
-		submittedTitle: `Deploying ${stepLabel}`,
-		submittedDetail: 'Transaction submitted. Waiting for confirmation.',
+		submittedTitle: TSX_STRINGS.libTransactionPresentations.copy012(stepLabel),
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy013,
 	})
 }
 
 export function createDeploymentSuccessPresentation(stepLabel: string, hash: Hash) {
 	return buildPresentation({
-		detail: `${stepLabel} was deployed successfully.`,
+		detail: TSX_STRINGS.libTransactionPresentations.copy014(stepLabel),
 		hash,
-		title: `${stepLabel} Deployed`,
+		title: TSX_STRINGS.libTransactionPresentations.copy015(stepLabel),
 		tone: 'success',
 	})
 }
@@ -119,7 +120,7 @@ export function createDeploymentSuccessPresentation(stepLabel: string, hash: Has
 export function createAwaitingWalletPresentation(intent: TransactionIntent, dismissKey: string) {
 	if (intent.requiresWalletConfirmation === false)
 		return buildHashlessPresentation({
-			detail: 'Submitting in browser simulation. No wallet confirmation is required.',
+			detail: TSX_STRINGS.libTransactionPresentations.copy016,
 			dismissKey,
 			title: intent.submittedTitle,
 			tone: 'preparing',
@@ -127,7 +128,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 		})
 
 	return buildHashlessPresentation({
-		detail: 'Confirm the transaction in your wallet.',
+		detail: TSX_STRINGS.libTransactionPresentations.copy017,
 		dismissKey,
 		title: intent.submittedTitle,
 		tone: 'awaiting-wallet',
@@ -138,7 +139,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 export function createPreparedWalletPresentation(intent: TransactionIntent, preview: TransactionRequestPreview, dismissKey: string): GlobalTransactionPresentation {
 	const requiresWalletConfirmation = preview.requiresWalletConfirmation ?? intent.requiresWalletConfirmation ?? true
 	return buildHashlessPresentation({
-		detail: requiresWalletConfirmation ? 'Review the prepared transaction, then confirm it in your wallet.' : 'Review the prepared transaction before it is submitted.',
+		detail: requiresWalletConfirmation ? TSX_STRINGS.libTransactionPresentations.copy018 : TSX_STRINGS.libTransactionPresentations.copy019,
 		dismissKey,
 		rows: getPreparedTransactionRows(intent, preview),
 		title: intent.submittedTitle,
@@ -160,20 +161,20 @@ export function createMarketCreationTransactionIntent() {
 	return buildIntent({
 		action: 'createMarket',
 		source: 'zoltar',
-		submittedTitle: 'Creating Question',
-		submittedDetail: 'Question creation transaction submitted.',
+		submittedTitle: TSX_STRINGS.libTransactionPresentations.copy020,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy021,
 	})
 }
 
 export function createMarketCreationSuccessPresentation(result: MarketCreationResult) {
 	return buildPresentation({
-		detail: 'The new Zoltar question is now on-chain.',
+		detail: TSX_STRINGS.libTransactionPresentations.copy022,
 		hash: result.createQuestionHash,
 		rows: [
-			{ label: 'Question ID', value: result.questionId },
-			{ label: 'Market Type', value: result.marketType },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy023, value: result.questionId },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy024, value: result.marketType },
 		],
-		title: 'Question Created',
+		title: TSX_STRINGS.libTransactionPresentations.copy025,
 		tone: 'success',
 	})
 }
@@ -186,20 +187,20 @@ export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork'
 	return buildIntent({
 		action: actionName,
 		source: 'zoltar',
-		submittedTitle: actionName === 'approve' ? 'Approving Fork REP' : 'Forking Zoltar',
-		submittedDetail: actionName === 'approve' ? 'REP approval transaction submitted.' : 'Zoltar fork transaction submitted.',
+		submittedTitle: actionName === 'approve' ? TSX_STRINGS.libTransactionPresentations.copy026 : TSX_STRINGS.libTransactionPresentations.copy027,
+		submittedDetail: actionName === 'approve' ? TSX_STRINGS.libTransactionPresentations.copy028 : TSX_STRINGS.libTransactionPresentations.copy029,
 	})
 }
 
 export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResult) {
-	const title = result.action === 'approveForkRep' ? 'Fork REP Approved' : 'Zoltar Fork Submitted'
-	const detail = result.action === 'approveForkRep' ? 'REP approval was updated for the Zoltar fork flow.' : 'The selected universe fork has been submitted on-chain.'
+	const title = result.action === 'approveForkRep' ? TSX_STRINGS.libTransactionPresentations.copy030 : TSX_STRINGS.libTransactionPresentations.copy031
+	const detail = result.action === 'approveForkRep' ? TSX_STRINGS.libTransactionPresentations.copy032 : TSX_STRINGS.libTransactionPresentations.copy033
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
-			{ label: 'Question ID', value: result.questionId },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy034, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy035, value: result.questionId },
 		],
 		title,
 		tone: 'success',
@@ -214,20 +215,20 @@ export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'z
 	return buildIntent({
 		action: 'createChildUniverse',
 		source,
-		submittedTitle: 'Deploying Child Universe',
-		submittedDetail: 'Child-universe deployment transaction submitted.',
+		submittedTitle: TSX_STRINGS.libTransactionPresentations.copy036,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy037,
 	})
 }
 
 export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult) {
 	return buildPresentation({
-		detail: 'The selected child universe was deployed successfully.',
+		detail: TSX_STRINGS.libTransactionPresentations.copy038,
 		hash: result.hash,
 		rows: [
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
-			{ label: 'Outcome Index', value: result.outcomeIndex.toString() },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy039, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy040, value: result.outcomeIndex.toString() },
 		],
-		title: 'Child Universe Deployed',
+		title: TSX_STRINGS.libTransactionPresentations.copy041,
 		tone: 'success',
 	})
 }
@@ -240,21 +241,21 @@ export function createZoltarMigrationTransactionIntent(actionName: 'prepare' | '
 	return buildIntent({
 		action: actionName,
 		source: 'zoltar',
-		submittedTitle: actionName === 'prepare' ? 'Preparing REP' : 'Splitting REP',
-		submittedDetail: actionName === 'prepare' ? 'REP preparation transaction submitted.' : 'REP migration transaction submitted.',
+		submittedTitle: actionName === 'prepare' ? TSX_STRINGS.libTransactionPresentations.copy042 : TSX_STRINGS.libTransactionPresentations.copy043,
+		submittedDetail: actionName === 'prepare' ? TSX_STRINGS.libTransactionPresentations.copy044 : TSX_STRINGS.libTransactionPresentations.copy045,
 	})
 }
 
 export function createZoltarMigrationSuccessPresentation(result: ZoltarMigrationActionResult) {
 	return buildPresentation({
-		detail: result.action === 'addRepToMigrationBalance' ? 'REP was added to your migration balance.' : 'Migration REP was split across the selected child universes.',
+		detail: result.action === 'addRepToMigrationBalance' ? TSX_STRINGS.libTransactionPresentations.copy046 : TSX_STRINGS.libTransactionPresentations.copy047,
 		hash: result.hash,
 		rows: [
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
-			{ label: 'Amount', value: `${formatCurrencyBalance(result.amount)} REP` },
-			{ label: 'Outcome Indexes', value: result.outcomeIndexes.length === 0 ? 'None' : result.outcomeIndexes.join(', ') },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy048, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy049, value: `${formatCurrencyBalance(result.amount)} ${UI_STRINGS.common.repLabel}` },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy050, value: result.outcomeIndexes.length === 0 ? UI_STRINGS.common.noneLabel : result.outcomeIndexes.join(', ') },
 		],
-		title: result.action === 'addRepToMigrationBalance' ? 'REP Prepared' : 'REP Split',
+		title: result.action === 'addRepToMigrationBalance' ? TSX_STRINGS.libTransactionPresentations.copy051 : TSX_STRINGS.libTransactionPresentations.copy052,
 		tone: 'success',
 	})
 }
@@ -267,22 +268,22 @@ export function createSecurityPoolCreationTransactionIntent() {
 	return buildIntent({
 		action: 'createSecurityPool',
 		source: 'security-pools',
-		submittedTitle: 'Creating Security Pool',
-		submittedDetail: 'Security-pool deployment transaction submitted.',
+		submittedTitle: TSX_STRINGS.libTransactionPresentations.copy053,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy054,
 	})
 }
 
 export function createSecurityPoolCreationSuccessPresentation(result: SecurityPoolCreationResult) {
 	return buildPresentation({
-		detail: 'The new security pool is now available for shares, reporting, and vault operations.',
+		detail: TSX_STRINGS.libTransactionPresentations.copy055,
 		hash: result.deployPoolHash,
 		rows: [
-			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
-			{ label: 'Question ID', value: result.questionId },
-			{ label: 'Security Multiplier', value: result.securityMultiplier.toString() },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy056, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy057, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy058, value: result.questionId },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy059, value: result.securityMultiplier.toString() },
 		],
-		title: 'Security Pool Created',
+		title: TSX_STRINGS.libTransactionPresentations.copy060,
 		tone: 'success',
 	})
 }
@@ -296,21 +297,19 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 		action: actionName,
 		source: 'security-vault',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: `${humanizeAction(actionName)} transaction submitted.`,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy061(humanizeAction(actionName)),
 	})
 }
 
 export function createSecurityVaultSuccessPresentation(result: SecurityVaultActionResult) {
 	let queuedOperationDetail: string | undefined
 	if (result.queuedOperation !== undefined) {
-		queuedOperationDetail = result.queuedOperation.isPendingSlot
-			? `Staged operation #${result.queuedOperation.operationId.toString()} was queued for the next oracle settlement.`
-			: `Staged operation #${result.queuedOperation.operationId.toString()} was queued and must be executed manually after a valid oracle price is available.`
+		queuedOperationDetail = result.queuedOperation.isPendingSlot ? TSX_STRINGS.libTransactionPresentations.copy062(result.queuedOperation.operationId.toString()) : TSX_STRINGS.libTransactionPresentations.copy063(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({
-		detail: queuedOperationDetail ?? `${humanizeAction(result.action)} completed successfully.`,
+		detail: queuedOperationDetail ?? TSX_STRINGS.libTransactionPresentations.copy064(humanizeAction(result.action)),
 		hash: result.hash,
-		rows: [{ label: 'Action', value: humanizeAction(result.action) }, ...(result.queuedOperation === undefined ? [] : [{ label: 'Staged Operation', value: `#${result.queuedOperation.operationId.toString()}` }])],
+		rows: [{ label: TSX_STRINGS.libTransactionPresentations.copy065, value: humanizeAction(result.action) }, ...(result.queuedOperation === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy066, value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -325,25 +324,25 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 		action: actionName,
 		source: 'trading',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: `${humanizeAction(actionName)} transaction submitted.`,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy067(humanizeAction(actionName)),
 	})
 }
 
 export function createTradingSuccessPresentation(result: TradingActionResult) {
 	const detail = (() => {
-		if (result.action === 'createCompleteSet') return 'A fresh Yes, No, and Invalid share set was minted for the selected pool.'
-		if (result.action === 'redeemCompleteSet') return 'Matching shares were burned and collateral was returned from the selected pool.'
-		if (result.action === 'migrateShares') return 'Selected parent-pool shares were migrated into child universes.'
-		return 'Resolved winning shares were redeemed from the selected pool.'
+		if (result.action === 'createCompleteSet') return TSX_STRINGS.libTransactionPresentations.copy068
+		if (result.action === 'redeemCompleteSet') return TSX_STRINGS.libTransactionPresentations.copy069
+		if (result.action === 'migrateShares') return TSX_STRINGS.libTransactionPresentations.copy070
+		return TSX_STRINGS.libTransactionPresentations.copy071
 	})()
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
-			...(result.shareOutcome === undefined ? [] : [{ label: 'Share Outcome', value: getReportingOutcomeLabel(result.shareOutcome) }]),
-			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: 'Target Outcome Indexes', value: result.targetOutcomeIndexes.join(', ') }]),
+			{ label: TSX_STRINGS.libTransactionPresentations.copy072, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy073, value: <UniverseLink universeId={result.universeId} /> },
+			...(result.shareOutcome === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy074, value: getReportingOutcomeLabel(result.shareOutcome) }]),
+			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy075, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
 		title: humanizeAction(result.action),
 		tone: 'success',
@@ -359,19 +358,19 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 		action: actionName,
 		source: 'reporting',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: `${humanizeAction(actionName)} transaction submitted.`,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy076(humanizeAction(actionName)),
 	})
 }
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
-	const detail = result.action === 'reportOutcome' ? 'Your selected REP was committed to the chosen escalation side.' : 'Selected escalation deposits were settled against the current finalized outcome.'
+	const detail = result.action === 'reportOutcome' ? TSX_STRINGS.libTransactionPresentations.copy077 : TSX_STRINGS.libTransactionPresentations.copy078
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
-			{ label: 'Outcome', value: getReportingOutcomeLabel(result.outcome) },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy079, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy080, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy081, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title: humanizeAction(result.action),
 		tone: 'success',
@@ -386,23 +385,21 @@ export function createLiquidationTransactionIntent() {
 	return buildIntent({
 		action: 'queueLiquidation',
 		source: 'security-pools',
-		submittedTitle: 'Submitting Liquidation',
-		submittedDetail: 'Liquidation transaction submitted.',
+		submittedTitle: TSX_STRINGS.libTransactionPresentations.copy082,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy083,
 	})
 }
 
 export function createLiquidationSuccessPresentation(result: SecurityPoolOverviewActionResult) {
-	let queuedOperationDetail = 'The liquidation request was submitted successfully.'
+	let queuedOperationDetail: string = TSX_STRINGS.libTransactionPresentations.copy084
 	if (result.queuedOperation !== undefined) {
-		queuedOperationDetail = result.queuedOperation.isPendingSlot
-			? `Liquidation staged as operation #${result.queuedOperation.operationId.toString()} for the next oracle settlement.`
-			: `Liquidation staged as operation #${result.queuedOperation.operationId.toString()} and must be executed manually after a valid oracle price is available.`
+		queuedOperationDetail = result.queuedOperation.isPendingSlot ? TSX_STRINGS.libTransactionPresentations.copy085(result.queuedOperation.operationId.toString()) : TSX_STRINGS.libTransactionPresentations.copy086(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({
-		detail: result.stagedExecution?.success === true ? 'The liquidation executed immediately.' : queuedOperationDetail,
+		detail: result.stagedExecution?.success === true ? TSX_STRINGS.libTransactionPresentations.copy087 : queuedOperationDetail,
 		hash: result.hash,
-		rows: [{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.queuedOperation === undefined ? [] : [{ label: 'Staged Operation', value: `#${result.queuedOperation.operationId.toString()}` }])],
-		title: result.stagedExecution?.success === true ? 'Liquidation Executed' : 'Liquidation Submitted',
+		rows: [{ label: TSX_STRINGS.libTransactionPresentations.copy088, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.queuedOperation === undefined ? [] : [{ label: TSX_STRINGS.libTransactionPresentations.copy089, value: `#${result.queuedOperation.operationId.toString()}` }])],
+		title: result.stagedExecution?.success === true ? TSX_STRINGS.libTransactionPresentations.copy090 : TSX_STRINGS.libTransactionPresentations.copy091,
 		tone: 'success',
 	})
 }
@@ -412,11 +409,11 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 }
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice') {
-	let submittedTitle = 'Executing Staged Operation'
-	let submittedDetail = 'Staged-operation transaction submitted.'
+	let submittedTitle: string = TSX_STRINGS.libTransactionPresentations.copy092
+	let submittedDetail: string = TSX_STRINGS.libTransactionPresentations.copy093
 	if (actionName === 'requestPrice') {
-		submittedTitle = 'Requesting Price'
-		submittedDetail = 'Price request transaction submitted.'
+		submittedTitle = TSX_STRINGS.libTransactionPresentations.copy094
+		submittedDetail = TSX_STRINGS.libTransactionPresentations.copy095
 	}
 	return buildIntent({
 		action: actionName,
@@ -427,16 +424,16 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 }
 
 export function createPoolOracleSuccessPresentation(result: OpenOracleActionResult) {
-	let detail = 'The staged oracle-manager operation was executed successfully.'
-	let title = 'Staged Operation Executed'
+	let detail: string = TSX_STRINGS.libTransactionPresentations.copy096
+	let title: string = TSX_STRINGS.libTransactionPresentations.copy097
 	if (result.action === 'requestPrice') {
-		detail = 'A new oracle price was requested successfully.'
-		title = 'Price Requested'
+		detail = TSX_STRINGS.libTransactionPresentations.copy098
+		title = TSX_STRINGS.libTransactionPresentations.copy099
 	}
 	return buildPresentation({
 		detail,
 		hash: result.hash,
-		rows: [{ label: 'Action', value: humanizeAction(result.action) }],
+		rows: [{ label: TSX_STRINGS.libTransactionPresentations.copy100, value: humanizeAction(result.action) }],
 		title,
 		tone: 'success',
 	})
@@ -451,15 +448,15 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 		action: actionName,
 		source: 'open-oracle',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: `${humanizeAction(actionName)} transaction submitted.`,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy101(humanizeAction(actionName)),
 	})
 }
 
 export function createOpenOracleSuccessPresentation(result: OpenOracleActionResult) {
 	return buildPresentation({
-		detail: `${humanizeAction(result.action)} completed successfully.`,
+		detail: TSX_STRINGS.libTransactionPresentations.copy102(humanizeAction(result.action)),
 		hash: result.hash,
-		rows: [{ label: 'Action', value: humanizeAction(result.action) }],
+		rows: [{ label: TSX_STRINGS.libTransactionPresentations.copy103, value: humanizeAction(result.action) }],
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -475,56 +472,56 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 		action: actionName,
 		source: 'fork-auction',
 		submittedTitle: resolvedSubmittedTitle,
-		submittedDetail: `${resolvedSubmittedTitle} transaction submitted.`,
+		submittedDetail: TSX_STRINGS.libTransactionPresentations.copy104(String(resolvedSubmittedTitle)),
 	})
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
-	const title = result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund' ? 'Settle Finalized Refunds' : humanizeAction(result.action)
+	const title = result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund' ? TSX_STRINGS.libTransactionPresentations.copy105 : humanizeAction(result.action)
 	const detail = (() => {
 		switch (result.action) {
 			case 'claimAuctionProceeds':
 				if (result.settlementMode === 'refund') {
-					return `Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning child-pool REP or ${AUCTIONED_BOND_ALLOWANCE_LABEL}.`
+					return TSX_STRINGS.libTransactionPresentations.copy106(AUCTIONED_BOND_ALLOWANCE_LABEL)
 				}
 				if (result.settlementMode === 'claim') {
-					return `Selected truth-auction winning bids were settled. The selected bids received child-pool REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, assigning the remaining open-interest debt.`
+					return TSX_STRINGS.libTransactionPresentations.copy107(AUCTIONED_BOND_ALLOWANCE_LABEL)
 				}
-				return `Selected truth-auction bids were settled. Winning bids received child-pool REP plus ${AUCTIONED_BOND_ALLOWANCE_LABEL}, assigning the remaining open-interest debt; refund-only rows returned locked ETH.`
+				return TSX_STRINGS.libTransactionPresentations.copy108(AUCTIONED_BOND_ALLOWANCE_LABEL)
 			case 'createChildUniverse':
-				return 'The selected child universe was deployed and linked to this fork path.'
+				return TSX_STRINGS.libTransactionPresentations.copy109
 			case 'forkWithOwnEscalation':
-				return 'This pool submitted its own escalation fork and moved into Fork & Migration.'
+				return TSX_STRINGS.libTransactionPresentations.copy110
 			case 'forkUniverse':
-				return 'The selected Zoltar universe fork was submitted on-chain.'
+				return TSX_STRINGS.libTransactionPresentations.copy111
 			case 'initiateFork':
-				return 'This pool entered fork handling and is ready for migration actions.'
+				return TSX_STRINGS.libTransactionPresentations.copy112
 			case 'migrateEscalationDeposits':
-				return 'Selected escalation deposits were migrated into the chosen child universe.'
+				return TSX_STRINGS.libTransactionPresentations.copy113
 			case 'migrateRepToZoltar':
-				return 'Pool-level REP was migrated into the selected child universe.'
+				return TSX_STRINGS.libTransactionPresentations.copy114
 			case 'migrateUnresolvedEscalation':
-				return 'All unresolved parent escalation locks for this wallet were migrated into the chosen child universe.'
+				return TSX_STRINGS.libTransactionPresentations.copy115
 			case 'migrateVault':
-				return 'Vault REP collateral and security-bond allowance were migrated into the selected child universe.'
+				return TSX_STRINGS.libTransactionPresentations.copy116
 			case 'refundLosingBids':
-				return 'Selected losing truth-auction bids were refunded.'
+				return TSX_STRINGS.libTransactionPresentations.copy117
 			case 'settleForkedEscalation':
-				return 'Imported fork-carried escalation deposits were settled.'
+				return TSX_STRINGS.libTransactionPresentations.copy118
 			case 'startTruthAuction':
-				return 'Truth auction state was started for the selected child universe.'
+				return TSX_STRINGS.libTransactionPresentations.copy119
 			case 'submitBid':
-				return 'Truth auction bid submitted. Bid ETH stays committed until settlement.'
+				return TSX_STRINGS.libTransactionPresentations.copy120
 			default:
-				return `${humanizeAction(result.action)} completed successfully.`
+				return TSX_STRINGS.libTransactionPresentations.copy121(humanizeAction(result.action))
 		}
 	})()
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: 'Pool', value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: 'Universe', value: <UniverseLink universeId={result.universeId} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy122, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: TSX_STRINGS.libTransactionPresentations.copy123, value: <UniverseLink universeId={result.universeId} /> },
 		],
 		title,
 		tone: 'success',

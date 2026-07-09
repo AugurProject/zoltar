@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from './Badge.js'
 import { OperationModal } from './OperationModal.js'
+import { TSX_STRINGS } from '../lib/uiStrings.js'
 
 type ActionSafetyPrompt = {
 	acknowledgeLabel?: string
-	checklist: string[]
+	checklist: readonly string[]
 	confirmLabel?: string
 	severity: 'danger' | 'warning'
 	summary: string
@@ -32,13 +33,13 @@ export function ActionSafetyModal({ onCancel, onConfirm, request }: ActionSafety
 	if (request === undefined) return undefined
 
 	const { prompt } = request
-	const confirmLabel = prompt.confirmLabel ?? 'Continue To Wallet'
+	const confirmLabel = prompt.confirmLabel ?? TSX_STRINGS.componentsActionSafetyModal.copy001
 
 	return (
 		<OperationModal isOpen onClose={onCancel} title={prompt.title} description={prompt.summary}>
 			<div className='action-safety-modal-stack'>
 				<div className='action-safety-header'>
-					<Badge tone={prompt.severity === 'danger' ? 'danger' : 'warning'}>{prompt.severity === 'danger' ? 'High Risk' : 'Review Needed'}</Badge>
+					<Badge tone={prompt.severity === 'danger' ? 'danger' : 'warning'}>{prompt.severity === 'danger' ? TSX_STRINGS.componentsActionSafetyModal.copy002 : TSX_STRINGS.componentsActionSafetyModal.copy003}</Badge>
 				</div>
 				<ul className='action-safety-checklist'>
 					{prompt.checklist.map(item => (
@@ -47,11 +48,11 @@ export function ActionSafetyModal({ onCancel, onConfirm, request }: ActionSafety
 				</ul>
 				<label className='action-safety-acknowledgement'>
 					<input checked={acknowledged} type='checkbox' onInput={event => setAcknowledged(event.currentTarget.checked)} />
-					<span>{prompt.acknowledgeLabel ?? 'I reviewed the transaction consequences shown above.'}</span>
+					<span>{prompt.acknowledgeLabel ?? TSX_STRINGS.componentsActionSafetyModal.copy004}</span>
 				</label>
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={onCancel}>
-						Cancel
+						{TSX_STRINGS.componentsActionSafetyModal.copy005}
 					</button>
 					<button className={prompt.severity === 'danger' ? 'destructive' : 'primary'} type='button' onClick={onConfirm} disabled={!acknowledged}>
 						{confirmLabel}
