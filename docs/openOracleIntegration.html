@@ -393,6 +393,164 @@
 					<code>withdrawOracleFeeCredits()</code>.
 				</p>
 				<p>
+					The money flow is easiest to follow if each role is separated. The
+					triggering caller pays the ETH request bounty, the initial reporter
+					posts the REP/WETH report amounts, and the eventual settler receives
+					the settler reward. Those roles can be different accounts or the same
+					account.
+				</p>
+				<p>
+					Worked example using a market snapshot taken at
+					<code>2026-07-09 09:49:35 UTC</code>: at that moment Ethereum base
+					fee was <code>69,594,403 wei</code> per gas
+					(<code>0.069594403 gwei</code>), ETH traded at
+					<code>$1,750.34</code>, and REP traded at <code>$0.792188</code> or
+					<code>0.00045231 ETH</code> per REP. The USD quotes and the
+					ETH-per-REP quote are
+					independently rounded snapshot values, so reconstructing one from the
+					other may differ by a few basis points. With the coordinator defaults
+					used in this documentation revision,
+					<code>gasConsumedOpenOracleReportPrice = 100,000</code>,
+					<code>gasConsumedSettlement = 1,000,000</code>, and
+					<code>MAX_PENDING_SETTLEMENT_OPERATIONS = 4</code>, the callback gas
+					limit is:
+				</p>
+				<figure class="equation" id="eq-openoracle-request-price-worked-example">
+					<math
+						display="block"
+						aria-label="callback gas limit equals one million times four equals four million"
+						data-source="callbackGasLimit = 1,000,000 \cdot 4 = 4,000,000"
+					>
+						<mrow>
+							<mi>callbackGasLimit</mi>
+							<mo>=</mo>
+							<mn>1,000,000</mn>
+							<mo>&#x22C5;</mo>
+							<mn>4</mn>
+							<mo>=</mo>
+							<mn>4,000,000</mn>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Worked Callback Gas Limit</span>The
+						current coordinator parameters reserve four settlement-operation gas
+						budgets inside one callback.
+					</p>
+				</figure>
+				<figure class="equation" id="eq-openoracle-request-price-snapshot-example">
+					<math
+						display="block"
+						aria-label="Worked request bounty calculation using the snapshot base fee"
+						data-source="requestPriceEthCost = 69,594,403 \cdot 4 \cdot (4,000,000 + 100,000) + 101 = 1,141,348,209,200,101 wei"
+					>
+						<mrow>
+							<mi>requestPriceEthCost</mi>
+							<mo>=</mo>
+							<mn>69,594,403</mn>
+							<mo>&#x22C5;</mo>
+							<mn>4</mn>
+							<mo>&#x22C5;</mo>
+							<mo>(</mo>
+							<mn>4,000,000</mn>
+							<mo>+</mo>
+							<mn>100,000</mn>
+							<mo>)</mo>
+							<mo>+</mo>
+							<mn>101</mn>
+							<mo>=</mo>
+							<mn>1,141,348,209,200,101</mn>
+							<mtext>&nbsp;wei</mtext>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Worked Trigger Cost</span>The caller
+						who opens a fresh price request sends
+						<code>0.001141348209200101 ETH</code>, about <code>$2.00</code> at
+						that snapshot's ETH/USD price. This bounty is separate from the
+						normal gas burned by the caller's own transaction.
+					</p>
+				</figure>
+				<p>
+					The initial reporter then posts the configured
+					<code>exactToken1Report</code>,
+					<code>259.332023575638507216 REP</code>, plus the matching WETH side
+					at the chosen report price. Using the same market snapshot:
+				</p>
+				<figure class="equation" id="eq-openoracle-initial-report-snapshot-example">
+					<math
+						display="block"
+						aria-label="Worked WETH stake approximation from REP stake and the snapshot ETH-per-REP quote"
+						data-source="amount2 = 259.332023575638507216 \cdot 0.00045231 = 0.11729846758349706 ETH"
+					>
+						<mrow>
+							<msub><mi>amount</mi><mn>2</mn></msub>
+							<mo>&#x2248;</mo>
+							<mn>259.332023575638507216</mn>
+							<mo>&#x22C5;</mo>
+							<mn>0.00045231</mn>
+							<mo>&#x2248;</mo>
+							<mn>0.11729846758349706</mn>
+							<mtext>&nbsp;ETH</mtext>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Worked Initial Report Stake</span>The
+						reporter posts about <code>259.3320 REP</code> and
+						<code>0.11729847 WETH</code>, roughly <code>$205</code> of each
+						token side at that snapshot. The displayed WETH decimal is an
+						explanatory approximation from the rounded REP/ETH quote rather than
+						an exact atomic-unit contract input.
+					</p>
+				</figure>
+				<p>
+					If no dispute replaces the report, settlement returns the full REP and
+					WETH amounts to the current reporter. The ETH bounty is split between
+					the initial reporter reward and the settler reward:
+				</p>
+				<figure class="equation" id="eq-openoracle-payout-snapshot-example">
+					<math
+						display="block"
+						aria-label="Worked no-dispute payout split showing settler reward and reporter reward in wei"
+						data-source="settlerReward = 69,594,403 \cdot 2 \cdot 100,000 = 13,918,880,600,000 wei; reporterReward = 1,141,348,209,200,101 - 13,918,880,600,000 = 1,127,429,328,600,101 wei"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>settlerReward</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mn>69,594,403</mn></mtd>
+								<mtd><mo>&#x22C5;</mo></mtd>
+								<mtd><mn>2</mn></mtd>
+								<mtd><mo>&#x22C5;</mo></mtd>
+								<mtd><mn>100,000</mn></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mn>13,918,880,600,000</mn></mtd>
+								<mtd><mtext>&nbsp;wei</mtext></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>reporterReward</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mn>1,141,348,209,200,101</mn></mtd>
+								<mtd><mo>-</mo></mtd>
+								<mtd><mn>13,918,880,600,000</mn></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mn>1,127,429,328,600,101</mn></mtd>
+								<mtd><mtext>&nbsp;wei</mtext></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Worked No-Dispute Payout</span>If the
+						same account triggers the request, submits the initial report, and
+						settles it undisputed, that account gets back the full REP stake,
+						the full WETH stake, and the entire ETH bounty in two pieces:
+						<code>0.001127429328600101 ETH</code> as reporter reward and
+						<code>0.0000139188806 ETH</code> as settler reward. If different
+						accounts fill those roles, the REP/WETH principal goes to the
+						current reporter, the larger ETH reward goes to the initial
+						reporter, and the smaller ETH reward goes to the settler.
+					</p>
+				</figure>
+				<p>
 					Escalation-game REP deposits are the exception to the staged callback
 					path. When the pool has active security-bond allowance,
 					<code>depositToEscalationGame</code> requires a fresh coordinator
