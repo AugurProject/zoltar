@@ -1,4 +1,5 @@
 import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { UI_STRINGS } from './uiStrings.js'
 
 export function isSupportedAppChain(chainId: string | undefined) {
 	const profile = getActiveNetworkProfile()
@@ -12,5 +13,5 @@ export function isMainnetChain(chainId: string | undefined) {
 export function getWrongNetworkMessage() {
 	const profile = getActiveNetworkProfile()
 	if (profile.id === 'simulation') return undefined
-	return 'Switch to Ethereum mainnet.'
+	return UI_STRINGS.userCopy.wallet.switchToMainnetDetail
 }

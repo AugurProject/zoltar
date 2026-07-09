@@ -14,6 +14,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
 export function SecurityPoolSection({
@@ -55,32 +56,32 @@ export function SecurityPoolSection({
 			createdQuestionDetails = carriedPoolCreationMarketDetails
 		}
 
-	let createButtonLabel: ComponentChildren = 'Create Pool'
+	let createButtonLabel: ComponentChildren = UI_STRINGS.securityPoolSection.createPoolButtonIdleLabel
 	if (securityPoolCreating) {
-		createButtonLabel = <LoadingText>Creating Pool...</LoadingText>
+		createButtonLabel = <LoadingText>{UI_STRINGS.securityPoolSection.createPoolButtonPendingLabel}</LoadingText>
 	} else if (checkingDuplicateOriginPool) {
-		createButtonLabel = <LoadingText>Checking Duplicate...</LoadingText>
+		createButtonLabel = <LoadingText>{UI_STRINGS.securityPoolSection.duplicateCheckPendingLabel}</LoadingText>
 	} else if (duplicateOriginPoolExists) {
-		createButtonLabel = 'Pool Already Exists'
-	} else if (zoltarUniverseHasForked) createButtonLabel = 'Pool Creation Locked'
+		createButtonLabel = UI_STRINGS.securityPoolSection.poolAlreadyExistsLabel
+	} else if (zoltarUniverseHasForked) createButtonLabel = UI_STRINGS.securityPoolSection.createPoolLockedLabel
 
 	const createdPoolResult =
 		securityPoolResult === undefined ? undefined : (
 			<EntityCard
-				title='Pool Created'
+				title={UI_STRINGS.securityPoolSection.createdPoolCardTitle}
 				variant='record'
 				actions={
 					<div className='actions'>
 						<button className='primary' onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress)}>
-							Open Pool
+							{UI_STRINGS.securityPoolSection.openPoolLabel}
 						</button>
 						{onReturnToBrowse === undefined ? undefined : (
 							<button className='secondary' onClick={onReturnToBrowse}>
-								Return to Browse
+								{UI_STRINGS.securityPoolSection.returnToBrowseLabel}
 							</button>
 						)}
 						<button className='secondary' onClick={onResetSecurityPoolCreation}>
-							Create Another Pool
+							{UI_STRINGS.securityPoolSection.createAnotherPoolLabel}
 						</button>
 					</div>
 				}
@@ -88,23 +89,23 @@ export function SecurityPoolSection({
 				<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
 				<ul className='status-list hashes'>
 					<li>
-						<span>Pool address</span>
+						<span>{UI_STRINGS.securityPoolSection.poolAddressLabel}</span>
 						<strong>
 							<AddressValue address={securityPoolResult.securityPoolAddress} />
 						</strong>
 					</li>
 					<li>
-						<span>Security Multiplier</span>
+						<span>{UI_STRINGS.securityPoolSection.securityMultiplierLabel}</span>
 						<strong>{securityPoolResult.securityMultiplier.toString()}</strong>
 					</li>
 					<li>
-						<span>Universe</span>
+						<span>{UI_STRINGS.securityPoolSection.universeLabel}</span>
 						<strong>
 							<UniverseLink universeId={securityPoolResult.universeId} />
 						</strong>
 					</li>
 					<li>
-						<span>Deployment transaction hash</span>
+						<span>{UI_STRINGS.securityPoolSection.deploymentTransactionHashLabel}</span>
 						<strong>
 							<TransactionHashLink hash={securityPoolResult.deployPoolHash} />
 						</strong>
@@ -114,7 +115,7 @@ export function SecurityPoolSection({
 		)
 
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title='Create Pool'>
+		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRINGS.securityPoolSection.createPoolPanelTitle}>
 			{hasSecurityPoolResult ? (
 				<>
 					{createdPoolResult}
@@ -122,15 +123,15 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Create Pool' variant='plain'>
+					<SectionBlock title={UI_STRINGS.securityPoolSection.createPoolPanelTitle} variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
-								<LookupFieldRow label='Question ID' value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder='0x...' />
-								<p className='field-help'>Paste an exact binary Yes / No Zoltar question ID.</p>
+								<LookupFieldRow label={UI_STRINGS.securityPoolSection.questionIdLabel} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={UI_STRINGS.securityPoolSection.questionIdPlaceholder} />
+								<p className='field-help'>{UI_STRINGS.securityPoolSection.questionHelpText}</p>
 							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>
-									<LoadingText>Loading question...</LoadingText>
+									<LoadingText>{UI_STRINGS.securityPoolSection.loadingQuestionLabel}</LoadingText>
 								</p>
 							) : undefined}
 							{marketDetails === undefined ? undefined : (
@@ -141,27 +142,34 @@ export function SecurityPoolSection({
 
 							<div className='field'>
 								<label htmlFor='security-pool-security-multiplier'>
-									<span>Security Multiplier</span>
+									<span>{UI_STRINGS.securityPoolSection.securityMultiplierLabel}</span>
 								</label>
 								<FormInput id='security-pool-security-multiplier' aria-describedby='security-pool-security-multiplier-help' value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
 								<p className='field-help' id='security-pool-security-multiplier-help'>
-									Security Multiplier sets the REP collateral target relative to open interest. Higher values require more REP backing and create a thicker safety buffer.
+									{UI_STRINGS.securityPoolSection.securityMultiplierHelpText}
 								</p>
 							</div>
 
 							<div className='field'>
-								<span>Initial Open Interest Fee / Year</span>
+								<span>{UI_STRINGS.securityPoolSection.initialOpenInterestFeeLabel}</span>
 								<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
-								<p className='field-help'>Initial Open Interest Fee / Year is the starting annualized fee charged against open interest. The rate follows pool utilization after deployment.</p>
+								<p className='field-help'>{UI_STRINGS.securityPoolSection.initialOpenInterestFeeHelpText}</p>
 							</div>
 
 							<div className='actions'>
-								<TransactionActionButton safetyId='security-pool.createPool' idleLabel={createButtonLabel} pendingLabel='Creating Pool...' onClick={onCreateSecurityPool} pending={securityPoolCreating} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
+								<TransactionActionButton
+									safetyId='security-pool.createPool'
+									idleLabel={createButtonLabel}
+									pendingLabel={UI_STRINGS.securityPoolSection.createPoolButtonPendingLabel}
+									onClick={onCreateSecurityPool}
+									pending={securityPoolCreating}
+									availability={{ disabled: isCreateDisabled, reason: createDisabledReason }}
+								/>
 							</div>
 						</div>
-						{!duplicateOriginPoolExists ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
-						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.</p> : undefined}
-						{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
+						{!duplicateOriginPoolExists ? undefined : <p className='detail'>{UI_STRINGS.securityPoolSection.duplicatePoolError}</p>}
+						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{UI_STRINGS.securityPoolSection.ineligibleQuestionError}</p> : undefined}
+						{zoltarUniverseHasForked ? <p className='notice error'>{UI_STRINGS.securityPoolSection.creationLockedError}</p> : undefined}
 					</SectionBlock>
 
 					<ErrorNotice message={securityPoolError} />

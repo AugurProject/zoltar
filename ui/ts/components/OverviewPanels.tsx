@@ -10,6 +10,7 @@ import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 export function OverviewPanels({
 	activeUniverseId,
@@ -52,24 +53,24 @@ export function OverviewPanels({
 	const walletOnMainnet = isMainnetChain(accountState.chainId)
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
 	const environmentBadge = (() => {
-		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>Simulation</Badge>
-		if (hasWrongWalletNetwork) return <Badge tone='danger'>Wrong Network</Badge>
-		if (accountState.address === undefined) return <Badge tone='pending'>Read-only</Badge>
-		return <Badge tone='ok'>Connected</Badge>
+		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{UI_STRINGS.overviewPanels.simulationBadgeLabel}</Badge>
+		if (hasWrongWalletNetwork) return <Badge tone='danger'>{UI_STRINGS.overviewPanels.wrongNetworkBadgeLabel}</Badge>
+		if (accountState.address === undefined) return <Badge tone='pending'>{UI_STRINGS.overviewPanels.readOnlyBadgeLabel}</Badge>
+		return <Badge tone='ok'>{UI_STRINGS.overviewPanels.connectedBadgeLabel}</Badge>
 	})()
 	const environmentDescription = (() => {
-		if (isBrowserSimulationReadBackend) return 'Simulation mode uses browser-local contract state. Transactions do not affect a public network.'
-		if (hasWrongWalletNetwork) return 'Wallet is connected to a non-mainnet chain. You can inspect configured read state, but transaction controls stay disabled until the wallet switches to Ethereum mainnet.'
-		if (accountState.address === undefined) return 'Read-only mode shows contract state. Connect a wallet before submitting transactions.'
+		if (isBrowserSimulationReadBackend) return UI_STRINGS.overviewPanels.simulationDescription
+		if (hasWrongWalletNetwork) return UI_STRINGS.overviewPanels.walletWrongNetworkDescription
+		if (accountState.address === undefined) return UI_STRINGS.overviewPanels.readOnlyDescription
 		return undefined
 	})()
 	const operationsHeaderDescription = (() => {
 		const forkDescription = (() => {
 			if (!universeHasForked) return undefined
-			if (universeForkTime === undefined) return 'Zoltar has forked.'
+			if (universeForkTime === undefined) return UI_STRINGS.overviewPanels.universeForkedDescription
 			return (
 				<>
-					Zoltar forked on <TimestampValue timestamp={universeForkTime} />.
+					{UI_STRINGS.overviewPanels.universeForkedOnDetailPrefix} <TimestampValue timestamp={universeForkTime} />.
 				</>
 			)
 		})()
@@ -88,53 +89,62 @@ export function OverviewPanels({
 					actions={
 						accountState.address === undefined ? (
 							<button className='secondary' type='button' onClick={onConnect} disabled={isConnectingWallet}>
-								{isConnectingWallet ? <LoadingText>Connecting...</LoadingText> : 'Connect wallet'}
+								{isConnectingWallet ? <LoadingText>{UI_STRINGS.overviewPanels.connectWalletPendingLabel}</LoadingText> : UI_STRINGS.overviewPanels.connectWalletIdleLabel}
 							</button>
 						) : undefined
 					}
 					badge={
 						<span className='environment-badge-row'>
 							{environmentBadge}
-							{universeHasForked ? <Badge tone='warning'>Forked</Badge> : undefined}
+							{universeHasForked ? <Badge tone='warning'>{UI_STRINGS.overviewPanels.forkedBadgeLabel}</Badge> : undefined}
 						</span>
 					}
 					description={operationsHeaderDescription}
-					eyebrow='Operations'
-					title='Augur Placeholder'
+					eyebrow={UI_STRINGS.overviewPanels.operationsEyebrow}
+					title={UI_STRINGS.overviewPanels.augurPlaceholderTitle}
 				/>
 				<DataGrid className='overview-inline-metrics' columns='auto'>
-					<MetricField className='overview-address-metric' label='Address'>
+					<MetricField className='overview-address-metric' label={UI_STRINGS.overviewPanels.addressLabel}>
 						{(() => {
 							if (isWalletAddressLoading)
 								return (
 									<span className='loading-value'>
 										<span className='spinner' aria-hidden='true' />
-										Connecting...
+										{UI_STRINGS.overviewPanels.connectingDetail}
 									</span>
 								)
-							if (accountState.address === undefined) return 'Not connected'
+							if (accountState.address === undefined) return UI_STRINGS.overviewPanels.notConnectedLabel
 
 							return <AddressValue address={accountState.address} />
 						})()}
 					</MetricField>
 					{showAccountBalances ? (
 						<>
-							<MetricField label='ETH'>
-								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' compactWhenOverflow />
+							<MetricField label={UI_STRINGS.overviewPanels.ethBalanceLabel}>
+								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={UI_STRINGS.common.ethSuffix} compactWhenOverflow />
 							</MetricField>
-							<MetricField label='WETH'>
-								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix='WETH' compactWhenOverflow />
+							<MetricField label={UI_STRINGS.overviewPanels.wethBalanceLabel}>
+								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={UI_STRINGS.common.wethSuffix} compactWhenOverflow />
 							</MetricField>
-							<MetricField label='REP'>
-								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' compactWhenOverflow />
+							<MetricField label={UI_STRINGS.overviewPanels.repBalanceLabel}>
+								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix={UI_STRINGS.common.repLabel} compactWhenOverflow />
 							</MetricField>
 						</>
 					) : undefined}
 					<MetricField
 						label={
 							<span className='metric-label-with-action'>
-								<span>REP/ETH {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label='Refresh REP prices' title={isRefreshingRepPrices ? 'Refreshing REP prices...' : 'Refresh REP prices'}>
+								<span>
+									{UI_STRINGS.overviewPanels.repPerEthLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+								</span>
+								<button
+									type='button'
+									className='quiet metric-label-refresh'
+									onClick={onRefreshRepPrices}
+									disabled={isRefreshingRepPrices}
+									aria-label={UI_STRINGS.overviewPanels.refreshRepPricesAriaLabel}
+									title={isRefreshingRepPrices ? UI_STRINGS.overviewPanels.refreshRepPricesPendingTitle : UI_STRINGS.overviewPanels.refreshRepPricesIdleTitle}
+								>
 									↻
 								</button>
 							</span>
@@ -142,12 +152,18 @@ export function OverviewPanels({
 					>
 						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
 					</MetricField>
-					<MetricField label={<>REP/USDC {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}</>}>
-						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
+					<MetricField
+						label={
+							<>
+								{UI_STRINGS.overviewPanels.repUsdcLabel} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
+							</>
+						}
+					>
+						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={UI_STRINGS.common.usdcSuffix} units={6} />
 					</MetricField>
-					<MetricField label='Universe'>{universeLabel}</MetricField>
+					<MetricField label={UI_STRINGS.overviewPanels.universeLabel}>{universeLabel}</MetricField>
 					{shouldShowParentUniverse ? (
-						<MetricField label='Parent Universe'>
+						<MetricField label={UI_STRINGS.overviewPanels.parentUniverseLabel}>
 							<UniverseLink universeId={parentUniverseId} />
 						</MetricField>
 					) : undefined}
@@ -158,7 +174,7 @@ export function OverviewPanels({
 						presentation={universePresentation}
 						actions={
 							<button className='secondary' onClick={onGoToGenesisUniverse}>
-								Go to Genesis universe
+								{UI_STRINGS.overviewPanels.goToGenesisUniverseLabel}
 							</button>
 						}
 					/>

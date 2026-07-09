@@ -6,6 +6,7 @@ import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, QUESTION_PAGE_SIZE } from '../lib/pagination.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { MarketDetailsPage } from '../types/contracts.js'
 
 function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: number, questionCount: bigint | undefined) {
@@ -75,7 +76,7 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 	return (
 		<SectionBlock
 			density='compact'
-			title='Markets'
+			title={UI_STRINGS.marketQuestionsSection.marketsTitle}
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}
@@ -92,7 +93,7 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 					if (loadingZoltarQuestionCount || loadingZoltarQuestions || isWaitingForPageData)
 						return (
 							<p className='detail'>
-								<LoadingText>Loading questions...</LoadingText>
+								<LoadingText>{UI_STRINGS.marketQuestionsSection.loadingQuestionsLabel}</LoadingText>
 							</p>
 						)
 					if (noQuestionsAvailable)
@@ -100,19 +101,19 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 							<StateHint
 								presentation={{
 									key: 'empty',
-									badgeLabel: 'None yet',
+									badgeLabel: UI_STRINGS.marketQuestionsSection.noQuestionsEmptyBadgeLabel,
 									badgeTone: 'muted',
-									detail: 'No questions are available in this universe yet. Create a question first, then use it to create a security pool for shares, reporting, and vaults.',
+									detail: UI_STRINGS.marketQuestionsSection.noQuestionsDetail,
 								}}
-								title='No questions'
+								title={UI_STRINGS.marketQuestionsSection.noQuestionsBadgeLabel}
 								actions={
 									<button className='primary' type='button' onClick={onCreateQuestion}>
-										Create Question
+										{UI_STRINGS.marketCreateQuestionSection.createQuestionButtonIdleLabel}
 									</button>
 								}
 							/>
 						)
-					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <StateHint presentation={{ key: 'not_checked', badgeLabel: 'Not checked', badgeTone: 'muted', detail: 'Questions for this page have not loaded yet.' }} />
+					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <StateHint presentation={{ key: 'not_checked', badgeLabel: UI_STRINGS.common.notCheckedBadgeLabel, badgeTone: 'muted', detail: UI_STRINGS.marketQuestionsSection.pageNotLoadedDetail }} />
 
 					return undefined
 				})()
@@ -133,16 +134,16 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 											onOpenForkTab()
 										}}
 									>
-										{hasForked ? 'Already Forked' : 'Use For Fork'}
+										{hasForked ? UI_STRINGS.marketQuestionsSection.alreadyForkedLabel : UI_STRINGS.marketCreateQuestionSection.useForForkLabel}
 									</button>
 									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
-										Create Pool From Question
+										{UI_STRINGS.marketCreateQuestionSection.createPoolFromQuestionLabel}
 									</button>
 								</div>
 							}
 						>
 							<Question question={question} showTitle={false} />
-							{question.marketType !== 'binary' ? <p className='detail'>Non-binary questions are valid in Zoltar, but Placeholder origin pools currently require an exact binary Yes / No question.</p> : undefined}
+							{question.marketType !== 'binary' ? <p className='detail'>{UI_STRINGS.marketQuestionsSection.nonBinaryPoolRestrictionDetail}</p> : undefined}
 						</EntityCard>
 					))}
 				</div>
