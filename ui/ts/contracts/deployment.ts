@@ -246,7 +246,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 		},
 		{
 			id: 'priceOracleManagerAndOperatorQueuerFactory',
-			label: 'Price Oracle Manager Factory',
+			label: 'OpenOracle Price Coordinator Factory',
 			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode()),

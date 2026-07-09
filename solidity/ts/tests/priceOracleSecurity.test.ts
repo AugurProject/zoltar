@@ -39,7 +39,7 @@ import {
 	wrapWeth,
 } from '../testsuite/simulator/utils/contracts/peripherals'
 import { depositRep, getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
-import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
+import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -52,7 +52,7 @@ const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -68,7 +68,7 @@ const findExecutedStagedOperationLogs = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -84,7 +84,7 @@ const findPendingOperationRecoveryConsumedLog = (logs: TransactionReceiptLogs) =
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -100,7 +100,7 @@ const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -116,7 +116,7 @@ const findPriceReportedLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -132,7 +132,7 @@ const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -163,8 +163,8 @@ type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, numb
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-		bytecode: `0x${peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.evm.bytecode.object}`,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		bytecode: `0x${peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object}`,
 		args,
 	})
 }
@@ -373,7 +373,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingMaxSettlementBaseFee, 0n, 'zero-basefee request should only settle under zero basefee')
 		const lastPriceBeforeSettlement = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestampBeforeSettlement = await client.readContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: priceOracle,
 			args: [],
@@ -548,7 +548,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const zeroCostJoinRejected = await counterpartyClient
 			.simulateContract({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
 				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
@@ -583,7 +583,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const overflowRejected = await counterpartyClient
 			.simulateContract({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
 				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
@@ -613,7 +613,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const validPriceRejected = await counterpartyClient
 			.simulateContract({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
 				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS],
@@ -684,7 +684,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const pendingMaxSettlementBaseFeeAfterRecovery = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
 		const lastPriceAfterRecovery = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestampAfterRecovery = await client.readContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: priceOracle,
 			args: [],
@@ -796,7 +796,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (callbackLog === undefined) throw new Error('missing settlement callback execution event')
 		const lastPrice = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestamp = await client.readContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: priceOracle,
 			args: [],

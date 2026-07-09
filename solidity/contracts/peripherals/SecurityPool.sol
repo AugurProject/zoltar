@@ -6,7 +6,7 @@ import { ReputationToken } from '../ReputationToken.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
-import { SecurityPoolOracleCoordinator } from './SecurityPoolOracleCoordinator.sol';
+import { OpenOraclePriceCoordinator } from './OpenOraclePriceCoordinator.sol';
 import {
 	ISecurityPool,
 	SecurityVault,
@@ -36,7 +36,7 @@ contract SecurityPool is ISecurityPool {
 	ISecurityPool public immutable parent;
 	IShareToken public immutable shareToken;
 	ReputationToken public immutable repToken;
-	SecurityPoolOracleCoordinator public immutable priceOracleManagerAndOperatorQueuer;
+	OpenOraclePriceCoordinator public immutable priceOracleManagerAndOperatorQueuer;
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
@@ -174,7 +174,7 @@ contract SecurityPool is ISecurityPool {
 		ISecurityPoolFactory _securityPoolFactory,
 		ZoltarQuestionData _questionData,
 		EscalationGameFactory _escalationGameFactory,
-		SecurityPoolOracleCoordinator _priceOracleManagerAndOperatorQueuer,
+		OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer,
 		IShareToken _shareToken,
 		OpenOracle _openOracle,
 		ISecurityPool _parent,

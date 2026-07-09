@@ -13,7 +13,7 @@ import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
 	peripherals_EscalationGame_EscalationGame,
-	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
@@ -100,7 +100,7 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 	for (const log of receipt.logs) {
 		try {
 			const decodedLog = decodeEventLog({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				data: log.data,
 				topics: log.topics,
 			})
@@ -126,7 +126,7 @@ function getStagedOracleQueuedResult(receipt: TransactionReceipt, expectedOperat
 	for (const log of receipt.logs) {
 		try {
 			const decodedLog = decodeEventLog({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				data: log.data,
 				topics: log.topics,
 			})
@@ -227,61 +227,61 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
 	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingOperationSlotId',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getPendingSettlementOperationIds',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'MAX_PENDING_SETTLEMENT_OPERATIONS',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingReportId',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getQueuedOperationEthCost',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getRequestPriceEthCost',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'isPriceValid',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getActiveStagedOperationCount',
 			address: managerAddress,
 			args: [],
@@ -301,7 +301,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	if (activeStagedOperationCount > 0n) {
 		const previewCount = activeStagedOperationCount < ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT ? activeStagedOperationCount : ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT
 		const activeStagedOperationsResponse = await client.readContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getActiveStagedOperations',
 			address: managerAddress,
 			args: [0n, previewCount],
@@ -326,7 +326,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingOperation = stagedOperations.find(operation => operation.operationId === pendingOperationSlotId)
 		if (pendingOperation === undefined && pendingOperationSlotId > 0n) {
 			const stagedOperation = await client.readContract({
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'getPendingOperationSlot',
 				address: managerAddress,
 				args: [],
@@ -695,7 +695,7 @@ export async function createOpenOracleReportInstance(
 async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddress: Address) {
 	const requestPriceEthCost = await client.readContract({
 		address: managerAddress,
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getRequestPriceEthCost',
 		args: [],
 	})
@@ -706,43 +706,43 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getPendingSettlementOperationIds',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'MAX_PENDING_SETTLEMENT_OPERATIONS',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingReportId',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getQueuedOperationEthCost',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getRequestPriceEthCost',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'isPriceValid',
 			args: [],
 		}),
@@ -777,7 +777,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address) {
 	const callParams = {
 		address: managerAddress,
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPrice',
 		args: [],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
@@ -791,7 +791,7 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 export async function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint) {
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: managerAddress,
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'executeStagedOperation',
 		args: [operationId],
 		gas: 5_000_000n,
@@ -1474,7 +1474,7 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint) {
 	const callParams = {
 		address: managerAddress,
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
 		args: [encodeOracleQueueOperation('liquidation'), targetVault, amount, validForSeconds],
 		value: await loadOracleManagerQueueOperationEthValue(client, managerAddress),
@@ -1507,7 +1507,7 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint) {
 	const callParams = {
 		address: managerAddress,
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
 		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds],
 		value: await loadOracleManagerQueueOperationEthValue(client, managerAddress),
