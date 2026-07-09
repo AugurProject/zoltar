@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '../types/contracts.js'
 import { sameAddress } from './address.js'
-import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, type TruthAuctionBidDisposition } from './truthAuctionBook.js'
+import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, getTruthAuctionWinningThresholdPrice, type TruthAuctionBidDisposition } from './truthAuctionBook.js'
 
 export type TruthAuctionSettlementBidRow = {
 	bid: TruthAuctionBidView
@@ -28,7 +28,8 @@ export type TruthAuctionSettlementSelectionState = {
 export type TruthAuctionSettlementSelectionEstimate = {
 	estimatedAssignedBondAllowance: bigint | undefined
 	estimatedEthRefunded: bigint
-	estimatedRepClaimed: bigint | undefined
+	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
+	estimatedRepClaimed: bigint
 }
 
 export function getTruthAuctionSettlementBidKey(bid: Pick<TruthAuctionBidView, 'bidIndex' | 'tick'>) {
@@ -84,23 +85,25 @@ export function getTruthAuctionSettlementSelectionState({ selectedBidKeys, settl
 
 export function getTruthAuctionSettlementSelectionEstimate({ auctionedSecurityBondAllowance, selectedRows, truthAuction }: { auctionedSecurityBondAllowance: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
 	let estimatedEthRefunded = 0n
-	let estimatedRepClaimed: bigint | undefined = 0n
+	let estimatedRepClaimed = 0n
+	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
+	const shouldCarryUnderfundedRemainder = truthAuction !== undefined && winningThresholdPrice !== undefined && truthAuction.underfundedWinningEth > 0n && truthAuction.totalRepPurchased > 0n
+	let underfundedRemainder = 0n
 
 	for (const row of selectedRows) {
 		const estimate = getTruthAuctionBidSettlementEstimate(row.bid, truthAuction)
 		estimatedEthRefunded += estimate.refundedEthAmount
-		if (estimate.purchasedRepAmount === undefined) {
-			estimatedRepClaimed = undefined
-			continue
+		if (shouldCarryUnderfundedRemainder && row.disposition.canPrefillSettle) {
+			const numerator = row.bid.ethAmount * truthAuction.totalRepPurchased + underfundedRemainder
+			estimatedRepClaimed += numerator / truthAuction.underfundedWinningEth
+			underfundedRemainder = numerator % truthAuction.underfundedWinningEth
+		} else {
+			estimatedRepClaimed += estimate.purchasedRepAmount
 		}
-		if (estimatedRepClaimed === undefined) continue
-		estimatedRepClaimed += estimate.purchasedRepAmount
 	}
 
 	let estimatedAssignedBondAllowance: bigint | undefined = 0n
-	if (estimatedRepClaimed === undefined) {
-		estimatedAssignedBondAllowance = undefined
-	} else if (estimatedRepClaimed > 0n) {
+	if (estimatedRepClaimed > 0n) {
 		if (truthAuction === undefined || truthAuction.totalRepPurchased === 0n || auctionedSecurityBondAllowance === undefined) {
 			estimatedAssignedBondAllowance = undefined
 		} else {

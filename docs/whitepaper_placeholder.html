@@ -6249,8 +6249,10 @@
 						<div class="summary-card">
 							<span>Edge cases</span>
 							<b
-								>If demand is weak, qualifying ticks buy only their limit-priced
-								REP demand and repair remains partial.</b
+								>If demand is weak and finalization finds a non-empty winning
+								prefix, qualifying ticks still settle at one synthetic uniform
+								price and share the full REP cap. If no winning prefix exists,
+								every bid refunds instead.</b
 							>
 						</div>
 					</div>
@@ -6794,7 +6796,7 @@
 								Underfunded
 							</text>
 							<text class="svg-small" x="135" y="240" text-anchor="middle">
-								limit-price demand
+								synthetic uniform
 							</text>
 						</svg>
 						<p class="diagram-caption">
@@ -6805,19 +6807,24 @@
 					</figure>
 					<p>
 						For the underfunded threshold row below,
-						<code>acceptedBidEthForThreshold</code> is the contract's
-						<code>ethRaised</code>: aggregate bid ETH still in the tree when
-						finalization computes the threshold. The ETH actually sent to the
-						pool is <code>underfundedWinningEth</code>, after below-threshold
-						bids are excluded for refund. That means the threshold is not
-						recomputed to a fixed point after refunds; pushing it higher requires
-						temporarily locking ETH in bids that may end up buying nothing.
+						<code>underfundedWinningEth</code> is the finalized winning ETH kept
+						after the winning prefix is fixed and ticks below
+						<code>clearingTick</code> are excluded for refund. If
+						<code>underfundedWinningEth &gt; 0</code>, the contract computes the
+						synthetic threshold from that winning ETH and allocates the full REP
+						cap across ticks <code>&gt;= clearingTick</code>. If no winning
+						prefix exists, <code>underfundedThreshold</code> is stored as
+						<code>type(uint256).max</code>, <code>totalRepPurchased</code>
+						remains zero, and every bid refunds. The contract still records
+						aggregate submitted <code>ethRaised</code>, but the underfunded
+						threshold and uniform winner allocation both use
+						<code>underfundedWinningEth</code> when it is non-zero.
 					</p>
 					<div class="equation" id="eq-placeholder-auction-fill-math">
 						<math
 							display="block"
-							aria-label="filled REP equals floor ETH used times price precision divided by clearing price, underfunded threshold equals floor accepted bid ETH for threshold times price precision divided by max REP being sold, tick REP demand equals floor tick total ETH times price precision divided by tick price, and underfunded REP share equals floor bid ETH times tick REP demand divided by tick total ETH"
-							data-source="filledRep = floor(ethUsed \cdot pricePrecision / clearingPrice); underfundedThreshold = floor(acceptedBidEthForThreshold \cdot pricePrecision / maxRepBeingSold); tickRepDemand = floor(tickTotalEth \cdot pricePrecision / tickPrice); underfundedRepShare = floor(bidEth \cdot tickRepDemand / tickTotalEth)"
+							aria-label="filled REP equals floor ETH used times price precision divided by clearing price, underfunded threshold equals the ceiling underfunded winning ETH times price precision divided by max REP being sold when the winning prefix is non-empty and otherwise type uint256 max, underfunded REP share equals floor bid ETH times max REP being sold plus carried remainder divided by underfunded winning ETH when the winning prefix is non-empty and otherwise not applicable, and the next carried remainder is the same numerator modulo underfunded winning ETH when the winning prefix is non-empty and otherwise not applicable"
+							data-source="filledRep = floor(ethUsed \cdot pricePrecision / clearingPrice); underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth \cdot pricePrecision / maxRepBeingSold) else type(uint256).max; underfundedRepShare = if underfundedWinningEth > 0 then floor((bidEth \cdot maxRepBeingSold + clearingRemainderIn) / underfundedWinningEth) else not applicable; clearingRemainderOut = if underfundedWinningEth > 0 then (bidEth \cdot maxRepBeingSold + clearingRemainderIn) mod underfundedWinningEth else not applicable"
 						>
 							<mtable>
 								<mtr>
@@ -6849,38 +6856,31 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mrow>
-												<mi>acceptedBidEthForThreshold</mi>
-												<mo>&#x22C5;</mo>
-												<mi>pricePrecision</mi>
-											</mrow>
-											<mi>maxRepBeingSold</mi>
-										</mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>tickRepDemand</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mrow>
-												<mi>tickTotalEth</mi>
-												<mo>&#x22C5;</mo>
-												<mi>pricePrecision</mi>
-											</mrow>
-											<mi>tickPrice</mi>
-										</mfrac>
-										<mo>)</mo>
+										<mrow>
+											<mo>{</mo>
+											<mtable>
+												<mtr>
+													<mtd>
+														<mi>ceil</mi>
+														<mo>(</mo>
+														<mfrac>
+															<mrow>
+																<mi>underfundedWinningEth</mi>
+																<mo>&#x22C5;</mo>
+																<mi>pricePrecision</mi>
+															</mrow>
+															<mi>maxRepBeingSold</mi>
+														</mfrac>
+														<mo>)</mo>
+													</mtd>
+													<mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd>
+												</mtr>
+												<mtr>
+													<mtd><mtext>type(uint256).max</mtext></mtd>
+													<mtd><mtext>otherwise</mtext></mtd>
+												</mtr>
+											</mtable>
+										</mrow>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -6891,17 +6891,68 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mrow>
-												<mi>bidEth</mi>
-												<mo>&#x22C5;</mo>
-												<mi>tickRepDemand</mi>
-											</mrow>
-											<mi>tickTotalEth</mi>
-										</mfrac>
-										<mo>)</mo>
+										<mrow>
+											<mo>{</mo>
+											<mtable>
+												<mtr>
+													<mtd>
+														<mi>floor</mi>
+														<mo>(</mo>
+														<mfrac>
+															<mrow>
+																<mi>bidEth</mi>
+																<mo>&#x22C5;</mo>
+																<mi>maxRepBeingSold</mi>
+																<mo>+</mo>
+																<mi>clearingRemainderIn</mi>
+															</mrow>
+															<mi>underfundedWinningEth</mi>
+														</mfrac>
+														<mo>)</mo>
+													</mtd>
+													<mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd>
+												</mtr>
+												<mtr>
+													<mtd><mtext>not applicable</mtext></mtd>
+													<mtd><mtext>otherwise</mtext></mtd>
+												</mtr>
+											</mtable>
+										</mrow>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd>
+										<mi>clearingRemainderOut</mi>
+									</mtd>
+									<mtd>
+										<mo>=</mo>
+									</mtd>
+									<mtd>
+										<mrow>
+											<mo>{</mo>
+											<mtable>
+												<mtr>
+													<mtd>
+														<mo>(</mo>
+														<mrow>
+															<mi>bidEth</mi>
+															<mo>&#x22C5;</mo>
+															<mi>maxRepBeingSold</mi>
+															<mo>+</mo>
+															<mi>clearingRemainderIn</mi>
+														</mrow>
+														<mo>)</mo>
+														<mo>mod</mo>
+														<mi>underfundedWinningEth</mi>
+													</mtd>
+													<mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd>
+												</mtr>
+												<mtr>
+													<mtd><mtext>not applicable</mtext></mtd>
+													<mtd><mtext>otherwise</mtext></mtd>
+												</mtr>
+											</mtable>
+										</mrow>
 									</mtd>
 								</mtr>
 							</mtable>
@@ -6909,26 +6960,112 @@
 						<p class="equation-caption">
 							<span class="equation-label">Auction Fill Math</span>Uniform
 							clearing converts filled ETH at the uniform clearing price;
-							underfunded clearing sets a threshold price and sells each winning
-							tick only the REP demanded at that tick's bid limit. Underfunded
-							ticks qualify at or above the floored threshold.
+							underfunded clearing sets a threshold price from winning ETH and
+							distributes the full REP cap across those winners pro rata by ETH.
+							The stored <code>clearingTick</code> marks the lowest winning
+							tick, and bids at ticks <code>&gt;= clearingTick</code> share the
+							synthetic uniform underfunded price. If
+							<code>underfundedWinningEth == 0</code>, the threshold row takes
+							<code>type(uint256).max</code>, the share and remainder rows are
+							not applicable, and every bid refunds.
 						</p>
 					</div>
+					<details class="interactive-example" id="underfunded-auction-example">
+						<summary>Adjust an underfunded synthetic uniform example</summary>
+						<p>
+							This widget assumes the bid is already inside the finalized
+							winning prefix. The winning ETH, REP sale cap, and bidder ETH then
+							determine the synthetic execution price, the bidder's REP fill,
+							and the REP assigned to the rest of the winning prefix. The tick
+							price input is only a consistency check: if the synthetic price is
+							above the tick limit, these inputs cannot describe a winning-prefix
+							bid.
+						</p>
+						<div class="example-grid">
+							<label>
+								Max REP being sold
+								<input
+									type="number"
+									min="0.0001"
+									step="1"
+									value="100"
+									data-example-input="maxRepBeingSold"
+								/>
+							</label>
+							<label>
+								Winning ETH kept
+								<input
+									type="number"
+									min="0"
+									step="0.1"
+									value="10"
+									data-example-input="underfundedWinningEth"
+								/>
+							</label>
+							<label>
+								Tick price ETH/REP
+								<input
+									type="number"
+									min="0.0001"
+									step="0.1"
+									value="5"
+									data-example-input="tickPrice"
+								/>
+							</label>
+							<label>
+								Bidder ETH at tick
+								<input
+									type="number"
+									min="0"
+									step="0.1"
+									value="4"
+									data-example-input="bidEth"
+								/>
+							</label>
+						</div>
+						<ul class="example-output" aria-live="polite">
+							<li>
+								Input note:
+								<output data-example-output="inputNote"
+									>inputs are consistent</output
+								>
+							</li>
+							<li>
+								Prefix note:
+								<output data-example-output="tickStatus"
+									>inputs are consistent with a winning-prefix bid</output
+								>
+							</li>
+							<li>
+								Underfunded threshold:
+								<output data-example-output="underfundedThreshold"
+									>0.1000 ETH/REP</output
+								>
+							</li>
+							<li>
+								Bidder REP fill:
+								<output data-example-output="underfundedRepShare">40.0000 REP</output>
+							</li>
+							<li>
+								REP assigned to other winners:
+								<output data-example-output="repAssignedElsewhere">60.0000 REP</output>
+							</li>
+						</ul>
+					</details>
 					<p>
 						In normal clearing, bids above the clearing tick win in full, bids
 						below it lose, and bids at the clearing tick are filled in
 						submission order. In the underfunded path, ticks at or above the
-						underfunded threshold win only their limit-priced REP demand.
-						Same-tick bids share that tick's REP demand pro rata by ETH
-						contribution, and unsold REP remains unsold.
+						finalized <code>clearingTick</code> boundary share the full REP sale
+						cap pro rata by winning ETH contribution.
 					</p>
 					<p>
 						Both finalized paths carry division dust across paged withdrawals.
 						Normal clearing carries <code>clearingRemainder</code> through the
-						uniform-price ETH-to-REP division, and underfunded clearing carries
-						a per-tick remainder through same-tick ETH-to-REP allocation, so
-						bid-level withdrawals reconcile to the aggregate finalized REP
-						demanded at that tick.
+						uniform-price ETH-to-REP division, and underfunded clearing reuses
+						that same remainder while dividing the full REP cap across winning
+						ETH, so bid-level withdrawals reconcile to the aggregate finalized
+						REP allocation.
 					</p>
 					<p>
 						Settlement then turns purchased REP into child-pool vault
@@ -7043,28 +7180,40 @@
 						<li>
 							In an underfunded auction, the contract computes
 							<math
-								aria-label="underfunded threshold equals floor accepted bid ETH for threshold times price precision divided by max REP being sold"
-								data-source="underfundedThreshold = floor(acceptedBidEthForThreshold \cdot PRICE_PRECISION / maxRepBeingSold)"
+								aria-label="underfunded threshold equals the ceiling underfunded winning ETH times price precision divided by max REP being sold when the winning prefix is non-empty, otherwise type uint256 max"
+								data-source="underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth \cdot PRICE_PRECISION / maxRepBeingSold) else type(uint256).max"
 								><mi>underfundedThreshold</mi><mo>=</mo
-								><mi>floor</mi><mo>(</mo><mfrac
-									><mrow
-										><mi>acceptedBidEthForThreshold</mi><mo>&#x22C5;</mo
-										><mi>PRICE_PRECISION</mi></mrow
-									><mi>maxRepBeingSold</mi></mfrac
-								><mo>)</mo></math
-							>, where <code>acceptedBidEthForThreshold</code> is the contract's
-							aggregate <code>ethRaised</code> threshold input, not the final
-							<code>underfundedWinningEth</code> sent after refunds.
+								><mrow
+									><mo>{</mo><mtable
+										><mtr
+											><mtd
+												><mi>ceil</mi><mo>(</mo><mfrac
+													><mrow
+														><mi>underfundedWinningEth</mi><mo>&#x22C5;</mo
+														><mi>PRICE_PRECISION</mi></mrow
+													><mi>maxRepBeingSold</mi></mfrac
+												><mo>)</mo></mtd
+											><mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd></mtr
+										><mtr><mtd><mtext>type(uint256).max</mtext></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable
+									></mrow></math
+							>, where <code>underfundedWinningEth</code> is the finalized ETH
+							kept after the winning prefix is fixed and losing bids are
+							refunded.
 						</li>
 						<li>
-							Only bids whose <code>tickToPrice(tick)</code> is at or above the
-							floored underfunded threshold count as winners; each winning tick
-							buys only the REP demanded at that tick's bid limit.
+							When <code>underfundedWinningEth &gt; 0</code>, the stored
+							<code>clearingTick</code> marks the lowest winning tick.
+							Underfunded winners are bids at ticks
+							<code>&gt;= clearingTick</code>, and those winners share the full
+							REP cap pro rata by ETH at the synthetic
+							<code>underfundedThreshold</code> price. If no winning prefix
+							exists, the contract stores <code>type(uint256).max</code>,
+							<code>totalRepPurchased</code> stays zero, and every bid refunds.
 						</li>
 						<li>
 							Normal clearing carries division dust through
-							<code>clearingRemainder</code>; underfunded clearing carries
-							division dust per tick as bids are withdrawn.
+							<code>clearingRemainder</code>; underfunded clearing reuses that
+							remainder while dividing the full REP cap across winning ETH.
 						</li>
 						<li>
 							Before finalization, losing bids below the currently found
@@ -7077,10 +7226,11 @@
 						</li>
 					</ul>
 					<div class="callout">
-						Underfunded intuition: winning ticks buy their own limit-priced
-						demand, and bids below the threshold are refunded. The clearing
-						slider below shows why weak demand leaves REP unsold instead of
-						giving one bidder the whole sale cap.
+						Underfunded intuition: winning ticks still clear at one synthetic
+						price, and the winner set is the finalized tick prefix rather than
+						a standalone threshold-price cutoff. The adjustable example above
+						shows how weak demand can still sell the full REP cap once the
+						winner set is fixed.
 					</div>
 					<p>
 						The <code>Binding condition</code> output reports one of four
@@ -7099,10 +7249,10 @@
 							tick. This example uses a three-level tick-derived ladder displayed near
 							<code>5</code>, <code>4</code>, and <code>3 ETH/REP</code> to keep
 							the arithmetic readable. If qualifying demand is below the ETH
-							raise cap, each qualifying tick buys only its limit-priced REP
-							demand. The calculator shows human-unit allocations; exact
-							withdrawals use integer REP-wei division with per-tick remainder
-							carry across paged withdrawals.
+							raise cap, the underfunded winner set still shares the full REP
+							cap at one synthetic uniform price. The calculator shows
+							human-unit allocations; exact withdrawals use integer REP-wei
+							division with carried remainder across paged withdrawals.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -7272,10 +7422,10 @@
 								><output data-example-output="ethRaised">12 ETH</output>
 							</div>
 							<div>
-								<span>Threshold input ETH</span
-								><output data-example-output="thresholdInputEth"
-									>not underfunded</output
-								>
+							<span>Winning ETH kept</span
+							><output data-example-output="thresholdInputEth"
+								>not underfunded</output
+							>
 							</div>
 							<div>
 								<span>Derived underfunded threshold</span
@@ -9314,25 +9464,41 @@
 					context.write("thresholdInputEth", "not underfunded");
 					context.write("underfundedThreshold", "not underfunded");
 				} else {
-					const totalActiveEth = accumulatedEth;
-					const underfundedThreshold =
-						repInventory === 0
-							? Number.POSITIVE_INFINITY
-							: totalActiveEth / repInventory;
+					let winningEth = 0;
+					let winningBidCount = 0;
 					for (const bid of activeBids) {
-						if (bid.price >= underfundedThreshold) {
-							repResults[bid.name] = bid.eth / bid.price;
-							ethRaised += bid.eth;
-						} else {
-							refunds += bid.eth;
+						const candidateWinningEth = winningEth + bid.eth;
+						const candidateThreshold =
+							repInventory === 0 ? Number.POSITIVE_INFINITY : candidateWinningEth / repInventory;
+						if (candidateThreshold <= bid.price) {
+							winningEth = candidateWinningEth;
+							winningBidCount += 1;
+							continue;
+						}
+						refunds += bid.eth;
+						for (const losingBid of activeBids.slice(activeBids.indexOf(bid) + 1)) {
+							refunds += losingBid.eth;
+						}
+						break;
+					}
+					const underfundedThreshold =
+						repInventory === 0 || winningEth === 0
+							? Number.POSITIVE_INFINITY
+							: winningEth / repInventory;
+					for (const winningBid of activeBids.slice(0, winningBidCount)) {
+						if (winningEth > 0) {
+							repResults[winningBid.name] = (winningBid.eth * repInventory) / winningEth;
+							ethRaised += winningBid.eth;
 						}
 					}
-					context.write("clearingMode", "underfunded tick demand");
+					context.write("clearingMode", "underfunded synthetic uniform");
 					context.write("bindingCondition", "underfunded");
-					context.write("thresholdInputEth", formatEth(totalActiveEth));
+					context.write("thresholdInputEth", formatEth(winningEth));
 					context.write(
 						"underfundedThreshold",
-						`${formatFixed(underfundedThreshold)} ETH/REP`,
+						winningEth === 0
+							? "no winning ETH"
+							: `${formatFixed(underfundedThreshold)} ETH/REP`,
 					);
 				}
 				const repScale = 560 / Math.max(repInventory, 1);
@@ -9414,6 +9580,94 @@
 				window.addEventListener("hashchange", scheduleCurrentSectionUpdate);
 			}
 
+			const underfundedAuctionExample = document.querySelector(
+				"#underfunded-auction-example",
+			);
+			if (underfundedAuctionExample) {
+				const exampleInputs = Object.fromEntries(
+					Array.from(
+						underfundedAuctionExample.querySelectorAll("[data-example-input]"),
+					).map((inputElement) => [
+						inputElement.dataset.exampleInput,
+						inputElement,
+					]),
+				);
+				const exampleOutputs = Object.fromEntries(
+					Array.from(
+						underfundedAuctionExample.querySelectorAll("[data-example-output]"),
+					).map((outputElement) => [
+						outputElement.dataset.exampleOutput,
+						outputElement,
+					]),
+				);
+				const readExampleNumber = (inputName) => {
+					const inputElement = exampleInputs[inputName];
+					if (!inputElement) {
+						return 0;
+					}
+					const inputValue = Number(inputElement.value);
+					return Number.isFinite(inputValue) ? inputValue : 0;
+				};
+				const formatRep = (repValue) => `${repValue.toFixed(4)} REP`;
+				const formatPrice = (priceValue) => `${priceValue.toFixed(4)} ETH/REP`;
+				const updateUnderfundedAuctionExample = () => {
+					const maxRepBeingSold = Math.max(
+						readExampleNumber("maxRepBeingSold"),
+						0.0001,
+					);
+					const underfundedWinningEth = Math.max(
+						readExampleNumber("underfundedWinningEth"),
+						0,
+					);
+					const tickPrice = Math.max(readExampleNumber("tickPrice"), 0.0001);
+					const bidEth = Math.min(
+						Math.max(readExampleNumber("bidEth"), 0),
+						underfundedWinningEth,
+					);
+					const inputWasClamped = bidEth !== Math.max(readExampleNumber("bidEth"), 0);
+					const underfundedThreshold =
+						underfundedWinningEth <= 0
+							? Number.POSITIVE_INFINITY
+							: underfundedWinningEth / maxRepBeingSold;
+					const winningPrefixConsistent =
+						underfundedWinningEth > 0 && tickPrice >= underfundedThreshold;
+					const underfundedRepShare =
+						winningPrefixConsistent && underfundedWinningEth > 0
+							? (bidEth * maxRepBeingSold) / underfundedWinningEth
+							: 0;
+					const repAssignedElsewhere = Math.max(
+						maxRepBeingSold - underfundedRepShare,
+						0,
+					);
+
+					exampleOutputs.inputNote.value = inputWasClamped
+						? "bid ETH was clamped to total winning ETH"
+						: "inputs are consistent";
+					if (underfundedWinningEth <= 0) {
+						exampleOutputs.tickStatus.value = "no winning prefix";
+						exampleOutputs.underfundedThreshold.value = "no winning ETH";
+					} else if (winningPrefixConsistent) {
+						exampleOutputs.tickStatus.value =
+							"inputs are consistent with a winning-prefix bid";
+						exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold);
+					} else {
+						exampleOutputs.tickStatus.value =
+							"synthetic price exceeds this tick limit";
+						exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold);
+					}
+					exampleOutputs.underfundedRepShare.value =
+						winningPrefixConsistent ? formatRep(underfundedRepShare) : "not applicable";
+					exampleOutputs.repAssignedElsewhere.value =
+						winningPrefixConsistent ? formatRep(repAssignedElsewhere) : "not applicable";
+				};
+				for (const inputElement of Object.values(exampleInputs)) {
+					inputElement.addEventListener(
+						"input",
+						updateUnderfundedAuctionExample,
+					);
+				}
+				updateUnderfundedAuctionExample();
+			}
 		</script>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>

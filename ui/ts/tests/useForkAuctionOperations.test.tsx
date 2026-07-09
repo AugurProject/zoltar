@@ -94,6 +94,8 @@ function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {})
 		timeRemaining: 50n,
 		totalRepPurchased: 0n,
 		underfunded: false,
+		underfundedThreshold: undefined,
+		underfundedWinningEth: 0n,
 		...overrides,
 	}
 }
