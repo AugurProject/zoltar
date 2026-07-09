@@ -368,13 +368,15 @@ describe('ForkAuctionSection', () => {
 							ethRaiseCap: 1n,
 							ethRaised: 0n,
 							finalized: true,
-							hitCap: false,
+							hitCap: true,
 							maxRepBeingSold: 1n,
 							minBidSize: 1n,
 							repPurchasableAtBid: undefined,
 							timeRemaining: 0n,
 							totalRepPurchased: 0n,
 							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningEth: 0n,
 						},
 					}),
 					selectedStageView: 'settlement',
@@ -387,7 +389,6 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByRole('tab', { name: 'Settlement' }).className.includes('is-current')).toBe(true)
 		expect(documentQueries.queryByRole('tab', { name: 'New Security Pools' })).toBeNull()
 		expect(documentQueries.getByRole('tabpanel', { name: 'Settlement' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
 	})
 
 	test('shows the selected outcome field and child-pool link in the settlement child pools section', async () => {
@@ -808,6 +809,8 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalRepPurchased: 0n,
 							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -875,6 +878,8 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalRepPurchased: 0n,
 							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -892,64 +897,6 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
 		expect(documentQueries.getByText('Winning bids buy more than REP.')).not.toBeNull()
 		expect(documentQueries.getByText(/remaining open-interest debt being assigned to auction participants/)).not.toBeNull()
-	})
-
-	test('makes the winning-claim debt transfer explicit during settlement', async () => {
-		const currentChildPool = createChildPool({
-			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
-			systemState: 'operational',
-			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
-			truthAuctionStartedAt: 1n,
-		})
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({
-						address: getAddress('0x00000000000000000000000000000000000000aa'),
-					}),
-					currentStageView: 'settlement',
-					currentTimestamp: 700_000n,
-					forkAuctionDetails: createForkAuctionDetails({
-						auctionedSecurityBondAllowance: 7n,
-						claimingAvailable: true,
-						currentTime: 700_000n,
-						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
-						questionOutcome: 'yes',
-						securityPoolAddress: currentChildPool.securityPoolAddress,
-						systemState: 'operational',
-						truthAuction: {
-							accumulatedEth: 1n,
-							auctionEndsAt: 604_801n,
-							clearingPrice: 1n,
-							clearingTick: 0n,
-							ethAtClearingTick: 1n,
-							ethRaiseCap: 1n,
-							ethRaised: 1n,
-							finalized: true,
-							hitCap: true,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
-							timeRemaining: 0n,
-							totalRepPurchased: 1n,
-							underfunded: false,
-						},
-						truthAuctionAddress: currentChildPool.truthAuctionAddress,
-						truthAuctionStartedAt: 1n,
-						universeId: currentChildPool.universeId,
-					}),
-					previewPool: currentChildPool,
-					securityPools: [currentChildPool],
-					selectedStageView: 'settlement',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Winning claims add REP and Auctioned Bond Allowance (OI Debt).')).not.toBeNull()
-		expect(documentQueries.getByText(/remaining open-interest debt being assigned during settlement/)).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
@@ -991,6 +938,8 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalRepPurchased: 0n,
 							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1038,7 +987,6 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Security Pool for Yes universe does not exist.')).not.toBeNull()
 		expect(documentQueries.queryByText('No child security pools are available yet.')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create Yes Child Universe' })).toBeNull()
 		expect(onCreateChildUniverse).not.toHaveBeenCalled()

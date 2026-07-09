@@ -48,6 +48,8 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		timeRemaining: 10n * 10n ** 18n,
 		totalRepPurchased: 0n,
 		underfunded: false,
+		underfundedThreshold: undefined,
+		underfundedWinningEth: 0n,
 		...overrides,
 	}
 }
@@ -429,6 +431,80 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
+	void test('derives provisional truth auction progress from the synthetic underfunded winner prefix', () => {
+		const ethUnit = 10n ** 18n
+		const progress = getTruthAuctionOverviewProgress(
+			createTruthAuction({
+				ethRaiseCap: 100n * ethUnit,
+				hitCap: false,
+				maxRepBeingSold: 4n * ethUnit,
+			}),
+			[createTickSummary({ active: true, currentTotalEth: 16n * ethUnit, price: 5n * 10n ** 18n, tick: 12n })],
+		)
+
+		expect(progress).toEqual({
+			ethRaised: 16n * ethUnit,
+			repSold: 4n * ethUnit,
+		})
+	})
+
+	void test('derives zero provisional progress when no underfunded winning prefix exists', () => {
+		const ethUnit = 10n ** 18n
+		const progress = getTruthAuctionOverviewProgress(
+			createTruthAuction({
+				ethRaiseCap: 100n * ethUnit,
+				hitCap: false,
+				maxRepBeingSold: 10n * ethUnit,
+			}),
+			[createTickSummary({ active: true, currentTotalEth: 11n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 0n })],
+		)
+
+		expect(progress).toEqual({
+			ethRaised: 0n,
+			repSold: 0n,
+		})
+	})
+
+	void test('uses retained winning ETH instead of submitted ETH for finalized underfunded progress', () => {
+		const ethUnit = 10n ** 18n
+		const progress = getTruthAuctionOverviewProgress(
+			createTruthAuction({
+				ethRaised: 10n * ethUnit,
+				finalized: true,
+				hitCap: false,
+				totalRepPurchased: 4n * ethUnit,
+				underfunded: true,
+				underfundedWinningEth: 4n * ethUnit,
+			}),
+			[],
+		)
+
+		expect(progress).toEqual({
+			ethRaised: 4n * ethUnit,
+			repSold: 4n * ethUnit,
+		})
+	})
+
+	void test('shows zero finalized underfunded progress when no winning prefix exists even if bids were submitted', () => {
+		const ethUnit = 10n ** 18n
+		const progress = getTruthAuctionOverviewProgress(
+			createTruthAuction({
+				ethRaised: 10n * ethUnit,
+				finalized: true,
+				hitCap: false,
+				totalRepPurchased: 0n,
+				underfunded: true,
+				underfundedWinningEth: 0n,
+			}),
+			[],
+		)
+
+		expect(progress).toEqual({
+			ethRaised: 0n,
+			repSold: 0n,
+		})
+	})
+
 	void test('sorts auction bids by price priority and bid index', () => {
 		const sortedBids = sortTruthAuctionBidsByPriority([createBid({ bidIndex: 3n, tick: 9n }), createBid({ bidIndex: 2n, tick: 11n }), createBid({ bidIndex: 1n, tick: 11n })])
 
@@ -512,13 +588,15 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('marks underfunded winning settlement amounts as unknown without the per-tick ETH denominator', () => {
+	void test('estimates underfunded winning settlement amounts from the synthetic clearing price winner set', () => {
 		const underfundedAuction = createTruthAuction({
 			ethRaised: 4n * ONE_UNIT,
 			finalized: true,
 			maxRepBeingSold: 8n * ONE_UNIT,
 			totalRepPurchased: 8n * ONE_UNIT,
 			underfunded: true,
+			underfundedThreshold: HALF_UNIT,
+			underfundedWinningEth: 4n * ONE_UNIT,
 		})
 		const winningBid = createBid({
 			bidIndex: 1n,
@@ -527,19 +605,21 @@ void describe('fork auction helpers', () => {
 		})
 
 		expect(getTruthAuctionBidSettlementEstimate(winningBid, underfundedAuction)).toEqual({
-			purchasedRepAmount: undefined,
+			purchasedRepAmount: 2n * ONE_UNIT,
 			refundedEthAmount: 0n,
 			usedEthAmount: ONE_UNIT,
 		})
 	})
 
-	void test('returns unknown selected claim estimates for underfunded winners when losing bids remain in the auction', () => {
+	void test('returns concrete selected claim estimates for underfunded winners when losing bids remain in the auction', () => {
 		const underfundedAuction = createTruthAuction({
 			ethRaised: 4n * ONE_UNIT,
 			finalized: true,
 			maxRepBeingSold: 8n * ONE_UNIT,
 			totalRepPurchased: 8n * ONE_UNIT,
 			underfunded: true,
+			underfundedThreshold: HALF_UNIT,
+			underfundedWinningEth: 4n * ONE_UNIT,
 		})
 		const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(underfundedAuction)
 		if (winningThresholdPrice === undefined) throw new Error('Expected an underfunded winning threshold price.')
@@ -559,9 +639,132 @@ void describe('fork auction helpers', () => {
 				truthAuction: underfundedAuction,
 			}),
 		).toEqual({
-			estimatedAssignedBondAllowance: undefined,
+			estimatedAssignedBondAllowance: 2n * ONE_UNIT,
 			estimatedEthRefunded: ONE_UNIT,
-			estimatedRepClaimed: undefined,
+			estimatedRepClaimed: 2n * ONE_UNIT,
+		})
+	})
+
+	void test('rejects finalized underfunded metrics that omit a winning threshold despite positive winning ETH', () => {
+		const underfundedAuction = createTruthAuction({
+			finalized: true,
+			underfunded: true,
+			underfundedThreshold: undefined,
+			underfundedWinningEth: ONE_UNIT,
+		})
+
+		expect(() => getTruthAuctionWinningThresholdPrice(underfundedAuction)).toThrow('Finalized underfunded truth auction metrics are missing the winning threshold.')
+	})
+
+	void test('rejects finalized underfunded metrics that omit a clearing tick despite positive winning ETH', () => {
+		const underfundedAuction = createTruthAuction({
+			clearingTick: undefined,
+			finalized: true,
+			underfunded: true,
+			underfundedThreshold: HALF_UNIT,
+			underfundedWinningEth: ONE_UNIT,
+		})
+
+		expect(() => getTruthAuctionWinningThresholdPrice(underfundedAuction)).toThrow('Finalized underfunded truth auction metrics are missing the winning clearing tick.')
+	})
+
+	void test('carries underfunded pro-rata remainder across selected winning rows', () => {
+		const underfundedAuction = createTruthAuction({
+			clearingTick: 0n,
+			ethRaised: 3n * ONE_UNIT,
+			finalized: true,
+			maxRepBeingSold: 10n,
+			totalRepPurchased: 10n,
+			underfunded: true,
+			underfundedThreshold: HALF_UNIT,
+			underfundedWinningEth: 3n * ONE_UNIT,
+		})
+		const settlementRows = getTruthAuctionSettlementBidRows({
+			accountAddress: walletAddress,
+			truthAuction: underfundedAuction,
+			viewerBids: [createBid({ bidIndex: 1n, ethAmount: ONE_UNIT, tick: 0n }), createBid({ bidIndex: 2n, ethAmount: ONE_UNIT, tick: 0n }), createBid({ bidIndex: 3n, ethAmount: ONE_UNIT, tick: 0n })],
+		})
+
+		expect(
+			getTruthAuctionSettlementSelectionEstimate({
+				auctionedSecurityBondAllowance: undefined,
+				selectedRows: settlementRows,
+				truthAuction: underfundedAuction,
+			}),
+		).toEqual({
+			estimatedAssignedBondAllowance: undefined,
+			estimatedEthRefunded: 0n,
+			estimatedRepClaimed: 10n,
+		})
+	})
+
+	void test('treats finalized underfunded auctions with no winning prefix as refundable, even at tick 0', () => {
+		const underfundedAuction = createTruthAuction({
+			clearingTick: 0n,
+			ethRaised: ONE_UNIT,
+			finalized: true,
+			maxRepBeingSold: 8n * ONE_UNIT,
+			totalRepPurchased: 0n,
+			underfunded: true,
+			underfundedThreshold: HALF_UNIT,
+			underfundedWinningEth: 0n,
+		})
+		const boundaryBid = createBid({
+			bidIndex: 9n,
+			ethAmount: ONE_UNIT,
+			tick: 0n,
+		})
+
+		expect(getTruthAuctionBidDisposition(boundaryBid, underfundedAuction)).toEqual({
+			label: 'Refundable',
+			tone: 'danger',
+			canPrefillRefund: true,
+			canPrefillSettle: false,
+			settlementKind: 'ethRefund',
+			summaryKind: 'refundable',
+		})
+
+		expect(getTruthAuctionBidSettlementEstimate(boundaryBid, underfundedAuction)).toEqual({
+			purchasedRepAmount: 0n,
+			refundedEthAmount: ONE_UNIT,
+			usedEthAmount: 0n,
+		})
+
+		expect(getTruthAuctionWinningThresholdPrice(underfundedAuction)).toBeUndefined()
+	})
+
+	void test('treats bids below the funded clearing tick as losers when the lower price level does not clear', () => {
+		const fundedAuction = createTruthAuction({
+			clearingPrice: getTruthAuctionPriceAtTick(10n),
+			clearingTick: 10n,
+			ethAtClearingTick: ONE_UNIT,
+			ethRaised: 4n * ONE_UNIT,
+			finalized: true,
+			hitCap: true,
+			maxRepBeingSold: 4n * ONE_UNIT,
+			totalRepPurchased: 4n * ONE_UNIT,
+		})
+		const excludedLowerTick = 9n
+
+		const losingBid = createBid({
+			bidIndex: 3n,
+			ethAmount: ONE_UNIT,
+			tick: excludedLowerTick,
+		})
+
+		expect(getTruthAuctionBidDisposition(losingBid, fundedAuction)).toEqual({
+			label: 'Refundable',
+			tone: 'danger',
+			canPrefillRefund: true,
+			canPrefillSettle: false,
+			settlementKind: 'ethRefund',
+			summaryKind: 'refundable',
+		})
+
+		expect(getTruthAuctionBidSettlementEstimate(losingBid, fundedAuction)).toEqual({
+			purchasedRepAmount: 0n,
+			refundedEthAmount: ONE_UNIT,
+			usedEthAmount: 0n,
 		})
 	})
 
@@ -599,6 +802,33 @@ void describe('fork auction helpers', () => {
 			estimatedAssignedBondAllowance: 3n * ONE_UNIT,
 			estimatedEthRefunded: ONE_UNIT + HALF_UNIT,
 			estimatedRepClaimed: ONE_UNIT + HALF_UNIT,
+		})
+	})
+
+	void test('keeps selected settlement claim estimates concrete for refund-only selections', () => {
+		const finalizedAuction = createTruthAuction({
+			clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
+			clearingTick: 10n,
+			finalized: true,
+			hitCap: true,
+			totalRepPurchased: 4n * ONE_UNIT,
+		})
+		const settlementRows = getTruthAuctionSettlementBidRows({
+			accountAddress: walletAddress,
+			truthAuction: finalizedAuction,
+			viewerBids: [createBid({ bidIndex: 1n, ethAmount: ONE_UNIT, tick: 9n })],
+		})
+
+		expect(
+			getTruthAuctionSettlementSelectionEstimate({
+				auctionedSecurityBondAllowance: 8n * ONE_UNIT,
+				selectedRows: settlementRows,
+				truthAuction: finalizedAuction,
+			}),
+		).toEqual({
+			estimatedAssignedBondAllowance: 0n,
+			estimatedEthRefunded: ONE_UNIT,
+			estimatedRepClaimed: 0n,
 		})
 	})
 
