@@ -39,6 +39,7 @@ import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
 import { useForkAuctionInteractionState } from '../hooks/useForkAuctionInteractionState.js'
@@ -232,7 +233,7 @@ function getForkTypeLabel(forkOwnSecurityPool: boolean) {
 function getPreviewForkTypeLabel({ hasPreviewForkActivity, isSyntheticForkTriggerPreview, previewPool }: { hasPreviewForkActivity: boolean; isSyntheticForkTriggerPreview: boolean; previewPool: ListedSecurityPool | undefined }) {
 	if (previewPool === undefined) return UNKNOWN_VALUE
 	if (!hasPreviewForkActivity) return UNAVAILABLE_UNTIL_FORK
-	if (isSyntheticForkTriggerPreview) return 'Not chosen yet'
+	if (isSyntheticForkTriggerPreview) return UI_STRINGS.common.notChosenLabel
 	return getForkTypeLabel(previewPool.forkOwnSecurityPool)
 }
 function getPreviewMigrationSummary(previewPool: ListedSecurityPool | undefined, hasPreviewForkActivity: boolean) {
@@ -1596,7 +1597,7 @@ export function ForkAuctionSection({
 							<div className='actions'>
 								{renderStageActionButton({
 									action: 'startTruthAuction',
-									availability: createActionAvailability(!hasSelectedAuctionChildPool ? `Child universe not created for the ${selectedAuctionLabel} outcome yet.` : startTruthAuctionAvailabilityMessage),
+									availability: createActionAvailability(!hasSelectedAuctionChildPool ? UI_STRINGS.forkAuctionSection.childUniverseNotCreatedForOutcomeDetail(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
 									forceEnabled: hasSelectedAuctionChildPool,
 									idleLabel: truthAuctionBypassReason === undefined ? 'Start Truth Auction' : 'Bypass Truth Auction',
 									onClick: onStartTruthAuctionSubmit,

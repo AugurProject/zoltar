@@ -144,7 +144,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title')
-		expect(documentQueries.getByText('Times use your browser timezone. Leave start time blank to allow activity immediately after creation. Reporting and trading settlement depend on the end time.')).not.toBeNull()
+		expect(documentQueries.getByText('Times use your browser timezone. Leave start time blank to allow activity immediately after creation.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Question Type Guidance' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
 		expect(documentQueries.getByText('Placeholder origin security pools support this exact Yes / No question shape.')).not.toBeNull()
@@ -600,7 +600,7 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = missingRender.cleanup
 		const missingQueries = within(document.body)
-		expect(missingQueries.getByText('Question details are not loaded yet.')).not.toBeNull()
+		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
 		expect(missingQueries.getByRole('button', { name: 'Already Forked' })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
 		expect(missingQueries.getByRole('button', { name: 'Create Pool From Question' }).getAttribute('disabled')).toBe('')

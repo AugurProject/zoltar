@@ -15,7 +15,6 @@ const COMMON_DISPUTE_DELAY_LABEL = 'Dispute Delay'
 const COMMON_END_TIME_LABEL = 'End Time'
 const COMMON_ESCALATION_HALT_LABEL = 'Escalation Halt'
 const COMMON_FEE_PERCENTAGE_LABEL = 'Fee Percentage'
-const COMMON_FORK_ORACLE_LABEL = 'Fork Oracle'
 const COMMON_FORK_ZOLTAR_LABEL = 'Fork Zoltar'
 const COMMON_FORKED_LABEL = 'Forked'
 const COMMON_GO_TO_GENESIS_UNIVERSE_LABEL = 'Go to Genesis universe'
@@ -29,7 +28,6 @@ const COMMON_MULTIPLIER_LABEL = 'Multiplier'
 const COMMON_MULTIPLIER_SUFFIX = 'x'
 const COMMON_OUTCOMES_LABEL = 'Outcomes'
 const COMMON_NONE_LABEL = 'None'
-const COMMON_NONE_YET_LABEL = 'None yet'
 const COMMON_NOT_CHECKED_LABEL = 'Not checked'
 const COMMON_NOT_FOUND_LABEL = 'Not found'
 const COMMON_ORACLE_REPORTS_LABEL = 'Oracle Reports'
@@ -69,20 +67,11 @@ const COMMON_NO_LABEL = 'No'
 const COMMON_INVALID_LABEL = 'Invalid'
 const COMMON_AMOUNT_LABEL = 'Amount'
 const COMMON_EXECUTED_LABEL = 'Executed'
-const STAGED_OPERATION_RETRY_DETAIL = 'Fix the underlying state and submit a new staged operation.'
-const TRANSACTION_STATE_UNAVAILABLE_DETAIL = 'The transaction succeeded, but the latest manager state is not available yet.'
+const STAGED_OPERATION_RETRY_DETAIL = 'Submit a new staged operation if you want to try again.'
+const TRANSACTION_STATE_UNAVAILABLE_DETAIL = 'The transaction succeeded, but the latest manager state is not available.'
 const REP_COLLATERAL_LABEL = 'REP Collateral'
 const WITHDRAW_ESCALATION_DEPOSITS_DETAIL = 'Withdraw escalation deposits before redeeming REP.'
 const MANUAL_QUEUED_OPERATION_DETAIL = 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
-const REPORTING_STAGE_NOT_ENABLED_BLOCKED_ACTIONS = ['Report outcome', 'Settle escalation deposits']
-const REPORTING_STAGE_OPEN_AVAILABLE_ACTIONS = ['Refresh reporting']
-const REPORTING_STAGE_OPEN_BLOCKED_ACTIONS: string[] = []
-const REPORTING_STAGE_RESOLVED_AVAILABLE_ACTIONS = ['Settle escalation deposits']
-const REPORTING_STAGE_ACTIVE_AVAILABLE_ACTIONS = ['Report outcome']
-const REPORTING_STAGE_ACTIVE_BLOCKED_ACTIONS = ['Settle escalation deposits until finalization']
-const REPORTING_STAGE_FORK_TRIGGERED_BLOCKED_ACTIONS = ['Settle escalation deposits on the parent pool']
-const REPORTING_STAGE_TIMED_OUT_AVAILABLE_ACTIONS = ['Refresh reporting']
-
 export const UI_STRINGS = {
 	appPageTitle: {
 		createOracleReportPageTitle: 'Create Oracle Report',
@@ -90,7 +79,7 @@ export const UI_STRINGS = {
 		createSecurityPoolPageTitle: 'Create Security Pool',
 		deployContractsPageTitle: 'Deploy Contracts',
 		documentTitleSuffix: APP_DOCUMENT_TITLE_SUFFIX,
-		forkOraclePageTitle: COMMON_FORK_ORACLE_LABEL,
+		forkOraclePageTitle: COMMON_FORK_ZOLTAR_LABEL,
 		manageSecurityPoolPageTitle: 'Manage Security Pool',
 		migrateRepPageTitle: COMMON_MIGRATE_REP_LABEL,
 		openOracleReportDetailsPageTitle: 'Oracle Report Details',
@@ -114,8 +103,8 @@ export const UI_STRINGS = {
 		},
 		zoltar: {
 			createQuestionLabel: COMMON_CREATE_QUESTION_LABEL,
-			forkOracleLabel: COMMON_FORK_ORACLE_LABEL,
-			forkOracleRequiredForRepMigrationReason: 'Fork Oracle before migrating REP.',
+			forkOracleLabel: COMMON_FORK_ZOLTAR_LABEL,
+			forkOracleRequiredForRepMigrationReason: 'REP migration is unavailable because this universe has not forked.',
 			migrateRepLabel: COMMON_MIGRATE_REP_LABEL,
 			questionsAndMarketsLabel: COMMON_QUESTIONS_AND_MARKETS_LABEL,
 			subNavigationAriaLabel: 'Market views',
@@ -133,11 +122,12 @@ export const UI_STRINGS = {
 		minutesLabel: 'minutes',
 		multiplierSuffix: COMMON_MULTIPLIER_SUFFIX,
 		noLabel: COMMON_NO_LABEL,
+		notChosenLabel: 'Not chosen',
 		noneLabel: COMMON_NONE_LABEL,
 		noneSelectedLabel: 'None selected',
 		notCheckedBadgeLabel: COMMON_NOT_CHECKED_LABEL,
 		notFoundBadgeLabel: COMMON_NOT_FOUND_LABEL,
-		noneYetBadgeLabel: COMMON_NONE_YET_LABEL,
+		noneYetBadgeLabel: COMMON_NONE_LABEL,
 		ethSuffix: 'ETH',
 		repPerEthSuffix: 'REP / ETH',
 		usdcSuffix: 'USDC',
@@ -159,7 +149,7 @@ export const UI_STRINGS = {
 		defaultRpcSourceLabel: 'default',
 		environmentRpcSourceLabel: 'environment',
 		explicitOverrideRpcSourceLabel: 'explicit override',
-		finishSetupBeforeUsingAppDetail: 'Finish setup in Deploy before using the app.',
+		finishSetupBeforeUsingAppDetail: 'Required application contracts are not deployed.',
 		globalRuntimeRpcSourceLabel: 'global runtime',
 		ignoredReadRpcOverrideTitle: 'Read RPC override ignored',
 		localStorageRpcSourceLabel: 'local storage',
@@ -178,7 +168,6 @@ export const UI_STRINGS = {
 		urlProvidedReadRpcTitle: 'URL-provided read RPC',
 		wrongNetworkDetailPrefix: 'This interface only enables contract interactions on Ethereum mainnet.',
 		wrongNetworkMainnetInstruction: 'Switch the connected wallet network to Ethereum mainnet to continue.',
-		wrongNetworkReadOnlySuffix: 'Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.',
 		wrongNetworkTitle: COMMON_WRONG_NETWORK_LABEL,
 	},
 	truthAuctionMarketViewSection: {
@@ -190,7 +179,7 @@ export const UI_STRINGS = {
 		loadingOrderBookDetail: 'Loading order book…',
 		loadingPriceLevelsDetail: 'Loading price levels…',
 		marketViewTitle: 'Market View',
-		noActiveLevelsDetail: 'No active levels are visible yet.',
+		noActiveLevelsDetail: 'No active levels are visible.',
 		noLivePriceLevelsDetail: 'No live price levels are currently active for this auction.',
 		priceLadderTitle: 'Price Ladder',
 		priceLevelLabel: 'Price level',
@@ -224,9 +213,9 @@ export const UI_STRINGS = {
 		loadStagedOperationsLabel: 'Load Staged Operations',
 		manualExecutionLabel: 'Manual execution',
 		noStagedOperationsQueuedDetail: 'No staged operations are currently queued for this pool.',
-		noVaultsInThisPoolDetail: 'No vaults in this pool yet.',
+		noVaultsInThisPoolDetail: 'No vaults in this pool.',
 		noneQueuedBadgeLabel: 'None queued',
-		noneYetBadgeLabel: 'None yet',
+		noneYetBadgeLabel: COMMON_NONE_LABEL,
 		pendingOperationLiquidationLabel: 'Liquidation',
 		pendingOperationSetBondAllowanceLabel: 'Set Bond Allowance',
 		pendingOperationWithdrawRepLabel: 'Withdraw REP',
@@ -284,6 +273,9 @@ export const UI_STRINGS = {
 		reportingOpensAfterMarketEndReason: 'Reporting opens after market end.',
 		operationIdLabel: 'Operation Id',
 	},
+	forkAuctionSection: {
+		childUniverseNotCreatedForOutcomeDetail: (outcomeLabel: string) => `Child universe not created for the ${outcomeLabel} outcome.`,
+	},
 	liquidationModal: {
 		callerCollateralizationAtOpenOracleLabel: 'Caller Collateralization @ Open Oracle',
 		collateralizationAtOpenOracleLabel: 'Collateralization @ Open Oracle',
@@ -293,7 +285,6 @@ export const UI_STRINGS = {
 		closeButtonAriaLabel: COMMON_CLOSE_LABEL,
 		enterLiquidationAmountReason: 'Enter a liquidation amount.',
 		enterLiquidationTimeoutReason: 'Enter a liquidation timeout of at least 1 minute.',
-		executeLiquidationIdleLabel: 'Execute Liquidation',
 		executeLiquidationPendingLabel: 'Executing liquidation...',
 		executeVaultLiquidationTitle: 'Execute Vault Liquidation',
 		failedBadgeLabel: 'Failed',
@@ -313,15 +304,15 @@ export const UI_STRINGS = {
 		metricAmountLabel: COMMON_AMOUNT_LABEL,
 		openOraclePriceLabel: 'Open Oracle Price',
 		operationExecutedBadgeLabel: COMMON_EXECUTED_LABEL,
-		queueLiquidationActionLabel: 'queue this liquidation',
+		queueLiquidationActionLabel: 'queue liquidation',
 		queueLiquidationIdleLabel: 'Queue Liquidation',
 		queueLiquidationPendingLabel: 'Queueing liquidation...',
 		queueVaultLiquidationTitle: 'Queue Vault Liquidation',
 		queuedBadgeLabel: 'Queued',
 		refreshingBadgeLabel: COMMON_REFRESHING_LABEL,
-		refreshingLiquidationStateDetail: 'Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.',
+		refreshingLiquidationStateDetail: 'Refreshing liquidation state.',
 		refreshingLiquidationStateTitle: 'Refreshing Liquidation State',
-		refreshingOpenOracleValidityReason: 'Refreshing Open Oracle validity before liquidation.',
+		refreshingOpenOracleValidityReason: 'Refreshing price validity.',
 		reloadPoolBeforeExecutingReason: 'Reload the selected pool before executing liquidation.',
 		reloadPoolBeforeLiquidatingReason: 'Reload the selected pool before liquidating.',
 		repCollateralLabel: REP_COLLATERAL_LABEL,
@@ -372,6 +363,13 @@ export const UI_STRINGS = {
 		statusUnforkedLabel: 'Unforked',
 		universeLabel: COMMON_UNIVERSE_LABEL,
 	},
+	marketOverviewSection: {
+		childUniverseAlreadyDeployedReason: 'Child universe already deployed.',
+		childUniverseNotAlreadyDeployedLabel: 'Child universe not already deployed',
+		childUniversesUnavailableReason: 'Child universes are unavailable because this universe has not forked.',
+		ethereumMainnetSelectedLabel: 'Ethereum mainnet selected',
+		universeIsForkedLabel: 'Universe is forked',
+	},
 	marketCreateQuestionSection: {
 		alreadyForkedLabel: COMMON_ALREADY_FORKED_LABEL,
 		answerUnitFieldLabel: COMMON_ANSWER_UNIT_LABEL,
@@ -414,7 +412,7 @@ export const UI_STRINGS = {
 		questionTypeGuidanceTitle: 'Question Type Guidance',
 		questionTypeLabel: COMMON_QUESTION_TYPE_LABEL,
 		questionDetailsLoadingAriaLabel: 'Loading question details',
-		questionDetailsNotLoadedText: 'Question details are not loaded yet.',
+		questionDetailsNotLoadedText: 'Question details are not available.',
 		riskCueFieldLabel: 'Risk cue',
 		scalarFieldHelpText: 'Scalar questions settle to a numeric result inside the range above. Use a unit that matches the public source you expect to cite.',
 		scalarIncrementFieldLabel: 'Scalar Increment',
@@ -427,7 +425,7 @@ export const UI_STRINGS = {
 		startTimeFieldLabel: 'Start Time',
 		startsLabel: 'Starts',
 		endsLabel: 'Ends',
-		timingFieldHelpText: 'Times use your browser timezone. Leave start time blank to allow activity immediately after creation. Reporting and trading settlement depend on the end time.',
+		timingFieldHelpText: 'Times use your browser timezone. Leave start time blank to allow activity immediately after creation.',
 		titleFieldHelpText: 'Keep the title self-contained so users can understand the exact question before opening details.',
 		titleFieldPlaceholder: 'Will event X happen?',
 		titleFieldLabel: 'Title',
@@ -467,15 +465,15 @@ export const UI_STRINGS = {
 		alreadyForkedLabel: COMMON_ALREADY_FORKED_LABEL,
 		loadingQuestionsLabel: 'Loading questions...',
 		marketsTitle: COMMON_MARKETS_LABEL,
-		noQuestionsEmptyBadgeLabel: COMMON_NONE_YET_LABEL,
+		noQuestionsEmptyBadgeLabel: 'No questions',
 		noQuestionsBadgeLabel: 'No questions',
-		noQuestionsDetail: 'No questions are available in this universe yet. Create a question first, then use it to create a security pool for shares, reporting, and vaults.',
+		noQuestionsDetail: 'No questions.',
 		nonBinaryPoolRestrictionDetail: 'Non-binary questions are valid in Zoltar, but Placeholder origin pools currently require an exact binary Yes / No question.',
-		pageNotLoadedDetail: 'Questions for this page have not loaded yet.',
+		pageUnavailableDetail: 'Question page unavailable.',
 	},
 	openOracleSection: {
 		advancedStandaloneOracleGameDescription: 'Direct Open Oracle creation for protocol testing. This bypasses pool-managed oracle-manager staging, so confirm addresses, token amounts, fees, and timing before submitting.',
-		advancedStandaloneOracleGameTitle: 'Advanced Standalone Oracle Game',
+		advancedStandaloneOracleGameTitle: 'Open Oracle Game',
 		approvingTokenPendingLabel: (tokenSymbol: string) => `Approving ${tokenSymbol}...`,
 		browseReportsTitle: 'Browse Reports',
 		browseReportsDescription: (pageSize: string) => `Browse every Open Oracle game and open a selected report view. Page size is fixed at ${pageSize} reports.`,
@@ -486,11 +484,6 @@ export const UI_STRINGS = {
 		currentAmount1Label: (tokenSymbol: string) => `Current Amount 1 (${tokenSymbol})`,
 		currentAmount2Label: (tokenSymbol: string) => `Current Amount 2 (${tokenSymbol})`,
 		tokenPairSuffix: (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`,
-		connectWalletBeforeApprovingTokensReason: 'Connect a wallet before approving tokens.',
-		connectWalletBeforeDisputingReportsReason: 'Connect a wallet before disputing reports.',
-		connectWalletBeforeSettlingReportsReason: 'Connect a wallet before settling reports.',
-		connectWalletBeforeSubmittingInitialReportReason: 'Connect a wallet before submitting the initial report.',
-		connectWalletBeforeWrappingEthReason: 'Connect a wallet before wrapping ETH.',
 		createAnotherLabel: 'Create Another',
 		createStandaloneOracleGameButtonIdleLabel: 'Create Standalone Oracle Game',
 		createStandaloneOracleGameButtonPendingLabel: 'Creating...',
@@ -574,7 +567,7 @@ export const UI_STRINGS = {
 		settleReportTitle: COMMON_SETTLE_REPORT_LABEL,
 		settledLabel: COMMON_SETTLED_LABEL,
 		settledReportTitle: 'Settled Report',
-		settlerRewardFieldHelpText: 'ETH paid to the account that settles the report, entered as a decimal ETH value.',
+		settlerRewardFieldHelpText: 'ETH paid to the account that settles the report.',
 		settlerRewardFieldLabel: COMMON_SETTLER_REWARD_LABEL,
 		settlerRewardLabel: COMMON_SETTLER_REWARD_LABEL,
 		settlementSummaryTitle: 'Settlement Summary',
@@ -591,7 +584,7 @@ export const UI_STRINGS = {
 		statusFilterPendingLabel: 'Pending',
 		statusFilterDisputedLabel: 'Disputed',
 		statusFilterSettledLabel: COMMON_SETTLED_LABEL,
-		noneYetBadgeLabel: COMMON_NONE_YET_LABEL,
+		noneYetBadgeLabel: COMMON_NONE_LABEL,
 		noMatchesBadgeLabel: 'No matches',
 		noOpenOracleGamesDetail: 'No Open Oracle games found.',
 		noReportsMatchFiltersDetail: 'No reports match the current search and status filters.',
@@ -639,6 +632,10 @@ export const UI_STRINGS = {
 			tokenPairLabel: COMMON_TOKEN_PAIR_LABEL,
 		},
 	},
+	zoltarMigrationSection: {
+		repMigrationUnavailableReason: 'REP migration is unavailable because this universe has not forked.',
+		repPreparationUnavailableReason: 'REP preparation is unavailable because this universe has not forked.',
+	},
 	overviewPanels: {
 		addressLabel: 'Address',
 		augurPlaceholderTitle: 'Augur Placeholder',
@@ -653,7 +650,6 @@ export const UI_STRINGS = {
 		operationsEyebrow: 'Operations',
 		parentUniverseLabel: 'Parent Universe',
 		readOnlyBadgeLabel: 'Read-only',
-		readOnlyDescription: 'Read-only mode shows contract state. Connect a wallet before submitting transactions.',
 		repBalanceLabel: COMMON_REP_LABEL,
 		repPerEthLabel: COMMON_REP_PER_ETH_LABEL,
 		repUsdcLabel: 'REP/USDC',
@@ -662,10 +658,9 @@ export const UI_STRINGS = {
 		refreshRepPricesPendingTitle: 'Refreshing REP prices...',
 		simulationBadgeLabel: 'Simulation',
 		simulationDescription: 'Simulation mode uses browser-local contract state. Transactions do not affect a public network.',
-		universeForkedDescription: 'Zoltar has forked.',
+		universeForkedDescription: 'This universe has forked.',
 		universeForkedOnDetailPrefix: 'Zoltar forked on',
 		universeLabel: COMMON_UNIVERSE_LABEL,
-		walletWrongNetworkDescription: 'Wallet is connected to a non-mainnet chain. You can inspect configured read state, but transaction controls stay disabled until the wallet switches to Ethereum mainnet.',
 		wethBalanceLabel: 'WETH',
 		wrongNetworkBadgeLabel: 'Wrong Network',
 	},
@@ -684,8 +679,8 @@ export const UI_STRINGS = {
 		untitledQuestionLabel: 'Untitled question',
 	},
 	scalarDeploymentSection: {
-		childUniverseAlreadyDeployedDetail: 'This child universe is already deployed.',
-		childUniverseAlreadyDeployedReason: 'This child universe is already deployed.',
+		childUniverseAlreadyDeployedDetail: 'Child universe already deployed.',
+		childUniverseAlreadyDeployedReason: 'Child universe already deployed.',
 		childUniverseNotAlreadyDeployedLabel: 'Child universe not already deployed',
 		childUniverseSelectedTitle: 'Selected Child Universe',
 		childUniversesTitle: 'Child Universes',
@@ -699,10 +694,10 @@ export const UI_STRINGS = {
 		deployingUniversePendingLabel: 'Deploying universe...',
 		existingChildUniversesTitle: 'Existing Child Universes',
 		executeChildUniverseDeploymentDescription: 'Confirm the selected scalar outcome and deploy its child universe in one bounded execution flow.',
-		forkBeforeDeployingChildUniversesReason: 'Fork Zoltar before deploying child universes.',
+		forkBeforeDeployingChildUniversesReason: 'Child universes are unavailable because this universe has not forked.',
 		loadingScalarRangeDetail: 'Loading scalar range...',
 		noChildUniverseSelectedMessage: 'No child universe selected.',
-		noDeployedChildUniversesMessage: 'No deployed child universes yet.',
+		noDeployedChildUniversesMessage: 'No deployed child universes.',
 		openingChildUniversePendingLabel: 'Opening...',
 		scalarForksCanDeployOneOutcomeUniverseAtATimeDetail: 'Scalar forks can deploy one outcome universe at a time.',
 		selectChildUniverseLabel: 'Select Child Universe',
@@ -710,7 +705,6 @@ export const UI_STRINGS = {
 		selectedTickInvalidReason: 'Selected tick is invalid',
 		universeIsForkedLabel: 'Universe is forked',
 		walletConnectedLabel: 'Wallet connected',
-		switchToMainnetBeforeDeployingChildUniverseReason: 'Switch to Ethereum mainnet before deploying a child universe.',
 		ethereumMainnetSelectedLabel: 'Ethereum mainnet selected',
 	},
 	shareMigrationTargetsSection: {
@@ -814,14 +808,6 @@ export const UI_STRINGS = {
 		reportingSettlementTitle: 'Settle Escalation Deposits',
 		reportingMetricsTitle: 'Escalation Metrics',
 		reportingOutcomeTitle: 'Report Outcome',
-		reportingStageNotEnabledBlockedActions: REPORTING_STAGE_NOT_ENABLED_BLOCKED_ACTIONS,
-		reportingStageOpenAvailableActions: REPORTING_STAGE_OPEN_AVAILABLE_ACTIONS,
-		reportingStageOpenBlockedActions: REPORTING_STAGE_OPEN_BLOCKED_ACTIONS,
-		reportingStageResolvedAvailableActions: REPORTING_STAGE_RESOLVED_AVAILABLE_ACTIONS,
-		reportingStageActiveAvailableActions: REPORTING_STAGE_ACTIVE_AVAILABLE_ACTIONS,
-		reportingStageActiveBlockedActions: REPORTING_STAGE_ACTIVE_BLOCKED_ACTIONS,
-		reportingStageForkTriggeredBlockedActions: REPORTING_STAGE_FORK_TRIGGERED_BLOCKED_ACTIONS,
-		reportingStageTimedOutAvailableActions: REPORTING_STAGE_TIMED_OUT_AVAILABLE_ACTIONS,
 		reportingNotEnabledTitle: 'Reporting Not Enabled',
 		reportingOpenTitle: 'Reporting Open',
 		resolvedTitle: 'Resolved',
@@ -842,8 +828,8 @@ export const UI_STRINGS = {
 		settlementLockedUntilFinalizedReason: 'Escalation deposits cannot be settled until the question is finalized.',
 		reportingResolvedDetail: 'Market finalized as',
 		reportingResolvedDetailLabel: (selectedOutcomeLabel: string) => `Market finalized as ${selectedOutcomeLabel}.`,
-		reportingTimedOutReason: 'Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.',
-		reportingTimedOutDetail: 'Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.',
+		reportingTimedOutReason: 'Escalation ended by timeout. The winner is computed from the current stakes.',
+		reportingTimedOutDetail: 'Escalation ended by timeout. The winner is computed from the current stakes.',
 		migrationExpiredReason: 'The migration window for these unresolved escalation deposits has closed.',
 		worthAfterFinalizationPendingLabel: 'Worth after finalization: Pending finalization',
 		worthNowLabel: 'Worth now:',
@@ -1080,7 +1066,7 @@ export const UI_STRINGS = {
 		redeemableCompleteSetsLabel: 'Redeemable Complete Sets',
 		bondAllowanceInUseLabel: 'Bond Allowance In Use',
 		securityPoolAddressLabel: COMMON_SECURITY_POOL_ADDRESS_LABEL,
-		shareBalancesNotLoadedMessage: 'Wallet balances are not loaded yet.',
+		shareBalancesNotLoadedMessage: 'Wallet balances are not loaded.',
 		shareOutcomeInvalidLabel: COMMON_INVALID_LABEL,
 		shareOutcomeNoLabel: COMMON_NO_LABEL,
 		shareOutcomeYesLabel: COMMON_YES_LABEL,
@@ -1089,10 +1075,6 @@ export const UI_STRINGS = {
 		totalAcrossOutcomesLabel: 'Total Across Outcomes',
 		waitForPoolToResolveReason: 'Wait for the selected pool to resolve before redeeming shares.',
 		yourHoldingsTitle: 'Your Holdings',
-		switchToMainnetToMigrateSharesReason: 'Switch to Ethereum mainnet before migrating shares.',
-		switchToMainnetToMintReason: 'Switch to Ethereum mainnet before minting complete sets.',
-		switchToMainnetToRedeemCompleteSetsReason: 'Switch to Ethereum mainnet before redeeming complete sets.',
-		switchToMainnetToRedeemSharesReason: 'Switch to Ethereum mainnet before redeeming shares.',
 		tradingRouteTitle: 'Trading',
 	},
 	tabNavigation: {
@@ -1107,13 +1089,12 @@ export const UI_STRINGS = {
 		pageNotFound: {
 			actionHint: 'Open one of the sections below.',
 			badgeLabel: 'Page not found',
-			detail: 'That page is not available here.',
 		},
 		poolRegistry: {
 			collection: {
 				emptyActionHint: 'Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.',
-				emptyBadgeLabel: COMMON_NONE_YET_LABEL,
-				emptyDetail: 'No security pools are available in this universe yet.',
+				emptyBadgeLabel: COMMON_NONE_LABEL,
+				emptyDetail: 'No security pools are available in this universe.',
 				loadingBadgeLabel: COMMON_LOADING_BADGE_LABEL,
 				loadingDetail: 'Refreshing pools.',
 				notCheckedBadgeLabel: COMMON_NOT_CHECKED_LABEL,

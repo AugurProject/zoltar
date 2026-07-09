@@ -14,6 +14,7 @@ import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { getUniversePresentation } from '../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
@@ -37,11 +38,11 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 	const [selectedChildOutcomeIndex, setSelectedChildOutcomeIndex] = useState<bigint | undefined>(undefined)
 	const selectedChildUniverse = rootUniverse?.childUniverses.find(child => child.outcomeIndex === selectedChildOutcomeIndex)
 	const childUniverseRequirements = [
-		{ key: 'forked', label: 'Universe is forked', resolved: hasForked, ...(hasForked ? {} : { detail: 'Fork Zoltar before deploying child universes.' }) },
+		{ key: 'forked', label: UI_STRINGS.marketOverviewSection.universeIsForkedLabel, resolved: hasForked, ...(hasForked ? {} : { detail: UI_STRINGS.marketOverviewSection.childUniversesUnavailableReason }) },
 		{ key: 'selection', label: 'Child universe selected', resolved: selectedChildUniverse !== undefined, ...(selectedChildUniverse === undefined ? { detail: 'Select a child universe to deploy.' } : {}) },
 		{ key: 'wallet', label: 'Wallet connected', resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: 'Connect a wallet before deploying a child universe.' }) },
-		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before deploying a child universe.' }) },
-		{ key: 'exists', label: 'Child universe not already deployed', resolved: selectedChildUniverse?.exists !== true, ...(selectedChildUniverse?.exists === true ? { detail: 'This child universe is already deployed.' } : {}) },
+		{ key: 'mainnet', label: UI_STRINGS.marketOverviewSection.ethereumMainnetSelectedLabel, resolved: isMainnet },
+		{ key: 'exists', label: UI_STRINGS.marketOverviewSection.childUniverseNotAlreadyDeployedLabel, resolved: selectedChildUniverse?.exists !== true, ...(selectedChildUniverse?.exists === true ? { detail: UI_STRINGS.marketOverviewSection.childUniverseAlreadyDeployedReason } : {}) },
 	]
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
@@ -100,11 +101,11 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
 									reason: (() => {
 										if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
-										if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
+										if (!isMainnet) return undefined
 
 										return (() => {
-											if (!hasForked) return 'Fork Zoltar before deploying child universes.'
-											if (child.exists) return 'This child universe is already deployed.'
+											if (!hasForked) return UI_STRINGS.marketOverviewSection.childUniversesUnavailableReason
+											if (child.exists) return UI_STRINGS.marketOverviewSection.childUniverseAlreadyDeployedReason
 
 											return undefined
 										})()
@@ -128,11 +129,11 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									? 'Select a child universe to deploy.'
 									: (() => {
 											if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
-											if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
+											if (!isMainnet) return undefined
 
 											return (() => {
-												if (!hasForked) return 'Fork Zoltar before deploying child universes.'
-												if (selectedChildUniverse.exists) return 'This child universe is already deployed.'
+												if (!hasForked) return UI_STRINGS.marketOverviewSection.childUniversesUnavailableReason
+												if (selectedChildUniverse.exists) return UI_STRINGS.marketOverviewSection.childUniverseAlreadyDeployedReason
 
 												return undefined
 											})()

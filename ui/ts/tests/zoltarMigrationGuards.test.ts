@@ -28,8 +28,8 @@ describe('zoltar migration guards', () => {
 	})
 
 	test('waits for root universe and fork state before migration actions can proceed', () => {
-		expect(getMigrationGuardMessage(zeroAddress, true, undefined, false, false, false, 'Fork Oracle before preparing REP.')).toBe('Refresh universe first.')
-		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse({ hasForked: false }), false, false, false, 'Fork Oracle before preparing REP.')).toBe('Fork Oracle before preparing REP.')
-		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse(), false, true, false, 'Fork Oracle before preparing REP.')).toBeUndefined()
+		expect(getMigrationGuardMessage(zeroAddress, true, undefined, false, false, false, 'REP preparation is unavailable because this universe has not forked.')).toBe('Refresh universe first.')
+		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse({ hasForked: false }), false, false, false, 'REP preparation is unavailable because this universe has not forked.')).toBe('REP preparation is unavailable because this universe has not forked.')
+		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse(), false, true, false, 'REP preparation is unavailable because this universe has not forked.')).toBeUndefined()
 	})
 })

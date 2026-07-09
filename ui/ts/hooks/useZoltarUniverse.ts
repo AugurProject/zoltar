@@ -112,7 +112,7 @@ export function useZoltarUniverse(
 
 		const loadedUniverse = await loadZoltarUniverse()
 		if (loadedUniverse !== undefined) return loadedUniverse
-		if (zoltarUniverseMissing.value) throw new Error('Zoltar universe does not exist yet')
+		if (zoltarUniverseMissing.value) throw new Error('Zoltar universe does not exist')
 
 		throw new Error('Failed to load current Zoltar universe')
 	}

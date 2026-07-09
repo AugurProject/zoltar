@@ -104,8 +104,8 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'Fork Oracle before preparing REP.')
-		expectTransactionButtonDisabled(document.body, 'Split REP', 'Fork Oracle before migrating REP.')
+		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'REP preparation is unavailable because this universe has not forked.')
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP migration is unavailable because this universe has not forked.')
 	})
 
 	test('enables prepare when additional REP must be moved into the migration balance', async () => {

@@ -5,6 +5,7 @@ import { fireEvent, waitFor, within } from './testUtils/queries'
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../lib/forkAuction.js'
+import { getWalletScopedAccountAddress } from '../lib/network.js'
 import type { AccountState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -101,7 +102,8 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 	const defaultPools = [createSecurityPool()]
 	const securityPools = overrides.securityPools ?? defaultPools
 	const environmentRefreshKey = overrides.environmentRefreshKey ?? 0
-	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const scopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
+	const accountRequestKey = scopedAccountAddress?.toLowerCase() ?? 'no-account'
 	const defaultPage: SecurityPoolBrowsePage = {
 		pageIndex: 0,
 		pageSize: 6,
@@ -366,6 +368,43 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('Account A pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+	})
+
+	test('uses a non-wallet request key off-mainnet and reloads with the wallet key after switching back', async () => {
+		const accountAddress = '0x00000000000000000000000000000000000000a1'
+		const onLoadSecurityPoolPage = mock(() => undefined)
+		const wrongNetworkProps = createProps({
+			accountState: createAccountState({
+				address: accountAddress,
+				chainId: '0xaa36a7',
+			}),
+			onLoadSecurityPoolPage,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...wrongNetworkProps} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, '0:0:6:no-account')
+		})
+
+		await act(() => {
+			render(
+				<SecurityPoolsOverviewSection
+					{...wrongNetworkProps}
+					accountState={createAccountState({
+						address: accountAddress,
+						chainId: '0x1',
+					})}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		await waitFor(() => {
+			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
+			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, `0:0:6:${accountAddress}`)
+		})
 	})
 
 	test('keeps pool-list load errors inline instead of opening liquidation', async () => {

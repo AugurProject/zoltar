@@ -58,9 +58,7 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
-		expect(
-			documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Switch the connected wallet network to Ethereum mainnet to continue. Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.'),
-		).not.toBeNull()
+		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Switch the connected wallet network to Ethereum mainnet to continue.')).not.toBeNull()
 	})
 
 	test('shows a simulation bootstrap failure notice', async () => {
@@ -200,9 +198,9 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Setup incomplete')).not.toBeNull()
-		expect(documentQueries.getByText('Finish setup in Deploy before using the app.')).not.toBeNull()
+		expect(documentQueries.getByText('Required application contracts are not deployed.')).not.toBeNull()
 		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
-		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Chain ID mismatch. Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.')).not.toBeNull()
+		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Chain ID mismatch.')).not.toBeNull()
 		expect(documentQueries.getByText('Error')).not.toBeNull()
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
 	})

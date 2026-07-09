@@ -113,7 +113,7 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 								}
 							/>
 						)
-					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <StateHint presentation={{ key: 'not_checked', badgeLabel: UI_STRINGS.common.notCheckedBadgeLabel, badgeTone: 'muted', detail: UI_STRINGS.marketQuestionsSection.pageNotLoadedDetail }} />
+					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{UI_STRINGS.marketQuestionsSection.pageUnavailableDetail}</p>
 
 					return undefined
 				})()

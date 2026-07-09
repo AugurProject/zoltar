@@ -93,6 +93,7 @@ export function TradingSection({
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
+	const walletOnWrongNetwork = accountState.address !== undefined && !isMainnet
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
@@ -137,7 +138,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToMintReason
 
 		return (() => {
-			if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToMintReason
+			if (!isMainnet) return undefined
 			if (selectedPool?.questionOutcome !== 'none') return UI_STRINGS.tradingSection.marketAlreadyFinalizedReason
 			if (remainingMintCapacity === undefined) return UI_STRINGS.tradingSection.loadingMintCapacityReason
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -158,7 +159,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToRedeemCompleteSetsReason
 
 		return (() => {
-			if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToRedeemCompleteSetsReason
+			if (!isMainnet) return undefined
 			if (loadingTradingDetails) return UI_STRINGS.tradingSection.loadWalletShareBalancesReason
 
 			return (() => {
@@ -174,7 +175,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToMigrateSharesReason
 
 		return (() => {
-			if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToMigrateSharesReason
+			if (!isMainnet) return undefined
 			if (loadingTradingForkUniverse) return UI_STRINGS.tradingSection.loadingForkTargetUniversesReason
 
 			return (() => {
@@ -194,7 +195,7 @@ export function TradingSection({
 		? UI_STRINGS.tradingSection.loadPoolToRedeemSharesReason
 		: (() => {
 				if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToRedeemSharesReason
-				if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToRedeemSharesReason
+				if (!isMainnet) return undefined
 				if (selectedPool?.questionOutcome === 'none') return UI_STRINGS.tradingSection.waitForPoolToResolveReason
 
 				return undefined
@@ -240,40 +241,40 @@ export function TradingSection({
 			actionLabel: UI_STRINGS.tradingSection.mintCompleteSetsActionLabel,
 			description: UI_STRINGS.tradingSection.mintCompleteSetsDescription,
 			key: 'mint-complete-sets',
-			readiness: mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
+			readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('createCompleteSet'),
 			title: UI_STRINGS.tradingSection.mintCompleteSetsTitle,
-			...(mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
+			...(!walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
 			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
 		},
 		{
 			actionLabel: UI_STRINGS.tradingSection.redeemCompleteSetsActionLabel,
 			description: UI_STRINGS.tradingSection.redeemCompleteSetsDescription,
 			key: 'redeem-complete-sets',
-			readiness: redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
+			readiness: !walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('redeemCompleteSet'),
 			title: UI_STRINGS.tradingSection.redeemCompleteSetsTitle,
-			...(redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
+			...(!walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
 			...(effectiveRedeemCompleteSetsLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemCompleteSetsLauncherBlocker }),
 		},
 		{
 			actionLabel: UI_STRINGS.tradingSection.migrateForkedSharesActionLabel,
 			description: UI_STRINGS.tradingSection.migrateForkedSharesDescription,
 			key: 'migrate-shares',
-			readiness: migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
+			readiness: !walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('migrateShares'),
 			title: UI_STRINGS.tradingSection.migrateForkedSharesTitle,
-			...(migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
+			...(!walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
 			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
 		},
 		{
 			actionLabel: UI_STRINGS.tradingSection.redeemSharesActionLabel,
 			description: UI_STRINGS.tradingSection.redeemSharesDescription,
 			key: 'redeem-shares',
-			readiness: redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
+			readiness: !walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('redeemShares'),
 			title: UI_STRINGS.tradingSection.redeemSharesTitle,
-			...(redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
+			...(!walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
 		},
 	]

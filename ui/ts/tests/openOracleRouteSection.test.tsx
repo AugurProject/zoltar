@@ -233,7 +233,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Actions' })).not.toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute yet.')
+		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
 	})
 
 	test('disables create when the wallet lacks enough ETH for the attached value', async () => {
@@ -345,7 +345,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(disputeDelayInput.getAttribute('inputmode')).toBe('numeric')
 		expect(protocolFeeInput.getAttribute('inputmode')).toBe('decimal')
 		expect(documentQueries.getByText('Token1 amount to report, entered as a decimal value for the token1 address.')).not.toBeNull()
-		expect(documentQueries.getByText('ETH paid to the account that settles the report, entered as a decimal ETH value.')).not.toBeNull()
+		expect(documentQueries.getByText('ETH paid to the account that settles the report.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH sent with creation; must cover required funding and the settler reward.')).not.toBeNull()
 		expect(documentQueries.getByText('Fee charged during dispute economics, entered as a percentage.')).not.toBeNull()
 		expect(documentQueries.getByText('Delay in seconds after the initial report before settlement can begin.')).not.toBeNull()

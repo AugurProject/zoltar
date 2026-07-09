@@ -476,7 +476,7 @@ void describe('fork auction helpers', () => {
 				selectionHasRefunds: settlementSelection.selectionHasRefunds,
 				truthAuction: finalizedAuction,
 			}),
-		).toBe('Finalized settlement is not yet available for this pool.')
+		).toBe('Finalized settlement is not available for this pool.')
 		expect(
 			getTruthAuctionSettlementActionAvailabilityMessage({
 				claimingAvailable: true,

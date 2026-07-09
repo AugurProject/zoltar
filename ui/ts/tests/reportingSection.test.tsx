@@ -849,7 +849,7 @@ describe('ReportingSection', () => {
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
-		expect(lifecycleBannerQueries.getByText('Trigger Zoltar Fork')).not.toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
 	})
@@ -873,7 +873,7 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(document.body.textContent?.includes('Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
-		expect(lifecycleBannerQueries.getByText('Continue in Fork & Migration')).not.toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
 	})
 

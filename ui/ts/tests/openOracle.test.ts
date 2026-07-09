@@ -1087,7 +1087,7 @@ describe('Open Oracle helpers', () => {
 		const beforeDisputeDelay = createOpenOracleLifecycleReport({ currentTime: 109n })
 		expect(getOpenOracleDisputeAvailability(beforeDisputeDelay)).toEqual({
 			canAct: false,
-			message: 'This report is not ready to dispute yet.',
+			message: 'This report is not ready to dispute.',
 		})
 		expect(getOpenOracleSettleAvailability(beforeDisputeDelay)).toEqual({
 			canAct: false,
@@ -1172,9 +1172,9 @@ describe('Open Oracle helpers', () => {
 
 	test('maps dispute and settle write failures into friendly guidance', () => {
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle yet.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('Submit an initial report before settling this report.')
-		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute yet.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle Report instead.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
 	})

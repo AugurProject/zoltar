@@ -14,7 +14,7 @@ const PERCENT_MULTIPLIER = 100n
 type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
 type CollateralizationTone = 'success' | 'danger'
 
-export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
+export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized.'
 export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
 export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. No active security bond allowance.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
@@ -166,7 +166,7 @@ export function getTradingMintGuardMessage({
 }) {
 	if (!hasSelectedPool) return 'Load a pool before minting.'
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
+	if (!isMainnet) return undefined
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
@@ -213,7 +213,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming complete sets.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming complete sets.'
+	if (!isMainnet) return undefined
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
 	const maxRedeemableCompleteSets = getMaxRedeemableCompleteSets(shareBalances)
@@ -258,7 +258,7 @@ export function getTradingMigrateSharesGuardMessage({
 }) {
 	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before migrating shares.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
+	if (!isMainnet) return undefined
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
 
@@ -277,6 +277,6 @@ export function getTradingMigrateSharesGuardMessage({
 export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isMainnet }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isMainnet: boolean }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming shares.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
+	if (!isMainnet) return undefined
 	return undefined
 }

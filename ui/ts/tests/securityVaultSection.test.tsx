@@ -238,7 +238,7 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
@@ -270,7 +270,7 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Set Bond Allowance' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
-		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available yet.')).not.toBeNull()
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 

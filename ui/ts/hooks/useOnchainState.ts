@@ -321,7 +321,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 
 				walletBootstrapComplete.value = true
 
-				if (connectedAddress !== undefined) {
+				if (connectedAddress !== undefined && walletOnExpectedChain) {
 					const readClient = createConnectedReadClient()
 					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
 					const wethBalancePromise = dependencies.loadErc20Balance(readClient, getWethAddress(), connectedAddress)
@@ -341,6 +341,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 						trackLoad: walletStateLoad.track,
 						wethBalancePromise,
 					})
+				} else if (connectedAddress !== undefined) {
+					accountState.value = { ...accountState.value, chainId: connectedChainId ?? backend.profile.chainIdHex, ethBalance: undefined, wethBalance: undefined }
 				} else {
 					accountState.value = { ...accountState.value, chainId: backend.profile.chainIdHex, ethBalance: undefined, wethBalance: undefined }
 				}

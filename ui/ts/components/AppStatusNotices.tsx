@@ -81,7 +81,7 @@ export function AppStatusNotices({ errorMessage, readBackendMessage, readBackend
 	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: UI_STRINGS.appStatusNotices.finishSetupBeforeUsingAppDetail, id: 'setup-incomplete', tone: 'blocking', title: UI_STRINGS.appStatusNotices.setupIncompleteTitle })
 	if (wrongNetworkMessage !== undefined)
 		items.push({
-			detail: `${UI_STRINGS.appStatusNotices.wrongNetworkDetailPrefix} ${wrongNetworkMessage === UI_STRINGS.userCopy.wallet.switchToMainnetDetail ? UI_STRINGS.appStatusNotices.wrongNetworkMainnetInstruction : wrongNetworkMessage} ${UI_STRINGS.appStatusNotices.wrongNetworkReadOnlySuffix}`,
+			detail: `${UI_STRINGS.appStatusNotices.wrongNetworkDetailPrefix} ${wrongNetworkMessage === UI_STRINGS.userCopy.wallet.switchToMainnetDetail ? UI_STRINGS.appStatusNotices.wrongNetworkMainnetInstruction : wrongNetworkMessage}`,
 			id: 'wrong-network',
 			tone: 'blocking',
 			title: UI_STRINGS.appStatusNotices.wrongNetworkTitle,
