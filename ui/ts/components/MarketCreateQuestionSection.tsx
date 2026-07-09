@@ -14,14 +14,15 @@ import { assertNever } from '../lib/assert.js'
 import { getMarketCreationOutcomeLabels, validateMarketForm } from '../lib/marketCreation.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
 import { clampScalarTickIndex, parseScalarFormInputs } from '../lib/scalarOutcome.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
-	{ value: 'binary', label: 'Binary' },
-	{ value: 'categorical', label: 'Categorical' },
-	{ value: 'scalar', label: 'Scalar' },
+	{ value: 'binary', label: UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.binaryLabel },
+	{ value: 'categorical', label: UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.categoricalLabel },
+	{ value: 'scalar', label: UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.scalarLabel },
 ]
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
 type MarketCreateQuestionSectionProps = {
@@ -52,9 +53,9 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 }
 
 function getPoolEligibilityMessage(marketType: MarketFormState['marketType']) {
-	if (marketType === 'binary') return 'Placeholder origin security pools support this exact Yes / No question shape.'
-	if (marketType === 'categorical') return 'Categorical questions are valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
-	return 'Scalar questions are valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.'
+	if (marketType === 'binary') return UI_STRINGS.marketCreateQuestionSection.poolEligibilityBinaryQuestionText
+	if (marketType === 'categorical') return UI_STRINGS.marketCreateQuestionSection.poolEligibilityCategoricalQuestionText
+	return UI_STRINGS.marketCreateQuestionSection.poolEligibilityScalarQuestionText
 }
 
 function getFieldErrorId(field: MarketFormFieldName) {
@@ -78,18 +79,18 @@ function getMarketTypeGuidance(marketType: MarketFormState['marketType']) {
 	switch (marketType) {
 		case 'binary':
 			return {
-				description: 'Ask a yes-or-no question that can be resolved from one public source of truth.',
-				steps: ['Write the title so it can be answered with Yes, No, or Invalid.', 'Name the event window clearly in the title or description.', 'Use the description for the exact resolution source and edge cases.'],
+				description: UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.binary.description,
+				steps: [UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.binary.stepOne, UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.binary.stepTwo, UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.binary.stepThree],
 			}
 		case 'categorical':
 			return {
-				description: 'List the mutually exclusive outcomes that could win this question.',
-				steps: ['Keep outcomes short and clearly distinct from each other.', 'Use the description to explain how ties, cancellations, or exceptions resolve.', 'Only include outcomes that a resolver can verify from a public source.'],
+				description: UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.categorical.description,
+				steps: [UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.categorical.stepOne, UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.categorical.stepTwo, UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.categorical.stepThree],
 			}
 		case 'scalar':
 			return {
-				description: 'Ask for a measurable number with a unit, range, and increment that users can understand.',
-				steps: ['Pick a range that covers realistic answers without being overly broad.', 'Set the answer unit so users know what the number represents.', 'Use the description to explain rounding, source data, and invalid conditions.'],
+				description: UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.scalar.description,
+				steps: [UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.scalar.stepOne, UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.scalar.stepTwo, UI_STRINGS.marketCreateQuestionSection.marketTypeGuidance.scalar.stepThree],
 			}
 		default:
 			return assertNever(marketType)
@@ -106,10 +107,10 @@ function getDraftOutcomeLabels(marketForm: MarketFormState, categoricalOutcomesE
 			}
 
 			const normalizedOutcomes = marketForm.categoricalOutcomes.map(outcome => outcome.trim()).filter(outcome => outcome !== '')
-			return normalizedOutcomes.length > 0 ? appendInvalidOutcomeLabelIfMissing(normalizedOutcomes) : ['Add at least 2 outcomes', 'Invalid']
+			return normalizedOutcomes.length > 0 ? appendInvalidOutcomeLabelIfMissing(normalizedOutcomes) : [UI_STRINGS.marketCreateQuestionSection.addAtLeastTwoOutcomesLabel, UI_STRINGS.question.invalidOutcomeLabel]
 		}
 		case 'scalar':
-			return ['Scalar', 'Invalid']
+			return [UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.scalarLabel, UI_STRINGS.question.invalidOutcomeLabel]
 		default:
 			return assertNever(marketForm.marketType)
 	}
@@ -138,16 +139,16 @@ export function MarketCreateQuestionSection({
 	const marketTypeGuidance = getMarketTypeGuidance(marketForm.marketType)
 	const scalarInputsValid = marketFormValidation.fieldErrors.scalarIncrement === undefined && marketFormValidation.fieldErrors.scalarMax === undefined && marketFormValidation.fieldErrors.scalarMin === undefined
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm, scalarInputsValid)
-	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : getQuestionTitle(selectedQuestionDetails)
+	const selectedQuestionTitle = selectedQuestionDetails === undefined ? UI_STRINGS.marketCreateQuestionSection.questionFallbackTitle : getQuestionTitle(selectedQuestionDetails)
 	const draftOutcomeItems = getDraftOutcomeLabels(marketForm, marketFormValidation.fieldErrors.categoricalOutcomes).map((outcome, outcomeIndex) => ({
 		key: `${outcomeIndex}-${outcome}`,
 		label: outcome,
 		tone: isInvalidOutcomeLabel(outcome) ? ('warning' as const) : ('default' as const),
 	}))
 	const normalizedDescription = marketForm.description.trim()
-	const draftDescription = normalizedDescription === '' ? 'Add resolution notes, evidence sources, and edge-case handling so other users know how this question will settle.' : marketForm.description
-	const draftTitle = marketForm.title.trim() === '' ? 'Add a clear question title' : marketForm.title
-	const draftQuestionContextLabel = normalizedDescription === '' ? 'Needs context' : 'Context provided'
+	const draftDescription = normalizedDescription === '' ? UI_STRINGS.marketCreateQuestionSection.questionDefaultDescriptionText : marketForm.description
+	const draftTitle = marketForm.title.trim() === '' ? UI_STRINGS.marketCreateQuestionSection.questionDefaultTitleText : marketForm.title
+	const draftQuestionContextLabel = normalizedDescription === '' ? UI_STRINGS.marketCreateQuestionSection.draftQuestionNeedsContextLabel : UI_STRINGS.marketCreateQuestionSection.draftQuestionContextProvidedLabel
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
@@ -185,13 +186,13 @@ export function MarketCreateQuestionSection({
 									onOpenForkTab()
 								}}
 							>
-								{hasForked ? 'Already Forked' : 'Use For Fork'}
+								{hasForked ? UI_STRINGS.marketCreateQuestionSection.alreadyForkedLabel : UI_STRINGS.marketCreateQuestionSection.useForForkLabel}
 							</button>
 							<button className='secondary' onClick={() => onUseQuestionForPool(marketResult.questionId)} disabled={marketResult.marketType !== 'binary'}>
-								Create Pool From Question
+								{UI_STRINGS.marketCreateQuestionSection.createPoolFromQuestionLabel}
 							</button>
 							<button className='secondary' onClick={onResetMarket}>
-								Create Another Question
+								{UI_STRINGS.marketCreateQuestionSection.createAnotherQuestionLabel}
 							</button>
 						</div>
 					}
@@ -201,17 +202,17 @@ export function MarketCreateQuestionSection({
 							if (selectedQuestionDetails === undefined) {
 								if (loadingZoltarQuestions)
 									return (
-										<span className='loading-value' role='status' aria-label='Loading question details'>
+										<span className='loading-value' role='status' aria-label={UI_STRINGS.marketCreateQuestionSection.questionDetailsLoadingAriaLabel}>
 											<span className='spinner' aria-hidden='true' />
 										</span>
 									)
 
-								return <p className='detail'>Question details are not loaded yet.</p>
+								return <p className='detail'>{UI_STRINGS.marketCreateQuestionSection.questionDetailsNotLoadedText}</p>
 							}
 
 							return <Question question={selectedQuestionDetails} showTitle={false} />
 						})()}
-						<MetricField label='Creation transaction hash'>
+						<MetricField label={UI_STRINGS.marketCreateQuestionSection.creationTransactionHashLabel}>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>
 						<p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>
@@ -220,20 +221,20 @@ export function MarketCreateQuestionSection({
 			)}
 
 			{marketResult === undefined ? (
-				<SectionBlock title='Create Question' variant='plain' description='Define the market type, timing, and outcomes for a new Zoltar question.'>
+				<SectionBlock title={UI_STRINGS.marketCreateQuestionSection.createQuestionTitle} variant='plain' description={UI_STRINGS.marketCreateQuestionSection.createQuestionDescription}>
 					<div className='workflow-summary-strip workflow-guide'>
 						<div className='workflow-guide-intro'>
-							<strong>Write the question the way a resolver will read it.</strong>
+							<strong>{UI_STRINGS.marketCreateQuestionSection.workflowIntroTitle}</strong>
 							<p className='detail'>{marketTypeGuidance.description}</p>
 						</div>
 						<div className='workflow-summary-strip-steps'>
-							<span className='current'>1. Define the event clearly</span>
-							<span>2. Explain how it resolves</span>
-							<span>3. Set the timing window</span>
+							<span className='current'>{UI_STRINGS.marketCreateQuestionSection.workflowStepDefineEventLabel}</span>
+							<span>{UI_STRINGS.marketCreateQuestionSection.workflowStepExplainResolutionLabel}</span>
+							<span>{UI_STRINGS.marketCreateQuestionSection.workflowStepSetTimingWindowLabel}</span>
 						</div>
 					</div>
 
-					<SectionBlock headingLevel={4} title='Question Type Guidance' variant='embedded'>
+					<SectionBlock headingLevel={4} title={UI_STRINGS.marketCreateQuestionSection.questionTypeGuidanceTitle} variant='embedded'>
 						<ul className='requirements-checklist'>
 							{marketTypeGuidance.steps.map(step => (
 								<li key={step}>{step}</li>
@@ -243,38 +244,38 @@ export function MarketCreateQuestionSection({
 
 					<div className='form-grid'>
 						<div className='field'>
-							<span>Question Type</span>
-							<EnumDropdown ariaLabel='Question Type' options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
+							<span>{UI_STRINGS.marketCreateQuestionSection.questionTypeLabel}</span>
+							<EnumDropdown ariaLabel={UI_STRINGS.marketCreateQuestionSection.questionTypeAriaLabel} options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
 							<p className='field-help'>{marketTypeGuidance.description}</p>
 						</div>
 
 						<div className='field'>
 							<label>
-								<span>Title</span>
+								<span>{UI_STRINGS.marketCreateQuestionSection.titleFieldLabel}</span>
 								<FormInput
 									aria-describedby={getFieldErrorDescribedBy('title', marketFormValidation.fieldErrors.title)}
 									invalid={marketFormValidation.fieldErrors.title !== undefined}
 									value={marketForm.title}
 									onInput={event => onMarketFormChange({ title: event.currentTarget.value })}
-									placeholder='Will event X happen?'
+									placeholder={UI_STRINGS.marketCreateQuestionSection.titleFieldPlaceholder}
 								/>
 							</label>
-							<p className='field-help'>Keep the title self-contained so users can understand the exact question before opening details.</p>
+							<p className='field-help'>{UI_STRINGS.marketCreateQuestionSection.titleFieldHelpText}</p>
 							{renderFieldError('title', marketFormValidation.fieldErrors.title)}
 						</div>
 
 						<div className='field'>
 							<label htmlFor='market-create-description'>
-								<span>Description</span>
+								<span>{UI_STRINGS.marketCreateQuestionSection.descriptionFieldLabel}</span>
 							</label>
-							<textarea id='market-create-description' value={marketForm.description} onInput={event => onMarketFormChange({ description: event.currentTarget.value })} placeholder='Optional question context' />
-							<p className='field-help'>Include the resolution source, any edge cases, and what should make the question resolve as invalid.</p>
+							<textarea id='market-create-description' value={marketForm.description} onInput={event => onMarketFormChange({ description: event.currentTarget.value })} placeholder={UI_STRINGS.marketCreateQuestionSection.descriptionFieldPlaceholder} />
+							<p className='field-help'>{UI_STRINGS.marketCreateQuestionSection.descriptionFieldHelpText}</p>
 						</div>
 
 						<div className='field-row'>
 							<div className='field'>
 								<label>
-									<span>Start Time</span>
+									<span>{UI_STRINGS.marketCreateQuestionSection.startTimeFieldLabel}</span>
 									<FormInput
 										aria-describedby={getFieldErrorDescribedBy('startTime', marketFormValidation.fieldErrors.startTime)}
 										invalid={marketFormValidation.fieldErrors.startTime !== undefined}
@@ -287,41 +288,41 @@ export function MarketCreateQuestionSection({
 							</div>
 							<div className='field'>
 								<label>
-									<span>End Time</span>
+									<span>{UI_STRINGS.marketCreateQuestionSection.endTimeFieldLabel}</span>
 									<FormInput aria-describedby={getFieldErrorDescribedBy('endTime', marketFormValidation.fieldErrors.endTime)} invalid={marketFormValidation.fieldErrors.endTime !== undefined} type='datetime-local' value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
 								</label>
 								{renderFieldError('endTime', marketFormValidation.fieldErrors.endTime)}
 							</div>
 						</div>
-						<p className='field-help'>Times use your browser timezone. Leave start time blank to allow activity immediately after creation. Reporting and trading settlement depend on the end time.</p>
+						<p className='field-help'>{UI_STRINGS.marketCreateQuestionSection.timingFieldHelpText}</p>
 						<p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>
 
 						{marketForm.marketType === 'categorical' ? (
 							<div className='field'>
-								<span>Outcomes</span>
+								<span>{UI_STRINGS.marketCreateQuestionSection.outcomesFieldLabel}</span>
 								<div className='categorical-outcomes'>
 									{marketForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
 										<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
 											<label className='field'>
-												<span className='visually-hidden'>{`Outcome ${outcomeIndex + 1}`}</span>
+												<span className='visually-hidden'>{`${UI_STRINGS.marketCreateQuestionSection.outcomeFieldLabelPrefix} ${outcomeIndex + 1}`}</span>
 												<FormInput
 													aria-describedby={getFieldErrorDescribedBy('categoricalOutcomes', marketFormValidation.fieldErrors.categoricalOutcomes)}
 													invalid={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined}
 													value={outcome}
 													onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)}
-													placeholder={`Outcome ${outcomeIndex + 1}`}
+													placeholder={`${UI_STRINGS.marketCreateQuestionSection.outcomeFieldLabelPrefix} ${outcomeIndex + 1}`}
 												/>
 											</label>
 											<button className='secondary categorical-outcome-remove' type='button' onClick={() => removeCategoricalOutcome(outcomeIndex)}>
-												Remove
+												{UI_STRINGS.marketCreateQuestionSection.removeOutcomeLabel}
 											</button>
 										</div>
 									))}
 								</div>
 								{renderFieldError('categoricalOutcomes', marketFormValidation.fieldErrors.categoricalOutcomes)}
-								<p className='field-help'>Use concise, mutually exclusive labels. Users should be able to tell at a glance which outcome would win.</p>
+								<p className='field-help'>{UI_STRINGS.marketCreateQuestionSection.outcomesFieldHelpText}</p>
 								<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
-									Add Outcome
+									{UI_STRINGS.marketCreateQuestionSection.addOutcomeLabel}
 								</button>
 							</div>
 						) : undefined}
@@ -330,20 +331,20 @@ export function MarketCreateQuestionSection({
 							<div className='field-row'>
 								<div className='field'>
 									<label>
-										<span>Scalar Min</span>
+										<span>{UI_STRINGS.marketCreateQuestionSection.scalarMinFieldLabel}</span>
 										<FormInput
 											aria-describedby={getFieldErrorDescribedBy('scalarMin', marketFormValidation.fieldErrors.scalarMin)}
 											invalid={marketFormValidation.fieldErrors.scalarMin !== undefined}
 											value={marketForm.scalarMin}
 											onInput={event => onMarketFormChange({ scalarMin: event.currentTarget.value })}
-											placeholder='1'
+											placeholder={UI_STRINGS.marketCreateQuestionSection.scalarMinFieldPlaceholder}
 										/>
 									</label>
 									{renderFieldError('scalarMin', marketFormValidation.fieldErrors.scalarMin)}
 								</div>
 								<label className='field'>
-									<span>Answer Unit</span>
-									<FormInput value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder='USD' />
+									<span>{UI_STRINGS.marketCreateQuestionSection.answerUnitFieldLabel}</span>
+									<FormInput value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder={UI_STRINGS.marketCreateQuestionSection.answerUnitFieldPlaceholder} />
 								</label>
 							</div>
 						) : undefined}
@@ -352,37 +353,37 @@ export function MarketCreateQuestionSection({
 							<div className='field-row'>
 								<div className='field'>
 									<label>
-										<span>Scalar Increment</span>
+										<span>{UI_STRINGS.marketCreateQuestionSection.scalarIncrementFieldLabel}</span>
 										<FormInput
 											aria-describedby={getFieldErrorDescribedBy('scalarIncrement', marketFormValidation.fieldErrors.scalarIncrement)}
 											invalid={marketFormValidation.fieldErrors.scalarIncrement !== undefined}
 											value={marketForm.scalarIncrement}
 											onInput={event => onMarketFormChange({ scalarIncrement: event.currentTarget.value })}
-											placeholder='0.1'
+											placeholder={UI_STRINGS.marketCreateQuestionSection.scalarIncrementFieldPlaceholder}
 										/>
 									</label>
 									{renderFieldError('scalarIncrement', marketFormValidation.fieldErrors.scalarIncrement)}
 								</div>
 								<div className='field'>
 									<label>
-										<span>Scalar Max</span>
+										<span>{UI_STRINGS.marketCreateQuestionSection.scalarMaxFieldLabel}</span>
 										<FormInput
 											aria-describedby={getFieldErrorDescribedBy('scalarMax', marketFormValidation.fieldErrors.scalarMax)}
 											invalid={marketFormValidation.fieldErrors.scalarMax !== undefined}
 											value={marketForm.scalarMax}
 											onInput={event => onMarketFormChange({ scalarMax: event.currentTarget.value })}
-											placeholder='10'
+											placeholder={UI_STRINGS.marketCreateQuestionSection.scalarMaxFieldPlaceholder}
 										/>
 									</label>
 									{renderFieldError('scalarMax', marketFormValidation.fieldErrors.scalarMax)}
 								</div>
 							</div>
 						) : undefined}
-						{marketForm.marketType === 'scalar' ? <p className='field-help'>Scalar questions settle to a numeric result inside the range above. Use a unit that matches the public source you expect to cite.</p> : undefined}
+						{marketForm.marketType === 'scalar' ? <p className='field-help'>{UI_STRINGS.marketCreateQuestionSection.scalarFieldHelpText}</p> : undefined}
 
 						{(() => {
 							if (marketForm.marketType === 'scalar') {
-								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
+								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>{UI_STRINGS.marketCreateQuestionSection.scalarPreviewPromptText}</p>
 
 								return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
 							}
@@ -390,14 +391,14 @@ export function MarketCreateQuestionSection({
 							return undefined
 						})()}
 
-						<SectionBlock headingLevel={4} title='Draft Preview' variant='embedded' description='Draft Preview shows the level of clarity traders and reporters will see before trusting the question.'>
+						<SectionBlock headingLevel={4} title={UI_STRINGS.marketCreateQuestionSection.draftPreviewTitle} variant='embedded' description={UI_STRINGS.marketCreateQuestionSection.draftPreviewDescription}>
 							<div className='question-draft-preview'>
 								<div className='question-draft-preview-header'>
 									<div className='question-summary-heading'>
 										<strong>{draftTitle}</strong>
 										<p className='detail'>{draftDescription}</p>
 									</div>
-									<div className='question-draft-preview-statuses' role='list' aria-label='Draft question status'>
+									<div className='question-draft-preview-statuses' role='list' aria-label={UI_STRINGS.marketCreateQuestionSection.draftQuestionStatusAriaLabel}>
 										<span className='question-draft-preview-chip' role='listitem'>
 											{marketForm.marketType}
 										</span>
@@ -407,18 +408,18 @@ export function MarketCreateQuestionSection({
 									</div>
 								</div>
 								<OutcomeChipRow items={draftOutcomeItems} />
-								<div className='question-draft-preview-meta' role='list' aria-label='Draft question summary'>
+								<div className='question-draft-preview-meta' role='list' aria-label={UI_STRINGS.marketCreateQuestionSection.draftQuestionSummaryAriaLabel}>
 									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>Starts</span>
-										<strong>{marketForm.startTime.trim() === '' ? 'Immediately after creation' : marketForm.startTime}</strong>
+										<span>{UI_STRINGS.marketCreateQuestionSection.startsLabel}</span>
+										<strong>{marketForm.startTime.trim() === '' ? UI_STRINGS.marketCreateQuestionSection.immediatelyAfterCreationLabel : marketForm.startTime}</strong>
 									</div>
 									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>Ends</span>
-										<strong>{marketForm.endTime.trim() === '' ? 'Choose an end time' : marketForm.endTime}</strong>
+										<span>{UI_STRINGS.marketCreateQuestionSection.endsLabel}</span>
+										<strong>{marketForm.endTime.trim() === '' ? UI_STRINGS.marketCreateQuestionSection.chooseEndTimeLabel : marketForm.endTime}</strong>
 									</div>
 									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>Risk cue</span>
-										<strong>{normalizedDescription === '' ? 'Low trust until context is added' : 'Context is present for review'}</strong>
+										<span>{UI_STRINGS.marketCreateQuestionSection.riskCueFieldLabel}</span>
+										<strong>{normalizedDescription === '' ? UI_STRINGS.marketCreateQuestionSection.lowTrustUntilContextAddedLabel : UI_STRINGS.marketCreateQuestionSection.contextPresentForReviewLabel}</strong>
 									</div>
 								</div>
 							</div>
@@ -427,15 +428,15 @@ export function MarketCreateQuestionSection({
 						<div className='actions'>
 							<TransactionActionButton
 								safetyId='market.createQuestion'
-								idleLabel='Create Question'
-								pendingLabel='Creating Question...'
+								idleLabel={UI_STRINGS.marketCreateQuestionSection.createQuestionButtonIdleLabel}
+								pendingLabel={UI_STRINGS.marketCreateQuestionSection.createQuestionButtonPendingLabel}
 								onClick={onCreateMarket}
 								pending={marketCreating}
 								availability={{
 									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
 									reason: (() => {
-										if (accountAddress === undefined) return 'Connect a wallet before creating a question.'
-										if (!isMainnet) return 'Switch to Ethereum mainnet before creating a question.'
+										if (accountAddress === undefined) return UI_STRINGS.marketCreateQuestionSection.walletRequiredReason
+										if (!isMainnet) return UI_STRINGS.marketCreateQuestionSection.mainnetRequiredReason
 
 										return marketFormValidation.notice
 									})(),

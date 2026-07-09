@@ -4,6 +4,7 @@ import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '../lib/scalarOutcome.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ShareMigrationTargetsSectionProps = {
@@ -23,7 +24,7 @@ type TargetOutcomePresentation = {
 }
 
 function getTargetOutcomeBadgeLabel(target: TargetOutcomePresentation) {
-	return target.exists ? 'Child deployed' : 'Child not deployed'
+	return target.exists ? UI_STRINGS.shareMigrationTargetsSection.childDeployedLabel : UI_STRINGS.shareMigrationTargetsSection.childNotDeployedLabel
 }
 
 function renderTargetOutcomeRow(target: TargetOutcomePresentation, selected: boolean, disabled: boolean, onToggleOutcomeIndex: (outcomeIndex: bigint) => void) {
@@ -31,7 +32,7 @@ function renderTargetOutcomeRow(target: TargetOutcomePresentation, selected: boo
 		details: (
 			<>
 				<span>
-					<strong>{selected ? 'Selected' : 'Not selected'}</strong>
+					<strong>{selected ? UI_STRINGS.shareMigrationTargetsSection.selectedLabel : UI_STRINGS.shareMigrationTargetsSection.notSelectedLabel}</strong>
 				</span>
 				<span>
 					<strong>{getTargetOutcomeBadgeLabel(target)}</strong>
@@ -50,7 +51,7 @@ function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string
 	return selectedOutcomeIndexes.map(outcomeIndex => {
 		const childUniverse = childUniverseByOutcomeIndex.get(outcomeIndex.toString())
 		const descriptor = getScalarOutcomeIndexDescriptor(scalarQuestion, outcomeIndex)
-		const label = childUniverse?.outcomeLabel ?? (descriptor.kind === 'malformed' ? `Malformed (${outcomeIndex.toString()})` : formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex))
+		const label = childUniverse?.outcomeLabel ?? (descriptor.kind === 'malformed' ? UI_STRINGS.shareMigrationTargetsSection.malformedOutcomeLabel(outcomeIndex.toString()) : formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex))
 		return {
 			exists: childUniverse?.exists === true,
 			label,
@@ -81,11 +82,11 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		setScalarOutcomeTick(nextTick)
 	}, [scalarOutcomeTick, scalarQuestion, selectedScalarTick])
 
-	if (forkUniverse === undefined) return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork target universes...</p>)
+	if (forkUniverse === undefined) return renderTargetSection(UI_STRINGS.shareMigrationTargetsSection.targetChildUniversesTitle, <p className='detail'>{UI_STRINGS.shareMigrationTargetsSection.loadingForkTargetUniversesDetail}</p>)
 
-	if (!forkUniverse.hasForked) return renderTargetSection('Target Child Universes', <p className='detail'>Child-universe targets unlock after this universe forks.</p>)
+	if (!forkUniverse.hasForked) return renderTargetSection(UI_STRINGS.shareMigrationTargetsSection.targetChildUniversesTitle, <p className='detail'>{UI_STRINGS.shareMigrationTargetsSection.targetsUnlockAfterForkDetail}</p>)
 
-	if (forkUniverse.forkQuestionDetails === undefined) return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork question details...</p>)
+	if (forkUniverse.forkQuestionDetails === undefined) return renderTargetSection(UI_STRINGS.shareMigrationTargetsSection.targetChildUniversesTitle, <p className='detail'>{UI_STRINGS.shareMigrationTargetsSection.loadingForkQuestionDetailsDetail}</p>)
 
 	if (forkUniverse.forkQuestionDetails.marketType !== 'scalar') {
 		const childUniverses = forkUniverse.childUniverses.map(child => ({
@@ -96,36 +97,36 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		const hasSelectableTargets = childUniverses.length > 0
 
 		return renderTargetSection(
-			'Target Child Universes',
-			<OutcomeSelectionList emptyMessage='No target child universes available.' items={childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))} />,
+			UI_STRINGS.shareMigrationTargetsSection.targetChildUniversesTitle,
+			<OutcomeSelectionList emptyMessage={UI_STRINGS.shareMigrationTargetsSection.noTargetChildUniversesDetail} items={childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))} />,
 			<div className='actions'>
 				<button className='quiet' type='button' onClick={onSelectAllOutcomeIndexes} disabled={disabled || !hasSelectableTargets}>
-					Select all
+					{UI_STRINGS.shareMigrationTargetsSection.selectAllLabel}
 				</button>
 				<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
-					Clear
+					{UI_STRINGS.shareMigrationTargetsSection.clearLabel}
 				</button>
 			</div>,
 		)
 	}
 
-	if (scalarQuestion === undefined) return renderTargetSection('Target Child Universes', <p className='detail'>Loading scalar fork details...</p>)
+	if (scalarQuestion === undefined) return renderTargetSection(UI_STRINGS.shareMigrationTargetsSection.targetChildUniversesTitle, <p className='detail'>{UI_STRINGS.shareMigrationTargetsSection.loadingScalarForkDetailsDetail}</p>)
 
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, scalarQuestion.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
 	const candidateOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(scalarQuestion, clampedSelectedScalarTick)
-	const candidateOutcomeLabel = scalarOutcomeInvalid ? 'Invalid' : formatScalarOutcomeLabel(scalarQuestion, clampedSelectedScalarTick)
+	const candidateOutcomeLabel = scalarOutcomeInvalid ? UI_STRINGS.question.invalidOutcomeLabel : formatScalarOutcomeLabel(scalarQuestion, clampedSelectedScalarTick)
 	const candidateSelected = selectedOutcomeIndexSet.has(candidateOutcomeIndex.toString())
 	const selectedTargetOutcomes = getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex, scalarQuestion, selectedOutcomeIndexes)
 
 	return renderTargetSection(
-		'Target Child Universes',
+		UI_STRINGS.shareMigrationTargetsSection.targetChildUniversesTitle,
 		<>
-			<OutcomeSelectionList emptyMessage='Select at least one scalar target universe.' items={selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))} />
+			<OutcomeSelectionList emptyMessage={UI_STRINGS.shareMigrationTargetsSection.selectScalarTargetUniverseDetail} items={selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))} />
 			<ScalarOutcomePicker
 				action={
 					<button className='secondary' type='button' onClick={() => onToggleOutcomeIndex(candidateOutcomeIndex)} disabled={disabled}>
-						{candidateSelected ? 'Remove Target' : 'Add Target'}
+						{candidateSelected ? UI_STRINGS.shareMigrationTargetsSection.removeTargetLabel : UI_STRINGS.shareMigrationTargetsSection.addTargetLabel}
 					</button>
 				}
 				details={{
@@ -135,16 +136,16 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 				}}
 				disabled={disabled}
 				isInvalid={scalarOutcomeInvalid}
-				label='Select Scalar Target'
+				label={UI_STRINGS.shareMigrationTargetsSection.selectScalarTargetLabel}
 				onInvalidChange={setScalarOutcomeInvalid}
 				onSelectedTickChange={setScalarOutcomeTick}
 				selectedOutcomeLabel={candidateOutcomeLabel}
 				selectedTick={clampedScalarOutcomeTick}
-				selectedTickLabel={scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${scalarQuestion.numTicks.toString()}`}
+				selectedTickLabel={scalarOutcomeInvalid ? UI_STRINGS.question.invalidOutcomeLabel : UI_STRINGS.shareMigrationTargetsSection.selectedTickLabel(clampedScalarOutcomeTick, scalarQuestion.numTicks.toString())}
 			/>
 		</>,
 		<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
-			Clear
+			{UI_STRINGS.shareMigrationTargetsSection.clearLabel}
 		</button>,
 	)
 }

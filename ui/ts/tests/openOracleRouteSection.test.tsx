@@ -14,6 +14,7 @@ import type { OpenOracleReportDetails } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 
 const ETH = 10n ** 18n
 
@@ -252,6 +253,10 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle game.')
+	})
+
+	test('formats browse description with the shared page size', () => {
+		expect(UI_STRINGS.openOracleSection.browseReportsDescription('10')).toContain('10 reports')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {

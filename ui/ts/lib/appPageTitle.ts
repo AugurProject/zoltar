@@ -1,7 +1,6 @@
 import type { Route } from '../types/app.js'
 import type { OpenOracleView, SecurityPoolsView, ZoltarView } from '../types/components.js'
-
-const APP_DOCUMENT_TITLE_SUFFIX = 'Zoltar + Augur Placeholder'
+import { UI_STRINGS } from './uiStrings.js'
 
 export type AppPageTitleInput = {
 	activeOpenOracleView: OpenOracleView
@@ -11,26 +10,26 @@ export type AppPageTitleInput = {
 }
 
 export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, activeZoltarView, route }: AppPageTitleInput) {
-	if (route === 'deploy') return 'Deploy Contracts'
+	if (route === 'deploy') return UI_STRINGS.appPageTitle.deployContractsPageTitle
 	if (route === 'zoltar') {
-		if (activeZoltarView === 'create') return 'Create Question'
-		if (activeZoltarView === 'fork') return 'Fork Oracle'
-		if (activeZoltarView === 'migrate') return 'Migrate REP'
-		return 'Questions & Markets'
+		if (activeZoltarView === 'create') return UI_STRINGS.appPageTitle.createQuestionPageTitle
+		if (activeZoltarView === 'fork') return UI_STRINGS.appPageTitle.forkOraclePageTitle
+		if (activeZoltarView === 'migrate') return UI_STRINGS.appPageTitle.migrateRepPageTitle
+		return UI_STRINGS.appPageTitle.questionsAndMarketsPageTitle
 	}
 	if (route === 'security-pools') {
-		if (activeSecurityPoolsView === 'create') return 'Create Security Pool'
-		if (activeSecurityPoolsView === 'operate') return 'Manage Security Pool'
-		return 'Security Pools'
+		if (activeSecurityPoolsView === 'create') return UI_STRINGS.appPageTitle.createSecurityPoolPageTitle
+		if (activeSecurityPoolsView === 'operate') return UI_STRINGS.appPageTitle.manageSecurityPoolPageTitle
+		return UI_STRINGS.appPageTitle.securityPoolsPageTitle
 	}
 	if (route === 'open-oracle') {
-		if (activeOpenOracleView === 'create') return 'Create Oracle Report'
-		if (activeOpenOracleView === 'selected-report') return 'Oracle Report Details'
-		return 'Oracle Reports'
+		if (activeOpenOracleView === 'create') return UI_STRINGS.appPageTitle.createOracleReportPageTitle
+		if (activeOpenOracleView === 'selected-report') return UI_STRINGS.appPageTitle.openOracleReportDetailsPageTitle
+		return UI_STRINGS.appPageTitle.openOracleReportsPageTitle
 	}
-	return 'Page Not Found'
+	return UI_STRINGS.appPageTitle.pageNotFoundPageTitle
 }
 
 export function formatAppDocumentTitle(pageTitle: string) {
-	return `${pageTitle} | ${APP_DOCUMENT_TITLE_SUFFIX}`
+	return `${pageTitle} | ${UI_STRINGS.appPageTitle.documentTitleSuffix}`
 }

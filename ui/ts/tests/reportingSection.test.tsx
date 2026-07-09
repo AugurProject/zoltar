@@ -10,6 +10,7 @@ import { ReportingSection } from '../components/ReportingSection.js'
 import { ActionSafetyProvider } from '../lib/actionSafety/runtime.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital, getSelectedOutcomeRewardWindowFillTimestamp } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
@@ -620,6 +621,46 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 	})
 
+	test('shows a locked-settlement reason before withdrawals unlock in active reporting', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					mode: 'withdraw-only',
+					reportingDetails: createReportingDetails(),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Escalation deposits cannot be settled until the question is finalized.')
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Escalation deposits cannot be settled until the question is finalized.')
+	})
+
+	test('shows the report submission pending label while the report action is in flight', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingActiveAction: 'reportOutcome',
+					reportingForm: createReportingForm({
+						reportAmount: '3',
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('Submitting report...')).toBe(true)
+		expect(document.body.textContent?.includes('Loading...')).toBe(false)
+	})
+
 	test('shows a loading notice and disables withdraw-only controls while deposits refresh', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -934,7 +975,7 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report Yes')
-		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m.')).toBe(true)
+		expect(document.body.textContent?.includes(UI_STRINGS.reportingSection.reportingProjectionNotStartedPrefix)).toBe(true)
 		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
 	})
 
@@ -955,9 +996,9 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m.')).toBe(true)
+		expect(document.body.textContent?.includes(UI_STRINGS.reportingSection.reportingProjectionNotStartedPrefix)).toBe(true)
+		expect(document.body.textContent?.includes(`If no one disputes after this report, the market would finalize in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY)}.`)).toBe(true)
 		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(latestCheckBackTimestamp)} (in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)}) to confirm Invalid is still leading if later disputes keep escalation open.`)).toBe(true)
-		expect(document.body.textContent?.includes(`If no one disputes after this report, the market would finalize in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)}.`)).toBe(false)
 	})
 
 	test('shows explicit outcome-selection guidance before the first report starts escalation', async () => {

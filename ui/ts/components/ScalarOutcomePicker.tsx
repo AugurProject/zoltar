@@ -1,5 +1,6 @@
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
@@ -24,18 +25,18 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 							<input disabled={disabled || isInvalid} type='range' min='0' max={details.numTicks.toString()} step='1' value={resolvedSelectedTick} aria-valuetext={typeof selectedOutcomeLabel === 'string' ? selectedOutcomeLabel : undefined} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
 						</div>
 					</div>
-					<span className='scalar-or-divider'>or</span>
+					<span className='scalar-or-divider'>{UI_STRINGS.scalarOutcomePicker.orLabel}</span>
 					<label className='scalar-invalid-toggle'>
 						<input type='checkbox' disabled={disabled} checked={isInvalid} onChange={event => onInvalidChange(event.currentTarget.checked)} />
-						<span>Invalid</span>
+						<span>{UI_STRINGS.scalarOutcomePicker.invalidLabel}</span>
 					</label>
 				</div>
 			</div>
 			<DataGrid className='scalar-slider-stats'>
-				{showMinMax ? <MetricField label='Min Value'>{details.minValueLabel}</MetricField> : undefined}
-				<MetricField label='Selected Tick'>{selectedTickLabel}</MetricField>
-				<MetricField label={showMinMax ? 'Selected Outcome' : 'Current Value'}>{selectedOutcomeLabel}</MetricField>
-				{showMinMax ? <MetricField label='Max Value'>{details.maxValueLabel}</MetricField> : undefined}
+				{showMinMax ? <MetricField label={UI_STRINGS.scalarOutcomePicker.minValueLabel}>{details.minValueLabel}</MetricField> : undefined}
+				<MetricField label={UI_STRINGS.scalarOutcomePicker.selectedTickLabel}>{selectedTickLabel}</MetricField>
+				<MetricField label={showMinMax ? UI_STRINGS.scalarOutcomePicker.selectedOutcomeLabel : UI_STRINGS.scalarOutcomePicker.currentValueLabel}>{selectedOutcomeLabel}</MetricField>
+				{showMinMax ? <MetricField label={UI_STRINGS.scalarOutcomePicker.maxValueLabel}>{details.maxValueLabel}</MetricField> : undefined}
 			</DataGrid>
 			{action === undefined ? undefined : <div className='actions'>{action}</div>}
 		</div>

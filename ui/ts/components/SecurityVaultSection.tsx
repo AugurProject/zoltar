@@ -30,6 +30,7 @@ import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.j
 import { isMainnetChain } from '../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import {
@@ -65,7 +66,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	const collateralizationPercent = getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)
 	const collateralizationTarget = selectedPoolSecurityMultiplier === undefined ? undefined : selectedPoolSecurityMultiplier * 100n * 10n ** 18n
 
-	const summaryTitle = <span>Vault Summary</span>
+	const summaryTitle = <span>{UI_STRINGS.securityVaultSection.vaultSummaryTitle}</span>
 
 	const embeddedContent = (
 		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
@@ -80,15 +81,15 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 						</div>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
-						<span>Security Bond Allowance</span>
+						<span>{UI_STRINGS.securityVaultSection.currentSecurityBondAllowanceLabel}</span>
 						<strong>
-							<CurrencyValue value={securityBondAllowance} suffix='ETH' />
+							<CurrencyValue value={securityBondAllowance} suffix={UI_STRINGS.common.ethSuffix} />
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
-						<span>REP Collateral</span>
+						<span>{UI_STRINGS.securityVaultSection.repCollateralLabel}</span>
 						<strong>
-							<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
+							<CurrencyValue value={securityVaultDetails.repDepositShare} suffix={UI_STRINGS.common.repLabel} />
 						</strong>
 					</div>
 				</div>
@@ -115,7 +116,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			</SectionBlock>
 		)
 	return (
-		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</Badge>} title='Selected Vault' variant='record'>
+		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? UI_STRINGS.securityVaultSection.ownedBadgeLabel : UI_STRINGS.securityVaultSection.readOnlyBadgeLabel}</Badge>} title={UI_STRINGS.securityVaultSection.selectedVaultTitle} variant='record'>
 			{gridContent}
 		</EntityCard>
 	)
@@ -188,10 +189,10 @@ function VaultQueuedOperationStatusCard({
 					</div>
 				</div>
 				<MetricGrid>
-					<MetricField label='Staged Operation'>{queuedVaultOperation === undefined ? 'Refreshing...' : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
+					<MetricField label={UI_STRINGS.securityVaultSection.stagedOperationLabel}>{queuedVaultOperation === undefined ? UI_STRINGS.securityVaultSection.refreshButtonPendingLabel : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
 					{queuedVaultOperation?.amount === undefined ? null : (
-						<MetricField label='Amount'>
-							<CurrencyValue value={queuedVaultOperation.amount} suffix='REP' />
+						<MetricField label={UI_STRINGS.securityVaultSection.repAmountLabel}>
+							<CurrencyValue value={queuedVaultOperation.amount} suffix={UI_STRINGS.common.repLabel} />
 						</MetricField>
 					)}
 				</MetricGrid>
@@ -199,7 +200,7 @@ function VaultQueuedOperationStatusCard({
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={onViewStagedOperations}>
-							View In Staged Operations
+							{UI_STRINGS.securityVaultSection.viewInStagedOperationsLabel}
 						</button>
 					</div>
 				)}
@@ -212,10 +213,10 @@ function VaultQueuedOperationStatusCard({
 					<div>
 						<h4>{failedTitle}</h4>
 					</div>
-					<Badge tone='blocked'>Failed</Badge>
+					<Badge tone='blocked'>{UI_STRINGS.common.failedBadgeLabel}</Badge>
 				</div>
-				<p className='detail'>{errorMessage ?? 'The security pool rejected the action.'}</p>
-				<p className='detail'>Fix the underlying state and submit a new staged operation.</p>
+				<p className='detail'>{errorMessage ?? UI_STRINGS.securityVaultSection.securityPoolRejectedActionDetail}</p>
+				<p className='detail'>{UI_STRINGS.securityVaultSection.stagedOperationRetryDetail}</p>
 			</section>
 		)
 	if (status === 'executed')
@@ -225,7 +226,7 @@ function VaultQueuedOperationStatusCard({
 					<div>
 						<h4>{executedTitle}</h4>
 					</div>
-					<Badge tone='ok'>Executed</Badge>
+					<Badge tone='ok'>{UI_STRINGS.securityVaultSection.operationExecutedBadgeLabel}</Badge>
 				</div>
 				<p className='detail'>{successDescription}</p>
 			</section>
@@ -247,7 +248,7 @@ function VaultQueuedOperationStatusCard({
 				<div>
 					<h4>{refreshingTitle}</h4>
 				</div>
-				<Badge tone='muted'>Refreshing</Badge>
+				<Badge tone='muted'>{UI_STRINGS.securityVaultSection.refreshingBadgeLabel}</Badge>
 			</div>
 			<p className='detail'>{refreshingDescription}</p>
 		</section>
@@ -354,11 +355,11 @@ export function SecurityVaultSection({
 	const poolCollateralActionsEnabled = depositRepEnabled
 	const effectiveRepExitMode = redeemRepEnabled ? 'redeem' : 'withdraw'
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepEnabled : queueWithdrawRepEnabled
-	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? 'Redeem REP' : 'Withdraw REP'
+	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.redeemRepIdleLabel : UI_STRINGS.securityVaultSection.withdrawRepIdleLabel
 	const repExitAmountLabel = (() => {
-		if (effectiveRepExitMode === 'redeem') return 'Redeemable REP'
-		if (hasValidOraclePrice) return 'Withdrawable REP'
-		return 'REP Available To Queue'
+		if (effectiveRepExitMode === 'redeem') return UI_STRINGS.securityVaultSection.redeemableRepLabel
+		if (hasValidOraclePrice) return UI_STRINGS.securityVaultSection.withdrawableRepLabel
+		return UI_STRINGS.securityVaultSection.repAvailableToQueueLabel
 	})()
 	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
@@ -412,14 +413,11 @@ export function SecurityVaultSection({
 		queuedVaultOperation,
 		securityVaultResult,
 	})
-	const stagedOperationTimeoutHelpText =
-		stagedOperationTimeoutSeconds === undefined
-			? 'Enter whole minutes. Queued self-service operations must stay executable for at least 1 minute after the oracle settlement window completes.'
-			: `This queued self-service operation will expire ${formatDuration(stagedOperationTimeoutSeconds)} after the oracle settlement window completes.`
+	const stagedOperationTimeoutHelpText = stagedOperationTimeoutSeconds === undefined ? UI_STRINGS.securityVaultSection.manualExecutionTimeoutInvalidDetail : UI_STRINGS.securityVaultSection.manualExecutionTimeoutResolvedDetail(formatDuration(stagedOperationTimeoutSeconds))
 	const renderStagedOperationTimeoutField = () => (
 		<>
 			<label className='field'>
-				<span>Manual Execution Timeout</span>
+				<span>{UI_STRINGS.securityVaultSection.manualExecutionTimeoutLabel}</span>
 				<div className='field-inline'>
 					<FormInput
 						className='field-inline-input'
@@ -431,7 +429,7 @@ export function SecurityVaultSection({
 						onInput={event => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes: event.currentTarget.value })}
 						disabled={!poolCollateralActionsEnabled}
 					/>
-					<span className='field-inline-action'>minutes</span>
+					<span className='field-inline-action'>{UI_STRINGS.common.minutesLabel}</span>
 				</div>
 			</label>
 			<p className='detail'>{stagedOperationTimeoutHelpText}</p>
@@ -441,38 +439,38 @@ export function SecurityVaultSection({
 		if (loadingSecurityVault)
 			return (
 				<p className='detail'>
-					<LoadingText>Loading vault...</LoadingText>
+					<LoadingText>{UI_STRINGS.securityVaultSection.loadingVaultDetail}</LoadingText>
 				</p>
 			)
-		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
+		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: UI_STRINGS.common.notFoundBadgeLabel, badgeTone: 'blocked', detail: UI_STRINGS.securityVaultSection.tryAnotherPoolAddressDetail }} />
 
 		return undefined
 	})()
-	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? 'This vault does not exist.' : undefined
+	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? UI_STRINGS.securityVaultSection.missingVaultBlockerDetail : undefined
 	const getVaultLauncherBlocker = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance') => {
 		if (!hasConnectedWallet) {
-			if (action === 'claim-fees') return 'Connect a wallet before claiming fees.'
-			if (action === 'deposit-rep') return 'Connect a wallet before depositing REP.'
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Connect a wallet before redeeming REP.' : 'Connect a wallet before withdrawing REP.'
-			return 'Connect a wallet before setting the security bond allowance.'
+			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'connect-wallet')
+			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'connect-wallet')
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'connect-wallet') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'connect-wallet')
+			return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'connect-wallet')
 		}
 		if (!isMainnet) {
-			if (action === 'claim-fees') return 'Switch to Ethereum mainnet before claiming fees.'
-			if (action === 'deposit-rep') return 'Switch to Ethereum mainnet before depositing REP.'
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Switch to Ethereum mainnet before redeeming REP.' : 'Switch to Ethereum mainnet before withdrawing REP.'
-			return 'Switch to Ethereum mainnet before setting the security bond allowance.'
+			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'switch-mainnet')
+			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'switch-mainnet')
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'switch-mainnet') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'switch-mainnet')
+			return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'switch-mainnet')
 		}
 		if (!selectedVaultIsOwnedByAccount) {
-			if (action === 'claim-fees') return 'Select your own vault to claim fees.'
-			if (action === 'deposit-rep') return 'Select your own vault to deposit REP.'
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Select your own vault to redeem REP.' : 'Select your own vault to withdraw REP.'
-			return 'Select your own vault to set the security bond allowance.'
+			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'select-own-vault')
+			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'select-own-vault')
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'select-own-vault') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'select-own-vault')
+			return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'select-own-vault')
 		}
 		if (!hasLoadedSelectedVaultDetails) {
-			if (action === 'claim-fees') return 'Refresh the vault before claiming fees.'
-			if (action === 'deposit-rep') return 'Refresh the vault before depositing REP.'
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? 'Refresh the vault before redeeming REP.' : 'Refresh the vault before withdrawing REP.'
-			return 'Refresh the vault before setting the security bond allowance.'
+			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'refresh-vault')
+			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'refresh-vault')
+			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'refresh-vault') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'refresh-vault')
+			return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'refresh-vault')
 		}
 		if (action === 'deposit-rep') return undefined
 		return loadedVaultMissingBlocker
@@ -492,18 +490,18 @@ export function SecurityVaultSection({
 	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultAddress])
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
-			actionLabel: 'Deposit REP',
-			description: 'Add REP to the selected vault.',
+			actionLabel: UI_STRINGS.securityVaultSection.depositRepIdleLabel,
+			description: UI_STRINGS.securityVaultSection.depositRepActionDescription,
 			key: 'deposit-rep',
 			safetyId: getSecurityVaultActionSafetyId('depositRep'),
 			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(depositLauncherBlocker === undefined ? {} : { blocker: depositLauncherBlocker }),
-			title: 'Deposit REP',
+			title: UI_STRINGS.securityVaultSection.depositRepTitle,
 		},
 		{
 			actionLabel: repExitActionLabel,
-			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal now, or let it execute immediately when a valid oracle price is already available.',
+			description: effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.repExitRedeemDescription : UI_STRINGS.securityVaultSection.repWithdrawQueueDescription,
 			key: 'rep-exit',
 			safetyId: effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep'),
 			...(repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
@@ -512,31 +510,31 @@ export function SecurityVaultSection({
 			title: repExitActionLabel,
 		},
 		{
-			actionLabel: 'Set Bond Allowance',
-			description: 'Queue a new security bond allowance using the current oracle price context.',
+			actionLabel: UI_STRINGS.securityVaultSection.setBondAllowanceIdleLabel,
+			description: UI_STRINGS.securityVaultSection.setBondAllowanceActionDescription,
 			key: 'set-bond-allowance',
 			safetyId: getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance'),
 			...(bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
 			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(bondAllowanceLauncherBlocker === undefined ? {} : { blocker: bondAllowanceLauncherBlocker }),
-			title: 'Set Security Bond Allowance',
+			title: UI_STRINGS.securityVaultSection.setSecurityBondAllowanceTitle,
 		},
 		{
-			actionLabel: 'Claim Fees',
-			description: 'Review claimable fees and confirm the fee redemption for the selected vault.',
+			actionLabel: UI_STRINGS.securityVaultSection.claimFeesIdleLabel,
+			description: UI_STRINGS.securityVaultSection.claimFeesActionDescription,
 			key: 'claim-fees',
 			safetyId: getSecurityVaultActionSafetyId('redeemFees'),
 			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(claimFeesLauncherBlocker === undefined ? {} : { blocker: claimFeesLauncherBlocker }),
-			title: 'Claim Fees',
+			title: UI_STRINGS.securityVaultSection.claimFeesTitle,
 		},
 		...extraReadinessActions,
 	] satisfies ReadinessAction[])
 	const actionSections = modalFirst ? (
 		<>
-			<SectionBlock title='Vault Actions'>
-				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: 'Vault missing', badgeTone: 'muted', detail: 'This vault does not exist. Deposit REP to create it.' }} /> : undefined}
+			<SectionBlock title={UI_STRINGS.securityVaultSection.vaultActionsTitle}>
+				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: UI_STRINGS.securityVaultSection.vaultMissingBadgeLabel, badgeTone: 'muted', detail: UI_STRINGS.securityVaultSection.createVaultByDepositingRepDetail }} /> : undefined}
 				<div className='vault-action-launcher-grid'>
 					{vaultReadinessActions.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />
@@ -544,8 +542,8 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
-			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP'>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>Selected vault details are unavailable.</p> : null}
+			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={UI_STRINGS.securityVaultSection.depositRepTitle}>
+				{currentSelectedVaultDetails === undefined ? <p className='detail'>{UI_STRINGS.securityVaultSection.selectedVaultDetailsUnavailableDetail}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
@@ -560,10 +558,10 @@ export function SecurityVaultSection({
 								variant='embedded'
 							/>
 						) : (
-							<StateHint presentation={{ key: 'not_found', badgeLabel: 'Vault missing', badgeTone: 'muted', detail: 'This vault does not exist. Deposit REP to create it.' }} />
+							<StateHint presentation={{ key: 'not_found', badgeLabel: UI_STRINGS.securityVaultSection.vaultMissingBadgeLabel, badgeTone: 'muted', detail: UI_STRINGS.securityVaultSection.createVaultByDepositingRepDetail }} />
 						)}
 						<label className='field'>
-							<span>REP Collateral Amount</span>
+							<span>{UI_STRINGS.securityVaultSection.depositRepAmountLabel}</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 								<button
@@ -575,24 +573,24 @@ export function SecurityVaultSection({
 									}}
 									disabled={securityVaultRepBalance === undefined || !poolCollateralActionsEnabled}
 								>
-									Max
+									{UI_STRINGS.common.maxLabel}
 								</button>
 							</div>
 						</label>
 						<MetricGrid>
-							<MetricField label='Wallet REP'>
-								<CurrencyValue value={securityVaultRepBalance} suffix='REP' />
+							<MetricField label={UI_STRINGS.securityVaultSection.walletRepLabel}>
+								<CurrencyValue value={securityVaultRepBalance} suffix={UI_STRINGS.common.repLabel} />
 							</MetricField>
 						</MetricGrid>
 						<TokenApprovalControl
-							actionLabel='depositing REP'
+							actionLabel={UI_STRINGS.securityVaultSection.approveRepActionLabel}
 							allowanceError={securityVaultRepApproval.error}
 							allowanceLoading={securityVaultRepApproval.loading}
 							approvedAmount={securityVaultRepApproval.value}
 							guardMessage={undefined}
 							onApprove={amount => onApproveRep(amount)}
 							pending={securityVaultActiveAction === 'approveRep'}
-							pendingLabel='Approving REP...'
+							pendingLabel={UI_STRINGS.securityVaultSection.approvingRepPendingLabel}
 							requiredAmount={depositAmount}
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
 							safetyId={getSecurityVaultActionSafetyId('approveRep')}
@@ -602,19 +600,24 @@ export function SecurityVaultSection({
 						/>
 						<RequirementsChecklist
 							items={[
-								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
-								{ key: 'balance', label: 'Wallet REP balance covers the deposit amount', resolved: repBalanceGap === undefined || repBalanceGap <= 0n, ...(repBalanceGap !== undefined && repBalanceGap > 0n ? { detail: `Need ${formatCurrencyBalance(repBalanceGap)} more REP.` } : {}) },
-								{ key: 'minimum', label: 'First deposit meets the vault minimum', resolved: !isDepositBelowMinimum, ...(isDepositBelowMinimum ? { detail: `First deposits must be at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP.` } : {}) },
+								{ key: 'owned', label: UI_STRINGS.securityVaultSection.ownedChecklistLabel, resolved: selectedVaultIsOwnedByAccount },
+								{
+									key: 'balance',
+									label: UI_STRINGS.securityVaultSection.repBalanceChecklistLabel,
+									resolved: repBalanceGap === undefined || repBalanceGap <= 0n,
+									...(repBalanceGap !== undefined && repBalanceGap > 0n ? { detail: UI_STRINGS.securityVaultSection.repBalanceShortageDetail(formatCurrencyBalance(repBalanceGap)) } : {}),
+								},
+								{ key: 'minimum', label: UI_STRINGS.securityVaultSection.firstDepositMinimumChecklistLabel, resolved: !isDepositBelowMinimum, ...(isDepositBelowMinimum ? { detail: UI_STRINGS.securityVaultSection.firstDepositMinimumChecklistDetail(formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)) } : {}) },
 							]}
 						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
-								Cancel
+								{UI_STRINGS.common.cancelLabel}
 							</button>
 							<TransactionActionButton
 								safetyId={getSecurityVaultActionSafetyId('depositRep')}
-								idleLabel='Deposit REP'
-								pendingLabel='Depositing REP...'
+								idleLabel={UI_STRINGS.securityVaultSection.depositRepIdleLabel}
+								pendingLabel={UI_STRINGS.securityVaultSection.depositRepPendingLabel}
 								onClick={onDepositRep}
 								pending={securityVaultActiveAction === 'depositRep'}
 								availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositGuardMessage : undefined }}
@@ -624,30 +627,25 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal
-				isOpen={vaultActionModal === 'withdraw-rep'}
-				onClose={() => setVaultActionModal(undefined)}
-				title={repExitActionLabel}
-				description={effectiveRepExitMode === 'redeem' ? 'Redeem the remaining REP collateral from this ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal after reviewing the current vault collateral and oracle status.'}
-			>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>Selected vault details are unavailable.</p> : null}
+			<OperationModal isOpen={vaultActionModal === 'withdraw-rep'} onClose={() => setVaultActionModal(undefined)} title={repExitActionLabel} description={effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.repExitRedeemDescription : UI_STRINGS.securityVaultSection.repExitWithdrawDescription}>
+				{currentSelectedVaultDetails === undefined ? <p className='detail'>{UI_STRINGS.securityVaultSection.selectedVaultDetailsUnavailableDetail}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : (
 							<VaultQueuedOperationStatusCard
-								errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the withdrawal immediately, but the security pool rejected it.'}
-								executedTitle='REP Withdrawal Executed'
-								failedTitle='REP Withdrawal Failed'
-								manualQueuedDescription='The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
-								missingDescription='The transaction succeeded, but the latest manager state is not available yet.'
-								missingTitle='REP Withdrawal Submitted'
+								errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? UI_STRINGS.securityVaultSection.repWithdrawalRejectedDetail}
+								executedTitle={UI_STRINGS.securityVaultSection.repWithdrawalExecutedTitle}
+								failedTitle={UI_STRINGS.securityVaultSection.repWithdrawalFailedTitle}
+								manualQueuedDescription={UI_STRINGS.securityVaultSection.oracleManagerAutoExecuteQueueFullDetail}
+								missingDescription={UI_STRINGS.securityVaultSection.operationStatusUnavailableDetail}
+								missingTitle={UI_STRINGS.securityVaultSection.repWithdrawalSubmittedTitle}
 								onViewStagedOperations={onViewStagedOperations}
-								queuedTitle='REP Withdrawal Queued'
+								queuedTitle={UI_STRINGS.securityVaultSection.repWithdrawalQueuedTitle}
 								queuedVaultOperation={queuedVaultOperation}
-								refreshingDescription='Refreshing the oracle manager to determine whether the withdrawal was queued or executed immediately.'
-								refreshingTitle='Refreshing Withdrawal State'
+								refreshingDescription={UI_STRINGS.securityVaultSection.refreshingWithdrawalStateDetail}
+								refreshingTitle={UI_STRINGS.securityVaultSection.refreshingWithdrawalStateTitle}
 								status={securityVaultResult?.action === 'queueWithdrawRep' ? queuedVaultOperationStatus : undefined}
-								successDescription='A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.'
+								successDescription={UI_STRINGS.securityVaultSection.successfulImmediateWithdrawalDetail}
 							/>
 						)}
 						<SelectedVaultSummarySection
@@ -666,24 +664,24 @@ export function SecurityVaultSection({
 									if (effectiveRepExitMode === 'redeem') {
 										if (redeemableRepAmount === undefined) return '—'
 
-										return <CurrencyValue value={redeemableRepAmount} suffix='REP' />
+										return <CurrencyValue value={redeemableRepAmount} suffix={UI_STRINGS.common.repLabel} />
 									}
 									if (queuedWithdrawRepLimit === undefined) return '—'
 
-									return <CurrencyValue value={queuedWithdrawRepLimit} suffix='REP' />
+									return <CurrencyValue value={queuedWithdrawRepLimit} suffix={UI_STRINGS.common.repLabel} />
 								})()}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
-								<MetricField label='Escrowed REP'>
-									<CurrencyValue value={currentSelectedVaultDetails.escalationEscrowedRep} suffix='REP' />
+								<MetricField label={UI_STRINGS.securityVaultSection.escalationEscrowedRepLabel}>
+									<CurrencyValue value={currentSelectedVaultDetails.escalationEscrowedRep} suffix={UI_STRINGS.common.repLabel} />
 								</MetricField>
 							) : (
-								<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
+								<MetricField label={UI_STRINGS.securityVaultSection.priceValidUntilLabel}>{oraclePriceValidUntilTimestamp === undefined ? UI_STRINGS.common.unavailableLabel : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
 							)}
 						</MetricGrid>
 						{effectiveRepExitMode === 'redeem' ? null : (
 							<label className='field'>
-								<span>REP Withdraw Amount</span>
+								<span>{UI_STRINGS.securityVaultSection.repWithdrawAmountLabel}</span>
 								<div className='field-inline'>
 									<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 									<button
@@ -695,7 +693,7 @@ export function SecurityVaultSection({
 										}}
 										disabled={queuedWithdrawRepLimit === undefined || !poolCollateralActionsEnabled}
 									>
-										Max
+										{UI_STRINGS.common.maxLabel}
 									</button>
 								</div>
 							</label>
@@ -705,39 +703,39 @@ export function SecurityVaultSection({
 							items={
 								effectiveRepExitMode === 'redeem'
 									? [
-											{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
+											{ key: 'owned', label: UI_STRINGS.securityVaultSection.ownedChecklistLabel, resolved: selectedVaultIsOwnedByAccount },
 											{
 												key: 'locked',
-												label: 'No REP remains locked in the escalation game',
+												label: UI_STRINGS.securityVaultSection.noRepLockedChecklistLabel,
 												resolved: currentSelectedVaultDetails.escalationEscrowedRep === 0n,
-												...(currentSelectedVaultDetails.escalationEscrowedRep > 0n ? { detail: 'Withdraw escalation deposits before redeeming REP.' } : {}),
+												...(currentSelectedVaultDetails.escalationEscrowedRep > 0n ? { detail: UI_STRINGS.securityVaultSection.noRepLockedChecklistDetail } : {}),
 											},
-											{ key: 'redeemable', label: 'The vault has redeemable REP', resolved: redeemableRepAmount !== undefined && redeemableRepAmount > 0n },
+											{ key: 'redeemable', label: UI_STRINGS.securityVaultSection.redeemableRepChecklistLabel, resolved: redeemableRepAmount !== undefined && redeemableRepAmount > 0n },
 										]
 									: [
-											{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
+											{ key: 'owned', label: UI_STRINGS.securityVaultSection.ownedChecklistLabel, resolved: selectedVaultIsOwnedByAccount },
 											{
 												key: 'oracle',
-												label: hasValidOraclePrice ? 'A valid oracle price is available' : 'Oracle execution can be funded until a fresh price arrives',
+												label: hasValidOraclePrice ? UI_STRINGS.securityVaultSection.validOraclePriceChecklistLabel : UI_STRINGS.securityVaultSection.oracleExecutionFundingChecklistLabel,
 												resolved: hasValidOraclePrice || withdrawRepFunding !== undefined,
 											},
 											{
 												key: 'withdrawable',
-												label: hasValidOraclePrice ? 'The vault has withdrawable REP' : 'The vault still holds REP collateral to queue',
+												label: hasValidOraclePrice ? UI_STRINGS.securityVaultSection.withdrawableRepLabel : UI_STRINGS.securityVaultSection.withdrawFundingChecklistLabel,
 												resolved: queuedWithdrawRepLimit !== undefined && queuedWithdrawRepLimit > 0n,
 											},
-											{ key: 'timeout', label: 'Manual execution timeout is at least 1 minute', resolved: stagedOperationTimeoutSeconds !== undefined },
+											{ key: 'timeout', label: UI_STRINGS.securityVaultSection.timeoutChecklistLabel, resolved: stagedOperationTimeoutSeconds !== undefined },
 										]
 							}
 						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
-								Cancel
+								{UI_STRINGS.common.cancelLabel}
 							</button>
 							<TransactionActionButton
 								safetyId={effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep')}
 								idleLabel={repExitActionLabel}
-								pendingLabel={effectiveRepExitMode === 'redeem' ? 'Redeeming REP...' : 'Queueing REP withdrawal...'}
+								pendingLabel={effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.redeemRepPendingLabel : UI_STRINGS.securityVaultSection.withdrawRepPendingLabel}
 								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 								pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 								tone='secondary'
@@ -751,57 +749,57 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title='Set Bond Allowance' description='Queue a new bond allowance using the latest valid oracle price for the selected vault.'>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>Selected vault details are unavailable.</p> : null}
+			<OperationModal isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={UI_STRINGS.securityVaultSection.setBondAllowanceModalTitle} description={UI_STRINGS.securityVaultSection.setSecurityBondAllowanceModalDescription}>
+				{currentSelectedVaultDetails === undefined ? <p className='detail'>{UI_STRINGS.securityVaultSection.selectedVaultDetailsUnavailableDetail}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						<VaultQueuedOperationStatusCard
-							errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the allowance update immediately, but the security pool rejected it.'}
-							executedTitle='Bond Allowance Executed'
-							failedTitle='Bond Allowance Failed'
-							manualQueuedDescription='The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
-							missingDescription='The transaction succeeded, but the latest manager state is not available yet.'
-							missingTitle='Bond Allowance Submitted'
+							errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? UI_STRINGS.securityVaultSection.bondAllowanceRejectedDetail}
+							executedTitle={UI_STRINGS.securityVaultSection.bondAllowanceExecutedTitle}
+							failedTitle={UI_STRINGS.securityVaultSection.bondAllowanceFailedTitle}
+							manualQueuedDescription={UI_STRINGS.securityVaultSection.oracleManagerAutoExecuteQueueFullDetail}
+							missingDescription={UI_STRINGS.securityVaultSection.operationStatusUnavailableDetail}
+							missingTitle={UI_STRINGS.securityVaultSection.bondAllowanceSubmittedTitle}
 							onViewStagedOperations={onViewStagedOperations}
-							queuedTitle='Bond Allowance Queued'
+							queuedTitle={UI_STRINGS.securityVaultSection.bondAllowanceQueuedTitle}
 							queuedVaultOperation={queuedVaultOperation}
-							refreshingDescription='Refreshing the oracle manager to determine whether the bond allowance was queued or executed immediately.'
-							refreshingTitle='Refreshing Bond Allowance State'
+							refreshingDescription={UI_STRINGS.securityVaultSection.refreshingBondAllowanceStateDetail}
+							refreshingTitle={UI_STRINGS.securityVaultSection.refreshingBondAllowanceStateTitle}
 							status={securityVaultResult?.action === 'queueSetSecurityBondAllowance' ? queuedVaultOperationStatus : undefined}
-							successDescription='A valid oracle price was already available, so the new bond allowance executed immediately and no staged operation was created.'
+							successDescription={UI_STRINGS.securityVaultSection.successfulImmediateBondAllowanceDetail}
 						/>
 						<MetricGrid>
-							<MetricField label='Current Bond Allowance'>
-								<CurrencyValue value={currentSelectedVaultDetails.securityBondAllowance} suffix='ETH' />
+							<MetricField label={UI_STRINGS.securityVaultSection.currentBondAllowanceLabel}>
+								<CurrencyValue value={currentSelectedVaultDetails.securityBondAllowance} suffix={UI_STRINGS.common.ethSuffix} />
 							</MetricField>
-							<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
+							<MetricField label={UI_STRINGS.securityVaultSection.priceValidUntilLabel}>{oraclePriceValidUntilTimestamp === undefined ? UI_STRINGS.common.unavailableLabel : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
 						</MetricGrid>
 						<label className='field'>
-							<span>Security Bond Allowance Amount</span>
+							<span>{UI_STRINGS.securityVaultSection.securityBondAllowanceAmountLabel}</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}>
-									Max
+									{UI_STRINGS.common.maxLabel}
 								</button>
 							</div>
 						</label>
 						{renderStagedOperationTimeoutField()}
 						<RequirementsChecklist
 							items={[
-								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
-								{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
-								{ key: 'allowance', label: `Allowance amount is zero or at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH`, resolved: hasValidSecurityBondAllowanceAmount },
-								{ key: 'timeout', label: 'Manual execution timeout is at least 1 minute', resolved: stagedOperationTimeoutSeconds !== undefined },
+								{ key: 'owned', label: UI_STRINGS.securityVaultSection.ownedChecklistLabel, resolved: selectedVaultIsOwnedByAccount },
+								{ key: 'oracle', label: UI_STRINGS.securityVaultSection.validOraclePriceChecklistLabel, resolved: hasValidOraclePrice },
+								{ key: 'allowance', label: UI_STRINGS.securityVaultSection.allowanceChecklistLabel(formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)), resolved: hasValidSecurityBondAllowanceAmount },
+								{ key: 'timeout', label: UI_STRINGS.securityVaultSection.timeoutChecklistLabel, resolved: stagedOperationTimeoutSeconds !== undefined },
 							]}
 						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
-								Cancel
+								{UI_STRINGS.common.cancelLabel}
 							</button>
 							<TransactionActionButton
 								safetyId={getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance')}
-								idleLabel='Set Security Bond Allowance'
-								pendingLabel='Queueing allowance update...'
+								idleLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowanceIdleLabel}
+								pendingLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowancePendingLabel}
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
@@ -812,25 +810,25 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title='Claim Fees' description='Confirm the claimable fee balance before submitting the fee redemption for this vault.'>
+			<OperationModal isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={UI_STRINGS.securityVaultSection.claimFeesTitle} description={UI_STRINGS.securityVaultSection.claimFeesModalDescription}>
 				<MetricGrid>
-					<MetricField label='Claimable Fees'>{currentSelectedVaultDetails === undefined ? '—' : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix='ETH' />}</MetricField>
-					<MetricField label='Vault'>{selectedVaultAddress === undefined ? 'None selected' : <AddressValue address={selectedVaultAddress} />}</MetricField>
+					<MetricField label={UI_STRINGS.securityVaultSection.claimFeesAmountLabel}>{currentSelectedVaultDetails === undefined ? UI_STRINGS.common.metricUnavailablePlaceholder : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix={UI_STRINGS.common.ethSuffix} />}</MetricField>
+					<MetricField label={UI_STRINGS.securityVaultSection.vaultLabel}>{selectedVaultAddress === undefined ? UI_STRINGS.common.noneSelectedLabel : <AddressValue address={selectedVaultAddress} />}</MetricField>
 				</MetricGrid>
 				<RequirementsChecklist
 					items={[
-						{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
-						{ key: 'fees', label: 'Claimable fees are available', resolved: hasClaimableFees },
+						{ key: 'owned', label: UI_STRINGS.securityVaultSection.ownedChecklistLabel, resolved: selectedVaultIsOwnedByAccount },
+						{ key: 'fees', label: UI_STRINGS.securityVaultSection.hasClaimableFeesChecklistLabel, resolved: hasClaimableFees },
 					]}
 				/>
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
-						Cancel
+						{UI_STRINGS.common.cancelLabel}
 					</button>
 					<TransactionActionButton
 						safetyId={getSecurityVaultActionSafetyId('redeemFees')}
-						idleLabel='Claim Fees'
-						pendingLabel='Claiming fees...'
+						idleLabel={UI_STRINGS.securityVaultSection.claimFeesIdleLabel}
+						pendingLabel={UI_STRINGS.securityVaultSection.claimFeesPendingLabel}
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
 						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }}
@@ -840,21 +838,21 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
-			<SectionBlock title='Claim Fees'>
+			<SectionBlock title={UI_STRINGS.securityVaultSection.claimFeesTitle}>
 				{currentSelectedVaultDetails === undefined ? (
-					<p className='detail'>Selected vault details are unavailable.</p>
+					<p className='detail'>{UI_STRINGS.securityVaultSection.selectedVaultDetailsUnavailableDetail}</p>
 				) : (
 					<div className='entity-metric-grid'>
-						<MetricField className='entity-metric' label='Claimable Fees'>
-							<CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix='ETH' />
+						<MetricField className='entity-metric' label={UI_STRINGS.securityVaultSection.claimFeesAmountLabel}>
+							<CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix={UI_STRINGS.common.ethSuffix} />
 						</MetricField>
 					</div>
 				)}
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId={getSecurityVaultActionSafetyId('redeemFees')}
-						idleLabel='Claim Fees'
-						pendingLabel='Claiming fees...'
+						idleLabel={UI_STRINGS.securityVaultSection.claimFeesIdleLabel}
+						pendingLabel={UI_STRINGS.securityVaultSection.claimFeesPendingLabel}
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
 						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }}
@@ -862,9 +860,9 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 
-			<SectionBlock title='Deposit REP'>
+			<SectionBlock title={UI_STRINGS.securityVaultSection.depositRepTitle}>
 				<label className='field'>
-					<span>REP Collateral Amount</span>
+					<span>{UI_STRINGS.securityVaultSection.depositRepAmountLabel}</span>
 					<div className='field-inline'>
 						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 						<button
@@ -876,19 +874,19 @@ export function SecurityVaultSection({
 							}}
 							disabled={securityVaultRepBalance === undefined || !poolCollateralActionsEnabled}
 						>
-							Max
+							{UI_STRINGS.common.maxLabel}
 						</button>
 					</div>
 				</label>
 				<TokenApprovalControl
-					actionLabel='depositing REP'
+					actionLabel={UI_STRINGS.securityVaultSection.approveRepActionLabel}
 					allowanceError={securityVaultRepApproval.error}
 					allowanceLoading={securityVaultRepApproval.loading}
 					approvedAmount={securityVaultRepApproval.value}
 					guardMessage={undefined}
 					onApprove={amount => onApproveRep(amount)}
 					pending={securityVaultActiveAction === 'approveRep'}
-					pendingLabel='Approving REP...'
+					pendingLabel={UI_STRINGS.securityVaultSection.approvingRepPendingLabel}
 					requiredAmount={depositAmount}
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
 					safetyId={getSecurityVaultActionSafetyId('approveRep')}
@@ -899,19 +897,19 @@ export function SecurityVaultSection({
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId={getSecurityVaultActionSafetyId('depositRep')}
-						idleLabel='Deposit REP'
-						pendingLabel='Depositing REP...'
+						idleLabel={UI_STRINGS.securityVaultSection.depositRepIdleLabel}
+						pendingLabel={UI_STRINGS.securityVaultSection.depositRepPendingLabel}
 						onClick={onDepositRep}
 						pending={securityVaultActiveAction === 'depositRep'}
 						availability={{ disabled: !depositRepEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositGuardMessage : undefined }}
 					/>
 				</div>
 				{(() => {
-					if (repBalanceGap !== undefined && repBalanceGap > 0n) return <ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
+					if (repBalanceGap !== undefined && repBalanceGap > 0n) return <ErrorNotice message={UI_STRINGS.securityVaultSection.insufficientRepBalanceDetail(formatCurrencyBalance(repBalanceGap))} />
 					if (isDepositBelowMinimum)
 						return (
 							<p className='detail'>
-								New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
+								{UI_STRINGS.securityVaultSection.firstDepositMinimumDetailPrefix} <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix={UI_STRINGS.common.repLabel} copyable={false} /> {UI_STRINGS.securityVaultSection.firstDepositMinimumInlineDetailSuffix}
 							</p>
 						)
 
@@ -919,27 +917,27 @@ export function SecurityVaultSection({
 				})()}
 			</SectionBlock>
 
-			<SectionBlock title='Set Security Bond Allowance'>
+			<SectionBlock title={UI_STRINGS.securityVaultSection.setSecurityBondAllowanceTitle}>
 				{currentSelectedVaultDetails === undefined ? (
-					<p className='detail'>Selected vault details are unavailable.</p>
+					<p className='detail'>{UI_STRINGS.securityVaultSection.selectedVaultDetailsUnavailableDetail}</p>
 				) : (
 					<>
 						<div className='entity-metric-grid'>
-							<MetricField className='entity-metric' label='Current Security Bond Allowance'>
-								<CurrencyValue value={securityBondAllowance} suffix='ETH' />
+							<MetricField className='entity-metric' label={UI_STRINGS.securityVaultSection.currentSecurityBondAllowanceLabel}>
+								<CurrencyValue value={securityBondAllowance} suffix={UI_STRINGS.common.ethSuffix} />
 							</MetricField>
 							{oraclePriceValidUntilTimestamp === undefined ? undefined : (
-								<MetricField className='entity-metric' label='Price Valid Until'>
+								<MetricField className='entity-metric' label={UI_STRINGS.securityVaultSection.priceValidUntilLabel}>
 									<TimestampValue timestamp={oraclePriceValidUntilTimestamp} />
 								</MetricField>
 							)}
 						</div>
 						<label className='field'>
-							<span>Security Bond Allowance Amount</span>
+							<span>{UI_STRINGS.securityVaultSection.securityBondAllowanceAmountLabel}</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}>
-									Max
+									{UI_STRINGS.common.maxLabel}
 								</button>
 							</div>
 						</label>
@@ -947,8 +945,8 @@ export function SecurityVaultSection({
 						<div className='actions'>
 							<TransactionActionButton
 								safetyId={getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance')}
-								idleLabel='Set Security Bond Allowance'
-								pendingLabel='Queueing allowance update...'
+								idleLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowanceIdleLabel}
+								pendingLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowancePendingLabel}
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
@@ -961,23 +959,23 @@ export function SecurityVaultSection({
 
 			<SectionBlock title={repExitActionLabel}>
 				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit) === undefined ? (
-					<p className='detail'>Selected vault details are unavailable.</p>
+					<p className='detail'>{UI_STRINGS.securityVaultSection.selectedVaultDetailsUnavailableDetail}</p>
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={repExitAmountLabel}>
-							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit} suffix='REP' />
+							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit} suffix={UI_STRINGS.common.repLabel} />
 						</MetricField>
 						{(() => {
 							if (effectiveRepExitMode === 'redeem')
 								return (
-									<MetricField className='entity-metric' label='Escrowed REP'>
-										<CurrencyValue value={currentSelectedVaultDetails?.escalationEscrowedRep} suffix='REP' />
+									<MetricField className='entity-metric' label={UI_STRINGS.securityVaultSection.escalationEscrowedRepLabel}>
+										<CurrencyValue value={currentSelectedVaultDetails?.escalationEscrowedRep} suffix={UI_STRINGS.common.repLabel} />
 									</MetricField>
 								)
 							if (oraclePriceValidUntilTimestamp === undefined) return undefined
 
 							return (
-								<MetricField className='entity-metric' label='Price Valid Until'>
+								<MetricField className='entity-metric' label={UI_STRINGS.securityVaultSection.priceValidUntilLabel}>
 									<TimestampValue timestamp={oraclePriceValidUntilTimestamp} />
 								</MetricField>
 							)
@@ -986,7 +984,7 @@ export function SecurityVaultSection({
 				)}
 				{effectiveRepExitMode === 'redeem' ? null : (
 					<label className='field'>
-						<span>REP Withdraw Amount</span>
+						<span>{UI_STRINGS.securityVaultSection.repWithdrawAmountLabel}</span>
 						<div className='field-inline'>
 							<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 							<button
@@ -998,7 +996,7 @@ export function SecurityVaultSection({
 								}}
 								disabled={queuedWithdrawRepLimit === undefined || !poolCollateralActionsEnabled}
 							>
-								Max
+								{UI_STRINGS.common.maxLabel}
 							</button>
 						</div>
 					</label>
@@ -1008,7 +1006,7 @@ export function SecurityVaultSection({
 					<TransactionActionButton
 						safetyId={effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep')}
 						idleLabel={repExitActionLabel}
-						pendingLabel={effectiveRepExitMode === 'redeem' ? 'Redeeming REP...' : 'Queueing REP withdrawal...'}
+						pendingLabel={effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.redeemRepPendingLabel : UI_STRINGS.securityVaultSection.withdrawRepPendingLabel}
 						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 						pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 						tone='secondary'
@@ -1018,7 +1016,7 @@ export function SecurityVaultSection({
 						}}
 					/>
 				</div>
-				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.escalationEscrowedRep !== undefined && currentSelectedVaultDetails.escalationEscrowedRep > 0n ? <p className='detail'>Withdraw escalation deposits before redeeming REP.</p> : undefined}
+				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.escalationEscrowedRep !== undefined && currentSelectedVaultDetails.escalationEscrowedRep > 0n ? <p className='detail'>{UI_STRINGS.securityVaultSection.withdrawEscalationDepositsDetail}</p> : undefined}
 			</SectionBlock>
 
 			<ErrorNotice message={securityVaultError} />
@@ -1027,23 +1025,23 @@ export function SecurityVaultSection({
 	const sections = (
 		<>
 			{showLookupSection ? (
-				<SectionBlock title='Vault Lookup'>
+				<SectionBlock title={UI_STRINGS.securityVaultSection.vaultLookupTitle}>
 					{vaultLoadNotice}
 					<LookupFieldRow
-						label='Selected Vault Address'
+						label={UI_STRINGS.securityVaultSection.selectedVaultAddressLabel}
 						value={normalizedSecurityVaultForm.selectedVaultAddress}
 						onInput={selectedVaultAddressInput => onSecurityVaultFormChange({ selectedVaultAddress: selectedVaultAddressInput })}
-						placeholder='0x...'
+						placeholder={UI_STRINGS.securityVaultSection.vaultLookupPlaceholder}
 						action={
 							<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
-								{loadingSecurityVault ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
+								{loadingSecurityVault ? <LoadingText>{UI_STRINGS.securityVaultSection.refreshButtonPendingLabel}</LoadingText> : UI_STRINGS.securityVaultSection.refreshButtonIdleLabel}
 							</button>
 						}
 					/>
 					{showSecurityPoolAddressInput ? (
 						<label className='field'>
-							<span>Security Pool Address</span>
-							<FormInput value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
+							<span>{UI_STRINGS.securityVaultSection.securityPoolAddressLabel}</span>
+							<FormInput value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder={UI_STRINGS.securityVaultSection.securityPoolAddressPlaceholder} />
 						</label>
 					) : undefined}
 				</SectionBlock>
@@ -1066,7 +1064,7 @@ export function SecurityVaultSection({
 	)
 	if (compactLayout) return sections
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title='Security Vault'>
+		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRINGS.securityVaultSection.securityVaultTitle}>
 			{sections}
 		</RouteWorkflowPanel>
 	)

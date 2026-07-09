@@ -9,6 +9,7 @@ import { LoadingText } from './LoadingText.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
@@ -27,37 +28,37 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const [deployModalOpen, setDeployModalOpen] = useState(false)
 	if (questionDetails === undefined)
 		return (
-			<WorkflowSubsection title='Child Universes'>
+			<WorkflowSubsection title={UI_STRINGS.scalarDeploymentSection.childUniversesTitle}>
 				<p className='detail'>
-					<LoadingText>Loading scalar range...</LoadingText>
+					<LoadingText>{UI_STRINGS.scalarDeploymentSection.loadingScalarRangeDetail}</LoadingText>
 				</p>
 			</WorkflowSubsection>
 		)
 	const selectedScalarTick = BigInt(scalarOutcomeTick)
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
-	const selectedScalarOutcomeLabel = scalarOutcomeInvalid ? 'Invalid' : formatScalarOutcomeLabel(questionDetails, clampedSelectedScalarTick)
+	const selectedScalarOutcomeLabel = scalarOutcomeInvalid ? UI_STRINGS.scalarDeploymentSection.selectedTickInvalidLabel : formatScalarOutcomeLabel(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 	const deployReason = (() => {
-		if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
-		if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
+		if (accountAddress === undefined) return UI_STRINGS.scalarDeploymentSection.connectWalletBeforeDeployingChildUniverseReason
+		if (!isMainnet) return UI_STRINGS.scalarDeploymentSection.switchToMainnetBeforeDeployingChildUniverseReason
 
 		return (() => {
-			if (!hasForked) return 'Fork Zoltar before deploying child universes.'
-			if (selectedScalarChildExists) return 'This child universe is already deployed.'
+			if (!hasForked) return UI_STRINGS.scalarDeploymentSection.forkBeforeDeployingChildUniversesReason
+			if (selectedScalarChildExists) return UI_STRINGS.scalarDeploymentSection.childUniverseAlreadyDeployedReason
 
 			return scalarDeployError
 		})()
 	})()
 	const scalarDeployPending = zoltarChildUniversePendingOutcomeIndex === selectedScalarOutcomeIndex
 	const scalarDeployRequirements = [
-		{ key: 'forked', label: 'Universe is forked', resolved: hasForked, ...(hasForked ? {} : { detail: 'Fork Zoltar before deploying child universes.' }) },
-		{ key: 'wallet', label: 'Wallet connected', resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: 'Connect a wallet before deploying a child universe.' }) },
-		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before deploying a child universe.' }) },
-		{ key: 'exists', label: 'Child universe not already deployed', resolved: !selectedScalarChildExists, ...(selectedScalarChildExists ? { detail: 'This child universe is already deployed.' } : {}) },
+		{ key: 'forked', label: UI_STRINGS.scalarDeploymentSection.universeIsForkedLabel, resolved: hasForked, ...(hasForked ? {} : { detail: UI_STRINGS.scalarDeploymentSection.forkBeforeDeployingChildUniversesReason }) },
+		{ key: 'wallet', label: UI_STRINGS.scalarDeploymentSection.walletConnectedLabel, resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: UI_STRINGS.scalarDeploymentSection.connectWalletBeforeDeployingChildUniverseReason }) },
+		{ key: 'mainnet', label: UI_STRINGS.scalarDeploymentSection.ethereumMainnetSelectedLabel, resolved: isMainnet, ...(isMainnet ? {} : { detail: UI_STRINGS.scalarDeploymentSection.switchToMainnetBeforeDeployingChildUniverseReason }) },
+		{ key: 'exists', label: UI_STRINGS.scalarDeploymentSection.childUniverseNotAlreadyDeployedLabel, resolved: !selectedScalarChildExists, ...(selectedScalarChildExists ? { detail: UI_STRINGS.scalarDeploymentSection.childUniverseAlreadyDeployedDetail } : {}) },
 	]
 	useEffect(() => {
 		const nextTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks).toString()
@@ -65,25 +66,31 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 		setScalarOutcomeTick(nextTick)
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
 	return (
-		<WorkflowSubsection badge={<span className='detail'>Scalar forks can deploy one outcome universe at a time.</span>} title='Child Universes'>
-			<ChildUniversesSection childUniverses={childUniverses} emptyMessage='No deployed child universes yet.' headerTitle='Existing Child Universes' renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
+		<WorkflowSubsection badge={<span className='detail'>{UI_STRINGS.scalarDeploymentSection.scalarForksCanDeployOneOutcomeUniverseAtATimeDetail}</span>} title={UI_STRINGS.scalarDeploymentSection.childUniversesTitle}>
+			<ChildUniversesSection
+				childUniverses={childUniverses}
+				emptyMessage={UI_STRINGS.scalarDeploymentSection.noDeployedChildUniversesMessage}
+				headerTitle={UI_STRINGS.scalarDeploymentSection.existingChildUniversesTitle}
+				renderBadge={child => <ChildUniverseStatusBadge child={child} />}
+				renderBody={child => <ChildUniverseDetails child={child} />}
+			/>
 			<ScalarOutcomePicker
 				action={
 					<ActionLauncherButton
 						safetyId='child-universe.deploy'
 						idleLabel={(() => {
-							if (selectedScalarChildExists) return 'Deployed'
-							if (scalarOutcomeInvalid) return 'Create invalid universe'
+							if (selectedScalarChildExists) return UI_STRINGS.scalarDeploymentSection.deployedLabel
+							if (scalarOutcomeInvalid) return UI_STRINGS.scalarDeploymentSection.createInvalidUniverseLabel
 
-							return 'Create child universe'
+							return UI_STRINGS.scalarDeploymentSection.createChildUniverseLabel
 						})()}
-						pendingLabel='Opening...'
+						pendingLabel={UI_STRINGS.scalarDeploymentSection.openingChildUniversePendingLabel}
 						onClick={() => {
 							try {
 								setScalarDeployError(undefined)
 								setDeployModalOpen(true)
 							} catch (error) {
-								setScalarDeployError(error instanceof Error ? error.message : 'Selected tick is invalid')
+								setScalarDeployError(error instanceof Error ? error.message : UI_STRINGS.scalarDeploymentSection.selectedTickInvalidReason)
 							}
 						}}
 						pending={false}
@@ -98,7 +105,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 					numTicks: questionDetails.numTicks,
 				}}
 				isInvalid={scalarOutcomeInvalid}
-				label='Select Child Universe'
+				label={UI_STRINGS.scalarDeploymentSection.selectChildUniverseLabel}
 				onInvalidChange={invalid => {
 					setScalarDeployError(undefined)
 					setScalarOutcomeInvalid(invalid)
@@ -109,23 +116,29 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				}}
 				selectedOutcomeLabel={selectedScalarOutcomeLabel}
 				selectedTick={clampedScalarOutcomeTick}
-				selectedTickLabel={scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}
+				selectedTickLabel={scalarOutcomeInvalid ? UI_STRINGS.scalarDeploymentSection.selectedTickInvalidLabel : UI_STRINGS.shareMigrationTargetsSection.selectedTickLabel(clampedScalarOutcomeTick, questionDetails.numTicks.toString())}
 			/>
 			<ChildUniverseDeploymentModal
 				actionAvailability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
-				description='Confirm the selected scalar outcome and deploy its child universe in one bounded execution flow.'
-				idleLabel={scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
+				description={UI_STRINGS.scalarDeploymentSection.executeChildUniverseDeploymentDescription}
+				idleLabel={scalarOutcomeInvalid ? UI_STRINGS.scalarDeploymentSection.deployInvalidUniverseLabel : UI_STRINGS.scalarDeploymentSection.deployUniverseLabel}
 				isOpen={deployModalOpen}
 				onClose={() => setDeployModalOpen(false)}
 				onConfirm={() => onCreateChildUniverseForOutcomeIndex(selectedScalarOutcomeIndex)}
 				pending={scalarDeployPending}
-				pendingLabel='Deploying universe...'
+				pendingLabel={UI_STRINGS.scalarDeploymentSection.deployingUniversePendingLabel}
 				requirements={scalarDeployRequirements}
 				safetyId='child-universe.deploy'
-				title='Create Child Universe'
+				title={UI_STRINGS.scalarDeploymentSection.createChildUniverseTitle}
 			>
 				{selectedScalarChild === undefined ? undefined : (
-					<ChildUniversesSection childUniverses={[selectedScalarChild]} emptyMessage='No child universe selected.' headerTitle='Selected Child Universe' renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
+					<ChildUniversesSection
+						childUniverses={[selectedScalarChild]}
+						emptyMessage={UI_STRINGS.scalarDeploymentSection.noChildUniverseSelectedMessage}
+						headerTitle={UI_STRINGS.scalarDeploymentSection.childUniverseSelectedTitle}
+						renderBadge={child => <ChildUniverseStatusBadge child={child} />}
+						renderBody={child => <ChildUniverseDetails child={child} />}
+					/>
 				)}
 			</ChildUniverseDeploymentModal>
 			<ErrorNotice message={scalarDeployError} />

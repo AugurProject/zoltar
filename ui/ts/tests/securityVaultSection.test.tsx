@@ -274,6 +274,33 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
+	test('shows the shared failed badge when a queued withdrawal fails', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultResult: {
+						action: 'queueWithdrawRep',
+						hash: '0x03',
+						stagedExecution: {
+							errorMessage: 'The transaction failed.',
+							operation: 'withdrawRep',
+							operationId: 7n,
+							success: false,
+						},
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expect(within(dialog).getByText('Failed')).not.toBeNull()
+		expect(within(dialog).getByText('The transaction failed.')).not.toBeNull()
+	})
+
 	test('keeps the modal-first claim fees launcher silently disabled when lifecycle gating blocks it', async () => {
 		const endedPoolState = createEndedPoolState()
 		const renderedComponent = await renderIntoDocument(
