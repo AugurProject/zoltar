@@ -867,7 +867,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			async walletAddress => {
 				const { details } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				const settleAvailability = getOpenOracleSettleAvailability(details)
-				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? 'This report is not ready to settle yet.')
+				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? 'This report is not ready to settle.')
 
 				return await dependencies.settleOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), getOpenOracleAddress(), details.reportId)
 			},
@@ -884,7 +884,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					const submittedReportIdInput = submittedOpenOracleForm.reportId.trim()
 					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedReportIdInput, requireCurrentSelection: true })
 					const disputeAvailability = getOpenOracleDisputeAvailability(details)
-					if (!disputeAvailability.canAct) throw new Error(disputeAvailability.message ?? 'This report is not ready to dispute yet.')
+					if (!disputeAvailability.canAct) throw new Error(disputeAvailability.message ?? 'This report is not ready to dispute.')
 					await refreshOpenOracleInitialReportTokenAccess(details, { preserveExisting: true })
 					assertSelectedReportCurrent(details.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)

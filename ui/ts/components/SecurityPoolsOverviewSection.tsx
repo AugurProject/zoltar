@@ -19,12 +19,13 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { UniverseLink } from './UniverseLink.js'
 import { sameAddress } from '../lib/address.js'
-import { isMainnetChain } from '../lib/network.js'
+import { getWalletScopedAccountAddress, isMainnetChain } from '../lib/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '../lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../lib/trading.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -73,7 +74,8 @@ export function SecurityPoolsOverviewSection({
 	const requestedPoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
 	const requestedPoolPageCount = getPaginationPageCount(requestedPoolCount, SECURITY_POOL_PAGE_SIZE)
 	const resolvedPageIndex = resolvePaginationPageIndex(pageIndex, requestedPoolPageCount)
-	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
+	const scopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
+	const accountRequestKey = scopedAccountAddress?.toLowerCase() ?? 'no-account'
 	const currentPageRequestKey = `${environmentRefreshKey}:${resolvedPageIndex}:${SECURITY_POOL_PAGE_SIZE}:${accountRequestKey}`
 	const hasCurrentPageData = securityPoolPage?.requestKey === currentPageRequestKey && securityPoolPage.pageIndex === resolvedPageIndex && securityPoolPage.pageSize === SECURITY_POOL_PAGE_SIZE
 	const currentPoolCount = hasCurrentPageData ? securityPoolPage.poolCount : undefined
@@ -335,7 +337,7 @@ export function SecurityPoolsOverviewSection({
 												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (
-															<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
+															<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRINGS.common.noneLabel, badgeTone: 'muted', detail: UI_STRINGS.securityPoolWorkflowSection.noVaultsInThisPoolDetail }} />
 														) : (
 															(() => {
 																const previewVaults = [...pool.vaults]

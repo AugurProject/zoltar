@@ -68,6 +68,34 @@ export function getChangedUiTsxFiles(runGitFn: (args: string[]) => string = runG
 	return getChangedFiles(runGitFn).filter(filePath => UI_TSX_CHANGED_FILE_PATTERN.test(filePath) && !filePath.startsWith(`${UI_TSX_ROOT}/tests/`))
 }
 
+function parseChangedLineNumbers(diffText: string) {
+	const changedLines = new Set<number>()
+	for (const line of diffText.split('\n')) {
+		const match = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/u.exec(line)
+		if (match === null) continue
+		const startLine = Number(match[1])
+		const lineCount = match[2] === undefined ? 1 : Number(match[2])
+		for (let offset = 0; offset < lineCount; offset += 1) {
+			changedLines.add(startLine + offset)
+		}
+	}
+	return changedLines
+}
+
+export function getChangedLineNumbers(filePath: string, runGitFn: (args: string[]) => string = runGit) {
+	const untrackedPath = runGitFn(['ls-files', '--others', '--exclude-standard', '--', filePath])
+	if (untrackedPath === filePath) return undefined
+	const mergeBase = runGitFn(['merge-base', 'origin/main', 'HEAD'])
+	const diffTexts = [runGitFn(['diff', '--no-color', '--unified=0', mergeBase, '--', filePath])]
+	const changedLines = new Set<number>()
+	for (const diffText of diffTexts) {
+		for (const lineNumber of parseChangedLineNumbers(diffText)) {
+			changedLines.add(lineNumber)
+		}
+	}
+	return changedLines
+}
+
 function looksUserFacingText(text: string) {
 	const trimmed = text.trim()
 	if (trimmed === '') return false
@@ -269,18 +297,35 @@ function shouldReportLiteral(node: ts.Node) {
 	return false
 }
 
-export function lintSourceText(filePath: string, sourceText: string) {
+export function lintSourceText(filePath: string, sourceText: string, changedLines?: ReadonlySet<number>) {
 	const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 	const failures: string[] = []
+	const nodeOverlapsChangedLines = (node: ts.Node) => {
+		if (changedLines === undefined) return true
+		const startLine = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1
+		const endLine = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1
+		for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+			if (changedLines.has(lineNumber)) return true
+		}
+		return false
+	}
 	const visit = (node: ts.Node) => {
 		if (ts.isJsxText(node)) {
 			if (looksUserFacingJsxText(node.getText(sourceFile))) {
 				const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+				if (!nodeOverlapsChangedLines(node)) {
+					ts.forEachChild(node, visit)
+					return
+				}
 				failures.push(`${filePath}:${line + 1}:${character + 1} JSX text must come from UI_STRINGS`)
 			}
 		}
 		if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) && shouldReportLiteral(node)) {
 			const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+			if (!nodeOverlapsChangedLines(node)) {
+				ts.forEachChild(node, visit)
+				return
+			}
 			failures.push(`${filePath}:${line + 1}:${character + 1} direct UI string literal must come from ui/ts/lib/uiStrings.ts`)
 		}
 		ts.forEachChild(node, visit)
@@ -290,7 +335,7 @@ export function lintSourceText(filePath: string, sourceText: string) {
 }
 
 function lintFile(filePath: string) {
-	return lintSourceText(filePath, readFileSync(filePath, 'utf8'))
+	return lintSourceText(filePath, readFileSync(filePath, 'utf8'), getChangedLineNumbers(filePath))
 }
 
 if (import.meta.main) {

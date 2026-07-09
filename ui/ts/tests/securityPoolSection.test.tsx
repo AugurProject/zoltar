@@ -102,6 +102,21 @@ describe('SecurityPoolSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Connect a wallet before creating a security pool.')
 	})
 
+	test('keeps pool creation disabled off mainnet without showing a switch-network message', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Create Pool')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
 	test('disables pool creation for non-binary markets and enables it for valid binary questions', async () => {
 		const blockedRender = await renderIntoDocument(
 			h(

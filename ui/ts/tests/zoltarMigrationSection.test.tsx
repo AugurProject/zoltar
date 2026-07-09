@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { within } from './testUtils/queries'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ZoltarMigrationSection } from '../components/ZoltarMigrationSection.js'
@@ -104,8 +105,8 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'Fork Oracle before preparing REP.')
-		expectTransactionButtonDisabled(document.body, 'Split REP', 'Fork Oracle before migrating REP.')
+		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'REP preparation is unavailable because this universe has not forked.')
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP migration is unavailable because this universe has not forked.')
 	})
 
 	test('enables prepare when additional REP must be moved into the migration balance', async () => {
@@ -132,5 +133,47 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Split REP')
+	})
+
+	test('keeps migration approval silently disabled off mainnet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					isMainnet: false,
+					zoltarForkApproval: {
+						error: undefined,
+						loading: false,
+						value: 0n,
+					},
+					zoltarMigrationPreparedRepBalance: 0n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const approveButton = within(document.body)
+			.getAllByRole('button')
+			.find(button => button.textContent?.startsWith('Approve ') === true)
+		if (approveButton === undefined) throw new Error('Expected approval button')
+		expect(approveButton.hasAttribute('disabled')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
+	test('keeps prepare and split silently disabled off mainnet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					isMainnet: false,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Prepare REP')
+		expectTransactionButtonDisabled(document.body, 'Split REP')
+		expect(document.body.textContent?.includes('Split the migration REP across the selected universes.')).toBe(false)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
 	})
 })

@@ -621,6 +621,52 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 	})
 
+	test('keeps reporting disabled off mainnet without showing a switch-network message', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					reportingForm: createReportingForm({
+						reportAmount: '1',
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report Yes')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
+	test('keeps escalation settlement disabled off mainnet without showing a switch-network message', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					mode: 'withdraw-only',
+					reportingDetails: createReportingDetails({
+						questionOutcome: 'yes',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
+					}),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+	})
+
 	test('shows a locked-settlement reason before withdrawals unlock in active reporting', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -849,7 +895,7 @@ describe('ReportingSection', () => {
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
-		expect(lifecycleBannerQueries.getByText('Trigger Zoltar Fork')).not.toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
 	})
@@ -873,7 +919,7 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(document.body.textContent?.includes('Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
-		expect(lifecycleBannerQueries.getByText('Continue in Fork & Migration')).not.toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
 	})
 

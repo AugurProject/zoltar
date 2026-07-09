@@ -2,6 +2,7 @@ import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { sameAddress } from './address.js'
+import { getWalletConnectionMainnetGuardState } from './actionGuards.js'
 import { assertNever } from './assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
@@ -136,7 +137,7 @@ export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallback
 	if (normalizedDetail === undefined) return 'Transaction failed while settling the report. Reload the report and try again.'
 	if (genericMessage === detail) return detail
 	if (normalizedDetail.includes('0x98bdb2e0') || normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('invalid gas limit')) return 'This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.'
-	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('settlement')) return 'This report is not ready to settle yet.'
+	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('settlement')) return 'This report is not ready to settle.'
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
 	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('no initial report')) return 'Submit an initial report before settling this report.'
 	return `Transaction failed while settling the report. Reason: ${detail}`
@@ -148,15 +149,19 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	const normalizedDetail = detail?.toLowerCase()
 	if (normalizedDetail === undefined) return 'Transaction failed while disputing the report. Reload the report and try again.'
 	if (genericMessage === detail) return detail
-	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute yet.'
+	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute.'
 	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle Report instead.'
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'Submit an initial report before disputing this report.'
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
 export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
-	if (!walletConnected) return 'Connect a wallet before creating a standalone Open Oracle game.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before creating a standalone Open Oracle game.'
+	const walletGuardState = getWalletConnectionMainnetGuardState({
+		isMainnet,
+		walletConnected,
+		walletRequiredReason: 'Connect a wallet before creating a standalone Open Oracle game.',
+	})
+	if (walletGuardState.blocked) return walletGuardState.reason
 	const ethValue = tryParseDecimalInput(ethValueInput)
 	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
 	const settlerReward = tryParseDecimalInput(settlerRewardInput)
@@ -374,7 +379,7 @@ export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDe
 	if (currentClock < disputeStart)
 		return {
 			canAct: false,
-			message: 'This report is not ready to dispute yet.',
+			message: 'This report is not ready to dispute.',
 		}
 	if (currentClock > settlementStart)
 		return {
@@ -928,7 +933,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	} else {
 		const disputeAvailability = getOpenOracleDisputeAvailability(reportDetails)
 		if (!disputeAvailability.canAct) {
-			blockMessage = createVisibleGateMessage(disputeAvailability.message ?? 'This report is not ready to dispute yet.')
+			blockMessage = createVisibleGateMessage(disputeAvailability.message ?? 'This report is not ready to dispute.')
 		} else if (newAmount1 === undefined) {
 			blockMessage = createVisibleGateMessage('Enter a valid new token1 amount.')
 		} else if (newAmount2 === undefined || newAmount2 <= 0n) {

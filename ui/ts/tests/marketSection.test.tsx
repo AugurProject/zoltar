@@ -219,7 +219,7 @@ describe('MarketSection', () => {
 		failedPageLoad.reject(new Error('page load failed'))
 		await waitFor(() => {
 			expect(documentQueries.queryByText('Loading questions...')).toBeNull()
-			expect(documentQueries.getByText('Questions for this page have not loaded yet.')).not.toBeNull()
+			expect(documentQueries.getByText('Question page unavailable.')).not.toBeNull()
 		})
 	})
 

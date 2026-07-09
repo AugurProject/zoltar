@@ -29,6 +29,7 @@ import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
+import { getWalletMainnetGuardState } from '../lib/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { UI_STRINGS } from '../lib/uiStrings.js'
 import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
@@ -61,6 +62,12 @@ type QueuedVaultOperationView = {
 	amount: bigint | undefined
 	isPendingSlot: boolean
 	operationId: bigint
+}
+function getVaultLauncherWalletReason(action: 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance', repExitMode: 'redeem' | 'withdraw') {
+	if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'connect-wallet')
+	if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'connect-wallet')
+	if (action === 'rep-exit') return repExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'connect-wallet') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'connect-wallet')
+	return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'connect-wallet')
 }
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const collateralizationPercent = getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)
@@ -448,18 +455,12 @@ export function SecurityVaultSection({
 	})()
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? UI_STRINGS.securityVaultSection.missingVaultBlockerDetail : undefined
 	const getVaultLauncherBlocker = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance') => {
-		if (!hasConnectedWallet) {
-			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'connect-wallet')
-			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'connect-wallet')
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'connect-wallet') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'connect-wallet')
-			return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'connect-wallet')
-		}
-		if (!isMainnet) {
-			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'switch-mainnet')
-			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'switch-mainnet')
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-redeem', 'switch-mainnet') : UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('rep-exit-withdraw', 'switch-mainnet')
-			return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('set-bond-allowance', 'switch-mainnet')
-		}
+		const walletGuardState = getWalletMainnetGuardState({
+			accountAddress: accountState.address,
+			isMainnet,
+			walletRequiredReason: getVaultLauncherWalletReason(action, effectiveRepExitMode),
+		})
+		if (walletGuardState.blocked) return walletGuardState.reason
 		if (!selectedVaultIsOwnedByAccount) {
 			if (action === 'claim-fees') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('claim-fees', 'select-own-vault')
 			if (action === 'deposit-rep') return UI_STRINGS.securityVaultSection.vaultLauncherBlockerReason('deposit-rep', 'select-own-vault')

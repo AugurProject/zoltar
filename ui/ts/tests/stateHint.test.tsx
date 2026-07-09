@@ -66,7 +66,7 @@ describe('StateHint', () => {
 		const renderedComponent = await renderIntoDocument(
 			<StateHint
 				presentation={{
-					badgeLabel: 'None yet',
+					badgeLabel: 'None',
 					badgeTone: 'muted',
 					key: 'empty',
 				}}
@@ -75,7 +75,7 @@ describe('StateHint', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'None yet' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'None' })).not.toBeNull()
 		expect(document.body.querySelector('.state-hint .badge')).toBeNull()
 	})
 })

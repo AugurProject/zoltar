@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadSecurityVaultDetails, loadZoltarUniverseSummary } from '../contracts.js'
 import { getDeploymentSteps } from '../contracts/deployment.js'
-import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
+import { getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
@@ -73,6 +73,15 @@ void describe('active environment', () => {
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
 		resetEnvironment()
+	})
+
+	void test('clears wallet-scoped account access when the connected wallet is on the wrong network', () => {
+		const accountAddress = getAddress('0x00000000000000000000000000000000000000a1')
+
+		expect(getWalletScopedAccountAddress(accountAddress, '0x1')).toBe(accountAddress)
+		expect(getWalletScopedAccountAddress(accountAddress, '0xaa36a7')).toBeUndefined()
+		expect(getWalletScopedAccountAddress(undefined, '0x1')).toBeUndefined()
+		expect(getWalletScopedAccountAddress(accountAddress, undefined)).toBeUndefined()
 	})
 
 	void test('disposes an existing simulation controller when reinitializing into injected mode', async () => {

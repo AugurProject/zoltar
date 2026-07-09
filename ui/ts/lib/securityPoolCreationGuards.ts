@@ -1,5 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { MarketDetails } from '../types/contracts.js'
+import { getWalletMainnetGuardState } from './actionGuards.js'
 
 export function getSecurityPoolCreateDisabledReason({
 	accountAddress,
@@ -18,8 +19,8 @@ export function getSecurityPoolCreateDisabledReason({
 	securityPoolCreating: boolean
 	zoltarUniverseHasForked: boolean
 }) {
-	if (accountAddress === undefined) return 'Connect a wallet before creating a security pool.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before creating a security pool.'
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before creating a security pool.' })
+	if (walletGuardState.blocked) return walletGuardState.reason
 	if (checkingDuplicateOriginPool) return 'Checking whether a pool already exists for this question and security multiplier.'
 	if (securityPoolCreating) return 'Security pool creation is already in progress.'
 	if (duplicateOriginPoolExists) return 'A pool for this question and security multiplier already exists.'
