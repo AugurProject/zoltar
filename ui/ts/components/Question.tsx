@@ -5,6 +5,7 @@ import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from './TimestampValue.js'
 import { assertNever } from '../lib/assert.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type QuestionProps = {
@@ -28,7 +29,7 @@ type QuestionSummaryField =
 	  }
 
 export function getQuestionTitle(question: MarketDetails) {
-	return question.title.trim() === '' ? 'Untitled question' : question.title
+	return question.title.trim() === '' ? UI_STRINGS.question.untitledQuestionLabel : question.title
 }
 
 function getQuestionDescription(question: MarketDetails) {
@@ -40,18 +41,18 @@ function getQuestionDescription(question: MarketDetails) {
 function getQuestionTypeLabel(question: MarketDetails) {
 	switch (question.marketType) {
 		case 'binary':
-			return 'Binary'
+			return UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.binaryLabel
 		case 'categorical':
-			return 'Categorical'
+			return UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.categoricalLabel
 		case 'scalar':
-			return 'Scalar'
+			return UI_STRINGS.marketCreateQuestionSection.marketTypeOptions.scalarLabel
 		default:
 			return assertNever(question.marketType)
 	}
 }
 
 function getDisplayedOutcomes(question: MarketDetails) {
-	const outcomes = question.outcomeLabels.length === 0 ? ['Scalar'] : question.outcomeLabels
+	const outcomes = question.outcomeLabels.length === 0 ? [UI_STRINGS.question.scalarOutcomeLabel] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
 }
 
@@ -61,14 +62,19 @@ function getDisplayRange(question: MarketDetails) {
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
-		{ kind: 'text', label: 'Question Type', value: getQuestionTypeLabel(question) },
-		{ kind: 'text', label: 'Question ID', value: question.questionId },
-		{ kind: 'timestamp', label: 'Created', value: question.createdAt },
-		{ kind: 'timestamp', label: 'End Time', value: question.endTime },
-		{ kind: 'text', label: 'Outcomes', value: getDisplayedOutcomes(question).join(', ') },
+		{ kind: 'text', label: UI_STRINGS.marketCreateQuestionSection.questionTypeLabel, value: getQuestionTypeLabel(question) },
+		{ kind: 'text', label: UI_STRINGS.question.questionIdLabel, value: question.questionId },
+		{ kind: 'timestamp', label: UI_STRINGS.question.createdLabel, value: question.createdAt },
+		{ kind: 'timestamp', label: UI_STRINGS.question.endTimeLabel, value: question.endTime },
+		{ kind: 'text', label: UI_STRINGS.question.outcomesLabel, value: getDisplayedOutcomes(question).join(', ') },
 	]
 
-	if (question.marketType === 'scalar') fields.push({ kind: 'text', label: 'Ticks', value: question.numTicks.toString() }, { kind: 'text', label: 'Display Range', value: getDisplayRange(question) }, { kind: 'text', label: 'Answer Unit', value: question.answerUnit === '' ? 'None' : question.answerUnit })
+	if (question.marketType === 'scalar')
+		fields.push(
+			{ kind: 'text', label: UI_STRINGS.question.ticksLabel, value: question.numTicks.toString() },
+			{ kind: 'text', label: UI_STRINGS.question.displayRangeLabel, value: getDisplayRange(question) },
+			{ kind: 'text', label: UI_STRINGS.question.answerUnitLabel, value: question.answerUnit === '' ? UI_STRINGS.common.noneLabel : question.answerUnit },
+		)
 
 	return fields
 }
@@ -93,7 +99,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 		return (
 			<div className={`question-summary ${className}`}>
 				<p className='detail'>
-					<LoadingText>Loading question details...</LoadingText>
+					<LoadingText>{UI_STRINGS.question.loadingQuestionDetailsLabel}</LoadingText>
 				</p>
 			</div>
 		)
@@ -113,11 +119,11 @@ export function Question({ className = '', loading = false, question, showTitle 
 			? []
 			: [
 					{
-						label: 'Ticks',
+						label: UI_STRINGS.question.ticksLabel,
 						value: question.numTicks.toString(),
 					},
 					{
-						label: 'Display Range',
+						label: UI_STRINGS.question.displayRangeLabel,
 						value: getDisplayRange(question),
 					},
 				]
@@ -132,15 +138,15 @@ export function Question({ className = '', loading = false, question, showTitle 
 					</div>
 				)}
 				<OutcomeChipRow items={outcomeItems} />
-				<div className='question-preview-timeline' role='list' aria-label='Question timeline'>
+				<div className='question-preview-timeline' role='list' aria-label={UI_STRINGS.question.questionTimelineAriaLabel}>
 					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>Created</span>
+						<span className='question-preview-timeline-label'>{UI_STRINGS.question.createdLabel}</span>
 						<strong className='question-preview-timeline-value'>
 							<TimestampValue timestamp={question.createdAt} />
 						</strong>
 					</div>
 					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>End Time</span>
+						<span className='question-preview-timeline-label'>{UI_STRINGS.question.endTimeLabel}</span>
 						<strong className='question-preview-timeline-value'>
 							<TimestampValue timestamp={question.endTime} />
 						</strong>
@@ -148,7 +154,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 				</div>
 				<div className='question-preview-meta'>
 					<div className='question-preview-meta-item'>
-						<span className='question-preview-meta-label'>Question ID</span>
+						<span className='question-preview-meta-label'>{UI_STRINGS.question.questionIdLabel}</span>
 						<strong>{question.questionId}</strong>
 					</div>
 					{scalarFields.map(field => (

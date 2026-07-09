@@ -2,6 +2,7 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { assertNever } from './assert.js'
 import { getWrongNetworkMessage } from './network.js'
 import type { LoadableValueState } from './loadState.js'
+import { UI_STRINGS } from './uiStrings.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'page_not_found' | 'load_failed'
 
@@ -17,7 +18,7 @@ export type UserMessagePresentation = {
 	placeholder?: string
 }
 
-const METRIC_PLACEHOLDER = '—'
+const METRIC_PLACEHOLDER = UI_STRINGS.common.metricUnavailablePlaceholder
 
 function createPresentation(key: UserMessageKey, presentation: Omit<UserMessagePresentation, 'key'>): UserMessagePresentation {
 	return { key, ...presentation }
@@ -27,9 +28,9 @@ export function getMetricPlaceholderPresentation(value: unknown, options?: { loa
 	if (value !== undefined) return undefined
 	if (options?.loading === true)
 		return createPresentation('loading', {
-			badgeLabel: 'Loading',
+			badgeLabel: UI_STRINGS.userCopy.poolRegistry.collection.loadingBadgeLabel,
 			badgeTone: 'pending',
-			placeholder: 'Loading...',
+			placeholder: UI_STRINGS.userCopy.poolRegistry.selection.loadingDetail,
 		})
 	return createPresentation('unavailable', {
 		placeholder: METRIC_PLACEHOLDER,
@@ -53,40 +54,40 @@ export function getPoolRegistryPresentation(
 		if (input.poolCount > 0) return undefined
 		if (input.isLoading)
 			return createPresentation('loading', {
-				badgeLabel: 'Loading',
+				badgeLabel: UI_STRINGS.userCopy.poolRegistry.collection.loadingBadgeLabel,
 				badgeTone: 'pending',
-				detail: 'Refreshing pools.',
+				detail: UI_STRINGS.userCopy.poolRegistry.collection.loadingDetail,
 			})
 		if (!input.hasLoaded)
 			return createPresentation('not_checked', {
-				badgeLabel: 'Not checked',
+				badgeLabel: UI_STRINGS.userCopy.poolRegistry.collection.notCheckedBadgeLabel,
 				badgeTone: 'muted',
-				detail: 'Load security pools to check what is available in this universe.',
+				detail: UI_STRINGS.userCopy.poolRegistry.collection.notCheckedDetail,
 			})
 		return createPresentation('empty', {
-			actionHint: 'Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.',
-			badgeLabel: 'None yet',
+			actionHint: UI_STRINGS.userCopy.poolRegistry.collection.emptyActionHint,
+			badgeLabel: UI_STRINGS.userCopy.poolRegistry.collection.emptyBadgeLabel,
 			badgeTone: 'muted',
-			detail: 'No security pools are available in this universe yet.',
+			detail: UI_STRINGS.userCopy.poolRegistry.collection.emptyDetail,
 		})
 	}
 
 	switch (input.state) {
 		case 'loading':
 			return createPresentation('loading', {
-				badgeLabel: 'Loading',
+				badgeLabel: UI_STRINGS.userCopy.poolRegistry.selection.loadingBadgeLabel,
 				badgeTone: 'pending',
-				detail: 'Loading...',
+				detail: UI_STRINGS.userCopy.poolRegistry.selection.loadingDetail,
 				detailIsLoading: true,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				badgeLabel: 'Not checked',
+				badgeLabel: UI_STRINGS.userCopy.poolRegistry.selection.notCheckedBadgeLabel,
 				badgeTone: 'muted',
 			})
 		case 'missing':
 			return createPresentation('not_found', {
-				badgeLabel: 'Not found',
+				badgeLabel: UI_STRINGS.userCopy.poolRegistry.selection.notFoundBadgeLabel,
 				badgeTone: 'blocked',
 			})
 		case 'ready':
@@ -100,22 +101,22 @@ export function getUniversePresentation(state: LoadableValueState) {
 	switch (state) {
 		case 'loading':
 			return createPresentation('loading', {
-				badgeLabel: 'Loading',
+				badgeLabel: UI_STRINGS.userCopy.universe.loadingBadgeLabel,
 				badgeTone: 'pending',
-				detail: 'Loading universe details.',
+				detail: UI_STRINGS.userCopy.universe.loadingDetail,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				badgeLabel: 'Not checked',
+				badgeLabel: UI_STRINGS.userCopy.universe.notCheckedBadgeLabel,
 				badgeTone: 'muted',
-				detail: 'Choose a universe to continue.',
+				detail: UI_STRINGS.userCopy.universe.notCheckedDetail,
 			})
 		case 'missing':
 			return createPresentation('not_found', {
-				actionHint: 'Go to Genesis universe',
-				badgeLabel: 'Not found',
+				actionHint: UI_STRINGS.userCopy.universe.goToGenesisUniverseActionHint,
+				badgeLabel: UI_STRINGS.userCopy.universe.notFoundBadgeLabel,
 				badgeTone: 'blocked',
-				detail: 'Choose another universe.',
+				detail: UI_STRINGS.userCopy.universe.notFoundDetail,
 			})
 		case 'ready':
 			return undefined
@@ -130,45 +131,45 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWa
 
 	if (!walletAvailable)
 		return createPresentation('wallet_disconnected', {
-			badgeLabel: 'Connect wallet',
+			badgeLabel: UI_STRINGS.userCopy.wallet.connectWalletBadgeLabel,
 			badgeTone: 'blocked',
-			detail: 'Install or enable a wallet to continue.',
+			detail: UI_STRINGS.userCopy.wallet.installWalletDetail,
 		})
 	if (accountAddress === undefined)
 		return createPresentation('wallet_disconnected', {
-			badgeLabel: 'Connect wallet',
+			badgeLabel: UI_STRINGS.userCopy.wallet.connectWalletBadgeLabel,
 			badgeTone: 'blocked',
-			detail: 'Connect wallet to continue.',
+			detail: UI_STRINGS.userCopy.wallet.connectWalletDetail,
 		})
 	if (!supportedChain)
 		return createPresentation('wrong_network', {
-			badgeLabel: 'Wrong network',
+			badgeLabel: UI_STRINGS.userCopy.wallet.wrongNetworkBadgeLabel,
 			badgeTone: 'blocked',
-			detail: getWrongNetworkMessage() ?? 'Switch to Ethereum mainnet.',
+			detail: getWrongNetworkMessage() ?? UI_STRINGS.userCopy.wallet.switchToMainnetDetail,
 		})
 	return undefined
 }
 
 export function getReportPresentation({ kind, state }: { kind: 'question' | 'report'; state: LoadableValueState }) {
-	const noun = kind === 'question' ? 'questions' : 'reports'
+	const noun = kind === 'question' ? UI_STRINGS.userCopy.report.questionNoun : UI_STRINGS.userCopy.report.reportNoun
 	switch (state) {
 		case 'loading':
 			return createPresentation('loading', {
-				detail: 'retrieving...',
+				detail: UI_STRINGS.userCopy.report.loadingDetail,
 				detailIsLoading: true,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				actionHint: `Refresh ${noun}`,
-				badgeLabel: 'Not checked',
+				actionHint: `${UI_STRINGS.userCopy.report.refreshActionHintPrefix} ${noun}`,
+				badgeLabel: UI_STRINGS.userCopy.report.notCheckedBadgeLabel,
 				badgeTone: 'muted',
-				detail: `Refresh ${noun} to check this ID.`,
+				detail: `${UI_STRINGS.userCopy.report.refreshActionHintPrefix} ${noun} ${UI_STRINGS.userCopy.report.refreshToCheckIdSuffix}`,
 			})
 		case 'missing':
 			return createPresentation('not_found', {
-				badgeLabel: 'Not found',
+				badgeLabel: UI_STRINGS.userCopy.report.notFoundBadgeLabel,
 				badgeTone: 'blocked',
-				detail: `Refresh ${noun} or try another ID.`,
+				detail: `${UI_STRINGS.userCopy.report.refreshActionHintPrefix} ${noun} ${UI_STRINGS.userCopy.report.refreshOrTryAnotherIdSuffix}`,
 			})
 		case 'ready':
 			return undefined
@@ -179,9 +180,9 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 
 export function getPageNotFoundPresentation() {
 	return createPresentation('page_not_found', {
-		actionHint: 'Open one of the sections below.',
-		badgeLabel: 'Page not found',
+		actionHint: UI_STRINGS.userCopy.pageNotFound.actionHint,
+		badgeLabel: UI_STRINGS.userCopy.pageNotFound.badgeLabel,
 		badgeTone: 'blocked',
-		detail: 'That page is not available here.',
+		detail: UI_STRINGS.userCopy.pageNotFound.detail,
 	})
 }

@@ -37,6 +37,7 @@ import {
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from '../lib/reporting.js'
 import { deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 type ReportingStatus = 'active' | 'missing' | 'not-started'
@@ -47,18 +48,18 @@ type EscalationSideDisplay = {
 	userDeposits: EscalationDeposit[] | undefined
 	userStake: bigint | undefined
 }
-const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
-const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
-const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using presets.'
-const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
-const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
-const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = 'Select an outcome side above to enable reporting.'
-const NO_SELECTED_SIDE_CAPACITY_REASON = 'No remaining contribution capacity is available on the selected side.'
-const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = 'Remaining selected-side capacity is below the minimum report bond.'
-const FORK_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
-const FORK_TRIGGERED_SETTLEMENT_REASON = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
-const FORK_ALREADY_TRIGGERED_REPORT_REASON = 'Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.'
-const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = 'Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in Fork & Migration.'
+const MAX_PROFIT_NOT_STARTED_REASON = UI_STRINGS.reportingSection.maxProfitNotStartedReason
+const LOAD_REPORTING_PRESETS_REASON = UI_STRINGS.reportingSection.loadReportingDetailsReason
+const SELECT_OUTCOME_PRESET_REASON = UI_STRINGS.reportingSection.selectOutcomePresetReason
+const SELECTED_SIDE_ALREADY_LEADS_REASON = UI_STRINGS.reportingSection.selectedSideAlreadyLeadsReason
+const MAX_PROFIT_WINDOW_FILLED_REASON = UI_STRINGS.reportingSection.maxProfitWindowFilledReason
+const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = UI_STRINGS.reportingSection.selectOutcomeAboveToEnableReportingMessage
+const NO_SELECTED_SIDE_CAPACITY_REASON = UI_STRINGS.reportingSection.noSelectedSideCapacityReason
+const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = UI_STRINGS.reportingSection.belowMinimumSelectedSideCapacityReason
+const FORK_TRIGGERED_REPORT_REASON = UI_STRINGS.reportingSection.forkTriggeredReportReason
+const FORK_TRIGGERED_SETTLEMENT_REASON = UI_STRINGS.reportingSection.forkTriggeredSettlementReason
+const FORK_ALREADY_TRIGGERED_REPORT_REASON = UI_STRINGS.reportingSection.forkAlreadyTriggeredReportReason
+const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = UI_STRINGS.reportingSection.forkAlreadyTriggeredSettlementReason
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active')
 		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
@@ -88,24 +89,12 @@ function isHiddenPresetReason(reason: string | undefined) {
 	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
 }
 function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {
-	return reportingDetails.questionOutcome === 'none' ? 'Pending finalization' : getReportingOutcomeLabel(reportingDetails.questionOutcome)
+	return reportingDetails.questionOutcome === 'none' ? UI_STRINGS.reportingSection.pendingFinalizationLabel : getReportingOutcomeLabel(reportingDetails.questionOutcome)
 }
 function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey) {
 	if (details === undefined || details.status !== 'active') return undefined
 	if (!isPoolQuestionFinalized(details)) return undefined
-	return details.questionOutcome === selectedOutcome ? 'Winning payout' : 'Losing deposit settlement'
-}
-
-function getWithdrawSelectedButtonLabel(sideLabel: string) {
-	return `Settle Selected ${sideLabel} Deposits`
-}
-
-function getWithdrawAllButtonLabel(sideLabel: string) {
-	return `Settle All ${sideLabel} Deposits`
-}
-
-function getWithdrawPendingLabel(sideLabel: string) {
-	return `Settling ${sideLabel} deposits...`
+	return details.questionOutcome === selectedOutcome ? UI_STRINGS.reportingSection.claimTypeWinningPayoutLabel : UI_STRINGS.reportingSection.claimTypeLosingDepositSettlementLabel
 }
 
 function getReportingStagePresentation({
@@ -123,28 +112,28 @@ function getReportingStagePresentation({
 	if (!hasReportingOpened(marketDetails.endTime, effectiveCurrentTimestamp))
 		return {
 			availableActions: [],
-			blockedActions: ['Report outcome', 'Settle escalation deposits'],
+			blockedActions: UI_STRINGS.reportingSection.reportingStageNotEnabledBlockedActions,
 			detail: getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp),
 			key: 'reporting-not-enabled',
-			label: 'Reporting Not Enabled',
+			label: UI_STRINGS.reportingSection.reportingNotEnabledTitle,
 			tone: 'warning',
 		}
 	if (reportingDetails === undefined)
 		return {
-			availableActions: ['Refresh reporting'],
-			blockedActions: [],
-			detail: 'Load reporting details to view the escalation state for this pool.',
+			availableActions: UI_STRINGS.reportingSection.reportingStageOpenAvailableActions,
+			blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+			detail: UI_STRINGS.reportingSection.reportingOpenDetail,
 			key: 'reporting-open',
-			label: 'Reporting Open',
+			label: UI_STRINGS.reportingSection.reportingOpenTitle,
 			tone: 'default',
 		}
 	if (isPoolQuestionFinalized(reportingDetails))
 		return {
-			availableActions: ['Settle escalation deposits'],
-			blockedActions: [],
-			detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}.`,
+			availableActions: UI_STRINGS.reportingSection.reportingStageResolvedAvailableActions,
+			blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+			detail: UI_STRINGS.reportingSection.reportingResolvedDetailLabel(getResolvedReportingOutcomeLabel(reportingDetails)),
 			key: 'escalation-resolved',
-			label: 'Resolved',
+			label: UI_STRINGS.reportingSection.resolvedTitle,
 			tone: 'success',
 		}
 	if (reportingDetails.status === 'not-started') return undefined
@@ -154,38 +143,38 @@ function getReportingStagePresentation({
 			return undefined
 		case 'Active':
 			return {
-				availableActions: ['Report outcome'],
-				blockedActions: ['Settle escalation deposits until finalization'],
-				detail: 'Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.',
+				availableActions: UI_STRINGS.reportingSection.reportingStageActiveAvailableActions,
+				blockedActions: UI_STRINGS.reportingSection.reportingStageActiveBlockedActions,
+				detail: UI_STRINGS.reportingSection.reportingActiveDetail,
 				key: 'escalation-active',
-				label: 'Active',
+				label: UI_STRINGS.reportingSection.activeTitle,
 				tone: 'default',
 			}
 		case 'Fork Triggered':
 			return {
-				availableActions: [forkAlreadyTriggered ? 'Continue in Fork & Migration' : 'Trigger Zoltar Fork'],
-				blockedActions: ['Settle escalation deposits on the parent pool'],
+				availableActions: [forkAlreadyTriggered ? UI_STRINGS.reportingSection.continueInForkAndMigrationLabel : UI_STRINGS.reportingSection.triggerZoltarForkLabel],
+				blockedActions: UI_STRINGS.reportingSection.reportingStageForkTriggeredBlockedActions,
 				detail: forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON,
 				key: 'escalation-fork-triggered',
-				label: 'Fork Triggered',
+				label: UI_STRINGS.reportingSection.forkTriggeredTitle,
 				tone: 'default',
 			}
 		case 'Timed Out':
 			return {
-				availableActions: ['Refresh reporting'],
-				blockedActions: [],
-				detail: 'Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.',
+				availableActions: UI_STRINGS.reportingSection.reportingStageTimedOutAvailableActions,
+				blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+				detail: UI_STRINGS.reportingSection.reportingTimedOutDetail,
 				key: 'escalation-timed-out',
-				label: 'Timed Out',
+				label: UI_STRINGS.reportingSection.timedOutTitle,
 				tone: 'default',
 			}
 		case 'Resolved':
 			return {
-				availableActions: ['Settle escalation deposits'],
-				blockedActions: [],
-				detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}.`,
+				availableActions: UI_STRINGS.reportingSection.reportingStageResolvedAvailableActions,
+				blockedActions: UI_STRINGS.reportingSection.reportingStageOpenBlockedActions,
+				detail: UI_STRINGS.reportingSection.reportingResolvedDetailLabel(getResolvedReportingOutcomeLabel(reportingDetails)),
 				key: 'escalation-resolved',
-				label: 'Resolved',
+				label: UI_STRINGS.reportingSection.resolvedTitle,
 				tone: 'success',
 			}
 		default:
@@ -197,20 +186,30 @@ function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {
 	return activationTime > ESCALATION_GAME_ACTIVATION_DELAY ? activationTime - ESCALATION_GAME_ACTIVATION_DELAY : 0n
 }
 function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimestamp, rewardWindowFillTimestamp, selectedOutcomeLabel }: { currentTimestamp: bigint | undefined; projectedFinalizationTimestamp: bigint | undefined; rewardWindowFillTimestamp: bigint | undefined; selectedOutcomeLabel: string }) {
-	if (projectedFinalizationTimestamp !== undefined && currentTimestamp !== undefined && projectedFinalizationTimestamp <= currentTimestamp) return <>Check back immediately to confirm the market finalized as {selectedOutcomeLabel}.</>
+	if (projectedFinalizationTimestamp !== undefined && currentTimestamp !== undefined && projectedFinalizationTimestamp <= currentTimestamp) return <>{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderImmediate(selectedOutcomeLabel)}</>
 	if (rewardWindowFillTimestamp !== undefined && currentTimestamp !== undefined && rewardWindowFillTimestamp > currentTimestamp)
 		return (
 			<>
-				Check back no later than <TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={rewardWindowFillTimestamp} /> to confirm {selectedOutcomeLabel} is the leading outcome before the remaining reward-eligible REP on {selectedOutcomeLabel} is filled.
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeRewardWindowPrefix}
+				<TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={rewardWindowFillTimestamp} />
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeRewardWindowMiddle}
+				{selectedOutcomeLabel}
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeRewardWindowSuffix}
+				{selectedOutcomeLabel}
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeRewardWindowTail}
 			</>
 		)
 	if (projectedFinalizationTimestamp !== undefined)
 		return (
 			<>
-				Check back no later than <TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={projectedFinalizationTimestamp} /> to confirm {selectedOutcomeLabel} is the leading outcome before finalization.
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeFinalizationPrefix}
+				<TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={projectedFinalizationTimestamp} />
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeFinalizationMiddle}
+				{selectedOutcomeLabel}
+				{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderBeforeFinalizationSuffix}
 			</>
 		)
-	return <>Check back later to confirm {selectedOutcomeLabel} is the leading outcome.</>
+	return <>{UI_STRINGS.reportingSection.reportingLatestOutcomeReminderLater(selectedOutcomeLabel)}</>
 }
 function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
 	if (reportingDetails === undefined || currentTimestamp === undefined || reportingDetails.currentTime === currentTimestamp) return reportingDetails
@@ -272,9 +271,9 @@ export function ReportingSection({
 	if (reportingStageKey === 'forkTriggered') {
 		reportLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON
 	} else if (reportingStageKey === 'timedOut') {
-		reportLifecycleReason = 'Escalation has ended. Refresh reporting to view the finalized outcome before settling deposits.'
+		reportLifecycleReason = UI_STRINGS.reportingSection.reportingHasEndedRefreshReason
 	} else if (reportingStageKey === 'resolved') {
-		reportLifecycleReason = 'This pool is already finalized.'
+		reportLifecycleReason = UI_STRINGS.reportingSection.reportingPoolAlreadyFinalizedReason
 	}
 	const reportControlsLockedReason = showFullReporting ? pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
@@ -282,13 +281,13 @@ export function ReportingSection({
 	if (reportingStageKey === 'forkTriggered') {
 		settlementLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
-		settlementLifecycleReason = forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'
+		settlementLifecycleReason = forkAlreadyTriggered ? UI_STRINGS.reportingSection.continueInForkAndMigrationReason : UI_STRINGS.reportingSection.migrationRequiredReason
 	} else if (activeReportingDetails?.settlementState === 'migration-expired') {
-		settlementLifecycleReason = 'The migration window for these unresolved escalation deposits has closed.'
+		settlementLifecycleReason = UI_STRINGS.reportingSection.migrationExpiredReason
 	} else if (reportingStageKey === 'activeLocked') {
-		settlementLifecycleReason = 'Escalation deposits cannot be settled until the question is finalized.'
+		settlementLifecycleReason = UI_STRINGS.reportingSection.settlementLockedUntilFinalizedReason
 	}
-	const withdrawControlsLockedReason = showSettlementSection && loadingReportingDetails ? 'Loading escalation deposits.' : pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
+	const withdrawControlsLockedReason = showSettlementSection && loadingReportingDetails ? UI_STRINGS.reportingSection.loadingEscalationDepositsReason : pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
 	const withdrawControlsLocked = !withdrawEscalationEnabled || withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -311,7 +310,7 @@ export function ReportingSection({
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
-	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
+	const selectedOutcomeLabel = selectedOutcome === undefined ? UI_STRINGS.reportingSection.selectedSideLabel : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	let projectedFinalizationTimestamp: bigint | undefined
 	if (timerPreview !== undefined && effectiveCurrentTimestamp !== undefined) {
 		if (timerPreview.kind === 'not-started') {
@@ -335,7 +334,12 @@ export function ReportingSection({
 			if (selectedEstimate === undefined) return undefined
 			return (
 				<>
-					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. {finalizationReminder}
+					{UI_STRINGS.reportingSection.reportingProjectionProfitPrefix}
+					{selectedOutcomeLabel}
+					{UI_STRINGS.reportingSection.reportingProjectionProfitMiddle}
+					<CurrencyValue value={selectedEstimate.profit} suffix={UI_STRINGS.common.repLabel} />
+					{UI_STRINGS.reportingSection.reportingProjectionProfitSuffix}
+					{finalizationReminder}
 				</>
 			)
 		}
@@ -343,13 +347,22 @@ export function ReportingSection({
 			if (timerPreview.hypotheticalDuration > 0n)
 				return (
 					<>
-						If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilStart)}. Check back no later than <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={projectedFinalizationTimestamp} /> to
-						confirm {selectedOutcomeLabel} is still leading if later disputes keep escalation open.
+						{UI_STRINGS.reportingSection.reportingProjectionNotStartedPrefix}
+						{formatDuration(timerPreview.timeUntilStart)}
+						{UI_STRINGS.reportingSection.reportingProjectionNotStartedSimpleSuffix}
+						{UI_STRINGS.reportingSection.reportingProjectionNotStartedCheckBackPrefix}
+						<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={projectedFinalizationTimestamp} />
+						{UI_STRINGS.reportingSection.reportingProjectionNotStartedCheckBackMiddle}
+						{selectedOutcomeLabel}
+						{UI_STRINGS.reportingSection.reportingProjectionNotStartedCheckBackSuffix}
 					</>
 				)
 			return (
 				<>
-					If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilStart)}. {finalizationReminder}
+					{UI_STRINGS.reportingSection.reportingProjectionNotStartedPrefix}
+					{formatDuration(timerPreview.timeUntilStart)}
+					{UI_STRINGS.reportingSection.reportingProjectionNotStartedSimpleSuffix}
+					{finalizationReminder}
 				</>
 			)
 		}
@@ -357,34 +370,56 @@ export function ReportingSection({
 		if (timerPreview.actualState === 'ends-immediately')
 			return (
 				<>
-					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would end the escalation and finalize the market immediately. {finalizationReminder}
+					{UI_STRINGS.reportingSection.reportingProjectionProfitPrefix}
+					{selectedOutcomeLabel}
+					{UI_STRINGS.reportingSection.reportingProjectionProfitMiddle}
+					<CurrencyValue value={selectedEstimate.profit} suffix={UI_STRINGS.common.repLabel} />
+					{UI_STRINGS.reportingSection.reportingProjectionProfitSuffix}
+					{UI_STRINGS.reportingSection.reportingProjectionEndsImmediatelyText}
+					{finalizationReminder}
 				</>
 			)
 		const projectedFinalizationDuration = formatDuration(getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n))
 		if (timerPreview.actualState === 'extends')
 			return (
 				<>
-					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would extend the timer by {formatDuration(timerPreview.timerIncrease ?? 0n)}, and if no one disputes after it, the
-					market would finalize in {projectedFinalizationDuration}. {finalizationReminder}
+					{UI_STRINGS.reportingSection.reportingProjectionProfitPrefix}
+					{selectedOutcomeLabel}
+					{UI_STRINGS.reportingSection.reportingProjectionProfitMiddle}
+					<CurrencyValue value={selectedEstimate.profit} suffix={UI_STRINGS.common.repLabel} />
+					{UI_STRINGS.reportingSection.reportingProjectionProfitSuffix}
+					{UI_STRINGS.reportingSection.reportingProjectionExtendsPrefix}
+					{formatDuration(timerPreview.timerIncrease ?? 0n)}
+					{UI_STRINGS.reportingSection.reportingProjectionExtendsMiddle}
+					{projectedFinalizationDuration}
+					{UI_STRINGS.reportingSection.reportingProjectionNotStartedSimpleSuffix}
+					{finalizationReminder}
 				</>
 			)
 		return (
 			<>
-				If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would not extend the timer, and if no one disputes after it, the market would finalize in {projectedFinalizationDuration}
-				. {finalizationReminder}
+				{UI_STRINGS.reportingSection.reportingProjectionProfitPrefix}
+				{selectedOutcomeLabel}
+				{UI_STRINGS.reportingSection.reportingProjectionProfitMiddle}
+				<CurrencyValue value={selectedEstimate.profit} suffix={UI_STRINGS.common.repLabel} />
+				{UI_STRINGS.reportingSection.reportingProjectionProfitSuffix}
+				{UI_STRINGS.reportingSection.reportingProjectionDoesNotExtendPrefix}
+				{projectedFinalizationDuration}
+				{UI_STRINGS.reportingSection.reportingProjectionNotStartedSimpleSuffix}
+				{finalizationReminder}
 			</>
 		)
 	}
 	const projectedReportingPreview = getProjectedReportingPreview()
-	const reportButtonLabel = selectedOutcome === undefined ? 'Report On Selected Side' : `Report ${selectedOutcomeLabel}`
+	const reportButtonLabel = selectedOutcome === undefined ? UI_STRINGS.reportingSection.reportOnSelectedSideLabel : UI_STRINGS.reportingSection.reportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
 	const maxContributionAmount = (() => {
 		if (selectedOutcome === undefined) return { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
 		if (effectiveReportingDetails === undefined) return { amount: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
-		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep === undefined) return { amount: undefined, reason: 'Loading available vault REP.' }
-		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep <= 0n) return { amount: undefined, reason: 'No unlocked vault REP available for reporting.' }
+		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep === undefined) return { amount: undefined, reason: UI_STRINGS.reportingSection.loadingAvailableVaultRepReason }
+		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep <= 0n) return { amount: undefined, reason: UI_STRINGS.reportingSection.noUnlockedVaultRepReason }
 		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amount: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
 		if (effectiveReportingDetails.status === 'not-started') {
 			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerVaultAvailableEscalationRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerVaultAvailableEscalationRep : remainingSelectedOutcomeCapacity
@@ -395,7 +430,7 @@ export function ReportingSection({
 			}
 		}
 		const selectedSide = effectiveReportingDetails.sides.find(side => side.key === selectedOutcome)
-		if (selectedSide === undefined) return { amount: undefined, reason: 'Selected side is unavailable.' }
+		if (selectedSide === undefined) return { amount: undefined, reason: UI_STRINGS.reportingSection.selectedSideUnavailableReason }
 		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThreshold - selectedSide.balance)
 		if (maxContributionPreview.actualDepositAmount === undefined) return { amount: undefined, reason: maxContributionPreview.reason }
 		let cappedAmount = maxContributionPreview.actualDepositAmount
@@ -408,7 +443,7 @@ export function ReportingSection({
 		}
 	})()
 	const presetReasons = reportControlsLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
-	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
+	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? UI_STRINGS.reportingSection.enterValidReportAmountReason : undefined
 	const reportGuardMessage =
 		reportControlsLockedReason ??
 		getReportingReportGuardMessage({
@@ -434,7 +469,7 @@ export function ReportingSection({
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	let reportingOpenNotice: string | undefined
 	if (showFullReporting && reportingStatus === 'not-started' && effectiveReportingDetails?.questionOutcome === 'none') {
-		reportingOpenNotice = selectedOutcome === undefined ? 'Reporting is open. Select an outcome side below to enable reporting.' : 'Reporting is open.'
+		reportingOpenNotice = selectedOutcome === undefined ? UI_STRINGS.reportingSection.reportingOpenSelectOutcomeMessage : UI_STRINGS.reportingSection.reportingOpenMessage
 	}
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && reportingStatus !== 'missing' && withdrawableSides.length === 0
@@ -446,11 +481,19 @@ export function ReportingSection({
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<div className='actions'>
 				{showTriggerZoltarForkAction ? (
-					<TransactionActionButton safetyId='reporting.triggerZoltarFork' idleLabel='Trigger Zoltar Fork' pendingLabel='Triggering Zoltar fork...' onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} />
+					<TransactionActionButton
+						safetyId='reporting.triggerZoltarFork'
+						idleLabel={UI_STRINGS.reportingSection.triggerZoltarForkIdleLabel}
+						pendingLabel={UI_STRINGS.reportingSection.triggeringZoltarForkLabel}
+						onClick={onTriggerZoltarFork}
+						pending={triggerZoltarForkPending}
+						tone='primary'
+						availability={resolvedTriggerZoltarForkAvailability}
+					/>
 				) : undefined}
 				{showForkWorkflowAction ? (
 					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
-						Open Fork & Migration
+						{UI_STRINGS.reportingSection.openForkAndMigrationLabel}
 					</button>
 				) : undefined}
 			</div>
@@ -484,20 +527,20 @@ export function ReportingSection({
 			})
 		: undefined
 	const reportingStageBanner = reportingStage?.key === 'escalation-active' ? undefined : reportingStage
-	const reportingWorkflowSummary = reportingStage?.detail ?? 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.'
+	const reportingWorkflowSummary = reportingStage?.detail ?? UI_STRINGS.reportingSection.reportingWorkflowSummary
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
 		<>
 			{showFullReporting ? (
-				<SectionBlock className='reporting-workflow-section' title='Reporting Workflow' density='compact' variant='plain'>
+				<SectionBlock className='reporting-workflow-section' title={UI_STRINGS.reportingSection.reportingWorkflowTitle} density='compact' variant='plain'>
 					<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
 						<div className='workflow-guide-intro'>
 							<p className='detail'>{reportingWorkflowSummary}</p>
 						</div>
 						<div className='workflow-summary-strip-steps'>
-							<span className='current'>1. Outcome</span>
-							<span>2. Lock REP</span>
-							<span>3. Settle</span>
+							<span className='current'>{UI_STRINGS.reportingSection.reportingWorkflowStepOutcomeLabel}</span>
+							<span>{UI_STRINGS.reportingSection.reportingWorkflowStepLockRepLabel}</span>
+							<span>{UI_STRINGS.reportingSection.reportingWorkflowStepSettleLabel}</span>
 						</div>
 					</div>
 				</SectionBlock>
@@ -507,13 +550,13 @@ export function ReportingSection({
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
 						<LookupFieldRow
-							label='Security Pool Address'
+							label={UI_STRINGS.reportingSection.securityPoolAddressLabel}
 							value={reportingForm.securityPoolAddress}
 							onInput={securityPoolAddress => onReportingFormChange({ securityPoolAddress })}
-							placeholder='0x...'
+							placeholder={UI_STRINGS.common.hexValuePlaceholder}
 							action={
 								<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || preOpenLockedReason !== undefined} title={preOpenLockedReason}>
-									{loadingReportingDetails ? <LoadingText>Loading escalation...</LoadingText> : 'Refresh reporting'}
+									{loadingReportingDetails ? <LoadingText>{UI_STRINGS.reportingSection.loadingEscalationLabel}</LoadingText> : UI_STRINGS.reportingSection.loadingReportingLabel}
 								</button>
 							}
 						/>
@@ -523,41 +566,41 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock className='reporting-metrics-section' title='Escalation Metrics' variant='embedded'>
+				<SectionBlock className='reporting-metrics-section' title={UI_STRINGS.reportingSection.reportingMetricsTitle} variant='embedded'>
 					<div className='escalation-metrics'>
-						<MetricField label='Non-decision threshold'>
-							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
+						<MetricField label={UI_STRINGS.reportingSection.nonDecisionThresholdLabel}>
+							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix={UI_STRINGS.common.repLabel} />
 						</MetricField>
-						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
-						<MetricField label='Escalation started'>
+						<MetricField label={UI_STRINGS.reportingSection.timeLeftLabel}>{activeReportingDetails === undefined ? UI_STRINGS.common.metricUnavailablePlaceholder : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
+						<MetricField label={UI_STRINGS.reportingSection.escalationStartedLabel}>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 						</MetricField>
-						<MetricField label='Start Bond'>
-							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix='REP' />
+						<MetricField label={UI_STRINGS.reportingSection.startBondLabel}>
+							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix={UI_STRINGS.common.repLabel} />
 						</MetricField>
 					</div>
 				</SectionBlock>
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock className='reporting-outcome-section' title='Report Outcome' variant='embedded'>
+				<SectionBlock className='reporting-outcome-section' title={UI_STRINGS.reportingSection.reportingOutcomeTitle} variant='embedded'>
 					<div className='escalation-sides-shell'>
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>Total side stake</span>
+								<span className='panel-label'>{UI_STRINGS.reportingSection.totalSideStakeLabel}</span>
 							</div>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>Your side stake</span>
+								<span className='panel-label'>{UI_STRINGS.reportingSection.selectedSideStakeLabel}</span>
 							</div>
 							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
 								<span aria-hidden='true' className='escalation-sides-legend-marker' />
-								<span className='panel-label'>Lead-holding capital</span>
-								<CurrencyValue copyable={false} value={displayBindingCapital} suffix='REP' />
+								<span className='panel-label'>{UI_STRINGS.reportingSection.leadHoldingCapitalLabel}</span>
+								<CurrencyValue copyable={false} value={displayBindingCapital} suffix={UI_STRINGS.common.repLabel} />
 							</div>
 						</div>
-						<div className='escalation-sides' role='radiogroup' aria-label='Report outcome'>
+						<div className='escalation-sides' role='radiogroup' aria-label={UI_STRINGS.reportingSection.reportOutcomeAriaLabel}>
 							{outcomeSides.map((side, index) => (
 								<EscalationSide
 									key={side.key}
@@ -576,12 +619,12 @@ export function ReportingSection({
 					{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
 					{effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
 						<p className='detail'>
-							Available unlocked vault REP for reporting: <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
+							{UI_STRINGS.reportingSection.availableUnlockedVaultRepPrefix} <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix={UI_STRINGS.common.repLabel} />.
 						</p>
 					)}
 					<div className='field'>
 						<label htmlFor='reporting-contribution-amount'>
-							<span>Contribution Amount (REP)</span>
+							<span>{UI_STRINGS.reportingSection.contributionAmountLabel}</span>
 						</label>
 						<div className='field-inline'>
 							<FormInput id='reporting-contribution-amount' className='field-inline-input' value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
@@ -595,10 +638,10 @@ export function ReportingSection({
 								disabled={reportControlsLocked || maxContributionAmount.amount === undefined}
 								title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
 							>
-								Max
+								{UI_STRINGS.common.maxLabel}
 							</button>
 						</div>
-						<p className='field-help'>This is the REP you are willing to lock on the selected side. Larger amounts can change the proposed outcome or extend the escalation timer.</p>
+						<p className='field-help'>{UI_STRINGS.reportingSection.contributionAmountHelpText}</p>
 					</div>
 
 					<div className='actions'>
@@ -612,7 +655,7 @@ export function ReportingSection({
 							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amount === undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 						>
-							Min to take the lead
+							{UI_STRINGS.reportingSection.minToTakeTheLeadLabel}
 						</button>
 						<button
 							className='secondary'
@@ -624,7 +667,7 @@ export function ReportingSection({
 							disabled={reportControlsLocked || maxProfitContribution.amount === undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 						>
-							Max profit
+							{UI_STRINGS.reportingSection.maxProfitLabel}
 						</button>
 					</div>
 
@@ -636,14 +679,16 @@ export function ReportingSection({
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
 						<p className='detail'>
-							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
+							{UI_STRINGS.reportingSection.reportingContributionLockPrefix}
+							<CurrencyValue value={actualReportDepositAmount} suffix={UI_STRINGS.common.repLabel} />
+							{UI_STRINGS.reportingSection.reportingContributionLockSuffix}
 						</p>
 					)}
 					<div className='actions'>
 						<TransactionActionButton
 							safetyId={getReportingActionSafetyId('reportOutcome')}
 							idleLabel={reportButtonLabel}
-							pendingLabel='Submitting report...'
+							pendingLabel={UI_STRINGS.reportingSection.submitReportPendingLabel}
 							onClick={onReportOutcome}
 							pending={reportingActiveAction === 'reportOutcome'}
 							availability={{ disabled: !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
@@ -654,30 +699,30 @@ export function ReportingSection({
 			) : undefined}
 
 			{showSettlementSection ? (
-				<SectionBlock className='reporting-settlement-section' title='Settle Escalation Deposits' variant='embedded'>
+				<SectionBlock className='reporting-settlement-section' title={UI_STRINGS.reportingSection.reportingSettlementTitle} variant='embedded'>
 					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
-					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.' : 'These escalation deposits must migrate in Fork & Migration.'}</p> : undefined}
-					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>The migration window for these unresolved escalation deposits has closed.</p> : undefined}
-					{hasImportedForkedDeposits ? <p className='detail'>This pool also has fork-carried escalation positions. Settle those in Fork & Migration.</p> : undefined}
+					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? UI_STRINGS.reportingSection.continueInForkAndMigrationReason : UI_STRINGS.reportingSection.migrationRequiredReason}</p> : undefined}
+					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>{UI_STRINGS.reportingSection.migrationExpiredReason}</p> : undefined}
+					{hasImportedForkedDeposits ? <p className='detail'>{UI_STRINGS.reportingSection.thisPoolAlsoHasForkCarriedEscalationPositionsDetail}</p> : undefined}
 					{loadingReportingDetails ? (
 						<p className='detail'>
-							<LoadingText>Loading escalation deposits...</LoadingText>
+							<LoadingText>{UI_STRINGS.reportingSection.loadingEscalationDepositsDetail}</LoadingText>
 						</p>
 					) : undefined}
-					{shouldShowWithdrawEmptyState && activeReportingDetails?.settlementState !== 'migration-required' && activeReportingDetails?.settlementState !== 'migration-expired' ? <p className='detail'>Connected wallet has no unsettled escalation deposits.</p> : undefined}
+					{shouldShowWithdrawEmptyState && activeReportingDetails?.settlementState !== 'migration-required' && activeReportingDetails?.settlementState !== 'migration-expired' ? <p className='detail'>{UI_STRINGS.reportingSection.withdrawEmptyStateDetail}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-required' || activeReportingDetails?.settlementState === 'migration-expired'
 						? undefined
 						: withdrawableSides.map(side => {
 								const selectedWithdrawDepositIndexes = selectedWithdrawDepositIndexesByOutcome[side.key]
 								const allWithdrawDepositIndexes = side.userDeposits.map(deposit => deposit.depositIndex)
 								const claimLabel = getWithdrawDepositClaimLabel(effectiveReportingDetails, side.key)
-								const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (!withdrawEscalationEnabled || selectedWithdrawDepositIndexes.length > 0 ? undefined : 'Select at least one deposit to settle or use Settle all for this side.')
+								const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (!withdrawEscalationEnabled || selectedWithdrawDepositIndexes.length > 0 ? undefined : UI_STRINGS.reportingSection.settleAllForThisSideReason)
 								const isPendingSide = withdrawActionPending && pendingWithdrawOutcome === side.key
 
 								return (
 									<SectionBlock key={side.key} density='compact' headingLevel={4} title={side.label} variant='embedded'>
 										<div className='field'>
-											<span>Choose deposits to settle</span>
+											<span>{UI_STRINGS.reportingSection.chooseDepositsToSettleLabel}</span>
 											<EscalationDepositSelectionList
 												disabled={withdrawControlsLocked || withdrawActionPending}
 												items={side.userDeposits.map(deposit => {
@@ -686,18 +731,18 @@ export function ReportingSection({
 														deposit,
 														details: [
 															<>
-																Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+																{UI_STRINGS.reportingSection.initiallyDepositedLabel} <CurrencyValue value={deposit.amount} suffix={UI_STRINGS.common.repLabel} />
 															</>,
 															claimAmount === undefined ? (
-																'Worth after finalization: Pending finalization'
+																UI_STRINGS.reportingSection.worthAfterFinalizationPendingLabel
 															) : (
 																<>
-																	Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
+																	{UI_STRINGS.reportingSection.worthNowLabel} <CurrencyValue value={claimAmount} suffix={UI_STRINGS.common.repLabel} />
 																</>
 															),
-															`Current claim type: ${claimLabel ?? 'Pending finalization'}`,
+															`${UI_STRINGS.reportingSection.currentClaimTypePrefix} ${claimLabel ?? UI_STRINGS.reportingSection.pendingFinalizationLabel}`,
 															<>
-																Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+																{UI_STRINGS.reportingSection.entryDepthLabel} <CurrencyValue value={deposit.cumulativeAmount} suffix={UI_STRINGS.common.repLabel} />
 															</>,
 														],
 													}
@@ -717,8 +762,8 @@ export function ReportingSection({
 										<div className='actions'>
 											<TransactionActionButton
 												safetyId={getReportingActionSafetyId('withdrawEscalation')}
-												idleLabel={getWithdrawSelectedButtonLabel(side.label)}
-												pendingLabel={getWithdrawPendingLabel(side.label)}
+												idleLabel={UI_STRINGS.reportingSection.settleSelectedDepositsLabel(side.label)}
+												pendingLabel={UI_STRINGS.reportingSection.settlingDepositsPendingLabel(side.label)}
 												onClick={() => handleWithdrawEscalation(side.key, selectedWithdrawDepositIndexes)}
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
@@ -727,8 +772,8 @@ export function ReportingSection({
 											/>
 											<TransactionActionButton
 												safetyId={getReportingActionSafetyId('withdrawEscalation')}
-												idleLabel={getWithdrawAllButtonLabel(side.label)}
-												pendingLabel={getWithdrawPendingLabel(side.label)}
+												idleLabel={UI_STRINGS.reportingSection.settleAllDepositsLabel(side.label)}
+												pendingLabel={UI_STRINGS.reportingSection.settlingDepositsPendingLabel(side.label)}
 												onClick={() => handleWithdrawEscalation(side.key, allWithdrawDepositIndexes)}
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
@@ -748,7 +793,7 @@ export function ReportingSection({
 	)
 	if (embedInCard) return sections
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title='Reporting & Escalation'>
+		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRINGS.reportingSection.reportingWorkflowCardTitle}>
 			{sections}
 		</RouteWorkflowPanel>
 	)

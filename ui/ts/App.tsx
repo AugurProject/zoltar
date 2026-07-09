@@ -40,6 +40,7 @@ import { ActionSafetyProvider } from './lib/actionSafety/runtime.js'
 import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
 import { getUniversePresentation } from './lib/userCopy.js'
+import { UI_STRINGS } from './lib/uiStrings.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
 import type { ReportingFormState } from './types/app.js'
@@ -706,18 +707,18 @@ export function App() {
 	if (route === 'zoltar') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel='Market views'
+				ariaLabel={UI_STRINGS.app.zoltar.subNavigationAriaLabel}
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: 'Questions & Markets', value: 'questions' },
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Question', value: 'create' },
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: 'Fork Oracle', value: 'fork' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: UI_STRINGS.app.zoltar.questionsAndMarketsLabel, value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRINGS.app.zoltar.createQuestionLabel, value: 'create' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: UI_STRINGS.app.zoltar.forkOracleLabel, value: 'fork' },
 					{
-						label: 'Migrate REP',
+						label: UI_STRINGS.app.zoltar.migrateRepLabel,
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: 'Fork Oracle before migrating REP.' }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: UI_STRINGS.app.zoltar.forkOracleRequiredForRepMigrationReason }),
 					},
 				]}
 			/>
@@ -725,26 +726,26 @@ export function App() {
 	} else if (route === 'security-pools') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel='Security Pools views'
+				ariaLabel={UI_STRINGS.app.securityPools.subNavigationAriaLabel}
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse Pools', value: 'browse' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Pool', value: 'create' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Manage Pool', value: 'operate' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: UI_STRINGS.app.securityPools.browsePoolsLabel, value: 'browse' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRINGS.app.securityPools.createPoolLabel, value: 'create' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: UI_STRINGS.app.securityPools.managePoolLabel, value: 'operate' },
 				]}
 			/>
 		)
 	} else if (route === 'open-oracle') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel='Oracle report views'
+				ariaLabel={UI_STRINGS.app.openOracle.subNavigationAriaLabel}
 				value={activeOpenOracleView}
 				onChange={view => setOpenOracleView(view)}
 				options={[
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Report', value: 'create' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Report Details', value: 'selected-report' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: UI_STRINGS.app.openOracle.browseLabel, value: 'browse' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRINGS.app.openOracle.createReportLabel, value: 'create' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: UI_STRINGS.app.openOracle.reportDetailsLabel, value: 'selected-report' },
 				]}
 			/>
 		)

@@ -19,6 +19,7 @@ import { tryParseBigIntListInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import {
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
@@ -132,20 +133,20 @@ export function TradingSection({
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = (() => {
-		if (!hasSelectedPool) return 'Load a pool before minting complete sets.'
-		if (accountState.address === undefined) return 'Connect a wallet before minting complete sets.'
+		if (!hasSelectedPool) return UI_STRINGS.tradingSection.loadPoolToMintReason
+		if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToMintReason
 
 		return (() => {
-			if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
-			if (selectedPool?.questionOutcome !== 'none') return 'This market has already finalized.'
-			if (remainingMintCapacity === undefined) return 'Loading mint capacity.'
+			if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToMintReason
+			if (selectedPool?.questionOutcome !== 'none') return UI_STRINGS.tradingSection.marketAlreadyFinalizedReason
+			if (remainingMintCapacity === undefined) return UI_STRINGS.tradingSection.loadingMintCapacityReason
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
 					if (hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
 
-					return 'No mint capacity remaining.'
+					return UI_STRINGS.tradingSection.noMintCapacityRemainingReason
 				}
 
 				return undefined
@@ -153,15 +154,15 @@ export function TradingSection({
 		})()
 	})()
 	const redeemCompleteSetsLauncherBlocker = (() => {
-		if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
-		if (accountState.address === undefined) return 'Connect a wallet before redeeming complete sets.'
+		if (!hasSelectedPool) return UI_STRINGS.tradingSection.loadPoolToRedeemCompleteSetsReason
+		if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToRedeemCompleteSetsReason
 
 		return (() => {
-			if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming complete sets.'
-			if (loadingTradingDetails) return 'Loading wallet share balances.'
+			if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToRedeemCompleteSetsReason
+			if (loadingTradingDetails) return UI_STRINGS.tradingSection.loadWalletShareBalancesReason
 
 			return (() => {
-				if (maxRedeemableCompleteSets === undefined) return 'Loading wallet share balances.'
+				if (maxRedeemableCompleteSets === undefined) return UI_STRINGS.tradingSection.loadWalletShareBalancesReason
 				if (maxRedeemableCompleteSets === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 				return undefined
@@ -169,20 +170,20 @@ export function TradingSection({
 		})()
 	})()
 	const migrateSharesLauncherBlocker = (() => {
-		if (!hasSelectedPool) return 'Load a pool before migrating shares.'
-		if (accountState.address === undefined) return 'Connect a wallet before migrating shares.'
+		if (!hasSelectedPool) return UI_STRINGS.tradingSection.loadPoolToMigrateSharesReason
+		if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToMigrateSharesReason
 
 		return (() => {
-			if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
-			if (loadingTradingForkUniverse) return 'Loading fork target universes.'
+			if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToMigrateSharesReason
+			if (loadingTradingForkUniverse) return UI_STRINGS.tradingSection.loadingForkTargetUniversesReason
 
 			return (() => {
-				if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
-				if (loadingTradingDetails) return 'Loading wallet share balances.'
+				if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return UI_STRINGS.tradingSection.refreshForkTargetUniversesReason
+				if (loadingTradingDetails) return UI_STRINGS.tradingSection.loadWalletShareBalancesReason
 
 				return (() => {
-					if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances.'
-					if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(tradingForm.selectedShareOutcome)} shares available to migrate.`
+					if (selectedOutcomeBalance === undefined) return UI_STRINGS.tradingSection.loadWalletShareBalancesReason
+					if (selectedOutcomeBalance === 0n) return UI_STRINGS.tradingSection.noSharesAvailableToMigrateReason(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))
 
 					return undefined
 				})()
@@ -190,18 +191,18 @@ export function TradingSection({
 		})()
 	})()
 	const redeemSharesLauncherBlocker = !hasSelectedPool
-		? 'Load a pool before redeeming shares.'
+		? UI_STRINGS.tradingSection.loadPoolToRedeemSharesReason
 		: (() => {
-				if (accountState.address === undefined) return 'Connect a wallet before redeeming shares.'
-				if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
-				if (selectedPool?.questionOutcome === 'none') return 'Wait for the selected pool to resolve before redeeming shares.'
+				if (accountState.address === undefined) return UI_STRINGS.tradingSection.connectWalletToRedeemSharesReason
+				if (!isMainnet) return UI_STRINGS.tradingSection.switchToMainnetToRedeemSharesReason
+				if (selectedPool?.questionOutcome === 'none') return UI_STRINGS.tradingSection.waitForPoolToResolveReason
 
 				return undefined
 			})()
-	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : 'Mint complete sets is not available right now.')
-	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : 'Redeem complete sets is not available right now.')
-	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : 'Migrate forked shares is not available right now.')
-	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : 'Redeem resolved shares is not available right now.')
+	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : UI_STRINGS.tradingSection.actionUnavailableReason(UI_STRINGS.tradingSection.mintCompleteSetsActionLabel))
+	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : UI_STRINGS.tradingSection.actionUnavailableReason(UI_STRINGS.tradingSection.redeemCompleteSetsActionLabel))
+	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : UI_STRINGS.tradingSection.actionUnavailableReason(UI_STRINGS.tradingSection.migrateForkedSharesActionLabel))
+	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : UI_STRINGS.tradingSection.actionUnavailableReason(UI_STRINGS.tradingSection.redeemSharesActionLabel))
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -236,42 +237,42 @@ export function TradingSection({
 	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
 	const tradingLaunchers: ReadinessAction[] = [
 		{
-			actionLabel: 'Mint complete sets',
-			description: 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this pool.',
+			actionLabel: UI_STRINGS.tradingSection.mintCompleteSetsActionLabel,
+			description: UI_STRINGS.tradingSection.mintCompleteSetsDescription,
 			key: 'mint-complete-sets',
 			readiness: mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('createCompleteSet'),
-			title: 'Mint Complete Sets',
+			title: UI_STRINGS.tradingSection.mintCompleteSetsTitle,
 			...(mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
 			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Redeem complete sets',
-			description: 'Burn matching Yes, No, and Invalid shares to recover collateral from the current pool.',
+			actionLabel: UI_STRINGS.tradingSection.redeemCompleteSetsActionLabel,
+			description: UI_STRINGS.tradingSection.redeemCompleteSetsDescription,
 			key: 'redeem-complete-sets',
 			readiness: redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('redeemCompleteSet'),
-			title: 'Redeem Complete Sets',
+			title: UI_STRINGS.tradingSection.redeemCompleteSetsTitle,
 			...(redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
 			...(effectiveRedeemCompleteSetsLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemCompleteSetsLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Migrate forked shares',
-			description: 'Burn parent-pool shares for one outcome and recreate them across selected child universes.',
+			actionLabel: UI_STRINGS.tradingSection.migrateForkedSharesActionLabel,
+			description: UI_STRINGS.tradingSection.migrateForkedSharesDescription,
 			key: 'migrate-shares',
 			readiness: migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('migrateShares'),
-			title: 'Migrate Forked Shares',
+			title: UI_STRINGS.tradingSection.migrateForkedSharesTitle,
 			...(migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
 			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Redeem resolved shares',
-			description: 'Redeem final winning shares after the selected pool fully resolves.',
+			actionLabel: UI_STRINGS.tradingSection.redeemSharesActionLabel,
+			description: UI_STRINGS.tradingSection.redeemSharesDescription,
 			key: 'redeem-shares',
 			readiness: redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			safetyId: getTradingActionSafetyId('redeemShares'),
-			title: 'Redeem Resolved Shares',
+			title: UI_STRINGS.tradingSection.redeemSharesTitle,
 			...(redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
 		},
@@ -281,40 +282,40 @@ export function TradingSection({
 			{!showSecurityPoolAddressInput ? undefined : (
 				<SectionBlock density='compact'>
 					<label className='field'>
-						<span>Security Pool Address</span>
-						<FormInput value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
+						<span>{UI_STRINGS.tradingSection.securityPoolAddressLabel}</span>
+						<FormInput value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder={UI_STRINGS.common.hexValuePlaceholder} />
 					</label>
 				</SectionBlock>
 			)}
 
 			{selectedPool === undefined ? undefined : (
-				<SectionBlock title='Your Holdings'>
+				<SectionBlock title={UI_STRINGS.tradingSection.yourHoldingsTitle}>
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
-							<span>Redeemable Complete Sets</span>
+							<span>{UI_STRINGS.tradingSection.redeemableCompleteSetsLabel}</span>
 							<strong>{renderShareMetricValue(displayMaxRedeemableCompleteSets)}</strong>
-							<p className='detail'>Limited by your smallest Yes, No, or Invalid balance.</p>
+							<p className='detail'>{UI_STRINGS.tradingSection.redeemableCompleteSetsDetail}</p>
 						</div>
 						<div className='trading-holdings-layout'>
 							<RankedBarList
 								className='trading-share-distribution'
-								emptyMessage='Wallet balances are not loaded yet.'
+								emptyMessage={UI_STRINGS.tradingSection.shareBalancesNotLoadedMessage}
 								items={[
 									{
 										key: 'yes',
-										label: 'Yes',
+										label: UI_STRINGS.tradingSection.shareOutcomeYesLabel,
 										valueText: renderShareMetricValue(displayShareBalances?.yes),
 										...(displayShareBalances?.yes === undefined ? {} : { value: displayShareBalances.yes }),
 									},
 									{
 										key: 'no',
-										label: 'No',
+										label: UI_STRINGS.tradingSection.shareOutcomeNoLabel,
 										valueText: renderShareMetricValue(displayShareBalances?.no),
 										...(displayShareBalances?.no === undefined ? {} : { value: displayShareBalances.no }),
 									},
 									{
 										key: 'invalid',
-										label: 'Invalid',
+										label: UI_STRINGS.question.invalidOutcomeLabel,
 										valueText: renderShareMetricValue(displayShareBalances?.invalid),
 										...(displayShareBalances?.invalid === undefined ? {} : { value: displayShareBalances.invalid }),
 									},
@@ -322,19 +323,19 @@ export function TradingSection({
 							/>
 							<div className='trading-share-callouts'>
 								<div>
-									<span>Yes</span>
+									<span>{UI_STRINGS.tradingSection.shareOutcomeYesLabel}</span>
 									<strong>{renderShareMetricValue(displayShareBalances?.yes)}</strong>
 								</div>
 								<div>
-									<span>No</span>
+									<span>{UI_STRINGS.tradingSection.shareOutcomeNoLabel}</span>
 									<strong>{renderShareMetricValue(displayShareBalances?.no)}</strong>
 								</div>
 								<div>
-									<span>Invalid</span>
+									<span>{UI_STRINGS.question.invalidOutcomeLabel}</span>
 									<strong>{renderShareMetricValue(displayShareBalances?.invalid)}</strong>
 								</div>
 								<div className='trading-share-callouts-total'>
-									<span>Total Across Outcomes</span>
+									<span>{UI_STRINGS.tradingSection.totalAcrossOutcomesLabel}</span>
 									<strong>{renderShareMetricValue(totalShareCount)}</strong>
 								</div>
 							</div>
@@ -343,7 +344,7 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			<SectionBlock title='Shares'>
+			<SectionBlock title={UI_STRINGS.tradingSection.sharesSectionTitle}>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />
@@ -353,27 +354,27 @@ export function TradingSection({
 
 			<ErrorNotice message={tradingError} />
 
-			<OperationModal description='Review available capacity and confirm the complete-set mint amount before submitting.' isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title='Mint Complete Sets'>
+			<OperationModal description={UI_STRINGS.tradingSection.mintCompleteSetsModalDescription} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={UI_STRINGS.tradingSection.mintCompleteSetsTitle}>
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
-						<MetricField label='Bond Allowance In Use'>
-							<CurrencyValue value={selectedPool.totalSecurityBondAllowance} suffix='ETH' />
+						<MetricField label={UI_STRINGS.tradingSection.bondAllowanceInUseLabel}>
+							<CurrencyValue value={selectedPool.totalSecurityBondAllowance} suffix={UI_STRINGS.common.ethSuffix} />
 						</MetricField>
-						<MetricField label='REP Backing'>
-							<CurrencyValue value={selectedPool.totalRepDeposit} suffix='REP' />
+						<MetricField label={UI_STRINGS.tradingSection.repBackingLabel}>
+							<CurrencyValue value={selectedPool.totalRepDeposit} suffix={UI_STRINGS.common.repLabel} />
 						</MetricField>
 					</MetricGrid>
 				)}
 				<label className='field'>
-					<span>Mint Complete Sets Amount</span>
+					<span>{UI_STRINGS.tradingSection.mintCompleteSetsAmountLabel}</span>
 					<FormInput value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
 				</label>
 				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId={getTradingActionSafetyId('createCompleteSet')}
-						idleLabel='Mint Complete Sets'
-						pendingLabel='Minting complete sets...'
+						idleLabel={UI_STRINGS.tradingSection.mintCompleteSetsTitle}
+						pendingLabel={UI_STRINGS.tradingSection.mintCompleteSetsPendingLabel}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
 						availability={{ disabled: !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }}
@@ -381,9 +382,9 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description='Redeeming complete sets requires matching yes, no, and invalid shares. Use the redeemable complete sets amount as the ceiling.' isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title='Redeem Complete Sets'>
+			<OperationModal description={UI_STRINGS.tradingSection.redeemCompleteSetsModalDescription} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={UI_STRINGS.tradingSection.redeemCompleteSetsTitle}>
 				<label className='field'>
-					<span>Redeem Complete Sets Amount</span>
+					<span>{UI_STRINGS.tradingSection.completeSetRedeemAmountLabel}</span>
 					<div className='field-inline'>
 						<FormInput className='field-inline-input' value={tradingForm.redeemAmount} inputMode='decimal' onInput={event => onTradingFormChange({ redeemAmount: event.currentTarget.value })} />
 						<button
@@ -395,7 +396,7 @@ export function TradingSection({
 							}}
 							disabled={displayMaxRedeemableCompleteSets === undefined || displayMaxRedeemableCompleteSets <= 0n}
 						>
-							Max
+							{UI_STRINGS.common.maxLabel}
 						</button>
 					</div>
 				</label>
@@ -403,8 +404,8 @@ export function TradingSection({
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId={getTradingActionSafetyId('redeemCompleteSet')}
-						idleLabel='Redeem Complete Sets'
-						pendingLabel='Redeeming complete sets...'
+						idleLabel={UI_STRINGS.tradingSection.redeemCompleteSetsTitle}
+						pendingLabel={UI_STRINGS.tradingSection.redeemCompleteSetsPendingLabel}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
 						tone='secondary'
@@ -413,14 +414,9 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal
-				description='Migrating burns the selected parent-pool share balance and recreates it across the chosen child universes. Review the source outcome and target universes carefully before submitting.'
-				isOpen={activeModal === 'migrate-shares'}
-				onClose={() => setActiveModal(undefined)}
-				title='Migrate Forked Shares'
-			>
+			<OperationModal description={UI_STRINGS.tradingSection.migrateForkedSharesModalDescription} isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title={UI_STRINGS.tradingSection.migrateForkedSharesTitle}>
 				<label className='field'>
-					<span>Share Outcome To Migrate</span>
+					<span>{UI_STRINGS.tradingSection.shareOutcomeToMigrateLabel}</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
 				</label>
 				<ShareMigrationTargetsSection
@@ -436,8 +432,8 @@ export function TradingSection({
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId={getTradingActionSafetyId('migrateShares')}
-						idleLabel='Migrate Shares'
-						pendingLabel='Migrating shares...'
+						idleLabel={UI_STRINGS.tradingSection.migrateSharesIdleLabel}
+						pendingLabel={UI_STRINGS.tradingSection.migrateSharesPendingLabel}
 						onClick={onMigrateShares}
 						pending={tradingActiveAction === 'migrateShares'}
 						tone='secondary'
@@ -446,13 +442,13 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description='Redeem finalized winning shares once the selected pool has resolved.' isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title='Redeem Resolved Shares'>
+			<OperationModal description={UI_STRINGS.tradingSection.redeemResolvedSharesModalDescription} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={UI_STRINGS.tradingSection.redeemSharesTitle}>
 				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
 						safetyId={getTradingActionSafetyId('redeemShares')}
-						idleLabel='Redeem Shares'
-						pendingLabel='Redeeming shares...'
+						idleLabel={UI_STRINGS.tradingSection.redeemSharesIdleLabel}
+						pendingLabel={UI_STRINGS.tradingSection.redeemSharesPendingLabel}
 						onClick={onRedeemShares}
 						pending={tradingActiveAction === 'redeemShares'}
 						tone='secondary'
@@ -464,7 +460,7 @@ export function TradingSection({
 	)
 	if (embedInCard) return sections
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title='Shares'>
+		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRINGS.tradingSection.sharesSectionTitle}>
 			{sections}
 		</RouteWorkflowPanel>
 	)

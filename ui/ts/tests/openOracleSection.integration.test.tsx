@@ -274,6 +274,7 @@ describe.serial('OpenOracleSection integration', () => {
 			const createdReport = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 			expect(createdReport.reportId).toBe(reportId)
 		})
+		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 
 		await clickElement(within(document.body).getByRole('tab', { name: 'Browse' }))
 		await waitFor(() => {
@@ -282,6 +283,18 @@ describe.serial('OpenOracleSection integration', () => {
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
 		await waitFor(() => getSectionByTitle('Report Details'))
+		let economicsSummary: HTMLElement | undefined
+		await waitFor(() => {
+			const summary = Array.from(document.body.querySelectorAll('summary')).find(summary => summary.textContent?.trim() === 'Economics')
+			if (!(summary instanceof HTMLElement)) throw new Error('Expected economics accordion summary')
+			economicsSummary = summary
+		})
+		if (economicsSummary === undefined) throw new Error('Expected economics accordion summary')
+		await clickElement(economicsSummary)
+		await waitFor(() => {
+			expect(document.body.textContent?.includes(`Current Amount 1 (${reportDetails.token1Symbol})`)).toBe(true)
+			expect(document.body.textContent?.includes(`Current Amount 2 (${reportDetails.token2Symbol})`)).toBe(true)
+		})
 		await waitFor(() => {
 			expect(within(document.body).getByRole('button', { name: 'Initial Report' })).not.toBeNull()
 		})
@@ -295,7 +308,6 @@ describe.serial('OpenOracleSection integration', () => {
 		expect(within(initialReportDialog).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
 		await setInputValue(/^Price \(/, initialReportPrice.toString())
 
-		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const openOracleAddress = getOpenOracleAddress()
 		const expectedAmount2 = reportDetails.exactToken1Report / initialReportPrice
 

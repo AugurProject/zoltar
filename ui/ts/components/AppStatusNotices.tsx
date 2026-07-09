@@ -1,5 +1,6 @@
 import { NoticeStack } from './NoticeStack.js'
 import { TimestampValue } from './TimestampValue.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import type { NoticeItem } from '../types/components.js'
@@ -17,75 +18,76 @@ type AppStatusNoticesProps = {
 }
 
 function formatRpcSourceLabel(source: ReadBackendStatus['rpcSource']) {
-	if (source === 'url') return 'page URL'
-	if (source === 'localStorage') return 'local storage'
-	if (source === 'environment') return 'environment'
-	if (source === 'global') return 'global runtime'
-	if (source === 'override') return 'explicit override'
-	return 'default'
+	if (source === 'url') return UI_STRINGS.appStatusNotices.pageUrlRpcSourceLabel
+	if (source === 'localStorage') return UI_STRINGS.appStatusNotices.localStorageRpcSourceLabel
+	if (source === 'environment') return UI_STRINGS.appStatusNotices.environmentRpcSourceLabel
+	if (source === 'global') return UI_STRINGS.appStatusNotices.globalRuntimeRpcSourceLabel
+	if (source === 'override') return UI_STRINGS.appStatusNotices.explicitOverrideRpcSourceLabel
+	return UI_STRINGS.appStatusNotices.defaultRpcSourceLabel
 }
 
 function getConfiguredRpcLabel(readBackendStatus: ReadBackendStatus) {
-	return readBackendStatus.transportMode === 'provider' ? 'Configured fallback read RPC' : 'Active read RPC'
+	return readBackendStatus.transportMode === 'provider' ? UI_STRINGS.appStatusNotices.configuredFallbackReadRpcLabel : UI_STRINGS.appStatusNotices.activeReadRpcLabel
 }
 
 function getReadBackendNoticeDetail(readBackendMessage: string) {
-	if (readBackendMessage.includes('stale')) return `${readBackendMessage} Displayed onchain state may be behind the latest chain state. Refresh or switch RPC before acting on balances, settlement, or liquidation.`
-	return `${readBackendMessage} Displayed onchain state may not match the network this interface writes to.`
+	if (readBackendMessage.includes('stale')) return `${readBackendMessage} ${UI_STRINGS.appStatusNotices.staleReadBackendSuffix}`
+	return `${readBackendMessage} ${UI_STRINGS.appStatusNotices.readBackendMismatchSuffix}`
 }
 
 function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined): NoticeItem | undefined {
 	if (readBackendStatus === undefined) return undefined
 	if (readBackendStatus.rejectedRpcOverride !== undefined) {
 		const rejectedOverride = readBackendStatus.rejectedRpcOverride
+		const configuredRpcLabel = getConfiguredRpcLabel(readBackendStatus)
 		return {
-			detail: `Ignored ${formatRpcSourceLabel(rejectedOverride.source)} RPC override (${rejectedOverride.url}): ${rejectedOverride.reason} ${getConfiguredRpcLabel(readBackendStatus)} is ${readBackendStatus.rpcUrl}.`,
+			detail: UI_STRINGS.appStatusNotices.readRpcOverrideIgnoredDetail(formatRpcSourceLabel(rejectedOverride.source), rejectedOverride.url, rejectedOverride.reason, configuredRpcLabel, readBackendStatus.rpcUrl),
 			id: 'read-rpc-override-ignored',
 			tone: 'warning',
-			title: 'Read RPC override ignored',
+			title: UI_STRINGS.appStatusNotices.ignoredReadRpcOverrideTitle,
 		}
 	}
 	if (readBackendStatus.rpcSource === 'url')
 		return {
-			detail: `${getConfiguredRpcLabel(readBackendStatus)} came from the page URL: ${readBackendStatus.rpcUrl}. Verify this endpoint before relying on displayed onchain state.`,
+			detail: UI_STRINGS.appStatusNotices.readRpcOverrideFromUrlDetail(getConfiguredRpcLabel(readBackendStatus), readBackendStatus.rpcUrl),
 			id: 'url-read-rpc-override',
 			tone: 'warning',
-			title: 'URL-provided read RPC',
+			title: UI_STRINGS.appStatusNotices.urlProvidedReadRpcTitle,
 		}
 	if (readBackendStatus.rpcSource === 'default') return undefined
 	return {
-		detail: `${getConfiguredRpcLabel(readBackendStatus)} came from ${formatRpcSourceLabel(readBackendStatus.rpcSource)}: ${readBackendStatus.rpcUrl}. Verify this endpoint before relying on displayed onchain state.`,
+		detail: UI_STRINGS.appStatusNotices.readRpcOverrideActiveDetail(getConfiguredRpcLabel(readBackendStatus), formatRpcSourceLabel(readBackendStatus.rpcSource), readBackendStatus.rpcUrl),
 		id: 'read-rpc-override-active',
 		tone: 'pending',
-		title: 'Read RPC override active',
+		title: UI_STRINGS.appStatusNotices.readRpcOverrideActiveTitle,
 	}
 }
 
 export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, wrongNetworkMessage, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
-	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: 'Simulation bootstrap failed' })
+	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: UI_STRINGS.appStatusNotices.simulationBootstrapFailedTitle })
 	if (showZoltarUniverseForkedWarning && zoltarUniverse !== undefined)
 		items.push({
 			detail: (
 				<>
-					{formatUniverseLabel(zoltarUniverse.universeId)} has forked on <TimestampValue timestamp={zoltarUniverse.forkTime} />.
+					{formatUniverseLabel(zoltarUniverse.universeId)} {UI_STRINGS.appStatusNotices.universeForkedOnDetailSuffix} <TimestampValue timestamp={zoltarUniverse.forkTime} />.
 				</>
 			),
 			id: 'zoltar-forked',
 			tone: 'blocking',
-			title: 'Universe forked',
+			title: UI_STRINGS.appStatusNotices.universeForkedTitle,
 		})
-	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: 'Finish setup in Deploy before using the app.', id: 'setup-incomplete', tone: 'blocking', title: 'Setup incomplete' })
+	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: UI_STRINGS.appStatusNotices.finishSetupBeforeUsingAppDetail, id: 'setup-incomplete', tone: 'blocking', title: UI_STRINGS.appStatusNotices.setupIncompleteTitle })
 	if (wrongNetworkMessage !== undefined)
 		items.push({
-			detail: `This interface only enables contract interactions on Ethereum mainnet. ${wrongNetworkMessage === 'Switch to Ethereum mainnet.' ? 'Switch the connected wallet network to Ethereum mainnet to continue.' : wrongNetworkMessage} Read-only contract data may still be visible, but transaction controls remain disabled until the wallet is back on Ethereum mainnet.`,
+			detail: `${UI_STRINGS.appStatusNotices.wrongNetworkDetailPrefix} ${wrongNetworkMessage === UI_STRINGS.userCopy.wallet.switchToMainnetDetail ? UI_STRINGS.appStatusNotices.wrongNetworkMainnetInstruction : wrongNetworkMessage} ${UI_STRINGS.appStatusNotices.wrongNetworkReadOnlySuffix}`,
 			id: 'wrong-network',
 			tone: 'blocking',
-			title: 'Wrong network',
+			title: UI_STRINGS.appStatusNotices.wrongNetworkTitle,
 		})
-	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: 'Read RPC mismatch' })
-	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: 'Error' })
+	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: UI_STRINGS.appStatusNotices.readRpcMismatchTitle })
+	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: UI_STRINGS.appStatusNotices.appErrorTitle })
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)
 
 	return <NoticeStack items={items} />

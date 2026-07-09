@@ -4,6 +4,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
 import { getDeploymentStepSafetyId } from '../lib/actionSafety/ids.js'
+import { UI_STRINGS } from '../lib/uiStrings.js'
 
 type StepStatus = {
 	badgeTone: BadgeTone
@@ -16,47 +17,47 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
-			detail: 'Code found at expected address.',
-			label: 'Deployed',
-			buttonLabel: 'Deployed',
+			detail: UI_STRINGS.deploymentSection.codeFoundAtExpectedAddressDetail,
+			label: UI_STRINGS.deploymentSection.deployedBadgeLabel,
+			buttonLabel: UI_STRINGS.deploymentSection.deployedBadgeLabel,
 		}
 
 	if (isBusy)
 		return {
 			badgeTone: 'pending',
-			detail: 'Deployment in progress.',
-			label: 'Deploying...',
-			buttonLabel: 'Deploying...',
+			detail: UI_STRINGS.deploymentSection.deployingDetail,
+			label: UI_STRINGS.deploymentSection.deployingBadgeLabel,
+			buttonLabel: UI_STRINGS.deploymentSection.deployingPendingLabel,
 		}
 
 	if (prerequisiteLabel === undefined) {
 		if (accountAddress === undefined)
 			return {
 				badgeTone: 'pending',
-				detail: 'Connect wallet to continue.',
-				label: 'Not Deployed',
-				buttonLabel: 'Deploy',
+				detail: UI_STRINGS.deploymentSection.connectWalletToContinueDetail,
+				label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
+				buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
 			}
 		if (!isMainnet)
 			return {
 				badgeTone: 'pending',
-				detail: 'Switch to Ethereum mainnet.',
-				label: 'Not Deployed',
-				buttonLabel: 'Deploy',
+				detail: UI_STRINGS.deploymentSection.ethereumMainnetRequiredDetail,
+				label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
+				buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
 			}
 		return {
 			badgeTone: 'pending',
-			detail: 'Can deploy now.',
-			label: 'Not Deployed',
-			buttonLabel: 'Deploy',
+			detail: UI_STRINGS.deploymentSection.canDeployNowDetail,
+			label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
+			buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
 		}
 	}
 
 	return {
 		badgeTone: 'blocked',
-		detail: `Waiting for ${prerequisiteLabel}.`,
-		label: 'Waiting',
-		buttonLabel: 'Deploy',
+		detail: UI_STRINGS.deploymentSection.waitingForPrerequisiteDetail(prerequisiteLabel),
+		label: UI_STRINGS.deploymentSection.waitingBadgeLabel,
+		buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
 	}
 }
 
@@ -87,7 +88,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 								<p className='address'>{step.address}</p>
 								<p className='detail'>{stepStatus.detail}</p>
 							</div>
-							<TransactionActionButton safetyId={getDeploymentStepSafetyId(step.id)} idleLabel={stepStatus.buttonLabel} pendingLabel='Deploying...' onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							<TransactionActionButton safetyId={getDeploymentStepSafetyId(step.id)} idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRINGS.deploymentSection.deployingPendingLabel} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>
 					)
 				})}
