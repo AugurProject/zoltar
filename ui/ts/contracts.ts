@@ -1013,7 +1013,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const migrationEndsAt = universeForkTime === 0n ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
-		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await readRequiredMulticall(client, [
+		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded, underfundedThreshold, underfundedWinningEth, storedClearingTick] = await readRequiredMulticall(client, [
 			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'computeClearing',
@@ -1062,18 +1062,39 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 				address: truthAuctionAddress,
 				args: [],
 			},
+			{
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'underfundedThreshold',
+				address: truthAuctionAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'underfundedWinningEth',
+				address: truthAuctionAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'clearingTick',
+				address: truthAuctionAddress,
+				args: [],
+			},
 		])
 		const computeClearingTuple: AuctionClearingTuple = computeClearingResult
-		const [hitCap, clearingTick, accumulatedEth, ethAtClearingTick] = computeClearingTuple
-		const clearingPrice =
-			clearingTick === 0n && accumulatedEth === 0n
-				? undefined
-				: await client.readContract({
-						abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-						functionName: 'tickToPrice',
-						address: truthAuctionAddress,
-						args: [clearingTick],
-					})
+		const [hitCap, computedClearingTick, accumulatedEth, ethAtClearingTick] = computeClearingTuple
+		const clearingTick = finalized ? storedClearingTick : computedClearingTick
+		let clearingPrice: bigint | undefined
+		if (underfunded) {
+			clearingPrice = underfundedWinningEth > 0n ? underfundedThreshold : undefined
+		} else if (!(clearingTick === 0n && accumulatedEth === 0n)) {
+			clearingPrice = await client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'tickToPrice',
+				address: truthAuctionAddress,
+				args: [clearingTick],
+			})
+		}
 		truthAuction = {
 			accumulatedEth,
 			auctionEndsAt: truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH,
@@ -1090,6 +1111,8 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			timeRemaining: finalized || block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
 			totalRepPurchased,
 			underfunded,
+			underfundedThreshold: underfunded ? underfundedThreshold : undefined,
+			underfundedWinningEth,
 		}
 	}
 	return {

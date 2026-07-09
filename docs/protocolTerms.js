@@ -194,7 +194,8 @@ window.protocolTermDefinitions = Object.freeze({
 	'tick index': 'The scalar answer position used to compute payout numerators.',
 	'terminal payoff': 'The final payoff used by the simplified attack model.',
 	'truth auction': 'A child-pool auction that sells child-universe REP for ETH to repair missing collateral. It repairs solvency instead of choosing the truthful branch.',
-	underfundedThreshold: 'The ETH/REP cutoff in an underfunded auction. Bids below it are refunded; qualifying bids buy only their limit-priced REP demand.',
+	underfundedThreshold:
+		'The synthetic ETH/REP execution price for a non-empty finalized winning prefix in an underfunded auction. When underfundedWinningEth is positive, the winner set is fixed by the stored clearingTick boundary and those winning bids share the full REP sale cap pro rata by winning ETH. If no winning prefix exists, the contract stores type(uint256).max, totalRepPurchased stays zero, and every bid refunds.',
 	'underfunded remainder': 'The remaining obligation after available proceeds or collateral are insufficient.',
 	underwriting: 'Supplying REP-backed capacity to support market obligations and security-pool operations.',
 	'unresolved escalation': 'A local dispute that has not produced a winner and may need fork handling.',
