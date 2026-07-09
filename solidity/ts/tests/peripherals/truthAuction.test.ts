@@ -1201,10 +1201,12 @@ describe('Peripherals: truth auction', () => {
 				throw new Error(`pre-claim liquidation did not reduce allowance; coordinator results=${executionReasons.join('|')}`)
 			}
 
-			strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, targetVaultBeforeLiquidation.securityBondAllowance - liquidationChunk, 'partial liquidation before claim should reduce the migrated vault allowance by the executed chunk')
-			assert.ok(targetRepAfterLiquidation < targetRepBeforeLiquidation, 'partial liquidation before claim should reduce the migrated vault REP')
-			assert.ok(liquidatorVaultAfterLiquidation.repDepositShare > liquidatorVaultBeforeLiquidation.repDepositShare, 'the liquidator should absorb the migrated vault ownership')
-			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, liquidatorVaultBeforeLiquidation.securityBondAllowance + liquidationChunk, 'the liquidator should absorb the liquidated allowance chunk')
+			const actualDebtMoved = targetVaultBeforeLiquidation.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance
+
+			strictEqualTypeSafe(actualDebtMoved > 0n, true, 'partial liquidation before claim should reduce the migrated vault allowance')
+			strictEqualTypeSafe(targetRepAfterLiquidation, targetRepBeforeLiquidation, 'repair liquidation should leave the migrated vault REP in place before claim')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.repDepositShare, liquidatorVaultBeforeLiquidation.repDepositShare, 'repair liquidation should not transfer the migrated vault ownership')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, liquidatorVaultBeforeLiquidation.securityBondAllowance + actualDebtMoved, 'the liquidator should absorb the executed allowance reduction')
 
 			const childCollateralAfterLiquidation = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
 			const childAllowanceAfterLiquidation = await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool)

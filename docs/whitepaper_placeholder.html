@@ -2019,11 +2019,22 @@
 						distance check.
 					</p>
 					<p>
-						Economically, liquidation moves debt and corresponding REP-backed
-						ownership from the unsafe vault to the caller vault. The receiving
-						vault must remain solvent after taking on that additional debt, and
-						both sides must still satisfy the minimum deposit requirements
-						enforced by the pool.
+						Economically, liquidation now moves debt first and only as far as is
+						needed to repair the target vault at the current price. The target’s
+						snapshot-derived unlocked vault REP claim stays with the target on
+						that repair path, so the caller vault is absorbing the under-backed
+						debt rather than extracting target REP. If the exact repair point
+						would leave a non-zero allowance below the pool’s minimum debt floor,
+						the cap rounds up to a full allowance transfer instead. REP
+						committed to escalation is never part of the liquidation transfer.
+						The receiving vault must remain solvent after taking on the moved
+						debt, and both sides must still satisfy the minimum deposit
+						requirements enforced by the pool.
+					</p>
+					<p>
+						For a focused walkthrough of the repair-cap math, chunking limits,
+						and incentive tradeoffs, see
+						<a href="./liquidation.html">Liquidation Design</a>.
 					</p>
 					<figure class="diagram" id="fig-placeholder-liquidation-transfer">
 						<svg
@@ -2032,12 +2043,13 @@
 							aria-labelledby="liquidation-transfer-title liquidation-transfer-desc"
 						>
 							<title id="liquidation-transfer-title">
-								Liquidation transfer proportions
+								Liquidation repair transfer
 							</title>
 							<desc id="liquidation-transfer-desc">
-								Liquidation caps moved debt to the target allowance and
-								transfers the corresponding proportional REP claim to the caller
-								vault.
+								Liquidation moves only the debt shortfall needed to repair the
+								target vault at the current price, leaves unlocked target REP in
+								place, and rounds up to a full debt transfer only when the repair
+								point would otherwise leave forbidden debt dust.
 							</desc>
 							<defs>
 								<marker
@@ -2074,16 +2086,11 @@
 								marker-end="url(#arrow-liquidation-transfer)"
 								d="M 304 118 H 610"
 							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-liquidation-transfer)"
-								d="M 304 160 H 610"
-							></path>
 							<text class="svg-small" x="457" y="99" text-anchor="middle">
 								debtToMove
 							</text>
 							<text class="svg-small" x="457" y="184" text-anchor="middle">
-								matching REP claim
+								no REP moves on the repair path
 							</text>
 							<rect
 								class="svg-green"
@@ -2097,7 +2104,7 @@
 								Caller Vault
 							</text>
 							<text class="svg-small" x="735" y="140" text-anchor="middle">
-								takes debt and REP
+								takes debt
 							</text>
 							<text class="svg-small" x="735" y="164" text-anchor="middle">
 								must remain solvent
@@ -2111,25 +2118,66 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="460" y="256" text-anchor="middle">
-								Transfer ratio = moved debt / target allowance
+								Repair cap = target debt shortfall at the execution price
 							</text>
 							<text class="svg-small" x="460" y="276" text-anchor="middle">
-								the same ratio is applied to the target REP claim
+								full transfer only when the repair point would leave debt dust
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Liquidation Transfer</span>Liquidation
-							moves a capped slice of target allowance and the matching
-							proportional REP claim to the caller vault.
+							moves a capped slice of snapshot target allowance to the caller
+							vault and leaves the target vault’s unlocked REP in place on the
+							repair path.
 						</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-liquidation-transfer">
 						<math
 							display="block"
-							aria-label="debt to move equals minimum of requested debt and target allowance, and REP to move equals debt to move times target REP divided by target allowance"
-							data-source="debtToMove = min(requestedDebt, targetAllowance); repToMove = debtToMove \cdot targetRep / targetAllowance"
+							aria-label="unsafe value numerator equals snapshot target allowance times security multiplier times current price minus snapshot target REP times price precision, repair debt cap equals the ceiling of unsafe value numerator divided by security multiplier times current price, debt to move equals the minimum of requested debt and the repair debt cap after dust rounding, and REP to move equals zero on the repair path"
+							data-source="unsafeValueNumerator = snapshotTargetAllowance \cdot securityMultiplier \cdot currentPrice - snapshotTargetRep \cdot PRICE_PRECISION; repairDebtCap = ceil(unsafeValueNumerator / (securityMultiplier \cdot currentPrice)); debtToMove = min(requestedDebt, maxDebtToMoveAfterDustRounding); repToMove = 0"
 						>
 							<mtable>
+								<mtr>
+									<mtd>
+										<mi>unsafeValueNumerator</mi>
+									</mtd>
+									<mtd>
+										<mo>=</mo>
+									</mtd>
+									<mtd>
+										<mi>snapshotTargetAllowance</mi>
+										<mo>&#x22C5;</mo>
+										<mi>securityMultiplier</mi>
+										<mo>&#x22C5;</mo>
+										<mi>currentPrice</mi>
+										<mo>-</mo>
+										<mi>snapshotTargetRep</mi>
+										<mo>&#x22C5;</mo>
+										<mi>PRICE_PRECISION</mi>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd>
+										<mi>repairDebtCap</mi>
+									</mtd>
+									<mtd>
+										<mo>=</mo>
+									</mtd>
+									<mtd>
+										<mi>ceil</mi>
+										<mo>(</mo>
+										<mfrac>
+											<mi>unsafeValueNumerator</mi>
+											<mrow>
+												<mi>securityMultiplier</mi>
+												<mo>&#x22C5;</mo>
+												<mi>currentPrice</mi>
+											</mrow>
+										</mfrac>
+										<mo>)</mo>
+									</mtd>
+								</mtr>
 								<mtr>
 									<mtd>
 										<mi>debtToMove</mi>
@@ -2142,7 +2190,7 @@
 										<mo>(</mo>
 										<mi>requestedDebt</mi>
 										<mo>,</mo>
-										<mi>targetAllowance</mi>
+										<mi>maxDebtToMoveAfterDustRounding</mi>
 										<mo>)</mo>
 									</mtd>
 								</mtr>
@@ -2153,23 +2201,16 @@
 									<mtd>
 										<mo>=</mo>
 									</mtd>
-									<mtd>
-										<mfrac>
-											<mrow>
-												<mi>debtToMove</mi>
-												<mo>&#x22C5;</mo>
-												<mi>targetRep</mi>
-											</mrow>
-											<mi>targetAllowance</mi>
-										</mfrac>
-									</mtd>
+									<mtd><mn>0</mn></mtd>
 								</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Liquidation Transfer</span>The debt
-							transfer is capped by the target allowance, then REP ownership
-							moves in the same proportion as the debt slice.
+							transfer is capped at the minimum amount needed to repair the
+							target vault at the execution price, except when that repair point
+							would leave non-zero debt dust below the minimum allowance. The
+							repair path moves no REP.
 						</p>
 					</div>
 					<p>

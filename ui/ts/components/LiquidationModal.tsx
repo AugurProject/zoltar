@@ -19,7 +19,7 @@ import { sameAddress } from '../lib/address.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
-import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
+import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
@@ -201,6 +201,7 @@ export function LiquidationModal({
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
+	const hasUsableOraclePrice = currentPoolOracleManagerDetails !== undefined && isOracleManagerPriceUsable(currentPoolOracleManagerDetails)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
@@ -213,8 +214,21 @@ export function LiquidationModal({
 					callerVaultSummary,
 					liquidationAmount: liquidationAmountValue,
 					repPerEthPrice: poolOraclePrice,
+					securityMultiplier: selectedPool.securityMultiplier,
 					targetVaultSummary,
 				})
+	const computedLiquidationMaxAmount = getMaxLiquidationAmount({
+		repPerEthPrice: poolOraclePrice,
+		securityMultiplier: selectedPool?.securityMultiplier,
+		targetVaultSummary,
+	})
+	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? liquidationMaxAmount) : liquidationMaxAmount
+	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
+		callerVaultSummary,
+		liquidationAmount: liquidationAmountValue,
+		maxDebtToMove: hasUsableOraclePrice && computedLiquidationMaxAmount !== undefined && computedLiquidationMaxAmount > 0n ? computedLiquidationMaxAmount : undefined,
+		targetVaultSummary,
+	})
 	const directLiquidationReason = (() => {
 		if (liquidationExecutionMode !== 'execute') return undefined
 		if (selectedPool?.securityMultiplier === undefined) return UI_STRINGS.liquidationModal.reloadPoolBeforeExecutingReason
@@ -250,6 +264,7 @@ export function LiquidationModal({
 		sameVaultWarning,
 		liquidationAmount.trim() === '' ? UI_STRINGS.liquidationModal.enterLiquidationAmountReason : undefined,
 		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? UI_STRINGS.liquidationModal.enterLiquidationTimeoutReason : undefined,
+		deterministicLiquidationReason,
 		directLiquidationReason,
 		queueLiquidationEthGuardMessage,
 	)
@@ -369,7 +384,7 @@ export function LiquidationModal({
 						<span>{UI_STRINGS.liquidationModal.liquidationAmountLabel}</span>
 						<div className='field-inline'>
 							<FormInput className='field-inline-input' value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={UI_STRINGS.liquidationModal.liquidationAmountPlaceholder} />
-							<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxAmount))} disabled={liquidationMaxAmount === undefined || liquidationMaxAmount <= 0n}>
+							<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
 								{UI_STRINGS.common.maxLabel}
 							</button>
 						</div>

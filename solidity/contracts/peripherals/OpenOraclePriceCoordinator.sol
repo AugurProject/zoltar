@@ -10,7 +10,6 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant PRICE_PRECISION = 1e18;
-uint256 constant BPS_DENOMINATOR = 10000;
 uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
 
 enum OperationType {
@@ -152,11 +151,11 @@ contract OpenOraclePriceCoordinator {
 		require(_escalationHaltMultiplierBps > 0, 'Escalation halt multiplier must be greater than zero');
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
 		require(
-			_maxSettlementBaseFeeMultiplierBps >= BPS_DENOMINATOR,
+			_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR,
 			'Max settlement base fee multiplier must be at least one hundred percent'
 		);
 		require(
-			_minLiquidationPriceDistanceBps <= BPS_DENOMINATOR,
+			_minLiquidationPriceDistanceBps <= SecurityPoolUtils.BPS_DENOMINATOR,
 			'Minimum liquidation price distance cannot exceed one hundred percent'
 		);
 		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
@@ -205,12 +204,13 @@ contract OpenOraclePriceCoordinator {
 
 	function _requestPrice(address sponsor, uint256 ethCost) private {
 		require(pendingReportId == 0, 'Oracle price request is already pending');
-		uint256 escalationHalt = (exactToken1Report * escalationHaltMultiplierBps) / BPS_DENOMINATOR;
+		uint256 escalationHalt = (exactToken1Report * escalationHaltMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
 		require(exactToken1Report <= type(uint128).max, 'Oracle exact token1 report amount exceeds uint128 maximum');
 		require(escalationHalt <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerReward <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		pendingReportMaxSettlementBaseFee = (block.basefee * maxSettlementBaseFeeMultiplierBps) / BPS_DENOMINATOR;
+		pendingReportMaxSettlementBaseFee =
+			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
 		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
 			exactToken1Report: uint128(exactToken1Report),
@@ -606,7 +606,9 @@ contract OpenOraclePriceCoordinator {
 		uint256 securityMultiplier = securityPool.securityMultiplier();
 		uint256 thresholdPrice = (vaultRep * PRICE_PRECISION) / (snapshotTargetAllowance * securityMultiplier);
 		if (currentPrice <= thresholdPrice) return false;
-		return ((currentPrice - thresholdPrice) * BPS_DENOMINATOR) / currentPrice >= minLiquidationPriceDistanceBps;
+		return
+			((currentPrice - thresholdPrice) * SecurityPoolUtils.BPS_DENOMINATOR) / currentPrice >=
+			minLiquidationPriceDistanceBps;
 	}
 
 	function _consumeStagedOperation(uint256 operationId) private {
