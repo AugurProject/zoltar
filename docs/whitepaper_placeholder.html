@@ -3152,12 +3152,12 @@
 					</details>
 					<details class="interactive-example" id="resolution-edge-example">
 						<summary>Adjust escalation resolution edge cases</summary>
-						<p>
-							The resolution helper first checks whether at least two outcomes
-							meet the running cost. If not unresolved, strict
-							<code>Invalid</code> or <code>Yes</code> leads win before the
-							fallback to <code>No</code>.
-						</p>
+							<p>
+								The resolution helper first checks whether at least two outcomes
+								meet the running cost. If not unresolved, a strict
+								<code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead
+								wins. If no outcome strictly leads, the game remains unresolved.
+							</p>
 						<div class="example-grid">
 							<label>
 								Invalid balance
@@ -3568,15 +3568,15 @@
 						shares a fixed reward pool; excess winning capital receives
 						principal only.
 					</p>
-					<p>
-						If time expires without the stronger non-decision condition, the
-						local resolution helper chooses a strict <code>Invalid</code> or
-						<code>Yes</code> lead, otherwise it falls through to
-						<code>No</code> once the unresolved check no longer applies. If two
-						or more outcomes are at or above the fixed
-						<code>nonDecisionThreshold</code>, the game records non-decision and
-						opens the fork path.
-					</p>
+						<p>
+							If time expires without the stronger non-decision condition, the
+							local resolution helper chooses a strict leading outcome. If no
+							outcome strictly leads once the unresolved check no longer
+							applies, the game stays unresolved instead of defaulting to one
+							side. If two or more outcomes are at or above the fixed
+							<code>nonDecisionThreshold</code>, the game records non-decision and
+							opens the fork path.
+						</p>
 					<p>
 						For the exact resolution ordering, empty-game fallback, deposit
 						clipping, carry batching, and residual sweep rules, see
@@ -3843,11 +3843,10 @@
 						<p>
 							Winning capital up to the reward cap shares the fixed reward pool.
 							Winning capital above the cap receives principal only, and a lower
-							actual fork threshold scales the withdrawal down. If the fallback
-							<code>No</code> outcome wins after <code>Invalid</code> and
-							<code>Yes</code> tie at larger balances, the binding capital can
-							be greater than the winning principal; the contract still computes
-							the payout from those two values.
+							actual fork threshold scales the withdrawal down. Tied leaders do
+							not resolve to a fallback outcome, so the payout path only applies
+							once one outcome has a strict lead or non-decision has already
+							routed the market into the fork path.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -9245,9 +9244,9 @@
 					(balance) => balance >= runningCost,
 				).length;
 				const allZero = balances.every((balance) => balance === 0);
-				let result = "No";
+				let result = "None";
 				let reason =
-					"no strict Invalid or Yes lead, so the helper falls through";
+					"no outcome has a strict lead, so the helper keeps the game unresolved";
 				if (atCost >= 2) {
 					result = "None";
 					reason = "two or more outcomes still contest the cost";
@@ -9260,6 +9259,9 @@
 				} else if (yesBalance > invalidBalance && yesBalance > noBalance) {
 					result = "Yes";
 					reason = "Yes has a strict lead";
+				} else if (noBalance > invalidBalance && noBalance > yesBalance) {
+					result = "No";
+					reason = "No has a strict lead";
 				}
 				const resolutionScale =
 					520 / Math.max(invalidBalance, yesBalance, noBalance, runningCost, 1);
@@ -9355,12 +9357,12 @@
 				context.write("excessPrincipal", formatRep(excessPrincipal));
 				context.write("depositWithdrawal", formatRep(depositWithdrawal));
 				context.write("scaledWithdrawal", formatRep(scaledWithdrawal));
-				context.write(
-					"payoutState",
-					bindingCapital > winningPrincipal
-						? "reachable No fallback/tied-leader edge case"
-						: "reachable ordinary winner state",
-				);
+					context.write(
+						"payoutState",
+						bindingCapital > winningPrincipal
+							? "unreachable after tied-leader fix"
+							: "reachable ordinary winner state",
+					);
 			});
 			bindExample("forked-escrow-example", (context) => {
 				const escrowPrincipal = Math.max(context.read("escrowPrincipal"), 1);

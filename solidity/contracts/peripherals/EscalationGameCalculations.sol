@@ -96,7 +96,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (_allOutcomeBalancesEmpty(invalidBalance, yesBalance, noBalance)) {
 			return BinaryOutcomes.BinaryOutcome.Invalid;
 		}
-		return _strictLeadingOutcome(invalidBalance, yesBalance, noBalance);
+		return _getStrictLeaderOrNone(invalidBalance, yesBalance, noBalance);
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
@@ -218,14 +218,15 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return invalidBalance == targetBalance || yesBalance == targetBalance;
 	}
 
-	function _strictLeadingOutcome(
+	function _getStrictLeaderOrNone(
 		uint256 invalidBalance,
 		uint256 yesBalance,
 		uint256 noBalance
 	) private pure returns (BinaryOutcomes.BinaryOutcome) {
 		if (invalidBalance > yesBalance && invalidBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Invalid;
 		if (yesBalance > invalidBalance && yesBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Yes;
-		return BinaryOutcomes.BinaryOutcome.No;
+		if (noBalance > invalidBalance && noBalance > yesBalance) return BinaryOutcomes.BinaryOutcome.No;
+		return BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	function _medianBalance(
