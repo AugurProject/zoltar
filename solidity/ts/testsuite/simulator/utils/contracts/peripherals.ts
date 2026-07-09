@@ -4,7 +4,7 @@ import { WETH_ADDRESS } from '../constants'
 import {
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	peripherals_openOracle_OpenOracle_OpenOracle,
-	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_tokens_ShareToken_ShareToken,
 	ZoltarQuestionData_ZoltarQuestionData,
 } from '../../../../types/contractArtifact'
@@ -25,7 +25,7 @@ const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operation, targetVault, amount, validForSeconds],
@@ -42,7 +42,7 @@ export const requestPriceIfNeededAndStageOperation = async (client: WriteClient,
 export const executeStagedOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operationId: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'executeStagedOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operationId],
@@ -54,7 +54,7 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
@@ -67,7 +67,7 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
@@ -79,7 +79,7 @@ export const requestPriceWithValue = async (client: WriteClient, priceOracleMana
 export const recoverSettledPendingReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'recoverSettledPendingReport',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
@@ -89,7 +89,7 @@ export const recoverSettledPendingReport = async (client: WriteClient, priceOrac
 
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'pendingReportId',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -97,7 +97,7 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 
 export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'pendingReportMaxSettlementBaseFee',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -105,7 +105,7 @@ export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, p
 
 export const getPendingOperationSlotId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'pendingOperationSlotId',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -113,7 +113,7 @@ export const getPendingOperationSlotId = async (client: ReadClient, priceOracleM
 
 export const getPendingSettlementOperationCount = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getPendingSettlementOperationCount',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -121,7 +121,7 @@ export const getPendingSettlementOperationCount = async (client: ReadClient, pri
 
 export const getPendingSettlementOperationIds = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getPendingSettlementOperationIds',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -129,7 +129,7 @@ export const getPendingSettlementOperationIds = async (client: ReadClient, price
 
 export const getIsPriceValid = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'isPriceValid',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -137,7 +137,7 @@ export const getIsPriceValid = async (client: ReadClient, priceOracleManagerAndO
 
 export const getStagedOperation = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address, operationId: bigint) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'stagedOperations',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [operationId],
@@ -145,7 +145,7 @@ export const getStagedOperation = async (client: ReadClient, priceOracleManagerA
 
 export const getStagedOperationCounter = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'stagedOperationCounter',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -153,7 +153,7 @@ export const getStagedOperationCounter = async (client: ReadClient, priceOracleM
 
 export const getActiveStagedOperationCount = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getActiveStagedOperationCount',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -161,7 +161,7 @@ export const getActiveStagedOperationCount = async (client: ReadClient, priceOra
 
 export const getActiveStagedOperations = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address, offset: bigint, count: bigint) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getActiveStagedOperations',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [offset, count],
@@ -238,7 +238,7 @@ export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getRequestPriceEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -246,7 +246,7 @@ export const getRequestPriceEthCost = async (client: ReadClient, priceOracleMana
 
 export const getQueuedOperationEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getQueuedOperationEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -315,7 +315,7 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 
 export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'lastPrice',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],

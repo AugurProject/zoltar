@@ -19,7 +19,7 @@ import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setu
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
 import {
 	peripherals_EscalationGame_EscalationGame,
-	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_tokens_ShareToken_ShareToken,
 	test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver,
@@ -285,7 +285,7 @@ describe('security regression coverage', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+						abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 						data: log.data,
 						topics: log.topics,
 					})

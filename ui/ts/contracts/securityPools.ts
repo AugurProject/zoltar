@@ -1,7 +1,7 @@
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	peripherals_EscalationGame_EscalationGame,
-	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -275,13 +275,13 @@ async function loadSecurityPoolDetails(
 				args: [securityPoolAddress],
 			},
 			{
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'lastPrice',
 				address: managerAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'lastSettlementTimestamp',
 				address: managerAddress,
 				args: [],

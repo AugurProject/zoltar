@@ -7,7 +7,7 @@ import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
-import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
+import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 
 contract SecurityPoolDeployer {
@@ -23,7 +23,7 @@ contract SecurityPoolDeployer {
 		address securityPoolForker,
 		ZoltarQuestionData questionData,
 		EscalationGameFactory escalationGameFactory,
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
 		OpenOracle openOracle,
 		ISecurityPool parent,
@@ -70,7 +70,7 @@ contract SecurityPoolDeploymentWorker {
 		ISecurityPoolFactory securityPoolFactory,
 		ZoltarQuestionData questionData,
 		EscalationGameFactory escalationGameFactory,
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer,
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
 		OpenOracle openOracle,
 		ISecurityPool parent,

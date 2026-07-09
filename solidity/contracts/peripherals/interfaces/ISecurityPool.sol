@@ -6,7 +6,7 @@ import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuction.sol';
 import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
-import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
+import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { CarriedDepositProof } from '../EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
@@ -60,7 +60,7 @@ interface ISecurityPool {
 	function shareToken() external view returns (IShareToken);
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
-	function priceOracleManagerAndOperatorQueuer() external view returns (SecurityPoolOracleCoordinator);
+	function priceOracleManagerAndOperatorQueuer() external view returns (OpenOraclePriceCoordinator);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupply() external view returns (uint256);
 
@@ -146,7 +146,7 @@ interface ISecurityPoolFactory {
 	struct SecurityPoolDeployment {
 		ISecurityPool securityPool;
 		UniformPriceDualCapBatchAuction truthAuction;
-		SecurityPoolOracleCoordinator priceOracleManagerAndOperatorQueuer;
+		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer;
 		IShareToken shareToken;
 		ISecurityPool parent;
 		uint248 universeId;
