@@ -55,6 +55,8 @@ contract SecurityPool is ISecurityPool {
 	uint256 public lastUpdatedFeeAccumulator;
 	uint256 public feeIndex;
 	uint256 private feeIndexRemainder;
+	// This carry is always below PRICE_PRECISION, so any residual value left here at the
+	// end of accrual is strictly sub-wei and cannot strand whole ETH.
 	uint256 private totalFeesOwedRemainder;
 	uint256 public currentRetentionRate;
 	bool public awaitingForkContinuation;
@@ -161,7 +163,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only oracle queue');
+		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only oracle');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Oracle price is stale');
 		_;
 	}
@@ -349,12 +351,14 @@ contract SecurityPool is ISecurityPool {
 
 	function _sweepFeeResidueIfAllVaultFeesSettled() internal {
 		if (totalFeesOwedToVaults == 0) return;
-		for (uint256 index = 0; index < vaults.length; index++) {
-			SecurityVault storage trackedVault = securityVaults[vaults[index]];
+		address trackedVaultAddress = latestActiveVault;
+		while (trackedVaultAddress != address(0x0)) {
+			SecurityVault storage trackedVault = securityVaults[trackedVaultAddress];
 			if (
 				(trackedVault.securityBondAllowance > 0 && trackedVault.feeIndex != feeIndex) ||
 				trackedVault.unpaidEthFees > 0
 			) return;
+			trackedVaultAddress = olderActiveVaults[trackedVaultAddress];
 		}
 		uint256 sweptResidue = totalFeesOwedToVaults;
 		totalFeesOwedToVaults = 0;
