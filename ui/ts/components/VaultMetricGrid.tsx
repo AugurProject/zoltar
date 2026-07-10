@@ -4,7 +4,7 @@ import { TimestampValue } from './TimestampValue.js'
 import type { VaultMetricGridProps } from '../types/components.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_ESCROWED_REP, UI_STRING_ETH, UI_STRING_PRICE_VALID_UNTIL, UI_STRING_REP, UI_STRING_REP_COLLATERAL, UI_STRING_SECURITY_BOND_ALLOWANCE } from '../lib/uiStrings.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
 	return (
@@ -25,19 +25,19 @@ export function VaultMetricGrid({ className = '', layout = 'grid', escalationEsc
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
 				<div className='vault-preview-strip-head'>
-					<VaultPrimaryMetric className='vault-preview-allowance' label={TSX_STRINGS.componentsVaultMetricGrid.copy001} value={securityBondAllowance} suffix={TSX_STRINGS.componentsVaultMetricGrid.copy002} />
+					<VaultPrimaryMetric className='vault-preview-allowance' label={UI_STRING_SECURITY_BOND_ALLOWANCE} value={securityBondAllowance} suffix={UI_STRING_ETH} />
 				</div>
 				<div className='vault-preview-side-metrics'>
-					<VaultPrimaryMetric label={TSX_STRINGS.componentsVaultMetricGrid.copy003} value={repDepositShare} suffix={TSX_STRINGS.componentsVaultMetricGrid.copy004} />
+					<VaultPrimaryMetric label={UI_STRING_REP_COLLATERAL} value={repDepositShare} suffix={UI_STRING_REP} />
 				</div>
 				<div className='vault-preview-meta'>
 					{escalationEscrowedRep === undefined ? null : (
-						<MetricField label={TSX_STRINGS.componentsVaultMetricGrid.copy005}>
-							<CurrencyValue value={escalationEscrowedRep} suffix={TSX_STRINGS.componentsVaultMetricGrid.copy006} />
+						<MetricField label={UI_STRING_ESCROWED_REP}>
+							<CurrencyValue value={escalationEscrowedRep} suffix={UI_STRING_REP} />
 						</MetricField>
 					)}
 					{priceValidUntilTimestamp === undefined ? null : (
-						<MetricField label={TSX_STRINGS.componentsVaultMetricGrid.copy007}>
+						<MetricField label={UI_STRING_PRICE_VALID_UNTIL}>
 							<TimestampValue timestamp={priceValidUntilTimestamp} />
 						</MetricField>
 					)}
@@ -49,19 +49,19 @@ export function VaultMetricGrid({ className = '', layout = 'grid', escalationEsc
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
 			<div className='vault-detail-hero'>
 				<CollateralizationCircle className='vault-detail-collateralization' collateralizationPercent={collateralizationPercent} size='medium' targetCollateralizationPercent={targetCollateralizationPercent} />
-				<VaultPrimaryMetric className='vault-detail-hero-primary' label={TSX_STRINGS.componentsVaultMetricGrid.copy008} value={securityBondAllowance} suffix={TSX_STRINGS.componentsVaultMetricGrid.copy009} />
+				<VaultPrimaryMetric className='vault-detail-hero-primary' label={UI_STRING_SECURITY_BOND_ALLOWANCE} value={securityBondAllowance} suffix={UI_STRING_ETH} />
 				<div className='vault-detail-hero-secondary'>
-					<VaultPrimaryMetric label={TSX_STRINGS.componentsVaultMetricGrid.copy010} value={repDepositShare} suffix={TSX_STRINGS.componentsVaultMetricGrid.copy011} />
+					<VaultPrimaryMetric label={UI_STRING_REP_COLLATERAL} value={repDepositShare} suffix={UI_STRING_REP} />
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
 				{escalationEscrowedRep === undefined ? undefined : (
-					<MetricField label={TSX_STRINGS.componentsVaultMetricGrid.copy012}>
-						<CurrencyValue value={escalationEscrowedRep} suffix={TSX_STRINGS.componentsVaultMetricGrid.copy013} />
+					<MetricField label={UI_STRING_ESCROWED_REP}>
+						<CurrencyValue value={escalationEscrowedRep} suffix={UI_STRING_REP} />
 					</MetricField>
 				)}
 				{priceValidUntilTimestamp === undefined ? undefined : (
-					<MetricField label={TSX_STRINGS.componentsVaultMetricGrid.copy014}>
+					<MetricField label={UI_STRING_PRICE_VALID_UNTIL}>
 						<TimestampValue timestamp={priceValidUntilTimestamp} />
 					</MetricField>
 				)}

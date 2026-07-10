@@ -4,7 +4,7 @@ import { AddressValue } from './AddressValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../types/contracts.js'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_ACTIVE_VAULTS_NEWEST_ACTIVITY_FIRST_ENTER_A_VAULT_ADDRESS_ABOVE_TO_INSPECT, UI_STRING_OF_PREFIX, UI_STRING_SHOWING_PREFIX } from '../lib/uiStrings.js'
 
 type SecurityPoolVaultDirectoryProps = {
 	emptyState: ComponentChildren
@@ -26,9 +26,9 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 		<div className='vault-position-list'>
 			{showingPartialDirectory ? (
 				<p className='detail'>
-					{TSX_STRINGS.componentsSecurityPoolVaultDirectory.copy001}
-					{loadedVaultCount.toString()} {TSX_STRINGS.componentsSecurityPoolVaultDirectory.copy002}
-					{pool.vaultCount.toString()} {TSX_STRINGS.componentsSecurityPoolVaultDirectory.copy003}
+					{UI_STRING_SHOWING_PREFIX}
+					{loadedVaultCount.toString()} {UI_STRING_OF_PREFIX}
+					{pool.vaultCount.toString()} {UI_STRING_ACTIVE_VAULTS_NEWEST_ACTIVITY_FIRST_ENTER_A_VAULT_ADDRESS_ABOVE_TO_INSPECT}
 				</p>
 			) : null}
 			{pool.vaults.map(vault => {

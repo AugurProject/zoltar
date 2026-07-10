@@ -1,12 +1,12 @@
 import type { ComponentChildren } from 'preact'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_LOADING_WITH_ELLIPSIS } from '../lib/uiStrings.js'
 
 type LoadingTextProps = {
 	children?: ComponentChildren
 	className?: string
 }
 
-export function LoadingText({ children = TSX_STRINGS.componentsLoadingText.copy001, className = '' }: LoadingTextProps) {
+export function LoadingText({ children = UI_STRING_LOADING_WITH_ELLIPSIS, className = '' }: LoadingTextProps) {
 	return (
 		<span className={`loading-value ${className}`}>
 			<span className='spinner' aria-hidden='true' />

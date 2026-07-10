@@ -25,7 +25,57 @@ import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../lib/trading.js'
-import { CURATED_TSX_STRINGS, UI_STRINGS, TSX_STRINGS } from '../lib/uiStrings.js'
+import {
+	UI_STRING_ACTIVE_VAULTS_IN_THIS_PREVIEW_NEWEST_ACTIVITY_FIRST,
+	UI_STRING_ALL_POOLS,
+	UI_STRING_ALL_STATES,
+	UI_STRING_ANNUAL_FEE,
+	UI_STRING_CREATE_SECURITY_POOL,
+	UI_STRING_ENDED,
+	UI_STRING_ETH,
+	UI_STRING_FILTER_THIS_PAGE_BY_POOL_ADDRESS_QUESTION_ID_OR_QUESTION_TEXT,
+	UI_STRING_FORK_MIGRATION,
+	UI_STRING_HAS_VAULTS,
+	UI_STRING_LOAD_SECURITY_POOLS,
+	UI_STRING_MANAGER_ADDRESS,
+	UI_STRING_MAX_PREFIX,
+	UI_STRING_MULTIPLIER,
+	UI_STRING_NONE,
+	UI_STRING_NO_MATCHES,
+	UI_STRING_NO_POOLS_MATCH_THE_CURRENT_SEARCH_AND_FILTER_SETTINGS,
+	UI_STRING_NO_SECURITY_POOLS,
+	UI_STRING_NO_VAULTS_IN_THIS_POOL,
+	UI_STRING_NO_VAULTS,
+	UI_STRING_OF_PREFIX,
+	UI_STRING_OPEN_INTEREST_MINTED,
+	UI_STRING_OPEN_ORACLE_PRICE,
+	UI_STRING_OPEN_POOL,
+	UI_STRING_OPERATIONAL,
+	UI_STRING_PERCENT,
+	UI_STRING_POOLS_SHOWN_ON_THIS_PAGE,
+	UI_STRING_POOL_ADDRESS,
+	UI_STRING_POOL_COLLATERALIZATION,
+	UI_STRING_POOL_FORKED,
+	UI_STRING_QUESTION_ID,
+	UI_STRING_REP,
+	UI_STRING_REP_COLLATERAL,
+	UI_STRING_RETRYING_SECURITY_POOLS_TRUNCATED,
+	UI_STRING_RETRY_LOADING_POOLS,
+	UI_STRING_REVIEW_LIQUIDATION,
+	UI_STRING_REVIEW_LIQUIDATION_DETAILS_FOR_THIS_VAULT_BEFORE_QUEUEING_THE_ACTION,
+	UI_STRING_SEARCH_LOADED_PAGE,
+	UI_STRING_SECURITY_BOND_ALLOWANCE,
+	UI_STRING_SECURITY_POOLS,
+	UI_STRING_SHOWING_PREFIX,
+	UI_STRING_SYSTEM_STATE,
+	UI_STRING_TRUTH_AUCTION,
+	UI_STRING_UNAVAILABLE,
+	UI_STRING_UNIVERSE,
+	UI_STRING_VAULTS,
+	UI_STRING_VAULT_COVERAGE,
+	UI_STRING_VAULT_PREVIEW_UNAVAILABLE,
+	UI_TEMPLATE_VAULT_COUNT_LABEL,
+} from '../lib/uiStrings.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -141,10 +191,10 @@ export function SecurityPoolsOverviewSection({
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
 	return (
-		<RouteWorkflowPanel showHeader={false} title={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy001}>
+		<RouteWorkflowPanel showHeader={false} title={UI_STRING_SECURITY_POOLS}>
 			<SectionBlock
 				density='compact'
-				title={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy002}
+				title={UI_STRING_SECURITY_POOLS}
 				actions={
 					<PaginationControls
 						hasNextPage={hasNextPage}
@@ -164,39 +214,39 @@ export function SecurityPoolsOverviewSection({
 				{securityPoolOverviewError === undefined ? undefined : (
 					<div className='actions pool-registry-recovery-actions'>
 						<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-							{loadingSecurityPoolPage ? <LoadingText>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy003}</LoadingText> : TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy004}
+							{loadingSecurityPoolPage ? <LoadingText>{UI_STRING_RETRYING_SECURITY_POOLS_TRUNCATED}</LoadingText> : UI_STRING_RETRY_LOADING_POOLS}
 						</button>
 					</div>
 				)}
 				<div className='filter-toolbar'>
 					<label className='field'>
-						<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy005}</span>
-						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy006} />
+						<span>{UI_STRING_SEARCH_LOADED_PAGE}</span>
+						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={UI_STRING_FILTER_THIS_PAGE_BY_POOL_ADDRESS_QUESTION_ID_OR_QUESTION_TEXT} />
 					</label>
 					<label className='field'>
-						<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy007}</span>
+						<span>{UI_STRING_SYSTEM_STATE}</span>
 						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolLifecycleState)}>
-							<option value='all'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy008}</option>
-							<option value='operational'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy009}</option>
-							<option value='ended'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy010}</option>
-							<option value='poolForked'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy011}</option>
-							<option value='forkMigration'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy012}</option>
-							<option value='forkTruthAuction'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy013}</option>
+							<option value='all'>{UI_STRING_ALL_STATES}</option>
+							<option value='operational'>{UI_STRING_OPERATIONAL}</option>
+							<option value='ended'>{UI_STRING_ENDED}</option>
+							<option value='poolForked'>{UI_STRING_POOL_FORKED}</option>
+							<option value='forkMigration'>{UI_STRING_FORK_MIGRATION}</option>
+							<option value='forkTruthAuction'>{UI_STRING_TRUTH_AUCTION}</option>
 						</select>
 					</label>
 					<label className='field'>
-						<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy014}</span>
+						<span>{UI_STRING_VAULT_COVERAGE}</span>
 						<select value={vaultFilter} onChange={event => setVaultFilter(event.currentTarget.value as 'all' | 'has-vaults' | 'empty')}>
-							<option value='all'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy015}</option>
-							<option value='has-vaults'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy016}</option>
-							<option value='empty'>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy017}</option>
+							<option value='all'>{UI_STRING_ALL_POOLS}</option>
+							<option value='has-vaults'>{UI_STRING_HAS_VAULTS}</option>
+							<option value='empty'>{UI_STRING_NO_VAULTS}</option>
 						</select>
 					</label>
 				</div>
 				{pagedSecurityPools.length > 0 ? (
 					<p className='detail'>
-						{filteredSecurityPools.length.toString()} {TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy018}
-						{pagedSecurityPools.length.toString()} {TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy019}
+						{filteredSecurityPools.length.toString()} {UI_STRING_OF_PREFIX}
+						{pagedSecurityPools.length.toString()} {UI_STRING_POOLS_SHOWN_ON_THIS_PAGE}
 					</p>
 				) : undefined}
 
@@ -209,21 +259,21 @@ export function SecurityPoolsOverviewSection({
 							if (isEmptyRegistry && onCreateSecurityPool !== undefined)
 								return (
 									<button className='primary' type='button' onClick={onCreateSecurityPool}>
-										{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy020}
+										{UI_STRING_CREATE_SECURITY_POOL}
 									</button>
 								)
 							if (isUncheckedRegistry && securityPoolOverviewError === undefined)
 								return (
 									<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-										{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy021}
+										{UI_STRING_LOAD_SECURITY_POOLS}
 									</button>
 								)
 							return undefined
 						})()
 
-						return <StateHint presentation={registryPresentation} title={isEmptyRegistry ? TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy022 : undefined} actions={registryActions} />
+						return <StateHint presentation={registryPresentation} title={isEmptyRegistry ? UI_STRING_NO_SECURITY_POOLS : undefined} actions={registryActions} />
 					}
-					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy023, badgeTone: 'muted', detail: TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy024 }} />
+					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_NO_MATCHES, badgeTone: 'muted', detail: UI_STRING_NO_POOLS_MATCH_THE_CURRENT_SEARCH_AND_FILTER_SETTINGS }} />
 
 					return (
 						<div className='entity-card-list'>
@@ -257,38 +307,38 @@ export function SecurityPoolsOverviewSection({
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (
 												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
-													{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy025}
+													{UI_STRING_OPEN_POOL}
 												</button>
 											)
 										}
 									>
 										<div className='security-pool-card-surface'>
-											<div className='security-pool-card-title-row' aria-label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy026}>
-												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy027} />
+											<div className='security-pool-card-title-row' aria-label={UI_STRING_POOL_COLLATERALIZATION}>
+												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={UI_STRING_POOL_COLLATERALIZATION} />
 											</div>
 											<div className='security-pool-strip'>
 												<div className='security-pool-strip-story'>
 													<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
 													<div className='security-pool-strip-stats'>
 														<div>
-															<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy028}</span>
+															<span>{UI_STRING_VAULTS}</span>
 															<strong>{pool.vaultCount.toString()}</strong>
 														</div>
 														<div>
-															<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy029}</span>
+															<span>{UI_STRING_MULTIPLIER}</span>
 															<strong>{pool.securityMultiplier.toString()}x</strong>
 														</div>
 														<div>
-															<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy030}</span>
+															<span>{UI_STRING_ANNUAL_FEE}</span>
 															<strong>
-																<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy031} />
+																<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={UI_STRING_PERCENT} />
 															</strong>
 														</div>
 													</div>
 												</div>
 												<div className='security-pool-strip-signal'>
 													<div className='security-pool-strip-price'>
-														<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy032}</span>
+														<span>{UI_STRING_OPEN_ORACLE_PRICE}</span>
 														<strong>
 															<OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
 														</strong>
@@ -296,12 +346,12 @@ export function SecurityPoolsOverviewSection({
 													<div className='security-pool-card-progress security-pool-strip-meters'>
 														<ProgressMeter
 															className='security-pool-strip-meter'
-															label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy033}
+															label={UI_STRING_OPEN_INTEREST_MINTED}
 															maxValue={pool.totalSecurityBondAllowance}
 															secondaryValue={
 																<span className='detail'>
-																	{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy034}
-																	<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy035} />
+																	{UI_STRING_MAX_PREFIX}
+																	<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={UI_STRING_ETH} />
 																</span>
 															}
 															tone={getToneRatioThreshold({
@@ -310,34 +360,34 @@ export function SecurityPoolsOverviewSection({
 																warningThreshold: 0.85,
 															})}
 															value={pool.completeSetCollateralAmount}
-															valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy036} />}
+															valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={UI_STRING_ETH} />}
 														/>
 													</div>
 												</div>
 											</div>
 											<div className='security-pool-detail-rail security-pool-card-inline-details'>
-												<MetricField label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy037}>
+												<MetricField label={UI_STRING_POOL_ADDRESS}>
 													<AddressValue address={pool.securityPoolAddress} />
 												</MetricField>
-												<MetricField label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy038}>
+												<MetricField label={UI_STRING_MANAGER_ADDRESS}>
 													<AddressValue address={pool.managerAddress} />
 												</MetricField>
-												<MetricField label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy039}>{pool.questionId}</MetricField>
-												<MetricField label={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy040}>
+												<MetricField label={UI_STRING_QUESTION_ID}>{pool.questionId}</MetricField>
+												<MetricField label={UI_STRING_UNIVERSE}>
 													<UniverseLink format='hex' universeId={pool.universeId} />
 												</MetricField>
 											</div>
 											<div className='security-pool-browse-vaults'>
 												<div className='security-pool-browse-vaults-head'>
-													<h4>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy041}</h4>
-													<div className='security-pool-browse-vaults-count'>{CURATED_TSX_STRINGS.securityPoolsOverviewSection.vaultCountLabel(pool.vaultCount.toString())}</div>
+													<h4>{UI_STRING_VAULTS}</h4>
+													<div className='security-pool-browse-vaults-count'>{UI_TEMPLATE_VAULT_COUNT_LABEL(pool.vaultCount.toString())}</div>
 												</div>
 												{pool.hasLoadedVaults === false ? (
-													<StateHint presentation={{ key: 'empty', badgeLabel: TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy043, badgeTone: 'muted', detail: TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy044 }} />
+													<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_UNAVAILABLE, badgeTone: 'muted', detail: UI_STRING_VAULT_PREVIEW_UNAVAILABLE }} />
 												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (
-															<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRINGS.common.noneLabel, badgeTone: 'muted', detail: UI_STRINGS.securityPoolWorkflowSection.noVaultsInThisPoolDetail }} />
+															<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_NONE, badgeTone: 'muted', detail: UI_STRING_NO_VAULTS_IN_THIS_POOL }} />
 														) : (
 															(() => {
 																const previewVaults = [...pool.vaults]
@@ -363,24 +413,24 @@ export function SecurityPoolsOverviewSection({
 																					</div>
 																				</div>
 																				<div className='security-pool-browse-vault-row-kpi'>
-																					<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy045}</span>
+																					<span>{UI_STRING_SECURITY_BOND_ALLOWANCE}</span>
 																					<strong>
-																						<CurrencyValue value={vault.securityBondAllowance} suffix={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy046} />
+																						<CurrencyValue value={vault.securityBondAllowance} suffix={UI_STRING_ETH} />
 																					</strong>
 																				</div>
 																				<div className='security-pool-browse-vault-row-kpi'>
-																					<span>{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy047}</span>
+																					<span>{UI_STRING_REP_COLLATERAL}</span>
 																					<strong>
-																						<CurrencyValue value={vault.repDepositShare} suffix={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy048} />
+																						<CurrencyValue value={vault.repDepositShare} suffix={UI_STRING_REP} />
 																					</strong>
 																				</div>
 																				<button
 																					className='secondary security-pool-browse-vault-row-liquidate'
 																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
-																					title={TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy049}
+																					title={UI_STRING_REVIEW_LIQUIDATION_DETAILS_FOR_THIS_VAULT_BEFORE_QUEUEING_THE_ACTION}
 																				>
-																					{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy050}
+																					{UI_STRING_REVIEW_LIQUIDATION}
 																				</button>
 																			</div>
 																		</div>
@@ -390,9 +440,9 @@ export function SecurityPoolsOverviewSection({
 														)}
 														{pool.vaultCount > BigInt(pool.vaults.length) ? (
 															<p className='detail'>
-																{TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy051}
-																{pool.vaults.length.toString()} {TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy052}
-																{pool.vaultCount.toString()} {TSX_STRINGS.componentsSecurityPoolsOverviewSection.copy053}
+																{UI_STRING_SHOWING_PREFIX}
+																{pool.vaults.length.toString()} {UI_STRING_OF_PREFIX}
+																{pool.vaultCount.toString()} {UI_STRING_ACTIVE_VAULTS_IN_THIS_PREVIEW_NEWEST_ACTIVITY_FIRST}
 															</p>
 														) : undefined}
 													</div>
