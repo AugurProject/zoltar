@@ -85,6 +85,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 					const recipient = args?.[0]
 					const amount = args?.[1]
 					if (typeof recipient !== 'string' || typeof amount !== 'bigint') throw new Error('Invalid mint arguments')
+					if (repState.totalSupply + amount > repState.theoreticalSupply) throw new Error('Mint exceeds theoretical supply')
 					const normalizedRecipient = recipient.toLowerCase()
 					repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
 					repState.totalSupply += amount
@@ -579,6 +580,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 						const recipient = args?.[0]
 						const amount = args?.[1]
 						if (typeof recipient !== 'string' || typeof amount !== 'bigint') throw new Error('Invalid mint arguments')
+						if (repState.totalSupply + amount > repState.theoreticalSupply) throw new Error('Mint exceeds theoretical supply')
 						const normalizedRecipient = recipient.toLowerCase()
 						repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
 						repState.totalSupply += amount
