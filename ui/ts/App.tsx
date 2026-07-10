@@ -36,7 +36,6 @@ import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from './lib/transactionTray.js'
 import type { TransactionTrayState } from './lib/transactionTray.js'
 import type { TransactionRequestPreview } from './lib/chainBackend.js'
-import { ActionSafetyProvider } from './lib/actionSafety/runtime.js'
 import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
 import { getUniversePresentation } from './lib/userCopy.js'
@@ -758,30 +757,28 @@ export function App() {
 	return (
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
-				<ActionSafetyProvider>
-					<main>
-						<AppPageHeading pageTitle={pageTitle} />
-						<AppStatusNotices
-							errorMessage={errorMessage}
-							readBackendMessage={readBackendMessage}
-							readBackendStatus={readBackendStatus}
-							simulationBootstrapError={environmentBootstrapError}
-							showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
-							showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-							zoltarUniverse={zoltarUniverse}
-						/>
-						<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
-						<GlobalTransactionTray transaction={transactionState.value.active} />
+				<main>
+					<AppPageHeading pageTitle={pageTitle} />
+					<AppStatusNotices
+						errorMessage={errorMessage}
+						readBackendMessage={readBackendMessage}
+						readBackendStatus={readBackendStatus}
+						simulationBootstrapError={environmentBootstrapError}
+						showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
+						showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
+						zoltarUniverse={zoltarUniverse}
+					/>
+					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
+					<GlobalTransactionTray transaction={transactionState.value.active} />
 
-						<div id='app-content' tabIndex={-1}>
-							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
-								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
-								</fieldset>
-							</TransactionActionButtonLockProvider>
-						</div>
-					</main>
-				</ActionSafetyProvider>
+					<div id='app-content' tabIndex={-1}>
+						<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
+							<fieldset className='route-shell' disabled={isRouteContentDisabled}>
+								<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
+							</fieldset>
+						</TransactionActionButtonLockProvider>
+					</div>
+				</main>
 			</ChainTimestampContext.Provider>
 		</ChainBlockNumberContext.Provider>
 	)

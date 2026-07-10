@@ -22,8 +22,6 @@ import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthA
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
 import { TruthAuctionSummaryCard } from './TruthAuctionSummaryCard.js'
 import { WarningSurface } from './WarningSurface.js'
-import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
-import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
 import { createActionAvailability } from '../lib/actionAvailability.js'
 import { sameAddress } from '../lib/address.js'
 import { AUCTIONED_BOND_ALLOWANCE_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView, getTimeRemaining } from '../lib/forkAuction.js'
@@ -737,7 +735,6 @@ export function ForkAuctionSection({
 			selectionHasRefunds: settlementSelectionHasRefunds,
 			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 		}) ?? 'refundLosingBids'
-	const settlementActionSafetyId: ActionSafetyId = truthAuctionStatus?.finalized === true && settlementSelectionMode === 'refund' ? 'fork-auction.settleAuctionRefunds' : getForkAuctionActionSafetyId(settlementAction)
 	const showRefundOnlySettlementDebtNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
 	const settlementActionLabel = TSX_STRINGS.componentsForkAuctionSection.copy086
 	const settlementActionDescription = (() => {
@@ -968,7 +965,6 @@ export function ForkAuctionSection({
 		onClick,
 		pendingLabel,
 		pending,
-		safetyId,
 		tone = 'secondary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -981,7 +977,6 @@ export function ForkAuctionSection({
 		onClick: () => void
 		pendingLabel: string
 		pending?: boolean
-		safetyId?: ActionSafetyId
 		tone?: 'primary' | 'secondary'
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
@@ -990,7 +985,6 @@ export function ForkAuctionSection({
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
-				safetyId={safetyId ?? getForkAuctionActionSafetyId(action)}
 				idleLabel={idleLabel}
 				pendingLabel={pendingLabel}
 				onClick={onClick}
@@ -1072,7 +1066,6 @@ export function ForkAuctionSection({
 		title,
 		availabilityMessage,
 		onClick,
-		safetyId,
 		tone = 'primary',
 	}: {
 		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -1084,7 +1077,6 @@ export function ForkAuctionSection({
 		title?: ComponentChildren
 		availabilityMessage: string | undefined
 		onClick?: () => void
-		safetyId?: ActionSafetyId
 		tone?: 'primary' | 'secondary'
 	}) => (
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
@@ -1101,7 +1093,6 @@ export function ForkAuctionSection({
 					pendingLabel,
 					pending,
 					tone,
-					...(safetyId === undefined ? {} : { safetyId }),
 				})}
 			</div>
 		</SectionBlock>
@@ -1324,7 +1315,6 @@ export function ForkAuctionSection({
 				selectedRefundCount: selectedRefundSettlementBidRows.length,
 				selectedRowCount: selectedSettlementBidRows.length,
 			}),
-			safetyId: settlementActionSafetyId,
 			title: settlementActionLabel,
 			onClick: onSettleSelectedBidsForSelectedAuction,
 			tone: 'primary',

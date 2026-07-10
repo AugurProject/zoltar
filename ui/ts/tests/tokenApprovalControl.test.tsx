@@ -36,7 +36,6 @@ describe('TokenApprovalControl', () => {
 				pendingLabel='Approving WETH...'
 				requiredAmount={30n * 10n ** 18n}
 				resetKey='weth-approval'
-				safetyId='open-oracle.approveToken1'
 				tokenSymbol='WETH'
 				tokenUnits={18}
 			/>,
@@ -68,7 +67,6 @@ describe('TokenApprovalControl', () => {
 				pendingLabel='Approving WETH...'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-guard'
-				safetyId='open-oracle.approveToken1'
 				tokenSymbol='WETH'
 				tokenUnits={18}
 			/>,
@@ -95,7 +93,6 @@ describe('TokenApprovalControl', () => {
 				pendingLabel='Approving WETH...'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-error'
-				safetyId='open-oracle.approveToken1'
 				tokenSymbol='WETH'
 				tokenUnits={18}
 			/>,
@@ -128,7 +125,6 @@ describe('TokenApprovalControl', () => {
 				pendingLabel='Approving WETH...'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-pending'
-				safetyId='open-oracle.approveToken1'
 				tokenSymbol='WETH'
 				tokenUnits={18}
 			/>,
@@ -156,7 +152,6 @@ describe('TokenApprovalControl', () => {
 				pendingLabel='Approving WETH...'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-invalid'
-				safetyId='open-oracle.approveToken1'
 				tokenSymbol='WETH'
 				tokenUnits={18}
 			/>,

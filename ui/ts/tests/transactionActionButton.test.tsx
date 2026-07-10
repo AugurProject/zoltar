@@ -6,8 +6,6 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { TransactionActionButton, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { getForkAuctionActionSafetyId } from '../lib/actionSafety/ids.js'
-import { ActionSafetyProvider } from '../lib/actionSafety/runtime.js'
 import { TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -34,7 +32,6 @@ describe('TransactionActionButton', () => {
 				onClick: () => undefined,
 				pending: true,
 				pendingLabel: 'Submitting...',
-				safetyId: 'deployment.deployNextMissing',
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -54,7 +51,6 @@ describe('TransactionActionButton', () => {
 				idleLabel: 'Submit',
 				onClick: () => undefined,
 				pendingLabel: 'Submitting...',
-				safetyId: 'deployment.deployNextMissing',
 				showDisabledReason: true,
 			}),
 		)
@@ -65,136 +61,14 @@ describe('TransactionActionButton', () => {
 		expect(documentQueries.getByText('Connect a wallet before submitting.')).not.toBeNull()
 	})
 
-	test('opens a safety confirmation for configured high-risk actions before calling onClick', async () => {
+	test('calls onClick immediately when enabled', async () => {
 		let callCount = 0
-		const renderedComponent = await renderIntoDocument(
-			<ActionSafetyProvider>
-				<TransactionActionButton idleLabel='Liquidate Vault' onClick={() => callCount++} pendingLabel='Submitting...' safetyId='security-pool.queueLiquidation' />
-			</ActionSafetyProvider>,
-		)
+		const renderedComponent = await renderIntoDocument(<TransactionActionButton idleLabel='Liquidate Vault' onClick={() => callCount++} pendingLabel='Submitting...' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Liquidate Vault' }))
-		})
-
-		expect(callCount).toBe(0)
-		expect(documentQueries.getByRole('dialog', { name: 'Review Vault Liquidation' })).not.toBeNull()
-		expect(documentQueries.getByText('Liquidation is a destructive operator action. Review the vault, oracle status, and amount carefully.')).not.toBeNull()
-
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('checkbox'))
-		})
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Queue Liquidation' }))
-		})
-
-		expect(callCount).toBe(1)
-	})
-
-	test('requires confirmation for fork-trigger actions before calling onClick', async () => {
-		for (const scenario of [
-			{
-				confirmLabel: 'Fork Zoltar',
-				dialogName: 'Review Zoltar Fork',
-				idleLabel: 'Fork Universe',
-				safetyId: getForkAuctionActionSafetyId('forkUniverse'),
-			},
-			{
-				confirmLabel: 'Trigger Fork',
-				dialogName: 'Trigger Zoltar Fork',
-				idleLabel: 'Trigger Pool Fork',
-				safetyId: getForkAuctionActionSafetyId('forkWithOwnEscalation'),
-			},
-			{
-				confirmLabel: 'Trigger Fork',
-				dialogName: 'Trigger Zoltar Fork',
-				idleLabel: 'Trigger Reporting Fork',
-				safetyId: 'reporting.triggerZoltarFork' as const,
-			},
-		] as const) {
-			let callCount = 0
-			const renderedComponent = await renderIntoDocument(
-				<ActionSafetyProvider>
-					<TransactionActionButton idleLabel={scenario.idleLabel} onClick={() => callCount++} pendingLabel='Submitting...' safetyId={scenario.safetyId} />
-				</ActionSafetyProvider>,
-			)
-
-			const documentQueries = within(document.body)
-			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: scenario.idleLabel }))
-			})
-
-			expect(callCount).toBe(0)
-			expect(documentQueries.getByRole('dialog', { name: scenario.dialogName })).not.toBeNull()
-
-			await act(() => {
-				fireEvent.click(documentQueries.getByRole('checkbox'))
-			})
-			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: scenario.confirmLabel }))
-			})
-
-			expect(callCount).toBe(1)
-
-			await renderedComponent.cleanup()
-			cleanupRenderedComponent = undefined
-		}
-	})
-
-	test('requires confirmation for auction claims before calling onClick', async () => {
-		let callCount = 0
-		const renderedComponent = await renderIntoDocument(
-			<ActionSafetyProvider>
-				<TransactionActionButton idleLabel='Settle Selected Bids' onClick={() => callCount++} pendingLabel='Submitting...' safetyId={getForkAuctionActionSafetyId('claimAuctionProceeds')} />
-			</ActionSafetyProvider>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
-		})
-
-		expect(callCount).toBe(0)
-		expect(documentQueries.getByRole('dialog', { name: 'Review Auction Claim' })).not.toBeNull()
-		expect(documentQueries.getByText('Review the selected winning bids before assigning their REP and Auctioned Bond Allowance (OI Debt) to the bidder vault.')).not.toBeNull()
-
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('checkbox'))
-		})
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Claim Auction Proceeds' }))
-		})
-
-		expect(callCount).toBe(1)
-	})
-
-	test('requires the refund-only finalized settlement confirmation before calling onClick', async () => {
-		let callCount = 0
-		const renderedComponent = await renderIntoDocument(
-			<ActionSafetyProvider>
-				<TransactionActionButton idleLabel='Settle Finalized Refunds' onClick={() => callCount++} pendingLabel='Submitting...' safetyId='fork-auction.settleAuctionRefunds' />
-			</ActionSafetyProvider>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Finalized Refunds' }))
-		})
-
-		expect(callCount).toBe(0)
-		const dialog = documentQueries.getByRole('dialog', { name: 'Review Finalized Refund Settlement' })
-		expect(dialog).not.toBeNull()
-		expect(documentQueries.getByText('Review the selected finalized refund rows before settling them through the child-pool settlement path.')).not.toBeNull()
-
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('checkbox'))
-		})
-		await act(() => {
-			fireEvent.click(within(dialog).getByRole('button', { name: 'Settle Finalized Refunds' }))
 		})
 
 		expect(callCount).toBe(1)
@@ -204,7 +78,7 @@ describe('TransactionActionButton', () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(
 			<TransactionActionButtonLockProvider disabledReason={TRANSACTION_ACTION_LOCK_REASON}>
-				<TransactionActionButton idleLabel='Create Pool' onClick={() => callCount++} pendingLabel='Submitting...' safetyId='security-pool.createPool' />
+				<TransactionActionButton idleLabel='Create Pool' onClick={() => callCount++} pendingLabel='Submitting...' />
 			</TransactionActionButtonLockProvider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup

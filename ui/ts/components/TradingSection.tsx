@@ -13,7 +13,6 @@ import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { getTradingActionSafetyId } from '../lib/actionSafety/ids.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { tryParseBigIntListInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -242,7 +241,6 @@ export function TradingSection({
 			description: UI_STRINGS.tradingSection.mintCompleteSetsDescription,
 			key: 'mint-complete-sets',
 			readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
-			safetyId: getTradingActionSafetyId('createCompleteSet'),
 			title: UI_STRINGS.tradingSection.mintCompleteSetsTitle,
 			...(!walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
 			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
@@ -252,7 +250,6 @@ export function TradingSection({
 			description: UI_STRINGS.tradingSection.redeemCompleteSetsDescription,
 			key: 'redeem-complete-sets',
 			readiness: !walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
-			safetyId: getTradingActionSafetyId('redeemCompleteSet'),
 			title: UI_STRINGS.tradingSection.redeemCompleteSetsTitle,
 			...(!walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
 			...(effectiveRedeemCompleteSetsLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemCompleteSetsLauncherBlocker }),
@@ -262,7 +259,6 @@ export function TradingSection({
 			description: UI_STRINGS.tradingSection.migrateForkedSharesDescription,
 			key: 'migrate-shares',
 			readiness: !walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			safetyId: getTradingActionSafetyId('migrateShares'),
 			title: UI_STRINGS.tradingSection.migrateForkedSharesTitle,
 			...(!walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
 			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
@@ -272,7 +268,6 @@ export function TradingSection({
 			description: UI_STRINGS.tradingSection.redeemSharesDescription,
 			key: 'redeem-shares',
 			readiness: !walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			safetyId: getTradingActionSafetyId('redeemShares'),
 			title: UI_STRINGS.tradingSection.redeemSharesTitle,
 			...(!walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
@@ -373,7 +368,6 @@ export function TradingSection({
 				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={getTradingActionSafetyId('createCompleteSet')}
 						idleLabel={UI_STRINGS.tradingSection.mintCompleteSetsTitle}
 						pendingLabel={UI_STRINGS.tradingSection.mintCompleteSetsPendingLabel}
 						onClick={onCreateCompleteSet}
@@ -404,7 +398,6 @@ export function TradingSection({
 				{redeemCompleteSetGuardMessage === undefined ? undefined : <p className='detail'>{redeemCompleteSetGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={getTradingActionSafetyId('redeemCompleteSet')}
 						idleLabel={UI_STRINGS.tradingSection.redeemCompleteSetsTitle}
 						pendingLabel={UI_STRINGS.tradingSection.redeemCompleteSetsPendingLabel}
 						onClick={onRedeemCompleteSet}
@@ -432,7 +425,6 @@ export function TradingSection({
 				{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={getTradingActionSafetyId('migrateShares')}
 						idleLabel={UI_STRINGS.tradingSection.migrateSharesIdleLabel}
 						pendingLabel={UI_STRINGS.tradingSection.migrateSharesPendingLabel}
 						onClick={onMigrateShares}
@@ -447,7 +439,6 @@ export function TradingSection({
 				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={getTradingActionSafetyId('redeemShares')}
 						idleLabel={UI_STRINGS.tradingSection.redeemSharesIdleLabel}
 						pendingLabel={UI_STRINGS.tradingSection.redeemSharesPendingLabel}
 						onClick={onRedeemShares}

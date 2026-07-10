@@ -7,7 +7,6 @@ import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ReportingSection } from '../components/ReportingSection.js'
-import { ActionSafetyProvider } from '../lib/actionSafety/runtime.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import { UI_STRINGS } from '../lib/uiStrings.js'
@@ -1524,43 +1523,30 @@ describe('ReportingSection', () => {
 		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
-	test('requires confirmation before triggering Zoltar fork from reporting', async () => {
+	test('triggers Zoltar fork directly from reporting', async () => {
 		let triggerZoltarForkCalls = 0
 		const renderedComponent = await renderIntoDocument(
-			<ActionSafetyProvider>
-				{h(
-					ReportingSection,
-					createProps({
-						onTriggerZoltarFork: () => {
-							triggerZoltarForkCalls += 1
-						},
-						reportingDetails: createReportingDetails({
-							hasReachedNonDecision: true,
-						}),
-						triggerZoltarForkAvailability: {
-							disabled: false,
-							reason: undefined,
-						},
+			h(
+				ReportingSection,
+				createProps({
+					onTriggerZoltarFork: () => {
+						triggerZoltarForkCalls += 1
+					},
+					reportingDetails: createReportingDetails({
+						hasReachedNonDecision: true,
 					}),
-				)}
-			</ActionSafetyProvider>,
+					triggerZoltarForkAvailability: {
+						disabled: false,
+						reason: undefined,
+					},
+				}),
+			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
-		})
-
-		expect(triggerZoltarForkCalls).toBe(0)
-		const dialog = documentQueries.getByRole('dialog', { name: 'Trigger Zoltar Fork' })
-		const dialogQueries = within(dialog)
-
-		await act(() => {
-			fireEvent.click(dialogQueries.getByRole('checkbox'))
-		})
-		await act(() => {
-			fireEvent.click(dialogQueries.getByRole('button', { name: 'Trigger Fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)

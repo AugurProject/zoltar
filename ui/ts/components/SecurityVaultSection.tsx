@@ -21,7 +21,6 @@ import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
-import { getSecurityVaultActionSafetyId } from '../lib/actionSafety/ids.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
@@ -494,7 +493,6 @@ export function SecurityVaultSection({
 			actionLabel: UI_STRINGS.securityVaultSection.depositRepIdleLabel,
 			description: UI_STRINGS.securityVaultSection.depositRepActionDescription,
 			key: 'deposit-rep',
-			safetyId: getSecurityVaultActionSafetyId('depositRep'),
 			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(depositLauncherBlocker === undefined ? {} : { blocker: depositLauncherBlocker }),
@@ -504,7 +502,6 @@ export function SecurityVaultSection({
 			actionLabel: repExitActionLabel,
 			description: effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.repExitRedeemDescription : UI_STRINGS.securityVaultSection.repWithdrawQueueDescription,
 			key: 'rep-exit',
-			safetyId: effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep'),
 			...(repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
 			readiness: repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(repExitLauncherBlocker === undefined ? {} : { blocker: repExitLauncherBlocker }),
@@ -514,7 +511,6 @@ export function SecurityVaultSection({
 			actionLabel: UI_STRINGS.securityVaultSection.setBondAllowanceIdleLabel,
 			description: UI_STRINGS.securityVaultSection.setBondAllowanceActionDescription,
 			key: 'set-bond-allowance',
-			safetyId: getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance'),
 			...(bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
 			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(bondAllowanceLauncherBlocker === undefined ? {} : { blocker: bondAllowanceLauncherBlocker }),
@@ -524,7 +520,6 @@ export function SecurityVaultSection({
 			actionLabel: UI_STRINGS.securityVaultSection.claimFeesIdleLabel,
 			description: UI_STRINGS.securityVaultSection.claimFeesActionDescription,
 			key: 'claim-fees',
-			safetyId: getSecurityVaultActionSafetyId('redeemFees'),
 			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(claimFeesLauncherBlocker === undefined ? {} : { blocker: claimFeesLauncherBlocker }),
@@ -594,7 +589,6 @@ export function SecurityVaultSection({
 							pendingLabel={UI_STRINGS.securityVaultSection.approvingRepPendingLabel}
 							requiredAmount={depositAmount}
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
-							safetyId={getSecurityVaultActionSafetyId('approveRep')}
 							tokenSymbol='REP'
 							tokenUnits={18}
 							disabled={!approveRepEnabled || !canUseLoadedVaultActions}
@@ -616,7 +610,6 @@ export function SecurityVaultSection({
 								{UI_STRINGS.common.cancelLabel}
 							</button>
 							<TransactionActionButton
-								safetyId={getSecurityVaultActionSafetyId('depositRep')}
 								idleLabel={UI_STRINGS.securityVaultSection.depositRepIdleLabel}
 								pendingLabel={UI_STRINGS.securityVaultSection.depositRepPendingLabel}
 								onClick={onDepositRep}
@@ -734,7 +727,6 @@ export function SecurityVaultSection({
 								{UI_STRINGS.common.cancelLabel}
 							</button>
 							<TransactionActionButton
-								safetyId={effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep')}
 								idleLabel={repExitActionLabel}
 								pendingLabel={effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.redeemRepPendingLabel : UI_STRINGS.securityVaultSection.withdrawRepPendingLabel}
 								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
@@ -798,7 +790,6 @@ export function SecurityVaultSection({
 								{UI_STRINGS.common.cancelLabel}
 							</button>
 							<TransactionActionButton
-								safetyId={getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance')}
 								idleLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowanceIdleLabel}
 								pendingLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowancePendingLabel}
 								onClick={onSetSecurityBondAllowance}
@@ -827,7 +818,6 @@ export function SecurityVaultSection({
 						{UI_STRINGS.common.cancelLabel}
 					</button>
 					<TransactionActionButton
-						safetyId={getSecurityVaultActionSafetyId('redeemFees')}
 						idleLabel={UI_STRINGS.securityVaultSection.claimFeesIdleLabel}
 						pendingLabel={UI_STRINGS.securityVaultSection.claimFeesPendingLabel}
 						onClick={onRedeemFees}
@@ -851,7 +841,6 @@ export function SecurityVaultSection({
 				)}
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={getSecurityVaultActionSafetyId('redeemFees')}
 						idleLabel={UI_STRINGS.securityVaultSection.claimFeesIdleLabel}
 						pendingLabel={UI_STRINGS.securityVaultSection.claimFeesPendingLabel}
 						onClick={onRedeemFees}
@@ -890,14 +879,12 @@ export function SecurityVaultSection({
 					pendingLabel={UI_STRINGS.securityVaultSection.approvingRepPendingLabel}
 					requiredAmount={depositAmount}
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
-					safetyId={getSecurityVaultActionSafetyId('approveRep')}
 					tokenSymbol='REP'
 					tokenUnits={18}
 					disabled={!approveRepEnabled || !canUseLoadedVaultActions}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={getSecurityVaultActionSafetyId('depositRep')}
 						idleLabel={UI_STRINGS.securityVaultSection.depositRepIdleLabel}
 						pendingLabel={UI_STRINGS.securityVaultSection.depositRepPendingLabel}
 						onClick={onDepositRep}
@@ -945,7 +932,6 @@ export function SecurityVaultSection({
 						{renderStagedOperationTimeoutField()}
 						<div className='actions'>
 							<TransactionActionButton
-								safetyId={getSecurityVaultActionSafetyId('queueSetSecurityBondAllowance')}
 								idleLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowanceIdleLabel}
 								pendingLabel={UI_STRINGS.securityVaultSection.setSecurityBondAllowancePendingLabel}
 								onClick={onSetSecurityBondAllowance}
@@ -1005,7 +991,6 @@ export function SecurityVaultSection({
 				{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId={effectiveRepExitMode === 'redeem' ? getSecurityVaultActionSafetyId('redeemRep') : getSecurityVaultActionSafetyId('queueWithdrawRep')}
 						idleLabel={repExitActionLabel}
 						pendingLabel={effectiveRepExitMode === 'redeem' ? UI_STRINGS.securityVaultSection.redeemRepPendingLabel : UI_STRINGS.securityVaultSection.withdrawRepPendingLabel}
 						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
