@@ -564,13 +564,16 @@ describe('Peripherals: fork migration', () => {
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
 			const openInterestAmount = 100n * 10n ** 18n
+			const splitUpdateCount = 128n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - splitUpdateCount - 10n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
-			const splitUpdateCount = 128n
 			for (let index = 1n; index <= splitUpdateCount; index++) {
 				await mockWindow.advanceTime(1n)
 				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
 			}
+			await mockWindow.setTime(endTime + 10000n)
 			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
 
 			const splitVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -579,6 +582,9 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(totalFeesOwed > 0n, 'repeated public collateral updates should accrue nonzero fees in this setup')
 			strictEqualTypeSafe(totalFeesOwed, splitVault.unpaidEthFees, 'pool fee accounting should only record fees that the vault index can actually credit')
 			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+			const contractBalance = await getETHBalance(client, securityPoolAddresses.securityPool)
+			const remainingCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(contractBalance, remainingCollateral + (await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)), 'final fee settlement should leave every remaining wei in either collateral or redeemable fees')
 		})
 
 		test('frequent public collateral updates keep multi-vault fee accounting sweepable', async () => {
@@ -1276,7 +1282,7 @@ describe('Peripherals: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'parent pool should enter PoolForked after the universe fork is activated')
-			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe already forked|Universe forked|Question resolved/)
+			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe already forked|Universe forked|Question resolved|Resolved/)
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)

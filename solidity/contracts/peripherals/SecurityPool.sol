@@ -164,12 +164,12 @@ contract SecurityPool is ISecurityPool {
 
 	modifier onlyValidOracle() {
 		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only oracle');
-		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Oracle price is stale');
+		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Stale price');
 		_;
 	}
 
 	modifier onlyForker() {
-		require(msg.sender == securityPoolForker, 'Only pool forker');
+		require(msg.sender == securityPoolForker, 'Only forker');
 		_;
 	}
 
@@ -302,6 +302,11 @@ contract SecurityPool is ISecurityPool {
 		uint256 scaledFeeDelta = (delta * SecurityPoolUtils.PRICE_PRECISION) + feeIndexRemainder;
 		uint256 feeIndexDelta = scaledFeeDelta / totalSecurityBondAllowance;
 		feeIndexRemainder = scaledFeeDelta % totalSecurityBondAllowance;
+		if (clampedCurrentTimestamp == feeEndDate && feeIndexRemainder >= SecurityPoolUtils.PRICE_PRECISION) {
+			uint256 nondistributableWholeWei = feeIndexRemainder / SecurityPoolUtils.PRICE_PRECISION;
+			completeSetCollateralAmount += nondistributableWholeWei;
+			feeIndexRemainder %= SecurityPoolUtils.PRICE_PRECISION;
+		}
 		feeIndex += feeIndexDelta;
 		uint256 feesOwedDelta = (feeIndexDelta * totalSecurityBondAllowance) + totalFeesOwedRemainder;
 		totalFeesOwedToVaults += feesOwedDelta / SecurityPoolUtils.PRICE_PRECISION;
@@ -370,7 +375,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 
 	function performWithdrawRep(address vault, uint256 repAmount) external isOperational onlyValidOracle {
-		require(!isEscalationResolved(), 'Question resolved');
+		require(!isEscalationResolved(), 'Resolved');
 		if (address(escalationGame) != address(0x0)) {
 			require(escalationGame.escrowedRepByVault(vault) == 0, 'Escrow locked');
 		}
@@ -384,7 +389,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 totalRepBalance = getTotalRepBalance();
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
-		require(oldRep >= withdrawRepAmount, 'Withdraw exceeds REP');
+		require(oldRep >= withdrawRepAmount, 'Withdraw REP');
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
 		_requireVaultBondCoverage(oldRep - withdrawRepAmount, securityVaults[vault].securityBondAllowance, repEthPrice);
 		_requirePoolBondCoverage(totalRepBalance - withdrawRepAmount, totalSecurityBondAllowance, repEthPrice);
@@ -488,7 +493,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 totalSecurityBondAllowanceValue,
 		uint256 collateralAmount
 	) private pure {
-		require(totalSecurityBondAllowanceValue >= collateralAmount, 'Capacity exceeded');
+		require(totalSecurityBondAllowanceValue >= collateralAmount, 'Over capacity');
 	}
 
 	function sharesToCash(uint256 completeSetAmount) public view returns (uint256) {
@@ -506,7 +511,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function depositRep(uint256 repAmount) external isOperational {
-		require(!isEscalationResolved(), 'Question resolved');
+		require(!isEscalationResolved(), 'Resolved');
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
 		IERC20(address(repToken)).safeTransferFrom(msg.sender, address(this), repAmount);
 		_trackVault(msg.sender);
@@ -538,7 +543,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 snapshotTotalRep,
 		uint256 snapshotDenominator
 	) external isOperational onlyValidOracle {
-		require(!isEscalationResolved(), 'Question resolved');
+		require(!isEscalationResolved(), 'Resolved');
 		_trackVault(callerVault);
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
@@ -570,7 +575,7 @@ contract SecurityPool is ISecurityPool {
 		}
 		uint256 maxDebtToMove = repairDebtToMove > snapshotTargetAllowance ? snapshotTargetAllowance : repairDebtToMove;
 		uint256 debtToMove = debtAmount > maxDebtToMove ? maxDebtToMove : debtAmount;
-		require(debtToMove > 0, 'No debt to liquidate');
+		require(debtToMove > 0, 'No debt');
 		uint256 repToMove = 0;
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
 		require(
@@ -632,7 +637,7 @@ contract SecurityPool is ISecurityPool {
 		address callerVault,
 		uint256 amount
 	) external isOperational onlyValidOracle {
-		require(!isEscalationResolved(), 'Question resolved');
+		require(!isEscalationResolved(), 'Resolved');
 		updateVaultFees(callerVault);
 
 		uint256 oldAllowance = securityVaults[callerVault].securityBondAllowance;
@@ -660,8 +665,8 @@ contract SecurityPool is ISecurityPool {
 	function createCompleteSet() external payable isOperational {
 		// Child pools mint complete sets only after migration and truth-auction
 		// accounting have restored `SystemState.Operational`.
-		require(!isEscalationResolved(), 'Question resolved');
-		require(msg.value > 0, 'ETH required');
+		require(!isEscalationResolved(), 'Resolved');
+		require(msg.value > 0, 'Need ETH');
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
@@ -727,7 +732,7 @@ contract SecurityPool is ISecurityPool {
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
-		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid None outcome');
+		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome');
 
 		EscalationGame escalationGameContract = EscalationGame(payable(address(escalationGame)));
 		address beneficiaryVault = address(0x0);
@@ -737,7 +742,7 @@ contract SecurityPool is ISecurityPool {
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
 			}
-			require(depositor == beneficiaryVault, 'Deposits need one vault');
+			require(depositor == beneficiaryVault, 'One vault');
 		}
 		_syncActiveVault(beneficiaryVault);
 	}
@@ -766,7 +771,7 @@ contract SecurityPool is ISecurityPool {
 		);
 		require(depositedAmount > 0, 'No escalation deposit');
 		if (totalSecurityBondAllowance > 0) {
-			require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Oracle price is stale');
+			require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Stale price');
 		}
 		uint256 ownershipToEscrow = repToPoolOwnershipRoundUp(depositedAmount);
 		uint256 currentRep = poolOwnershipToRep(securityVaults[msg.sender].poolOwnership);
@@ -807,7 +812,7 @@ contract SecurityPool is ISecurityPool {
 	) external {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid None outcome');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome');
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (
@@ -825,7 +830,7 @@ contract SecurityPool is ISecurityPool {
 			if (beneficiaryVault == address(0x0)) {
 				beneficiaryVault = depositor;
 			}
-			require(depositor == beneficiaryVault, 'Deposits need one vault');
+			require(depositor == beneficiaryVault, 'One vault');
 		}
 		_syncActiveVault(beneficiaryVault);
 	}
