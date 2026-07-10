@@ -285,7 +285,6 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function updateCollateralAmount() public {
-		if (totalSecurityBondAllowance == 0) return;
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		uint256 endTime = questionData.getQuestionEndDate(questionId);
 		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
@@ -293,6 +292,11 @@ contract SecurityPool is ISecurityPool {
 		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
+		if (totalSecurityBondAllowance == 0) {
+			_clearFeeIndexRemainder();
+			lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
+			return;
+		}
 
 		uint256 newCompleteSetCollateralAmount =
 			(completeSetCollateralAmount *
@@ -302,16 +306,12 @@ contract SecurityPool is ISecurityPool {
 		uint256 scaledFeeDelta = (delta * SecurityPoolUtils.PRICE_PRECISION) + feeIndexRemainder;
 		uint256 feeIndexDelta = scaledFeeDelta / totalSecurityBondAllowance;
 		feeIndexRemainder = scaledFeeDelta % totalSecurityBondAllowance;
-		if (clampedCurrentTimestamp == feeEndDate && feeIndexRemainder >= SecurityPoolUtils.PRICE_PRECISION) {
-			uint256 nondistributableWholeWei = feeIndexRemainder / SecurityPoolUtils.PRICE_PRECISION;
-			completeSetCollateralAmount += nondistributableWholeWei;
-			feeIndexRemainder %= SecurityPoolUtils.PRICE_PRECISION;
-		}
 		feeIndex += feeIndexDelta;
 		uint256 feesOwedDelta = (feeIndexDelta * totalSecurityBondAllowance) + totalFeesOwedRemainder;
-		totalFeesOwedToVaults += feesOwedDelta / SecurityPoolUtils.PRICE_PRECISION;
+		uint256 creditedFees = feesOwedDelta / SecurityPoolUtils.PRICE_PRECISION;
+		totalFeesOwedToVaults += creditedFees;
 		totalFeesOwedRemainder = feesOwedDelta % SecurityPoolUtils.PRICE_PRECISION;
-		completeSetCollateralAmount = newCompleteSetCollateralAmount;
+		completeSetCollateralAmount -= creditedFees;
 		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 
 		emit UpdateCollateralAmount(
@@ -348,26 +348,26 @@ contract SecurityPool is ISecurityPool {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
-		_sweepFeeResidueIfAllVaultFeesSettled();
+		_reconcileCollateralBalanceAfterFeeRedemption(fees);
 		_syncActiveVault(vault);
 		_sendEth(payable(vault), fees);
 		emit RedeemFees(vault, fees, totalFeesOwedToVaults);
 	}
 
-	function _sweepFeeResidueIfAllVaultFeesSettled() internal {
-		if (totalFeesOwedToVaults == 0) return;
-		address trackedVaultAddress = latestActiveVault;
-		while (trackedVaultAddress != address(0x0)) {
-			SecurityVault storage trackedVault = securityVaults[trackedVaultAddress];
-			if (
-				(trackedVault.securityBondAllowance > 0 && trackedVault.feeIndex != feeIndex) ||
-				trackedVault.unpaidEthFees > 0
-			) return;
-			trackedVaultAddress = olderActiveVaults[trackedVaultAddress];
+	function _reconcileCollateralBalanceAfterFeeRedemption(uint256 pendingFeePayout) internal {
+		uint256 balanceAfterPayout = address(this).balance - pendingFeePayout;
+		uint256 accountedBalance = completeSetCollateralAmount + totalFeesOwedToVaults;
+		if (balanceAfterPayout > accountedBalance) {
+			completeSetCollateralAmount += balanceAfterPayout - accountedBalance;
 		}
-		uint256 sweptResidue = totalFeesOwedToVaults;
-		totalFeesOwedToVaults = 0;
-		completeSetCollateralAmount += sweptResidue;
+	}
+
+	function _clearFeeIndexRemainder() internal {
+		// This carry is scoped to the allowance denominator that produced it.
+		// Collateral already retains the undistributed value, so once allowance
+		// ownership changes the old denominator-specific remainder must not be
+		// attributed to the new allowance holders.
+		feeIndexRemainder = 0;
 	}
 
 	////////////////////////////////////////
@@ -586,6 +586,7 @@ contract SecurityPool is ISecurityPool {
 		);
 
 		// Update target's allowance based on snapshot to prevent blocking via allowance changes
+		_clearFeeIndexRemainder();
 		securityVaults[targetVaultAddress].securityBondAllowance = snapshotTargetAllowance - debtToMove;
 		securityVaults[targetVaultAddress].poolOwnership -= ownershipToMove;
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
@@ -641,6 +642,7 @@ contract SecurityPool is ISecurityPool {
 		updateVaultFees(callerVault);
 
 		uint256 oldAllowance = securityVaults[callerVault].securityBondAllowance;
+		_clearFeeIndexRemainder();
 		totalSecurityBondAllowance += amount;
 		totalSecurityBondAllowance -= oldAllowance;
 		securityVaults[callerVault].securityBondAllowance = amount;
@@ -914,6 +916,9 @@ contract SecurityPool is ISecurityPool {
 		require(vault != address(0x0), 'Zero vault');
 		_trackVault(vault);
 		securityVaults[vault].poolOwnership = poolOwnership;
+		if (securityVaults[vault].securityBondAllowance != securityBondAllowance) {
+			_clearFeeIndexRemainder();
+		}
 		securityVaults[vault].securityBondAllowance = securityBondAllowance;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
 		_syncActiveVault(vault);
@@ -995,6 +1000,7 @@ contract SecurityPool is ISecurityPool {
 		require(newTotalBondAllowance >= newCollateral, 'Bond below collateral');
 		completeSetCollateralAmount = newCollateral;
 		totalSecurityBondAllowance = newTotalBondAllowance;
+		_clearFeeIndexRemainder();
 		emit PoolFinancialsSet(completeSetCollateralAmount, totalSecurityBondAllowance);
 	}
 
