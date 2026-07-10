@@ -45,6 +45,7 @@ import {
 	UI_STRING_FUNCTION,
 	UI_STRING_IMPORTED_FORK_CARRIED_ESCALATION_DEPOSITS_WERE_SETTLED,
 	UI_STRING_LIQUIDATION_EXECUTED,
+	UI_STRING_LIQUIDATION_FAILED,
 	UI_STRING_LIQUIDATION_SUBMITTED,
 	UI_STRING_LIQUIDATION_TRANSACTION_SUBMITTED,
 	UI_STRING_MARKET_TYPE,
@@ -511,6 +512,16 @@ export function createLiquidationSuccessPresentation(result: SecurityPoolOvervie
 		rows: [{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.queuedOperation === undefined ? [] : [{ label: UI_STRING_STAGED_OPERATION, value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: result.stagedExecution?.success === true ? UI_STRING_LIQUIDATION_EXECUTED : UI_STRING_LIQUIDATION_SUBMITTED,
 		tone: 'success',
+	})
+}
+
+export function createLiquidationFailurePresentation(result: SecurityPoolOverviewActionResult, detail: string) {
+	return buildPresentation({
+		detail,
+		hash: result.hash,
+		rows: [{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.stagedExecution === undefined ? [] : [{ label: UI_STRING_STAGED_OPERATION, value: `#${result.stagedExecution.operationId.toString()}` }])],
+		title: UI_STRING_LIQUIDATION_FAILED,
+		tone: 'error',
 	})
 }
 

@@ -8,6 +8,7 @@ library SecurityPoolUtils {
 	// fees
 	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant BPS_DENOMINATOR = 10_000;
+	uint256 constant LIQUIDATION_REP_BONUS_BPS = 500;
 
 	uint256 constant MAX_RETENTION_RATE = 999_999_996_848_000_000; // ≈90% yearly (10% fees)
 	uint256 constant MIN_RETENTION_RATE = 999_999_977_880_000_000; // ≈50% yearly (50% fees)

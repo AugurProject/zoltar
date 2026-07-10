@@ -48,7 +48,7 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 		case 'forkMigration':
 			return 'Migration is active. Vaults, escalation deposits, and REP can be moved into a child universe before the truth auction starts.'
 		case 'forkTruthAuction':
-			return `Truth auction is active. Winning bidders later claim child-pool REP plus a pro-rata share of the ${AUCTIONED_BOND_ALLOWANCE_LABEL}, which is the remaining open-interest debt for this repair path.`
+			return `Truth auction is active. Winning bidders later claim child-pool REP plus a pro-rata share of the ${AUCTIONED_BOND_ALLOWANCE_LABEL}, which is the remaining open-interest debt carried into the child pool.`
 		default:
 			return assertNever(state)
 	}

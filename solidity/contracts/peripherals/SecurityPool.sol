@@ -159,13 +159,13 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only oracle coordinator');
+		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only coordinator');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Oracle price is stale');
 		_;
 	}
 
 	modifier onlyForker() {
-		require(msg.sender == securityPoolForker, 'Only pool forker');
+		require(msg.sender == securityPoolForker, 'Only forker');
 		_;
 	}
 
@@ -265,7 +265,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _completeSetCollateralAmount) external {
-		require(msg.sender == address(securityPoolFactory), 'Only pool factory');
+		require(msg.sender == address(securityPoolFactory), 'Only factory');
 		lastUpdatedFeeAccumulator = block.timestamp;
 		currentRetentionRate = _currentRetentionRate;
 		completeSetCollateralAmount = _completeSetCollateralAmount;
@@ -358,7 +358,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 totalRepBalance = getTotalRepBalance();
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
-		require(oldRep >= withdrawRepAmount, 'Withdraw amount exceeds vault REP');
+		require(oldRep >= withdrawRepAmount, 'Withdraw exceeds vault REP');
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
 		_requireVaultBondCoverage(oldRep - withdrawRepAmount, securityVaults[vault].securityBondAllowance, repEthPrice);
 		_requirePoolBondCoverage(totalRepBalance - withdrawRepAmount, totalSecurityBondAllowance, repEthPrice);
@@ -427,7 +427,7 @@ contract SecurityPool is ISecurityPool {
 	) private pure {
 		require(
 			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION > securityBondAllowance * repEthPrice,
-			'Vault allowance exceeds REP backing'
+			'Vault allowance exceeds backing'
 		);
 	}
 
@@ -438,7 +438,7 @@ contract SecurityPool is ISecurityPool {
 	) private pure {
 		require(
 			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowanceValue * repEthPrice,
-			'Pool allowance exceeds REP backing'
+			'Pool allowance exceeds backing'
 		);
 	}
 
@@ -500,9 +500,9 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
-	// Liquidation moves only the debt shortfall needed to repair solvency at the
-	// current price, unless clearing the shortfall would strand a forbidden dust
-	// allowance, in which case it moves the full remaining allowance.
+	// Liquidation moves debt to the caller vault and seizes unlocked REP from the
+	// target at a fixed bonus over market value, subject to the target and caller
+	// minimum debt floors plus the minimum unlocked REP floor on the target.
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,
@@ -528,30 +528,52 @@ contract SecurityPool is ISecurityPool {
 		require(
 			snapshotTargetAllowance * securityMultiplier * repEthPrice >
 				vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION,
-			'Target vault not liquidatable'
+			'Target safe'
 		);
 
-		uint256 unsafeValueNumerator =
-			(snapshotTargetAllowance * securityMultiplier * repEthPrice) -
-				(vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION);
-		uint256 repairDebtToMove =
-			(unsafeValueNumerator + (securityMultiplier * repEthPrice) - 1) / (securityMultiplier * repEthPrice);
-		if (
-			snapshotTargetAllowance > repairDebtToMove &&
-			snapshotTargetAllowance - repairDebtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
-		) {
-			repairDebtToMove = snapshotTargetAllowance;
+		uint256 maxDebtToMove = 0;
+		if (vaultsRepDeposit > SecurityPoolUtils.MIN_REP_DEPOSIT) {
+			maxDebtToMove =
+				((vaultsRepDeposit - SecurityPoolUtils.MIN_REP_DEPOSIT) *
+					SecurityPoolUtils.PRICE_PRECISION *
+					SecurityPoolUtils.BPS_DENOMINATOR) /
+				(repEthPrice * (SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS));
+			if (maxDebtToMove > snapshotTargetAllowance) {
+				maxDebtToMove = snapshotTargetAllowance;
+			}
 		}
-		uint256 maxDebtToMove = repairDebtToMove > snapshotTargetAllowance ? snapshotTargetAllowance : repairDebtToMove;
+		if (
+			maxDebtToMove < snapshotTargetAllowance &&
+			snapshotTargetAllowance - maxDebtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+		) {
+			maxDebtToMove =
+				snapshotTargetAllowance > SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+					? snapshotTargetAllowance - SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+					: 0;
+		}
 		uint256 debtToMove = debtAmount > maxDebtToMove ? maxDebtToMove : debtAmount;
-		require(debtToMove > 0, 'No debt to liquidate');
-		uint256 repToMove = 0;
+		require(debtToMove > 0, 'No liq');
+		uint256 repToMove =
+			(debtToMove *
+				repEthPrice *
+				(SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS)) /
+				(SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR);
+		if (
+			repToMove * SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR <
+			debtToMove * repEthPrice * (SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS)
+		) {
+			repToMove += 1;
+		}
+		require(
+			debtToMove * securityMultiplier * repEthPrice > repToMove * SecurityPoolUtils.PRICE_PRECISION,
+			'No gain'
+		);
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
 		require(
 			(securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <=
 				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) *
 					SecurityPoolUtils.PRICE_PRECISION,
-			'Caller vault liquidatable'
+			'Caller bad'
 		);
 
 		// Update target's allowance based on snapshot to prevent blocking via allowance changes
@@ -565,23 +587,15 @@ contract SecurityPool is ISecurityPool {
 			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership),
 			securityVaults[targetVaultAddress].poolOwnership == 0 &&
 				securityVaults[targetVaultAddress].securityBondAllowance == 0,
-			'Target vault REP below minimum'
+			'Target REP'
 		);
 		_requireMinimumSecurityBondAllowance(
 			securityVaults[targetVaultAddress].securityBondAllowance,
 			securityVaults[targetVaultAddress].securityBondAllowance == 0,
-			'Target vault debt below minimum'
+			'Target debt'
 		);
-		_requireMinimumVaultRep(
-			poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
-			false,
-			'Caller vault REP below minimum'
-		);
-		_requireMinimumSecurityBondAllowance(
-			securityVaults[callerVault].securityBondAllowance,
-			false,
-			'Caller vault debt below minimum'
-		);
+		_requireMinimumVaultRep(poolOwnershipToRep(securityVaults[callerVault].poolOwnership), false, 'Caller REP');
+		_requireMinimumSecurityBondAllowance(securityVaults[callerVault].securityBondAllowance, false, 'Caller debt');
 		_syncActiveVault(targetVaultAddress);
 		_syncActiveVault(callerVault);
 
@@ -635,7 +649,7 @@ contract SecurityPool is ISecurityPool {
 		// Child pools mint complete sets only after migration and truth-auction
 		// accounting have restored `SystemState.Operational`.
 		require(!isEscalationResolved(), 'Question resolved');
-		require(msg.value > 0, 'ETH payment required');
+		require(msg.value > 0, 'ETH required');
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
@@ -818,7 +832,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 nonDecisionThreshold,
 		uint256 elapsedAtFork
 	) external onlyForker {
-		require(address(escalationGame) == address(0x0), 'Escalation game already set');
+		require(address(escalationGame) == address(0x0), 'Escalation game set');
 		escalationGame = escalationGameFactory.deployEscalationGameFromFork(
 			startBond,
 			nonDecisionThreshold,
@@ -880,7 +894,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 securityBondAllowance,
 		uint256 vaultFeeIndex
 	) external onlyForker {
-		require(vault != address(0x0), 'Vault address is zero');
+		require(vault != address(0x0), 'Zero vault address');
 		_trackVault(vault);
 		securityVaults[vault].poolOwnership = poolOwnership;
 		securityVaults[vault].securityBondAllowance = securityBondAllowance;
@@ -896,7 +910,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function _trackVault(address vault) private {
-		require(vault != address(0x0), 'Vault address is zero');
+		require(vault != address(0x0), 'Zero vault address');
 		if (vaultIndexesPlusOne[vault] != 0) return;
 		vaults.push(vault);
 		vaultIndexesPlusOne[vault] = vaults.length;

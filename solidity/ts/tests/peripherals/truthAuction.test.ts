@@ -1,6 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
+import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize } from '../../testsuite/simulator/utils/contracts/auction'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 
@@ -1203,9 +1204,15 @@ describe('Peripherals: truth auction', () => {
 
 			const actualDebtMoved = targetVaultBeforeLiquidation.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance
 
+			const expectedRepMove = getExpectedLiquidationRepMove(actualDebtMoved, forcedPrice)
 			strictEqualTypeSafe(actualDebtMoved > 0n, true, 'partial liquidation before claim should reduce the migrated vault allowance')
-			strictEqualTypeSafe(targetRepAfterLiquidation, targetRepBeforeLiquidation, 'repair liquidation should leave the migrated vault REP in place before claim')
-			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.repDepositShare, liquidatorVaultBeforeLiquidation.repDepositShare, 'repair liquidation should not transfer the migrated vault ownership')
+			approximatelyEqual(targetRepAfterLiquidation, targetRepBeforeLiquidation - expectedRepMove, 2n, 'liquidation should seize migrated vault REP before claim')
+			approximatelyEqual(
+				await poolOwnershipToRep(client, yesSecurityPool.securityPool, liquidatorVaultAfterLiquidation.repDepositShare),
+				(await poolOwnershipToRep(client, yesSecurityPool.securityPool, liquidatorVaultBeforeLiquidation.repDepositShare)) + expectedRepMove,
+				2n,
+				'liquidation should transfer the seized migrated REP into the liquidator vault',
+			)
 			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, liquidatorVaultBeforeLiquidation.securityBondAllowance + actualDebtMoved, 'the liquidator should absorb the executed allowance reduction')
 
 			const childCollateralAfterLiquidation = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)

@@ -2004,12 +2004,14 @@
 						valid REP/ETH price. Withdrawal and allowance changes check backing
 						against allowance, while liquidation applies the stronger
 						<code>securityMultiplier</code>-adjusted liquidability condition.
-					</p>
-					<p>
-						Liquidation is a transfer of risk, not a direct sale of collateral.
-						When a vault becomes undercollateralized, another vault can call
-						<code>performLiquidation</code>
-						through the queued-oracle path. The contract snapshots the target
+						</p>
+						<p>
+							Liquidation is a punitive vault-to-vault transfer: debt moves to
+							the caller vault, and unlocked target REP moves to that caller at
+							the liquidation bonus. When a vault becomes undercollateralized,
+							another vault can call
+							<code>performLiquidation</code>
+							through the queued-oracle path. The contract snapshots the target
 						vault’s state at queue time and uses that snapshot when the
 						operation executes, so later target-vault manipulation cannot
 						trivially invalidate the liquidation attempt. The queued liquidation
@@ -2017,24 +2019,35 @@
 						the computed threshold and far enough beyond it to satisfy the
 						configured <code>minLiquidationPriceDistanceBps</code> liquidation
 						distance check.
+						</p>
+						<p>
+							Economically, liquidation is punitive: the liquidator vault absorbs
+							target debt and receives unlocked target REP at a fixed
+							five-percent bonus over the debt chunk’s REP market value. That
+						punishes the target and rewards the liquidator, while the
+						<code>securityMultiplier</code> still makes the target healthier as
+						long as required backing falls faster than seized REP.
 					</p>
 					<p>
-						Economically, liquidation now moves debt first and only as far as is
-						needed to repair the target vault at the current price. The target’s
-						snapshot-derived unlocked vault REP claim stays with the target on
-						that repair path, so the caller vault is absorbing the under-backed
-						debt rather than extracting target REP. If the exact repair point
-						would leave a non-zero allowance below the pool’s minimum debt floor,
-						the cap rounds up to a full allowance transfer instead. REP
-						committed to escalation is never part of the liquidation transfer.
-						The receiving vault must remain solvent after taking on the moved
-						debt, and both sides must still satisfy the minimum deposit
-						requirements enforced by the pool.
+						The purpose is therefore threefold: punish the liquidated vault,
+						reward the liquidator, and move the system into a healthier state.
+						The first two effects are direct REP transfers; the third comes from
+						the strict health-improvement guard that rejects chunks whose
+						rounding would fail to reduce the target shortfall.
+						Healthier means the target shortfall shrinks and the moved debt
+						lands only on a caller vault that remains non-liquidatable under the
+						<code>securityMultiplier</code>-adjusted collateral threshold;
+						liquidation redistributes REP and allowance rather than increasing
+						aggregate backing.
 					</p>
 					<p>
-						For a focused walkthrough of the repair-cap math, chunking limits,
-						and incentive tradeoffs, see
-						<a href="./liquidation.html">Liquidation Design</a>.
+						Snapshot sizing, REP-seizure math, the strict health-improvement
+						guard
+						<code>debtToMove * securityMultiplier * currentRepPerEthPrice &gt; repToMove * PRICE_PRECISION</code>,
+						target/caller dust floors, and repeated-liquidation edge cases
+						define the liquidation execution envelope;
+						<a href="./liquidation.html">Liquidation Design</a> derives that
+						flow in full.
 					</p>
 					<figure class="diagram" id="fig-placeholder-liquidation-transfer">
 						<svg
@@ -2043,13 +2056,12 @@
 							aria-labelledby="liquidation-transfer-title liquidation-transfer-desc"
 						>
 							<title id="liquidation-transfer-title">
-								Liquidation repair transfer
+								Punitive liquidation transfer
 							</title>
 							<desc id="liquidation-transfer-desc">
-								Liquidation moves only the debt shortfall needed to repair the
-								target vault at the current price, leaves unlocked target REP in
-								place, and rounds up to a full debt transfer only when the repair
-								point would otherwise leave forbidden debt dust.
+								Liquidation moves debt to the caller vault and moves unlocked REP
+								from the target vault to the caller at a fixed liquidation bonus,
+								subject to target and caller minimum-balance constraints.
 							</desc>
 							<defs>
 								<marker
@@ -2079,7 +2091,7 @@
 								unsafe allowance
 							</text>
 							<text class="svg-small" x="179" y="164" text-anchor="middle">
-								REP backing snapshot
+								loses unlocked REP
 							</text>
 							<path
 								class="svg-line"
@@ -2087,10 +2099,10 @@
 								d="M 304 118 H 610"
 							></path>
 							<text class="svg-small" x="457" y="99" text-anchor="middle">
-								debtToMove
+								debtToMove + repToMove
 							</text>
 							<text class="svg-small" x="457" y="184" text-anchor="middle">
-								no REP moves on the repair path
+								snapshot sizing + floor checks
 							</text>
 							<rect
 								class="svg-green"
@@ -2107,7 +2119,7 @@
 								takes debt
 							</text>
 							<text class="svg-small" x="735" y="164" text-anchor="middle">
-								must remain solvent
+								earns seized REP
 							</text>
 							<rect
 								class="svg-box"
@@ -2118,99 +2130,40 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="460" y="256" text-anchor="middle">
-								Repair cap = target debt shortfall at the execution price
+								REP moves with a fixed 5% liquidation bonus
 							</text>
 							<text class="svg-small" x="460" y="276" text-anchor="middle">
-								full transfer only when the repair point would leave debt dust
+								full rules and worked examples live in Liquidation Design
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Liquidation Transfer</span>Liquidation
-							moves a capped slice of snapshot target allowance to the caller
-							vault and leaves the target vault’s unlocked REP in place on the
-							repair path.
+							moves snapshot-sized debt to the caller vault and seizes unlocked
+							target REP at the configured liquidation bonus.
 						</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-liquidation-transfer">
 						<math
 							display="block"
-							aria-label="unsafe value numerator equals snapshot target allowance times security multiplier times current price minus snapshot target REP times price precision, repair debt cap equals the ceiling of unsafe value numerator divided by security multiplier times current price, debt to move equals the minimum of requested debt and the repair debt cap after dust rounding, and REP to move equals zero on the repair path"
-							data-source="unsafeValueNumerator = snapshotTargetAllowance \cdot securityMultiplier \cdot currentPrice - snapshotTargetRep \cdot PRICE_PRECISION; repairDebtCap = ceil(unsafeValueNumerator / (securityMultiplier \cdot currentPrice)); debtToMove = min(requestedDebt, maxDebtToMoveAfterDustRounding); repToMove = 0"
+							aria-label="rep to move equals the ceiling of debt moved times current REP per ETH price times one plus the liquidation bonus divided by price precision"
+							data-source="repToMove = ceil(debtToMove \cdot currentPrice \cdot (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION \cdot BPS_DENOMINATOR))"
 						>
-							<mtable>
-								<mtr>
-									<mtd>
-										<mi>unsafeValueNumerator</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>snapshotTargetAllowance</mi>
-										<mo>&#x22C5;</mo>
-										<mi>securityMultiplier</mi>
-										<mo>&#x22C5;</mo>
-										<mi>currentPrice</mi>
-										<mo>-</mo>
-										<mi>snapshotTargetRep</mi>
-										<mo>&#x22C5;</mo>
-										<mi>PRICE_PRECISION</mi>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>repairDebtCap</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>ceil</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mi>unsafeValueNumerator</mi>
-											<mrow>
-												<mi>securityMultiplier</mi>
-												<mo>&#x22C5;</mo>
-												<mi>currentPrice</mi>
-											</mrow>
-										</mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>debtToMove</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>min</mi>
-										<mo>(</mo>
-										<mi>requestedDebt</mi>
-										<mo>,</mo>
-										<mi>maxDebtToMoveAfterDustRounding</mi>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>repToMove</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd><mn>0</mn></mtd>
-								</mtr>
-							</mtable>
+							<mrow>
+								<mi>repToMove</mi>
+								<mo>=</mo>
+								<mi>ceil</mi>
+								<mo>(</mo>
+								<mfrac>
+									<mrow><mi>debtToMove</mi><mo>&#x22C5;</mo><mi>currentPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
+									<mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
+								</mfrac>
+								<mo>)</mo>
+							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Liquidation Transfer</span>The debt
-							transfer is capped at the minimum amount needed to repair the
-							target vault at the execution price, except when that repair point
-							would leave non-zero debt dust below the minimum allowance. The
-							repair path moves no REP.
+							<span class="equation-label">Liquidation Transfer</span>The caller
+							receives REP priced from the executed debt chunk plus the fixed
+							liquidation bonus.
 						</p>
 					</div>
 					<p>
@@ -8723,6 +8676,16 @@
 								<td>
 									Scaled utilization point where the retention curve reaches its
 									minimum. Solidity constant in <code>SecurityPoolUtils</code>.
+								</td>
+							</tr>
+							<tr>
+								<td><code>LIQUIDATION_REP_BONUS_BPS</code></td>
+								<td><code>500</code></td>
+								<td>
+									Fixed liquidator reward bonus in basis points. Higher values
+									increase liquidator reward but reduce the margin by which a
+									liquidation improves target health. Solidity constant in
+									<code>SecurityPoolUtils</code>.
 								</td>
 							</tr>
 							<tr>

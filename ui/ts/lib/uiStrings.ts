@@ -51,6 +51,7 @@ export const UI_STRING_INITIALLY_DEPOSITED_PREFIX = 'Initially deposited: '
 export const UI_STRING_INVALID = 'Invalid'
 export const UI_STRING_JSON_STATE = 'JSON state'
 export const UI_STRING_LIQUIDATION_EXECUTED = 'Liquidation Executed'
+export const UI_STRING_LIQUIDATION_FAILED = 'Liquidation Failed'
 export const UI_STRING_LIQUIDATION_SUBMITTED = 'Liquidation Submitted'
 export const UI_STRING_LOADED_DEPTH_ETH = 'Loaded Depth (ETH)'
 export const UI_STRING_LOADING = 'Loading'
@@ -897,7 +898,15 @@ export const UI_STRINGS = {
 		liquidationAmountPlaceholder: UI_STRING_ZERO_DECIMAL_PLACEHOLDER,
 		liquidationExecutedTitle: UI_STRING_LIQUIDATION_EXECUTED,
 		liquidationFailedDetail: 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.',
-		liquidationFailedTitle: 'Liquidation Failed',
+		liquidationFailedTitle: UI_STRING_LIQUIDATION_FAILED,
+		liquidationFailureCallerDebtDetail: 'The caller vault would remain below the minimum security bond allowance after liquidation.',
+		liquidationFailureCallerRepDetail: 'The caller vault would remain below the minimum REP collateral after liquidation.',
+		liquidationFailureNoHealthGainDetail: 'This liquidation amount is too small to improve the target vault health after rounding.',
+		liquidationFailureNoExecutableDebtDetail: 'No debt is executable for liquidation at the current target-side bounds.',
+		liquidationFailureTargetSafeDetail: 'The target vault is not liquidatable at the current price.',
+		liquidationFailureTargetDebtDetail: 'The target vault would fall below the minimum security bond allowance after liquidation.',
+		liquidationFailureTargetRepDetail: 'The target vault would fall below the minimum REP collateral after liquidation.',
+		liquidationFailureUndercollateralizedCallerDetail: 'The caller vault would become undercollateralized after this liquidation, or the liquidator vault is the target vault.',
 		liquidationQueuedTitle: 'Liquidation Queued',
 		liquidationSubmittedTitle: UI_STRING_LIQUIDATION_SUBMITTED,
 		manualExecutionTimeoutLabel: UI_STRING_MANUAL_EXECUTION_TIMEOUT,
