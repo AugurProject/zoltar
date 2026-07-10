@@ -14,7 +14,14 @@ assertSimpleByteRow('Creation bytecode', formatNumber(bytecodeSnapshot.creationB
 assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedBytes))
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
+assertContinuationIdentifierExplanation()
 assertZoltarForkDepths()
+
+function assertContinuationIdentifierExplanation(): void {
+	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
+	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
+	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarriedDepositClaimed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
+}
 
 function assertZoltarForkDepths(): void {
 	const initialSupply = 7_825_488_326_666_847_200_078_019n
