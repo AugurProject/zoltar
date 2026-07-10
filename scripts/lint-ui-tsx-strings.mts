@@ -262,10 +262,20 @@ function isPreactFactoryCall(node: ts.CallExpression) {
 	return callName === 'h' || callName === 'createElement' || callName?.endsWith('.createElement') === true
 }
 
+function isRenderHelperModeTokenArgument(node: ts.Node, callExpression: ts.CallExpression) {
+	if (!ts.isExpression(node) || !callExpression.arguments.includes(node)) return false
+	const callName = getCallExpressionName(callExpression)
+	if (callName !== 'renderTruthAuctionDebtNotice') return false
+	const argumentIndex = callExpression.arguments.indexOf(node)
+	if (argumentIndex !== 0) return false
+	return ts.isStringLiteral(node) && (node.text === 'bid' || node.text === 'settlement')
+}
+
 function shouldReportLiteral(node: ts.Node) {
 	const textSegments = getNodeTextSegments(node)
 	if (textSegments === undefined) return false
 	if (ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node) return false
+	if (ts.isPropertyAssignment(node.parent) && node.parent.name === node) return false
 	const hasDirectUserFacingText = textSegments.some(looksDirectUserFacingLiteral)
 	if (ts.isJsxAttribute(node.parent)) {
 		return isUserFacingJsxAttribute(node.parent) && hasDirectUserFacingText
@@ -280,7 +290,12 @@ function shouldReportLiteral(node: ts.Node) {
 		if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
 			const directText = textSegments.join('')
 			if (ts.isCallExpression(current) && isPreactFactoryCall(current) && looksLikeVisibleCopy(directText)) return true
-			return (looksLikeVisibleCopy(directText) || (looksLikeLowercaseCopy(directText) && isLikelyFormattingHelper(node))) && isUserFacingContext(current.parent)
+			if (looksLikeVisibleCopy(directText)) return isUserFacingContext(current.parent)
+			if (looksLikeLowercaseCopy(directText) && isLikelyFormattingHelper(node)) {
+				if (ts.isCallExpression(current) && isRenderHelperModeTokenArgument(node, current)) return false
+				return true
+			}
+			return false
 		}
 		if (ts.isObjectLiteralExpression(current)) return false
 		if (ts.isReturnStatement(current)) {
