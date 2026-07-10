@@ -54,6 +54,8 @@ contract SecurityPool is ISecurityPool {
 	uint256 public totalFeesOwedToVaults;
 	uint256 public lastUpdatedFeeAccumulator;
 	uint256 public feeIndex;
+	uint256 private feeIndexRemainder;
+	uint256 private totalFeesOwedRemainder;
 	uint256 public currentRetentionRate;
 	bool public awaitingForkContinuation;
 
@@ -295,8 +297,13 @@ contract SecurityPool is ISecurityPool {
 				SecurityPoolUtils.rpow(currentRetentionRate, timeDelta, SecurityPoolUtils.PRICE_PRECISION)) /
 				SecurityPoolUtils.PRICE_PRECISION;
 		uint256 delta = completeSetCollateralAmount - newCompleteSetCollateralAmount;
-		totalFeesOwedToVaults += delta;
-		feeIndex += (delta * SecurityPoolUtils.PRICE_PRECISION) / totalSecurityBondAllowance;
+		uint256 scaledFeeDelta = (delta * SecurityPoolUtils.PRICE_PRECISION) + feeIndexRemainder;
+		uint256 feeIndexDelta = scaledFeeDelta / totalSecurityBondAllowance;
+		feeIndexRemainder = scaledFeeDelta % totalSecurityBondAllowance;
+		feeIndex += feeIndexDelta;
+		uint256 feesOwedDelta = (feeIndexDelta * totalSecurityBondAllowance) + totalFeesOwedRemainder;
+		totalFeesOwedToVaults += feesOwedDelta / SecurityPoolUtils.PRICE_PRECISION;
+		totalFeesOwedRemainder = feesOwedDelta % SecurityPoolUtils.PRICE_PRECISION;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
 		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 

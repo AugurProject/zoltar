@@ -92,6 +92,7 @@ describe('Peripherals: fork migration', () => {
 		redeemRep,
 		redeemShares,
 		sharesToCash,
+		updateCollateralAmount,
 		updateVaultFees,
 		withdrawFromEscalationGame,
 		peripherals_EscalationGame_EscalationGame,
@@ -519,6 +520,28 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')
 		})
 
+		test('frequent public collateral updates do not strand extra fee residue', async () => {
+			const securityPoolAllowance = repDeposit / 4n + 1n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+			const openInterestAmount = 100n * 10n ** 18n
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			const splitUpdateCount = 128n
+			for (let index = 1n; index <= splitUpdateCount; index++) {
+				await mockWindow.advanceTime(1n)
+				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			}
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+			const splitVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const totalFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+
+			assert.ok(totalFeesOwed > 0n, 'repeated public collateral updates should accrue nonzero fees in this setup')
+			strictEqualTypeSafe(totalFeesOwed, splitVault.unpaidEthFees, 'pool fee accounting should only record fees that the vault index can actually credit')
+			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+		})
+
 		test('redeemCompleteSet exits at the fee-adjusted share exchange rate', async () => {
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -549,9 +572,10 @@ describe('Peripherals: fork migration', () => {
 			const firstHolderSharesAfterRedeem = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
 			const secondHolderSharesAfterRedeem = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
 			const shareSupplyAfterRedeem = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+			const feeDustTolerance = securityPoolAllowance / PRICE_PRECISION
 
 			assert.ok(firstHolderPayout > 0n, 'redeeming complete sets should pay ETH to the holder')
-			strictEqualTypeSafe(collateralAfterRedeem + firstHolderPayout + feeDelta, initialCollateral, 'complete-set redemption should conserve collateral after fee accrual')
+			approximatelyEqual(collateralAfterRedeem + firstHolderPayout + feeDelta, initialCollateral, feeDustTolerance, 'complete-set redemption should conserve collateral after fee accrual up to bounded fee dust')
 			strictEqualTypeSafe(shareSupplyAfterRedeem, initialShareSupply - redeemAmount, 'complete-set redemption should reduce share supply by the burned set amount')
 			strictEqualTypeSafe(firstHolderSharesAfterRedeem[0], firstHolderShares[0] - redeemAmount, 'redeeming should burn the holders invalid-side share')
 			strictEqualTypeSafe(firstHolderSharesAfterRedeem[1], firstHolderShares[1] - redeemAmount, 'redeeming should burn the holders yes-side share')
@@ -669,9 +693,10 @@ describe('Peripherals: fork migration', () => {
 			const feesAfterFirstRedemption = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 			const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
 			const feeDelta = feesAfterFirstRedemption - initialFeesOwed
+			const feeDustTolerance = securityPoolAllowance / PRICE_PRECISION
 
 			assert.ok(feeDelta > 0n, 'first redemption should accrue open-interest fees')
-			strictEqualTypeSafe(collateralAfterFirstRedemption + firstHolderPayout + feeDelta, initialCollateral, 'collateral should shrink by fees and first winning redemption')
+			approximatelyEqual(collateralAfterFirstRedemption + firstHolderPayout + feeDelta, initialCollateral, feeDustTolerance, 'collateral should shrink by fees and first winning redemption up to bounded fee dust')
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), initialShareSupply - firstWinningShares, 'share supply should shrink after first winning redemption')
 			approximatelyEqual(await sharesToCash(client, securityPoolAddresses.securityPool, secondWinningShares), collateralAfterFirstRedemption, 10n, 'remaining winning shares should not be double counted')
 
