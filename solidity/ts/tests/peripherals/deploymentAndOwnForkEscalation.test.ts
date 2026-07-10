@@ -530,6 +530,10 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			await approveAndDepositRep(client, vaultRepNeeded, questionId)
 		}
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const parentInvalidOutcomeState = await getEscalationGameOutcomeState(client, parentEscalationGame, QuestionOutcome.Invalid)
+		const parentYesOutcomeState = await getEscalationGameOutcomeState(client, parentEscalationGame, QuestionOutcome.Yes)
+		const parentNoOutcomeState = await getEscalationGameOutcomeState(client, parentEscalationGame, QuestionOutcome.No)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Invalid)
@@ -546,8 +550,9 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const childEscrowByOriginalDepositOutcome = childYesEscrowByOriginalDepositOutcome + childNoEscrowByOriginalDepositOutcome
 		strictEqualTypeSafe(childEscrow, 0n, 'invalid child migration should not record forked escrow against the child branch outcome')
 		assert.ok(childEscrowByOriginalDepositOutcome > 0n, 'invalid child migration should record forked escrow against the original deposit outcome')
-		strictEqualTypeSafe(invalidOutcomeState.balance, 0n, 'migrating to the invalid child should not credit resolution balance to the child fork outcome')
-		strictEqualTypeSafe(yesOutcomeState.balance + noOutcomeState.balance, childEscrowByOriginalDepositOutcome, 'migrating unresolved deposits should credit resolution balances to original deposit outcomes')
+		strictEqualTypeSafe(invalidOutcomeState.balance, parentInvalidOutcomeState.balance, 'invalid child continuation should preserve the parent invalid balance')
+		strictEqualTypeSafe(yesOutcomeState.balance, parentYesOutcomeState.balance, 'invalid child continuation should preserve the parent yes balance')
+		strictEqualTypeSafe(noOutcomeState.balance, parentNoOutcomeState.balance, 'invalid child continuation should preserve the parent no balance')
 	})
 
 	test('own-fork escalation claim zero child allocation does not revert', async () => {

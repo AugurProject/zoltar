@@ -182,7 +182,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 		bytes32[3] memory normalizedNullifierRoots;
 		uint256 totalCarry;
-		uint256 totalResolutionBalance;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			require(
@@ -206,9 +205,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			state.balance = snapshotResolutionBalances[outcomeIndex];
 			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
 			totalCarry += snapshotCarryTotals[outcomeIndex];
-			totalResolutionBalance += snapshotResolutionBalances[outcomeIndex];
 		}
-		forkCarrySnapshotRequiresForkedEscrow = totalCarry > totalResolutionBalance;
+		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
 	}

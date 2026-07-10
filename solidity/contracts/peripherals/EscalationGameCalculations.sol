@@ -109,6 +109,13 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return _medianBalance(invalidBalance, yesBalance, noBalance);
 	}
 
+	function getOutcomeBalances() public view returns (uint256[3] memory balances) {
+		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
+		balances[0] = invalidBalance;
+		balances[1] = yesBalance;
+		balances[2] = noBalance;
+	}
+
 	function _getAcceptedDepositAmount(
 		uint256 outcomeIndex,
 		uint256 requestedAmount,

@@ -3193,12 +3193,14 @@
 					</details>
 					<details class="interactive-example" id="resolution-edge-example">
 						<summary>Adjust escalation resolution edge cases</summary>
-							<p>
-								The resolution helper first checks whether at least two outcomes
-								meet the running cost. If not unresolved, a strict
-								<code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead
-								wins. If no outcome strictly leads, the game remains unresolved.
-							</p>
+						<p>
+							The resolution helper first checks whether at least two outcomes
+							meet the running cost. If that unresolved test does not apply and
+							all three balances are zero, the helper returns
+							<code>Invalid</code>. Otherwise, a strict
+							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead
+							wins, while tied non-empty leaders remain unresolved.
+						</p>
 						<div class="example-grid">
 							<label>
 								Invalid balance
@@ -3609,15 +3611,16 @@
 						shares a fixed reward pool; excess winning capital receives
 						principal only.
 					</p>
-						<p>
-							If time expires without the stronger non-decision condition, the
-							local resolution helper chooses a strict leading outcome. If no
-							outcome strictly leads once the unresolved check no longer
-							applies, the game stays unresolved instead of defaulting to one
-							side. If two or more outcomes are at or above the fixed
-							<code>nonDecisionThreshold</code>, the game records non-decision and
-							opens the fork path.
-						</p>
+					<p>
+						If time expires without the stronger non-decision condition, the
+						local resolution helper first checks whether two or more outcomes
+						still meet the running cost. If not and all three balances are
+						zero, it falls back to <code>Invalid</code>. Otherwise, a strict
+						leading outcome wins, while tied non-empty leaders stay unresolved
+						instead of defaulting to one side. If two or more outcomes are at
+						or above the fixed <code>nonDecisionThreshold</code>, the game
+						records non-decision and opens the fork path.
+					</p>
 					<p>
 						For the exact resolution ordering, empty-game fallback, deposit
 						clipping, carry batching, and residual sweep rules, see
@@ -5326,9 +5329,13 @@
 						<code>startBond</code>, <code>nonDecisionThreshold</code>, elapsed
 						escalation time, and per-outcome carry state. Each relevant child
 						pool can initialize its own paused fork-continuation escalation game
-						from that snapshot. The continuation preserves each unresolved
-						deposit’s original outcome, stable parent deposit index, payout
-						ordering, and remaining REP backing.
+						from that snapshot. The continuation preserves the parent live
+						<code>Invalid</code>, <code>Yes</code>, and <code>No</code>
+						balances, each unresolved deposit’s original outcome, stable parent
+						deposit index, payout ordering, and the remaining REP backing that
+						still needs to arrive through forked escrow. Forked escrow then
+						tracks how much child REP backing has arrived for those inherited
+						unresolved deposits without rebasing the preserved live balances.
 					</p>
 					<p>
 						The continuation game remains paused during the migration window so
@@ -9398,12 +9405,12 @@
 				context.write("excessPrincipal", formatRep(excessPrincipal));
 				context.write("depositWithdrawal", formatRep(depositWithdrawal));
 				context.write("scaledWithdrawal", formatRep(scaledWithdrawal));
-					context.write(
-						"payoutState",
-						bindingCapital > winningPrincipal
-							? "unreachable after tied-leader fix"
-							: "reachable ordinary winner state",
-					);
+				context.write(
+					"payoutState",
+					bindingCapital > winningPrincipal
+						? "not a valid final winner state: binding capital cannot exceed a strict winner's balance"
+						: "reachable ordinary winner state",
+				);
 			});
 			bindExample("forked-escrow-example", (context) => {
 				const escrowPrincipal = Math.max(context.read("escrowPrincipal"), 1);

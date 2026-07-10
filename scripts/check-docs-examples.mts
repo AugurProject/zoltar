@@ -264,6 +264,14 @@ async function checkResolutionEdgeExample(): Promise<void> {
 		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example default result')
 		assertEqual(example.output('resolutionReason'), 'two or more outcomes still contest the cost', 'resolution edge example default reason')
 
+		example.setInput('invalidBalance', 0)
+		example.setInput('yesBalance', 0)
+		example.setInput('noBalance', 0)
+		example.setInput('runningCost', 1)
+
+		assertEqual(example.output('resolutionResult'), 'Invalid', 'resolution edge example all-zero fallback result')
+		assertEqual(example.output('resolutionReason'), 'empty game after cost is non-zero', 'resolution edge example all-zero fallback reason')
+
 		example.setInput('invalidBalance', 4)
 		example.setInput('yesBalance', 5)
 		example.setInput('noBalance', 5)
@@ -297,7 +305,7 @@ async function checkPayoutRegionExample(): Promise<void> {
 		example.setInput('depositStart', 10)
 		example.setInput('actualForkThresholdPercent', 100)
 
-		assertEqual(example.output('payoutState'), 'unreachable after tied-leader fix', 'payout region example unreachable tied fallback state')
+		assertEqual(example.output('payoutState'), "not a valid final winner state: binding capital cannot exceed a strict winner's balance", 'payout region example invalid winner state')
 		assertEqual(example.output('scaledWithdrawal'), '9 REP', 'payout region example unreachable state still reports computed withdrawal')
 	} finally {
 		example.close()

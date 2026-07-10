@@ -162,7 +162,7 @@ function isCompileError(value: unknown): value is { severity: string; formattedM
 }
 
 function isAllowedImmutableContractWarning(formattedMessage: string): boolean {
-	return allowedImmutableContractWarnings.some(({ sourcePath, message }) => formattedMessage.includes(sourcePath) && formattedMessage.includes(message))
+	return allowedImmutableContractWarnings.some(({ sourcePath, message }) => formattedMessage.includes(message) && formattedMessage.includes(sourcePath))
 }
 
 function isFuntypesValidationError(error: unknown): error is Error {
