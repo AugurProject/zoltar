@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_LOAD_MORE, UI_STRING_NEXT_PAGE, UI_STRING_PREVIOUS_PAGE } from '../lib/uiStrings.js'
 
 type PaginationControlsProps = {
 	hasNextPage?: boolean
@@ -14,18 +14,7 @@ type PaginationControlsProps = {
 	summary?: ComponentChildren
 }
 
-export function PaginationControls({
-	hasNextPage = false,
-	hasPreviousPage = false,
-	loading = false,
-	loadMoreLabel = TSX_STRINGS.componentsPaginationControls.copy001,
-	nextLabel = TSX_STRINGS.componentsPaginationControls.copy002,
-	onLoadMore,
-	onNextPage,
-	onPreviousPage,
-	previousLabel = TSX_STRINGS.componentsPaginationControls.copy003,
-	summary,
-}: PaginationControlsProps) {
+export function PaginationControls({ hasNextPage = false, hasPreviousPage = false, loading = false, loadMoreLabel = UI_STRING_LOAD_MORE, nextLabel = UI_STRING_NEXT_PAGE, onLoadMore, onNextPage, onPreviousPage, previousLabel = UI_STRING_PREVIOUS_PAGE, summary }: PaginationControlsProps) {
 	const hasPageNavigation = onPreviousPage !== undefined || onNextPage !== undefined
 	const hasLoadMore = onLoadMore !== undefined
 	if (!hasPageNavigation && !hasLoadMore && summary === undefined) return undefined
