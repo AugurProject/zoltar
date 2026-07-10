@@ -63,6 +63,7 @@ interface ISecurityPool {
 	function priceOracleManagerAndOperatorQueuer() external view returns (OpenOraclePriceCoordinator);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupply() external view returns (uint256);
+	function truthAuction() external view returns (address);
 
 	function sharesToCash(uint256 completeSetAmount) external view returns (uint256);
 	function cashToShares(uint256 eth) external view returns (uint256);
