@@ -162,6 +162,20 @@
 					appear in both its vault-local counter and the corresponding global
 					total until settlement, claim, or export consumes it.
 				</p>
+				<p>
+					The stable parent deposit identifier now has two domains. In ordinary
+					games it stays equal to the local <code>depositIndex</code>. In
+					fork-continuation games it becomes
+					<code>uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))</code>,
+					so a child-local deposit and a grandchild-local deposit can never reuse
+					the same carry/nullifier key just because both were appended at local
+					index zero. That same identifier is stored in carry leaves, emitted by
+					<code>LocalDepositAppended</code>,
+					<code>CarriedDepositClaimed</code>, and
+					<code>ClaimDeposit</code>, returned by both
+					<code>exportUnresolvedDeposit</code> overloads, and consumed through
+					<code>consumedParentDepositIndexes</code>.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -268,19 +282,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>26,935</code> bytes</td>
+							<td><code>26,980</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>23,882</code> bytes</td>
+							<td><code>23,927</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>118</code> bytes below <code>24,000</code></td>
+							<td><code>73</code> bytes below <code>24,000</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>694</code> bytes below <code>24,576</code></td>
+							<td><code>649</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

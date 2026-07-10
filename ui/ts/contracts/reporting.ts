@@ -202,7 +202,7 @@ async function loadRecursiveCarrySnapshot(
 }> {
 	const [outcomeState, forkContinuation, localLeaves] = await Promise.all([readEscalationOutcomeState(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress), loadCarryLeafPage(client, escalationGameAddress, outcome)])
 	const { currentCarryRoot: carryRoot, currentLeafCount: carryLeafCount, currentNullifierRoot: nullifierRoot } = outcomeState
-	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigintAscending(left.parentDepositIndex, right.parentDepositIndex))
+	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigintAscending(left.sourceNodeId, right.sourceNodeId))
 	if (forkContinuation !== true) {
 		return {
 			orderedLeaves: orderedLocalLeaves,
@@ -247,7 +247,7 @@ async function loadRecursiveCarrySnapshot(
 	}
 	const parentSnapshot = await loadRecursiveCarrySnapshot(client, parentEscalationGameAddress, outcome)
 	return {
-		orderedLeaves: [...parentSnapshot.orderedLeaves, ...orderedLocalLeaves].sort((left, right) => compareBigintAscending(left.parentDepositIndex, right.parentDepositIndex)),
+		orderedLeaves: [...parentSnapshot.orderedLeaves, ...orderedLocalLeaves],
 		carryRoot,
 		carryLeafCount,
 		nullifierRoot,

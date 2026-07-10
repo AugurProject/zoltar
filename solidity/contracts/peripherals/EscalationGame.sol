@@ -99,7 +99,7 @@ contract EscalationGame is EscalationGameSettlement {
 		selectedOutcomeState.deposits.push(deposit);
 		uint256 depositIndex = selectedOutcomeState.deposits.length - 1;
 		unresolvedLocalDepositRefsByVault[depositor].push(_encodeLocalDepositRef(uint8(outcome), depositIndex));
-		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(depositIndex);
+		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(uint8(outcome), depositIndex);
 		parentDepositIndex = stableParentDepositIndex;
 		uint256 nodeId = nextNodeId;
 		nextNodeId += 1;
