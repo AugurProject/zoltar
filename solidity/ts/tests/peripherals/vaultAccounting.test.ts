@@ -516,7 +516,7 @@ describe('Peripherals: vault accounting', () => {
 		await finalizeQuestionAsYesWithoutFork()
 
 		const walletRepBeforeRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /Escrow locked/)
+		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /Escrow locked|Escrow/)
 
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		const vaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)

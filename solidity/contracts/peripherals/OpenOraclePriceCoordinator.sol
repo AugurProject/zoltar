@@ -339,6 +339,8 @@ contract OpenOraclePriceCoordinator {
 		);
 		if (operation != OperationType.Liquidation) {
 			require(targetVault == msg.sender, 'Self-targeted staged operation target must match the initiator vault');
+		} else {
+			require(targetVault != msg.sender, 'Caller bad');
 		}
 		require(
 			!securityPool.isEscalationResolved(),

@@ -333,12 +333,15 @@
 				<p>
 					<span class="term" tabindex="0">Staged operation</span>
 					inputs are constrained before any oracle report is requested.
-					Liquidation and withdrawal amounts must be non-zero, allowance updates
-					may set zero, <code>validForSeconds</code> must be positive and no
-					more than five minutes, non-liquidation operations must target the
-					caller's own vault, and staging is disabled after the security pool's
-					local escalation has already resolved.
-				</p>
+						Liquidation and withdrawal amounts must be non-zero, allowance updates
+						may set zero, <code>validForSeconds</code> must be positive and no
+						more than five minutes, liquidation must target a different vault,
+						non-liquidation operations must target the caller's own vault, and
+						staging is disabled after the security pool's local escalation has
+						already resolved. Same-vault liquidation is rejected with
+						<code>Caller bad</code> before the coordinator requests or uses an
+						oracle report.
+					</p>
 				<p>
 					Report funding is caller supplied. The coordinator computes
 					<code>requestPriceEthCost</code>, the caller-funded
@@ -1355,14 +1358,15 @@
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Contract Liquidation Guard</span
-						><code>SecurityPool</code> first requires the scaled solvency
-						inequality to be strictly liquidatable. The coordinator then floors
-						the threshold and distance calculations. Equality passes only at the
-						distance check; <code>currentPrice</code> must still be strictly
-						above <code>thresholdPrice</code>.
-					</p>
+						<p class="equation-caption">
+							<span class="equation-label">Contract Liquidation Guard</span
+							>The coordinator computes the floored threshold and distance checks
+							before calling the pool. <code>SecurityPool</code> then rechecks the
+							scaled liquidation-threshold inequality and rejects chunks that fail
+							target, caller, or floor checks. Equality passes only at the distance
+							check; <code>currentPrice</code> must still be strictly above
+							<code>thresholdPrice</code>.
+						</p>
 				</div>
 				<p>
 					The attack model separates attacker payoff from delay cost. The payoff

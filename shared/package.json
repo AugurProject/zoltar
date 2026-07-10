@@ -35,6 +35,10 @@
 			"types": "./ts/oracleInitialReport.ts",
 			"default": "./js/oracleInitialReport.js"
 		},
+		"./liquidation": {
+			"types": "./ts/liquidation.ts",
+			"default": "./js/liquidation.js"
+		},
 		"./truthAuctionTickMath": {
 			"types": "./ts/truthAuctionTickMath.ts",
 			"default": "./js/truthAuctionTickMath.js"

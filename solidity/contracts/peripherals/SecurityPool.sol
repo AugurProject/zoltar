@@ -157,13 +157,13 @@ contract SecurityPool is ISecurityPool {
 		// Outcome child pools can re-enter `SystemState.Operational` after migration and
 		// truth-auction processing complete. Finalized claim paths keep their own state
 		// and finality guards so late unrelated forks do not block share or REP redemption.
-		require(zoltar.getForkTime(universeId) == 0, 'Universe forked');
-		require(systemState == SystemState.Operational, 'Pool not operational');
+		require(zoltar.getForkTime(universeId) == 0, 'Forked');
+		require(systemState == SystemState.Operational, 'Pool inactive');
 		_;
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only oracle');
+		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only coord');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Stale price');
 		_;
 	}
@@ -377,7 +377,7 @@ contract SecurityPool is ISecurityPool {
 	function performWithdrawRep(address vault, uint256 repAmount) external isOperational onlyValidOracle {
 		require(!isEscalationResolved(), 'Resolved');
 		if (address(escalationGame) != address(0x0)) {
-			require(escalationGame.escrowedRepByVault(vault) == 0, 'Escrow locked');
+			require(escalationGame.escrowedRepByVault(vault) == 0, 'Escrow');
 		}
 		uint256 ownershipToWithdraw = repToPoolOwnership(repAmount);
 		uint256 withdrawOwnership =
@@ -436,7 +436,7 @@ contract SecurityPool is ISecurityPool {
 	) private pure {
 		require(
 			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * repEthPrice,
-			'Vault bond undercollateralized'
+			'Vault bond'
 		);
 	}
 
@@ -447,7 +447,7 @@ contract SecurityPool is ISecurityPool {
 	) private pure {
 		require(
 			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowanceValue * repEthPrice,
-			'Pool bond undercollateralized'
+			'Pool bond'
 		);
 	}
 
@@ -458,7 +458,7 @@ contract SecurityPool is ISecurityPool {
 	) private pure {
 		require(
 			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION > securityBondAllowance * repEthPrice,
-			'Vault allowance exceeds REP backing'
+			'Vault allow'
 		);
 	}
 
@@ -469,7 +469,7 @@ contract SecurityPool is ISecurityPool {
 	) private pure {
 		require(
 			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowanceValue * repEthPrice,
-			'Pool allowance exceeds REP backing'
+			'Pool allow'
 		);
 	}
 
@@ -531,9 +531,9 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
-	// Liquidation moves only the debt shortfall needed to repair solvency at the
-	// current price, unless clearing the shortfall would strand a forbidden dust
-	// allowance, in which case it moves the full remaining allowance.
+	// Liquidation moves debt to the caller vault and seizes unlocked REP from the
+	// target at a fixed bonus over market value, subject to the target and caller
+	// minimum debt floors plus the minimum unlocked REP floor on the target.
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,
@@ -559,30 +559,52 @@ contract SecurityPool is ISecurityPool {
 		require(
 			snapshotTargetAllowance * securityMultiplier * repEthPrice >
 				vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION,
-			'Target vault not liquidatable'
+			'Target safe'
 		);
 
-		uint256 unsafeValueNumerator =
-			(snapshotTargetAllowance * securityMultiplier * repEthPrice) -
-				(vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION);
-		uint256 repairDebtToMove =
-			(unsafeValueNumerator + (securityMultiplier * repEthPrice) - 1) / (securityMultiplier * repEthPrice);
-		if (
-			snapshotTargetAllowance > repairDebtToMove &&
-			snapshotTargetAllowance - repairDebtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
-		) {
-			repairDebtToMove = snapshotTargetAllowance;
+		uint256 maxDebtToMove = 0;
+		if (vaultsRepDeposit > SecurityPoolUtils.MIN_REP_DEPOSIT) {
+			maxDebtToMove =
+				((vaultsRepDeposit - SecurityPoolUtils.MIN_REP_DEPOSIT) *
+					SecurityPoolUtils.PRICE_PRECISION *
+					SecurityPoolUtils.BPS_DENOMINATOR) /
+				(repEthPrice * (SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS));
+			if (maxDebtToMove > snapshotTargetAllowance) {
+				maxDebtToMove = snapshotTargetAllowance;
+			}
 		}
-		uint256 maxDebtToMove = repairDebtToMove > snapshotTargetAllowance ? snapshotTargetAllowance : repairDebtToMove;
+		if (
+			maxDebtToMove < snapshotTargetAllowance &&
+			snapshotTargetAllowance - maxDebtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+		) {
+			maxDebtToMove =
+				snapshotTargetAllowance > SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+					? snapshotTargetAllowance - SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+					: 0;
+		}
 		uint256 debtToMove = debtAmount > maxDebtToMove ? maxDebtToMove : debtAmount;
-		require(debtToMove > 0, 'No debt');
-		uint256 repToMove = 0;
+		require(debtToMove > 0, 'No liq');
+		uint256 repToMove =
+			(debtToMove *
+				repEthPrice *
+				(SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS)) /
+				(SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR);
+		if (
+			repToMove * SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR <
+			debtToMove * repEthPrice * (SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS)
+		) {
+			repToMove += 1;
+		}
+		require(
+			debtToMove * securityMultiplier * repEthPrice > repToMove * SecurityPoolUtils.PRICE_PRECISION,
+			'No gain'
+		);
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
 		require(
 			(securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <=
 				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) *
 					SecurityPoolUtils.PRICE_PRECISION,
-			'Caller vault liquidatable'
+			'Caller bad'
 		);
 
 		// Update target's allowance based on snapshot to prevent blocking via allowance changes
@@ -597,23 +619,15 @@ contract SecurityPool is ISecurityPool {
 			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership),
 			securityVaults[targetVaultAddress].poolOwnership == 0 &&
 				securityVaults[targetVaultAddress].securityBondAllowance == 0,
-			'Target vault REP below minimum'
+			'Target REP'
 		);
 		_requireMinimumSecurityBondAllowance(
 			securityVaults[targetVaultAddress].securityBondAllowance,
 			securityVaults[targetVaultAddress].securityBondAllowance == 0,
-			'Target vault debt below minimum'
+			'Target debt'
 		);
-		_requireMinimumVaultRep(
-			poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
-			false,
-			'Caller vault REP below minimum'
-		);
-		_requireMinimumSecurityBondAllowance(
-			securityVaults[callerVault].securityBondAllowance,
-			false,
-			'Caller vault debt below minimum'
-		);
+		_requireMinimumVaultRep(poolOwnershipToRep(securityVaults[callerVault].poolOwnership), false, 'Caller REP');
+		_requireMinimumSecurityBondAllowance(securityVaults[callerVault].securityBondAllowance, false, 'Caller debt');
 		_syncActiveVault(targetVaultAddress);
 		_syncActiveVault(callerVault);
 
@@ -655,7 +669,7 @@ contract SecurityPool is ISecurityPool {
 		);
 		_requirePoolAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice);
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, completeSetCollateralAmount);
-		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Security bond below minimum');
+		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond minimum');
 		_syncActiveVault(callerVault);
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount, totalSecurityBondAllowance);
 		updateRetentionRate();
@@ -764,7 +778,7 @@ contract SecurityPool is ISecurityPool {
 			);
 			emit EscalationGameSet(escalationGame);
 		} else {
-			require(!escalationGame.forkContinuation() || escalationGame.forkResumedAt() != 0, 'Fork not resumed');
+			require(!escalationGame.forkContinuation() || escalationGame.forkResumedAt() != 0, 'Fork paused');
 		}
 
 		(uint256 depositedAmount, uint256 resultingCumulativeAmount) = escalationGame.previewDepositOnOutcome(
@@ -851,7 +865,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 nonDecisionThreshold,
 		uint256 elapsedAtFork
 	) external onlyForker {
-		require(address(escalationGame) == address(0x0), 'Game already set');
+		require(address(escalationGame) == address(0x0), 'Game set');
 		escalationGame = escalationGameFactory.deployEscalationGameFromFork(
 			startBond,
 			nonDecisionThreshold,
@@ -997,7 +1011,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function setPoolFinancials(uint256 newCollateral, uint256 newTotalBondAllowance) external onlyForker {
-		require(newTotalBondAllowance >= newCollateral, 'Bond below collateral');
+		require(newTotalBondAllowance >= newCollateral, 'Bond low');
 		completeSetCollateralAmount = newCollateral;
 		totalSecurityBondAllowance = newTotalBondAllowance;
 		_clearFeeIndexRemainder();
@@ -1022,7 +1036,7 @@ contract SecurityPool is ISecurityPool {
 
 	function _sendEth(address payable receiver, uint256 amount) private {
 		(bool sent, ) = receiver.call{ value: amount }('');
-		require(sent, 'ETH transfer failed');
+		require(sent, 'ETH failed');
 	}
 
 	function authorizeChildPool(ISecurityPool pool) external onlyForker {
