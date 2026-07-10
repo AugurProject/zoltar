@@ -4,6 +4,7 @@ import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/whitepaper_zoltar.html', 'utf8')
+const whitepaperPlaceholder = await readFile('docs/whitepaper_placeholder.html', 'utf8')
 const bytecodeSnapshot = readBytecodeSnapshot(await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8'))
 const interfaceRegressionTest = await readFile('solidity/ts/tests/escalationGameInterfaceRegression.test.ts', 'utf8')
 
@@ -16,6 +17,7 @@ assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumbe
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
 assertZoltarForkDepths()
+assertCoordinatorRecoveryBranch()
 
 function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
@@ -56,6 +58,16 @@ function assertZoltarForkDepths(): void {
 		'at depth <code>5,303</code>, theoretical supply is <code>99 wei</code>, the fork threshold is <code>4 wei</code>, and the haircut floors to zero',
 	]) {
 		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork-depth claim: ${documentedClaim}`)
+	}
+}
+
+function assertCoordinatorRecoveryBranch(): void {
+	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	for (const documentedClaim of [
+		'If the pending settlement list is empty, another staged request can fund a replacement report.',
+		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(amount2)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
+	]) {
+		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
 }
 

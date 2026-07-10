@@ -157,7 +157,7 @@ function usePeripheralsTestFixture() {
 	}
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
-	const reportedRepEthPrice = 10n
+	const reportedRepEthPrice = 10n * 10n ** 18n
 	const testInternalSenderBalance = 10n ** 18n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 	const EXTRA_INFO = 'test question!'

@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import { executeOracleManagerStagedOperation, loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
+import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { sameAddress } from '../lib/address.js'
@@ -8,12 +8,14 @@ import { getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createPoolOracleWarningPresentation } from '../lib/transactionPresentations.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
+import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
 
 type UsePriceOracleManagerParameters = {
 	accountAddress: Address | undefined
@@ -97,7 +99,18 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					const currentManagerDetails = poolOracleManagerDetails.value
 					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
 					const refreshedManagerDetails = poolOracleManagerDetails.value
+					if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
+					if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
+					const writeClient = createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
+					const initialReportFunding = await loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
+					if (initialReportFunding.currentRepBalance < initialReportFunding.exactToken1Report) {
+						throw new Error(`Need ${formatCurrencyBalance(initialReportFunding.exactToken1Report - initialReportFunding.currentRepBalance)} more REP in this wallet to fund the initial report.`)
+					}
 					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+					const totalRequiredEth = addOpenOracleBountyBuffer(refreshedManagerDetails?.requestPriceEthCost ?? 0n) + initialReportFunding.wethShortfall
+					if (walletEthBalance < totalRequiredEth) {
+						throw new Error(`Need ${formatCurrencyBalance(totalRequiredEth - walletEthBalance)} more ETH in this wallet to fund the initial report and request a new price.`)
+					}
 					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
 						actionLabel: 'request a new price',
 						includeBuffer: true,
@@ -105,7 +118,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						walletEthBalance,
 					})
 					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
-					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress)
+					return await requestOraclePrice(writeClient, managerAddress, initialReportFunding.initialReportAmount2)
 				},
 				'Failed to request price',
 				result => {

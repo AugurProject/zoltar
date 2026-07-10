@@ -1,10 +1,22 @@
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import type { Hash } from '@zoltar/shared/ethereum'
-import { Zoltar_Zoltar } from './types/contractArtifact'
+import { peripherals_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testsuite/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testsuite/simulator/utils/contracts/deployPeripherals'
-import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, migrateShares, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, wrapWeth } from './testsuite/simulator/utils/contracts/peripherals'
+import {
+	getOpenOracleExtraData,
+	getPendingReportId,
+	getRequestPriceEthCost,
+	migrateShares,
+	openOracleSettle,
+	openOracleSubmitInitialReport,
+	OperationType,
+	requestPrice,
+	requestPriceIfNeededAndStageOperation,
+	requestPriceIfNeededAndStageOperationWithInitialReportAmount2,
+	wrapWeth,
+} from './testsuite/simulator/utils/contracts/peripherals'
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testsuite/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRep, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testsuite/simulator/utils/contracts/securityPool'
@@ -23,6 +35,8 @@ const securityBondAllowance = repDepositAmount / 4n
 const openInterestAmount = 100n * 10n ** 18n
 const reportBond = 1n * 10n ** 18n
 const questionOutcomes = ['Yes', 'No']
+const coordinatorPricePrecision = 10n ** 18n
+const defaultSelfOperationValidForSeconds = 5n * 60n
 
 const isHash = (value: string): value is Hash => value.startsWith('0x')
 
@@ -224,20 +238,35 @@ const prepareYesChildFinalized = async () => {
 	return { context, yesPool, ethRaiseCap }
 }
 
-const prepareOracleInitialReport = async (context: PoolContext) => {
-	await confirmTx(alice, requestPrice(alice, context.addresses.priceOracleManagerAndOperatorQueuer))
-	const pendingReportId = await getPendingReportId(alice, context.addresses.priceOracleManagerAndOperatorQueuer)
-	const reportMeta = await getOpenOracleReportMeta(alice, pendingReportId)
-	const amount1 = reportMeta.exactToken1Report
-	const amount2 = amount1
-	const stateHash = (await getOpenOracleExtraData(alice, pendingReportId)).stateHash
+const prepareDirectOpenOracleInitialReport = async () => {
+	const openOracleAddress = getInfraContractAddresses().openOracle
+	const reportId: bigint = await alice.readContract({
+		address: openOracleAddress,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		functionName: 'nextReportId',
+		args: [],
+	})
+	await confirmTx(
+		alice,
+		writeContractAndWait(alice, () =>
+			alice.writeContract({
+				address: openOracleAddress,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'createReportInstance',
+				args: [addressString(GENESIS_REPUTATION_TOKEN), WETH_ADDRESS, reportBond, 0, 100, DAY, reportBond, 0, 0, 0],
+			}),
+		),
+	)
+	const amount1 = reportBond
+	const amount2 = reportBond
+	const stateHash = (await getOpenOracleExtraData(alice, reportId)).stateHash
 	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getInfraContractAddresses().openOracle))
 	await confirmTx(alice, approveToken(alice, WETH_ADDRESS, getInfraContractAddresses().openOracle))
 	const wethBalanceBefore = await getERC20Balance(alice, WETH_ADDRESS, alice.account.address)
 	await confirmTx(alice, wrapWeth(alice, amount2))
 	const wethBalanceAfter = await getERC20Balance(alice, WETH_ADDRESS, alice.account.address)
 	if (BigInt(wethBalanceAfter) - BigInt(wethBalanceBefore) !== amount2) throw new Error('Failed to wrap the expected amount of WETH')
-	return { pendingReportId, amount1, amount2, stateHash }
+	return { reportId, amount1, amount2, stateHash }
 }
 
 const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
@@ -334,7 +363,7 @@ const scenarios: Scenario[] = [
 	},
 	{
 		section: '6. Open Oracle Operation',
-		label: 'request REP/ETH price from OpenOracle',
+		label: 'request REP/ETH price from coordinator with atomic initial report',
 		run: async () => {
 			const context = await setupPool('Gas request price')
 			return await waitForGas(alice, requestPrice(alice, context.addresses.priceOracleManagerAndOperatorQueuer))
@@ -344,20 +373,20 @@ const scenarios: Scenario[] = [
 		section: '6. Open Oracle Operation',
 		label: 'submit initial OpenOracle report',
 		run: async () => {
-			const context = await setupPool('Gas submit report')
-			const initialReport = await prepareOracleInitialReport(context)
-			return await waitForGas(alice, openOracleSubmitInitialReport(alice, initialReport.pendingReportId, initialReport.amount1, initialReport.amount2, initialReport.stateHash))
+			await setupPool('Gas submit report')
+			const initialReport = await prepareDirectOpenOracleInitialReport()
+			return await waitForGas(alice, openOracleSubmitInitialReport(alice, initialReport.reportId, initialReport.amount1, initialReport.amount2, initialReport.stateHash))
 		},
 	},
 	{
 		section: '6. Open Oracle Operation',
 		label: 'settle OpenOracle report',
 		run: async () => {
-			const context = await setupPool('Gas settle report')
-			const initialReport = await prepareOracleInitialReport(context)
-			await confirmTx(alice, openOracleSubmitInitialReport(alice, initialReport.pendingReportId, initialReport.amount1, initialReport.amount2, initialReport.stateHash))
+			await setupPool('Gas settle report')
+			const initialReport = await prepareDirectOpenOracleInitialReport()
+			await confirmTx(alice, openOracleSubmitInitialReport(alice, initialReport.reportId, initialReport.amount1, initialReport.amount2, initialReport.stateHash))
 			await anvil.advanceTime(DAY)
-			return await waitForGas(alice, openOracleSettle(alice, initialReport.pendingReportId))
+			return await waitForGas(alice, openOracleSettle(alice, initialReport.reportId))
 		},
 	},
 	{
@@ -412,17 +441,10 @@ const scenarios: Scenario[] = [
 			await confirmApproveAndDepositRep(bob, context, repDepositAmount * 10n)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.advanceTime(2n * DAY)
-			await confirmTx(bob, requestPriceIfNeededAndStageOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance))
+			const initialReportAmount2 = (reportBond * coordinatorPricePrecision) / 10n ** 19n
+			const ethCost = await getRequestPriceEthCost(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
+			await confirmTx(bob, requestPriceIfNeededAndStageOperationWithInitialReportAmount2(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance, defaultSelfOperationValidForSeconds, initialReportAmount2, ethCost))
 			const pendingReportId = await getPendingReportId(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
-			const reportMeta = await getOpenOracleReportMeta(bob, pendingReportId)
-			const amount1 = reportMeta.exactToken1Report
-			const forcedPrice = 10n ** 19n
-			const amount2 = (amount1 * 10n ** 18n) / forcedPrice
-			const stateHash = (await getOpenOracleExtraData(bob, pendingReportId)).stateHash
-			await confirmTx(bob, approveToken(bob, addressString(GENESIS_REPUTATION_TOKEN), getInfraContractAddresses().openOracle))
-			await confirmTx(bob, approveToken(bob, WETH_ADDRESS, getInfraContractAddresses().openOracle))
-			await confirmTx(bob, wrapWeth(bob, amount2))
-			await confirmTx(bob, openOracleSubmitInitialReport(bob, pendingReportId, amount1, amount2, stateHash))
 			await anvil.advanceTime(DAY)
 			return await waitForGas(bob, openOracleSettle(bob, pendingReportId))
 		},

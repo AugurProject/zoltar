@@ -194,4 +194,69 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
 	})
+
+	test('blocks queued liquidations when the wallet cannot fund the initial report WETH wrap', async () => {
+		const queueSecurityPoolLiquidation = mock(async () => ({
+			action: 'queueLiquidation' as const,
+			hash: '0x03' as const,
+			securityPoolAddress: zeroAddress,
+		}))
+
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 1n,
+			})),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 10n,
+				currentWethBalance: 0n,
+				exactToken1Report: 10n,
+				initialReportAmount2: 5n,
+				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+				wethShortfall: 5n,
+			})),
+			loadOracleManagerDetails: mock(async () => ({
+				callbackStateHash: undefined,
+				exactToken1Report: undefined,
+				isPriceValid: false,
+				lastPrice: 0n,
+				lastSettlementTimestamp: 0n,
+				managerAddress: zeroAddress,
+				openOracleAddress: zeroAddress,
+				pendingOperation: undefined,
+				pendingOperationSlotId: 0n,
+				pendingSettlementOperationIds: [],
+				pendingSettlementQueueCapacity: 4n,
+				pendingReportId: 0n,
+				priceValidUntilTimestamp: undefined,
+				queuedOperationEthCost: 0n,
+				requestPriceEthCost: 1n,
+				token1: undefined,
+				token2: undefined,
+			})),
+			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
+			queueSecurityPoolLiquidation,
+		})
+
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
+			requireHookState(hookState).setLiquidationAmount('1')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+		})
+
+		expect(queueSecurityPoolLiquidation).not.toHaveBeenCalled()
+		await waitFor(() => {
+			expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toContain('fund the initial report and queue this liquidation')
+		})
+	})
 })

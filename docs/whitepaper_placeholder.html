@@ -7668,10 +7668,11 @@
 					</p>
 					<p>
 						The OpenOracle path is contestable before the coordinator can use
-						it: the coordinator requests a REP/WETH report, a reporter posts
-						token amounts, disputers can replace a bad report with a larger one,
-						a settler finalizes the report after the timing window, and the
-						settlement callback returns the final amounts to the coordinator.
+						it: the coordinator requests a REP/WETH report and atomically posts
+						the sponsor-funded initial token amounts, disputers can replace a bad
+						report with a larger one, a settler finalizes the report after the
+						timing window, and the settlement callback returns the final amounts
+						to the coordinator.
 						Request, dispute, settlement, and callback safety checks are
 						detailed in the dedicated
 						<a href="./openOracleIntegration.html">OpenOracle integration</a>
@@ -7807,12 +7808,12 @@
 								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="793" y="219" text-anchor="middle">
-								OpenOracle
-							</text>
-							<text class="svg-small" x="793" y="239" text-anchor="middle">
-								reporter posts
-							</text>
+								<text class="svg-label" x="793" y="219" text-anchor="middle">
+									OpenOracle
+								</text>
+								<text class="svg-small" x="793" y="239" text-anchor="middle">
+									sponsor posts initial report
+								</text>
 							<text class="svg-small" x="793" y="255" text-anchor="middle">
 								disputer may replace
 							</text>
@@ -7869,9 +7870,9 @@
 								</tr>
 								<tr>
 									<td>Create report</td>
-									<td><code>requestPrice</code></td>
-									<td>Funds one pending OpenOracle report and records callback gas/basefee bounds.</td>
-									<td>The requester pays for the contestable price path when the cache is stale.</td>
+									<td><code>requestPrice(amount2)</code></td>
+									<td>Funds one pending OpenOracle report, atomically submits the sponsor-funded initial stake, and records callback gas/basefee bounds.</td>
+									<td>The requester pays for the contestable price path when the cache is stale and cannot open a redundant report while the cache is still fresh.</td>
 								</tr>
 								<tr>
 									<td>Accept callback</td>
@@ -7894,8 +7895,12 @@
 										operations can remain queued.
 									</td>
 									<td>
-										Remaining operations need a later valid price path, such as a
-										direct <code>requestPrice()</code> followed by settlement.
+										Remaining operations need a later valid price path. If the
+										pending settlement list is empty, another staged request can
+										fund a replacement report. If pending settlement operation IDs
+										still remain, an operator or user must call direct
+										<code>requestPrice(amount2)</code> with the ETH bounty and
+										initial-report funding, then let that replacement report settle.
 									</td>
 								</tr>
 								<tr>
@@ -7909,9 +7914,11 @@
 					</div>
 					<p>
 						When no fresh price is available, the caller funds the OpenOracle
-						request bounty. The coordinator sizes that ETH cost from the current
-						base fee, the callback gas limit, and the configured gas budget for
-						reporting the price.
+						request bounty and the initial REP/WETH position. The coordinator
+						sizes the ETH cost from the current base fee, the callback gas
+						limit, and the configured gas budget for reporting the price, while
+						the caller also chooses the initial <code>amount2</code> for the
+						atomic report submission.
 					</p>
 						<p>
 							While a report remains pending, only the original pending report

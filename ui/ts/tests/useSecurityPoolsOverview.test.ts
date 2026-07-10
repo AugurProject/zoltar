@@ -252,6 +252,14 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 		const dependencies = createSecurityPoolsOverviewDependencies({
 			createConnectedReadClient: mock(() => readClient),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 1n,
+				currentWethBalance: 1n,
+				exactToken1Report: 1n,
+				initialReportAmount2: 1n,
+				reputationTokenAddress: zeroAddress,
+				wethShortfall: 0n,
+			})),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')
@@ -315,6 +323,14 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
 		const dependencies = createSecurityPoolsOverviewDependencies({
 			createConnectedReadClient: mock(() => readClient),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 1n,
+				currentWethBalance: 1n,
+				exactToken1Report: 1n,
+				initialReportAmount2: 1n,
+				reputationTokenAddress: zeroAddress,
+				wethShortfall: 0n,
+			})),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
 			loadSecurityPoolPage: mock(async () => {
 				throw new Error('loadSecurityPoolPage should not be called in this test')

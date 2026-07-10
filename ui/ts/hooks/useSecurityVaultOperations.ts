@@ -4,7 +4,8 @@ import { useErc20AllowanceLoader, useErc20BalanceLoader } from './useErc20Loader
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from '@zoltar/shared/ethereum'
-import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemRepFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
+import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
+import { approveErc20, depositRepToSecurityPool, loadCoordinatorInitialReportFundingRequirement, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemRepFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
 import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
@@ -42,6 +43,7 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	depositRepToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint) => Promise<SecurityVaultActionResult>
+	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadSecurityVaultDetails: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultDetails | undefined>
@@ -56,6 +58,7 @@ const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsD
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
 	depositRepToSecurityPool: async (client, securityPoolAddress, amount) => await depositRepToSecurityPool(client, securityPoolAddress, amount),
+	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
 	loadErc20Balance: async (tokenAddress, accountAddress) => await loadErc20Balance(createConnectedReadClient(), tokenAddress, accountAddress),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 	loadSecurityVaultDetails: async (securityPoolAddress, vaultAddress) => await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress),
@@ -231,6 +234,17 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 
 	const refreshVaultFees = async (vaultAddress: Address, securityPoolAddress: Address) => {
 		await dependencies.updateSecurityVaultFees(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, vaultAddress)
+	}
+
+	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredEthCost: bigint, actionLabel: string, walletEthBalance: bigint | undefined) => {
+		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress)
+		if (fundingRequirement.currentRepBalance < fundingRequirement.exactToken1Report) {
+			throw new Error(`Need ${formatCurrencyBalance(fundingRequirement.exactToken1Report - fundingRequirement.currentRepBalance)} more REP in this wallet to fund the initial report.`)
+		}
+		const requiredEthWithWrap = addOpenOracleBountyBuffer(requiredEthCost) + fundingRequirement.wethShortfall
+		if (walletEthBalance !== undefined && walletEthBalance < requiredEthWithWrap) {
+			throw new Error(`Need ${formatCurrencyBalance(requiredEthWithWrap - walletEthBalance)} more ETH in this wallet to fund the initial report and ${actionLabel}.`)
+		}
 	}
 
 	const loadExistingSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address, missingPoolMessage: string, isCurrentSelection?: () => boolean) => {
@@ -415,7 +429,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const funding = resolveOracleOperationEthFunding({
 					managerDetails,
 				})
+				const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted })
 				const walletEthBalance = funding?.ethCost === undefined || funding.ethCost === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress })
+				if (funding?.ethCost !== undefined && funding.ethCost > 0n) {
+					await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.ethCost, 'queue this bond allowance update', walletEthBalance)
+				}
 				const setBondAllowanceGuardMessage = getOracleRequestEthGuardMessage({
 					actionLabel: 'queue this bond allowance update',
 					includeBuffer: funding?.includeBuffer === true,
@@ -424,7 +442,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				})
 				if (setBondAllowanceGuardMessage !== undefined) throw new Error(setBondAllowanceGuardMessage)
 				if (!isCurrentSelection()) return undefined
-				const result = await dependencies.queueOracleManagerOperation(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
+				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
 				return {
 					action: 'queueSetSecurityBondAllowance',
 					hash: result.hash,
@@ -493,7 +511,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const funding = resolveOracleOperationEthFunding({
 					managerDetails,
 				})
+				const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted })
 				const walletEthBalance = funding?.ethCost === undefined || funding.ethCost === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress })
+				if (funding?.ethCost !== undefined && funding.ethCost > 0n) {
+					await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.ethCost, 'queue this REP withdrawal', walletEthBalance)
+				}
 				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({
 					actionLabel: 'queue this REP withdrawal',
 					includeBuffer: funding?.includeBuffer === true,
@@ -502,7 +524,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				})
 				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
 				if (!isCurrentSelection()) return undefined
-				const result = await dependencies.queueOracleManagerOperation(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
+				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
 				return {
 					action: 'queueWithdrawRep',
 					hash: result.hash,

@@ -12,7 +12,6 @@ import {
 	forkZoltarWithOwnEscalation,
 	getDeploymentSteps,
 	loadAllSecurityPools,
-	loadErc20Balance,
 	loadForkAuctionDetails,
 	loadOracleManagerDetails,
 	loadOpenOracleReportDetails,
@@ -25,7 +24,6 @@ import {
 	requestOraclePrice,
 	settleOracleReport,
 	startTruthAuctionForSecurityPool,
-	submitInitialOracleReport,
 	submitTruthAuctionBid,
 } from '../contracts.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
@@ -38,6 +36,37 @@ import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulatio
 import type { SimulationScenario } from './scenarios.js'
 
 type TevmLikeClient = ReturnType<typeof createMemoryClient>
+const COORDINATOR_PRICE_PRECISION = 10n ** 18n
+
+async function readCoordinatorExactToken1Report(readClient: ReadClient, managerAddress: Address) {
+	if ('readContract' in readClient && typeof readClient.readContract === 'function') {
+		const exactToken1Report = await readClient.readContract({
+			address: managerAddress,
+			abi: [
+				{
+					type: 'function',
+					name: 'exactToken1Report',
+					stateMutability: 'view',
+					inputs: [],
+					outputs: [{ name: '', type: 'uint256' }],
+				},
+			] as const,
+			functionName: 'exactToken1Report',
+			args: [],
+		})
+		if (typeof exactToken1Report === 'bigint') return exactToken1Report
+	}
+
+	const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+	if (managerDetails.exactToken1Report === undefined) throw new Error('Missing coordinator exactToken1Report for seeded simulation bootstrap')
+	return managerDetails.exactToken1Report
+}
+
+async function getSeededCoordinatorInitialReportAmount2(readClient: ReadClient, managerAddress: Address) {
+	const exactToken1Report = await readCoordinatorExactToken1Report(readClient, managerAddress)
+	const amount2 = (exactToken1Report * COORDINATOR_PRICE_PRECISION) / SEEDED_REP_ETH_PRICE
+	return amount2 > 0n ? amount2 : 1n
+}
 type BootstrapProgressHandler = (progress: { label: string; value: number }) => Promise<void> | void
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
@@ -428,17 +457,6 @@ function createSecurityPoolSeedParameters(
 	}
 }
 
-async function ensureSufficientWethBalance(readClient: ReadClient, writeClient: WriteClient, profile: NetworkProfile, accountAddress: Address, requiredAmount: bigint) {
-	const currentBalance = await loadErc20Balance(readClient, profile.wethAddress, accountAddress)
-	if (currentBalance >= requiredAmount) return
-	const missingBalance = requiredAmount - currentBalance
-	const hash = await writeClient.sendTransaction({
-		to: profile.wethAddress,
-		value: missingBalance,
-	})
-	await writeClient.waitForTransactionReceipt({ hash })
-}
-
 async function loadRequiredSeededPool(readClient: ReadClient, securityPoolAddress: Address, poolLabel: string) {
 	const seededPool = (await loadAllSecurityPools(readClient)).find(pool => pool.securityPoolAddress === securityPoolAddress)
 	if (seededPool === undefined) throw new Error(`Expected ${poolLabel} at ${securityPoolAddress}`)
@@ -508,25 +526,23 @@ async function configureSecurityBondAllowance({
 	readClient,
 	securityPoolAddress,
 	securityBondAllowance,
-	profile,
 }: {
 	accountAddress: Address
 	createWriteClient: (accountAddress: Address) => WriteClient
 	managerAddress: Address
 	memoryClient: TevmLikeClient
-	profile: NetworkProfile
 	readClient: ReadClient
 	securityPoolAddress: Address
 	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
+	const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
+	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)
 	if (queueResult.stagedExecution?.success === false) throw new Error(queueResult.stagedExecution.errorMessage ?? `Failed to seed security bond allowance for ${accountAddress}`)
 	await ensureSecurityBondAllowanceConfigured({
 		accountAddress,
 		managerAddress,
 		memoryClient,
-		profile,
 		readClient,
 		securityBondAllowance,
 		securityPoolAddress,
@@ -538,7 +554,6 @@ async function ensureSecurityBondAllowanceConfigured({
 	accountAddress,
 	managerAddress,
 	memoryClient,
-	profile,
 	readClient,
 	securityBondAllowance,
 	securityPoolAddress,
@@ -547,7 +562,6 @@ async function ensureSecurityBondAllowanceConfigured({
 	accountAddress: Address
 	managerAddress: Address
 	memoryClient: TevmLikeClient
-	profile: NetworkProfile
 	readClient: ReadClient
 	securityBondAllowance: bigint
 	securityPoolAddress: Address
@@ -556,23 +570,16 @@ async function ensureSecurityBondAllowanceConfigured({
 	let updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
 	for (let attempt = 0; updatedVault.securityBondAllowance !== securityBondAllowance && attempt < 5; attempt += 1) {
 		const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
+		const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
 		if (managerDetails.pendingOperation?.operation !== 'setSecurityBondsAllowance' || managerDetails.pendingOperation.targetVault !== accountAddress || managerDetails.pendingOperation.amount !== securityBondAllowance) {
-			await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
+			await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)
 		}
 
 		if (managerDetails.pendingReportId > 0n) {
-			if (managerDetails.callbackStateHash === undefined || managerDetails.exactToken1Report === undefined || managerDetails.token1 === undefined || managerDetails.token2 === undefined) throw new Error(`Expected a pending oracle report for ${accountAddress}`)
-
 			const reportDetails = await loadOpenOracleReportDetails(readClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
-			if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === '0x0000000000000000000000000000000000000000') {
-				const amount1 = managerDetails.exactToken1Report
-				const amount2 = (amount1 * 10n ** 18n) / SEEDED_REP_ETH_PRICE
-				await approveErc20(writeClient, managerDetails.token1, managerDetails.openOracleAddress, amount1, 'approveToken1')
-				await ensureSufficientWethBalance(readClient, writeClient, profile, accountAddress, amount2)
-				await approveErc20(writeClient, managerDetails.token2, managerDetails.openOracleAddress, amount2, 'approveToken2')
-				await submitInitialOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId, amount1, amount2, managerDetails.callbackStateHash)
+			if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === zeroAddress) {
+				throw new Error(`Expected the coordinator request to submit the initial report for ${accountAddress}`)
 			}
-
 			if (!reportDetails.isDistributed) {
 				await advanceSimulationTime(memoryClient, reportDetails.settlementTime + 1n)
 				await settleOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
@@ -637,7 +644,6 @@ async function settleSeededOracleReport({
 	managerAddress,
 	onProgressStep,
 	poolLabel,
-	profile,
 	readClient,
 	securityBondAllowance,
 }: {
@@ -646,25 +652,17 @@ async function settleSeededOracleReport({
 	managerAddress: Address
 	onProgressStep: (label: string) => Promise<void>
 	poolLabel: string
-	profile: NetworkProfile
 	readClient: ReadClient
 	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS)
+	const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
+	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)
 	await onProgressStep(`Configuring oracle manager for ${poolLabel}`)
 
 	const oracleManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-	if (oracleManagerDetails.pendingReportId === 0n || oracleManagerDetails.callbackStateHash === undefined || oracleManagerDetails.exactToken1Report === undefined || oracleManagerDetails.token1 === undefined || oracleManagerDetails.token2 === undefined)
-		throw new Error(`Expected a pending oracle report for ${poolLabel}`)
-
-	const amount1 = oracleManagerDetails.exactToken1Report
-	const amount2 = (amount1 * 10n ** 18n) / SEEDED_REP_ETH_PRICE
-	await approveErc20(writeClient, oracleManagerDetails.token1, oracleManagerDetails.openOracleAddress, amount1, 'approveToken1')
-	await ensureSufficientWethBalance(readClient, writeClient, profile, accountAddress, amount2)
-	await approveErc20(writeClient, oracleManagerDetails.token2, oracleManagerDetails.openOracleAddress, amount2, 'approveToken2')
-	await submitInitialOracleReport(writeClient, oracleManagerDetails.openOracleAddress, oracleManagerDetails.pendingReportId, amount1, amount2, oracleManagerDetails.callbackStateHash)
-	await onProgressStep(`Submitting seeded oracle report for ${poolLabel}`)
+	if (oracleManagerDetails.pendingReportId === 0n) throw new Error(`Expected a pending oracle report for ${poolLabel}`)
+	await onProgressStep(`Opening seeded oracle report for ${poolLabel}`)
 
 	return {
 		openOracleAddress: oracleManagerDetails.openOracleAddress,
@@ -687,39 +685,21 @@ async function settleOracleReportIfNeeded({ memoryClient, readClient, writeClien
 	await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
 }
 
-async function refreshSeededOraclePrice({
-	accountAddress,
-	createWriteClient,
-	managerAddress,
-	memoryClient,
-	profile,
-	readClient,
-}: {
-	accountAddress: Address
-	createWriteClient: (accountAddress: Address) => WriteClient
-	managerAddress: Address
-	memoryClient: TevmLikeClient
-	profile: NetworkProfile
-	readClient: ReadClient
-}) {
+async function refreshSeededOraclePrice({ accountAddress, createWriteClient, managerAddress, memoryClient, readClient }: { accountAddress: Address; createWriteClient: (accountAddress: Address) => WriteClient; managerAddress: Address; memoryClient: TevmLikeClient; readClient: ReadClient }) {
 	const writeClient = createWriteClient(accountAddress)
 	let managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 	if (managerDetails.isPriceValid) return
 	if (managerDetails.pendingReportId === 0n) {
-		await requestOraclePrice(writeClient, managerAddress)
+		const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
+		await requestOraclePrice(writeClient, managerAddress, initialReportAmount2)
 		managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 	}
-	if (managerDetails.pendingReportId === 0n || managerDetails.callbackStateHash === undefined || managerDetails.exactToken1Report === undefined || managerDetails.token1 === undefined || managerDetails.token2 === undefined) {
+	if (managerDetails.pendingReportId === 0n) {
 		throw new Error(`Expected a pending oracle report for ${managerAddress}`)
 	}
 	const reportDetails = await loadOpenOracleReportDetails(readClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
 	if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === zeroAddress) {
-		const amount1 = managerDetails.exactToken1Report
-		const amount2 = (amount1 * 10n ** 18n) / SEEDED_REP_ETH_PRICE
-		await approveErc20(writeClient, managerDetails.token1, managerDetails.openOracleAddress, amount1, 'approveToken1')
-		await ensureSufficientWethBalance(readClient, writeClient, profile, accountAddress, amount2)
-		await approveErc20(writeClient, managerDetails.token2, managerDetails.openOracleAddress, amount2, 'approveToken2')
-		await submitInitialOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId, amount1, amount2, managerDetails.callbackStateHash)
+		throw new Error(`Expected the coordinator request to submit the initial report for ${managerAddress}`)
 	}
 	await settleOracleReportIfNeeded({
 		memoryClient,
@@ -788,7 +768,6 @@ async function seedSecurityPool({
 		managerAddress: primaryVault.managerAddress,
 		onProgressStep: reportStep,
 		poolLabel: poolSpec.poolLabel,
-		profile,
 		readClient,
 		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 	})
@@ -808,7 +787,6 @@ async function seedSecurityPool({
 		accountAddress: primaryVaultAccount,
 		managerAddress: primaryVault.managerAddress,
 		memoryClient,
-		profile,
 		readClient,
 		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 		securityPoolAddress: poolResult.securityPoolAddress,
@@ -834,7 +812,6 @@ async function seedSecurityPool({
 			createWriteClient,
 			managerAddress: primaryVault.managerAddress,
 			memoryClient,
-			profile,
 			readClient,
 			securityPoolAddress: poolResult.securityPoolAddress,
 			securityBondAllowance: vaultSpec.securityBondAllowance,
@@ -975,7 +952,6 @@ async function seedSecurityPoolX2Scenario({
 			managerAddress: primaryVault.managerAddress,
 			onProgressStep: reportStep,
 			poolLabel: seededPool.poolLabel,
-			profile,
 			readClient,
 			securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 		})
@@ -1008,7 +984,6 @@ async function seedSecurityPoolX2Scenario({
 			accountAddress: primaryAccount,
 			managerAddress: preparedPool.managerAddress,
 			memoryClient,
-			profile,
 			readClient,
 			securityBondAllowance: preparedPool.primaryVault.securityBondAllowance,
 			securityPoolAddress: preparedPool.securityPoolAddress,
@@ -1037,7 +1012,6 @@ async function seedSecurityPoolX2Scenario({
 			createWriteClient,
 			managerAddress: preparedPool.managerAddress,
 			memoryClient,
-			profile,
 			readClient,
 			securityPoolAddress: preparedPool.securityPoolAddress,
 			securityBondAllowance: secondaryVault.securityBondAllowance,
@@ -1114,7 +1088,6 @@ async function seedSecurityPoolX2AuctionScenario({
 		createWriteClient,
 		managerAddress: parentPool.managerAddress,
 		memoryClient,
-		profile,
 		readClient,
 	})
 	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)

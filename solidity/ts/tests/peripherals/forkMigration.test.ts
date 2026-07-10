@@ -2,6 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/shared/ethereum'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
+import { queueLiquidationAtForcedPrice } from '../../testsuite/simulator/utils/contracts/peripherals'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
 
@@ -280,7 +281,7 @@ describe('Peripherals: fork migration', () => {
 			// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 			const forcedPrice = PRICE_PRECISION * 10n
 			const liquidationAmount = 25n * 10n ** 18n
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, forcedPrice)
 
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
@@ -327,7 +328,7 @@ describe('Peripherals: fork migration', () => {
 			// Queue liquidation (liquidator requests price to trigger liquidation)
 			const forcedPrice = PRICE_PRECISION * 10n
 			const liquidationAmount = 25n * 10n ** 18n
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, forcedPrice)
 
 			// Record liquidator's ownership before attack
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -378,7 +379,7 @@ describe('Peripherals: fork migration', () => {
 			const targetClaimBefore = await getVaultRepClaim(client.account.address)
 			const liquidationAmount = securityPoolAllowance
 
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, PRICE_PRECISION * 10n)
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 10n)
 
 			const targetVaultAfterFirstLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -390,7 +391,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(liquidatorVaultAfterFirstLiquidation.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + 25n * 10n ** 18n, 'the liquidator should only absorb the repair debt amount')
 			strictEqualTypeSafe(targetClaimAfterFirstLiquidation, targetClaimBefore, 'repair liquidation should leave the target REP claim unchanged')
 
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, PRICE_PRECISION * 10n)
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 10n)
 
 			const targetVaultAfterSecondLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
