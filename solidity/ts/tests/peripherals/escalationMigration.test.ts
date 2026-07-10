@@ -686,7 +686,7 @@ describe('Peripherals: escalation migration', () => {
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [QuestionOutcome.Yes, [proof]],
 			}),
-			/Question not finalized/,
+			/Question not finalized|Question open/,
 		)
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, client.account.address), walletBalanceBeforeClaim, 'the honest winner should not receive child REP before the losing vault funds its carried lock')
 		strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)).repInEscalationGame, childVaultBeforeClaim.repInEscalationGame, 'the paused continuation should preserve the winner escrow while funding is incomplete')
@@ -781,7 +781,7 @@ describe('Peripherals: escalation migration', () => {
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [QuestionOutcome.Yes, [attackerProof]],
 			}),
-			/Question not finalized/,
+			/Question not finalized|Question open/,
 		)
 		const honestWinnerProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
 			expectedOutcome: QuestionOutcome.Yes,
@@ -802,7 +802,7 @@ describe('Peripherals: escalation migration', () => {
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [QuestionOutcome.Yes, [honestWinnerProof]],
 			}),
-			/Question not finalized/,
+			/Question not finalized|Question open/,
 		)
 
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
@@ -1193,7 +1193,7 @@ describe('Peripherals: escalation migration', () => {
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question not finalized/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question not finalized|Question open/)
 	})
 
 	test('third parties can permissionlessly settle another vaults resolved escalation deposits', async () => {

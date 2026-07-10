@@ -87,6 +87,17 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 		}),
 	)
 
+export const updateCollateralAmount = async (client: WriteClient, securityPoolAddress: Address) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'updateCollateralAmount',
+			address: securityPoolAddress,
+			args: [],
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
+		}),
+	)
+
 export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: Address, completeSetsToRedeem: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
