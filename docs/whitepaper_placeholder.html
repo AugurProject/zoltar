@@ -3195,9 +3195,17 @@
 						<summary>Adjust escalation resolution edge cases</summary>
 						<p>
 							The resolution helper first checks whether at least two outcomes
-							meet the running cost. If not unresolved, strict
-							<code>Invalid</code> or <code>Yes</code> leads win before the
-							fallback to <code>No</code>.
+							meet the running cost. If that unresolved test does not apply and
+							all three balances are zero, the helper returns
+							<code>Invalid</code>. Otherwise, a strict
+							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead
+							wins. Valid deposits prevent tied maxima below non-decision by
+							reducing the accepted amount by one atomic REP unit, or
+							reverting if that adjusted amount becomes invalid. Continuation
+							snapshots reject preserved positive tied maxima below
+							<code>nonDecisionThreshold</code>. Ties already at
+							<code>nonDecisionThreshold</code>, or all-zero preserved
+							balances, remain valid carried states.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -3235,11 +3243,11 @@
 									min="0"
 									max="20"
 									step="1"
-									value="6"
+									value="7"
 									data-example-input="noBalance"
 								/>
 								<span class="example-value" data-example-value="noBalance"
-									>6 REP</span
+									>7 REP</span
 								>
 							</label>
 							<label>
@@ -3611,12 +3619,21 @@
 					</p>
 					<p>
 						If time expires without the stronger non-decision condition, the
-						local resolution helper chooses a strict <code>Invalid</code> or
-						<code>Yes</code> lead, otherwise it falls through to
-						<code>No</code> once the unresolved check no longer applies. If two
-						or more outcomes are at or above the fixed
-						<code>nonDecisionThreshold</code>, the game records non-decision and
-						opens the fork path.
+						local resolution helper first checks whether two or more outcomes
+						still meet the running cost. If not and all three balances are
+						zero, it falls back to <code>Invalid</code>. Otherwise, a strict
+						leading outcome wins. Valid deposits prevent tied maxima below
+						non-decision by reducing the accepted amount by one atomic REP
+						unit, or reverting if that adjusted amount becomes invalid.
+						Continuation snapshots reject preserved positive tied maxima below
+						<code>nonDecisionThreshold</code>. Ties already at the fixed
+						<code>nonDecisionThreshold</code>, or all-zero preserved
+						balances, remain valid carried states. A local deposit that brings
+						a second outcome to <code>nonDecisionThreshold</code> records
+						<code>nonDecisionTimestamp</code> and opens the fork path. A fork
+						continuation can instead inherit a threshold tie without rebasing
+						balances or recording a new timestamp during snapshot
+						initialization.
 					</p>
 					<p>
 						For the exact resolution ordering, empty-game fallback, deposit
@@ -3884,11 +3901,10 @@
 						<p>
 							Winning capital up to the reward cap shares the fixed reward pool.
 							Winning capital above the cap receives principal only, and a lower
-							actual fork threshold scales the withdrawal down. If the fallback
-							<code>No</code> outcome wins after <code>Invalid</code> and
-							<code>Yes</code> tie at larger balances, the binding capital can
-							be greater than the winning principal; the contract still computes
-							the payout from those two values.
+							actual fork threshold scales the withdrawal down. Tied leaders do
+							not resolve to a fallback outcome, so the payout path only applies
+							once one outcome has a strict lead or non-decision has already
+							routed the market into the fork path.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -5327,9 +5343,13 @@
 						<code>startBond</code>, <code>nonDecisionThreshold</code>, elapsed
 						escalation time, and per-outcome carry state. Each relevant child
 						pool can initialize its own paused fork-continuation escalation game
-						from that snapshot. The continuation preserves each unresolved
-						deposit’s original outcome, stable parent deposit index, payout
-						ordering, and remaining REP backing.
+						from that snapshot. The continuation preserves the parent live
+						<code>Invalid</code>, <code>Yes</code>, and <code>No</code>
+						balances, each unresolved deposit’s original outcome, stable parent
+						deposit index, payout ordering, and the remaining REP backing that
+						still needs to arrive through forked escrow. Forked escrow then
+						tracks how much child REP backing has arrived for those inherited
+						unresolved deposits without rebasing the preserved live balances.
 					</p>
 					<p>
 						The continuation game remains paused during the migration window so
@@ -5655,7 +5675,10 @@
 						Forked escrow records both source-principal amounts and converted
 						child REP by original outcome. The scaling path applies only when a
 						claim has positive source principal and a forked-escrow record
-						exists; zero-amount or missing-escrow claims release no child REP.
+						exists. If inherited carry requires forked escrow, missing escrow
+						blocks settlement. A zero-source, zero-child escrow record is a
+						no-op; recorded escrow with zero child REP can settle a positive
+						proof for zero child REP.
 						Once a game is final, all unresolved principal is cleared, and no
 						escrow remains, any residual REP still sitting in the escalation
 						game can be swept back to the security pool.
@@ -9286,21 +9309,34 @@
 					(balance) => balance >= runningCost,
 				).length;
 				const allZero = balances.every((balance) => balance === 0);
-				let result = "No";
+				const maxBalance = Math.max(...balances);
+				const tiedMaximumCount = balances.filter(
+					(balance) => balance === maxBalance,
+				).length;
+				const hasSyntheticTiedLeader =
+					maxBalance > 0 && tiedMaximumCount >= 2 && atCost < 2;
+				let result = "None";
 				let reason =
-					"no strict Invalid or Yes lead, so the helper falls through";
+					"no outcome has a strict lead, so the helper keeps the game unresolved";
 				if (atCost >= 2) {
 					result = "None";
 					reason = "two or more outcomes still contest the cost";
 				} else if (allZero) {
 					result = "Invalid";
 					reason = "empty game after cost is non-zero";
+				} else if (hasSyntheticTiedLeader) {
+					result = "None";
+					reason =
+						"synthetic tied leader; valid deposits and preserved non-zero snapshots reject this state";
 				} else if (invalidBalance > yesBalance && invalidBalance > noBalance) {
 					result = "Invalid";
 					reason = "Invalid has a strict lead";
 				} else if (yesBalance > invalidBalance && yesBalance > noBalance) {
 					result = "Yes";
 					reason = "Yes has a strict lead";
+				} else if (noBalance > invalidBalance && noBalance > yesBalance) {
+					result = "No";
+					reason = "No has a strict lead";
 				}
 				const resolutionScale =
 					520 / Math.max(invalidBalance, yesBalance, noBalance, runningCost, 1);
@@ -9399,7 +9435,7 @@
 				context.write(
 					"payoutState",
 					bindingCapital > winningPrincipal
-						? "reachable No fallback/tied-leader edge case"
+						? "not a valid final winner state: binding capital cannot exceed a strict winner's balance"
 						: "reachable ordinary winner state",
 				);
 			});

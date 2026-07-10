@@ -29,8 +29,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		uint256 outcomeBalance = outcomeStateForEscrow.balance;
 		if (forkCarrySnapshotRequiresForkedEscrow) {
 			outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal += sourcePrincipal;
-			outcomeBalance += childRepAmount;
-			outcomeStateForEscrow.balance = outcomeBalance;
 		}
 		emit ForkedEscrowRecorded(
 			depositor,

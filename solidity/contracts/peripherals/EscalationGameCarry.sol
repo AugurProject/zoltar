@@ -179,10 +179,11 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
+		// Defensive invariant: valid escalation-game state should never carry a positive tied leader below non-decision into a child snapshot.
+		require(!_hasInvalidTiedResolutionMaximum(snapshotResolutionBalances), 'Resolution tie');
 
 		bytes32[3] memory normalizedNullifierRoots;
 		uint256 totalCarry;
-		uint256 totalResolutionBalance;
 		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			require(
@@ -206,11 +207,26 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			state.balance = snapshotResolutionBalances[outcomeIndex];
 			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
 			totalCarry += snapshotCarryTotals[outcomeIndex];
-			totalResolutionBalance += snapshotResolutionBalances[outcomeIndex];
 		}
-		forkCarrySnapshotRequiresForkedEscrow = totalCarry > totalResolutionBalance;
+		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
+	}
+
+	function _hasInvalidTiedResolutionMaximum(
+		uint256[3] memory snapshotResolutionBalances
+	) private view returns (bool) {
+		uint256 maxBalance = snapshotResolutionBalances[0];
+		if (snapshotResolutionBalances[1] > maxBalance) maxBalance = snapshotResolutionBalances[1];
+		if (snapshotResolutionBalances[2] > maxBalance) maxBalance = snapshotResolutionBalances[2];
+		if (maxBalance == 0) return false;
+		if (maxBalance >= nonDecisionThreshold) return false;
+
+		uint256 matches;
+		if (snapshotResolutionBalances[0] == maxBalance) matches += 1;
+		if (snapshotResolutionBalances[1] == maxBalance) matches += 1;
+		if (snapshotResolutionBalances[2] == maxBalance) matches += 1;
+		return matches >= 2;
 	}
 
 	function _getStableLocalParentDepositIndex(uint256 depositIndex) internal view returns (uint256) {

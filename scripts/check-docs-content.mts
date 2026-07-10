@@ -189,6 +189,7 @@ assert.match(textReviewGuidance, /Document\s+titles should not be\s+grammatical 
 
 const whitepaper = await Bun.file('docs/whitepaper_placeholder.html').text()
 const openOracleIntegration = await Bun.file('docs/openOracleIntegration.html').text()
+const operatorReference = await Bun.file('docs/operator-reference.md').text()
 assert.match(whitepaper, /PRICE_VALID_FOR_SECONDS = 5 minutes/)
 assert.match(whitepaper, /<td><code>PRICE_VALID_FOR_SECONDS<\/code><\/td>\s*<td><code>5 minutes<\/code><\/td>/)
 assert.match(whitepaper, /OpenOracle <code>settlementTime<\/code><\/td>\s*<td>\s*<math aria-label="40 times 12" data-source="40 \\cdot 12"/)
@@ -203,6 +204,10 @@ assert.match(whitepaper, /<code>1 REP<\/code> default deployment value/)
 assert.match(whitepaper, /<td><code>initialEscalationGameDeposit<\/code><\/td>\s*<td><code>1 REP<\/code> default<\/td>/)
 assert.match(whitepaper, /<code>1000000000000000000<\/code> atomic REP units/)
 assert.ok(!/initialEscalationGameDeposit[\s\S]{0,200}<code>1 ether<\/code>/.test(whitepaper))
+assert.match(whitepaper, /The continuation preserves the parent live\s+<code>Invalid<\/code>,\s+<code>Yes<\/code>,\s+and\s+<code>No<\/code>\s+balances[\s\S]{0,220}Forked escrow then\s+tracks how much child REP backing has arrived for those inherited\s+unresolved deposits without rebasing the preserved live balances\./)
+assert.match(operatorReference, /\| Continuation balance snapshot \| Child continuations initialize live `Invalid`\/`Yes`\/`No` balances from the parent escalation game, while forked escrow separately tracks source principal and arriving child REP backing for inherited unresolved deposits\./)
+assert.match(whitepaper, /preserved positive tied maxima below\s+<code>nonDecisionThreshold<\/code>/)
+assert.match(operatorReference, /preserved positive tied maxima below `nonDecisionThreshold`/)
 
 const protocolTerms = await Bun.file('docs/protocolTerms.js').text()
 assert.match(protocolTerms, /const repEthPriceDefinition/)
