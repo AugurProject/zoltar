@@ -45,6 +45,62 @@ test('lint-ui-tsx-strings rejects direct children and factory-call literals', ()
 	expect(factoryCallFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
 })
 
+test('lint-ui-tsx-strings ignores lowercase helper mode tokens passed to render helpers', () => {
+	const bidFailures = lintSourceText('ui/ts/components/TestRenderHelperMode.tsx', "export function TestRenderHelperMode() { function renderDebtNotice() { return <>{renderTruthAuctionDebtNotice('bid')}</> } return renderDebtNotice() }")
+	const settlementFailures = lintSourceText('ui/ts/components/TestRenderHelperSettlementMode.tsx', "export function TestRenderHelperSettlementMode() { const renderDebtNotice = () => <>{renderTruthAuctionDebtNotice('settlement', true)}</>; return renderDebtNotice() }")
+
+	expect(bidFailures).toHaveLength(0)
+	expect(settlementFailures).toHaveLength(0)
+})
+
+test('lint-ui-tsx-strings still rejects lowercase visible copy passed through helper calls', () => {
+	const failures = lintSourceText('ui/ts/components/TestLowercaseCallHelper.tsx', "export function TestLowercaseCallHelper() { function formatUnit() { return String('minutes') } return <span>{formatUnit()}</span> }")
+	const renderLabelFailures = lintSourceText('ui/ts/components/TestRenderLabelHelper.tsx', "export function TestRenderLabelHelper() { function renderNotice() { return <Panel title={renderLabel('minutes')} /> } return renderNotice() }")
+
+	expect(failures).toHaveLength(1)
+	expect(renderLabelFailures).toHaveLength(1)
+	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(renderLabelFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+})
+
+test('lint-ui-tsx-strings ignores local prop-object keys that are not direct user-facing literals', () => {
+	const failures = lintSourceText(
+		'ui/ts/components/TestLocalPropsObject.tsx',
+		"export function TestLocalPropsObject({ option }: { option: { panelId: string; reason?: string } }) { const commonProps = { 'aria-controls': option.panelId, 'aria-description': option.reason, title: option.reason } as const; return <button {...commonProps}>Open</button> }",
+	)
+	const jsxPayloadFailures = lintSourceText('ui/ts/components/TestJsxPayloadPropertyKeys.tsx', "export function TestJsxPayloadPropertyKeys({ option }: { option: { reason?: string } }) { return <Panel config={{ 'aria-description': option.reason }} /> }")
+	const localDescriptionPropsFailures = lintSourceText(
+		'ui/ts/components/TestLocalDescriptionProps.tsx',
+		"export function TestLocalDescriptionProps({ option }: { option: { reason?: string } }) { const descriptionProps = { 'aria-description': option.reason } as const; return <button {...descriptionProps}>Open</button> }",
+	)
+
+	expect(failures).toHaveLength(1)
+	expect(failures[0]).toContain('JSX text must come from UI_STRINGS')
+	expect(jsxPayloadFailures).toHaveLength(0)
+	expect(localDescriptionPropsFailures).toHaveLength(1)
+	expect(localDescriptionPropsFailures[0]).toContain('JSX text must come from UI_STRINGS')
+})
+
+test('lint-ui-tsx-strings rejects nested user-facing object payload literals inside JSX attributes', () => {
+	const objectFailures = lintSourceText('ui/ts/components/TestNestedObjectPayload.tsx', "export function TestNestedObjectPayload() { return <Panel config={{ actions: { buttonLabel: 'Save Changes' } }} /> }")
+	const arrayFailures = lintSourceText('ui/ts/components/TestNestedArrayPayload.tsx', "export function TestNestedArrayPayload() { return <Panel config={{ actions: [{ modalTitle: 'Save Changes' }] }} /> }")
+
+	expect(objectFailures).toHaveLength(1)
+	expect(arrayFailures).toHaveLength(1)
+	expect(objectFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(arrayFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+})
+
+test('lint-ui-tsx-strings rejects direct literal values in local spread props objects', () => {
+	const titleFailures = lintSourceText('ui/ts/components/TestLocalSpreadTitleValue.tsx', "export function TestLocalSpreadTitleValue() { const commonProps = { title: 'Save Changes' } as const; return <button {...commonProps} /> }")
+	const ariaDescriptionFailures = lintSourceText('ui/ts/components/TestLocalSpreadAriaDescriptionValue.tsx', "export function TestLocalSpreadAriaDescriptionValue() { const commonProps = { 'aria-description': 'Save Changes' } as const; return <button {...commonProps} /> }")
+
+	expect(titleFailures).toHaveLength(1)
+	expect(ariaDescriptionFailures).toHaveLength(1)
+	expect(titleFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(ariaDescriptionFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+})
+
 test('lint-ui-tsx-strings rejects direct suffix props and acronym JSX text', () => {
 	const suffixFailures = lintSourceText('ui/ts/components/TestSuffix.tsx', "export function TestSuffix() { return <CurrencyValue suffix='ETH' /> }")
 	const wrappedSuffixFailures = lintSourceText('ui/ts/components/TestWrappedSuffix.tsx', "export function TestWrappedSuffix() { return <CurrencyValue suffix={'REP'} /> }")
