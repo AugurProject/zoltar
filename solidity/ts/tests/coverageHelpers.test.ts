@@ -447,6 +447,39 @@ describe('Solidity bytecode coverage helpers', () => {
 		)
 	})
 
+	test('reputation token mint rejects supply growth beyond the theoretical cap', async () => {
+		const reputationTokenAddress = await deployReputationToken()
+
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'setMaxTheoreticalSupply',
+				args: [10n],
+			}),
+		)
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'mint',
+				args: [client.account.address, 9n],
+			}),
+		)
+
+		await assert.rejects(
+			transact(
+				reputationTokenAddress,
+				encodeFunctionData({
+					abi: ReputationToken_ReputationToken.abi,
+					functionName: 'mint',
+					args: [client.account.address, 2n],
+				}),
+			),
+			/Mint exceeds theoretical supply/i,
+		)
+	})
+
 	test('reuses cached address profiles without repeated getCode lookups for the same deployed contract', async () => {
 		if (!isCoverageEnabled()) return
 

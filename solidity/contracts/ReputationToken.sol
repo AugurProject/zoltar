@@ -25,6 +25,9 @@ contract ReputationToken is ERC20 {
 	}
 
 	function mint(address account, uint256 value) external isZoltar {
+		// Defense in depth: preserve the theoretical-supply invariant even if future
+		// migration accounting changes accidentally route an oversized mint here.
+		require(totalSupply() + value <= totalTheoreticalSupply, 'Mint exceeds theoretical supply');
 		_mint(account, value);
 		emit Mint(account, value);
 	}

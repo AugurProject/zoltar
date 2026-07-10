@@ -18,7 +18,7 @@ interface KnownSourceMapCoverageGapFileRule {
 export const knownSourceMapCoverageGaps = [
 	{
 		sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol',
-		lineRules: [{ currentSourceMatches: 1, linePattern: /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*_[A-Za-z_][A-Za-z0-9_]*;$/ }],
+		lineRules: [{ currentSourceMatches: 0, linePattern: /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*_[A-Za-z_][A-Za-z0-9_]*;$/ }],
 	},
 	{
 		sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol',
