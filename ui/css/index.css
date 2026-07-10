@@ -3329,44 +3329,6 @@ strong.metric-value-danger {
 	flex: 0 0 auto;
 }
 
-.action-safety-modal-stack {
-	display: grid;
-	gap: 0.9rem;
-}
-
-.action-safety-header {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-}
-
-.action-safety-checklist {
-	display: grid;
-	gap: 0.55rem;
-	margin: 0;
-	padding-left: 1.15rem;
-	color: var(--text-secondary);
-}
-
-.action-safety-checklist li {
-	line-height: 1.45;
-}
-
-.action-safety-acknowledgement {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
-	gap: 0.65rem;
-	align-items: start;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-control);
-	background: rgba(10, 20, 36, 0.24);
-}
-
-.action-safety-acknowledgement input {
-	margin-top: 0.14rem;
-}
-
 .workflow-status-item {
 	display: grid;
 	position: relative;

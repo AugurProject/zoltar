@@ -32,7 +32,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				eyebrow={UI_STRINGS.deploymentRouteContent.deployRouteEyebrow}
 				title={UI_STRINGS.deploymentRouteContent.deterministicContractDeploymentTitle}
 				description={UI_STRINGS.deploymentRouteContent.deterministicContractDeploymentDescription}
-				actions={<TransactionActionButton safetyId='deployment.deployNextMissing' idleLabel={buttonContent} pendingLabel={UI_STRINGS.deploymentRouteContent.deployButtonPendingLabel} onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
+				actions={<TransactionActionButton idleLabel={buttonContent} pendingLabel={UI_STRINGS.deploymentRouteContent.deployButtonPendingLabel} onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
 				summary={
 					<DataGrid columns='auto'>
 						<div>

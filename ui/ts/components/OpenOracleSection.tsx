@@ -24,7 +24,6 @@ import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
-import { getOpenOracleActionSafetyId } from '../lib/actionSafety/ids.js'
 import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../lib/chainTimestamp.js'
@@ -258,7 +257,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token1Symbol)}
 								requiredAmount={initialReportSubmission.amount1}
 								resetKey={`token1:${token1Symbol}:${initialReportSubmission.amount1?.toString() ?? ''}:${openOracleForm.reportId}`}
-								safetyId={getOpenOracleActionSafetyId('approveToken1')}
 								tokenSymbol={token1Symbol}
 								tokenUnits={initialReportSubmission.token1Decimals ?? 18}
 							/>
@@ -277,7 +275,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token2Symbol)}
 								requiredAmount={initialReportSubmission.amount2}
 								resetKey={`token2:${token2Symbol}:${initialReportSubmission.amount2?.toString() ?? ''}:${openOracleForm.reportId}`}
-								safetyId={getOpenOracleActionSafetyId('approveToken2')}
 								tokenSymbol={token2Symbol}
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
@@ -292,7 +289,6 @@ export function renderSelectedReportActionSection({
 						<div className='actions'>
 							{!initialReportSubmission.hasWethWrapAction ? undefined : (
 								<TransactionActionButton
-									safetyId={getOpenOracleActionSafetyId('wrapWeth')}
 									idleLabel={UI_STRINGS.openOracleSection.wrapEthToWethIdleLabel}
 									pendingLabel={UI_STRINGS.openOracleSection.wrapEthToWethPendingLabel}
 									onClick={onWrapWethForInitialReport}
@@ -305,7 +301,6 @@ export function renderSelectedReportActionSection({
 								/>
 							)}
 							<TransactionActionButton
-								safetyId={getOpenOracleActionSafetyId('submitInitialReport')}
 								idleLabel={UI_STRINGS.openOracleSection.submitInitialReportIdleLabel}
 								pendingLabel={UI_STRINGS.openOracleSection.submitInitialReportPendingLabel}
 								onClick={onSubmitInitialReport}
@@ -390,7 +385,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token1Symbol)}
 								requiredAmount={disputeSubmission?.token1ContributionAmount}
 								resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-								safetyId={getOpenOracleActionSafetyId('approveToken1')}
 								tokenSymbol={token1Symbol}
 								tokenUnits={disputeSubmission?.token1Decimals ?? 18}
 							/>
@@ -408,7 +402,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel={UI_STRINGS.openOracleSection.approvingTokenPendingLabel(token2Symbol)}
 								requiredAmount={disputeSubmission?.token2ContributionAmount}
 								resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-								safetyId={getOpenOracleActionSafetyId('approveToken2')}
 								tokenSymbol={token2Symbol}
 								tokenUnits={disputeSubmission?.token2Decimals ?? 18}
 							/>
@@ -416,7 +409,6 @@ export function renderSelectedReportActionSection({
 						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
-								safetyId={getOpenOracleActionSafetyId('dispute')}
 								idleLabel={UI_STRINGS.openOracleSection.disputeReportActionLabel}
 								pendingLabel={UI_STRINGS.openOracleSection.disputeAndSwapPendingLabel}
 								onClick={onDisputeReport}
@@ -456,7 +448,6 @@ export function renderSelectedReportActionSection({
 						<p className='detail'>{UI_STRINGS.openOracleSection.settleConfirmationDetail}</p>
 						<div className='actions'>
 							<TransactionActionButton
-								safetyId={getOpenOracleActionSafetyId('settle')}
 								idleLabel={UI_STRINGS.openOracleSection.settleReportIdleLabel}
 								pendingLabel={UI_STRINGS.openOracleSection.settleReportPendingLabel}
 								onClick={onSettleReport}
@@ -1094,7 +1085,6 @@ export function OpenOracleSection({
 
 							<div className='actions'>
 								<TransactionActionButton
-									safetyId={getOpenOracleActionSafetyId('createReportInstance')}
 									idleLabel={UI_STRINGS.openOracleSection.createStandaloneOracleGameButtonIdleLabel}
 									pendingLabel={UI_STRINGS.openOracleSection.createStandaloneOracleGameButtonPendingLabel}
 									onClick={onCreateOpenOracleGame}

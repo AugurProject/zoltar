@@ -25,8 +25,8 @@ describe('ActionLauncherCard', () => {
 	test('renders ready and blocked readiness using the standard card shell classes', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<div>
-				<ActionLauncherCard action={{ actionLabel: 'Ready Action', description: 'Ready details.', key: 'ready', onAction: () => undefined, readiness: 'ready', safetyId: 'open-oracle.submitInitialReport', title: 'Ready Action' }} />
-				<ActionLauncherCard action={{ actionLabel: 'Blocked Action', blocker: 'Blocked.', description: 'Blocked details.', key: 'blocked', readiness: 'blocked', safetyId: 'open-oracle.settle', title: 'Blocked Action' }} />
+				<ActionLauncherCard action={{ actionLabel: 'Ready Action', description: 'Ready details.', key: 'ready', onAction: () => undefined, readiness: 'ready', title: 'Ready Action' }} />
+				<ActionLauncherCard action={{ actionLabel: 'Blocked Action', blocker: 'Blocked.', description: 'Blocked details.', key: 'blocked', readiness: 'blocked', title: 'Blocked Action' }} />
 			</div>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -49,7 +49,6 @@ describe('ActionLauncherCard', () => {
 					key: 'blocked-ready',
 					onAction: () => undefined,
 					readiness: 'ready',
-					safetyId: 'open-oracle.submitInitialReport',
 					title: 'Blocked Ready Action',
 				}}
 			/>,
@@ -75,7 +74,6 @@ describe('ActionLauncherCard', () => {
 						actionCalls += 1
 					},
 					readiness: 'blocked',
-					safetyId: 'open-oracle.submitInitialReport',
 					title: 'Blocked Without Copy',
 				}}
 			/>,
