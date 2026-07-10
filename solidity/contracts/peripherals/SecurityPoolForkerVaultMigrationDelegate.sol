@@ -6,10 +6,11 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolForkerChildEscalationGameInitializer } from './interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
+import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultMigrationBase.sol';
 
 contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigrationBase {
-	constructor(Zoltar _zoltar) SecurityPoolForkerVaultMigrationBase(_zoltar) {}
+	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
 		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(
@@ -31,5 +32,9 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		parent.updateVaultFees(msg.sender);
 		ISecurityPool child = _getOrDeployChildPool(parent, outcomeIndex);
 		_migrateVaultUnlockedState(parent, child, msg.sender);
+	}
+
+	function ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplit) public {
+		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredSplit);
 	}
 }

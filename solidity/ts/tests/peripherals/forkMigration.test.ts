@@ -1,7 +1,9 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { encodeDeployData } from '@zoltar/shared/ethereum'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
 
 describe('Peripherals: fork migration', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
@@ -216,6 +218,43 @@ describe('Peripherals: fork migration', () => {
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
 			strictEqualTypeSafe(forkData.auctionableRepAtFork, forkDataBeforeStrayRep.auctionableRepAtFork, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
+		})
+
+		test('createChildUniverse rejects fake parents that try to reuse a legitimate pool as the child', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await triggerExternalForkForSecurityPool()
+
+			const targetPool = securityPoolAddresses.securityPool
+			const denominatorBeforeAttack = await getPoolOwnershipDenominator(client, targetPool)
+			const targetForkDataBeforeAttack = await getSecurityPoolForkerForkData(client, targetPool)
+			const attackerChosenDenominator = denominatorBeforeAttack + 123n
+
+			const attackFactoryDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock.evm.bytecode.object}`,
+					args: [targetPool, targetPool],
+				}),
+			})
+			const attackFactoryReceipt = await client.waitForTransactionReceipt({ hash: attackFactoryDeploymentHash })
+			const attackFactoryAddress = ensureDefined(attackFactoryReceipt.contractAddress, 'attack factory address missing')
+
+			const fakeParentDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock.evm.bytecode.object}`,
+					args: [genesisUniverse, attackFactoryAddress, securityPoolAddresses.shareToken, questionId, securityMultiplier, 0n, 0n, attackerChosenDenominator],
+				}),
+			})
+			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
+			const fakeParentAddress = fakeParentReceipt.contractAddress
+			if (fakeParentAddress === undefined || fakeParentAddress === null) throw new Error('fake parent address missing')
+
+			await assert.rejects(createChildUniverse(client, fakeParentAddress, QuestionOutcome.Yes), /Invalid child deployment/)
+
+			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, targetPool), denominatorBeforeAttack, 'attack should not change the legitimate pool ownership denominator')
+			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, targetPool)).truthAuction, targetForkDataBeforeAttack.truthAuction, 'attack should not overwrite the legitimate pool fork metadata')
 		})
 	})
 
@@ -1414,7 +1453,7 @@ describe('Peripherals: fork migration', () => {
 			const migrationDeadline = (await mockWindow.getTime()) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline + 1n)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /(Migration closed|Own-fork window closed)/i)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /closed/i)
 		})
 
 		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
@@ -1450,7 +1489,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child not migrating/)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child closed/)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {
