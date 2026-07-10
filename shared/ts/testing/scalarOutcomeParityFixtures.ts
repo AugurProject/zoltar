@@ -40,6 +40,7 @@ export const SCALAR_PARITY_DECIMAL_BASE = 10n ** SCALAR_PARITY_DECIMALS
 export const SCALAR_PARITY_PART_BIT_LENGTH = 120n
 export const SCALAR_PARITY_TOTAL_BITS = 256n
 export const SCALAR_PARITY_PART_MASK = (1n << SCALAR_PARITY_PART_BIT_LENGTH) - 1n
+export const SCALAR_PARITY_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
 export const SCALAR_PARITY_UINT120_MAX = SCALAR_PARITY_PART_MASK
 export const SCALAR_PARITY_INT256_MIN = -(1n << 255n)
 export const SCALAR_PARITY_INT256_MAX = (1n << 255n) - 1n
@@ -214,6 +215,7 @@ export function formatScalarParityLabel(question: ScalarParityQuestion, tickInde
 
 export function describeScalarParityOutcomeIndex(question: ScalarParityQuestion, outcomeIndex: bigint): ScalarParityOutcomeIndexDescriptor {
 	if (question.numTicks <= 0n) return { kind: 'malformed' }
+	if ((outcomeIndex & SCALAR_PARITY_RESERVED_BITS_MASK) !== 0n) return { kind: 'malformed' }
 	const { invalid, firstPart, secondPart } = splitScalarParityOutcomeIndex(outcomeIndex)
 	if (invalid) return firstPart === 0n && secondPart === 0n ? { kind: 'invalid' } : { kind: 'malformed' }
 	if (firstPart + secondPart !== question.numTicks) return { kind: 'malformed' }

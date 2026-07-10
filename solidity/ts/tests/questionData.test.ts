@@ -30,6 +30,7 @@ import type { ScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeP
 const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12
 const SCALAR_ENCODING_FUZZ_STATE_MASK = (1n << 128n) - 1n
+const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
 
 type ScalarEncodingFuzzSample = {
 	firstPart: bigint
@@ -61,6 +62,10 @@ function getScalarEncodingFuzzSamples(question: ScalarParityQuestion, seed: bigi
 		if (index % 3 === 0) samples.push({ invalid: true, firstPart: (firstPart % 19n) + 1n, secondPart: secondPart % 23n })
 	}
 	return samples
+}
+
+function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
+	return answer | ((reservedBits << 240n) & SCALAR_RESERVED_BITS_MASK)
 }
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -302,6 +307,35 @@ describe('Question Data', () => {
 			const malformed = await isMalformedAnswerOption(client, questionId, ans)
 			assert.strictEqual(malformed, false, 'invalid flag + both zero is Invalid (not malformed)')
 		}
+	})
+
+	test('scalar answers with non-zero reserved bits are malformed even when the payload is otherwise canonical', async () => {
+		const testScalarQuestion = {
+			title: 'scalar reserved bits',
+			description: 'scalar reserved bits',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 1000n,
+			displayValueMin: 0n,
+			displayValueMax: 1000n,
+			answerUnit: 'unit',
+		}
+		await createQuestion(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
+
+		const canonicalScalarAnswer = combineUint256FromTwoWithInvalid(false, 600n, 400n)
+		const aliasedScalarAnswer = withScalarReservedBits(canonicalScalarAnswer, 0x1234n)
+		const canonicalInvalidAnswer = combineUint256FromTwoWithInvalid(true, 0n, 0n)
+		const aliasedInvalidAnswer = withScalarReservedBits(canonicalInvalidAnswer, 0x7fffn)
+		const canonicalScalarLabel = await getAnswerOptionName(client, questionId, canonicalScalarAnswer)
+
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, canonicalScalarAnswer), false, 'canonical scalar answer should remain valid')
+		assert.notStrictEqual(canonicalScalarLabel, 'Malformed', 'canonical scalar answer should keep a non-malformed label')
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, aliasedScalarAnswer), true, 'scalar alias with reserved bits should be malformed')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, aliasedScalarAnswer), 'Malformed', 'scalar alias with reserved bits should render as malformed')
+		assert.strictEqual(await isMalformedAnswerOption(client, questionId, aliasedInvalidAnswer), true, 'invalid alias with reserved bits should be malformed')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, aliasedInvalidAnswer), 'Malformed', 'invalid alias with reserved bits should render as malformed')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, canonicalInvalidAnswer), 'Invalid', 'canonical invalid answer should remain available')
 	})
 
 	test('accepts scalar questions at the uint120 encoding boundary', async () => {
