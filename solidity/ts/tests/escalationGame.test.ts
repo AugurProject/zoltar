@@ -1587,15 +1587,19 @@ describe('Escalation Game Test Suite', () => {
 		assert.deepStrictEqual(await readForkedEscrowByVaultAndOutcome(child.escalationGameAddress, client.account.address, QuestionOutcome.Yes), [3n * reportBond, 0n, 3n, 0n], 'funding progress should still track the inherited principal separately from the preserved live balance')
 	})
 
-	test('fork continuation resolution keeps tied carried leaders unresolved after attrition rises above both balances', async () => {
+	test('fork continuation snapshot rejects tied preserved leaders below non-decision', async () => {
 		const child = await deployEscalationGameWithProofPool()
 		const tiedBalance = 2n * reportBond
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 1n], [0n, tiedBalance, tiedBalance], [0n, tiedBalance, tiedBalance], [zeroHash(), zeroHash(), zeroHash()])
-		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
+		await assert.rejects(initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 1n], [0n, tiedBalance, tiedBalance], [0n, tiedBalance, tiedBalance], [zeroHash(), zeroHash(), zeroHash()]), /Resolution tie/)
+	})
 
-		const resolution = await getQuestionResolution(client, child.escalationGameAddress)
-		assert.strictEqual(resolution, QuestionOutcome.None, 'tied carried leaders must remain unresolved instead of defaulting to No')
+	test('fork continuation snapshot allows tied preserved leaders at non-decision threshold', async () => {
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 1n], [0n, nonDecisionThreshold, nonDecisionThreshold], [0n, nonDecisionThreshold, nonDecisionThreshold], [zeroHash(), zeroHash(), zeroHash()])
+
+		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.None, 'threshold-tied carried non-decision states should remain unresolved')
 	})
 
 	test('forked carried proof cannot withdraw from another vaults escrow backing', async () => {

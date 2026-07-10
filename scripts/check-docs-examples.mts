@@ -278,7 +278,7 @@ async function checkResolutionEdgeExample(): Promise<void> {
 		example.setInput('runningCost', 6)
 
 		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example tied leader below cost result')
-		assertEqual(example.output('resolutionReason'), 'no outcome has a strict lead, so the helper keeps the game unresolved', 'resolution edge example tied leader below cost reason')
+		assertEqual(example.output('resolutionReason'), 'synthetic tied leader; valid deposits and preserved non-zero snapshots reject this state', 'resolution edge example tied leader below cost reason')
 
 		example.setInput('invalidBalance', 4)
 		example.setInput('yesBalance', 5)

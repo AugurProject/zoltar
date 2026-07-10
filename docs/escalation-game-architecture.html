@@ -253,9 +253,10 @@
 				<h2>Deployment and Bytecode</h2>
 				<p>
 					The proof verifier split also exists because bytecode headroom is
-					tight. Keeping proof math outside the state-owning contract preserves
-					room for revert strings, event payloads, and future execution logic
-					without collapsing the public game contract into an unreviewable blob.
+					tight. Keeping proof math outside the state-owning contract keeps the
+					contract under the current bytecode budgets and leaves only limited
+					headroom for small execution changes without collapsing the public
+					game contract into an unreviewable blob.
 				</p>
 				<table>
 					<thead>
@@ -267,19 +268,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>26,706</code> bytes</td>
+							<td><code>26,935</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>23,653</code> bytes</td>
+							<td><code>23,882</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>347</code> bytes below <code>24,000</code></td>
+							<td><code>118</code> bytes below <code>24,000</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>923</code> bytes below <code>24,576</code></td>
+							<td><code>694</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

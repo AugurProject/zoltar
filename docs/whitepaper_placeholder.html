@@ -3199,7 +3199,13 @@
 							all three balances are zero, the helper returns
 							<code>Invalid</code>. Otherwise, a strict
 							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> lead
-							wins, while tied non-empty leaders remain unresolved.
+							wins. Valid deposits prevent tied maxima below non-decision by
+							reducing the accepted amount by one atomic REP unit, or
+							reverting if that adjusted amount becomes invalid. Continuation
+							snapshots reject preserved positive tied maxima below
+							<code>nonDecisionThreshold</code>. Ties already at
+							<code>nonDecisionThreshold</code>, or all-zero preserved
+							balances, remain valid carried states.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -3237,11 +3243,11 @@
 									min="0"
 									max="20"
 									step="1"
-									value="6"
+									value="7"
 									data-example-input="noBalance"
 								/>
 								<span class="example-value" data-example-value="noBalance"
-									>6 REP</span
+									>7 REP</span
 								>
 							</label>
 							<label>
@@ -3616,10 +3622,18 @@
 						local resolution helper first checks whether two or more outcomes
 						still meet the running cost. If not and all three balances are
 						zero, it falls back to <code>Invalid</code>. Otherwise, a strict
-						leading outcome wins, while tied non-empty leaders stay unresolved
-						instead of defaulting to one side. If two or more outcomes are at
-						or above the fixed <code>nonDecisionThreshold</code>, the game
-						records non-decision and opens the fork path.
+						leading outcome wins. Valid deposits prevent tied maxima below
+						non-decision by reducing the accepted amount by one atomic REP
+						unit, or reverting if that adjusted amount becomes invalid.
+						Continuation snapshots reject preserved positive tied maxima below
+						<code>nonDecisionThreshold</code>. Ties already at the fixed
+						<code>nonDecisionThreshold</code>, or all-zero preserved
+						balances, remain valid carried states. A local deposit that brings
+						a second outcome to <code>nonDecisionThreshold</code> records
+						<code>nonDecisionTimestamp</code> and opens the fork path. A fork
+						continuation can instead inherit a threshold tie without rebasing
+						balances or recording a new timestamp during snapshot
+						initialization.
 					</p>
 					<p>
 						For the exact resolution ordering, empty-game fallback, deposit
@@ -5661,7 +5675,10 @@
 						Forked escrow records both source-principal amounts and converted
 						child REP by original outcome. The scaling path applies only when a
 						claim has positive source principal and a forked-escrow record
-						exists; zero-amount or missing-escrow claims release no child REP.
+						exists. If inherited carry requires forked escrow, missing escrow
+						blocks settlement. A zero-source, zero-child escrow record is a
+						no-op; recorded escrow with zero child REP can settle a positive
+						proof for zero child REP.
 						Once a game is final, all unresolved principal is cleared, and no
 						escrow remains, any residual REP still sitting in the escalation
 						game can be swept back to the security pool.
@@ -9292,6 +9309,12 @@
 					(balance) => balance >= runningCost,
 				).length;
 				const allZero = balances.every((balance) => balance === 0);
+				const maxBalance = Math.max(...balances);
+				const tiedMaximumCount = balances.filter(
+					(balance) => balance === maxBalance,
+				).length;
+				const hasSyntheticTiedLeader =
+					maxBalance > 0 && tiedMaximumCount >= 2 && atCost < 2;
 				let result = "None";
 				let reason =
 					"no outcome has a strict lead, so the helper keeps the game unresolved";
@@ -9301,6 +9324,10 @@
 				} else if (allZero) {
 					result = "Invalid";
 					reason = "empty game after cost is non-zero";
+				} else if (hasSyntheticTiedLeader) {
+					result = "None";
+					reason =
+						"synthetic tied leader; valid deposits and preserved non-zero snapshots reject this state";
 				} else if (invalidBalance > yesBalance && invalidBalance > noBalance) {
 					result = "Invalid";
 					reason = "Invalid has a strict lead";

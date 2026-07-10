@@ -257,9 +257,13 @@
 					<li>Traders mint complete sets with ETH and later redeem finalized winning shares.</li>
 					<li>
 						After the question end time, local escalation can resolve to a
-						strict leading outcome. If every outcome has no deposits,
-						<code>Invalid</code> wins; if multiple outcomes remain strongly
-						contested, the game stays unresolved instead of choosing one.
+						strict leading outcome. If every outcome has no deposits after the
+						running cost becomes non-zero, <code>Invalid</code> wins.
+						Otherwise it remains unresolved while at least two outcomes still
+						meet the running cost; as running cost rises, one outcome may
+						remain above cost and become the strict leader. Additional deposits
+						can change that balance picture or, if two balances reach
+						<code>nonDecisionThreshold</code>, open the fork flow.
 					</li>
 				</ol>
 				<p>
