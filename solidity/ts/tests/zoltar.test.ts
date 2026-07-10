@@ -34,6 +34,11 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/si
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
 const MAX_UINT256 = 2n ** 256n - 1n
+const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
+
+function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
+	return answer | ((reservedBits << 240n) & SCALAR_RESERVED_BITS_MASK)
+}
 
 function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`
@@ -518,6 +523,16 @@ describe('Contract Test Suite', () => {
 		const malformedChildUniverseId = getChildUniverseId(genesisUniverse, malformedScalarOutcomeIndex)
 		await assert.rejects(deployChild(client, genesisUniverse, malformedScalarOutcomeIndex), /Malformed/)
 		assert.ok(!(await contractExists(client, getRepTokenAddress(malformedChildUniverseId))), 'malformed scalar child universe should not be deployed')
+
+		const canonicalScalarOutcomeIndex = getScalarOutcomeIndex(scalarQuestionData, 5n)
+		const aliasedScalarOutcomeIndex = withScalarReservedBits(canonicalScalarOutcomeIndex, 0x4567n)
+		const aliasedChildUniverseId = getChildUniverseId(genesisUniverse, aliasedScalarOutcomeIndex)
+		assert.ok(aliasedChildUniverseId !== getChildUniverseId(genesisUniverse, canonicalScalarOutcomeIndex), 'reserved-bit alias should still hash to a distinct child id before validation')
+		await assert.rejects(deployChild(client, genesisUniverse, aliasedScalarOutcomeIndex), /Malformed/)
+		assert.ok(!(await contractExists(client, getRepTokenAddress(aliasedChildUniverseId))), 'reserved-bit scalar alias should not deploy a child universe')
+
+		const migrationBalance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, [aliasedScalarOutcomeIndex]), /Malformed/)
 	})
 
 	test('getDeployedChildUniverses pages deployed child universes', async () => {
