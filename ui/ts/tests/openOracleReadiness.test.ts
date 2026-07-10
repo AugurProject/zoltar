@@ -20,7 +20,6 @@ describe('open oracle readiness actions', () => {
 				description: 'Provide price, approvals, and submission details for the initial report.',
 				key: 'submit-initial-report',
 				readiness: 'blocked',
-				safetyId: 'open-oracle.submitInitialReport',
 				title: 'Submit Initial Report',
 			},
 		])
@@ -41,7 +40,6 @@ describe('open oracle readiness actions', () => {
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
 				readiness: 'ready',
-				safetyId: 'open-oracle.dispute',
 				title: 'Dispute & Swap',
 			},
 			{
@@ -50,7 +48,6 @@ describe('open oracle readiness actions', () => {
 				description: 'Review settlement readiness and settle once the dispute window has closed.',
 				key: 'settle-report',
 				readiness: 'blocked',
-				safetyId: 'open-oracle.settle',
 				title: 'Settle Report',
 			},
 		])
@@ -72,7 +69,6 @@ describe('open oracle readiness actions', () => {
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
 				readiness: 'blocked',
-				safetyId: 'open-oracle.dispute',
 				title: 'Dispute & Swap',
 			},
 			{
@@ -81,7 +77,6 @@ describe('open oracle readiness actions', () => {
 				description: 'Review settlement readiness and settle once the dispute window has closed.',
 				key: 'settle-report',
 				readiness: 'blocked',
-				safetyId: 'open-oracle.settle',
 				title: 'Settle Report',
 			},
 		])
@@ -102,7 +97,6 @@ describe('open oracle readiness actions', () => {
 				description: 'Confirm settlement once the report is ready.',
 				key: 'settle-report',
 				readiness: 'ready',
-				safetyId: 'open-oracle.settle',
 				title: 'Settle Report',
 			},
 		])
@@ -121,7 +115,6 @@ describe('open oracle readiness actions', () => {
 				description: 'This report has completed its lifecycle.',
 				key: 'settled-read-only',
 				readiness: 'ready',
-				safetyId: 'open-oracle.readOnly',
 				title: 'Settled Report',
 			},
 		])

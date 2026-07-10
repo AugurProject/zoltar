@@ -434,7 +434,6 @@ export function LiquidationModal({
 						{UI_STRINGS.common.cancelLabel}
 					</button>
 					<TransactionActionButton
-						safetyId='security-pool.queueLiquidation'
 						idleLabel={buttonLabels.idle}
 						pendingLabel={buttonLabels.pending}
 						onClick={() => {

@@ -3,7 +3,6 @@ import { Badge } from './Badge.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
-import { getDeploymentStepSafetyId } from '../lib/actionSafety/ids.js'
 import { UI_STRINGS } from '../lib/uiStrings.js'
 
 type StepStatus = {
@@ -87,7 +86,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							<TransactionActionButton safetyId={getDeploymentStepSafetyId(step.id)} idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRINGS.deploymentSection.deployingPendingLabel} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRINGS.deploymentSection.deployingPendingLabel} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>
 					)
 				})}

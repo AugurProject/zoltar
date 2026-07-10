@@ -222,7 +222,6 @@ export function ZoltarMigrationSection({
 						pendingLabel={TSX_STRINGS.componentsZoltarMigrationSection.copy027}
 						requiredAmount={missingPreparationAmount}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
-						safetyId='zoltar.approveForkRep'
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -242,7 +241,6 @@ export function ZoltarMigrationSection({
 
 					<div className='actions'>
 						<TransactionActionButton
-							safetyId='zoltar-migration.prepareRep'
 							idleLabel={UI_STRINGS.zoltarMigrationSection.prepareRepIdleLabel}
 							pendingLabel={UI_STRINGS.zoltarMigrationSection.preparingRepPendingLabel}
 							onClick={onPrepareRepForMigration}
@@ -251,7 +249,6 @@ export function ZoltarMigrationSection({
 							availability={{ disabled: !canPrepare, reason: isMainnet ? prepareHintMessage : undefined }}
 						/>
 						<TransactionActionButton
-							safetyId='zoltar-migration.splitRep'
 							idleLabel={UI_STRINGS.zoltarMigrationSection.splitRepIdleLabel}
 							pendingLabel={UI_STRINGS.zoltarMigrationSection.splittingRepPendingLabel}
 							onClick={onMigrateInternalRep}

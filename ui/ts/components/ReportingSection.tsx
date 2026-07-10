@@ -13,7 +13,6 @@ import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { assertNever } from '../lib/assert.js'
-import { getReportingActionSafetyId } from '../lib/actionSafety/ids.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
@@ -481,15 +480,7 @@ export function ReportingSection({
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<div className='actions'>
 				{showTriggerZoltarForkAction ? (
-					<TransactionActionButton
-						safetyId='reporting.triggerZoltarFork'
-						idleLabel={UI_STRINGS.reportingSection.triggerZoltarForkIdleLabel}
-						pendingLabel={UI_STRINGS.reportingSection.triggeringZoltarForkLabel}
-						onClick={onTriggerZoltarFork}
-						pending={triggerZoltarForkPending}
-						tone='primary'
-						availability={resolvedTriggerZoltarForkAvailability}
-					/>
+					<TransactionActionButton idleLabel={UI_STRINGS.reportingSection.triggerZoltarForkIdleLabel} pendingLabel={UI_STRINGS.reportingSection.triggeringZoltarForkLabel} onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} />
 				) : undefined}
 				{showForkWorkflowAction ? (
 					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
@@ -686,7 +677,6 @@ export function ReportingSection({
 					)}
 					<div className='actions'>
 						<TransactionActionButton
-							safetyId={getReportingActionSafetyId('reportOutcome')}
 							idleLabel={reportButtonLabel}
 							pendingLabel={UI_STRINGS.reportingSection.submitReportPendingLabel}
 							onClick={onReportOutcome}
@@ -761,7 +751,6 @@ export function ReportingSection({
 
 										<div className='actions'>
 											<TransactionActionButton
-												safetyId={getReportingActionSafetyId('withdrawEscalation')}
 												idleLabel={UI_STRINGS.reportingSection.settleSelectedDepositsLabel(side.label)}
 												pendingLabel={UI_STRINGS.reportingSection.settlingDepositsPendingLabel(side.label)}
 												onClick={() => handleWithdrawEscalation(side.key, selectedWithdrawDepositIndexes)}
@@ -771,7 +760,6 @@ export function ReportingSection({
 												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
 											/>
 											<TransactionActionButton
-												safetyId={getReportingActionSafetyId('withdrawEscalation')}
 												idleLabel={UI_STRINGS.reportingSection.settleAllDepositsLabel(side.label)}
 												pendingLabel={UI_STRINGS.reportingSection.settlingDepositsPendingLabel(side.label)}
 												onClick={() => handleWithdrawEscalation(side.key, allWithdrawDepositIndexes)}

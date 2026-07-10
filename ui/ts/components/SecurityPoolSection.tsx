@@ -157,14 +157,7 @@ export function SecurityPoolSection({
 							</div>
 
 							<div className='actions'>
-								<TransactionActionButton
-									safetyId='security-pool.createPool'
-									idleLabel={createButtonLabel}
-									pendingLabel={UI_STRINGS.securityPoolSection.createPoolButtonPendingLabel}
-									onClick={onCreateSecurityPool}
-									pending={securityPoolCreating}
-									availability={{ disabled: isCreateDisabled, reason: createDisabledReason }}
-								/>
+								<TransactionActionButton idleLabel={createButtonLabel} pendingLabel={UI_STRINGS.securityPoolSection.createPoolButtonPendingLabel} onClick={onCreateSecurityPool} pending={securityPoolCreating} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
 							</div>
 						</div>
 						{!duplicateOriginPoolExists ? undefined : <p className='detail'>{UI_STRINGS.securityPoolSection.duplicatePoolError}</p>}

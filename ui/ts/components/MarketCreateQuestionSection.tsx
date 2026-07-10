@@ -427,7 +427,6 @@ export function MarketCreateQuestionSection({
 
 						<div className='actions'>
 							<TransactionActionButton
-								safetyId='market.createQuestion'
 								idleLabel={UI_STRINGS.marketCreateQuestionSection.createQuestionButtonIdleLabel}
 								pendingLabel={UI_STRINGS.marketCreateQuestionSection.createQuestionButtonPendingLabel}
 								onClick={onCreateMarket}
