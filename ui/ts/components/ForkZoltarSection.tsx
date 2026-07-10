@@ -126,7 +126,6 @@ export function ForkZoltarSection({
 						pendingLabel={TSX_STRINGS.componentsForkZoltarSection.copy012}
 						requiredAmount={rootUniverse?.forkThreshold}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
-						safetyId='zoltar.approveForkRep'
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -146,7 +145,6 @@ export function ForkZoltarSection({
 
 				<div className='actions'>
 					<TransactionActionButton
-						safetyId='zoltar.forkZoltar'
 						idleLabel={TSX_STRINGS.componentsForkZoltarSection.copy016}
 						pendingLabel={TSX_STRINGS.componentsForkZoltarSection.copy017}
 						onClick={() => {

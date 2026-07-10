@@ -7,7 +7,6 @@ import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
 import { CURATED_TSX_STRINGS, TSX_STRINGS } from '../lib/uiStrings.js'
@@ -23,7 +22,6 @@ type TokenApprovalControlProps = {
 	pendingLabel: string
 	requiredAmount: bigint | undefined
 	resetKey: string
-	safetyId: ActionSafetyId
 	tokenSymbol: string
 	tokenUnits: number
 }
@@ -54,7 +52,7 @@ function resolveApprovalButtonLabel({
 	if (isMaxAmount) return TSX_STRINGS.componentsTokenApprovalControl.copy003(tokenSymbol)
 	return TSX_STRINGS.componentsTokenApprovalControl.copy004(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
 }
-export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, safetyId, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
+export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
 	useEffect(() => {
@@ -137,7 +135,6 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 
 			<div className='actions'>
 				<TransactionActionButton
-					safetyId={safetyId}
 					idleLabel={buttonLabel}
 					pendingLabel={pendingLabel}
 					onClick={() => onApprove(nextApprovalAmount)}

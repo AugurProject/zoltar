@@ -5,7 +5,6 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { UI_STRINGS } from '../lib/uiStrings.js'
-import type { ActionSafetyId } from '../lib/actionSafety/ids.js'
 import type { ActionAvailability } from '../types/components.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
@@ -15,7 +14,6 @@ type ChildUniverseAction = {
 	onClick: () => void
 	pending?: boolean
 	pendingLabel?: string
-	safetyId: ActionSafetyId
 	showDisabledReason?: boolean
 	tone?: 'primary' | 'secondary'
 }
@@ -53,7 +51,6 @@ export function ChildUniversesSection({ action, childUniverses, emptyMessage, he
 								actions={
 									childAction === undefined ? undefined : (
 										<TransactionActionButton
-											safetyId={childAction.safetyId}
 											idleLabel={childAction.label}
 											pendingLabel={childAction.pendingLabel ?? UI_STRINGS.childUniversesSection.workingLabel}
 											onClick={childAction.onClick}

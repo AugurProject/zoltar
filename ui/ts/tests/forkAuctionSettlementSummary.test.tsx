@@ -6,7 +6,6 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Address, zeroAddress } from '@zoltar/shared/ethereum'
 import { getTruthAuctionBidDisposition, TRUTH_AUCTION_PRICE_PRECISION } from '../lib/truthAuctionBook.js'
-import { ActionSafetyProvider } from '../lib/actionSafety/runtime.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '../lib/truthAuctionSettlement.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
@@ -360,7 +359,7 @@ describe('ForkAuctionSection settlement summary', () => {
 		expect(documentQueries.getByText('Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.')).not.toBeNull()
 	})
 
-	test('uses the finalized refund-only confirmation copy for refund-only settlement selections', async () => {
+	test('does not open a confirmation dialog for refund-only settlement selections', async () => {
 		const truthAuction = createTruthAuction({
 			finalized: true,
 		})
@@ -373,20 +372,18 @@ describe('ForkAuctionSection settlement summary', () => {
 		mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([refundRow])
 
 		const renderedComponent = await renderIntoDocument(
-			<ActionSafetyProvider>
-				{h(
-					ForkAuctionSection,
-					createProps({
-						accountState: createAccountState({
-							address: getAddress(CONNECTED_WALLET),
-						}),
-						currentTimestamp: 700_000n,
-						forkAuctionDetails: mockedForkAuctionDetails,
-						previewPool: childPool,
-						securityPools: [childPool],
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress(CONNECTED_WALLET),
 					}),
-				)}
-			</ActionSafetyProvider>,
+					currentTimestamp: 700_000n,
+					forkAuctionDetails: mockedForkAuctionDetails,
+					previewPool: childPool,
+					securityPools: [childPool],
+				}),
+			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -395,8 +392,7 @@ describe('ForkAuctionSection settlement summary', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
 		})
 
-		expect(documentQueries.getByRole('dialog', { name: 'Review Finalized Refund Settlement' })).not.toBeNull()
-		expect(documentQueries.getByText('Review the selected finalized refund rows before settling them through the child-pool settlement path.')).not.toBeNull()
+		expect(documentQueries.queryByRole('dialog', { name: 'Review Finalized Refund Settlement' })).toBeNull()
 	})
 
 	test('does not render a winning-threshold metric for finalized underfunded auctions with no winning prefix', async () => {

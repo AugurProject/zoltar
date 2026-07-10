@@ -844,7 +844,6 @@ export function SecurityPoolWorkflowSection({
 															description: UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationDescription,
 															key: 'liquidate-vault',
 															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
-															safetyId: 'security-pool.queueLiquidation',
 															title: UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationTitle,
 															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
@@ -964,7 +963,6 @@ export function SecurityPoolWorkflowSection({
 											</button>
 											{currentPoolOracleManagerDetails === undefined ? undefined : (
 												<TransactionActionButton
-													safetyId='security-pool.executeStagedOperation'
 													idleLabel={UI_STRINGS.securityPoolWorkflowSection.executeStagedOperationLabel}
 													pendingLabel={UI_STRINGS.securityPoolWorkflowSection.executingStagedOperationLabel}
 													onClick={() => {
@@ -1013,7 +1011,6 @@ export function SecurityPoolWorkflowSection({
 												{loadingPoolOracleManager ? <LoadingText>{UI_STRINGS.securityPoolWorkflowSection.refreshingOracleLabel}</LoadingText> : UI_STRINGS.securityPoolWorkflowSection.refreshOracleLabel}
 											</button>
 											<TransactionActionButton
-												safetyId='security-pool.requestPrice'
 												idleLabel={UI_STRINGS.securityPoolWorkflowSection.requestNewPriceLabel}
 												pendingLabel={UI_STRINGS.securityPoolWorkflowSection.requestingNewPriceLabel}
 												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}

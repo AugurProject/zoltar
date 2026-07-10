@@ -76,7 +76,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			<ScalarOutcomePicker
 				action={
 					<ActionLauncherButton
-						safetyId='child-universe.deploy'
 						idleLabel={(() => {
 							if (selectedScalarChildExists) return UI_STRINGS.scalarDeploymentSection.deployedLabel
 							if (scalarOutcomeInvalid) return UI_STRINGS.scalarDeploymentSection.createInvalidUniverseLabel
@@ -127,7 +126,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				pending={scalarDeployPending}
 				pendingLabel={UI_STRINGS.scalarDeploymentSection.deployingUniversePendingLabel}
 				requirements={scalarDeployRequirements}
-				safetyId='child-universe.deploy'
 				title={UI_STRINGS.scalarDeploymentSection.createChildUniverseTitle}
 			>
 				{selectedScalarChild === undefined ? undefined : (
