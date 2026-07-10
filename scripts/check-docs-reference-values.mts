@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
+import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
+const zoltarWhitepaper = await readFile('docs/whitepaper_zoltar.html', 'utf8')
 const bytecodeSnapshot = readBytecodeSnapshot(await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8'))
 const interfaceRegressionTest = await readFile('solidity/ts/tests/escalationGameInterfaceRegression.test.ts', 'utf8')
 
@@ -12,6 +14,43 @@ assertSimpleByteRow('Creation bytecode', formatNumber(bytecodeSnapshot.creationB
 assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedBytes))
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
+assertZoltarForkDepths()
+
+function assertZoltarForkDepths(): void {
+	const initialSupply = 7_825_488_326_666_847_200_078_019n
+	const oneRep = 10n ** 18n
+	const protocolConfig = getMainnetProtocolConfig()
+	let supply = initialSupply
+	let escalationBoundary: number | undefined
+	let subOneRepBoundary: number | undefined
+	let zeroHaircutBoundary: number | undefined
+
+	for (let depth = 0; zeroHaircutBoundary === undefined; depth += 1) {
+		const threshold = supply / protocolConfig.forkThresholdDivisor
+		const haircut = threshold / protocolConfig.forkBurnDivisor
+		if (escalationBoundary === undefined && threshold / 2n <= oneRep) escalationBoundary = depth
+		if (subOneRepBoundary === undefined && threshold < oneRep) subOneRepBoundary = depth
+		if (haircut === 0n) {
+			zeroHaircutBoundary = depth
+			break
+		}
+		supply -= haircut
+	}
+
+	assert.equal(escalationBoundary, 1_213, 'Zoltar escalation boundary depth changed')
+	assert.equal(subOneRepBoundary, 1_282, 'Zoltar sub-1-REP threshold depth changed')
+	assert.equal(zeroHaircutBoundary, 5_303, 'Zoltar zero-haircut boundary depth changed')
+	assert.equal(supply, 99n, 'Zoltar zero-haircut fixed-point supply changed')
+	assert.equal(supply / protocolConfig.forkThresholdDivisor, 4n, 'Zoltar zero-haircut fixed-point threshold changed')
+	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
+	for (const documentedClaim of [
+		'at child depth <code>1,213</code>, the fork threshold is approximately <code>1.986 REP</code>',
+		'at depth <code>1,282</code>, the fork threshold is below <code>1 REP</code>',
+		'at depth <code>5,303</code>, theoretical supply is <code>99 wei</code>, the fork threshold is <code>4 wei</code>, and the haircut floors to zero',
+	]) {
+		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork-depth claim: ${documentedClaim}`)
+	}
+}
 
 function assertSimpleByteRow(label: string, expectedValue: string): void {
 	const escapedLabel = escapeRegExp(label)
