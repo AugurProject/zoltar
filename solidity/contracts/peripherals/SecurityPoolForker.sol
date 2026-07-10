@@ -21,7 +21,7 @@ import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 contract SecurityPoolForker is SecurityPoolForkerBase {
 	using SafeERC20Ops for IERC20;
 	// These delegates keep fork/migration behavior under the EVM bytecode-size limit while
-	// sharing the same storage layout via `SecurityPoolForkerVaultMigrationBase`.
+	// sharing the same storage layout defined by `SecurityPoolForkerBase` and `SecurityPoolForkerStorage`.
 	address private immutable vaultMigrationDelegate;
 	address private immutable escalationGameForkerDelegate;
 

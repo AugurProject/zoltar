@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x341e19442FC7541C0173EFB3D47D9fb47B1E1795"
+			"address": "0xE0F51D8F6735E61933338C7B2eAa897D89c723c3"
 		},
 		{
 			"id": "multicall3",
@@ -63,7 +63,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x58898eA51ab70A33F5bcE26D8559D23ec70Ab90D"
+			"address": "0x6b9040B5D1B230B2EC2AF4D138d0404b147F1298"
 		},
 		{
 			"id": "escalationGameFactory",
@@ -73,7 +73,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xe07D7CA213B89309521730C8bF10130f0CC69D9d"
+			"address": "0xa4Bd2988ccA417460F65eB2FD678f535D4208DC5"
 		}
 	],
 	"derivedContracts": [
