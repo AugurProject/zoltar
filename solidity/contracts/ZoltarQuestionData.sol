@@ -4,6 +4,8 @@ pragma solidity 0.8.35;
 import { ScalarOutcomes } from './ScalarOutcomes.sol';
 
 contract ZoltarQuestionData {
+	uint256 private constant SCALAR_RESERVED_BITS_MASK = ((uint256(1) << 15) - 1) << 240;
+
 	struct QuestionData {
 		string title;
 		string description;
@@ -98,6 +100,10 @@ contract ZoltarQuestionData {
 		secondPart = uint120(value & ((1 << 120) - 1));
 	}
 
+	function hasNonZeroScalarReservedBits(uint256 answer) public pure returns (bool) {
+		return answer & SCALAR_RESERVED_BITS_MASK != 0;
+	}
+
 	function getOutcomeLabels(
 		uint256 questionId,
 		uint256 startIndex,
@@ -121,6 +127,7 @@ contract ZoltarQuestionData {
 	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
 		if (outcomeLabels[questionId].length == 0) {
 			// scalar
+			if (hasNonZeroScalarReservedBits(answer)) return true;
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
 			if (invalid) {
 				if (firstPart == 0 && secondPart == 0) return false;
@@ -141,6 +148,7 @@ contract ZoltarQuestionData {
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
 		if (outcomeLabels[questionId].length == 0) {
 			// scalar
+			if (hasNonZeroScalarReservedBits(answer)) return 'Malformed';
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
 			if (invalid) {
 				if (firstPart == 0 && secondPart == 0) return 'Invalid';

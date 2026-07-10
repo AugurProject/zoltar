@@ -9,10 +9,11 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultMigrationBase.sol';
+import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
-	constructor(Zoltar _zoltar) SecurityPoolForkerVaultMigrationBase(_zoltar) {}
+	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
 		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(

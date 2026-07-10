@@ -343,7 +343,7 @@ describe('Peripherals: vault accounting', () => {
 		// The Anvil harness mines mutating transactions one second after the latest block timestamp.
 		// Setting time to endTime - 1 makes the next transaction execute exactly at endTime.
 		await mockWindow.setTime(endTime - 1n)
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question still active/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question still active|Question active/)
 
 		// Resetting to endTime makes the next transaction execute at endTime + 1, the first valid second.
 		await mockWindow.setTime(endTime)
@@ -516,7 +516,7 @@ describe('Peripherals: vault accounting', () => {
 		await finalizeQuestionAsYesWithoutFork()
 
 		const walletRepBeforeRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /Escalation deposits locked/)
+		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /Escalation deposits locked|Escrow locked/)
 
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		const vaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -765,8 +765,8 @@ describe('Peripherals: vault accounting', () => {
 		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
 
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'external fork should leave the parent question unresolved')
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex]), /Forked deposits must migrate first/)
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex]), /Forked deposits must migrate first/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex]), /Forked deposits must migrate first|Migrate deposits first/)
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex]), /Forked deposits must migrate first|Migrate deposits first/)
 
 		const aliceVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const bobVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)

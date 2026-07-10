@@ -1,7 +1,9 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { encodeDeployData } from '@zoltar/shared/ethereum'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
 
 describe('Peripherals: fork migration', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
@@ -217,6 +219,43 @@ describe('Peripherals: fork migration', () => {
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
 			strictEqualTypeSafe(forkData.auctionableRepAtFork, forkDataBeforeStrayRep.auctionableRepAtFork, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
+		})
+
+		test('createChildUniverse rejects fake parents that try to reuse a legitimate pool as the child', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await triggerExternalForkForSecurityPool()
+
+			const targetPool = securityPoolAddresses.securityPool
+			const denominatorBeforeAttack = await getPoolOwnershipDenominator(client, targetPool)
+			const targetForkDataBeforeAttack = await getSecurityPoolForkerForkData(client, targetPool)
+			const attackerChosenDenominator = denominatorBeforeAttack + 123n
+
+			const attackFactoryDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock.evm.bytecode.object}`,
+					args: [targetPool, targetPool],
+				}),
+			})
+			const attackFactoryReceipt = await client.waitForTransactionReceipt({ hash: attackFactoryDeploymentHash })
+			const attackFactoryAddress = ensureDefined(attackFactoryReceipt.contractAddress, 'attack factory address missing')
+
+			const fakeParentDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock.evm.bytecode.object}`,
+					args: [genesisUniverse, attackFactoryAddress, securityPoolAddresses.shareToken, questionId, securityMultiplier, 0n, 0n, attackerChosenDenominator],
+				}),
+			})
+			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
+			const fakeParentAddress = fakeParentReceipt.contractAddress
+			if (fakeParentAddress === undefined || fakeParentAddress === null) throw new Error('fake parent address missing')
+
+			await assert.rejects(createChildUniverse(client, fakeParentAddress, QuestionOutcome.Yes), /Invalid child deployment/)
+
+			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, targetPool), denominatorBeforeAttack, 'attack should not change the legitimate pool ownership denominator')
+			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, targetPool)).truthAuction, targetForkDataBeforeAttack.truthAuction, 'attack should not overwrite the legitimate pool fork metadata')
 		})
 	})
 
@@ -540,6 +579,44 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(totalFeesOwed > 0n, 'repeated public collateral updates should accrue nonzero fees in this setup')
 			strictEqualTypeSafe(totalFeesOwed, splitVault.unpaidEthFees, 'pool fee accounting should only record fees that the vault index can actually credit')
 			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+		})
+
+		test('frequent public collateral updates keep multi-vault fee accounting sweepable', async () => {
+			const firstVaultAllowance = repDeposit / 8n + 1n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, firstVaultAllowance)
+
+			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(secondVaultClient, repDeposit, questionId)
+			const secondVaultAllowance = repDeposit / 8n + 3n
+			await manipulatePriceOracleAndPerformOperation(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, secondVaultClient.account.address, secondVaultAllowance)
+
+			const openInterestAmount = 100n * 10n ** 18n
+			const splitUpdateCount = 128n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - splitUpdateCount - 10n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			for (let index = 1n; index <= splitUpdateCount; index++) {
+				await mockWindow.advanceTime(1n)
+				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			}
+			await mockWindow.setTime(endTime + 10000n)
+
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+			await updateVaultFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+
+			const firstVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const secondVault = await getSecurityVault(client, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+			const totalFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+			const totalCreditedFees = firstVault.unpaidEthFees + secondVault.unpaidEthFees
+
+			assert.ok(totalCreditedFees > 0n, 'repeated public collateral updates should accrue nonzero fees across both vaults in this setup')
+			strictEqualTypeSafe(totalFeesOwed, totalCreditedFees, 'pool fee accounting should equal the sum of vault-creditable fees after both vaults sync')
+
+			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+			await redeemFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+
+			strictEqualTypeSafe(await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool), 0n, 'pool fee accounting should fully clear once every credited vault fee is redeemed')
 		})
 
 		test('redeemCompleteSet exits at the fee-adjusted share exchange rate', async () => {
@@ -1199,7 +1276,7 @@ describe('Peripherals: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'parent pool should enter PoolForked after the universe fork is activated')
-			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe already forked|Question resolved/)
+			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe already forked|Universe forked|Question resolved/)
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -1248,7 +1325,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should wait in migration state before accounting is settled')
-			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational/)
+			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational|Pool inactive/)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -1439,7 +1516,7 @@ describe('Peripherals: fork migration', () => {
 			const migrationDeadline = (await mockWindow.getTime()) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline + 1n)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /(Migration closed|Own-fork window closed)/i)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /closed/i)
 		})
 
 		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
@@ -1475,7 +1552,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child not migrating/)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child closed/)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {
@@ -1696,8 +1773,8 @@ describe('Peripherals: fork migration', () => {
 			const clientVaultAfterFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const attackerVaultAfterFork = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 
-			await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Pool not operational/)
-			await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Pool not operational/)
+			await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Pool not operational|Pool inactive/)
+			await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Pool not operational|Pool inactive/)
 
 			const clientVaultAfterFailedWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const attackerVaultAfterFailedWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)

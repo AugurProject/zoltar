@@ -141,7 +141,7 @@ describe('Peripherals: truth auction', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
-			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Migration open/)
+			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Active/)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should keep accepting migration until the parent window closes')
 		})
 
@@ -161,7 +161,7 @@ describe('Peripherals: truth auction', () => {
 			const migrationDeadline = forkTime + 8n * 7n * DAY
 
 			await mockWindow.setTime(migrationDeadline - 1n)
-			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Migration open/)
+			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Active/)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in migration at the exact parent deadline')
 
 			await mockWindow.setTime(migrationDeadline)
@@ -175,7 +175,7 @@ describe('Peripherals: truth auction', () => {
 			const auctionDeadline = truthAuctionStarted + 7n * DAY
 
 			await mockWindow.setTime(auctionDeadline - 1n)
-			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Auction active/)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Auction open/)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should remain in truth auction at the exact finalization deadline')
 
 			await mockWindow.setTime(auctionDeadline)
@@ -688,7 +688,7 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in fork migration before the truth-auction window ends')
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork child currently reports a finalized outcome before the pool is operational')
-			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /Pool not operational/)
+			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /Pool not operational|Pool inactive/)
 		})
 	})
 

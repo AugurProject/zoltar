@@ -19,6 +19,7 @@ const SCALAR_DECIMAL_BASE = 10n ** SCALAR_DECIMALS
 const SCALAR_PART_BIT_LENGTH = 120n
 const SCALAR_TOTAL_BITS = 256n
 const SCALAR_PART_MASK = (1n << SCALAR_PART_BIT_LENGTH) - 1n
+const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
 
 type ScalarOutcomeIndexDescriptor =
 	| {
@@ -115,6 +116,7 @@ export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIn
 
 export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails, outcomeIndex: bigint): ScalarOutcomeIndexDescriptor {
 	if (question.numTicks <= 0n) return { kind: 'malformed' }
+	if ((outcomeIndex & SCALAR_RESERVED_BITS_MASK) !== 0n) return { kind: 'malformed' }
 
 	const { invalid, firstPart, secondPart } = splitScalarOutcomeIndex(outcomeIndex)
 	if (invalid) return firstPart === 0n && secondPart === 0n ? { kind: 'invalid' } : { kind: 'malformed' }

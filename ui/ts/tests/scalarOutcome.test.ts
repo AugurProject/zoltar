@@ -10,6 +10,11 @@ const scalarQuestion = {
 	displayValueMin: 0n,
 	numTicks: 10n,
 }
+const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
+
+function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
+	return answer | ((reservedBits << 240n) & SCALAR_RESERVED_BITS_MASK)
+}
 
 void describe('scalar outcome helpers', () => {
 	void test('rejects zero tick scalar questions', () => {
@@ -51,6 +56,17 @@ void describe('scalar outcome helpers', () => {
 		expect(formatScalarOutcomeIndexLabel(scalarQuestion, scalarOutcomeIndex)).toBe('4 km')
 		expect(formatScalarOutcomeIndexLabel(scalarQuestion, 0n)).toBe('Invalid')
 		expect(() => formatScalarOutcomeIndexLabel(scalarQuestion, 5n)).toThrow('Scalar outcome index is malformed')
+	})
+
+	void test('treats reserved-bit scalar aliases as malformed', () => {
+		const canonicalOutcomeIndex = getScalarOutcomeIndex(scalarQuestion, 4n)
+		const aliasedOutcomeIndex = withScalarReservedBits(canonicalOutcomeIndex, 0x1234n)
+		const aliasedInvalidOutcomeIndex = withScalarReservedBits(0n, 0x7fffn)
+
+		expect(getScalarOutcomeIndexDescriptor(scalarQuestion, aliasedOutcomeIndex)).toEqual({ kind: 'malformed' })
+		expect(getScalarOutcomeIndexDescriptor(scalarQuestion, aliasedInvalidOutcomeIndex)).toEqual({ kind: 'malformed' })
+		expect(isValidScalarOutcomeIndex(scalarQuestion, aliasedOutcomeIndex)).toBe(false)
+		expect(() => formatScalarOutcomeIndexLabel(scalarQuestion, aliasedOutcomeIndex)).toThrow('Scalar outcome index is malformed')
 	})
 
 	void test('rejects scalar inputs that do not divide into whole ticks', () => {
