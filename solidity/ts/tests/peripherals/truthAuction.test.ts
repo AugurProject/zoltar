@@ -689,7 +689,7 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in fork migration before the truth-auction window ends')
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork child currently reports a finalized outcome before the pool is operational')
-			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /Pool not operational/)
+			await assert.rejects(redeemRep(client, yesSecurityPool.securityPool, client.account.address), /Pool not operational|Pool inactive/)
 		})
 	})
 

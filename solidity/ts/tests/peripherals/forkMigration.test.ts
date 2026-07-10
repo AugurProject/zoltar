@@ -95,6 +95,7 @@ describe('Peripherals: fork migration', () => {
 		redeemRep,
 		redeemShares,
 		sharesToCash,
+		updateCollateralAmount,
 		updateVaultFees,
 		withdrawFromEscalationGame,
 		peripherals_EscalationGame_EscalationGame,
@@ -618,6 +619,143 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')
 		})
 
+		test('frequent public collateral updates do not strand extra fee residue', async () => {
+			const securityPoolAllowance = repDeposit / 4n + 1n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+			const openInterestAmount = 100n * 10n ** 18n
+			const splitUpdateCount = 128n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - splitUpdateCount - 10n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			for (let index = 1n; index <= splitUpdateCount; index++) {
+				await mockWindow.advanceTime(1n)
+				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			}
+			await mockWindow.setTime(endTime + 10000n)
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+			const splitVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const totalFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+
+			assert.ok(totalFeesOwed > 0n, 'repeated public collateral updates should accrue nonzero fees in this setup')
+			strictEqualTypeSafe(totalFeesOwed, splitVault.unpaidEthFees, 'pool fee accounting should only record fees that the vault index can actually credit')
+			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+			const contractBalance = await getETHBalance(client, securityPoolAddresses.securityPool)
+			const remainingCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(contractBalance, remainingCollateral + (await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)), 'final fee settlement should leave every remaining wei in either collateral or redeemable fees')
+		})
+
+		test('frequent public collateral updates keep multi-vault fee accounting sweepable', async () => {
+			const firstVaultAllowance = repDeposit / 8n + 1n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, firstVaultAllowance)
+
+			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(secondVaultClient, repDeposit, questionId)
+			const secondVaultAllowance = repDeposit / 8n + 3n
+			await manipulatePriceOracleAndPerformOperation(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, secondVaultClient.account.address, secondVaultAllowance)
+
+			const openInterestAmount = 100n * 10n ** 18n
+			const splitUpdateCount = 128n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - splitUpdateCount - 10n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			for (let index = 1n; index <= splitUpdateCount; index++) {
+				await mockWindow.advanceTime(1n)
+				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			}
+			await mockWindow.setTime(endTime + 10000n)
+
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+			await updateVaultFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+
+			const firstVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const secondVault = await getSecurityVault(client, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+			const totalFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+			const totalCreditedFees = firstVault.unpaidEthFees + secondVault.unpaidEthFees
+
+			assert.ok(totalCreditedFees > 0n, 'repeated public collateral updates should accrue nonzero fees across both vaults in this setup')
+			strictEqualTypeSafe(totalFeesOwed, totalCreditedFees, 'pool fee accounting should equal the sum of vault-creditable fees after both vaults sync')
+
+			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+			await redeemFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+
+			strictEqualTypeSafe(await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool), 0n, 'pool fee accounting should fully clear once every credited vault fee is redeemed')
+		})
+
+		test('allowance handoff does not pay old fee residue to the new vault', async () => {
+			const firstVaultAllowance = repDeposit / 4n + 1n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, firstVaultAllowance)
+
+			const openInterestAmount = 100n * 10n ** 18n
+			const splitUpdateCount = 128n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - splitUpdateCount - 20n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			for (let index = 1n; index <= splitUpdateCount; index++) {
+				await mockWindow.advanceTime(1n)
+				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			}
+
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+
+			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(secondVaultClient, repDeposit, questionId)
+			const secondVaultAllowance = repDeposit / 4n + 3n
+			await manipulatePriceOracleAndPerformOperation(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, secondVaultClient.account.address, secondVaultAllowance)
+
+			const collateralBeforeSecondAccrual = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			const retentionRate = await getCurrentRetentionRate(client, securityPoolAddresses.securityPool)
+			const expectedNextSecondDelta = collateralBeforeSecondAccrual - (collateralBeforeSecondAccrual * rpow(retentionRate, 1n, PRICE_PRECISION)) / PRICE_PRECISION
+
+			await mockWindow.advanceTime(1n)
+			await updateVaultFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+
+			const secondVault = await getSecurityVault(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+			assert.ok(secondVault.unpaidEthFees <= expectedNextSecondDelta, 'new allowance holder should not inherit denominator residue that accrued before the handoff')
+		})
+
+		test('zero-allowance gaps do not charge the next vault for idle time', async () => {
+			const firstVaultAllowance = repDeposit / 4n + 1n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, firstVaultAllowance)
+
+			const openInterestAmount = 100n * 10n ** 18n
+			const splitUpdateCount = 128n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - splitUpdateCount - 40n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			for (let index = 1n; index <= splitUpdateCount; index++) {
+				await mockWindow.advanceTime(1n)
+				await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			}
+
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+			const collateralAtZeroAllowance = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+
+			await mockWindow.advanceTime(30n)
+			await updateCollateralAmount(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), collateralAtZeroAllowance, 'collateral should not decay while no vault backs the pool')
+
+			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(secondVaultClient, repDeposit, questionId)
+			const secondVaultAllowance = repDeposit / 4n + 3n
+			await manipulatePriceOracleAndPerformOperation(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, secondVaultClient.account.address, secondVaultAllowance)
+
+			const collateralBeforeSecondAccrual = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			const retentionRate = await getCurrentRetentionRate(client, securityPoolAddresses.securityPool)
+			const expectedNextSecondDelta = collateralBeforeSecondAccrual - (collateralBeforeSecondAccrual * rpow(retentionRate, 1n, PRICE_PRECISION)) / PRICE_PRECISION
+
+			await mockWindow.advanceTime(1n)
+			await updateVaultFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+
+			const secondVault = await getSecurityVault(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+			assert.ok(secondVault.unpaidEthFees <= expectedNextSecondDelta, 'new allowance holder should only accrue fees for time after the zero-allowance gap ends')
+		})
+
 		test('redeemCompleteSet exits at the fee-adjusted share exchange rate', async () => {
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -648,9 +786,10 @@ describe('Peripherals: fork migration', () => {
 			const firstHolderSharesAfterRedeem = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
 			const secondHolderSharesAfterRedeem = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
 			const shareSupplyAfterRedeem = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+			const feeDustTolerance = securityPoolAllowance / PRICE_PRECISION
 
 			assert.ok(firstHolderPayout > 0n, 'redeeming complete sets should pay ETH to the holder')
-			strictEqualTypeSafe(collateralAfterRedeem + firstHolderPayout + feeDelta, initialCollateral, 'complete-set redemption should conserve collateral after fee accrual')
+			approximatelyEqual(collateralAfterRedeem + firstHolderPayout + feeDelta, initialCollateral, feeDustTolerance, 'complete-set redemption should conserve collateral after fee accrual up to bounded fee dust')
 			strictEqualTypeSafe(shareSupplyAfterRedeem, initialShareSupply - redeemAmount, 'complete-set redemption should reduce share supply by the burned set amount')
 			strictEqualTypeSafe(firstHolderSharesAfterRedeem[0], firstHolderShares[0] - redeemAmount, 'redeeming should burn the holders invalid-side share')
 			strictEqualTypeSafe(firstHolderSharesAfterRedeem[1], firstHolderShares[1] - redeemAmount, 'redeeming should burn the holders yes-side share')
@@ -768,9 +907,10 @@ describe('Peripherals: fork migration', () => {
 			const feesAfterFirstRedemption = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 			const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
 			const feeDelta = feesAfterFirstRedemption - initialFeesOwed
+			const feeDustTolerance = securityPoolAllowance / PRICE_PRECISION
 
 			assert.ok(feeDelta > 0n, 'first redemption should accrue open-interest fees')
-			strictEqualTypeSafe(collateralAfterFirstRedemption + firstHolderPayout + feeDelta, initialCollateral, 'collateral should shrink by fees and first winning redemption')
+			approximatelyEqual(collateralAfterFirstRedemption + firstHolderPayout + feeDelta, initialCollateral, feeDustTolerance, 'collateral should shrink by fees and first winning redemption up to bounded fee dust')
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), initialShareSupply - firstWinningShares, 'share supply should shrink after first winning redemption')
 			approximatelyEqual(await sharesToCash(client, securityPoolAddresses.securityPool, secondWinningShares), collateralAfterFirstRedemption, 10n, 'remaining winning shares should not be double counted')
 
@@ -1273,7 +1413,7 @@ describe('Peripherals: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'parent pool should enter PoolForked after the universe fork is activated')
-			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe already forked|Question resolved/)
+			await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Universe forked|Forked/)
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -1322,7 +1462,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should wait in migration state before accounting is settled')
-			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational/)
+			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational|Pool inactive/)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -1770,8 +1910,8 @@ describe('Peripherals: fork migration', () => {
 			const clientVaultAfterFork = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const attackerVaultAfterFork = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 
-			await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Pool not operational/)
-			await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Pool not operational/)
+			await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Pool inactive/)
+			await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Pool inactive/)
 
 			const clientVaultAfterFailedWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const attackerVaultAfterFailedWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
