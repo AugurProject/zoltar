@@ -343,11 +343,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 				);
 				_delegateMigrationCall(
 					vaultMigrationDelegate,
-					abi.encodeWithSelector(
-						SecurityPoolForkerVaultMigrationDelegate.ensureChildPoolRepSplit.selector,
-						securityPool,
-						outcomeIndex,
-						migrationAmount
+					abi.encodeCall(
+						SecurityPoolForkerVaultMigrationDelegate.ensureChildPoolRepSplit,
+						(securityPool, outcomeIndex, migrationAmount)
 					)
 				);
 			}
@@ -367,11 +365,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external {
 		_delegateMigrationCall(
 			vaultMigrationDelegate,
-			abi.encodeWithSelector(
-				SecurityPoolForkerVaultMigrationDelegate.createChildUniverse.selector,
-				securityPool,
-				outcomeIndex
-			)
+			abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.createChildUniverse, (securityPool, outcomeIndex))
 		);
 	}
 
@@ -384,12 +378,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		require(msg.sender == vault, 'Vault');
 		_delegateMigrationCall(
 			escalationGameForkerDelegate,
-			abi.encodeWithSelector(
-				EscalationGameForker.claimForkedEscalationDeposits.selector,
-				securityPool,
-				vault,
-				outcomeIndex,
-				depositIndexes
+			abi.encodeCall(
+				EscalationGameForker.claimForkedEscalationDeposits,
+				(securityPool, vault, outcomeIndex, depositIndexes)
 			)
 		);
 	}
@@ -398,11 +389,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) external {
 		_delegateMigrationCall(
 			vaultMigrationDelegate,
-			abi.encodeWithSelector(
-				SecurityPoolForkerVaultMigrationDelegate.migrateVault.selector,
-				securityPool,
-				outcomeIndex
-			)
+			abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.migrateVault, (securityPool, outcomeIndex))
 		);
 	}
 
@@ -414,11 +401,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		require(msg.sender == vault, 'Vault');
 		bytes memory returnData = _delegateMigrationCall(
 			escalationGameForkerDelegate,
-			abi.encodeWithSelector(
-				EscalationGameForker.migrateVaultWithUnresolvedEscalation.selector,
-				securityPool,
-				vault,
-				childOutcomeIndex
+			abi.encodeCall(
+				EscalationGameForker.migrateVaultWithUnresolvedEscalation,
+				(securityPool, vault, childOutcomeIndex)
 			)
 		);
 		return abi.decode(returnData, (bool));

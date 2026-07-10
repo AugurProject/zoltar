@@ -163,9 +163,15 @@ async function seedGenesisRepTokenState({
 	try {
 		return await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
 			const zoltarWriteClient = createWriteClient(zoltarAddress)
-			let totalSupply = 0n
+			const totalSupply = BigInt(accounts.length) * REP_TOKEN_MINT_AMOUNT
+			const syncHash = await zoltarWriteClient.writeContract({
+				address: repAddress,
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'setMaxTheoreticalSupply',
+				args: [totalSupply],
+			})
+			await zoltarWriteClient.waitForTransactionReceipt({ hash: syncHash })
 			for (const [index, account] of accounts.entries()) {
-				totalSupply += REP_TOKEN_MINT_AMOUNT
 				const hash = await zoltarWriteClient.writeContract({
 					address: repAddress,
 					abi: ReputationToken_ReputationToken.abi,
@@ -175,14 +181,6 @@ async function seedGenesisRepTokenState({
 				await zoltarWriteClient.waitForTransactionReceipt({ hash })
 				await reportBootstrapProgress(onProgress, `Seeding REP balances ${index + 1} of ${accounts.length}`, 0.16 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
 			}
-
-			const syncHash = await zoltarWriteClient.writeContract({
-				address: repAddress,
-				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupply',
-				args: [totalSupply],
-			})
-			await zoltarWriteClient.waitForTransactionReceipt({ hash: syncHash })
 			await reportBootstrapProgress(onProgress, 'Finalizing REP token state', 0.23)
 			return totalSupply
 		})
@@ -255,13 +253,6 @@ export async function mintSimulationGenesisRep({ accountAddress, amount, createW
 	try {
 		await withSimulationAuthorityAccount(memoryClient, zoltarAddress, async () => {
 			const zoltarWriteClient = createWriteClient(zoltarAddress)
-			const mintHash = await zoltarWriteClient.writeContract({
-				address: repAddress,
-				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'mint',
-				args: [accountAddress, amount],
-			})
-			await zoltarWriteClient.waitForTransactionReceipt({ hash: mintHash })
 			const totalSupply = await zoltarWriteClient.readContract({
 				address: repAddress,
 				abi: ReputationToken_ReputationToken.abi,
@@ -272,9 +263,16 @@ export async function mintSimulationGenesisRep({ accountAddress, amount, createW
 				address: repAddress,
 				abi: ReputationToken_ReputationToken.abi,
 				functionName: 'setMaxTheoreticalSupply',
-				args: [totalSupply],
+				args: [totalSupply + amount],
 			})
 			await zoltarWriteClient.waitForTransactionReceipt({ hash: syncHash })
+			const mintHash = await zoltarWriteClient.writeContract({
+				address: repAddress,
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'mint',
+				args: [accountAddress, amount],
+			})
+			await zoltarWriteClient.waitForTransactionReceipt({ hash: mintHash })
 
 			const zoltarCode = await memoryClient.getCode({
 				address: zoltarAddress,

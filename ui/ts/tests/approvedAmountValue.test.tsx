@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { ApprovedAmountValue, APPROVAL_MAX_DISPLAY_THRESHOLD, APPROVAL_MAX_LABEL } from '../components/ApprovedAmountValue.js'
+import { ApprovedAmountValue, APPROVAL_MAX_DISPLAY_THRESHOLD } from '../components/ApprovedAmountValue.js'
+import { UI_STRING_MAX } from '../lib/uiStrings.js'
 
 describe('ApprovedAmountValue', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -26,7 +27,7 @@ describe('ApprovedAmountValue', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const valueBadge = documentQueries.getByText(APPROVAL_MAX_LABEL)
+		const valueBadge = documentQueries.getByText(UI_STRING_MAX)
 		expect(valueBadge.textContent).toBe('Max')
 		expect(valueBadge.className).toContain('approval-max')
 		expect(documentQueries.queryByText(/^≈/)).toBeNull()

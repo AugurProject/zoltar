@@ -2,7 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { maxUint256 } from '@zoltar/shared/ethereum'
-import { APPROVAL_MAX_DISPLAY_THRESHOLD, APPROVAL_MAX_LABEL, getApprovedAmountTone, isApprovalAmountMaxDisplay } from '../components/ApprovedAmountValue.js'
+import { APPROVAL_MAX_DISPLAY_THRESHOLD, getApprovedAmountTone, isApprovalAmountMaxDisplay } from '../components/ApprovedAmountValue.js'
+import { UI_STRING_MAX } from '../lib/uiStrings.js'
 
 void describe('ApprovedAmountValue helpers', () => {
 	void test('treats maxUint256 as max display', () => {
@@ -18,7 +19,7 @@ void describe('ApprovedAmountValue helpers', () => {
 	})
 
 	void test('uses a capitalized Max label for unlimited approval display', () => {
-		expect(APPROVAL_MAX_LABEL).toBe('Max')
+		expect(UI_STRING_MAX).toBe('Max')
 	})
 
 	void test('reports whether the approved amount satisfies the required amount', () => {
