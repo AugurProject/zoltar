@@ -1,8 +1,7 @@
 import { CurrencyValue } from './CurrencyValue.js'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_MAX, UI_STRING_UNLIMITED_APPROVAL } from '../lib/uiStrings.js'
 
 export const APPROVAL_MAX_DISPLAY_THRESHOLD = (1n << 200n) - 1n
-export const APPROVAL_MAX_LABEL = 'Max'
 
 type ApprovedAmountValueProps = {
 	className?: string
@@ -29,8 +28,8 @@ export function ApprovedAmountValue({ className = '', copyable = true, decimals 
 
 	if (isApprovalAmountMaxDisplay(value))
 		return (
-			<span className={['currency-value', 'approval-max', toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} title={TSX_STRINGS.componentsApprovedAmountValue.copy001}>
-				{APPROVAL_MAX_LABEL}
+			<span className={['currency-value', 'approval-max', toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} title={UI_STRING_UNLIMITED_APPROVAL}>
+				{UI_STRING_MAX}
 			</span>
 		)
 

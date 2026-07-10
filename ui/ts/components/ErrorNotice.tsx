@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { isCloseableErrorMessage } from '../lib/errors.js'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_DISMISS_ERROR } from '../lib/uiStrings.js'
 
 type ErrorNoticeProps = {
 	message: string | undefined
@@ -20,7 +20,7 @@ export function ErrorNotice({ message }: ErrorNoticeProps) {
 	return (
 		<div className={`notice error${isCloseable ? ' closeable' : ''}`} role='alert' aria-live='assertive' aria-atomic='true'>
 			{isCloseable ? (
-				<button type='button' className='notice-dismiss' aria-label={TSX_STRINGS.componentsErrorNotice.copy001} onClick={() => setDismissed(true)}>
+				<button type='button' className='notice-dismiss' aria-label={UI_STRING_DISMISS_ERROR} onClick={() => setDismissed(true)}>
 					<span className='notice-dismiss-icon' aria-hidden='true' />
 				</button>
 			) : undefined}

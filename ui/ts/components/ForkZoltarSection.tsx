@@ -14,7 +14,23 @@ import { resolveLoadableValueState, type LoadableValueState } from '../lib/loadS
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
-import { TSX_STRINGS } from '../lib/uiStrings.js'
+import {
+	UI_STRING_APPROVE_ENOUGH_REP_BEFORE_FORKING_ZOLTAR,
+	UI_STRING_APPROVING_REP_THRESHOLD_TRUNCATED,
+	UI_STRING_CONNECT_A_WALLET_BEFORE_FORKING_ZOLTAR,
+	UI_STRING_FORKING_ZOLTAR_ACTION_LABEL,
+	UI_STRING_FORKING_ZOLTAR_TRUNCATED,
+	UI_STRING_FORK_QUESTION_ID,
+	UI_STRING_FORK_THRESHOLD,
+	UI_STRING_FORK_ZOLTAR,
+	UI_STRING_HEX_VALUE_PLACEHOLDER,
+	UI_STRING_INSUFFICIENT_REP_TO_MEET_THE_FORK_THRESHOLD,
+	UI_STRING_QUESTION,
+	UI_STRING_REFRESH_UNIVERSE_DATA_BEFORE_FORKING_ZOLTAR,
+	UI_STRING_REP,
+	UI_STRING_SELECT_A_VALID_FORK_QUESTION_BEFORE_FORKING_ZOLTAR,
+	UI_STRING_ZOLTAR_IS_ALREADY_FORKED,
+} from '../lib/uiStrings.js'
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	hasLoadedZoltarQuestions: boolean
@@ -73,23 +89,23 @@ export function ForkZoltarSection({
 		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet: true })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
-		if (hasForked) return TSX_STRINGS.componentsForkZoltarSection.copy001
+		if (hasForked) return UI_STRING_ZOLTAR_IS_ALREADY_FORKED
 		return undefined
 	})()
 	const forkGuardMessage =
 		accountAddress === undefined
-			? TSX_STRINGS.componentsForkZoltarSection.copy002
+			? UI_STRING_CONNECT_A_WALLET_BEFORE_FORKING_ZOLTAR
 			: (() => {
 					if (!isMainnet) return undefined
-					if (rootUniverse === undefined) return TSX_STRINGS.componentsForkZoltarSection.copy003
+					if (rootUniverse === undefined) return UI_STRING_REFRESH_UNIVERSE_DATA_BEFORE_FORKING_ZOLTAR
 
 					return (() => {
-						if (hasForked) return TSX_STRINGS.componentsForkZoltarSection.copy004
-						if (selectedQuestion === undefined) return TSX_STRINGS.componentsForkZoltarSection.copy005
+						if (hasForked) return UI_STRING_ZOLTAR_IS_ALREADY_FORKED
+						if (selectedQuestion === undefined) return UI_STRING_SELECT_A_VALID_FORK_QUESTION_BEFORE_FORKING_ZOLTAR
 
 						return (() => {
-							if (!hasEnoughRep) return TSX_STRINGS.componentsForkZoltarSection.copy006
-							if (!hasEnoughApproval) return TSX_STRINGS.componentsForkZoltarSection.copy007
+							if (!hasEnoughRep) return UI_STRING_INSUFFICIENT_REP_TO_MEET_THE_FORK_THRESHOLD
+							if (!hasEnoughApproval) return UI_STRING_APPROVE_ENOUGH_REP_BEFORE_FORKING_ZOLTAR
 
 							return undefined
 						})()
@@ -99,7 +115,7 @@ export function ForkZoltarSection({
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
-				{presentation === undefined ? undefined : <StateHint presentation={presentation} title={TSX_STRINGS.componentsForkZoltarSection.copy008} />}
+				{presentation === undefined ? undefined : <StateHint presentation={presentation} title={UI_STRING_FORK_ZOLTAR} />}
 				<ErrorNotice message={zoltarForkError} />
 			</>
 		)
@@ -107,15 +123,15 @@ export function ForkZoltarSection({
 	return (
 		<>
 			<DataGrid>
-				<MetricField label={TSX_STRINGS.componentsForkZoltarSection.copy009}>
-					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix={TSX_STRINGS.componentsForkZoltarSection.copy010} />
+				<MetricField label={UI_STRING_FORK_THRESHOLD}>
+					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix={UI_STRING_REP} />
 				</MetricField>
 			</DataGrid>
 
 			<div className='form-grid'>
 				{hasForked ? undefined : (
 					<TokenApprovalControl
-						actionLabel={TSX_STRINGS.componentsForkZoltarSection.copy011}
+						actionLabel={UI_STRING_FORKING_ZOLTAR_ACTION_LABEL}
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
@@ -123,7 +139,7 @@ export function ForkZoltarSection({
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}
-						pendingLabel={TSX_STRINGS.componentsForkZoltarSection.copy012}
+						pendingLabel={UI_STRING_APPROVING_REP_THRESHOLD_TRUNCATED}
 						requiredAmount={rootUniverse?.forkThreshold}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
 						tokenSymbol='REP'
@@ -132,12 +148,12 @@ export function ForkZoltarSection({
 				)}
 
 				<label className='field'>
-					<span>{TSX_STRINGS.componentsForkZoltarSection.copy013}</span>
-					<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={TSX_STRINGS.componentsForkZoltarSection.copy014} disabled={hasForked || zoltarForkPending} />
+					<span>{UI_STRING_FORK_QUESTION_ID}</span>
+					<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={UI_STRING_HEX_VALUE_PLACEHOLDER} disabled={hasForked || zoltarForkPending} />
 				</label>
 
 				{selectedQuestion === undefined ? undefined : (
-					<WorkflowSubsection title={TSX_STRINGS.componentsForkZoltarSection.copy015}>
+					<WorkflowSubsection title={UI_STRING_QUESTION}>
 						<Question question={selectedQuestion} />
 					</WorkflowSubsection>
 				)}
@@ -145,8 +161,8 @@ export function ForkZoltarSection({
 
 				<div className='actions'>
 					<TransactionActionButton
-						idleLabel={TSX_STRINGS.componentsForkZoltarSection.copy016}
-						pendingLabel={TSX_STRINGS.componentsForkZoltarSection.copy017}
+						idleLabel={UI_STRING_FORK_ZOLTAR}
+						pendingLabel={UI_STRING_FORKING_ZOLTAR_TRUNCATED}
 						onClick={() => {
 							if (selectedQuestionId === '') return
 							onForkZoltar()
