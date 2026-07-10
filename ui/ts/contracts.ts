@@ -1,13 +1,14 @@
 import { decodeEventLog, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
+import { ORACLE_ASSUMED_REP_PER_ETH_PRICE } from '@zoltar/shared/oracleInitialReport'
 import { assertNever } from './lib/assert.js'
 import { sameAddress } from './lib/address.js'
 import { isIgnorableLogDecodeError } from './lib/errors.js'
 import { deriveHasForkActivity } from './lib/forkAuction.js'
 import { resolveOracleOperationEthFunding } from './lib/oracleRequestEth.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
-import { addOpenOracleBountyBuffer, getOpenOracleCreateParameterValidationMessage } from './lib/openOracle.js'
+import { addOpenOracleBountyBuffer, getOpenOracleCreateParameterValidationMessage, loadOpenOracleInitialReportPrice } from './lib/openOracle.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './lib/oracleQueueOperation.js'
 import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
@@ -76,6 +77,7 @@ export { readOptionalMulticall } from './contracts/core.js'
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
+type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 const QUESTION_OUTCOME_ABI = [
 	{
 		inputs: [{ name: 'securityPool', type: 'address' }],
@@ -776,8 +778,8 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	return funding.includeBuffer ? addOpenOracleBountyBuffer(funding.ethCost) : funding.ethCost
 }
 
-async function getCoordinatorInitialReportAmount2(client: Pick<WriteClient, 'readContract'>, managerAddress: Address) {
-	const [exactToken1Report, lastPrice] = await Promise.all([
+async function getCoordinatorInitialReportAmount2(client: CoordinatorInitialReportClient, managerAddress: Address) {
+	const [exactToken1Report, lastPrice, reputationTokenAddress] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -790,15 +792,30 @@ async function getCoordinatorInitialReportAmount2(client: Pick<WriteClient, 'rea
 			functionName: 'lastPrice',
 			args: [],
 		}),
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'reputationToken',
+			args: [],
+		}),
 	])
 	if (lastPrice === 0n) {
-		throw new Error('The coordinator cannot infer the first report price. Provide an explicit coordinator initial REP/WETH quote amount for this request.')
+		try {
+			const quote = await loadOpenOracleInitialReportPrice(client, reputationTokenAddress, getWethAddress(), exactToken1Report)
+			return quote.token2Amount > 0n ? quote.token2Amount : 1n
+		} catch (error) {
+			if (error instanceof Error && error.message === '') {
+				throw new Error('Unexpected empty error while resolving the first coordinator report price.')
+			}
+			const assumedAmount2 = (exactToken1Report * COORDINATOR_PRICE_PRECISION) / ORACLE_ASSUMED_REP_PER_ETH_PRICE
+			return assumedAmount2 > 0n ? assumedAmount2 : 1n
+		}
 	}
 	const amount2 = (exactToken1Report * COORDINATOR_PRICE_PRECISION) / lastPrice
 	return amount2 > 0n ? amount2 : 1n
 }
 
-export async function loadCoordinatorInitialReportFundingRequirement(client: Pick<WriteClient, 'readContract'>, managerAddress: Address, walletAddress: Address, initialReportAmount2?: bigint) {
+export async function loadCoordinatorInitialReportFundingRequirement(client: CoordinatorInitialReportClient, managerAddress: Address, walletAddress: Address, initialReportAmount2?: bigint) {
 	const [reputationTokenAddress, currentWethBalance, resolvedInitialReportAmount2, exactToken1Report] = await Promise.all([
 		client.readContract({
 			address: managerAddress,

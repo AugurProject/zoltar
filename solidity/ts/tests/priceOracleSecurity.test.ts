@@ -402,16 +402,18 @@ describe('Price Oracle Refund Security Tests', () => {
 		const initialBalance = await getETHBalance(client, client.account.address)
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const overpayment = ethCost * 2n
+		const lastPrice = await getLastPrice(client, priceOracle)
+		const initialReportAmount2 = lastPrice === 0n ? ORACLE_EXACT_TOKEN1_REPORT : (ORACLE_EXACT_TOKEN1_REPORT * 10n ** 18n) / lastPrice || 1n
 
 		// Call requestPrice with overpayment
 		await requestPriceWithValue(client, priceOracle, overpayment)
 
 		const finalBalance = await getETHBalance(client, client.account.address)
 
-		// The caller still funds the REP side of the atomic initial report in addition
+		// The caller still funds the WETH side of the atomic initial report in addition
 		// to the ETH bounty, but any extra ETH value should be refunded.
-		const expectedNetCost = ethCost + ORACLE_EXACT_TOKEN1_REPORT
-		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay the ETH bounty plus the REP-side initial report funding (${expectedNetCost}), but paid ${initialBalance - finalBalance}`)
+		const expectedNetCost = ethCost + initialReportAmount2
+		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay the ETH bounty plus the WETH-side initial report funding (${expectedNetCost}), but paid ${initialBalance - finalBalance}`)
 	})
 
 	test('requestPriceIfNeededAndStageOperation should not drain preexisting contract balance', async () => {

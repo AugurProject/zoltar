@@ -6,6 +6,7 @@ import {
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
 	getOpenOracleAddress,
+	loadCoordinatorInitialReportFundingRequirement,
 	loadErc20Balance,
 	loadOpenOracleReportDetails,
 	loadOpenOracleReportSummaries,
@@ -46,6 +47,7 @@ import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import type { WriteContractClient } from '../contracts/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
+import { ORACLE_ASSUMED_REP_PER_ETH_PRICE } from '@zoltar/shared/oracleInitialReport'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
@@ -1293,8 +1295,55 @@ describe('Open Oracle helpers', () => {
 		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBe(0n)
 	})
 
-	test('requestOraclePrice rejects missing explicit amount2 when the coordinator has no cached price yet', async () => {
-		await expect(requestOraclePrice(uiWriteClient, managerAddress)).rejects.toThrow('The coordinator cannot infer the first report price')
+	test('loadCoordinatorInitialReportFundingRequirement prefers a live quote before the assumed fallback price', async () => {
+		const exactToken1Report = 100n * 10n ** 18n
+		const quotedAmount2 = 7n * 10n ** 18n
+		const currentWethBalance = 2n * 10n ** 18n
+		const currentRepBalance = 300n * 10n ** 18n
+		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const mockClient = createConnectedReadClient()
+		mockClient.readContract = async parameters => {
+			const address = parameters.address as Address
+			const functionName = parameters.functionName as string
+			if (functionName === 'exactToken1Report') return exactToken1Report as never
+			if (functionName === 'lastPrice') return 0n as never
+			if (functionName === 'reputationToken') return reputationTokenAddress as never
+			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return currentWethBalance as never
+			if (functionName === 'balanceOf' && address === reputationTokenAddress) return currentRepBalance as never
+			throw new Error(`Unexpected read ${functionName} for ${address}`)
+		}
+		mockClient.simulateContract = async () => ({ result: [quotedAmount2, 100000n], request: {} as never }) as never
+
+		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address)
+
+		expect(funding.initialReportAmount2).toBe(quotedAmount2)
+		expect(funding.wethShortfall).toBe(quotedAmount2 - currentWethBalance)
+	})
+
+	test('requestOraclePrice falls back to the assumed REP/ETH price when the first report quote is unavailable', async () => {
+		const exactToken1Report = await client.readContract({
+			address: managerAddress,
+			abi: [
+				{
+					type: 'function',
+					name: 'exactToken1Report',
+					stateMutability: 'view',
+					inputs: [],
+					outputs: [{ name: '', type: 'uint256' }],
+				},
+			],
+			functionName: 'exactToken1Report',
+			args: [],
+		})
+		if (typeof exactToken1Report !== 'bigint') throw new Error('expected bigint exactToken1Report')
+		await requestOraclePrice(uiWriteClient, managerAddress)
+
+		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
+		expect(reportId).toBeGreaterThan(0n)
+
+		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		expect(reportDetails.currentAmount1).toBe(exactToken1Report)
+		expect(reportDetails.currentAmount2).toBe((exactToken1Report * 10n ** 18n) / ORACLE_ASSUMED_REP_PER_ETH_PRICE)
 	})
 
 	test('requestOraclePrice rejects insufficient REP before WETH wrap side effects', async () => {
