@@ -481,6 +481,53 @@
 						<a href="../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
 						under Zoltar’s control.
 					</p>
+					<p>
+						A child's theoretical supply is a maximum for REP that can be minted in that
+						branch. It starts from the parent's pre-fork theoretical supply and subtracts
+						only the uncredited haircut. The initiator's remaining threshold deposit is
+						migration credit, so it remains part of the maximum amount that could be minted
+						in each child.
+					</p>
+
+					<h3>Repeated-fork threshold decay</h3>
+					<p>
+						Along one lineage, let <code>theoreticalSupplyBeforeForkₙ</code> be the
+						theoretical supply before fork <code>n</code>. With the mainnet threshold divisor
+						of <code>20</code> and burn divisor of <code>5</code>, the exact integer recurrence is
+						<code>forkThresholdₙ = floor(theoreticalSupplyBeforeForkₙ / 20)</code>,
+						<code>haircutₙ = floor(forkThresholdₙ / 5)</code>, and
+						<code>theoreticalSupplyBeforeForkₙ₊₁ = theoreticalSupplyBeforeForkₙ - haircutₙ</code>.
+						This is close to multiplying supply by <code>0.99</code> at each generation,
+						but both Solidity flooring operations matter once supply becomes small.
+					</p>
+					<div class="callout">
+						<strong>Launch-supply-dependent limit</strong>
+						The number of generations is not a universal constant because the genesis
+						supply snapshot is read when Zoltar is deployed. At Ethereum block
+						<code>25,501,749</code> on July 10, 2026, calling
+						<code>getTotalTheoreticalSupply()</code> on REPv2 at
+						<code>0x221657776846890989a759BA2973e427DfF5C9bB</code> returned
+						<code>7,825,488.326666847200078019 REP</code>. Starting from that value, the
+						default recurrence reaches three relevant boundaries: at child depth
+						<code>1,213</code>, the fork threshold is approximately <code>1.986 REP</code>, so
+						half of it no longer exceeds the configured <code>1 REP</code> escalation
+						starting bond; at depth <code>1,282</code>, the fork threshold is below
+						<code>1 REP</code>; and at depth <code>5,303</code>, theoretical supply is
+						<code>99 wei</code>, the fork threshold is <code>4 wei</code>, and the haircut
+						floors to zero. Supply then stops decreasing along further descendants rather
+						than reaching a zero fork threshold.
+					</div>
+					<p>
+						These depths require more than a thousand consecutive forks along the same
+						surviving branch before escalation parameters become incompatible. They are
+						therefore remote limits rather than near-term fork incentives. Implementers
+						should nevertheless treat the first boundary as an explicit parameter limit:
+						<code>SecurityPool</code> initializes an escalation game's non-decision threshold
+						as half the current fork threshold, while <code>EscalationGame</code> requires that
+						value to be strictly greater than its starting bond. A deployment expected to
+						survive thousands of recursive forks needs either a minimum fork threshold or
+						a compatible rule for scaling escalation parameters.
+					</p>
 
 					<div class="table-wrap">
 						<table>
@@ -639,6 +686,38 @@
 						costs of doing so. The economic pressure is therefore value concentration:
 						REP in an abandoned branch may keep existing, but it is expected to have little
 						long-term value compared with REP in the branch that markets keep using.
+					</p>
+					<h3>Global forks are migrations, not permanent shutdowns</h3>
+					<p>
+						Zoltar questions are global protocol objects: any existing question whose end
+						time has passed can identify the branches of any still-unforked universe.
+						Recording the fork stops new operational changes in parent-universe pools so
+						that their accounting cannot move while it is being snapshotted. Placeholder
+						provides permissionless, user-driven paths to migrate REP, shares, vault
+						positions, collateral, and unresolved escalation state into child-universe
+						pools. A child pool can return to the operational state once the migration
+						window and any required truth-auction and finalization transactions complete.
+						Timely progress therefore depends on callers submitting those transactions and
+						on the available migration participation. The parent boundary is a transition
+						into child universes, not an intended permanent freeze of market activity.
+					</p>
+					<p>
+						A caller cannot trigger that transition for free under normal parameters. The
+						caller supplies the full fork threshold in parent REP, loses the uncredited
+						haircut, and receives migration credit for only the remainder. Existing REP
+						holders can migrate their own positions and benefit from the reduced supply in
+						the branches where economic activity continues. Consequently, an unrelated
+						fork is economically evaluated as a costly forced migration: its risk is
+						operational migration latency and coordination burden, while its deterrent is
+						the initiator's threshold commitment and permanent haircut.
+					</p>
+					<p>
+						Likewise, a question with many valid outcomes creates more possible children,
+						but it does not multiply value in the branch that ultimately retains economic
+						coordination. Deploying and using many children costs gas, and REP in abandoned
+						branches is expected to have little value. Outcome count by itself is therefore
+						a gas and state-growth consideration, not a demonstrated value-extraction
+						attack.
 					</p>
 				</section>
 

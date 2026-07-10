@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testsuite/simulator/utils/assert'
 import type { Address } from '@zoltar/shared/ethereum'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
@@ -223,7 +224,8 @@ describe('Peripherals invariant harness', () => {
 		const parentSupplyBeforeFork = await getTotalTheoreticalSupply(client, parentRepToken)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
 		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
-		const expectedChildSupplySnapshot = parentSupplyBeforeFork - forkThreshold
+		const permanentHaircut = forkThreshold / DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor
+		const expectedChildSupplySnapshot = parentSupplyBeforeFork - permanentHaircut
 		const branchOrder = shuffle([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No], 0xdecafbadn)
 		const attackerClient = createClient(1)
 		await approveAndDepositRep(attackerClient, repDeposit, context.questionId)
@@ -248,7 +250,7 @@ describe('Peripherals invariant harness', () => {
 			strictEqualTypeSafe(childUniverse.forkingOutcomeIndex, BigInt(outcome), 'child should retain its outcome index')
 			const childUniverseSupply = await getUniverseTheoreticalSupply(client, childUniverseId)
 			assert.ok(childUniverseSupply > 0n, 'child universe supply should stay positive')
-			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should equal the parent snapshot immediately after fork burn')
+			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should subtract only the permanent fork haircut')
 		}
 
 		const childUniverseIds = branchOrder.map(outcome => getChildUniverseIdForOutcome(outcome))
