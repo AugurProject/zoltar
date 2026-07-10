@@ -640,15 +640,85 @@ describe('LiquidationModal', () => {
 
 	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 0n,
+				vaultAddress: defaultCallerVaultAddress,
+			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
 				requestPriceEthCost: 10n * ETH,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 100n * 10n ** 18n,
 			}),
 			walletEthBalance: 5n * ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Need 7 more ETH in this wallet to queue liquidation.')
+	})
+
+	test('allows queued liquidation when the entered amount exceeds the repair cap because execution will clamp it', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+			}),
+			liquidationAmount: '100',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 2_000n * 10n ** 18n,
+				securityBondAllowance: 0n,
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 100n * 10n ** 18n,
+			}),
+			walletEthBalance: 100n * ETH,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queueButton = within(document.body).getByRole('button', { name: 'Queue Liquidation' }) as HTMLButtonElement
+		expect(queueButton.disabled).toBe(false)
+	})
+
+	test('uses the full queued allowance for Max when the current oracle price is stale', async () => {
+		const amountChanges: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '1',
+			liquidationMaxAmount: 100n * 10n ** 18n,
+			onLiquidationAmountChange: value => {
+				amountChanges.push(value)
+			},
+			selectedPool: createSelectedPool({
+				lastOraclePrice: 10n * 10n ** 18n,
+				securityMultiplier: 2n,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAddress: defaultTargetVaultAddress,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			const maxButton = document.body.querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLElement)) throw new Error('Expected liquidation Max button')
+			fireEvent.click(maxButton)
+		})
+
+		expect(amountChanges).toEqual(['100'])
 	})
 
 	test('shows liquidation failure details when the staged execution event reports a rejection', async () => {
@@ -740,7 +810,7 @@ describe('LiquidationModal', () => {
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						repDepositShare: 11n * 10n ** 18n,
+						repDepositShare: 12n * 10n ** 18n,
 						securityBondAllowance: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
@@ -822,7 +892,7 @@ describe('LiquidationModal', () => {
 						vaultAddress: defaultCallerVaultAddress,
 					})}
 					targetVaultSummary={createTargetVaultSummary({
-						repDepositShare: 11n * 10n ** 18n,
+						repDepositShare: 12n * 10n ** 18n,
 						securityBondAllowance: 11n * 10n ** 18n,
 						vaultAddress: defaultTargetVaultAddress,
 					})}
@@ -849,9 +919,13 @@ describe('LiquidationModal', () => {
 		container.remove()
 	})
 
-	test('fills the liquidation amount from the provided Max value', async () => {
+	test('fills the liquidation amount from the computed repair Max value', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 3n * 10n ** 18n,
+			}),
 			liquidationAmount: '1',
 			liquidationMaxAmount: 25n * 10n ** 18n,
 			onLiquidationAmountChange: value => {
@@ -866,11 +940,49 @@ describe('LiquidationModal', () => {
 			fireEvent.click(maxButton)
 		})
 
-		expect(amountChanges).toEqual(['25'])
+		expect(amountChanges).toEqual(['2'])
+	})
+
+	test('fills the liquidation amount from the full allowance when dust rounding forces a full repair', async () => {
+		const amountChanges: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '1',
+			liquidationMaxAmount: 995n * 10n ** 17n,
+			onLiquidationAmountChange: value => {
+				amountChanges.push(value)
+			},
+			selectedPool: createSelectedPool({
+				lastOraclePrice: 10n * 10n ** 18n,
+				securityMultiplier: 2n,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 10n * 10n ** 18n,
+				securityBondAllowance: 100n * 10n ** 18n,
+				vaultAddress: defaultTargetVaultAddress,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			const maxButton = document.body.querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLElement)) throw new Error('Expected liquidation Max button')
+			fireEvent.click(maxButton)
+		})
+
+		expect(amountChanges).toEqual(['100'])
 	})
 
 	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
 		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 0n,
+				vaultAddress: defaultCallerVaultAddress,
+			}),
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 				lastPrice: 1n * 10n ** 18n,
@@ -879,7 +991,7 @@ describe('LiquidationModal', () => {
 				securityMultiplier: 2n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
-				repDepositShare: 10n * 10n ** 18n,
+				repDepositShare: 100n * 10n ** 18n,
 				securityBondAllowance: 2n * 10n ** 18n,
 			}),
 		})
@@ -1084,7 +1196,96 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Rep Moved')).not.toBeNull()
 	})
 
-	test('uses simulation labels for mock prices and updates the caller collateralization as the liquidation amount changes', async () => {
+	test('shows zero REP moved for a repair liquidation preview', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '2',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 2n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.metric-label')).find(element => element.textContent === 'Rep Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
+		const repMovedValue = repMovedLabel.nextElementSibling
+		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
+
+		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
+	})
+
+	test('allows execution when the entered amount exceeds the repair cap because execution will clamp it', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '100',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 2_000n * 10n ** 18n,
+				securityBondAllowance: 0n,
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 100n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const executeButton = within(document.body).getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		expect(executeButton.disabled).toBe(false)
+	})
+
+	test('allows execution when the entered amount would leave dust before the repair cap clamp', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '99.6',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 2_000n * 10n ** 18n,
+				securityBondAllowance: 0n,
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 100n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const executeButton = within(document.body).getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		expect(executeButton.disabled).toBe(false)
+		expect(document.body.textContent?.includes('The target vault would fall below the minimum security bond allowance after liquidation.')).toBe(false)
+	})
+
+	test('uses simulation labels for mock prices and clamps the preview once the entered amount exceeds the repair cap', async () => {
 		function LiquidationSimulationHarness() {
 			const [liquidationAmount, setLiquidationAmount] = useState('1000')
 
@@ -1149,14 +1350,13 @@ describe('LiquidationModal', () => {
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
 		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
-		expect(documentQueries.getByText(/266\.67 %/)).not.toBeNull()
+		expect(documentQueries.getByText(/218\./)).not.toBeNull()
 
 		await act(() => {
 			fireEvent.input(amountInput, { target: { value: '2500' } })
 		})
 
-		expect(documentQueries.getByText(/209\.52 %/)).not.toBeNull()
-		expect(documentQueries.queryByText(/266\.67 %/)).toBeNull()
+		expect(documentQueries.getByText(/218\./)).not.toBeNull()
 
 		render(null, container)
 		container.remove()

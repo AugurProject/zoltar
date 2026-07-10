@@ -500,8 +500,9 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
-	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable
-	// this is currently very harsh, as we steal all the rep and debt from the pool
+	// Liquidation moves only the debt shortfall needed to repair solvency at the
+	// current price, unless clearing the shortfall would strand a forbidden dust
+	// allowance, in which case it moves the full remaining allowance.
 	function performLiquidation(
 		address callerVault,
 		address targetVaultAddress,
@@ -530,9 +531,21 @@ contract SecurityPool is ISecurityPool {
 			'Target vault not liquidatable'
 		);
 
-		uint256 debtToMove = debtAmount > snapshotTargetAllowance ? snapshotTargetAllowance : debtAmount;
+		uint256 unsafeValueNumerator =
+			(snapshotTargetAllowance * securityMultiplier * repEthPrice) -
+				(vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION);
+		uint256 repairDebtToMove =
+			(unsafeValueNumerator + (securityMultiplier * repEthPrice) - 1) / (securityMultiplier * repEthPrice);
+		if (
+			snapshotTargetAllowance > repairDebtToMove &&
+			snapshotTargetAllowance - repairDebtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+		) {
+			repairDebtToMove = snapshotTargetAllowance;
+		}
+		uint256 maxDebtToMove = repairDebtToMove > snapshotTargetAllowance ? snapshotTargetAllowance : repairDebtToMove;
+		uint256 debtToMove = debtAmount > maxDebtToMove ? maxDebtToMove : debtAmount;
 		require(debtToMove > 0, 'No debt to liquidate');
-		uint256 repToMove = (debtToMove * vaultsRepDeposit) / snapshotTargetAllowance;
+		uint256 repToMove = 0;
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
 		require(
 			(securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <=
@@ -550,7 +563,8 @@ contract SecurityPool is ISecurityPool {
 		// target vault needs to be above thresholds after liquidation
 		_requireMinimumVaultRep(
 			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership),
-			securityVaults[targetVaultAddress].poolOwnership == 0,
+			securityVaults[targetVaultAddress].poolOwnership == 0 &&
+				securityVaults[targetVaultAddress].securityBondAllowance == 0,
 			'Target vault REP below minimum'
 		);
 		_requireMinimumSecurityBondAllowance(

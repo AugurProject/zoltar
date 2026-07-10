@@ -437,6 +437,46 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childEscrowChildRep, unresolvedDeposit, 'non-own continuation should back the carried escrow 1:1 in child REP')
 	})
 
+	test('real non-own continuation migration can produce tied yes/no child balances from equal parent unresolved deposits', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, 2n * reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+
+		const externalForkQuestionData = {
+			...questionData,
+			title: 'parent for real tied continuation migration',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const externalForkQuestionId = getQuestionId(externalForkQuestionData, outcomes)
+		await createQuestion(attackerClient, externalForkQuestionData, outcomes)
+		await mockWindow.setTime(externalForkQuestionData.endTime + 1n)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, externalForkQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		const invalidOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Invalid)
+		const yesOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)
+		const noOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.No)
+		const childTotalCost = await getEscalationGameTotalCost(client, childEscalationGame)
+
+		strictEqualTypeSafe(invalidOutcomeState.balance, 0n, 'the child tie state should come only from the migrating vault yes/no balances, not from the parent invalid max holder')
+		strictEqualTypeSafe(yesOutcomeState.balance, reportBond, 'real continuation migration should preserve the parent yes-side unresolved amount')
+		strictEqualTypeSafe(noOutcomeState.balance, reportBond, 'real continuation migration should preserve the parent no-side unresolved amount')
+		strictEqualTypeSafe(childTotalCost, 0n, 'this real-path tie case starts before the child continuation attrition cost becomes active')
+	})
+
 	test('claimForkedEscalationDeposits requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
