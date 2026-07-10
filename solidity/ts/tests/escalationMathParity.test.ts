@@ -232,6 +232,18 @@ describe('Escalation math parity', () => {
 				}),
 		)
 
+	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipal: bigint, childRepAmount: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: escalationGameProofTestPoolArtifact.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'recordForkedEscrowForOutcome',
+					args: [depositor, outcome, sourcePrincipal, childRepAmount],
+				}),
+		)
+
 	const withdrawDepositViaProofTestSecurityPool = async (
 		testSecurityPoolAddress: Address,
 		outcome: QuestionOutcome,
@@ -439,6 +451,7 @@ describe('Escalation math parity', () => {
 			[emptyOutcomeCarryTotal, parentYesCarryTotal, parentNoCarryTotal],
 			[emptyOutcomeNullifierRoot, parentYesNullifierRoot, parentNoNullifierRoot],
 		)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentYesCarryTotal, parentYesCarryTotal)
 		const childBindingCapital = await readBindingCapital(child.escalationGameAddress)
 		assert.strictEqual(childBindingCapital, losingDepositAmount, 'child fork should inherit the parent binding-capital depth for this snapshot')
 		await resumeEscalationFromFork(child.escalationGameAddress)

@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 import { Window } from 'happy-dom'
 
-type AuctionExampleHarness = {
+type InteractiveExampleHarness = {
 	close: () => void
 	labelFor: (name: string) => string
 	output: (name: string) => string
@@ -19,7 +19,7 @@ type AuctionExampleScenario = {
 	exampleId: string
 }
 
-async function loadAuctionExample({ filePath, exampleId }: AuctionExampleScenario): Promise<AuctionExampleHarness> {
+async function loadInteractiveExample(filePath: string, exampleId: string): Promise<InteractiveExampleHarness> {
 	const html = await readFile(filePath, 'utf8')
 	const window = new Window({
 		url: pathToFileURL(filePath).href,
@@ -78,6 +78,10 @@ async function loadAuctionExample({ filePath, exampleId }: AuctionExampleScenari
 		output,
 		setInput,
 	}
+}
+
+async function loadAuctionExample({ filePath, exampleId }: AuctionExampleScenario): Promise<InteractiveExampleHarness> {
+	return loadInteractiveExample(filePath, exampleId)
 }
 
 function assertEqual(actual: string, expected: string, message: string): void {
@@ -231,14 +235,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 }
 
 async function checkUnderfundedPrefixExample(): Promise<void> {
-	const example = await loadAuctionExample({
-		defaultBindingCondition: '',
-		defaultAliceReceives: '',
-		defaultBobReceives: '',
-		defaultCarolReceives: '',
-		filePath: 'docs/whitepaper_placeholder.html',
-		exampleId: 'underfunded-auction-example',
-	})
+	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'underfunded-auction-example')
 
 	try {
 		assertEqual(example.output('tickStatus'), 'inputs are consistent with a winning-prefix bid', 'underfunded prefix example default status')
@@ -255,6 +252,61 @@ async function checkUnderfundedPrefixExample(): Promise<void> {
 		assertEqual(example.output('underfundedThreshold'), '2.0000 ETH/REP', 'underfunded prefix example inconsistent threshold')
 		assertEqual(example.output('underfundedRepShare'), 'not applicable', 'underfunded prefix example inconsistent REP share')
 		assertEqual(example.output('repAssignedElsewhere'), 'not applicable', 'underfunded prefix example inconsistent remainder allocation')
+	} finally {
+		example.close()
+	}
+}
+
+async function checkResolutionEdgeExample(): Promise<void> {
+	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'resolution-edge-example')
+
+	try {
+		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example default result')
+		assertEqual(example.output('resolutionReason'), 'two or more outcomes still contest the cost', 'resolution edge example default reason')
+
+		example.setInput('invalidBalance', 0)
+		example.setInput('yesBalance', 0)
+		example.setInput('noBalance', 0)
+		example.setInput('runningCost', 1)
+
+		assertEqual(example.output('resolutionResult'), 'Invalid', 'resolution edge example all-zero fallback result')
+		assertEqual(example.output('resolutionReason'), 'empty game after cost is non-zero', 'resolution edge example all-zero fallback reason')
+
+		example.setInput('invalidBalance', 4)
+		example.setInput('yesBalance', 5)
+		example.setInput('noBalance', 5)
+		example.setInput('runningCost', 6)
+
+		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example tied leader below cost result')
+		assertEqual(example.output('resolutionReason'), 'synthetic tied leader; valid deposits and preserved non-zero snapshots reject this state', 'resolution edge example tied leader below cost reason')
+
+		example.setInput('invalidBalance', 4)
+		example.setInput('yesBalance', 5)
+		example.setInput('noBalance', 6)
+		example.setInput('runningCost', 7)
+
+		assertEqual(example.output('resolutionResult'), 'No', 'resolution edge example strict No result')
+		assertEqual(example.output('resolutionReason'), 'No has a strict lead', 'resolution edge example strict No reason')
+	} finally {
+		example.close()
+	}
+}
+
+async function checkPayoutRegionExample(): Promise<void> {
+	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'payout-region-example')
+
+	try {
+		assertEqual(example.output('payoutState'), 'reachable ordinary winner state', 'payout region example default state')
+		assertEqual(example.output('scaledWithdrawal'), '7 REP', 'payout region example default scaled withdrawal')
+
+		example.setInput('bindingCapital', 20)
+		example.setInput('winningPrincipal', 15)
+		example.setInput('depositAmount', 5)
+		example.setInput('depositStart', 10)
+		example.setInput('actualForkThresholdPercent', 100)
+
+		assertEqual(example.output('payoutState'), "not a valid final winner state: binding capital cannot exceed a strict winner's balance", 'payout region example invalid winner state')
+		assertEqual(example.output('scaledWithdrawal'), '9 REP', 'payout region example unreachable state still reports computed withdrawal')
 	} finally {
 		example.close()
 	}
@@ -302,6 +354,8 @@ await checkSourceLabelsAndThresholdText('docs/whitepaper_placeholder.html', [
 
 await checkCollateralRepairExample()
 await checkUnderfundedPrefixExample()
+await checkResolutionEdgeExample()
+await checkPayoutRegionExample()
 
 const auctionDesignHtml = await readFile('docs/auction-design.html', 'utf8')
 assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
