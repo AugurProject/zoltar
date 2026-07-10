@@ -1,416 +1,239 @@
 export type UiStringTemplateValue = string | number | bigint | boolean | null | undefined
 
-export const UI_STRING_ACTION = 'Action'
-export const UI_STRING_ACTIVE = 'Active'
-export const UI_STRING_AMOUNT = 'Amount'
-export const UI_STRING_ANNUAL_FEE = 'Annual Fee'
-export const UI_STRING_APPROVING_REP = 'Approving REP...'
-export const UI_STRING_BID_AMOUNT_ETH = 'Bid Amount (ETH)'
-export const UI_STRING_CANCEL = 'Cancel'
-export const UI_STRING_CHECK_BACK_NO_LATER_THAN = 'Check back no later than '
-export const UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE = 'Checking whether pool REP is already ready for the selected child universe.'
-export const UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED = 'Child universe already deployed.'
-export const UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED = 'Child universe not already deployed'
-export const UI_STRING_CHILD_UNIVERSES = 'Child Universes'
-export const UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED = 'Child universes are unavailable because this universe has not forked.'
-export const UI_STRING_CLEARING_PRICE = 'Clearing Price'
-export const UI_STRING_CLOSED = 'Closed'
-export const UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE = 'Connect a wallet before deploying a child universe.'
-export const UI_STRING_CONNECT_WALLET_TO_CONTINUE = 'Connect wallet to continue.'
-export const UI_STRING_COPIED = 'Copied'
-export const UI_STRING_CREATE_CHILD_UNIVERSE = 'Create child universe'
-export const UI_STRING_CREATE_CHILD_UNIVERSE_TITLE = 'Create Child Universe'
-export const UI_STRING_CREATE_QUESTION = 'Create Question'
-export const UI_STRING_CREATE_SECURITY_POOL = 'Create Security Pool'
-export const UI_STRING_DELETE_SAVE = 'Delete save'
-export const UI_STRING_DEPLOYED = 'Deployed'
-export const UI_STRING_DEPLOYING = 'Deploying...'
-export const UI_STRING_DEPLOYING_UNIVERSE = 'Deploying universe...'
-export const UI_STRING_DEPLOY_UNIVERSE = 'Deploy Universe'
-export const UI_STRING_DEPOSIT_REP = 'Deposit REP'
-export const UI_STRING_DISPUTE_REPORT = 'Dispute Report'
-export const UI_STRING_ENDS = 'Ends'
-export const UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO = 'Enter an amount greater than zero.'
-export const UI_STRING_ENTRY_DEPTH_PREFIX = 'Entry depth: '
-export const UI_STRING_ERROR = 'Error'
-export const UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL = 'Escalation deposit details are unavailable for this pool right now.'
-export const UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED = 'Escalation ended by timeout. The winner is computed from the current stakes.'
-export const UI_STRING_ESCALATION_METRICS = 'Escalation Metrics'
-export const UI_STRING_ESCROWED_REP = 'Escrowed REP'
-export const UI_STRING_ETH = 'ETH'
-export const UI_STRING_ETH_RAISED_PER_CAP = 'ETH Raised / Cap'
-export const UI_STRING_FAILED = 'Failed'
-export const UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES = 'Fork-carried escalation deposits can be settled after this child pool finalizes.'
-export const UI_STRING_FORKED = 'Forked'
-export const UI_STRING_FORK_THRESHOLD = 'Fork Threshold'
-export const UI_STRING_FORK_TIME = 'Fork Time'
-export const UI_STRING_FORK_TRIGGERED = 'Fork Triggered'
-export const UI_STRING_FORK_ZOLTAR = 'Fork Zoltar'
-export const UI_STRING_HEX_VALUE_PLACEHOLDER = '0x...'
-export const UI_STRING_INITIALLY_DEPOSITED_PREFIX = 'Initially deposited: '
-export const UI_STRING_INVALID = 'Invalid'
-export const UI_STRING_JSON_STATE = 'JSON state'
-export const UI_STRING_LIQUIDATION_EXECUTED = 'Liquidation Executed'
-export const UI_STRING_LIQUIDATION_SUBMITTED = 'Liquidation Submitted'
-export const UI_STRING_LOADED_DEPTH_ETH = 'Loaded Depth (ETH)'
-export const UI_STRING_LOADING = 'Loading'
-export const UI_STRING_LOADING_WITH_ELLIPSIS = 'Loading...'
-export const UI_STRING_LOADING_CURRENT_CHAIN_TIME = 'Loading current chain time.'
-export const UI_STRING_LOADING_ESCALATION_DEPOSITS = 'Loading escalation deposits.'
-export const UI_STRING_LOADING_UNIVERSE_DETAILS = 'Loading universe details.'
-export const UI_STRING_LOADING_VAULT = 'Loading vault...'
-export const UI_STRING_MANAGE_POOL = 'Manage Pool'
-export const UI_STRING_MAX = 'Max'
-export const UI_STRING_MAX_PREFIX = 'Max '
-export const UI_STRING_MIGRATE_REP = 'Migrate REP'
-export const UI_STRING_MIGRATE_SHARES = 'Migrate Shares'
-export const UI_STRING_MIGRATE_VAULT = 'Migrate Vault'
-export const UI_STRING_MIGRATING_VAULT = 'Migrating vault...'
-export const UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE = 'Migration timing is unavailable.'
-export const UI_STRING_MINT_COMPLETE_SETS = 'Mint Complete Sets'
-export const UI_STRING_MULTIPLIER = 'Multiplier'
-export const UI_STRING_NO = 'No'
-export const UI_STRING_NO_MATCHES = 'No matches'
-export const UI_STRING_NO_PREFIX = 'No '
-export const UI_STRING_NO_QUESTIONS = 'No questions'
-export const UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS = 'No REP collateral or security bond allowance remains to migrate for the connected wallet.'
-export const UI_STRING_NOT_FOUND = 'Not found'
-export const UI_STRING_NOT_STARTED = 'Not started'
-export const UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET = 'No unresolved parent escalation deposits remain for the connected wallet.'
-export const UI_STRING_OF_PREFIX = 'of '
-export const UI_STRING_OPEN = 'Open'
-export const UI_STRING_OPENING = 'Opening...'
-export const UI_STRING_OPEN_INTEREST_MINTED = 'Open Interest Minted'
-export const UI_STRING_OPEN_ORACLE_PRICE = 'Open Oracle Price'
-export const UI_STRING_OPEN_POOL = 'Open Pool'
-export const UI_STRING_OPERATIONAL = 'Operational'
-export const UI_STRING_OUTCOME = 'Outcome'
-export const UI_STRING_OUTCOME_INDEX = 'Outcome Index'
-export const UI_STRING_PAGE_NOT_FOUND = 'Page not found'
-export const UI_STRING_PENDING = 'Pending'
-export const UI_STRING_PERCENT = '%'
-export const UI_STRING_PLURAL_SUFFIX = 's'
-export const UI_STRING_POOL = 'Pool'
-export const UI_STRING_POOL_ADDRESS = 'Pool Address'
-export const UI_STRING_POOL_COLLATERALIZATION = 'Pool collateralization'
-export const UI_STRING_PREPARE_REP = 'Prepare REP'
-export const UI_STRING_PRICE_ETH_PER_REP = 'Price (ETH / REP)'
-export const UI_STRING_PRICE_VALID_UNTIL = 'Price Valid Until'
-export const UI_STRING_QUESTION = 'Question'
-export const UI_STRING_QUESTION_ID = 'Question ID'
-export const UI_STRING_QUEUE_LIQUIDATION = 'Queue Liquidation'
-export const UI_STRING_REDEEM_COMPLETE_SETS = 'Redeem Complete Sets'
-export const UI_STRING_REDEEM_RESOLVED_SHARES = 'Redeem Resolved Shares'
-export const UI_STRING_REFRESHING = 'Refreshing...'
-export const UI_STRING_REMOVE_CORRUPTED_SAVES = 'Remove corrupted saves'
-export const UI_STRING_REP = 'REP'
-export const UI_STRING_REP_COLLATERAL = 'REP Collateral'
-export const UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED = 'REP migration is unavailable because this universe has not forked.'
-export const UI_STRING_REPORTING_WORKFLOW = 'Reporting Workflow'
-export const UI_STRING_REPORT_OUTCOME = 'Report Outcome'
-export const UI_STRING_REP_PER_ETH = 'REP / ETH'
-export const UI_STRING_REP_PURCHASED = 'REP Purchased'
-export const UI_STRING_REPUTATION_TOKEN = 'Reputation Token'
-export const UI_STRING_REVIEW_LIQUIDATION = 'Review Liquidation'
-export const UI_STRING_SECURITY_BOND_ALLOWANCE = 'Security Bond Allowance'
-export const UI_STRING_SECURITY_MULTIPLIER = 'Security Multiplier'
-export const UI_STRING_SECURITY_POOL_ADDRESS = 'Security Pool Address'
-export const UI_STRING_SECURITY_POOLS = 'Security Pools'
-export const UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY = 'Select a child universe to deploy.'
-export const UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING = 'Select an outcome side above to enable reporting.'
-export const UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE = 'Select at least one deposit to settle or use Settle all for this side.'
-export const UI_STRING_SELECTED = 'Selected'
-export const UI_STRING_SELECTED_CHILD_UNIVERSE = 'Selected Child Universe'
-export const UI_STRING_SELECTED_VAULT_ADDRESS = 'Selected Vault Address'
-export const UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK = 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.'
-export const UI_STRING_SET_BOND_ALLOWANCE = 'Set Bond Allowance'
-export const UI_STRING_SETTLED = 'Settled'
-export const UI_STRING_SETTLE_ESCALATION_DEPOSITS = 'Settle Escalation Deposits'
-export const UI_STRING_SETTLE_FINALIZED_REFUNDS = 'Settle Finalized Refunds'
-export const UI_STRING_SETTLEMENT = 'Settlement'
-export const UI_STRING_SETTLE_REPORT = 'Settle Report'
-export const UI_STRING_SHOWING_PREFIX = 'Showing '
-export const UI_STRING_SPLIT_REP = 'Split REP'
-export const UI_STRING_STAGED_OPERATION = 'Staged Operation'
-export const UI_STRING_STARTING_TRUTH_AUCTION = 'Starting truth auction...'
-export const UI_STRING_STARTS = 'Starts'
-export const UI_STRING_START_TRUTH_AUCTION = 'Start Truth Auction'
-export const UI_STRING_STATUS = 'Status'
-export const UI_STRING_SUBMIT_BID = 'Submit Bid'
-export const UI_STRING_SUBMIT_INITIAL_REPORT = 'Submit Initial Report'
-export const UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING = 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.'
-export const UI_STRING_TARGET_VAULT = 'Target Vault'
-export const UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES = 'This amount is already fully split across the selected universes.'
-export const UI_STRING_THIS_VAULT_DOES_NOT_EXIST = 'This vault does not exist.'
-export const UI_STRING_TO_CONFIRM = ' to confirm '
-export const UI_STRING_TRIGGER_ZOLTAR_FORK = 'Trigger Zoltar Fork'
-export const UI_STRING_TRUTH_AUCTION = 'Truth Auction'
-export const UI_STRING_UNAVAILABLE = 'Unavailable'
-export const UI_STRING_UNFORKED = 'Unforked'
-export const UI_STRING_UNIVERSE = 'Universe'
-export const UI_STRING_UNIVERSE_IS_FORKED = 'Universe is forked'
-export const UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW = 'Unresolved escalation deposit details are unavailable for this pool right now.'
-export const UI_STRING_VAULTS = 'Vaults'
-export const UI_STRING_WALLET_CONNECTED = 'Wallet connected'
-export const UI_STRING_WETH = 'WETH'
-export const UI_STRING_WITHDRAW_REP = 'Withdraw REP'
-export const UI_STRING_WORTH_NOW_PREFIX = 'Worth now: '
-export const UI_STRING_YES = 'Yes'
-export const UI_STRING_ZERO_DECIMAL_PLACEHOLDER = '0.0'
-export const UI_STRING_ZOLTAR_IS_ALREADY_FORKED = 'Zoltar is already forked.'
-export const UI_STRING_APP_DOCUMENT_TITLE_SUFFIX = 'Zoltar + Augur Placeholder'
-export const UI_STRING_ANSWER_UNIT = 'Answer Unit'
-export const UI_STRING_ALREADY_FORKED = 'Already Forked'
-export const UI_STRING_CLAIM_FEES = 'Claim Fees'
-export const UI_STRING_CONNECT_WALLET = 'Connect wallet'
-export const UI_STRING_CONNECTING = 'Connecting...'
-export const UI_STRING_CREATE_POOL = 'Create Pool'
-export const UI_STRING_CLOSE = 'Close'
-export const UI_STRING_MANUAL_EXECUTION_TIMEOUT = 'Manual Execution Timeout'
-export const UI_STRING_DEPLOY = 'Deploy'
-export const UI_STRING_DISPUTE_AND_SWAP = 'Dispute & Swap'
-export const UI_STRING_DISPUTE_DELAY = 'Dispute Delay'
-export const UI_STRING_END_TIME = 'End Time'
-export const UI_STRING_ESCALATION_HALT = 'Escalation Halt'
-export const UI_STRING_FEE_PERCENTAGE = 'Fee Percentage'
-export const UI_STRING_GO_TO_GENESIS_UNIVERSE = 'Go to Genesis universe'
-export const UI_STRING_LIQUIDATE_VAULT = 'Liquidate Vault'
-export const UI_STRING_MARKETS = 'Markets'
-export const UI_STRING_MULTIPLIER_SUFFIX = 'x'
-export const UI_STRING_OUTCOMES = 'Outcomes'
-export const UI_STRING_NONE = 'None'
-export const UI_STRING_NOT_CHECKED = 'Not checked'
-export const UI_STRING_ORACLE_REPORTS = 'Oracle Reports'
-export const UI_STRING_PRICE = 'Price'
-export const UI_STRING_PROTOCOL_FEE = 'Protocol Fee'
-export const UI_STRING_QUESTION_TYPE = 'Question Type'
-export const UI_STRING_QUESTIONS_AND_MARKETS = 'Questions & Markets'
-export const UI_STRING_REFRESH = 'Refresh'
-export const UI_STRING_REFRESH_REP_PRICES = 'Refresh REP prices'
-export const UI_STRING_REFRESHING_WITHOUT_ELLIPSIS = 'Refreshing'
-export const UI_STRING_REPORT_DETAILS = 'Report Details'
-export const UI_STRING_REPORT_ID = 'Report ID'
-export const UI_STRING_REP_PER_ETH_COMPACT = 'REP/ETH'
-export const UI_STRING_RETURN_TO_BROWSE = 'Return to Browse'
-export const UI_STRING_SCALAR = 'Scalar'
-export const UI_STRING_SETTLEMENT_TIME = 'Settlement Time'
-export const UI_STRING_SETTLER_REWARD = 'Settler Reward'
-export const UI_STRING_SET_SECURITY_BOND_ALLOWANCE = 'Set Security Bond Allowance'
-export const UI_STRING_TOKEN_PAIR = 'Token Pair'
-export const UI_STRING_VIEW_IN_STAGED_OPERATIONS = 'View In Staged Operations'
-export const UI_STRING_WALLET_REP = 'Wallet REP'
-export const UI_STRING_WRONG_NETWORK = 'Wrong network'
-export const UI_STRING_EXECUTED = 'Executed'
-export const UI_STRING_STAGED_OPERATION_RETRY = 'Submit a new staged operation if you want to try again.'
-export const UI_STRING_TRANSACTION_STATE_UNAVAILABLE = 'The transaction succeeded, but the latest manager state is not available.'
-export const UI_STRING_WITHDRAW_ESCALATION_DEPOSITS = 'Withdraw escalation deposits before redeeming REP.'
-export const UI_STRING_MANUAL_QUEUED_OPERATION = 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
+const UI_STRING_ACTION = 'Action'
+const UI_STRING_ACTIVE = 'Active'
+const UI_STRING_AMOUNT = 'Amount'
+const UI_STRING_ANNUAL_FEE = 'Annual Fee'
+const UI_STRING_APPROVING_REP = 'Approving REP...'
+const UI_STRING_BID_AMOUNT_ETH = 'Bid Amount (ETH)'
+const UI_STRING_CANCEL = 'Cancel'
+const UI_STRING_CHECK_BACK_NO_LATER_THAN = 'Check back no later than '
+const UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE = 'Checking whether pool REP is already ready for the selected child universe.'
+const UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED = 'Child universe already deployed.'
+const UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED = 'Child universe not already deployed'
+const UI_STRING_CHILD_UNIVERSES = 'Child Universes'
+const UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED = 'Child universes are unavailable because this universe has not forked.'
+const UI_STRING_CLEARING_PRICE = 'Clearing Price'
+const UI_STRING_CLOSED = 'Closed'
+const UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE = 'Connect a wallet before deploying a child universe.'
+const UI_STRING_CONNECT_WALLET_TO_CONTINUE = 'Connect wallet to continue.'
+const UI_STRING_COPIED = 'Copied'
+const UI_STRING_CREATE_CHILD_UNIVERSE = 'Create child universe'
+const UI_STRING_CREATE_CHILD_UNIVERSE_TITLE = 'Create Child Universe'
+const UI_STRING_CREATE_QUESTION = 'Create Question'
+const UI_STRING_CREATE_SECURITY_POOL = 'Create Security Pool'
+const UI_STRING_DELETE_SAVE = 'Delete save'
+const UI_STRING_DEPLOYED = 'Deployed'
+const UI_STRING_DEPLOYING = 'Deploying...'
+const UI_STRING_DEPLOYING_UNIVERSE = 'Deploying universe...'
+const UI_STRING_DEPLOY_UNIVERSE = 'Deploy Universe'
+const UI_STRING_DEPOSIT_REP = 'Deposit REP'
+const UI_STRING_DISPUTE_REPORT = 'Dispute Report'
+const UI_STRING_ENDS = 'Ends'
+const UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO = 'Enter an amount greater than zero.'
+const UI_STRING_ENTRY_DEPTH_PREFIX = 'Entry depth: '
+const UI_STRING_ERROR = 'Error'
+const UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL = 'Escalation deposit details are unavailable for this pool right now.'
+const UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED = 'Escalation ended by timeout. The winner is computed from the current stakes.'
+const UI_STRING_ESCALATION_METRICS = 'Escalation Metrics'
+const UI_STRING_ESCROWED_REP = 'Escrowed REP'
+const UI_STRING_ETH = 'ETH'
+const UI_STRING_ETH_RAISED_PER_CAP = 'ETH Raised / Cap'
+const UI_STRING_FAILED = 'Failed'
+const UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES = 'Fork-carried escalation deposits can be settled after this child pool finalizes.'
+const UI_STRING_FORKED = 'Forked'
+const UI_STRING_FORK_THRESHOLD = 'Fork Threshold'
+const UI_STRING_FORK_TIME = 'Fork Time'
+const UI_STRING_FORK_TRIGGERED = 'Fork Triggered'
+const UI_STRING_FORK_ZOLTAR = 'Fork Zoltar'
+const UI_STRING_HEX_VALUE_PLACEHOLDER = '0x...'
+const UI_STRING_INITIALLY_DEPOSITED_PREFIX = 'Initially deposited: '
+const UI_STRING_INVALID = 'Invalid'
+const UI_STRING_JSON_STATE = 'JSON state'
+const UI_STRING_LIQUIDATION_EXECUTED = 'Liquidation Executed'
+const UI_STRING_LIQUIDATION_SUBMITTED = 'Liquidation Submitted'
+const UI_STRING_LOADED_DEPTH_ETH = 'Loaded Depth (ETH)'
+const UI_STRING_LOADING = 'Loading'
+const UI_STRING_LOADING_WITH_ELLIPSIS = 'Loading...'
+const UI_STRING_LOADING_CURRENT_CHAIN_TIME = 'Loading current chain time.'
+const UI_STRING_LOADING_ESCALATION_DEPOSITS = 'Loading escalation deposits.'
+const UI_STRING_LOADING_UNIVERSE_DETAILS = 'Loading universe details.'
+const UI_STRING_LOADING_VAULT = 'Loading vault...'
+const UI_STRING_MANAGE_POOL = 'Manage Pool'
+const UI_STRING_MAX = 'Max'
+const UI_STRING_MAX_PREFIX = 'Max '
+const UI_STRING_MIGRATE_REP = 'Migrate REP'
+const UI_STRING_MIGRATE_SHARES = 'Migrate Shares'
+const UI_STRING_MIGRATE_VAULT = 'Migrate Vault'
+const UI_STRING_MIGRATING_VAULT = 'Migrating vault...'
+const UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE = 'Migration timing is unavailable.'
+const UI_STRING_MINT_COMPLETE_SETS = 'Mint Complete Sets'
+const UI_STRING_MULTIPLIER = 'Multiplier'
+const UI_STRING_NO = 'No'
+const UI_STRING_NO_MATCHES = 'No matches'
+const UI_STRING_NO_PREFIX = 'No '
+const UI_STRING_NO_QUESTIONS = 'No questions'
+const UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS = 'No REP collateral or security bond allowance remains to migrate for the connected wallet.'
+const UI_STRING_NOT_FOUND = 'Not found'
+const UI_STRING_NOT_STARTED = 'Not started'
+const UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET = 'No unresolved parent escalation deposits remain for the connected wallet.'
+const UI_STRING_OF_PREFIX = 'of '
+const UI_STRING_OPEN = 'Open'
+const UI_STRING_OPENING = 'Opening...'
+const UI_STRING_OPEN_INTEREST_MINTED = 'Open Interest Minted'
+const UI_STRING_OPEN_ORACLE_PRICE = 'Open Oracle Price'
+const UI_STRING_OPEN_POOL = 'Open Pool'
+const UI_STRING_OPERATIONAL = 'Operational'
+const UI_STRING_OUTCOME = 'Outcome'
+const UI_STRING_OUTCOME_INDEX = 'Outcome Index'
+const UI_STRING_PAGE_NOT_FOUND = 'Page not found'
+const UI_STRING_PENDING = 'Pending'
+const UI_STRING_PERCENT = '%'
+const UI_STRING_PLURAL_SUFFIX = 's'
+const UI_STRING_POOL = 'Pool'
+const UI_STRING_POOL_ADDRESS = 'Pool Address'
+const UI_STRING_POOL_COLLATERALIZATION = 'Pool collateralization'
+const UI_STRING_PREPARE_REP = 'Prepare REP'
+const UI_STRING_PRICE_ETH_PER_REP = 'Price (ETH / REP)'
+const UI_STRING_PRICE_VALID_UNTIL = 'Price Valid Until'
+const UI_STRING_QUESTION = 'Question'
+const UI_STRING_QUESTION_ID = 'Question ID'
+const UI_STRING_QUEUE_LIQUIDATION = 'Queue Liquidation'
+const UI_STRING_REDEEM_COMPLETE_SETS = 'Redeem Complete Sets'
+const UI_STRING_REDEEM_RESOLVED_SHARES = 'Redeem Resolved Shares'
+const UI_STRING_REFRESHING = 'Refreshing...'
+const UI_STRING_REMOVE_CORRUPTED_SAVES = 'Remove corrupted saves'
+const UI_STRING_REP = 'REP'
+const UI_STRING_REP_COLLATERAL = 'REP Collateral'
+const UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED = 'REP migration is unavailable because this universe has not forked.'
+const UI_STRING_REPORTING_WORKFLOW = 'Reporting Workflow'
+const UI_STRING_REPORT_OUTCOME = 'Report Outcome'
+const UI_STRING_REP_PER_ETH = 'REP / ETH'
+const UI_STRING_REP_PURCHASED = 'REP Purchased'
+const UI_STRING_REPUTATION_TOKEN = 'Reputation Token'
+const UI_STRING_REVIEW_LIQUIDATION = 'Review Liquidation'
+const UI_STRING_SECURITY_BOND_ALLOWANCE = 'Security Bond Allowance'
+const UI_STRING_SECURITY_MULTIPLIER = 'Security Multiplier'
+const UI_STRING_SECURITY_POOL_ADDRESS = 'Security Pool Address'
+const UI_STRING_SECURITY_POOLS = 'Security Pools'
+const UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY = 'Select a child universe to deploy.'
+const UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING = 'Select an outcome side above to enable reporting.'
+const UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE = 'Select at least one deposit to settle or use Settle all for this side.'
+const UI_STRING_SELECTED = 'Selected'
+const UI_STRING_SELECTED_CHILD_UNIVERSE = 'Selected Child Universe'
+const UI_STRING_SELECTED_VAULT_ADDRESS = 'Selected Vault Address'
+const UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK = 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.'
+const UI_STRING_SET_BOND_ALLOWANCE = 'Set Bond Allowance'
+const UI_STRING_SETTLED = 'Settled'
+const UI_STRING_SETTLE_ESCALATION_DEPOSITS = 'Settle Escalation Deposits'
+const UI_STRING_SETTLE_FINALIZED_REFUNDS = 'Settle Finalized Refunds'
+const UI_STRING_SETTLEMENT = 'Settlement'
+const UI_STRING_SETTLE_REPORT = 'Settle Report'
+const UI_STRING_SHOWING_PREFIX = 'Showing '
+const UI_STRING_SPLIT_REP = 'Split REP'
+const UI_STRING_STAGED_OPERATION = 'Staged Operation'
+const UI_STRING_STARTING_TRUTH_AUCTION = 'Starting truth auction...'
+const UI_STRING_STARTS = 'Starts'
+const UI_STRING_START_TRUTH_AUCTION = 'Start Truth Auction'
+const UI_STRING_STATUS = 'Status'
+const UI_STRING_SUBMIT_BID = 'Submit Bid'
+const UI_STRING_SUBMIT_INITIAL_REPORT = 'Submit Initial Report'
+const UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING = 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.'
+const UI_STRING_TARGET_VAULT = 'Target Vault'
+const UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES = 'This amount is already fully split across the selected universes.'
+const UI_STRING_THIS_VAULT_DOES_NOT_EXIST = 'This vault does not exist.'
+const UI_STRING_TO_CONFIRM = ' to confirm '
+const UI_STRING_TRIGGER_ZOLTAR_FORK = 'Trigger Zoltar Fork'
+const UI_STRING_TRUTH_AUCTION = 'Truth Auction'
+const UI_STRING_UNAVAILABLE = 'Unavailable'
+const UI_STRING_UNFORKED = 'Unforked'
+const UI_STRING_UNIVERSE = 'Universe'
+const UI_STRING_UNIVERSE_IS_FORKED = 'Universe is forked'
+const UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW = 'Unresolved escalation deposit details are unavailable for this pool right now.'
+const UI_STRING_VAULTS = 'Vaults'
+const UI_STRING_WALLET_CONNECTED = 'Wallet connected'
+const UI_STRING_WETH = 'WETH'
+const UI_STRING_WITHDRAW_REP = 'Withdraw REP'
+const UI_STRING_WORTH_NOW_PREFIX = 'Worth now: '
+const UI_STRING_YES = 'Yes'
+const UI_STRING_ZERO_DECIMAL_PLACEHOLDER = '0.0'
+const UI_STRING_ZOLTAR_IS_ALREADY_FORKED = 'Zoltar is already forked.'
+const UI_STRING_APP_DOCUMENT_TITLE_SUFFIX = 'Zoltar + Augur Placeholder'
+const UI_STRING_ANSWER_UNIT = 'Answer Unit'
+const UI_STRING_ALREADY_FORKED = 'Already Forked'
+const UI_STRING_CLAIM_FEES = 'Claim Fees'
+const UI_STRING_CONNECT_WALLET = 'Connect wallet'
+const UI_STRING_CONNECTING = 'Connecting...'
+const UI_STRING_CREATE_POOL = 'Create Pool'
+const UI_STRING_CLOSE = 'Close'
+const UI_STRING_MANUAL_EXECUTION_TIMEOUT = 'Manual Execution Timeout'
+const UI_STRING_DEPLOY = 'Deploy'
+const UI_STRING_DISPUTE_AND_SWAP = 'Dispute & Swap'
+const UI_STRING_DISPUTE_DELAY = 'Dispute Delay'
+const UI_STRING_END_TIME = 'End Time'
+const UI_STRING_ESCALATION_HALT = 'Escalation Halt'
+const UI_STRING_FEE_PERCENTAGE = 'Fee Percentage'
+const UI_STRING_GO_TO_GENESIS_UNIVERSE = 'Go to Genesis universe'
+const UI_STRING_LIQUIDATE_VAULT = 'Liquidate Vault'
+const UI_STRING_MARKETS = 'Markets'
+const UI_STRING_MULTIPLIER_SUFFIX = 'x'
+const UI_STRING_OUTCOMES = 'Outcomes'
+const UI_STRING_NONE = 'None'
+const UI_STRING_NOT_CHECKED = 'Not checked'
+const UI_STRING_ORACLE_REPORTS = 'Oracle Reports'
+const UI_STRING_PRICE = 'Price'
+const UI_STRING_PROTOCOL_FEE = 'Protocol Fee'
+const UI_STRING_QUESTION_TYPE = 'Question Type'
+const UI_STRING_QUESTIONS_AND_MARKETS = 'Questions & Markets'
+const UI_STRING_REFRESH = 'Refresh'
+const UI_STRING_REFRESH_REP_PRICES = 'Refresh REP prices'
+const UI_STRING_REFRESHING_WITHOUT_ELLIPSIS = 'Refreshing'
+const UI_STRING_REPORT_DETAILS = 'Report Details'
+const UI_STRING_REPORT_ID = 'Report ID'
+const UI_STRING_REP_PER_ETH_COMPACT = 'REP/ETH'
+const UI_STRING_RETURN_TO_BROWSE = 'Return to Browse'
+const UI_STRING_SCALAR = 'Scalar'
+const UI_STRING_SETTLEMENT_TIME = 'Settlement Time'
+const UI_STRING_SETTLER_REWARD = 'Settler Reward'
+const UI_STRING_SET_SECURITY_BOND_ALLOWANCE = 'Set Security Bond Allowance'
+const UI_STRING_TOKEN_PAIR = 'Token Pair'
+const UI_STRING_VIEW_IN_STAGED_OPERATIONS = 'View In Staged Operations'
+const UI_STRING_WALLET_REP = 'Wallet REP'
+const UI_STRING_WRONG_NETWORK = 'Wrong network'
+const UI_STRING_EXECUTED = 'Executed'
+const UI_STRING_STAGED_OPERATION_RETRY = 'Submit a new staged operation if you want to try again.'
+const UI_STRING_TRANSACTION_STATE_UNAVAILABLE = 'The transaction succeeded, but the latest manager state is not available.'
+const UI_STRING_WITHDRAW_ESCALATION_DEPOSITS = 'Withdraw escalation deposits before redeeming REP.'
+const UI_STRING_MANUAL_QUEUED_OPERATION = 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
 
-export const UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL = (value0: UiStringTemplateValue) => `Add ${value0} REP to your migration balance from this universe, then split it across the selected universes.`
-export const UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE = (value0: UiStringTemplateValue) => `Checking whether pool REP has already been migrated for the ${value0} child universe.`
-export const UI_TEMPLATE_COMPLETED_SUCCESSFULLY = (value0: UiStringTemplateValue) => `${value0} completed successfully.`
-export const UI_TEMPLATE_ETH_PER_REP_VALUE = (value0: UiStringTemplateValue) => `${value0} ETH / REP`
-export const UI_TEMPLATE_LABEL_VALUE = (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0}: ${value1}`
-export const UI_TEMPLATE_PAIR_SLASH = (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0} / ${value1}`
-export const UI_TEMPLATE_REPORT_NUMBER_LABEL = (value0: UiStringTemplateValue) => `Report #${value0}`
-export const UI_TEMPLATE_TRANSACTION_SUBMITTED = (value0: UiStringTemplateValue) => `${value0} transaction submitted.`
-export const UI_TEMPLATE_WRAPPED_VALUE = (value0: UiStringTemplateValue) => `(${value0})`
+const UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL = (value0: UiStringTemplateValue) => `Add ${value0} REP to your migration balance from this universe, then split it across the selected universes.`
+const UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE = (value0: UiStringTemplateValue) => `Checking whether pool REP has already been migrated for the ${value0} child universe.`
+const UI_TEMPLATE_COMPLETED_SUCCESSFULLY = (value0: UiStringTemplateValue) => `${value0} completed successfully.`
+const UI_TEMPLATE_ETH_PER_REP_VALUE = (value0: UiStringTemplateValue) => `${value0} ETH / REP`
+const UI_TEMPLATE_LABEL_VALUE = (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0}: ${value1}`
+const UI_TEMPLATE_PAIR_SLASH = (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0} / ${value1}`
+const UI_TEMPLATE_REPORT_NUMBER_LABEL = (value0: UiStringTemplateValue) => `Report #${value0}`
+const UI_TEMPLATE_TRANSACTION_SUBMITTED = (value0: UiStringTemplateValue) => `${value0} transaction submitted.`
+const UI_TEMPLATE_WRAPPED_VALUE = (value0: UiStringTemplateValue) => `(${value0})`
 
-const SHARED_UI_STRINGS = {
-	action: UI_STRING_ACTION,
-	active: UI_STRING_ACTIVE,
-	amount: UI_STRING_AMOUNT,
-	annualFee: UI_STRING_ANNUAL_FEE,
-	approvingRep: UI_STRING_APPROVING_REP,
-	bidAmountEth: UI_STRING_BID_AMOUNT_ETH,
-	cancel: UI_STRING_CANCEL,
-	checkBackNoLaterThan: UI_STRING_CHECK_BACK_NO_LATER_THAN,
-	checkingWhetherPoolRepIsAlreadyReadyFor: UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE,
-	childUniverseAlreadyDeployed: UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED,
-	childUniverseNotAlreadyDeployed: UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED,
-	childUniverses: UI_STRING_CHILD_UNIVERSES,
-	childUniversesAreUnavailableBecauseThisUniverseHas: UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
-	clearingPrice: UI_STRING_CLEARING_PRICE,
-	closed: UI_STRING_CLOSED,
-	connectAWalletBeforeDeployingAChildUniverse: UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE,
-	connectWalletToContinue: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
-	copied: UI_STRING_COPIED,
-	createChildUniverse: UI_STRING_CREATE_CHILD_UNIVERSE,
-	createChildUniverseTitle: UI_STRING_CREATE_CHILD_UNIVERSE_TITLE,
-	createQuestion: UI_STRING_CREATE_QUESTION,
-	createSecurityPool: UI_STRING_CREATE_SECURITY_POOL,
-	deleteSave: UI_STRING_DELETE_SAVE,
-	deployed: UI_STRING_DEPLOYED,
-	deploying: UI_STRING_DEPLOYING,
-	deployingUniverse: UI_STRING_DEPLOYING_UNIVERSE,
-	deployUniverse: UI_STRING_DEPLOY_UNIVERSE,
-	depositRep: UI_STRING_DEPOSIT_REP,
-	disputeReport: UI_STRING_DISPUTE_REPORT,
-	ends: UI_STRING_ENDS,
-	enterAnAmountGreaterThanZero: UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO,
-	entryDepthPrefix: UI_STRING_ENTRY_DEPTH_PREFIX,
-	error: UI_STRING_ERROR,
-	escalationDepositDetailsAreUnavailableForThisPool: UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL,
-	escalationEndedByTimeoutTheWinnerIsComputed: UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED,
-	escalationMetrics: UI_STRING_ESCALATION_METRICS,
-	escrowedRep: UI_STRING_ESCROWED_REP,
-	eth: UI_STRING_ETH,
-	ethRaisedPerCap: UI_STRING_ETH_RAISED_PER_CAP,
-	failed: UI_STRING_FAILED,
-	forkCarriedEscalationDepositsCanBeSettledAfter: UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES,
-	forked: UI_STRING_FORKED,
-	forkThreshold: UI_STRING_FORK_THRESHOLD,
-	forkTime: UI_STRING_FORK_TIME,
-	forkTriggered: UI_STRING_FORK_TRIGGERED,
-	forkZoltar: UI_STRING_FORK_ZOLTAR,
-	hexValuePlaceholder: UI_STRING_HEX_VALUE_PLACEHOLDER,
-	initiallyDepositedPrefix: UI_STRING_INITIALLY_DEPOSITED_PREFIX,
-	invalid: UI_STRING_INVALID,
-	jsonState: UI_STRING_JSON_STATE,
-	liquidationExecuted: UI_STRING_LIQUIDATION_EXECUTED,
-	liquidationSubmitted: UI_STRING_LIQUIDATION_SUBMITTED,
-	loadedDepthEth: UI_STRING_LOADED_DEPTH_ETH,
-	loading: UI_STRING_LOADING,
-	loadingWithEllipsis: UI_STRING_LOADING_WITH_ELLIPSIS,
-	loadingCurrentChainTime: UI_STRING_LOADING_CURRENT_CHAIN_TIME,
-	loadingEscalationDeposits: UI_STRING_LOADING_ESCALATION_DEPOSITS,
-	loadingUniverseDetails: UI_STRING_LOADING_UNIVERSE_DETAILS,
-	loadingVault: UI_STRING_LOADING_VAULT,
-	managePool: UI_STRING_MANAGE_POOL,
-	max: UI_STRING_MAX,
-	maxPrefix: UI_STRING_MAX_PREFIX,
-	migrateRep: UI_STRING_MIGRATE_REP,
-	migrateShares: UI_STRING_MIGRATE_SHARES,
-	migrateVault: UI_STRING_MIGRATE_VAULT,
-	migratingVault: UI_STRING_MIGRATING_VAULT,
-	migrationTimingIsUnavailable: UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE,
-	mintCompleteSets: UI_STRING_MINT_COMPLETE_SETS,
-	multiplier: UI_STRING_MULTIPLIER,
-	no: UI_STRING_NO,
-	noMatches: UI_STRING_NO_MATCHES,
-	noPrefix: UI_STRING_NO_PREFIX,
-	noQuestions: UI_STRING_NO_QUESTIONS,
-	noRepCollateralOrSecurityBondAllowanceRemains: UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS,
-	notFound: UI_STRING_NOT_FOUND,
-	notStarted: UI_STRING_NOT_STARTED,
-	noUnresolvedParentEscalationDepositsRemainForThe: UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET,
-	ofPrefix: UI_STRING_OF_PREFIX,
-	open: UI_STRING_OPEN,
-	opening: UI_STRING_OPENING,
-	openInterestMinted: UI_STRING_OPEN_INTEREST_MINTED,
-	openOraclePrice: UI_STRING_OPEN_ORACLE_PRICE,
-	openPool: UI_STRING_OPEN_POOL,
-	operational: UI_STRING_OPERATIONAL,
-	outcome: UI_STRING_OUTCOME,
-	outcomeIndex: UI_STRING_OUTCOME_INDEX,
-	pageNotFound: UI_STRING_PAGE_NOT_FOUND,
-	pending: UI_STRING_PENDING,
-	percent: UI_STRING_PERCENT,
-	pluralSuffix: UI_STRING_PLURAL_SUFFIX,
-	pool: UI_STRING_POOL,
-	poolAddress: UI_STRING_POOL_ADDRESS,
-	poolCollateralization: UI_STRING_POOL_COLLATERALIZATION,
-	prepareRep: UI_STRING_PREPARE_REP,
-	priceEthPerRep: UI_STRING_PRICE_ETH_PER_REP,
-	priceValidUntil: UI_STRING_PRICE_VALID_UNTIL,
-	question: UI_STRING_QUESTION,
-	questionId: UI_STRING_QUESTION_ID,
-	queueLiquidation: UI_STRING_QUEUE_LIQUIDATION,
-	redeemCompleteSets: UI_STRING_REDEEM_COMPLETE_SETS,
-	redeemResolvedShares: UI_STRING_REDEEM_RESOLVED_SHARES,
-	refreshing: UI_STRING_REFRESHING,
-	removeCorruptedSaves: UI_STRING_REMOVE_CORRUPTED_SAVES,
-	rep: UI_STRING_REP,
-	repCollateral: UI_STRING_REP_COLLATERAL,
-	repMigrationIsUnavailableBecauseThisUniverseHas: UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
-	reportingWorkflow: UI_STRING_REPORTING_WORKFLOW,
-	reportOutcome: UI_STRING_REPORT_OUTCOME,
-	repPerEth: UI_STRING_REP_PER_ETH,
-	repPurchased: UI_STRING_REP_PURCHASED,
-	reputationToken: UI_STRING_REPUTATION_TOKEN,
-	reviewLiquidation: UI_STRING_REVIEW_LIQUIDATION,
-	securityBondAllowance: UI_STRING_SECURITY_BOND_ALLOWANCE,
-	securityMultiplier: UI_STRING_SECURITY_MULTIPLIER,
-	securityPoolAddress: UI_STRING_SECURITY_POOL_ADDRESS,
-	securityPools: UI_STRING_SECURITY_POOLS,
-	selectAChildUniverseToDeploy: UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY,
-	selectAnOutcomeSideAboveToEnableReporting: UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING,
-	selectAtLeastOneDepositToSettleOr: UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE,
-	selected: UI_STRING_SELECTED,
-	selectedChildUniverse: UI_STRING_SELECTED_CHILD_UNIVERSE,
-	selectedVaultAddress: UI_STRING_SELECTED_VAULT_ADDRESS,
-	selectTheAnswerYouBelieveShouldFinalizeLock: UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK,
-	setBondAllowance: UI_STRING_SET_BOND_ALLOWANCE,
-	settled: UI_STRING_SETTLED,
-	settleEscalationDeposits: UI_STRING_SETTLE_ESCALATION_DEPOSITS,
-	settleFinalizedRefunds: UI_STRING_SETTLE_FINALIZED_REFUNDS,
-	settlement: UI_STRING_SETTLEMENT,
-	settleReport: UI_STRING_SETTLE_REPORT,
-	showingPrefix: UI_STRING_SHOWING_PREFIX,
-	splitRep: UI_STRING_SPLIT_REP,
-	stagedOperation: UI_STRING_STAGED_OPERATION,
-	startingTruthAuction: UI_STRING_STARTING_TRUTH_AUCTION,
-	starts: UI_STRING_STARTS,
-	startTruthAuction: UI_STRING_START_TRUTH_AUCTION,
-	status: UI_STRING_STATUS,
-	submitBid: UI_STRING_SUBMIT_BID,
-	submitInitialReport: UI_STRING_SUBMIT_INITIAL_REPORT,
-	submittingABidLocksEthUntilSettlementLosing: UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING,
-	targetVault: UI_STRING_TARGET_VAULT,
-	thisAmountIsAlreadyFullySplitAcrossThe: UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES,
-	thisVaultDoesNotExist: UI_STRING_THIS_VAULT_DOES_NOT_EXIST,
-	toConfirm: UI_STRING_TO_CONFIRM,
-	triggerZoltarFork: UI_STRING_TRIGGER_ZOLTAR_FORK,
-	truthAuction: UI_STRING_TRUTH_AUCTION,
-	unavailable: UI_STRING_UNAVAILABLE,
-	unforked: UI_STRING_UNFORKED,
-	universe: UI_STRING_UNIVERSE,
-	universeIsForked: UI_STRING_UNIVERSE_IS_FORKED,
-	unresolvedEscalationDepositDetailsAreUnavailableForThis: UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
-	vaults: UI_STRING_VAULTS,
-	walletConnected: UI_STRING_WALLET_CONNECTED,
-	weth: UI_STRING_WETH,
-	withdrawRep: UI_STRING_WITHDRAW_REP,
-	worthNowPrefix: UI_STRING_WORTH_NOW_PREFIX,
-	yes: UI_STRING_YES,
-	zeroDecimalPlaceholder: UI_STRING_ZERO_DECIMAL_PLACEHOLDER,
-	zoltarIsAlreadyForked: UI_STRING_ZOLTAR_IS_ALREADY_FORKED,
-} as const
-const SHARED_UI_TEMPLATES = {
-	addRepToMigrationBalanceDetail: UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL,
-	checkingPoolRepMigratedToChildUniverse: UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE,
-	completedSuccessfully: UI_TEMPLATE_COMPLETED_SUCCESSFULLY,
-	ethPerRepValue: UI_TEMPLATE_ETH_PER_REP_VALUE,
-	labelValue: UI_TEMPLATE_LABEL_VALUE,
-	pairSlash: UI_TEMPLATE_PAIR_SLASH,
-	reportNumberLabel: UI_TEMPLATE_REPORT_NUMBER_LABEL,
-	transactionSubmitted: UI_TEMPLATE_TRANSACTION_SUBMITTED,
-	wrappedValue: UI_TEMPLATE_WRAPPED_VALUE,
-} as const
-const SECURITY_VAULT_ACTION_IDS = {
-	claimFees: 'claim-fees',
-	depositRep: 'deposit-rep',
-	repExitRedeem: 'rep-exit-redeem',
-	repExitWithdraw: 'rep-exit-withdraw',
-} as const
 export const CURATED_TSX_STRINGS = {
 	repPriceSource: {
 		mockTooltip: 'Uses the simulation REP/ETH mock price.',
 		v4Tooltip: 'Uses the live Uniswap V4 REP/ETH quote.',
 		v3Tooltip: 'Uses the live Uniswap V3 REP/ETH quote.',
 		unavailableTooltip: 'REP/ETH price source is unavailable until a quote loads.',
-		wrappedBadgeLabel: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.wrappedValue(value0),
+		wrappedBadgeLabel: (value0: UiStringTemplateValue) => UI_TEMPLATE_WRAPPED_VALUE(value0),
 	},
 	forkAuctionSection: {
 		forkWorkflowStageLabels: {
-			'fork-triggered': SHARED_UI_STRINGS.forkTriggered,
+			'fork-triggered': UI_STRING_FORK_TRIGGERED,
 			migration: 'Migration',
-			auction: SHARED_UI_STRINGS.truthAuction,
-			settlement: SHARED_UI_STRINGS.settlement,
+			auction: UI_STRING_TRUTH_AUCTION,
+			settlement: UI_STRING_SETTLEMENT,
 		},
 		forkUnavailablePlaceholder: '-',
 		missingChildSecurityPoolDetail: (value0: UiStringTemplateValue) => `Security Pool for ${value0} universe does not exist.`,
-		notStartedLabel: SHARED_UI_STRINGS.notStarted,
+		notStartedLabel: UI_STRING_NOT_STARTED,
 		systemIsForkingLabel: 'System is forking',
 	},
 	escalationDepositSelectionList: {
@@ -420,7 +243,7 @@ export const CURATED_TSX_STRINGS = {
 		paginationSummary: (value0: UiStringTemplateValue, value1: UiStringTemplateValue, value2: UiStringTemplateValue, value3: UiStringTemplateValue) => `Showing parent deposits ${value0}-${value1} of ${value2}. ${value3}`,
 	},
 	securityPoolsOverviewSection: {
-		vaultCountLabel: (value0: UiStringTemplateValue) => `${value0} vault${Number(value0) === 1 ? '' : SHARED_UI_STRINGS.pluralSuffix}`,
+		vaultCountLabel: (value0: UiStringTemplateValue) => `${value0} vault${Number(value0) === 1 ? '' : UI_STRING_PLURAL_SUFFIX}`,
 	},
 	simulationBanner: {
 		updateSavedStateError: 'Failed to update the saved simulation state',
@@ -442,14 +265,14 @@ export const CURATED_TSX_STRINGS = {
 // opaque sink entries.
 export const TSX_STRINGS = {
 	componentsActionLauncherCard: {
-		copy001: SHARED_UI_STRINGS.opening,
+		copy001: UI_STRING_OPENING,
 	},
 	componentsAddressInfo: {
 		copy001: 'Unknown',
 	},
 	componentsAddressValue: {
 		copy001: (value0: UiStringTemplateValue) => `Copy address ${value0}`,
-		copy002: SHARED_UI_STRINGS.copied,
+		copy002: UI_STRING_COPIED,
 	},
 	componentsAppHeaderShell: {
 		copy001: 'Skip simulation controls',
@@ -458,29 +281,29 @@ export const TSX_STRINGS = {
 		copy001: 'Unlimited approval',
 	},
 	componentsChildUniverseDetails: {
-		copy001: SHARED_UI_STRINGS.outcome,
-		copy002: SHARED_UI_STRINGS.outcomeIndex,
-		copy003: SHARED_UI_STRINGS.reputationToken,
-		copy004: SHARED_UI_STRINGS.forkTime,
+		copy001: UI_STRING_OUTCOME,
+		copy002: UI_STRING_OUTCOME_INDEX,
+		copy003: UI_STRING_REPUTATION_TOKEN,
+		copy004: UI_STRING_FORK_TIME,
 	},
 	componentsCollateralizationCircle: {
 		copy001: 'Collateralization',
 		copy002: (value0: UiStringTemplateValue) => `${value0} unavailable`,
-		copy003: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => SHARED_UI_TEMPLATES.labelValue(value0, value1),
+		copy003: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => UI_TEMPLATE_LABEL_VALUE(value0, value1),
 	},
 	componentsCollateralizationMetricField: {
 		copy001: 'Collateralization ',
 		copy002: 'Awaiting REP/ETH price',
 		copy003: 'No active allowance',
-		copy004: SHARED_UI_STRINGS.percent,
+		copy004: UI_STRING_PERCENT,
 	},
 	componentsCurrencyValue: {
-		copy001: SHARED_UI_STRINGS.loadingWithEllipsis,
+		copy001: UI_STRING_LOADING_WITH_ELLIPSIS,
 		copy002: (value0: UiStringTemplateValue) => `Copy exact value ${value0}`,
-		copy003: SHARED_UI_STRINGS.copied,
+		copy003: UI_STRING_COPIED,
 	},
 	componentsEnumDropdown: {
-		copy001: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => SHARED_UI_TEMPLATES.labelValue(value0, value1),
+		copy001: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => UI_TEMPLATE_LABEL_VALUE(value0, value1),
 		copy002: 'Dropdown options',
 	},
 	componentsErrorNotice: {
@@ -492,15 +315,15 @@ export const TSX_STRINGS = {
 		copy003: 'Previous Deposits',
 	},
 	componentsEscalationSide: {
-		copy001: SHARED_UI_STRINGS.selected,
+		copy001: UI_STRING_SELECTED,
 		copy002: 'Leading',
 		copy003: 'Total stake',
-		copy004: SHARED_UI_STRINGS.rep,
+		copy004: UI_STRING_REP,
 		copy005: 'Your stake',
-		copy006: SHARED_UI_STRINGS.rep,
+		copy006: UI_STRING_REP,
 	},
 	componentsForkAuctionSection: {
-		copy001: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.ethPerRepValue(value0),
+		copy001: (value0: UiStringTemplateValue) => UI_TEMPLATE_ETH_PER_REP_VALUE(value0),
 		copy002: 'ETH / REP',
 		copy003: 'Winning bids buy more than REP.',
 		copy004: 'When you later claim a filled bid, the vault also receives a pro-rata share of the ',
@@ -521,22 +344,22 @@ export const TSX_STRINGS = {
 		copy019: 'Selected Winning Bids',
 		copy020: 'Selected Refund Rows',
 		copy021: 'Estimated REP Claimed',
-		copy022: SHARED_UI_STRINGS.rep,
+		copy022: UI_STRING_REP,
 		copy023: (value0: UiStringTemplateValue) => `Estimated ${value0}`,
-		copy024: SHARED_UI_STRINGS.eth,
+		copy024: UI_STRING_ETH,
 		copy025: 'Estimated ETH Refunded',
-		copy026: SHARED_UI_STRINGS.eth,
+		copy026: UI_STRING_ETH,
 		copy027: 'Own escalation fork',
 		copy028: 'Parent/Zoltar fork',
 		copy029: 'Child Security Pools',
 		copy030: 'Pending outcome',
-		copy031: SHARED_UI_STRINGS.operational,
+		copy031: UI_STRING_OPERATIONAL,
 		copy032: 'Open security pool',
-		copy033: SHARED_UI_STRINGS.migrationTimingIsUnavailable,
-		copy034: SHARED_UI_STRINGS.loadingCurrentChainTime,
+		copy033: UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE,
+		copy034: UI_STRING_LOADING_CURRENT_CHAIN_TIME,
 		copy035: 'Migration is still active. Truth auction can start once migration ends.',
-		copy036: SHARED_UI_STRINGS.migrationTimingIsUnavailable,
-		copy037: SHARED_UI_STRINGS.loadingCurrentChainTime,
+		copy036: UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE,
+		copy037: UI_STRING_LOADING_CURRENT_CHAIN_TIME,
 		copy038: 'Migration window has closed for this parent pool.',
 		copy039: 'No parent collateral remains to auction, so this step immediately bypasses bidding and finalizes the child pool.',
 		copy040: 'No REP was present at fork, so no truth auction is needed for this child universe.',
@@ -544,47 +367,47 @@ export const TSX_STRINGS = {
 		copy042: 'Load the truth auction before finalizing.',
 		copy043: 'Truth auction is already finalized.',
 		copy044: 'Truth auction end time is unavailable.',
-		copy045: SHARED_UI_STRINGS.loadingCurrentChainTime,
+		copy045: UI_STRING_LOADING_CURRENT_CHAIN_TIME,
 		copy046: 'Truth auction is still ongoing.',
-		copy047: SHARED_UI_STRINGS.pending,
+		copy047: UI_STRING_PENDING,
 		copy048: 'Inactive',
 		copy049: 'Clearing',
-		copy050: SHARED_UI_STRINGS.open,
+		copy050: UI_STRING_OPEN,
 		copy051: 'Shortfall',
-		copy052: SHARED_UI_STRINGS.settled,
+		copy052: UI_STRING_SETTLED,
 		copy053: 'Unfilled',
 		copy054: 'Not Started',
-		copy055: SHARED_UI_STRINGS.closed,
-		copy056: SHARED_UI_STRINGS.closed,
-		copy057: SHARED_UI_STRINGS.open,
+		copy055: UI_STRING_CLOSED,
+		copy056: UI_STRING_CLOSED,
+		copy057: UI_STRING_OPEN,
 		copy058: 'Child pool',
 		copy059: 'Connect wallet to inspect your parent-pool balances.',
 		copy060: 'Parent-pool vault balances are unavailable for the connected wallet. You can still use the migration actions below if this wallet has parent-pool state to move.',
 		copy061: 'Migrated balances for this outcome:',
 		copy062: 'Selected Outcome REP Collateral',
-		copy063: SHARED_UI_STRINGS.rep,
+		copy063: UI_STRING_REP,
 		copy064: 'Selected Outcome Security Bond Allowance',
-		copy065: SHARED_UI_STRINGS.eth,
-		copy066: SHARED_UI_STRINGS.repCollateral,
-		copy067: SHARED_UI_STRINGS.rep,
-		copy068: SHARED_UI_STRINGS.securityBondAllowance,
-		copy069: SHARED_UI_STRINGS.eth,
-		copy070: SHARED_UI_STRINGS.escrowedRep,
-		copy071: SHARED_UI_STRINGS.rep,
-		copy072: SHARED_UI_STRINGS.outcome,
-		copy073: SHARED_UI_STRINGS.noRepCollateralOrSecurityBondAllowanceRemains,
+		copy065: UI_STRING_ETH,
+		copy066: UI_STRING_REP_COLLATERAL,
+		copy067: UI_STRING_REP,
+		copy068: UI_STRING_SECURITY_BOND_ALLOWANCE,
+		copy069: UI_STRING_ETH,
+		copy070: UI_STRING_ESCROWED_REP,
+		copy071: UI_STRING_REP,
+		copy072: UI_STRING_OUTCOME,
+		copy073: UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS,
 		copy074: 'No escrowed REP remains to migrate for the connected wallet.',
-		copy075: SHARED_UI_STRINGS.notStarted,
+		copy075: UI_STRING_NOT_STARTED,
 		copy076: 'Starting...',
 		copy077: (value0: UiStringTemplateValue) => `Starts in ${value0}`,
-		copy078: SHARED_UI_STRINGS.notStarted,
-		copy079: SHARED_UI_STRINGS.notStarted,
+		copy078: UI_STRING_NOT_STARTED,
+		copy079: UI_STRING_NOT_STARTED,
 		copy080: 'Pending confirmation',
-		copy081: SHARED_UI_STRINGS.notStarted,
-		copy082: SHARED_UI_STRINGS.eth,
-		copy083: SHARED_UI_STRINGS.eth,
-		copy084: SHARED_UI_STRINGS.yes,
-		copy085: SHARED_UI_STRINGS.no,
+		copy081: UI_STRING_NOT_STARTED,
+		copy082: UI_STRING_ETH,
+		copy083: UI_STRING_ETH,
+		copy084: UI_STRING_YES,
+		copy085: UI_STRING_NO,
 		copy086: 'Settle Selected Bids',
 		copy087: (value0: UiStringTemplateValue) => `Select winning bids and settle them together. Winning claims add child-pool REP plus ${value0}.`,
 		copy088: (value0: UiStringTemplateValue) => `Select finalized refund rows and settle them together. These rows return locked ETH without adding ${value0}.`,
@@ -600,58 +423,58 @@ export const TSX_STRINGS = {
 		copy098: 'Finalizing truth auction...',
 		copy099: (value0: UiStringTemplateValue) => `Truth auction can be started in ${value0} once migration ends.`,
 		copy100: 'Truth auction already started.',
-		copy101: SHARED_UI_STRINGS.startingTruthAuction,
+		copy101: UI_STRING_STARTING_TRUTH_AUCTION,
 		copy102: 'Loading eligible escalation deposits.',
-		copy103: SHARED_UI_STRINGS.escalationDepositDetailsAreUnavailableForThisPool,
+		copy103: UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL,
 		copy104: 'Use unresolved escalation migration for this parent pool.',
 		copy105: 'The migration window for unresolved parent escalation deposits has closed.',
 		copy106: (value0: UiStringTemplateValue) => `No ${value0} escalation deposits are currently available to migrate for this wallet.`,
 		copy107: 'Select at least one deposit to migrate.',
 		copy108: 'Unresolved escalation migration is unavailable for this pool.',
 		copy109: 'Loading unresolved escalation deposits.',
-		copy110: SHARED_UI_STRINGS.unresolvedEscalationDepositDetailsAreUnavailableForThis,
-		copy111: SHARED_UI_STRINGS.noUnresolvedParentEscalationDepositsRemainForThe,
-		copy112: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.checkingPoolRepMigratedToChildUniverse(value0),
+		copy110: UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
+		copy111: UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET,
+		copy112: (value0: UiStringTemplateValue) => UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE(value0),
 		copy113: (value0: UiStringTemplateValue) => `Pool REP has already been migrated to the ${value0} universe.`,
-		copy114: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.checkingPoolRepMigratedToChildUniverse(value0),
+		copy114: (value0: UiStringTemplateValue) => UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE(value0),
 		copy115: (value0: UiStringTemplateValue) => `Migrate pool to the ${value0} universe before moving vault balances.`,
 		copy116: 'Vault migration is already complete for this wallet.',
-		copy117: SHARED_UI_STRINGS.migratingVault,
+		copy117: UI_STRING_MIGRATING_VAULT,
 		copy118: 'Use unresolved escalation migration to move locked positions and vault balances together.',
 		copy119: 'Security Pool for ',
 		copy120: 'universe does not exist.',
-		copy121: SHARED_UI_STRINGS.submitBid,
+		copy121: UI_STRING_SUBMIT_BID,
 		copy122: 'Selected ladder price: ',
 		copy123: 'Bid Price (ETH / REP)',
-		copy124: SHARED_UI_STRINGS.bidAmountEth,
+		copy124: UI_STRING_BID_AMOUNT_ETH,
 		copy125: 'At the entered price, this bid would buy roughly ',
-		copy126: SHARED_UI_STRINGS.rep,
+		copy126: UI_STRING_REP,
 		copy127: 'if fully filled.',
-		copy129: SHARED_UI_STRINGS.submitBid,
+		copy129: UI_STRING_SUBMIT_BID,
 		copy130: 'Submitting bid...',
-		copy132: SHARED_UI_STRINGS.rep,
-		copy133: SHARED_UI_STRINGS.notStarted,
+		copy132: UI_STRING_REP,
+		copy133: UI_STRING_NOT_STARTED,
 		copy134: 'Truth Auction Address',
 		copy135: 'Started',
-		copy136: SHARED_UI_STRINGS.ends,
-		copy137: SHARED_UI_STRINGS.ethRaisedPerCap,
-		copy138: SHARED_UI_STRINGS.repPurchased,
-		copy139: SHARED_UI_STRINGS.rep,
-		copy140: SHARED_UI_STRINGS.clearingPrice,
-		copy141: SHARED_UI_STRINGS.eth,
+		copy136: UI_STRING_ENDS,
+		copy137: UI_STRING_ETH_RAISED_PER_CAP,
+		copy138: UI_STRING_REP_PURCHASED,
+		copy139: UI_STRING_REP,
+		copy140: UI_STRING_CLEARING_PRICE,
+		copy141: UI_STRING_ETH,
 		copy142: 'Min Bid Size',
-		copy143: SHARED_UI_STRINGS.eth,
+		copy143: UI_STRING_ETH,
 		copy144: 'Max REP Being Sold',
-		copy145: SHARED_UI_STRINGS.rep,
-		copy146: SHARED_UI_STRINGS.eth,
+		copy145: UI_STRING_REP,
+		copy146: UI_STRING_ETH,
 		copy147: 'Settlement Available',
-		copy148: SHARED_UI_STRINGS.ethRaisedPerCap,
-		copy149: SHARED_UI_STRINGS.repPurchased,
-		copy150: SHARED_UI_STRINGS.rep,
-		copy151: SHARED_UI_STRINGS.outcome,
+		copy148: UI_STRING_ETH_RAISED_PER_CAP,
+		copy149: UI_STRING_REP_PURCHASED,
+		copy150: UI_STRING_REP,
+		copy151: UI_STRING_OUTCOME,
 		copy152: 'Loading ',
 		copy153: 'child auction details.',
-		copy154: SHARED_UI_STRINGS.eth,
+		copy154: UI_STRING_ETH,
 		copy155: 'Migration Status',
 		copy156: 'REP At Fork',
 		copy157: 'Migrated REP',
@@ -661,17 +484,17 @@ export const TSX_STRINGS = {
 		copy161: 'Fork Type',
 		copy162: 'Advanced Diagnostics',
 		copy163: 'Pool REP At Fork',
-		copy164: SHARED_UI_STRINGS.rep,
+		copy164: UI_STRING_REP,
 		copy165: 'Unallocated Escrow Child REP',
-		copy166: SHARED_UI_STRINGS.rep,
+		copy166: UI_STRING_REP,
 		copy167: 'Escrow Source REP At Fork',
-		copy168: SHARED_UI_STRINGS.rep,
+		copy168: UI_STRING_REP,
 		copy169: (value0: UiStringTemplateValue) => `Settle Selected ${value0} Fork-Carried Deposits`,
 		copy170: 'Settling fork-carried deposits...',
 		copy171: 'Fork lifecycle stages',
 		copy172: 'Viewing',
-		copy173: SHARED_UI_STRINGS.forkTriggered,
-		copy174: SHARED_UI_STRINGS.status,
+		copy173: UI_STRING_FORK_TRIGGERED,
+		copy174: UI_STRING_STATUS,
 		copy175: 'Triggered At',
 		copy176: 'The system is not forking.',
 		copy177: 'Your Migration Balances',
@@ -680,167 +503,167 @@ export const TSX_STRINGS = {
 		copy180: 'The migration window for these unresolved parent escalation deposits has closed.',
 		copy181: 'All unresolved parent escalation locks on this wallet will migrate together with your vault into the selected child universe.',
 		copy182: 'Loading unresolved escalation deposits for the connected wallet…',
-		copy183: SHARED_UI_STRINGS.unresolvedEscalationDepositDetailsAreUnavailableForThis,
-		copy184: SHARED_UI_STRINGS.noUnresolvedParentEscalationDepositsRemainForThe,
+		copy183: UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
+		copy184: UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET,
 		copy185: 'All unresolved parent escalation locks on this wallet move together into the selected child universe. They cannot be split across multiple outcomes.',
-		copy186: SHARED_UI_STRINGS.noPrefix,
+		copy186: UI_STRING_NO_PREFIX,
 		copy187: 'unresolved deposits remain for this wallet.',
-		copy188: SHARED_UI_STRINGS.initiallyDepositedPrefix,
-		copy189: SHARED_UI_STRINGS.rep,
+		copy188: UI_STRING_INITIALLY_DEPOSITED_PREFIX,
+		copy189: UI_STRING_REP,
 		copy190: 'Current path: Must migrate into the selected child universe',
-		copy191: SHARED_UI_STRINGS.entryDepthPrefix,
-		copy192: SHARED_UI_STRINGS.rep,
+		copy191: UI_STRING_ENTRY_DEPTH_PREFIX,
+		copy192: UI_STRING_REP,
 		copy193: (value0: UiStringTemplateValue) => `Migrate Unresolved Escalation To ${value0}`,
 		copy194: 'Migrating unresolved escalation...',
 		copy195: 'Migrate Resolved Escalation Deposits',
 		copy196: 'Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.',
 		copy197: 'No escrowed REP is currently visible for migratable escalation deposits on the connected wallet.',
 		copy198: 'Loading escalation deposits for the selected wallet…',
-		copy199: SHARED_UI_STRINGS.escalationDepositDetailsAreUnavailableForThisPool,
-		copy200: SHARED_UI_STRINGS.noPrefix,
+		copy199: UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL,
+		copy200: UI_STRING_NO_PREFIX,
 		copy201: 'escalation deposits are currently available to migrate for this wallet.',
 		copy202: 'Choose deposits to migrate',
-		copy203: SHARED_UI_STRINGS.initiallyDepositedPrefix,
-		copy204: SHARED_UI_STRINGS.rep,
+		copy203: UI_STRING_INITIALLY_DEPOSITED_PREFIX,
+		copy204: UI_STRING_REP,
 		copy205: 'Worth now: Pending migration/finalization',
-		copy206: SHARED_UI_STRINGS.worthNowPrefix,
-		copy207: SHARED_UI_STRINGS.rep,
+		copy206: UI_STRING_WORTH_NOW_PREFIX,
+		copy207: UI_STRING_REP,
 		copy208: 'Current path: Eligible for child-pool migration',
-		copy209: SHARED_UI_STRINGS.entryDepthPrefix,
-		copy210: SHARED_UI_STRINGS.rep,
+		copy209: UI_STRING_ENTRY_DEPTH_PREFIX,
+		copy210: UI_STRING_REP,
 		copy211: (value0: UiStringTemplateValue) => `Migrate Selected ${value0} Deposits`,
 		copy212: 'Migrating escalation deposits...',
 		copy213: 'Migrate Pool To Universe',
 		copy214: 'This moves pool-level REP shared by the selected outcome into the child universe. It affects the outcome pool, not just your vault.',
-		copy215: SHARED_UI_STRINGS.checkingWhetherPoolRepIsAlreadyReadyFor,
+		copy215: UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE,
 		copy216: 'Pool REP has already been migrated to the selected child universe.',
 		copy217: 'Pool REP for this outcome is already staged and will sweep into the child universe during vault migration.',
 		copy218: (value0: UiStringTemplateValue) => `Migrate Pool To ${value0} Universe`,
 		copy219: 'Migrating pool to universe...',
-		copy220: SHARED_UI_STRINGS.migrateVault,
+		copy220: UI_STRING_MIGRATE_VAULT,
 		copy221: 'This moves all remaining REP collateral and security-bond allowance from your parent vault into the selected child pool for this outcome.',
-		copy222: SHARED_UI_STRINGS.noRepCollateralOrSecurityBondAllowanceRemains,
-		copy223: SHARED_UI_STRINGS.checkingWhetherPoolRepIsAlreadyReadyFor,
+		copy222: UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS,
+		copy223: UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE,
 		copy224: (value0: UiStringTemplateValue) => `Migrate Vault To ${value0}`,
-		copy225: SHARED_UI_STRINGS.migratingVault,
+		copy225: UI_STRING_MIGRATING_VAULT,
 		copy226: 'Already migrated',
-		copy227: SHARED_UI_STRINGS.submittingABidLocksEthUntilSettlementLosing,
+		copy227: UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING,
 		copy228: 'Truth Auction Status',
-		copy229: SHARED_UI_STRINGS.startTruthAuction,
+		copy229: UI_STRING_START_TRUTH_AUCTION,
 		copy230: 'Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP plus ',
 		copy231: ', while losing bids are refunded during settlement.',
-		copy232: SHARED_UI_STRINGS.startTruthAuction,
+		copy232: UI_STRING_START_TRUTH_AUCTION,
 		copy233: 'Bypass Truth Auction',
-		copy234: SHARED_UI_STRINGS.startingTruthAuction,
+		copy234: UI_STRING_STARTING_TRUTH_AUCTION,
 		copy235: 'Bypassing auction...',
-		copy236: SHARED_UI_STRINGS.submittingABidLocksEthUntilSettlementLosing,
+		copy236: UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING,
 		copy237: 'Settlement Status',
-		copy238: SHARED_UI_STRINGS.securityPoolAddress,
-		copy239: SHARED_UI_STRINGS.hexValuePlaceholder,
+		copy238: UI_STRING_SECURITY_POOL_ADDRESS,
+		copy239: UI_STRING_HEX_VALUE_PLACEHOLDER,
 		copy240: 'Load a pool to inspect fork progress, migration, and the truth auction.',
 		copy241: 'Fork & Truth Auction',
 	},
 	componentsForkZoltarSection: {
-		copy001: SHARED_UI_STRINGS.zoltarIsAlreadyForked,
+		copy001: UI_STRING_ZOLTAR_IS_ALREADY_FORKED,
 		copy002: 'Connect a wallet before forking Zoltar.',
 		copy003: 'Refresh universe data before forking Zoltar.',
-		copy004: SHARED_UI_STRINGS.zoltarIsAlreadyForked,
+		copy004: UI_STRING_ZOLTAR_IS_ALREADY_FORKED,
 		copy005: 'Select a valid fork question before forking Zoltar.',
 		copy006: 'Insufficient REP to meet the fork threshold.',
 		copy007: 'Approve enough REP before forking Zoltar.',
-		copy008: SHARED_UI_STRINGS.forkZoltar,
-		copy009: SHARED_UI_STRINGS.forkThreshold,
-		copy010: SHARED_UI_STRINGS.rep,
+		copy008: UI_STRING_FORK_ZOLTAR,
+		copy009: UI_STRING_FORK_THRESHOLD,
+		copy010: UI_STRING_REP,
 		copy011: 'forking Zoltar',
 		copy012: 'Approving REP Threshold...',
 		copy013: 'Fork Question ID',
-		copy014: SHARED_UI_STRINGS.hexValuePlaceholder,
-		copy015: SHARED_UI_STRINGS.question,
-		copy016: SHARED_UI_STRINGS.forkZoltar,
+		copy014: UI_STRING_HEX_VALUE_PLACEHOLDER,
+		copy015: UI_STRING_QUESTION,
+		copy016: UI_STRING_FORK_ZOLTAR,
 		copy017: 'Forking Zoltar...',
 	},
 	componentsGlobalTransactionTray: {
 		copy001: 'Preparing',
 		copy002: 'Awaiting Wallet',
-		copy003: SHARED_UI_STRINGS.pending,
+		copy003: UI_STRING_PENDING,
 		copy004: 'Confirmed',
-		copy005: SHARED_UI_STRINGS.failed,
+		copy005: UI_STRING_FAILED,
 		copy006: 'Attention',
 		copy007: 'Dismiss',
 	},
 	componentsImportedForkSettlementSection: {
-		copy001: SHARED_UI_STRINGS.forkCarriedEscalationDepositsCanBeSettledAfter,
+		copy001: UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES,
 		copy002: (value0: UiStringTemplateValue) => `Select at least one ${value0} fork-carried deposit to settle.`,
 		copy003: 'Imported from parent universe',
 		copy004: 'Parent deposit #',
-		copy005: SHARED_UI_STRINGS.initiallyDepositedPrefix,
-		copy006: SHARED_UI_STRINGS.rep,
+		copy005: UI_STRING_INITIALLY_DEPOSITED_PREFIX,
+		copy006: UI_STRING_REP,
 		copy007: 'Worth now: Pending final settlement',
-		copy008: SHARED_UI_STRINGS.worthNowPrefix,
-		copy009: SHARED_UI_STRINGS.rep,
+		copy008: UI_STRING_WORTH_NOW_PREFIX,
+		copy009: UI_STRING_REP,
 		copy010: 'Imported entry depth: ',
-		copy011: SHARED_UI_STRINGS.rep,
+		copy011: UI_STRING_REP,
 		copy012: 'Next Parent Deposits',
 		copy013: 'Previous Parent Deposits',
 		copy014: 'Settle Fork-Carried Escalation Deposits',
 		copy015: 'Imported from the parent universe. Settle these positions in this child pool after finalization.',
-		copy016: SHARED_UI_STRINGS.forkCarriedEscalationDepositsCanBeSettledAfter,
+		copy016: UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES,
 	},
 	componentsLifecycleStageBanner: {
 		copy001: 'Available now',
 		copy002: 'Blocked',
 	},
 	componentsLoadableValue: {
-		copy001: SHARED_UI_STRINGS.loadingWithEllipsis,
+		copy001: UI_STRING_LOADING_WITH_ELLIPSIS,
 	},
 	componentsLoadingText: {
-		copy001: SHARED_UI_STRINGS.loadingWithEllipsis,
+		copy001: UI_STRING_LOADING_WITH_ELLIPSIS,
 	},
 	componentsMarketOverviewSection: {
 		copy001: 'Child universe selected',
-		copy002: SHARED_UI_STRINGS.selectAChildUniverseToDeploy,
-		copy003: SHARED_UI_STRINGS.walletConnected,
-		copy004: SHARED_UI_STRINGS.connectAWalletBeforeDeployingAChildUniverse,
-		copy005: SHARED_UI_STRINGS.loading,
-		copy006: SHARED_UI_STRINGS.loadingUniverseDetails,
-		copy007: SHARED_UI_STRINGS.universe,
-		copy008: SHARED_UI_STRINGS.universe,
-		copy009: SHARED_UI_STRINGS.status,
-		copy010: SHARED_UI_STRINGS.forked,
-		copy011: SHARED_UI_STRINGS.unforked,
-		copy012: SHARED_UI_STRINGS.forkTime,
-		copy013: SHARED_UI_STRINGS.loadingWithEllipsis,
-		copy014: SHARED_UI_STRINGS.forkThreshold,
-		copy015: SHARED_UI_STRINGS.rep,
-		copy016: SHARED_UI_STRINGS.reputationToken,
+		copy002: UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY,
+		copy003: UI_STRING_WALLET_CONNECTED,
+		copy004: UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE,
+		copy005: UI_STRING_LOADING,
+		copy006: UI_STRING_LOADING_UNIVERSE_DETAILS,
+		copy007: UI_STRING_UNIVERSE,
+		copy008: UI_STRING_UNIVERSE,
+		copy009: UI_STRING_STATUS,
+		copy010: UI_STRING_FORKED,
+		copy011: UI_STRING_UNFORKED,
+		copy012: UI_STRING_FORK_TIME,
+		copy013: UI_STRING_LOADING_WITH_ELLIPSIS,
+		copy014: UI_STRING_FORK_THRESHOLD,
+		copy015: UI_STRING_REP,
+		copy016: UI_STRING_REPUTATION_TOKEN,
 		copy017: 'Total Theoretical Supply',
-		copy018: SHARED_UI_STRINGS.rep,
+		copy018: UI_STRING_REP,
 		copy019: 'Fork Question',
 		copy020: 'Selected Fork Question',
 		copy021: 'No child universes',
 		copy022: 'Deploy child universes as needed for fork resolution.',
-		copy023: SHARED_UI_STRINGS.childUniverses,
-		copy024: SHARED_UI_STRINGS.connectAWalletBeforeDeployingAChildUniverse,
-		copy025: SHARED_UI_STRINGS.deployed,
-		copy026: SHARED_UI_STRINGS.createChildUniverse,
-		copy027: SHARED_UI_STRINGS.opening,
-		copy028: SHARED_UI_STRINGS.selectAChildUniverseToDeploy,
-		copy029: SHARED_UI_STRINGS.connectAWalletBeforeDeployingAChildUniverse,
+		copy023: UI_STRING_CHILD_UNIVERSES,
+		copy024: UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE,
+		copy025: UI_STRING_DEPLOYED,
+		copy026: UI_STRING_CREATE_CHILD_UNIVERSE,
+		copy027: UI_STRING_OPENING,
+		copy028: UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY,
+		copy029: UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE,
 		copy030: 'Confirm the selected fork outcome and deploy its child universe in one bounded execution flow.',
-		copy031: SHARED_UI_STRINGS.deployUniverse,
-		copy032: SHARED_UI_STRINGS.deployingUniverse,
-		copy033: SHARED_UI_STRINGS.createChildUniverseTitle,
-		copy034: SHARED_UI_STRINGS.selectedChildUniverse,
+		copy031: UI_STRING_DEPLOY_UNIVERSE,
+		copy032: UI_STRING_DEPLOYING_UNIVERSE,
+		copy033: UI_STRING_CREATE_CHILD_UNIVERSE_TITLE,
+		copy034: UI_STRING_SELECTED_CHILD_UNIVERSE,
 	},
 	componentsMigrationOutcomeUniversesSection: {
 		copy001: 'Add another universe',
 		copy002: 'Outcome Universes',
 		copy003: 'No outcome universes available.',
 		copy004: 'Your balance:',
-		copy005: SHARED_UI_STRINGS.rep,
+		copy005: UI_STRING_REP,
 		copy006: 'Already migrated:',
-		copy007: SHARED_UI_STRINGS.rep,
-		copy008: SHARED_UI_STRINGS.rep,
+		copy007: UI_STRING_REP,
+		copy008: UI_STRING_REP,
 	},
 	componentsNotFoundSection: {
 		copy001: 'Augur PLACEHOLDER',
@@ -848,7 +671,7 @@ export const TSX_STRINGS = {
 		copy003: 'That page is not here.',
 		copy004: 'Hash route not found',
 		copy005: 'Use the main routes below to return to a supported page.',
-		copy006: SHARED_UI_STRINGS.pageNotFound,
+		copy006: UI_STRING_PAGE_NOT_FOUND,
 		copy007: 'Hash navigation',
 		copy008: 'Mainnet console',
 		copy009: 'Return to Deploy',
@@ -856,7 +679,7 @@ export const TSX_STRINGS = {
 		copy011: 'Open Security Pools',
 	},
 	componentsOpenOraclePriceValue: {
-		copy001: SHARED_UI_STRINGS.unavailable,
+		copy001: UI_STRING_UNAVAILABLE,
 	},
 	componentsPaginationControls: {
 		copy001: 'Load More',
@@ -868,95 +691,95 @@ export const TSX_STRINGS = {
 	},
 	componentsScalarCreatePreview: {
 		copy001: 'Scalar Preview',
-		copy002: SHARED_UI_STRINGS.invalid,
-		copy003: SHARED_UI_STRINGS.invalid,
-		copy004: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => SHARED_UI_TEMPLATES.pairSlash(value0, value1),
+		copy002: UI_STRING_INVALID,
+		copy003: UI_STRING_INVALID,
+		copy004: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => UI_TEMPLATE_PAIR_SLASH(value0, value1),
 	},
 	componentsSecurityPoolsOverviewSection: {
-		copy001: SHARED_UI_STRINGS.securityPools,
-		copy002: SHARED_UI_STRINGS.securityPools,
+		copy001: UI_STRING_SECURITY_POOLS,
+		copy002: UI_STRING_SECURITY_POOLS,
 		copy003: 'Retrying security pools...',
 		copy004: 'Retry Loading Pools',
 		copy005: 'Search Loaded Page',
 		copy006: 'Filter this page by pool address, question ID, or question text',
 		copy007: 'System State',
 		copy008: 'All states',
-		copy009: SHARED_UI_STRINGS.operational,
+		copy009: UI_STRING_OPERATIONAL,
 		copy010: 'Ended',
 		copy011: 'Pool Forked',
 		copy012: 'Fork Migration',
-		copy013: SHARED_UI_STRINGS.truthAuction,
+		copy013: UI_STRING_TRUTH_AUCTION,
 		copy014: 'Vault Coverage',
 		copy015: 'All pools',
 		copy016: 'Has vaults',
 		copy017: 'No vaults',
-		copy018: SHARED_UI_STRINGS.ofPrefix,
+		copy018: UI_STRING_OF_PREFIX,
 		copy019: 'pools shown on this page.',
-		copy020: SHARED_UI_STRINGS.createSecurityPool,
+		copy020: UI_STRING_CREATE_SECURITY_POOL,
 		copy021: 'Load Security Pools',
 		copy022: 'No security pools',
-		copy023: SHARED_UI_STRINGS.noMatches,
+		copy023: UI_STRING_NO_MATCHES,
 		copy024: 'No pools match the current search and filter settings.',
-		copy025: SHARED_UI_STRINGS.openPool,
-		copy026: SHARED_UI_STRINGS.poolCollateralization,
-		copy027: SHARED_UI_STRINGS.poolCollateralization,
-		copy028: SHARED_UI_STRINGS.vaults,
-		copy029: SHARED_UI_STRINGS.multiplier,
-		copy030: SHARED_UI_STRINGS.annualFee,
-		copy031: SHARED_UI_STRINGS.percent,
-		copy032: SHARED_UI_STRINGS.openOraclePrice,
-		copy033: SHARED_UI_STRINGS.openInterestMinted,
-		copy034: SHARED_UI_STRINGS.maxPrefix,
-		copy035: SHARED_UI_STRINGS.eth,
-		copy036: SHARED_UI_STRINGS.eth,
-		copy037: SHARED_UI_STRINGS.poolAddress,
+		copy025: UI_STRING_OPEN_POOL,
+		copy026: UI_STRING_POOL_COLLATERALIZATION,
+		copy027: UI_STRING_POOL_COLLATERALIZATION,
+		copy028: UI_STRING_VAULTS,
+		copy029: UI_STRING_MULTIPLIER,
+		copy030: UI_STRING_ANNUAL_FEE,
+		copy031: UI_STRING_PERCENT,
+		copy032: UI_STRING_OPEN_ORACLE_PRICE,
+		copy033: UI_STRING_OPEN_INTEREST_MINTED,
+		copy034: UI_STRING_MAX_PREFIX,
+		copy035: UI_STRING_ETH,
+		copy036: UI_STRING_ETH,
+		copy037: UI_STRING_POOL_ADDRESS,
 		copy038: 'Manager Address',
-		copy039: SHARED_UI_STRINGS.questionId,
-		copy040: SHARED_UI_STRINGS.universe,
-		copy041: SHARED_UI_STRINGS.vaults,
+		copy039: UI_STRING_QUESTION_ID,
+		copy040: UI_STRING_UNIVERSE,
+		copy041: UI_STRING_VAULTS,
 		copy042: 'vault',
-		copy043: SHARED_UI_STRINGS.unavailable,
+		copy043: UI_STRING_UNAVAILABLE,
 		copy044: 'Vault preview unavailable.',
-		copy045: SHARED_UI_STRINGS.securityBondAllowance,
-		copy046: SHARED_UI_STRINGS.eth,
-		copy047: SHARED_UI_STRINGS.repCollateral,
-		copy048: SHARED_UI_STRINGS.rep,
+		copy045: UI_STRING_SECURITY_BOND_ALLOWANCE,
+		copy046: UI_STRING_ETH,
+		copy047: UI_STRING_REP_COLLATERAL,
+		copy048: UI_STRING_REP,
 		copy049: 'Review liquidation details for this vault before queueing the action.',
-		copy050: SHARED_UI_STRINGS.reviewLiquidation,
-		copy051: SHARED_UI_STRINGS.showingPrefix,
-		copy052: SHARED_UI_STRINGS.ofPrefix,
+		copy050: UI_STRING_REVIEW_LIQUIDATION,
+		copy051: UI_STRING_SHOWING_PREFIX,
+		copy052: UI_STRING_OF_PREFIX,
 		copy053: 'active vaults in this preview, newest activity first.',
 	},
 	componentsSecurityPoolSummaryMetrics: {
-		copy001: SHARED_UI_STRINGS.poolAddress,
-		copy002: SHARED_UI_STRINGS.universe,
-		copy003: SHARED_UI_STRINGS.vaults,
-		copy004: SHARED_UI_STRINGS.securityMultiplier,
+		copy001: UI_STRING_POOL_ADDRESS,
+		copy002: UI_STRING_UNIVERSE,
+		copy003: UI_STRING_VAULTS,
+		copy004: UI_STRING_SECURITY_MULTIPLIER,
 		copy005: 'Open Interest Fee / Year',
-		copy006: SHARED_UI_STRINGS.percent,
+		copy006: UI_STRING_PERCENT,
 		copy007: 'Total REP Collateral',
-		copy008: SHARED_UI_STRINGS.rep,
+		copy008: UI_STRING_REP,
 		copy009: 'Open Interest Minted / Max',
-		copy010: SHARED_UI_STRINGS.eth,
-		copy011: SHARED_UI_STRINGS.eth,
+		copy010: UI_STRING_ETH,
+		copy011: UI_STRING_ETH,
 		copy012: 'Vault Count',
-		copy013: SHARED_UI_STRINGS.securityMultiplier,
-		copy014: SHARED_UI_STRINGS.annualFee,
-		copy015: SHARED_UI_STRINGS.percent,
+		copy013: UI_STRING_SECURITY_MULTIPLIER,
+		copy014: UI_STRING_ANNUAL_FEE,
+		copy015: UI_STRING_PERCENT,
 		copy016: 'Total REP Backing',
-		copy017: SHARED_UI_STRINGS.rep,
+		copy017: UI_STRING_REP,
 		copy018: 'Current Oracle Price',
 		copy019: 'Latest settlement anchors the trading and liquidation views.',
-		copy020: SHARED_UI_STRINGS.openInterestMinted,
-		copy021: SHARED_UI_STRINGS.maxPrefix,
-		copy022: SHARED_UI_STRINGS.eth,
-		copy023: SHARED_UI_STRINGS.eth,
-		copy024: SHARED_UI_STRINGS.poolAddress,
-		copy025: SHARED_UI_STRINGS.universe,
+		copy020: UI_STRING_OPEN_INTEREST_MINTED,
+		copy021: UI_STRING_MAX_PREFIX,
+		copy022: UI_STRING_ETH,
+		copy023: UI_STRING_ETH,
+		copy024: UI_STRING_POOL_ADDRESS,
+		copy025: UI_STRING_UNIVERSE,
 	},
 	componentsSecurityPoolVaultDirectory: {
-		copy001: SHARED_UI_STRINGS.showingPrefix,
-		copy002: SHARED_UI_STRINGS.ofPrefix,
+		copy001: UI_STRING_SHOWING_PREFIX,
+		copy002: UI_STRING_OF_PREFIX,
 		copy003: 'active vaults, newest activity first. Enter a vault address above to inspect any specific vault.',
 	},
 	componentsSimulationBanner: {
@@ -966,7 +789,7 @@ export const TSX_STRINGS = {
 		copy004: '+1 month',
 		copy005: '+1 year',
 		copy006: (value0: UiStringTemplateValue) => `QA ${value0}`,
-		copy007: SHARED_UI_STRINGS.error,
+		copy007: UI_STRING_ERROR,
 		copy008: 'Ready',
 		copy009: 'Bootstrapping',
 		copy010: (value0: UiStringTemplateValue, value1: UiStringTemplateValue, value2: UiStringTemplateValue) => `Custom state "${value0}" based on ${value1}. Saved ${value2}.`,
@@ -977,7 +800,7 @@ export const TSX_STRINGS = {
 		copy015: 'Simulation scenario',
 		copy016: 'Built-in scenarios',
 		copy017: 'Saved states',
-		copy018: SHARED_UI_STRINGS.active,
+		copy018: UI_STRING_ACTIVE,
 		copy019: 'QA account',
 		copy020: 'Simulation QA account',
 		copy021: 'Blocks',
@@ -998,31 +821,31 @@ export const TSX_STRINGS = {
 		copy036: 'Save state',
 		copy037: 'Export state',
 		copy038: 'Import state',
-		copy039: SHARED_UI_STRINGS.removeCorruptedSaves,
-		copy040: SHARED_UI_STRINGS.deleteSave,
+		copy039: UI_STRING_REMOVE_CORRUPTED_SAVES,
+		copy040: UI_STRING_DELETE_SAVE,
 		copy041: 'Time travel',
 		copy042: 'Save Simulation State',
 		copy043: 'State name',
 		copy044: 'Save',
 		copy045: 'Export Simulation State',
 		copy046: 'Export name',
-		copy047: SHARED_UI_STRINGS.jsonState,
+		copy047: UI_STRING_JSON_STATE,
 		copy048: 'Refresh export',
-		copy049: SHARED_UI_STRINGS.copied,
+		copy049: UI_STRING_COPIED,
 		copy050: 'Copy JSON',
 		copy051: 'Import Simulation State',
-		copy052: SHARED_UI_STRINGS.jsonState,
+		copy052: UI_STRING_JSON_STATE,
 		copy053: 'Import and load',
 		copy054: 'Delete Saved Simulation State',
 		copy055: (value0: UiStringTemplateValue) => `Delete the saved state "${value0}" from browser storage. Built-in scenarios are not affected.`,
 		copy056: 'Built-in scenarios cannot be deleted.',
-		copy057: SHARED_UI_STRINGS.deleteSave,
+		copy057: UI_STRING_DELETE_SAVE,
 		copy058: 'Remove Corrupted Saved States',
 		copy059: 'Remove saved simulation state entries that are no longer readable from browser storage. Valid saved states will be kept.',
-		copy060: SHARED_UI_STRINGS.removeCorruptedSaves,
+		copy060: UI_STRING_REMOVE_CORRUPTED_SAVES,
 	},
 	componentsTimestampValue: {
-		copy001: SHARED_UI_STRINGS.loadingWithEllipsis,
+		copy001: UI_STRING_LOADING_WITH_ELLIPSIS,
 	},
 	componentsTokenApprovalControl: {
 		copy001: (value0: UiStringTemplateValue) => `Approve ${value0}`,
@@ -1033,21 +856,21 @@ export const TSX_STRINGS = {
 		copy006: (value0: UiStringTemplateValue) => `Approved ${value0}`,
 		copy007: (value0: UiStringTemplateValue) => `${value0} Approval Amount`,
 		copy008: 'Leave blank for required total',
-		copy009: SHARED_UI_STRINGS.max,
+		copy009: UI_STRING_MAX,
 	},
 	componentsTransactionHashLink: {
 		copy001: 'View transaction',
 	},
 	componentsTruthAuctionBidsSection: {
-		copy001: SHARED_UI_STRINGS.priceEthPerRep,
+		copy001: UI_STRING_PRICE_ETH_PER_REP,
 		copy002: 'Bidder',
-		copy003: SHARED_UI_STRINGS.bidAmountEth,
-		copy004: SHARED_UI_STRINGS.loadedDepthEth,
-		copy005: SHARED_UI_STRINGS.status,
-		copy006: SHARED_UI_STRINGS.selected,
-		copy007: SHARED_UI_STRINGS.priceEthPerRep,
-		copy008: SHARED_UI_STRINGS.bidAmountEth,
-		copy009: SHARED_UI_STRINGS.status,
+		copy003: UI_STRING_BID_AMOUNT_ETH,
+		copy004: UI_STRING_LOADED_DEPTH_ETH,
+		copy005: UI_STRING_STATUS,
+		copy006: UI_STRING_SELECTED,
+		copy007: UI_STRING_PRICE_ETH_PER_REP,
+		copy008: UI_STRING_BID_AMOUNT_ETH,
+		copy009: UI_STRING_STATUS,
 		copy010: 'Truth Auction Bids',
 		copy011: 'Loaded Levels',
 		copy012: 'Loaded Bids',
@@ -1056,85 +879,85 @@ export const TSX_STRINGS = {
 		copy015: 'Loading auction bids…',
 		copy016: 'No active prices are currently visible for this auction.',
 		copy017: 'No bids are currently indexed for the loaded prices.',
-		copy018: SHARED_UI_STRINGS.eth,
-		copy019: SHARED_UI_STRINGS.eth,
+		copy018: UI_STRING_ETH,
+		copy019: UI_STRING_ETH,
 		copy020: 'Load More Truth Auction Bids',
 		copy021: 'My Bids',
 		copy022: 'Connect a wallet to inspect your submitted truth auction bids.',
 		copy023: 'Loading your bids…',
 		copy024: 'No bids from this wallet are indexed for the current auction.',
-		copy025: SHARED_UI_STRINGS.eth,
+		copy025: UI_STRING_ETH,
 		copy026: 'Load More Of My Bids',
 	},
 	componentsTruthAuctionDepthChart: {
-		copy001: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.ethPerRepValue(value0),
-		copy002: SHARED_UI_STRINGS.loadedDepthEth,
-		copy003: SHARED_UI_STRINGS.eth,
-		copy004: SHARED_UI_STRINGS.eth,
+		copy001: (value0: UiStringTemplateValue) => UI_TEMPLATE_ETH_PER_REP_VALUE(value0),
+		copy002: UI_STRING_LOADED_DEPTH_ETH,
+		copy003: UI_STRING_ETH,
+		copy004: UI_STRING_ETH,
 		copy005: '0 ETH',
 		copy006: 'Truth auction visible depth chart',
 		copy007: (value0: UiStringTemplateValue) => `Select price ${value0} ETH / REP from depth chart`,
-		copy008: SHARED_UI_STRINGS.priceEthPerRep,
+		copy008: UI_STRING_PRICE_ETH_PER_REP,
 	},
 	componentsTruthAuctionSummaryCard: {
-		copy001: SHARED_UI_STRINGS.truthAuction,
+		copy001: UI_STRING_TRUTH_AUCTION,
 		copy002: 'ETH Raised',
-		copy003: SHARED_UI_STRINGS.eth,
-		copy004: SHARED_UI_STRINGS.eth,
+		copy003: UI_STRING_ETH,
+		copy004: UI_STRING_ETH,
 		copy005: 'REP Sold',
-		copy006: SHARED_UI_STRINGS.rep,
-		copy007: SHARED_UI_STRINGS.rep,
-		copy008: SHARED_UI_STRINGS.starts,
-		copy009: SHARED_UI_STRINGS.clearingPrice,
+		copy006: UI_STRING_REP,
+		copy007: UI_STRING_REP,
+		copy008: UI_STRING_STARTS,
+		copy009: UI_STRING_CLEARING_PRICE,
 		copy010: 'Min Bid',
-		copy011: SHARED_UI_STRINGS.eth,
-		copy012: SHARED_UI_STRINGS.ends,
+		copy011: UI_STRING_ETH,
+		copy012: UI_STRING_ENDS,
 		copy013: 'Winning Threshold',
 	},
 	componentsVaultMetricGrid: {
-		copy001: SHARED_UI_STRINGS.securityBondAllowance,
-		copy002: SHARED_UI_STRINGS.eth,
-		copy003: SHARED_UI_STRINGS.repCollateral,
-		copy004: SHARED_UI_STRINGS.rep,
-		copy005: SHARED_UI_STRINGS.escrowedRep,
-		copy006: SHARED_UI_STRINGS.rep,
-		copy007: SHARED_UI_STRINGS.priceValidUntil,
-		copy008: SHARED_UI_STRINGS.securityBondAllowance,
-		copy009: SHARED_UI_STRINGS.eth,
-		copy010: SHARED_UI_STRINGS.repCollateral,
-		copy011: SHARED_UI_STRINGS.rep,
-		copy012: SHARED_UI_STRINGS.escrowedRep,
-		copy013: SHARED_UI_STRINGS.rep,
-		copy014: SHARED_UI_STRINGS.priceValidUntil,
+		copy001: UI_STRING_SECURITY_BOND_ALLOWANCE,
+		copy002: UI_STRING_ETH,
+		copy003: UI_STRING_REP_COLLATERAL,
+		copy004: UI_STRING_REP,
+		copy005: UI_STRING_ESCROWED_REP,
+		copy006: UI_STRING_REP,
+		copy007: UI_STRING_PRICE_VALID_UNTIL,
+		copy008: UI_STRING_SECURITY_BOND_ALLOWANCE,
+		copy009: UI_STRING_ETH,
+		copy010: UI_STRING_REP_COLLATERAL,
+		copy011: UI_STRING_REP,
+		copy012: UI_STRING_ESCROWED_REP,
+		copy013: UI_STRING_REP,
+		copy014: UI_STRING_PRICE_VALID_UNTIL,
 	},
 	componentsZoltarMigrationSection: {
-		copy001: SHARED_UI_STRINGS.enterAnAmountGreaterThanZero,
-		copy002: SHARED_UI_STRINGS.thisAmountIsAlreadyFullySplitAcrossThe,
+		copy001: UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO,
+		copy002: UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES,
 		copy003: 'This amount is already in your migration balance. Split REP when ready.',
-		copy004: SHARED_UI_STRINGS.enterAnAmountGreaterThanZero,
+		copy004: UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO,
 		copy005: (value0: UiStringTemplateValue) => `Need ${value0} more REP in this universe to prepare the selected amount.`,
 		copy006: 'Waiting for approved REP amount before preparing the selected amount.',
-		copy007: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.addRepToMigrationBalanceDetail(value0),
-		copy008: SHARED_UI_STRINGS.enterAnAmountGreaterThanZero,
+		copy007: (value0: UiStringTemplateValue) => UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL(value0),
+		copy008: UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO,
 		copy009: (value0: UiStringTemplateValue) => `Add ${value0} REP to your migration balance first, then split it across the selected universes.`,
 		copy010: 'Select at least one outcome universe.',
 		copy011: 'Loading outcome universe balances...',
-		copy012: SHARED_UI_STRINGS.thisAmountIsAlreadyFullySplitAcrossThe,
+		copy012: UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES,
 		copy013: (value0: UiStringTemplateValue) => `The selected universes only have ${value0} REP of room left for this amount. Reduce the amount or choose different universes.`,
 		copy014: 'Split the migration REP across the selected universes.',
 		copy015: (value0: UiStringTemplateValue, value1: UiStringTemplateValue, value2: UiStringTemplateValue) => `You only have ${value0} REP available for migration in this universe (${value1} in your migration balance and ${value2} wallet REP).`,
-		copy016: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.addRepToMigrationBalanceDetail(value0),
-		copy017: SHARED_UI_STRINGS.migrateRep,
-		copy018: SHARED_UI_STRINGS.migrateRep,
+		copy016: (value0: UiStringTemplateValue) => UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL(value0),
+		copy017: UI_STRING_MIGRATE_REP,
+		copy018: UI_STRING_MIGRATE_REP,
 		copy019: 'Migration REP Balance',
-		copy020: SHARED_UI_STRINGS.rep,
-		copy021: SHARED_UI_STRINGS.universe,
+		copy020: UI_STRING_REP,
+		copy021: UI_STRING_UNIVERSE,
 		copy022: 'Loading universe data',
 		copy023: 'Migration Amount',
-		copy024: SHARED_UI_STRINGS.zeroDecimalPlaceholder,
-		copy025: SHARED_UI_STRINGS.max,
+		copy024: UI_STRING_ZERO_DECIMAL_PLACEHOLDER,
+		copy025: UI_STRING_MAX,
 		copy026: 'preparing the current amount',
-		copy027: SHARED_UI_STRINGS.approvingRep,
+		copy027: UI_STRING_APPROVING_REP,
 	},
 	libRepPriceSource: {
 		copy001: 'MOCK',
@@ -1150,8 +973,8 @@ export const TSX_STRINGS = {
 		copy011: 'Target Collateralization @ Uniswap V3 Price',
 		copy012: 'Uniswap V3 REP / ETH',
 		copy013: 'Target Collateralization',
-		copy014: SHARED_UI_STRINGS.repPerEth,
-		copy015: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.wrappedValue(value0),
+		copy014: UI_STRING_REP_PER_ETH,
+		copy015: (value0: UiStringTemplateValue) => UI_TEMPLATE_WRAPPED_VALUE(value0),
 	},
 	libTransactionPresentations: {
 		copy001: 'undefined',
@@ -1176,7 +999,7 @@ export const TSX_STRINGS = {
 		copy020: 'Creating Question',
 		copy021: 'Question creation transaction submitted.',
 		copy022: 'The new Zoltar question is now on-chain.',
-		copy023: SHARED_UI_STRINGS.questionId,
+		copy023: UI_STRING_QUESTION_ID,
 		copy024: 'Market Type',
 		copy025: 'Question Created',
 		copy026: 'Approving Fork REP',
@@ -1187,13 +1010,13 @@ export const TSX_STRINGS = {
 		copy031: 'Zoltar Fork Submitted',
 		copy032: 'REP approval was updated for the Zoltar fork flow.',
 		copy033: 'The selected universe fork has been submitted on-chain.',
-		copy034: SHARED_UI_STRINGS.universe,
-		copy035: SHARED_UI_STRINGS.questionId,
+		copy034: UI_STRING_UNIVERSE,
+		copy035: UI_STRING_QUESTION_ID,
 		copy036: 'Deploying Child Universe',
 		copy037: 'Child-universe deployment transaction submitted.',
 		copy038: 'The selected child universe was deployed successfully.',
-		copy039: SHARED_UI_STRINGS.universe,
-		copy040: SHARED_UI_STRINGS.outcomeIndex,
+		copy039: UI_STRING_UNIVERSE,
+		copy040: UI_STRING_OUTCOME_INDEX,
 		copy041: 'Child Universe Deployed',
 		copy042: 'Preparing REP',
 		copy043: 'Splitting REP',
@@ -1201,50 +1024,50 @@ export const TSX_STRINGS = {
 		copy045: 'REP migration transaction submitted.',
 		copy046: 'REP was added to your migration balance.',
 		copy047: 'Migration REP was split across the selected child universes.',
-		copy048: SHARED_UI_STRINGS.universe,
-		copy049: SHARED_UI_STRINGS.amount,
+		copy048: UI_STRING_UNIVERSE,
+		copy049: UI_STRING_AMOUNT,
 		copy050: 'Outcome Indexes',
 		copy051: 'REP Prepared',
 		copy052: 'REP Split',
 		copy053: 'Creating Security Pool',
 		copy054: 'Security-pool deployment transaction submitted.',
 		copy055: 'The new security pool is now available for shares, reporting, and vault operations.',
-		copy056: SHARED_UI_STRINGS.pool,
-		copy057: SHARED_UI_STRINGS.universe,
-		copy058: SHARED_UI_STRINGS.questionId,
-		copy059: SHARED_UI_STRINGS.securityMultiplier,
+		copy056: UI_STRING_POOL,
+		copy057: UI_STRING_UNIVERSE,
+		copy058: UI_STRING_QUESTION_ID,
+		copy059: UI_STRING_SECURITY_MULTIPLIER,
 		copy060: 'Security Pool Created',
-		copy061: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.transactionSubmitted(value0),
+		copy061: (value0: UiStringTemplateValue) => UI_TEMPLATE_TRANSACTION_SUBMITTED(value0),
 		copy062: (value0: UiStringTemplateValue) => `Staged operation #${value0} was queued for the next oracle settlement.`,
 		copy063: (value0: UiStringTemplateValue) => `Staged operation #${value0} was queued and must be executed manually after a valid oracle price is available.`,
-		copy064: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.completedSuccessfully(value0),
-		copy065: SHARED_UI_STRINGS.action,
-		copy066: SHARED_UI_STRINGS.stagedOperation,
-		copy067: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.transactionSubmitted(value0),
+		copy064: (value0: UiStringTemplateValue) => UI_TEMPLATE_COMPLETED_SUCCESSFULLY(value0),
+		copy065: UI_STRING_ACTION,
+		copy066: UI_STRING_STAGED_OPERATION,
+		copy067: (value0: UiStringTemplateValue) => UI_TEMPLATE_TRANSACTION_SUBMITTED(value0),
 		copy068: 'A fresh Yes, No, and Invalid share set was minted for the selected pool.',
 		copy069: 'Matching shares were burned and collateral was returned from the selected pool.',
 		copy070: 'Selected parent-pool shares were migrated into child universes.',
 		copy071: 'Resolved winning shares were redeemed from the selected pool.',
-		copy072: SHARED_UI_STRINGS.pool,
-		copy073: SHARED_UI_STRINGS.universe,
+		copy072: UI_STRING_POOL,
+		copy073: UI_STRING_UNIVERSE,
 		copy074: 'Share Outcome',
 		copy075: 'Target Outcome Indexes',
-		copy076: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.transactionSubmitted(value0),
+		copy076: (value0: UiStringTemplateValue) => UI_TEMPLATE_TRANSACTION_SUBMITTED(value0),
 		copy077: 'Your selected REP was committed to the chosen escalation side.',
 		copy078: 'Selected escalation deposits were settled against the current finalized outcome.',
-		copy079: SHARED_UI_STRINGS.pool,
-		copy080: SHARED_UI_STRINGS.universe,
-		copy081: SHARED_UI_STRINGS.outcome,
+		copy079: UI_STRING_POOL,
+		copy080: UI_STRING_UNIVERSE,
+		copy081: UI_STRING_OUTCOME,
 		copy082: 'Submitting Liquidation',
 		copy083: 'Liquidation transaction submitted.',
 		copy084: 'The liquidation request was submitted successfully.',
 		copy085: (value0: UiStringTemplateValue) => `Liquidation staged as operation #${value0} for the next oracle settlement.`,
 		copy086: (value0: UiStringTemplateValue) => `Liquidation staged as operation #${value0} and must be executed manually after a valid oracle price is available.`,
 		copy087: 'The liquidation executed immediately.',
-		copy088: SHARED_UI_STRINGS.pool,
-		copy089: SHARED_UI_STRINGS.stagedOperation,
-		copy090: SHARED_UI_STRINGS.liquidationExecuted,
-		copy091: SHARED_UI_STRINGS.liquidationSubmitted,
+		copy088: UI_STRING_POOL,
+		copy089: UI_STRING_STAGED_OPERATION,
+		copy090: UI_STRING_LIQUIDATION_EXECUTED,
+		copy091: UI_STRING_LIQUIDATION_SUBMITTED,
 		copy092: 'Executing Staged Operation',
 		copy093: 'Staged-operation transaction submitted.',
 		copy094: 'Requesting Price',
@@ -1253,12 +1076,12 @@ export const TSX_STRINGS = {
 		copy097: 'Staged Operation Executed',
 		copy098: 'A new oracle price was requested successfully.',
 		copy099: 'Price Requested',
-		copy100: SHARED_UI_STRINGS.action,
-		copy101: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.transactionSubmitted(value0),
-		copy102: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.completedSuccessfully(value0),
-		copy103: SHARED_UI_STRINGS.action,
-		copy104: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.transactionSubmitted(value0),
-		copy105: SHARED_UI_STRINGS.settleFinalizedRefunds,
+		copy100: UI_STRING_ACTION,
+		copy101: (value0: UiStringTemplateValue) => UI_TEMPLATE_TRANSACTION_SUBMITTED(value0),
+		copy102: (value0: UiStringTemplateValue) => UI_TEMPLATE_COMPLETED_SUCCESSFULLY(value0),
+		copy103: UI_STRING_ACTION,
+		copy104: (value0: UiStringTemplateValue) => UI_TEMPLATE_TRANSACTION_SUBMITTED(value0),
+		copy105: UI_STRING_SETTLE_FINALIZED_REFUNDS,
 		copy106: (value0: UiStringTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning child-pool REP or ${value0}.`,
 		copy107: (value0: UiStringTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received child-pool REP plus ${value0}, assigning the remaining open-interest debt.`,
 		copy108: (value0: UiStringTemplateValue) => `Selected truth-auction bids were settled. Winning bids received child-pool REP plus ${value0}, assigning the remaining open-interest debt; refund-only rows returned locked ETH.`,
@@ -1274,9 +1097,9 @@ export const TSX_STRINGS = {
 		copy118: 'Imported fork-carried escalation deposits were settled.',
 		copy119: 'Truth auction state was started for the selected child universe.',
 		copy120: 'Truth auction bid submitted. Bid ETH stays committed until settlement.',
-		copy121: (value0: UiStringTemplateValue) => SHARED_UI_TEMPLATES.completedSuccessfully(value0),
-		copy122: SHARED_UI_STRINGS.pool,
-		copy123: SHARED_UI_STRINGS.universe,
+		copy121: (value0: UiStringTemplateValue) => UI_TEMPLATE_COMPLETED_SUCCESSFULLY(value0),
+		copy122: UI_STRING_POOL,
+		copy123: UI_STRING_UNIVERSE,
 	},
 } as const
 
@@ -1284,7 +1107,7 @@ export const UI_STRINGS = {
 	appPageTitle: {
 		createOracleReportPageTitle: 'Create Oracle Report',
 		createQuestionPageTitle: UI_STRING_CREATE_QUESTION,
-		createSecurityPoolPageTitle: SHARED_UI_STRINGS.createSecurityPool,
+		createSecurityPoolPageTitle: UI_STRING_CREATE_SECURITY_POOL,
 		deployContractsPageTitle: 'Deploy Contracts',
 		documentTitleSuffix: UI_STRING_APP_DOCUMENT_TITLE_SUFFIX,
 		forkOraclePageTitle: UI_STRING_FORK_ZOLTAR,
@@ -1306,27 +1129,27 @@ export const UI_STRINGS = {
 		securityPools: {
 			browsePoolsLabel: 'Browse Pools',
 			createPoolLabel: UI_STRING_CREATE_POOL,
-			managePoolLabel: SHARED_UI_STRINGS.managePool,
+			managePoolLabel: UI_STRING_MANAGE_POOL,
 			subNavigationAriaLabel: 'Security Pools views',
 		},
 		zoltar: {
 			createQuestionLabel: UI_STRING_CREATE_QUESTION,
 			forkOracleLabel: UI_STRING_FORK_ZOLTAR,
-			forkOracleRequiredForRepMigrationReason: SHARED_UI_STRINGS.repMigrationIsUnavailableBecauseThisUniverseHas,
+			forkOracleRequiredForRepMigrationReason: UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
 			migrateRepLabel: UI_STRING_MIGRATE_REP,
 			questionsAndMarketsLabel: UI_STRING_QUESTIONS_AND_MARKETS,
 			subNavigationAriaLabel: 'Market views',
 		},
 	},
 	common: {
-		cancelLabel: SHARED_UI_STRINGS.cancel,
+		cancelLabel: UI_STRING_CANCEL,
 		closeLabel: UI_STRING_CLOSE,
 		connectWalletToContinueDetail: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
 		hexValuePlaceholder: UI_STRING_HEX_VALUE_PLACEHOLDER,
-		failedBadgeLabel: SHARED_UI_STRINGS.failed,
+		failedBadgeLabel: UI_STRING_FAILED,
 		loadingBadgeLabel: UI_STRING_LOADING,
 		loadingLabel: UI_STRING_LOADING_WITH_ELLIPSIS,
-		maxLabel: SHARED_UI_STRINGS.max,
+		maxLabel: UI_STRING_MAX,
 		metricUnavailablePlaceholder: '—',
 		minutesLabel: 'minutes',
 		multiplierSuffix: UI_STRING_MULTIPLIER_SUFFIX,
@@ -1337,10 +1160,10 @@ export const UI_STRINGS = {
 		notCheckedBadgeLabel: UI_STRING_NOT_CHECKED,
 		notFoundBadgeLabel: UI_STRING_NOT_FOUND,
 		noneYetBadgeLabel: UI_STRING_NONE,
-		ethSuffix: SHARED_UI_STRINGS.eth,
-		repPerEthSuffix: SHARED_UI_STRINGS.repPerEth,
+		ethSuffix: UI_STRING_ETH,
+		repPerEthSuffix: UI_STRING_REP_PER_ETH,
 		usdcSuffix: 'USDC',
-		wethSuffix: SHARED_UI_STRINGS.weth,
+		wethSuffix: UI_STRING_WETH,
 		repLabel: UI_STRING_REP,
 		refreshLabel: UI_STRING_REFRESH,
 		unavailableLabel: UI_STRING_UNAVAILABLE,
@@ -1353,7 +1176,7 @@ export const UI_STRINGS = {
 	},
 	appStatusNotices: {
 		activeReadRpcLabel: 'Active read RPC',
-		appErrorTitle: SHARED_UI_STRINGS.error,
+		appErrorTitle: UI_STRING_ERROR,
 		configuredFallbackReadRpcLabel: 'Configured fallback read RPC',
 		defaultRpcSourceLabel: 'default',
 		environmentRpcSourceLabel: 'environment',
@@ -1396,11 +1219,11 @@ export const UI_STRINGS = {
 		canDeployNowDetail: 'Can deploy now.',
 		codeFoundAtExpectedAddressDetail: 'Code found at expected address.',
 		connectWalletToContinueDetail: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
-		deployedBadgeLabel: SHARED_UI_STRINGS.deployed,
+		deployedBadgeLabel: UI_STRING_DEPLOYED,
 		deployButtonLabel: UI_STRING_DEPLOY,
-		deployingBadgeLabel: SHARED_UI_STRINGS.deploying,
+		deployingBadgeLabel: UI_STRING_DEPLOYING,
 		deployingDetail: 'Deployment in progress.',
-		deployingPendingLabel: SHARED_UI_STRINGS.deploying,
+		deployingPendingLabel: UI_STRING_DEPLOYING,
 		notDeployedBadgeLabel: 'Not Deployed',
 		waitingBadgeLabel: 'Waiting',
 		waitingForPrerequisiteDetail: (prerequisiteLabel: string) => `Waiting for ${prerequisiteLabel}.`,
@@ -1408,13 +1231,13 @@ export const UI_STRINGS = {
 	securityPoolWorkflowSection: {
 		autoExecPendingLabel: 'Auto-exec pending',
 		additionalPoolActionsAriaLabel: 'Additional pool actions',
-		amountLabel: SHARED_UI_STRINGS.amount,
+		amountLabel: UI_STRING_AMOUNT,
 		directoryViewLabel: 'Directory',
 		executeStagedOperationLabel: 'Execute Staged Operation',
 		executingStagedOperationLabel: 'Executing staged operation...',
 		forkAndTruthReadOnlyReason: 'This pool is currently operational, so fork and truth auction actions are read only.',
 		initiatorLabel: 'Initiator',
-		loadingVaultDetail: SHARED_UI_STRINGS.loadingVault,
+		loadingVaultDetail: UI_STRING_LOADING_VAULT,
 		loadStagedOperationsLabel: 'Load Staged Operations',
 		manualExecutionLabel: 'Manual execution',
 		noStagedOperationsQueuedDetail: 'No staged operations are currently queued for this pool.',
@@ -1422,52 +1245,52 @@ export const UI_STRINGS = {
 		noneQueuedBadgeLabel: 'None queued',
 		noneYetBadgeLabel: UI_STRING_NONE,
 		pendingOperationLiquidationLabel: 'Liquidation',
-		pendingOperationSetBondAllowanceLabel: SHARED_UI_STRINGS.setBondAllowance,
-		pendingOperationWithdrawRepLabel: SHARED_UI_STRINGS.withdrawRep,
-		pendingReportLabel: (reportId: string) => SHARED_UI_TEMPLATES.reportNumberLabel(reportId),
+		pendingOperationSetBondAllowanceLabel: UI_STRING_SET_BOND_ALLOWANCE,
+		pendingOperationWithdrawRepLabel: UI_STRING_WITHDRAW_REP,
+		pendingReportLabel: (reportId: string) => UI_TEMPLATE_REPORT_NUMBER_LABEL(reportId),
 		primaryPoolActionsAriaLabel: 'Primary pool actions',
 		poolNotFoundTitle: 'Pool not found',
-		managePoolTitle: SHARED_UI_STRINGS.managePool,
+		managePoolTitle: UI_STRING_MANAGE_POOL,
 		refreshOracleLabel: 'Refresh Oracle',
 		refreshPoolLabel: 'Refresh pool',
 		refreshStagedOperationsLabel: 'Refresh Staged Operations',
 		refreshingOracleLabel: 'Refreshing oracle...',
 		refreshingOperationsLabel: 'Refreshing operations...',
 		refreshingPoolLabel: 'Refreshing pool...',
-		refreshingVaultLabel: SHARED_UI_STRINGS.refreshing,
+		refreshingVaultLabel: UI_STRING_REFRESHING,
 		requestCostLabel: 'Request Cost',
 		requestNewPriceLabel: 'Request New Price',
 		requestingNewPriceLabel: 'Requesting new price...',
-		reviewLiquidationActionLabel: SHARED_UI_STRINGS.reviewLiquidation,
+		reviewLiquidationActionLabel: UI_STRING_REVIEW_LIQUIDATION,
 		reviewLiquidationDescription: 'Inspect the liquidation quote, timeout, and execution path before queueing liquidation.',
-		reviewLiquidationTitle: SHARED_UI_STRINGS.reviewLiquidation,
-		selectedBadgeLabel: SHARED_UI_STRINGS.selected,
+		reviewLiquidationTitle: UI_STRING_REVIEW_LIQUIDATION,
+		selectedBadgeLabel: UI_STRING_SELECTED,
 		selectedPoolTitle: 'Selected Pool',
 		selectedPoolVaultViewsAriaLabel: 'Selected pool vault views',
 		selectedPoolViewsAriaLabel: 'Selected pool views',
-		notFoundBadgeLabel: SHARED_UI_STRINGS.notFound,
-		openOraclePriceLabel: SHARED_UI_STRINGS.openOraclePrice,
+		notFoundBadgeLabel: UI_STRING_NOT_FOUND,
+		openOraclePriceLabel: UI_STRING_OPEN_ORACLE_PRICE,
 		openOracleTitle: 'Open Oracle',
 		parentPoolLabel: 'Parent Pool',
 		pendingRequestLabel: 'Pending Request',
-		questionTitle: SHARED_UI_STRINGS.question,
+		questionTitle: UI_STRING_QUESTION,
 		selectVaultActionLabel: 'Select Vault',
-		selectedViewLabel: SHARED_UI_STRINGS.selected,
+		selectedViewLabel: UI_STRING_SELECTED,
 		showingActiveStagedOperationsLabel: (loadedCount: string, activeCount: string) => `Showing ${loadedCount} of ${activeCount} active staged operations, newest first.`,
 		stagedOperationIdLabel: 'Staged Operation Id',
 		stagedOperationIdPlaceholder: '0',
 		stagedOperationsLabel: 'Staged Operations',
 		stagedOperationsListLabel: 'Staged Operations List',
-		targetVaultLabel: SHARED_UI_STRINGS.targetVault,
+		targetVaultLabel: UI_STRING_TARGET_VAULT,
 		universeMismatchTitle: 'Universe Mismatch',
 		universeMismatchDetailPrefix: 'This pool belongs to',
 		universeMismatchDetailMiddle: 'but the app is currently set to',
 		universeMismatchDetailSuffix: 'This pool does not exist.',
 		vaultDirectoryTitle: 'Vault Directory',
-		vaultMissingDetail: SHARED_UI_STRINGS.thisVaultDoesNotExist,
+		vaultMissingDetail: UI_STRING_THIS_VAULT_DOES_NOT_EXIST,
 		vaultOperationsTitle: 'Vault Operations',
-		selectedVaultAddressLabel: SHARED_UI_STRINGS.selectedVaultAddress,
-		securityPoolAddressLabel: SHARED_UI_STRINGS.securityPoolAddress,
+		selectedVaultAddressLabel: UI_STRING_SELECTED_VAULT_ADDRESS,
+		securityPoolAddressLabel: UI_STRING_SECURITY_POOL_ADDRESS,
 		tryAnotherVaultAddressDetail: 'Try another vault address.',
 		triggerZoltarForkAlreadyTriggeredReason: 'Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.',
 		triggerZoltarForkEnteredForkWorkflowReason: 'This pool has already entered Fork & Migration.',
@@ -1492,25 +1315,25 @@ export const UI_STRINGS = {
 		enterLiquidationTimeoutReason: 'Enter a liquidation timeout of at least 1 minute.',
 		executeLiquidationPendingLabel: 'Executing liquidation...',
 		executeVaultLiquidationTitle: 'Execute Vault Liquidation',
-		failedBadgeLabel: SHARED_UI_STRINGS.failed,
+		failedBadgeLabel: UI_STRING_FAILED,
 		invalidLiquidationPairTitle: 'Invalid Liquidation Pair',
 		liquidateVaultIdleLabel: UI_STRING_LIQUIDATE_VAULT,
 		liquidateVaultPendingLabel: 'Submitting liquidation...',
 		liquidateVaultTitle: UI_STRING_LIQUIDATE_VAULT,
 		liquidationAmountLabel: 'Liquidation Amount (ETH)',
-		liquidationAmountPlaceholder: SHARED_UI_STRINGS.zeroDecimalPlaceholder,
-		liquidationExecutedTitle: SHARED_UI_STRINGS.liquidationExecuted,
+		liquidationAmountPlaceholder: UI_STRING_ZERO_DECIMAL_PLACEHOLDER,
+		liquidationExecutedTitle: UI_STRING_LIQUIDATION_EXECUTED,
 		liquidationFailedDetail: 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.',
 		liquidationFailedTitle: 'Liquidation Failed',
 		liquidationQueuedTitle: 'Liquidation Queued',
-		liquidationSubmittedTitle: SHARED_UI_STRINGS.liquidationSubmitted,
+		liquidationSubmittedTitle: UI_STRING_LIQUIDATION_SUBMITTED,
 		manualExecutionTimeoutLabel: UI_STRING_MANUAL_EXECUTION_TIMEOUT,
 		manualQueuedLiquidationDetail: UI_STRING_MANUAL_QUEUED_OPERATION,
 		metricAmountLabel: UI_STRING_AMOUNT,
-		openOraclePriceLabel: SHARED_UI_STRINGS.openOraclePrice,
+		openOraclePriceLabel: UI_STRING_OPEN_ORACLE_PRICE,
 		operationExecutedBadgeLabel: UI_STRING_EXECUTED,
 		queueLiquidationActionLabel: 'queue liquidation',
-		queueLiquidationIdleLabel: SHARED_UI_STRINGS.queueLiquidation,
+		queueLiquidationIdleLabel: UI_STRING_QUEUE_LIQUIDATION,
 		queueLiquidationPendingLabel: 'Queueing liquidation...',
 		queueVaultLiquidationTitle: 'Queue Vault Liquidation',
 		queuedBadgeLabel: 'Queued',
@@ -1522,14 +1345,14 @@ export const UI_STRINGS = {
 		reloadPoolBeforeLiquidatingReason: 'Reload the selected pool before liquidating.',
 		repCollateralLabel: UI_STRING_REP_COLLATERAL,
 		repMovedLabel: 'Rep Moved',
-		securityBondAllowanceLabel: SHARED_UI_STRINGS.securityBondAllowance,
+		securityBondAllowanceLabel: UI_STRING_SECURITY_BOND_ALLOWANCE,
 		securityMultiplierLabel: UI_STRING_SECURITY_MULTIPLIER,
 		securityPoolLabel: 'Security Pool',
 		selectDifferentTargetVaultReason: 'Select a target vault that is different from the caller vault.',
 		selectTargetVaultReason: 'Select a target vault first.',
 		submitNewStagedOperationDetail: UI_STRING_STAGED_OPERATION_RETRY,
 		targetCollateralizationAtOpenOracleLabel: 'Target Collateralization @ Open Oracle',
-		targetVaultLabel: SHARED_UI_STRINGS.targetVault,
+		targetVaultLabel: UI_STRING_TARGET_VAULT,
 		timeoutHelpTextInvalid: 'Enter whole minutes. Queued staged operations must stay executable for at least 1 minute after the oracle settlement window completes.',
 		timeoutHelpTextResolved: (duration: string) => `This queued staged operation will expire ${duration} after the oracle settlement window completes.`,
 		transactionStateUnavailableDetail: UI_STRING_TRANSACTION_STATE_UNAVAILABLE,
@@ -1541,7 +1364,7 @@ export const UI_STRINGS = {
 		completedSectionTitle: (sectionTitle: string) => `${sectionTitle} (Completed)`,
 		contractsDeployedLabel: 'Contracts deployed',
 		deployButtonIdleLabel: 'Deploy Next Missing',
-		deployButtonPendingLabel: SHARED_UI_STRINGS.deploying,
+		deployButtonPendingLabel: UI_STRING_DEPLOYING,
 		deploymentGroupsDescription: 'All deterministic contracts are deployed in grouped sections.',
 		deploymentGroupsTitle: 'Deployment Groups',
 		deploymentInProgressLabel: 'Deployment In Progress',
@@ -1565,14 +1388,14 @@ export const UI_STRINGS = {
 		selectedForkQuestionPrefix: 'Selected fork question:',
 		statusForkedLabel: UI_STRING_FORKED,
 		statusLabel: UI_STRING_STATUS,
-		statusUnforkedLabel: SHARED_UI_STRINGS.unforked,
+		statusUnforkedLabel: UI_STRING_UNFORKED,
 		universeLabel: UI_STRING_UNIVERSE,
 	},
 	marketOverviewSection: {
-		childUniverseAlreadyDeployedReason: SHARED_UI_STRINGS.childUniverseAlreadyDeployed,
-		childUniverseNotAlreadyDeployedLabel: SHARED_UI_STRINGS.childUniverseNotAlreadyDeployed,
-		childUniversesUnavailableReason: SHARED_UI_STRINGS.childUniversesAreUnavailableBecauseThisUniverseHas,
-		universeIsForkedLabel: SHARED_UI_STRINGS.universeIsForked,
+		childUniverseAlreadyDeployedReason: UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED,
+		childUniverseNotAlreadyDeployedLabel: UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED,
+		childUniversesUnavailableReason: UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
+		universeIsForkedLabel: UI_STRING_UNIVERSE_IS_FORKED,
 	},
 	marketCreateQuestionSection: {
 		alreadyForkedLabel: UI_STRING_ALREADY_FORKED,
@@ -1599,7 +1422,7 @@ export const UI_STRINGS = {
 		endTimeFieldLabel: UI_STRING_END_TIME,
 		immediatelyAfterCreationLabel: 'Immediately after creation',
 		lowTrustUntilContextAddedLabel: 'Low trust until context is added',
-		outcomeFieldLabelPrefix: SHARED_UI_STRINGS.outcome,
+		outcomeFieldLabelPrefix: UI_STRING_OUTCOME,
 		outcomesFieldLabel: UI_STRING_OUTCOMES,
 		addOutcomeLabel: 'Add Outcome',
 		addAtLeastTwoOutcomesLabel: 'Add at least 2 outcomes',
@@ -1610,7 +1433,7 @@ export const UI_STRINGS = {
 		poolEligibilityScalarQuestionText: 'Scalar questions are valid in Zoltar, but Placeholder origin security pools currently require an exact binary Yes / No question.',
 		questionDefaultDescriptionText: 'Add resolution notes, evidence sources, and edge-case handling so other users know how this question will settle.',
 		questionDefaultTitleText: 'Add a clear question title',
-		questionFallbackTitle: SHARED_UI_STRINGS.question,
+		questionFallbackTitle: UI_STRING_QUESTION,
 		questionTypeAriaLabel: UI_STRING_QUESTION_TYPE,
 		questionTypeGuidanceTitle: 'Question Type Guidance',
 		questionTypeLabel: UI_STRING_QUESTION_TYPE,
@@ -1626,8 +1449,8 @@ export const UI_STRINGS = {
 		scalarMinFieldPlaceholder: '1',
 		scalarPreviewPromptText: 'Enter scalar min, max, and increment to preview the tick slider.',
 		startTimeFieldLabel: 'Start Time',
-		startsLabel: SHARED_UI_STRINGS.starts,
-		endsLabel: SHARED_UI_STRINGS.ends,
+		startsLabel: UI_STRING_STARTS,
+		endsLabel: UI_STRING_ENDS,
 		timingFieldHelpText: 'Times use your browser timezone. Leave start time blank to allow activity immediately after creation.',
 		titleFieldHelpText: 'Keep the title self-contained so users can understand the exact question before opening details.',
 		titleFieldPlaceholder: 'Will event X happen?',
@@ -1668,8 +1491,8 @@ export const UI_STRINGS = {
 		alreadyForkedLabel: UI_STRING_ALREADY_FORKED,
 		loadingQuestionsLabel: 'Loading questions...',
 		marketsTitle: UI_STRING_MARKETS,
-		noQuestionsEmptyBadgeLabel: SHARED_UI_STRINGS.noQuestions,
-		noQuestionsBadgeLabel: SHARED_UI_STRINGS.noQuestions,
+		noQuestionsEmptyBadgeLabel: UI_STRING_NO_QUESTIONS,
+		noQuestionsBadgeLabel: UI_STRING_NO_QUESTIONS,
 		noQuestionsDetail: 'No questions.',
 		nonBinaryPoolRestrictionDetail: 'Non-binary questions are valid in Zoltar, but Placeholder origin pools currently require an exact binary Yes / No question.',
 		pageUnavailableDetail: 'Question page unavailable.',
@@ -1686,7 +1509,7 @@ export const UI_STRINGS = {
 		callbackGasLimitLabel: 'Callback Gas Limit',
 		currentAmount1Label: (tokenSymbol: string) => `Current Amount 1 (${tokenSymbol})`,
 		currentAmount2Label: (tokenSymbol: string) => `Current Amount 2 (${tokenSymbol})`,
-		tokenPairSuffix: (token1Symbol: string, token2Symbol: string) => SHARED_UI_TEMPLATES.pairSlash(token1Symbol, token2Symbol),
+		tokenPairSuffix: (token1Symbol: string, token2Symbol: string) => UI_TEMPLATE_PAIR_SLASH(token1Symbol, token2Symbol),
 		createAnotherLabel: 'Create Another',
 		createStandaloneOracleGameButtonIdleLabel: 'Create Standalone Oracle Game',
 		createStandaloneOracleGameButtonPendingLabel: 'Creating...',
@@ -1712,7 +1535,7 @@ export const UI_STRINGS = {
 		disconnectedWalletSettleReason: 'Connect a wallet before settling the report.',
 		disconnectedWalletSubmitInitialReportReason: 'Connect a wallet before submitting the initial report.',
 		disconnectedWalletWrapEthReason: 'Connect a wallet before wrapping ETH.',
-		disputeReportTitle: SHARED_UI_STRINGS.disputeReport,
+		disputeReportTitle: UI_STRING_DISPUTE_REPORT,
 		economicsTitle: 'Economics',
 		enterValidDisputeAmountsBeforeApprovingReason: (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`,
 		enterValidPriceBeforeApprovingReason: (token1Symbol: string, token2Symbol: string) => `Enter a valid ${token1Symbol} / ${token2Symbol} price before approving ${token2Symbol}.`,
@@ -1761,7 +1584,7 @@ export const UI_STRINGS = {
 		reportIdFieldLabel: UI_STRING_REPORT_ID,
 		reportIdLabel: UI_STRING_REPORT_ID,
 		reportLabel: 'Report',
-		reportNumberTitle: (reportId: string) => SHARED_UI_TEMPLATES.reportNumberLabel(reportId),
+		reportNumberTitle: (reportId: string) => UI_TEMPLATE_REPORT_NUMBER_LABEL(reportId),
 		reportTimestampLabel: 'Report Timestamp',
 		reportActionsTitle: 'Report Actions',
 		reportActionsDescription: 'Open a focused action flow for the selected report when it is available.',
@@ -1783,17 +1606,17 @@ export const UI_STRINGS = {
 		settlementTimeFieldLabel: UI_STRING_SETTLEMENT_TIME,
 		settlementTimeLabel: UI_STRING_SETTLEMENT_TIME,
 		settlementTimestampLabel: 'Settlement Timestamp',
-		settlementTitle: SHARED_UI_STRINGS.settlement,
+		settlementTitle: UI_STRING_SETTLEMENT,
 		notSettledLabel: 'Not settled',
 		stateHashLabel: 'State Hash',
 		statusFieldLabel: UI_STRING_STATUS,
 		statusFilterAllLabel: 'All statuses',
 		statusFilterAwaitingInitialReportLabel: 'Awaiting initial report',
-		statusFilterPendingLabel: SHARED_UI_STRINGS.pending,
+		statusFilterPendingLabel: UI_STRING_PENDING,
 		statusFilterDisputedLabel: 'Disputed',
 		statusFilterSettledLabel: UI_STRING_SETTLED,
 		noneYetBadgeLabel: UI_STRING_NONE,
-		noMatchesBadgeLabel: SHARED_UI_STRINGS.noMatches,
+		noMatchesBadgeLabel: UI_STRING_NO_MATCHES,
 		noOpenOracleGamesDetail: 'No Open Oracle games found.',
 		noReportsMatchFiltersDetail: 'No reports match the current search and status filters.',
 		refreshingReportSummariesDetail: 'Refreshing report summaries.',
@@ -1807,7 +1630,7 @@ export const UI_STRINGS = {
 		submitInitialReportIdleLabel: UI_STRING_SUBMIT_INITIAL_REPORT,
 		submitInitialReportPendingLabel: 'Submitting...',
 		timeInBlocksSuffix: ' blocks',
-		timeInSecondsSuffix: SHARED_UI_STRINGS.pluralSuffix,
+		timeInSecondsSuffix: UI_STRING_PLURAL_SUFFIX,
 		timingTitle: 'Timing',
 		quoteLoadedDetail: (quoteBlockNumberText: string | undefined, ageText: string) => (quoteBlockNumberText === undefined ? `Quote loaded ${ageText}.` : `Quote loaded at block ${quoteBlockNumberText} ${ageText}.`),
 		quoteAgeText: (quoteLoadedAtMs: number) => {
@@ -1841,11 +1664,11 @@ export const UI_STRINGS = {
 		},
 	},
 	zoltarMigrationSection: {
-		prepareRepIdleLabel: SHARED_UI_STRINGS.prepareRep,
+		prepareRepIdleLabel: UI_STRING_PREPARE_REP,
 		preparingRepPendingLabel: 'Preparing REP...',
-		repMigrationUnavailableReason: SHARED_UI_STRINGS.repMigrationIsUnavailableBecauseThisUniverseHas,
+		repMigrationUnavailableReason: UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
 		repPreparationUnavailableReason: 'REP preparation is unavailable because this universe has not forked.',
-		splitRepIdleLabel: SHARED_UI_STRINGS.splitRep,
+		splitRepIdleLabel: UI_STRING_SPLIT_REP,
 		splittingRepPendingLabel: 'Splitting REP...',
 	},
 	overviewPanels: {
@@ -1855,7 +1678,7 @@ export const UI_STRINGS = {
 		connectWalletPendingLabel: UI_STRING_CONNECTING,
 		connectedBadgeLabel: 'Connected',
 		connectingDetail: UI_STRING_CONNECTING,
-		ethBalanceLabel: SHARED_UI_STRINGS.eth,
+		ethBalanceLabel: UI_STRING_ETH,
 		forkedBadgeLabel: UI_STRING_FORKED,
 		goToGenesisUniverseLabel: UI_STRING_GO_TO_GENESIS_UNIVERSE,
 		notConnectedLabel: 'Not connected',
@@ -1873,7 +1696,7 @@ export const UI_STRINGS = {
 		universeForkedDescription: 'This universe has forked.',
 		universeForkedOnDetailPrefix: 'Zoltar forked on',
 		universeLabel: UI_STRING_UNIVERSE,
-		wethBalanceLabel: SHARED_UI_STRINGS.weth,
+		wethBalanceLabel: UI_STRING_WETH,
 		wrongNetworkBadgeLabel: 'Wrong Network',
 	},
 	question: {
@@ -1891,32 +1714,32 @@ export const UI_STRINGS = {
 		untitledQuestionLabel: 'Untitled question',
 	},
 	scalarDeploymentSection: {
-		childUniverseAlreadyDeployedDetail: SHARED_UI_STRINGS.childUniverseAlreadyDeployed,
-		childUniverseAlreadyDeployedReason: SHARED_UI_STRINGS.childUniverseAlreadyDeployed,
-		childUniverseNotAlreadyDeployedLabel: SHARED_UI_STRINGS.childUniverseNotAlreadyDeployed,
-		childUniverseSelectedTitle: SHARED_UI_STRINGS.selectedChildUniverse,
-		childUniversesTitle: SHARED_UI_STRINGS.childUniverses,
-		connectWalletBeforeDeployingChildUniverseReason: SHARED_UI_STRINGS.connectAWalletBeforeDeployingAChildUniverse,
-		createChildUniverseLabel: SHARED_UI_STRINGS.createChildUniverse,
-		createChildUniverseTitle: SHARED_UI_STRINGS.createChildUniverseTitle,
+		childUniverseAlreadyDeployedDetail: UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED,
+		childUniverseAlreadyDeployedReason: UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED,
+		childUniverseNotAlreadyDeployedLabel: UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED,
+		childUniverseSelectedTitle: UI_STRING_SELECTED_CHILD_UNIVERSE,
+		childUniversesTitle: UI_STRING_CHILD_UNIVERSES,
+		connectWalletBeforeDeployingChildUniverseReason: UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE,
+		createChildUniverseLabel: UI_STRING_CREATE_CHILD_UNIVERSE,
+		createChildUniverseTitle: UI_STRING_CREATE_CHILD_UNIVERSE_TITLE,
 		createInvalidUniverseLabel: 'Create invalid universe',
-		deployedLabel: SHARED_UI_STRINGS.deployed,
+		deployedLabel: UI_STRING_DEPLOYED,
 		deployInvalidUniverseLabel: 'Deploy Invalid Universe',
-		deployUniverseLabel: SHARED_UI_STRINGS.deployUniverse,
-		deployingUniversePendingLabel: SHARED_UI_STRINGS.deployingUniverse,
+		deployUniverseLabel: UI_STRING_DEPLOY_UNIVERSE,
+		deployingUniversePendingLabel: UI_STRING_DEPLOYING_UNIVERSE,
 		existingChildUniversesTitle: 'Existing Child Universes',
 		executeChildUniverseDeploymentDescription: 'Confirm the selected scalar outcome and deploy its child universe in one bounded execution flow.',
-		forkBeforeDeployingChildUniversesReason: SHARED_UI_STRINGS.childUniversesAreUnavailableBecauseThisUniverseHas,
+		forkBeforeDeployingChildUniversesReason: UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
 		loadingScalarRangeDetail: 'Loading scalar range...',
 		noChildUniverseSelectedMessage: 'No child universe selected.',
 		noDeployedChildUniversesMessage: 'No deployed child universes.',
-		openingChildUniversePendingLabel: SHARED_UI_STRINGS.opening,
+		openingChildUniversePendingLabel: UI_STRING_OPENING,
 		scalarForksCanDeployOneOutcomeUniverseAtATimeDetail: 'Scalar forks can deploy one outcome universe at a time.',
 		selectChildUniverseLabel: 'Select Child Universe',
 		selectedTickInvalidLabel: UI_STRING_INVALID,
 		selectedTickInvalidReason: 'Selected tick is invalid',
-		universeIsForkedLabel: SHARED_UI_STRINGS.universeIsForked,
-		walletConnectedLabel: SHARED_UI_STRINGS.walletConnected,
+		universeIsForkedLabel: UI_STRING_UNIVERSE_IS_FORKED,
+		walletConnectedLabel: UI_STRING_WALLET_CONNECTED,
 	},
 	shareMigrationTargetsSection: {
 		addTargetLabel: 'Add Target',
@@ -1933,8 +1756,8 @@ export const UI_STRINGS = {
 		selectAllLabel: 'Select all',
 		selectScalarTargetLabel: 'Select Scalar Target',
 		selectScalarTargetUniverseDetail: 'Select at least one scalar target universe.',
-		selectedLabel: SHARED_UI_STRINGS.selected,
-		selectedTickLabel: (selectedTick: string, totalTicks: string) => SHARED_UI_TEMPLATES.pairSlash(selectedTick, totalTicks),
+		selectedLabel: UI_STRING_SELECTED,
+		selectedTickLabel: (selectedTick: string, totalTicks: string) => UI_TEMPLATE_PAIR_SLASH(selectedTick, totalTicks),
 		targetChildUniversesTitle: 'Target Child Universes',
 		targetsUnlockAfterForkDetail: 'Child-universe targets unlock after this universe forks.',
 	},
@@ -1954,10 +1777,10 @@ export const UI_STRINGS = {
 		contributionAmountHelpText: 'This is the REP you are willing to lock on the selected side. Larger amounts can change the proposed outcome or extend the escalation timer.',
 		contributionAmountLabel: 'Contribution Amount (REP)',
 		enterValidReportAmountReason: 'Enter a valid report amount to preview profit.',
-		escalationMetricsTitle: SHARED_UI_STRINGS.escalationMetrics,
+		escalationMetricsTitle: UI_STRING_ESCALATION_METRICS,
 		escalationStartedLabel: 'Escalation started',
-		escalationWorkflowSummary: SHARED_UI_STRINGS.selectTheAnswerYouBelieveShouldFinalizeLock,
-		establishedReportOutcomeLabel: SHARED_UI_STRINGS.reportOutcome,
+		escalationWorkflowSummary: UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK,
+		establishedReportOutcomeLabel: UI_STRING_REPORT_OUTCOME,
 		chooseDepositsToSettleLabel: 'Choose deposits to settle',
 		forkAlreadyTriggeredReportReason: 'Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.',
 		forkAlreadyTriggeredSettlementReason: 'Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in Fork & Migration.',
@@ -1966,7 +1789,7 @@ export const UI_STRINGS = {
 		initiallyDepositedLabel: 'Initially deposited:',
 		leadHoldingCapitalLabel: 'Lead-holding capital',
 		loadingAvailableVaultRepReason: 'Loading available vault REP.',
-		loadingEscalationDepositsReason: SHARED_UI_STRINGS.loadingEscalationDeposits,
+		loadingEscalationDepositsReason: UI_STRING_LOADING_ESCALATION_DEPOSITS,
 		loadReportingDetailsReason: 'Load reporting details before using presets.',
 		loadingEscalationLabel: 'Loading escalation...',
 		loadingReportingLabel: 'Refresh reporting',
@@ -1980,24 +1803,24 @@ export const UI_STRINGS = {
 		reportOnSelectedSideLabel: 'Report On Selected Side',
 		reportOutcomeAriaLabel: 'Report outcome',
 		reportSelectedOutcomeButtonLabel: (selectedOutcomeLabel: string) => `Report ${selectedOutcomeLabel}`,
-		reportOutcomeSelectionMessage: SHARED_UI_STRINGS.selectAnOutcomeSideAboveToEnableReporting,
+		reportOutcomeSelectionMessage: UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING,
 		reportingActiveDetail: 'Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.',
-		reportingWorkflowTitle: SHARED_UI_STRINGS.reportingWorkflow,
+		reportingWorkflowTitle: UI_STRING_REPORTING_WORKFLOW,
 		reportingLatestOutcomeReminderImmediate: (selectedOutcomeLabel: string) => `Check back immediately to confirm the market finalized as ${selectedOutcomeLabel}.`,
 		reportingLatestOutcomeReminderLater: (selectedOutcomeLabel: string) => `Check back later to confirm ${selectedOutcomeLabel} is the leading outcome.`,
-		reportingLatestOutcomeReminderBeforeRewardWindowPrefix: SHARED_UI_STRINGS.checkBackNoLaterThan,
-		reportingLatestOutcomeReminderBeforeRewardWindowMiddle: SHARED_UI_STRINGS.toConfirm,
+		reportingLatestOutcomeReminderBeforeRewardWindowPrefix: UI_STRING_CHECK_BACK_NO_LATER_THAN,
+		reportingLatestOutcomeReminderBeforeRewardWindowMiddle: UI_STRING_TO_CONFIRM,
 		reportingLatestOutcomeReminderBeforeRewardWindowSuffix: ' is the leading outcome before the remaining reward-eligible REP on ',
 		reportingLatestOutcomeReminderBeforeRewardWindowTail: ' is filled.',
-		reportingLatestOutcomeReminderBeforeFinalizationPrefix: SHARED_UI_STRINGS.checkBackNoLaterThan,
-		reportingLatestOutcomeReminderBeforeFinalizationMiddle: SHARED_UI_STRINGS.toConfirm,
+		reportingLatestOutcomeReminderBeforeFinalizationPrefix: UI_STRING_CHECK_BACK_NO_LATER_THAN,
+		reportingLatestOutcomeReminderBeforeFinalizationMiddle: UI_STRING_TO_CONFIRM,
 		reportingLatestOutcomeReminderBeforeFinalizationSuffix: ' is the leading outcome before finalization.',
 		reportingProjectionProfitPrefix: 'If ',
 		reportingProjectionProfitMiddle: ' wins and no one else contributes afterward, this amount projects roughly ',
 		reportingProjectionProfitSuffix: ' of profit. ',
 		reportingProjectionNotStartedPrefix: 'If no one disputes after this report, the market would finalize in ',
-		reportingProjectionNotStartedCheckBackPrefix: SHARED_UI_STRINGS.checkBackNoLaterThan,
-		reportingProjectionNotStartedCheckBackMiddle: SHARED_UI_STRINGS.toConfirm,
+		reportingProjectionNotStartedCheckBackPrefix: UI_STRING_CHECK_BACK_NO_LATER_THAN,
+		reportingProjectionNotStartedCheckBackMiddle: UI_STRING_TO_CONFIRM,
 		reportingProjectionNotStartedCheckBackSuffix: ' is still leading if later disputes keep escalation open.',
 		reportingProjectionNotStartedSimpleSuffix: '. ',
 		reportingProjectionEndsImmediatelyText: 'This contribution would end the escalation and finalize the market immediately. ',
@@ -2007,23 +1830,23 @@ export const UI_STRINGS = {
 		reportingContributionLockPrefix: 'Based on the current escalation state, this action would lock ',
 		reportingContributionLockSuffix: ' instead of the full entered amount.',
 		openForkAndMigrationLabel: 'Open Fork & Migration',
-		settleAllForThisSideReason: SHARED_UI_STRINGS.selectAtLeastOneDepositToSettleOr,
+		settleAllForThisSideReason: UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE,
 		migrationRequiredReason: 'These escalation deposits must migrate in Fork & Migration.',
 		reportingWorkflowStepOutcomeLabel: '1. Outcome',
 		reportingWorkflowStepLockRepLabel: '2. Lock REP',
 		reportingWorkflowStepSettleLabel: '3. Settle',
-		reportingWorkflowCardDescription: SHARED_UI_STRINGS.selectTheAnswerYouBelieveShouldFinalizeLock,
-		reportingWorkflowCardTitle: SHARED_UI_STRINGS.reportingWorkflow,
-		reportingWorkflowSummary: SHARED_UI_STRINGS.selectTheAnswerYouBelieveShouldFinalizeLock,
+		reportingWorkflowCardDescription: UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK,
+		reportingWorkflowCardTitle: UI_STRING_REPORTING_WORKFLOW,
+		reportingWorkflowSummary: UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK,
 		submitReportPendingLabel: 'Submitting report...',
-		reportingSettlementTitle: SHARED_UI_STRINGS.settleEscalationDeposits,
-		reportingMetricsTitle: SHARED_UI_STRINGS.escalationMetrics,
-		reportingOutcomeTitle: SHARED_UI_STRINGS.reportOutcome,
+		reportingSettlementTitle: UI_STRING_SETTLE_ESCALATION_DEPOSITS,
+		reportingMetricsTitle: UI_STRING_ESCALATION_METRICS,
+		reportingOutcomeTitle: UI_STRING_REPORT_OUTCOME,
 		reportingNotEnabledTitle: 'Reporting Not Enabled',
 		reportingOpenTitle: 'Reporting Open',
 		resolvedTitle: 'Resolved',
-		activeTitle: SHARED_UI_STRINGS.active,
-		forkTriggeredTitle: SHARED_UI_STRINGS.forkTriggered,
+		activeTitle: UI_STRING_ACTIVE,
+		forkTriggeredTitle: UI_STRING_FORK_TRIGGERED,
 		timedOutTitle: 'Timed Out',
 		pendingFinalizationLabel: 'Pending finalization',
 		timeLeftLabel: 'Time Left',
@@ -2039,17 +1862,17 @@ export const UI_STRINGS = {
 		settlementLockedUntilFinalizedReason: 'Escalation deposits cannot be settled until the question is finalized.',
 		reportingResolvedDetail: 'Market finalized as',
 		reportingResolvedDetailLabel: (selectedOutcomeLabel: string) => `Market finalized as ${selectedOutcomeLabel}.`,
-		reportingTimedOutReason: SHARED_UI_STRINGS.escalationEndedByTimeoutTheWinnerIsComputed,
-		reportingTimedOutDetail: SHARED_UI_STRINGS.escalationEndedByTimeoutTheWinnerIsComputed,
+		reportingTimedOutReason: UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED,
+		reportingTimedOutDetail: UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED,
 		migrationExpiredReason: 'The migration window for these unresolved escalation deposits has closed.',
 		worthAfterFinalizationPendingLabel: 'Worth after finalization: Pending finalization',
 		worthNowLabel: 'Worth now:',
-		selectOutcomeAboveToEnableReportingMessage: SHARED_UI_STRINGS.selectAnOutcomeSideAboveToEnableReporting,
+		selectOutcomeAboveToEnableReportingMessage: UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING,
 		selectOutcomePresetReason: 'Select an outcome side before using presets.',
 		selectedSideAlreadyLeadsReason: 'Selected side already leads.',
 		selectedSideUnavailableReason: 'Selected side is unavailable.',
 		selectedSideLabel: 'Selected Side',
-		securityPoolAddressLabel: SHARED_UI_STRINGS.securityPoolAddress,
+		securityPoolAddressLabel: UI_STRING_SECURITY_POOL_ADDRESS,
 		settleAllDepositsLabel: (sideLabel: string) => `Settle All ${sideLabel} Deposits`,
 		settleSelectedDepositsLabel: (sideLabel: string) => `Settle Selected ${sideLabel} Deposits`,
 		settlingDepositsPendingLabel: (sideLabel: string) => `Settling ${sideLabel} deposits...`,
@@ -2057,12 +1880,12 @@ export const UI_STRINGS = {
 		totalSideStakeLabel: 'Total side stake',
 		selectedSideStakeLabel: 'Your side stake',
 		triggeringZoltarForkLabel: 'Triggering Zoltar fork...',
-		triggerZoltarForkIdleLabel: SHARED_UI_STRINGS.triggerZoltarFork,
-		triggerZoltarForkLabel: SHARED_UI_STRINGS.triggerZoltarFork,
-		loadingEscalationDepositReason: SHARED_UI_STRINGS.loadingEscalationDeposits,
+		triggerZoltarForkIdleLabel: UI_STRING_TRIGGER_ZOLTAR_FORK,
+		triggerZoltarForkLabel: UI_STRING_TRIGGER_ZOLTAR_FORK,
+		loadingEscalationDepositReason: UI_STRING_LOADING_ESCALATION_DEPOSITS,
 		loadingEscalationDepositsDetail: 'Loading escalation deposits...',
 		availableUnlockedVaultRepPrefix: 'Available unlocked vault REP for reporting:',
-		withdrawSelectedAllReason: SHARED_UI_STRINGS.selectAtLeastOneDepositToSettleOr,
+		withdrawSelectedAllReason: UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE,
 		withdrawEmptyStateDetail: 'Connected wallet has no unsettled escalation deposits.',
 		thisPoolAlsoHasForkCarriedEscalationPositionsDetail: 'This pool also has fork-carried escalation positions. Settle those in Fork & Migration.',
 	},
@@ -2081,7 +1904,7 @@ export const UI_STRINGS = {
 		initialOpenInterestFeeLabel: 'Initial Open Interest Fee / Year',
 		ineligibleQuestionError: 'Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.',
 		loadingQuestionLabel: 'Loading question...',
-		openPoolLabel: SHARED_UI_STRINGS.openPool,
+		openPoolLabel: UI_STRING_OPEN_POOL,
 		poolAddressLabel: 'Pool address',
 		poolAlreadyExistsLabel: 'Pool Already Exists',
 		questionHelpText: 'Paste an exact binary Yes / No Zoltar question ID.',
@@ -2094,7 +1917,7 @@ export const UI_STRINGS = {
 	},
 	securityVaultSection: {
 		approveRepActionLabel: 'depositing REP',
-		approvingRepPendingLabel: SHARED_UI_STRINGS.approvingRep,
+		approvingRepPendingLabel: UI_STRING_APPROVING_REP,
 		bondAllowanceRejectedDetail: 'The oracle manager attempted the allowance update immediately, but the security pool rejected it.',
 		bondAllowanceExecutedTitle: 'Bond Allowance Executed',
 		bondAllowanceFailedTitle: 'Bond Allowance Failed',
@@ -2116,36 +1939,36 @@ export const UI_STRINGS = {
 		depositRepTitle: UI_STRING_DEPOSIT_REP,
 		firstDepositMinimumChecklistDetail: (amount: string) => `First deposits must be at least ${amount} REP.`,
 		firstDepositMinimumInlineDetailSuffix: 'in the first deposit.',
-		escalationEscrowedRepLabel: SHARED_UI_STRINGS.escrowedRep,
+		escalationEscrowedRepLabel: UI_STRING_ESCROWED_REP,
 		firstDepositMinimumChecklistLabel: 'First deposit meets the vault minimum',
 		firstDepositMinimumDetailPrefix: 'New vaults require at least',
 		hasClaimableFeesChecklistLabel: 'Claimable fees are available',
 		insufficientRepBalanceDetail: (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount} REP.`,
-		loadingVaultDetail: SHARED_UI_STRINGS.loadingVault,
-		missingVaultBlockerDetail: SHARED_UI_STRINGS.thisVaultDoesNotExist,
+		loadingVaultDetail: UI_STRING_LOADING_VAULT,
+		missingVaultBlockerDetail: UI_STRING_THIS_VAULT_DOES_NOT_EXIST,
 		vaultLauncherBlockerReason: (action: 'claim-fees' | 'deposit-rep' | 'rep-exit-redeem' | 'rep-exit-withdraw' | 'set-bond-allowance', blocker: 'connect-wallet' | 'missing-vault' | 'refresh-vault' | 'select-own-vault') => {
-			if (blocker === 'missing-vault') return SHARED_UI_STRINGS.thisVaultDoesNotExist
+			if (blocker === 'missing-vault') return UI_STRING_THIS_VAULT_DOES_NOT_EXIST
 
 			if (blocker === 'connect-wallet') {
-				if (action === SECURITY_VAULT_ACTION_IDS.claimFees) return 'Connect a wallet before claiming fees.'
-				if (action === SECURITY_VAULT_ACTION_IDS.depositRep) return 'Connect a wallet before depositing REP.'
-				if (action === SECURITY_VAULT_ACTION_IDS.repExitRedeem) return 'Connect a wallet before redeeming REP.'
-				if (action === SECURITY_VAULT_ACTION_IDS.repExitWithdraw) return 'Connect a wallet before withdrawing REP.'
+				if (action === 'claim-fees') return 'Connect a wallet before claiming fees.'
+				if (action === 'deposit-rep') return 'Connect a wallet before depositing REP.'
+				if (action === 'rep-exit-redeem') return 'Connect a wallet before redeeming REP.'
+				if (action === 'rep-exit-withdraw') return 'Connect a wallet before withdrawing REP.'
 				return 'Connect a wallet before setting the security bond allowance.'
 			}
 
 			if (blocker === 'select-own-vault') {
-				if (action === SECURITY_VAULT_ACTION_IDS.claimFees) return 'Select your own vault to claim fees.'
-				if (action === SECURITY_VAULT_ACTION_IDS.depositRep) return 'Select your own vault to deposit REP.'
-				if (action === SECURITY_VAULT_ACTION_IDS.repExitRedeem) return 'Select your own vault to redeem REP.'
-				if (action === SECURITY_VAULT_ACTION_IDS.repExitWithdraw) return 'Select your own vault to withdraw REP.'
+				if (action === 'claim-fees') return 'Select your own vault to claim fees.'
+				if (action === 'deposit-rep') return 'Select your own vault to deposit REP.'
+				if (action === 'rep-exit-redeem') return 'Select your own vault to redeem REP.'
+				if (action === 'rep-exit-withdraw') return 'Select your own vault to withdraw REP.'
 				return 'Select your own vault to set the security bond allowance.'
 			}
 
-			if (action === SECURITY_VAULT_ACTION_IDS.claimFees) return 'Refresh the vault before claiming fees.'
-			if (action === SECURITY_VAULT_ACTION_IDS.depositRep) return 'Refresh the vault before depositing REP.'
-			if (action === SECURITY_VAULT_ACTION_IDS.repExitRedeem) return 'Refresh the vault before redeeming REP.'
-			if (action === SECURITY_VAULT_ACTION_IDS.repExitWithdraw) return 'Refresh the vault before withdrawing REP.'
+			if (action === 'claim-fees') return 'Refresh the vault before claiming fees.'
+			if (action === 'deposit-rep') return 'Refresh the vault before depositing REP.'
+			if (action === 'rep-exit-redeem') return 'Refresh the vault before redeeming REP.'
+			if (action === 'rep-exit-withdraw') return 'Refresh the vault before withdrawing REP.'
 			return 'Refresh the vault before setting the security bond allowance.'
 		},
 		noRepLockedChecklistDetail: UI_STRING_WITHDRAW_ESCALATION_DEPOSITS,
@@ -2159,10 +1982,10 @@ export const UI_STRINGS = {
 		operationExecutedBadgeLabel: UI_STRING_EXECUTED,
 		operationStatusUnavailableDetail: UI_STRING_TRANSACTION_STATE_UNAVAILABLE,
 		oracleManagerAutoExecuteQueueFullDetail: UI_STRING_MANUAL_QUEUED_OPERATION,
-		priceValidUntilLabel: SHARED_UI_STRINGS.priceValidUntil,
+		priceValidUntilLabel: UI_STRING_PRICE_VALID_UNTIL,
 		readOnlyBadgeLabel: 'Read only',
 		refreshButtonIdleLabel: UI_STRING_REFRESH,
-		refreshButtonPendingLabel: SHARED_UI_STRINGS.refreshing,
+		refreshButtonPendingLabel: UI_STRING_REFRESHING,
 		refreshingBadgeLabel: UI_STRING_REFRESHING_WITHOUT_ELLIPSIS,
 		refreshingBondAllowanceStateDetail: 'Refreshing the oracle manager to determine whether the bond allowance was queued or executed immediately.',
 		refreshingBondAllowanceStateTitle: 'Refreshing Bond Allowance State',
@@ -2201,9 +2024,9 @@ export const UI_STRINGS = {
 		setSecurityBondAllowanceModalDescription: 'Queue a new bond allowance using the latest valid oracle price for the selected vault.',
 		setSecurityBondAllowancePendingLabel: 'Queueing allowance update...',
 		setSecurityBondAllowanceTitle: UI_STRING_SET_SECURITY_BOND_ALLOWANCE,
-		selectedVaultAddressLabel: SHARED_UI_STRINGS.selectedVaultAddress,
+		selectedVaultAddressLabel: UI_STRING_SELECTED_VAULT_ADDRESS,
 		selectedVaultTitle: 'Selected Vault',
-		stagedOperationLabel: SHARED_UI_STRINGS.stagedOperation,
+		stagedOperationLabel: UI_STRING_STAGED_OPERATION,
 		successfulImmediateBondAllowanceDetail: 'A valid oracle price was already available, so the new bond allowance executed immediately and no staged operation was created.',
 		successfulImmediateWithdrawalDetail: 'A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.',
 		timeoutChecklistLabel: 'Manual execution timeout is at least 1 minute',
@@ -2220,7 +2043,7 @@ export const UI_STRINGS = {
 		withdrawEscalationDepositsDetail: UI_STRING_WITHDRAW_ESCALATION_DEPOSITS,
 		withdrawFundingChecklistLabel: 'The vault still holds REP collateral to queue',
 		withdrawableRepLabel: 'Withdrawable REP',
-		withdrawRepIdleLabel: SHARED_UI_STRINGS.withdrawRep,
+		withdrawRepIdleLabel: UI_STRING_WITHDRAW_REP,
 		withdrawRepPendingLabel: 'Queueing REP withdrawal...',
 	},
 	tradingSection: {
@@ -2242,7 +2065,7 @@ export const UI_STRINGS = {
 		migrateForkedSharesDescription: 'Burn parent-pool shares for one outcome and recreate them across selected child universes.',
 		migrateForkedSharesModalDescription: 'Migrating burns the selected parent-pool share balance and recreates it across the chosen child universes. Review the source outcome and target universes carefully before submitting.',
 		migrateForkedSharesTitle: 'Migrate Forked Shares',
-		migrateSharesIdleLabel: SHARED_UI_STRINGS.migrateShares,
+		migrateSharesIdleLabel: UI_STRING_MIGRATE_SHARES,
 		migrateSharesPendingLabel: 'Migrating shares...',
 		marketAlreadyFinalizedReason: 'This market has already finalized.',
 		mintCompleteSetsAmountLabel: 'Mint Complete Sets Amount',
@@ -2250,7 +2073,7 @@ export const UI_STRINGS = {
 		mintCompleteSetsDescription: 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this pool.',
 		mintCompleteSetsModalDescription: 'Review available capacity and confirm the complete-set mint amount before submitting.',
 		mintCompleteSetsPendingLabel: 'Minting complete sets...',
-		mintCompleteSetsTitle: SHARED_UI_STRINGS.mintCompleteSets,
+		mintCompleteSetsTitle: UI_STRING_MINT_COMPLETE_SETS,
 		noMintCapacityRemainingReason: 'No mint capacity remaining.',
 		noSharesAvailableToMigrateReason: (outcomeLabel: string) => `No ${outcomeLabel} shares available to migrate.`,
 		redeemResolvedSharesModalDescription: 'Redeem finalized winning shares once the selected pool has resolved.',
@@ -2259,12 +2082,12 @@ export const UI_STRINGS = {
 		redeemCompleteSetsDescription: 'Burn matching Yes, No, and Invalid shares to recover collateral from the current pool.',
 		redeemCompleteSetsModalDescription: 'Redeeming complete sets requires matching yes, no, and invalid shares. Use the redeemable complete sets amount as the ceiling.',
 		redeemCompleteSetsPendingLabel: 'Redeeming complete sets...',
-		redeemCompleteSetsTitle: SHARED_UI_STRINGS.redeemCompleteSets,
+		redeemCompleteSetsTitle: UI_STRING_REDEEM_COMPLETE_SETS,
 		redeemSharesActionLabel: 'Redeem resolved shares',
 		redeemSharesDescription: 'Redeem final winning shares after the selected pool fully resolves.',
 		redeemSharesIdleLabel: 'Redeem Shares',
 		redeemSharesPendingLabel: 'Redeeming shares...',
-		redeemSharesTitle: SHARED_UI_STRINGS.redeemResolvedShares,
+		redeemSharesTitle: UI_STRING_REDEEM_RESOLVED_SHARES,
 		redeemableCompleteSetsDetail: 'Limited by your smallest Yes, No, or Invalid balance.',
 		redeemableCompleteSetsLabel: 'Redeemable Complete Sets',
 		bondAllowanceInUseLabel: 'Bond Allowance In Use',
@@ -2291,7 +2114,7 @@ export const UI_STRINGS = {
 	userCopy: {
 		pageNotFound: {
 			actionHint: 'Open one of the sections below.',
-			badgeLabel: SHARED_UI_STRINGS.pageNotFound,
+			badgeLabel: UI_STRING_PAGE_NOT_FOUND,
 		},
 		poolRegistry: {
 			collection: {
@@ -2323,7 +2146,7 @@ export const UI_STRINGS = {
 		universe: {
 			goToGenesisUniverseActionHint: UI_STRING_GO_TO_GENESIS_UNIVERSE,
 			loadingBadgeLabel: UI_STRING_LOADING,
-			loadingDetail: SHARED_UI_STRINGS.loadingUniverseDetails,
+			loadingDetail: UI_STRING_LOADING_UNIVERSE_DETAILS,
 			notCheckedBadgeLabel: UI_STRING_NOT_CHECKED,
 			notCheckedDetail: 'Choose a universe to continue.',
 			notFoundBadgeLabel: UI_STRING_NOT_FOUND,
@@ -2331,7 +2154,7 @@ export const UI_STRINGS = {
 		},
 		wallet: {
 			connectWalletBadgeLabel: UI_STRING_CONNECT_WALLET,
-			connectWalletDetail: SHARED_UI_STRINGS.connectWalletToContinue,
+			connectWalletDetail: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
 			installWalletDetail: 'Install or enable a wallet to continue.',
 			switchToMainnetDetail: 'Switch to Ethereum mainnet.',
 			wrongNetworkBadgeLabel: UI_STRING_WRONG_NETWORK,
