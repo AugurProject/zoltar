@@ -73,6 +73,7 @@ import {
 	redeemRep,
 	redeemShares,
 	sharesToCash,
+	updateCollateralAmount,
 	updateVaultFees,
 	withdrawFromEscalationGame,
 } from '../../testsuite/simulator/utils/contracts/securityPool'
@@ -396,6 +397,7 @@ function usePeripheralsTestFixture() {
 		redeemRep,
 		redeemShares,
 		sharesToCash,
+		updateCollateralAmount,
 		updateVaultFees,
 		withdrawFromEscalationGame,
 		peripherals_EscalationGame_EscalationGame,
@@ -676,6 +678,7 @@ export function usePeripheralsForkMigrationFixture() {
 		'redeemRep',
 		'redeemShares',
 		'sharesToCash',
+		'updateCollateralAmount',
 		'updateVaultFees',
 		'withdrawFromEscalationGame',
 		'peripherals_EscalationGame_EscalationGame',

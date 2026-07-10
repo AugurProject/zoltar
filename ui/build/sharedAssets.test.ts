@@ -329,6 +329,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')

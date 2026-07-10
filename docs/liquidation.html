@@ -12,9 +12,32 @@
 				<h1>Liquidation Design</h1>
 				<p>
 					A liquidation moves unsafe security-bond allowance from an
-					undercollateralized target vault to a solvent liquidator vault. The
-					repair-cap rule moves only enough debt to make the target safe at the
-					execution REP/ETH price, and no target REP moves on that path.
+					undercollateralized target vault to a non-liquidatable liquidator
+					vault. Liquidation is punitive: it moves debt to the liquidator and
+					seizes unlocked REP from the target vault at a bonus-priced exchange
+					rate.
+				</p>
+				<p>
+					The purpose of liquidation is explicit: punish the vault that let its
+					backing fall below the required threshold, reward the liquidator that
+					takes on the unsafe debt, and move the system into a healthier state.
+				</p>
+				<ol>
+					<li>The liquidated vault is punished by losing unlocked REP.</li>
+					<li>The liquidator is rewarded with seized REP above market value.</li>
+					<li>
+						The target shortfall shrinks because required REP backing falls
+						faster than REP is seized, and moved debt is accepted only by a
+						caller vault that remains non-liquidatable, meaning at or above the
+						collateral threshold.
+					</li>
+				</ol>
+				<p>
+					Here, healthier means the target shortfall shrinks and the moved debt
+					lands only on a caller vault that remains non-liquidatable under the
+					<code>securityMultiplier</code>-adjusted collateral threshold.
+					Liquidation redistributes REP and allowance; it does not increase
+					aggregate backing.
 				</p>
 				<p>
 					Terms used below:
@@ -32,8 +55,8 @@
 					A vault is liquidatable when its unlocked REP backing is below the
 					required threshold:
 				</p>
-				<figure class="diagram" id="fig-liquidation-repair-flow">
-					<svg viewBox="0 0 900 200" role="img" aria-label="Unsafe vault debt moves to a solvent liquidator vault until the target reaches the collateral boundary while REP stays with the target on the repair path.">
+				<figure class="diagram" id="fig-liquidation-punitive-flow">
+					<svg viewBox="0 0 900 200" role="img" aria-label="Unsafe vault debt and unlocked REP move from the target vault to a non-liquidatable liquidator vault.">
 						<defs>
 							<marker id="liquidation-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -42,18 +65,20 @@
 						<rect class="svg-red" x="40" y="50" width="220" height="90" rx="10"></rect>
 						<text class="svg-label" x="150" y="82" text-anchor="middle">Target Vault</text>
 						<text class="svg-small" x="150" y="108" text-anchor="middle">unsafe debt</text>
-						<text class="svg-small" x="150" y="128" text-anchor="middle">keeps unlocked REP</text>
+						<text class="svg-small" x="150" y="128" text-anchor="middle">loses unlocked REP</text>
 						<path class="svg-line" marker-end="url(#liquidation-arrow)" d="M 270 95 H 610"></path>
-						<text class="svg-small" x="440" y="82" text-anchor="middle">repair-capped debt only</text>
+						<text class="svg-small" x="440" y="82" text-anchor="middle">debt plus bonus-priced REP</text>
 						<rect class="svg-green" x="620" y="50" width="220" height="90" rx="10"></rect>
 						<text class="svg-label" x="730" y="82" text-anchor="middle">Liquidator Vault</text>
 						<text class="svg-small" x="730" y="108" text-anchor="middle">absorbs debt</text>
-						<text class="svg-small" x="730" y="128" text-anchor="middle">must stay solvent</text>
+						<text class="svg-small" x="730" y="128" text-anchor="middle">earns seized REP</text>
 					</svg>
 					<p class="diagram-caption">
-						<span class="figure-label">Repair Flow</span>The repair path moves
-						only debt. Target REP stays in the target vault, so one max
-						liquidation at a fixed price can make the target safe again.
+						<span class="figure-label">Punitive Flow</span>The liquidator takes
+						debt and receives unlocked REP from the target vault. The target is
+						punished, the liquidator is rewarded, and the target becomes
+						healthier only because required REP backing falls faster than REP is
+						seized.
 					</p>
 				</figure>
 				<div class="equation" id="eq-liquidatable-condition">
@@ -82,10 +107,10 @@
 				</p>
 				<h3>Execution Gates</h3>
 				<p>
-					The solvency inequality is necessary but not sufficient for execution.
-					A staged liquidation also needs a valid current oracle price, an
-					unexpired staging window, target allowance unchanged and target
-					ownership not below the queued snapshot, and enough
+					The liquidatable-threshold inequality is necessary but not sufficient
+					for execution. A staged liquidation also needs a valid current oracle
+					price, an unexpired staging window, target allowance unchanged and
+					target ownership not below the queued snapshot, and enough
 					distance beyond the threshold to satisfy
 					<code>minLiquidationPriceDistanceBps</code>. These gates fail in
 					different ways. If the current price is stale, execution reverts and the
@@ -101,106 +126,199 @@
 				</p>
 			</section>
 
-			<section id="repair-cap">
-				<h2>Repair-Cap Math</h2>
+			<section id="punitive-liquidation">
+				<h2>Penalty Math</h2>
 				<p>
-					The current liquidation path does not move REP on the repair path. It
-					moves only enough debt to make the target vault safe again at the
-					execution price.
+					The seized REP is based on the debt chunk's market value plus a fixed
+					liquidation bonus. The current implementation uses
+					<code>LIQUIDATION_REP_BONUS_BPS = 500</code>, or a five percent REP
+					bonus to the liquidator.
 				</p>
-				<div class="equation" id="eq-repair-debt-cap">
-					<math display="block" aria-label="unsafe value numerator equals target allowance times security multiplier times current REP per ETH price minus target unlocked REP times PRICE_PRECISION; repair debt cap equals ceiling of that value divided by security multiplier times current REP per ETH price" data-source="unsafeValueNumerator = targetAllowanceEth * securityMultiplier * currentRepPerEthPrice - targetUnlockedRep * PRICE_PRECISION; repairDebtCap = ceil(unsafeValueNumerator / (securityMultiplier * currentRepPerEthPrice))">
+				<table>
+					<thead>
+						<tr>
+							<th>Constant</th>
+							<th>Value</th>
+							<th>Unit</th>
+							<th>Source</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>BPS_DENOMINATOR</code></td>
+							<td><code>10000</code></td>
+							<td>basis points</td>
+							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+						</tr>
+						<tr>
+							<td><code>LIQUIDATION_REP_BONUS_BPS</code></td>
+							<td><code>500</code></td>
+							<td>basis points</td>
+							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+						</tr>
+						<tr>
+							<td><code>MIN_REP_DEPOSIT</code></td>
+							<td><code>10e18</code></td>
+							<td>REP wei</td>
+							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+						</tr>
+						<tr>
+							<td><code>MIN_SECURITY_BOND_DEBT</code></td>
+							<td><code>1e18</code></td>
+							<td>ETH wei</td>
+							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+						</tr>
+						<tr>
+							<td><code>PRICE_PRECISION</code></td>
+							<td><code>1e18</code></td>
+							<td>fixed-point scale</td>
+							<td><a href="../solidity/contracts/peripherals/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="equation" id="eq-liquidation-rep-penalty">
+					<math display="block" aria-label="rep seized equals ceiling of debt moved times REP per ETH price times one plus the liquidation bonus divided by price precision" data-source="repToMove = ceil(debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR))">
 						<mtable>
 							<mtr>
-								<mtd><mi>unsafeValueNumerator</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd>
-									<mi>targetAllowanceEth</mi><mo>&#x22C5;</mo><mi>securityMultiplier</mi><mo>&#x22C5;</mo><mi>currentRepPerEthPrice</mi>
-									<mo>-</mo>
-									<mi>targetUnlockedRep</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd><mi>repairDebtCap</mi></mtd>
+								<mtd><mi>repToMove</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
 									<mi>ceil</mi>
 									<mo>(</mo>
 									<mfrac>
-										<mi>unsafeValueNumerator</mi>
-										<mrow><mi>securityMultiplier</mi><mo>&#x22C5;</mo><mi>currentRepPerEthPrice</mi></mrow>
+										<mrow><mi>debtToMove</mi><mo>&#x22C5;</mo><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
+										<mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
 									</mfrac>
 									<mo>)</mo>
 								</mtd>
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Repair Debt Cap</span>This is the
-						minimum debt transfer that repairs the vault at the current price.
-					</p>
-				</div>
+						<p class="equation-caption">
+							<span class="equation-label">REP Penalty</span>The liquidator
+							receives REP worth the liquidated debt plus a bonus. This computed
+							<code>repToMove</code> is the penalty and event amount; the pool
+							moves the corresponding ownership units, so displayed REP claims can
+							differ by ownership-rounding dust.
+						</p>
+					</div>
 				<p>
-					If leaving
-					<code>targetAllowanceEth - repairDebtCap</code> would strand a
-					non-zero allowance below the minimum debt floor, the contract rounds up
-					to a full allowance transfer instead.
+					The maximum executable debt chunk is bounded by the target's unlocked
+					REP. The contract will not liquidate away the last
+					<code>MIN_REP_DEPOSIT</code> unless a separate flow closes the vault
+					fully.
 				</p>
 				<div class="equation" id="eq-liquidation-dust-rounding">
-					<math display="block" aria-label="max debt to move equals full target allowance when the repaired remainder is positive but below minimum debt, otherwise repair debt cap; rep to move equals zero" data-source="maxDebtToMove = 0 < targetAllowanceEth - repairDebtCap < MIN_SECURITY_BOND_DEBT ? targetAllowanceEth : repairDebtCap; debtToMove = min(requestedDebt, maxDebtToMove); repToMove = 0">
+					<math display="block" aria-label="rep-bounded debt cap equals floor of target unlocked REP minus minimum REP deposit times price precision times basis-point denominator divided by current REP per ETH price times basis-point denominator plus liquidation bonus; target cap before debt floor equals the smaller of target allowance and that REP bound; target cap after debt floor clamps down again when the remainder would be forbidden target debt dust; debt to move equals the minimum of requested debt and the executable maximum" data-source="repBoundDebt = targetUnlockedRep > MIN_REP_DEPOSIT ? floor((targetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0; targetCapBeforeDebtFloor = min(targetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < targetAllowanceEth - targetCapBeforeDebtFloor < MIN_SECURITY_BOND_DEBT ? (targetAllowanceEth > MIN_SECURITY_BOND_DEBT ? targetAllowanceEth - MIN_SECURITY_BOND_DEBT : 0) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)">
 						<mtable>
 							<mtr>
-								<mtd><mi>maxDebtToMove</mi></mtd>
+								<mtd><mi>repBoundDebt</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mi>if</mi>
-									<mo>&#xA0;</mo>
-									<mn>0</mn><mo>&lt;</mo><mi>targetAllowanceEth</mi><mo>-</mo><mi>repairDebtCap</mi><mo>&lt;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
+									<mi>if</mi><mo>&#xA0;</mo><mi>targetUnlockedRep</mi><mo>&gt;</mo><mi>MIN_REP_DEPOSIT</mi>
 									<mo>,</mo>
-									<mo>&#xA0;</mo><mi>targetAllowanceEth</mi>
-									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mi>repairDebtCap</mi>
+									<mo>&#xA0;</mo>
+									<mi>floor</mi>
+									<mo>(</mo>
+									<mfrac>
+										<mrow><mo>(</mo><mi>targetUnlockedRep</mi><mo>-</mo><mi>MIN_REP_DEPOSIT</mi><mo>)</mo><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
+										<mrow><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
+									</mfrac>
+									<mo>)</mo>
+									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mn>0</mn>
+								</mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>targetCapBeforeDebtFloor</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>targetAllowanceEth</mi><mo>,</mo><mi>repBoundDebt</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>targetCapAfterDebtFloor</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd>
+									<mi>if</mi><mo>&#xA0;</mo><mn>0</mn><mo>&lt;</mo><mi>targetAllowanceEth</mi><mo>-</mo><mi>targetCapBeforeDebtFloor</mi><mo>&lt;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>targetAllowanceEth</mi><mo>&gt;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
+									<mo>?</mo><mi>targetAllowanceEth</mi><mo>-</mo><mi>MIN_SECURITY_BOND_DEBT</mi><mo>:</mo><mn>0</mn>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mi>targetCapBeforeDebtFloor</mi>
 								</mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>debtToMove</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>min</mi><mo>(</mo><mi>requestedDebt</mi><mo>,</mo><mi>maxDebtToMove</mi><mo>)</mo></mtd>
-							</mtr>
-							<mtr>
-								<mtd><mi>repToMove</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd><mn>0</mn></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>requestedDebt</mi><mo>,</mo><mi>targetCapAfterDebtFloor</mi><mo>)</mo></mtd>
 							</mtr>
 						</mtable>
 					</math>
 					<p class="equation-caption">
-						<span class="equation-label">Dust Rounding</span>If the exact repair
-						point would leave forbidden debt dust, the protocol rounds up to a
-						full debt transfer. REP still does not move on that path.
+						<span class="equation-label">Executable Bound</span>The requested
+						debt chunk is capped by the target's unlocked REP and then checked
+						against the minimum debt floors.
+					</p>
+				</div>
+				<div class="equation" id="eq-liquidation-health-guard">
+					<math display="block" aria-label="debt moved times security multiplier times current REP per ETH price must be strictly greater than REP seized times price precision" data-source="debtToMove * securityMultiplier * currentRepPerEthPrice > repToMove * PRICE_PRECISION">
+						<mrow>
+							<mi>debtToMove</mi>
+							<mo>&#x22C5;</mo>
+							<mi>securityMultiplier</mi>
+							<mo>&#x22C5;</mo>
+							<mi>currentRepPerEthPrice</mi>
+							<mo>&gt;</mo>
+							<mi>repToMove</mi>
+							<mo>&#x22C5;</mo>
+							<mi>PRICE_PRECISION</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Health-Improvement Guard</span>Every
+						successful liquidation must strictly reduce the target shortfall.
+						Equality still fails, so ceiling-rounded REP seizure can make
+						one-wei or otherwise tiny chunks non-executable.
 					</p>
 				</div>
 				<p>
 					There is one more chunking constraint at execution time:
 					<code>remainingDebt = targetAllowanceEth - debtToMove</code> must be
-					zero or at least <code>MIN_SECURITY_BOND_DEBT</code>. A smaller
-					requested chunk can still revert if it would leave forbidden non-zero
-					debt dust.
+					zero or at least <code>MIN_SECURITY_BOND_DEBT</code>. The caller's
+					post-liquidation allowance must also be at least
+					<code>MIN_SECURITY_BOND_DEBT</code>, because any successful
+					liquidation moves non-zero debt to the caller. A chunk that is safe
+					for the target can still revert if it would leave the liquidator
+					below that minimum non-zero debt floor. Very small chunks can also
+					revert when ceiling-rounded REP seizure would reduce the target's REP
+					faster than the chunk reduces required backing, because every
+					successful liquidation must strictly improve target health.
 				</p>
 			</section>
 
-			<section id="why-once">
-				<h2>Why One Max Liquidation Is Enough</h2>
+			<section id="repeated-liquidations">
+				<h2>Repeated Liquidations</h2>
 				<p>
-					If the liquidator asks for at least <code>maxDebtToMove</code>, the
-					target vault ends exactly at the collateral boundary, or at zero debt if
-					dust rounding forces a full transfer. With price unchanged, the vault is
-					no longer liquidatable after that one execution, so a second max
-					liquidation at the same price cannot change the state.
+					A punitive liquidation is not guaranteed to restore target safety in
+					one execution. A liquidation can move the target toward safety without
+					restoring it completely, because the liquidator is also paid a REP
+					bonus. Repeated liquidations at the same price can therefore remain
+					possible until the target debt is cleared, the target becomes safe
+					again, the target hits a floor constraint, or the liquidator side would
+					become liquidatable after absorbing more debt.
+					This is one source of path dependence: a smaller first liquidation can
+					make the target safe again and block a later same-price liquidation
+					that would have been absorbed inside one larger execution.
 				</p>
 			</section>
 
 			<section id="examples">
 				<h2>Worked Examples</h2>
+				<p>
+					Unless a row says otherwise, assume the caller vault already has enough
+					REP backing to remain non-liquidatable after it absorbs the moved debt
+					and receives seized REP. The rows focus on target-side sizing and
+					penalty math; execution still applies the caller post-liquidation
+					check.
+				</p>
 				<table>
 					<thead>
 						<tr>
@@ -211,42 +329,48 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td>Repair without dust</td>
+							<td>Penalty liquidation</td>
 							<td><code>targetUnlockedRep = 1000 REP</code>, <code>targetAllowanceEth = 75 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 10 REP/ETH</code></td>
 							<td>
 								Required backing is <code>75 * 2 * 10 = 1500 REP</code>, so the
-								shortfall is <code>500 REP</code>. The repair cap is
-								<code>ceil(500 / 20) = 25 ETH</code>. After moving
-								<code>25 ETH</code>, the vault has <code>50 ETH</code> of debt and
-								<code>1000 REP</code> of backing, exactly at the boundary.
+								target starts <code>500 REP</code> short. A
+								<code>25 ETH</code> liquidation seizes
+								<code>25 * 10 * 1.05 = 262.5 REP</code>. After liquidation the
+								target has <code>50 ETH</code> of debt and <code>737.5 REP</code>
+								of backing. The target is still unsafe, but the shortfall shrinks
+								from <code>500 REP</code> to <code>262.5 REP</code>.
 							</td>
 						</tr>
 						<tr>
-							<td>Repair with locked escalation REP</td>
+							<td>Locked escalation REP stays untouched</td>
 							<td><code>targetUnlockedRep = 300 REP</code> unlocked, <code>targetAllowanceEth = 200 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 1 REP/ETH</code></td>
 							<td>
-								Required backing is <code>400 REP</code>, so the shortfall is
-								<code>100 REP</code>. The repair cap is <code>50 ETH</code>.
-								Escalation-locked REP is ignored, so the target keeps its
-								<code>300 REP</code> unlocked claim and becomes safe at
-								<code>150 ETH</code> debt.
+								A full <code>200 ETH</code> liquidation would seize
+								<code>210 REP</code>, leaving <code>90 REP</code> unlocked and
+								<code>0 ETH</code> debt. Escalation-locked REP is still ignored
+								when sizing the liquidation, so only the unlocked vault claim is
+								at risk.
 							</td>
 						</tr>
 						<tr>
-							<td>Dust rounding</td>
-							<td><code>targetAllowanceEth = 1.4 ETH</code>, repair cap would leave <code>0.6 ETH</code>, min non-zero debt is <code>1 ETH</code></td>
+							<td>Target-side debt dust clamp</td>
+							<td><code>targetAllowanceEth = 1.4 ETH</code>, <code>targetUnlockedRep = 1000 REP</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 1000 REP/ETH</code></td>
 							<td>
-								The repair point would strand forbidden dust, so the protocol rounds
-								up to a full <code>1.4 ETH</code> liquidation.
+								The target has enough unlocked REP for about
+								<code>0.94 ETH</code> of punitive liquidation while still keeping
+								<code>10 REP</code>. That would leave <code>0.46 ETH</code> of
+								target debt, which is forbidden dust, so the executable target-side
+								cap is reduced to <code>0.4 ETH</code> instead.
 							</td>
 						</tr>
 						<tr>
-							<td>Dust-reverting partial request</td>
-							<td><code>targetAllowanceEth = 1.4 ETH</code>, liquidator requests <code>0.8 ETH</code></td>
+							<td>Caller-side dust revert</td>
+							<td><code>targetAllowanceEth = 1.4 ETH</code>, <code>targetUnlockedRep = 1000 REP</code>, <code>securityMultiplier = 2</code>, executable target-side cap is <code>0.4 ETH</code>, caller starts with zero debt</td>
 							<td>
-								That chunk leaves <code>0.6 ETH</code> of debt. The remainder is
-								non-zero and below <code>MIN_SECURITY_BOND_DEBT</code>, so the
-								execution reverts instead of leaving forbidden dust behind.
+								A <code>0.4 ETH</code> liquidation would leave the caller with a
+								non-zero allowance below <code>MIN_SECURITY_BOND_DEBT</code>, so
+								the pool rejects it. In that setup, no punitive liquidation chunk
+								is executable.
 							</td>
 						</tr>
 					</tbody>
@@ -260,7 +384,7 @@
 					equations above describe the scaled integer math used onchain.
 				</p>
 				<details class="interactive-example" open>
-					<summary>Repair-cap calculator</summary>
+					<summary>Punitive liquidation calculator</summary>
 					<div class="example-grid">
 						<label>
 							Unlocked REP
@@ -274,7 +398,7 @@
 						</label>
 						<label>
 							Multiplier
-							<input data-liquidation-input="multiplier" type="range" min="1" max="4" step="1" value="2" />
+							<input data-liquidation-input="multiplier" type="range" min="2" max="4" step="1" value="2" />
 							<span class="example-value" data-liquidation-value="multiplier">2x</span>
 						</label>
 						<label>
@@ -287,14 +411,22 @@
 						<p><strong>Status:</strong> <span data-liquidation-output="status">Liquidatable</span></p>
 						<p><strong>Required REP:</strong> <span data-liquidation-output="required">1500 REP</span></p>
 						<p><strong>REP shortfall:</strong> <span data-liquidation-output="shortfall">500 REP</span></p>
-						<p><strong>Repair debt cap:</strong> <span data-liquidation-output="cap">25 ETH</span></p>
-						<p><strong>Post-max debt:</strong> <span data-liquidation-output="postDebt">50 ETH</span></p>
-						<p><strong>REP moved:</strong> <span data-liquidation-output="repMoved">0 REP</span></p>
+						<p><strong>Target-side cap before caller checks:</strong> <span data-liquidation-output="cap">75 ETH</span></p>
+						<p><strong>Post-max debt:</strong> <span data-liquidation-output="postDebt">0 ETH</span></p>
+						<p><strong>REP seized at Max:</strong> <span data-liquidation-output="repMoved">787.5 REP</span></p>
 					</div>
+					<p class="detail">
+						This calculator only models the target-side cap. A real execution
+						can still revert if the caller vault would fail its own debt-floor
+						or post-liquidation non-liquidatable checks. It also clamps away non-deployable low
+						multipliers, but it remains a whole-unit target-side illustration
+						rather than a wei-level requested-chunk simulator for the strict
+						health-improvement guard.
+					</p>
 				</details>
 
 				<details class="interactive-example">
-					<summary>Path independence check</summary>
+					<summary>Path dependence check</summary>
 					<div class="example-grid">
 						<label>
 							Requested debt, first liquidation
@@ -314,73 +446,83 @@
 						<code>securityMultiplier = 2</code>, and
 						<code>currentRepPerEthPrice = 10 REP/ETH</code>.
 					</p>
-					<div class="example-output">
-						<p><strong>Single liquidation using first + second:</strong> <span data-path-output="single">50 ETH debt remaining</span></p>
-						<p><strong>Two-step path:</strong> <span data-path-output="twoStep">50 ETH debt remaining</span></p>
-						<p><strong>Same state?</strong> <span data-path-output="same">Yes</span></p>
-					</div>
-				</details>
+						<div class="example-output">
+							<p><strong>Single liquidation using first + second:</strong> <span data-path-output="single">50 ETH debt remaining</span></p>
+							<p><strong>Two-step path:</strong> <span data-path-output="twoStep">50 ETH debt remaining</span></p>
+							<p><strong>Same state?</strong> <span data-path-output="same">Yes</span></p>
+						</div>
+						<p class="detail">
+							This path comparison assumes each step's caller vault passes the
+							post-liquidation non-liquidatable and debt-floor checks. It models
+							target-side path dependence only.
+						</p>
+					</details>
 			</section>
 
 			<section id="incentives">
 				<h2>Incentive Implications</h2>
 				<p>
-					A repair-capped liquidation cannot also pay an immediate target-funded
-					REP bonus without making the target unsafe again. The design gets the
-					path-independence property the protocol wants by removing any
-					target-funded REP bonus from the healing path.
+					The protocol uses a target-funded REP penalty. That means the liquidator
+					has a direct immediate reward and the target is explicitly punished when
+					it falls below the collateral threshold.
 				</p>
 				<p>
-					If a liquidation both:
+					This only improves the target if debt relief frees more required
+					backing than the protocol seizes as a REP bonus. Ignoring integer
+					rounding, the economic condition is:
 				</p>
-				<ul>
-					<li>leaves the target vault safe again at the same price, and</li>
-					<li>pays the liquidator an immediate positive bonus from the target’s own REP,</li>
-				</ul>
+				<p><code>securityMultiplier &gt; 1 + liquidation bonus</code></p>
 				<p>
-					then the target loses collateral faster than debt, so the repair point
-					does not work. A positive immediate incentive therefore needs a different
-					source of value:
+					With a <code>2x</code> security multiplier and a <code>5%</code> REP
+					bonus, ordinary-sized liquidations reduce required backing faster than
+					seized REP, so the target gets healthier even while it loses
+					collateral. The executable rule is still the strict onchain
+					health-improvement guard
+					<code>debtToMove * securityMultiplier * currentRepPerEthPrice &gt; repToMove * PRICE_PRECISION</code>;
+					ceil-rounded tiny chunks can fail with <code>No gain</code>.
 				</p>
-				<ul>
-					<li>an explicit protocol-funded bounty, paid in ETH or REP from a reserve,</li>
-					<li>a queue-execution reward funded by requesters, or</li>
-					<li>a separate backstop that buys bad debt and earns future upside elsewhere.</li>
-				</ul>
 				<p>
-					Without that external value source, the liquidator is simply choosing to
-					absorb under-backed debt because their own vault is overcollateralized
-					enough to do it.
+					The tradeoff is boundary sensitivity, not generic path dependence.
+					Partial liquidations can leave the target still liquidatable, and exact
+					results become path-sensitive when integer rounding, REP floors, debt
+					floors, or caller threshold checks bind. Away from those boundaries, the
+					linear REP penalty means repeated partial liquidations at a fixed price
+					can reach the same final state as one combined liquidation.
 				</p>
 			</section>
 		</main>
 
 		<script>
+			const LIQUIDATION_REP_BONUS = 0.05
+			const MIN_REP_DEPOSIT = 10
 			const MIN_SECURITY_BOND_DEBT = 1
 
-			function ceilDiv(numerator, denominator) {
-				return Math.floor((numerator + denominator - 1) / denominator)
+			function getRepToMove(debt, price) {
+				return debt * price * (1 + LIQUIDATION_REP_BONUS)
 			}
 
-			function getRepairCap({ debt, multiplier, price, rep }) {
-				const shortfall = debt * multiplier * price - rep
-				if (shortfall <= 0) return 0
-				let cap = ceilDiv(shortfall, multiplier * price)
+			function getLiquidationCap({ debt, multiplier, price, rep }) {
+				if (multiplier <= 1) return 0
+				if (debt * multiplier * price <= rep) return 0
+				if (rep <= MIN_REP_DEPOSIT) return 0
+				let cap = (rep - MIN_REP_DEPOSIT) / (price * (1 + LIQUIDATION_REP_BONUS))
 				if (cap > debt) cap = debt
 				const remaining = debt - cap
-				if (remaining > 0 && remaining < MIN_SECURITY_BOND_DEBT) return debt
+				if (remaining > 0 && remaining < MIN_SECURITY_BOND_DEBT) cap = Math.max(0, debt - MIN_SECURITY_BOND_DEBT)
+				if (cap > 0 && cap * multiplier * price <= getRepToMove(cap, price)) return 0
 				return cap
 			}
 
-			function updateRepairExample() {
+			function updateLiquidationExample() {
 				const rep = Number(document.querySelector('[data-liquidation-input="rep"]').value)
 				const debt = Number(document.querySelector('[data-liquidation-input="debt"]').value)
 				const multiplier = Number(document.querySelector('[data-liquidation-input="multiplier"]').value)
 				const price = Number(document.querySelector('[data-liquidation-input="price"]').value)
 				const required = debt * multiplier * price
 				const shortfall = Math.max(0, required - rep)
-				const cap = getRepairCap({ debt, multiplier, price, rep })
+				const cap = getLiquidationCap({ debt, multiplier, price, rep })
 				const postDebt = debt - cap
+				const repMoved = getRepToMove(cap, price)
 
 				document.querySelector('[data-liquidation-value="rep"]').textContent = `${rep} REP`
 				document.querySelector('[data-liquidation-value="debt"]').textContent = `${debt} ETH`
@@ -389,13 +531,13 @@
 				document.querySelector('[data-liquidation-output="status"]').textContent = shortfall > 0 ? 'Liquidatable' : 'Safe'
 				document.querySelector('[data-liquidation-output="required"]').textContent = `${required} REP`
 				document.querySelector('[data-liquidation-output="shortfall"]').textContent = `${shortfall} REP`
-				document.querySelector('[data-liquidation-output="cap"]').textContent = `${cap} ETH`
-				document.querySelector('[data-liquidation-output="postDebt"]').textContent = `${postDebt} ETH`
-				document.querySelector('[data-liquidation-output="repMoved"]').textContent = '0 REP'
+				document.querySelector('[data-liquidation-output="cap"]').textContent = `${cap.toFixed(2)} ETH`
+				document.querySelector('[data-liquidation-output="postDebt"]').textContent = `${postDebt.toFixed(2)} ETH`
+				document.querySelector('[data-liquidation-output="repMoved"]').textContent = `${repMoved.toFixed(2)} REP`
 			}
 
 			function applyCap(base, requested) {
-				return Math.min(requested, getRepairCap(base))
+				return Math.min(requested, getLiquidationCap(base))
 			}
 
 			function updatePathExample() {
@@ -404,7 +546,11 @@
 				const second = Number(document.querySelector('[data-path-input="second"]').value)
 
 				const firstMoved = applyCap(base, first)
-				const afterFirst = { ...base, debt: base.debt - firstMoved }
+				const afterFirst = {
+					...base,
+					debt: base.debt - firstMoved,
+					rep: base.rep - getRepToMove(firstMoved, base.price),
+				}
 				const secondMoved = applyCap(afterFirst, second)
 				const twoStepDebt = afterFirst.debt - secondMoved
 				const combinedMoved = applyCap(base, first + second)
@@ -418,13 +564,13 @@
 			}
 
 			for (const input of document.querySelectorAll('[data-liquidation-input]')) {
-				input.addEventListener('input', updateRepairExample)
+				input.addEventListener('input', updateLiquidationExample)
 			}
 			for (const input of document.querySelectorAll('[data-path-input]')) {
 				input.addEventListener('input', updatePathExample)
 			}
 
-			updateRepairExample()
+			updateLiquidationExample()
 			updatePathExample()
 		</script>
 	</body>

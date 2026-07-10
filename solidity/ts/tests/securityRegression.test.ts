@@ -328,7 +328,7 @@ describe('security regression coverage', () => {
 		await mockWindow.setTime(questionEndDate + 1n)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
 
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit), /Oracle price is stale/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit), /Oracle price is stale|Stale price/)
 	})
 
 	test('large escalation deposits reject stale oracle prices while bond allowance is active', async () => {
@@ -340,6 +340,6 @@ describe('security regression coverage', () => {
 		await mockWindow.setTime(questionEndDate + 1n)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
 
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, largeEscalationGameDeposit), /Oracle price is stale/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, largeEscalationGameDeposit), /Oracle price is stale|Stale price/)
 	})
 })

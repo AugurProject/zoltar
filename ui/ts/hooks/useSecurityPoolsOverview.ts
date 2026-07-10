@@ -8,13 +8,14 @@ import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import type { ActionFeedback } from '../lib/actionFeedback.js'
-import { createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
+import { createLiquidationFailurePresentation, createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../lib/transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
+import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { WriteOperationsParameters } from '../types/app.js'
@@ -205,7 +206,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const getLiquidationSubmittedFeedback = (hash: Hash) => createSuccessActionFeedback('queueLiquidation', 'Liquidation submitted', hash, 'Waiting for refreshed pool state.')
 
 	const getLiquidationFeedbackFromResult = (result: SecurityPoolOverviewActionResult) => {
-		if (result.stagedExecution?.success === false) return createErrorActionFeedback('queueLiquidation', 'Liquidation failed', result.stagedExecution.errorMessage ?? 'The liquidation execution failed.')
+		if (result.stagedExecution?.success === false) return createErrorActionFeedback('queueLiquidation', 'Liquidation failed', getLiquidationExecutionFailureDetail(result.stagedExecution.errorMessage) ?? 'The liquidation execution failed.')
 		if (result.stagedExecution?.success === true) return createSuccessActionFeedback('queueLiquidation', 'Liquidation executed', result.hash, 'Execution completed immediately.')
 		return getLiquidationSubmittedFeedback(result.hash)
 	}
@@ -290,7 +291,11 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					securityPoolLiquidationError.value = undefined
 					securityPoolOverviewResult.value = nextResult
 					securityPoolOverviewFeedback.value = getLiquidationFeedbackFromResult(nextResult)
-					onTransactionPresented(createLiquidationSuccessPresentation(nextResult))
+					if (nextResult.stagedExecution?.success === false) {
+						onTransactionPresented(createLiquidationFailurePresentation(nextResult, getLiquidationExecutionFailureDetail(nextResult.stagedExecution.errorMessage) ?? 'The liquidation execution failed.'))
+					} else {
+						onTransactionPresented(createLiquidationSuccessPresentation(nextResult))
+					}
 					await loadSecurityPools(securityPoolAddress)
 				},
 			)

@@ -19,7 +19,7 @@ import { sameAddress } from '../lib/address.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
-import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
+import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
@@ -94,6 +94,7 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 			return assertNever(executionMode)
 	}
 }
+
 function renderQueuedLiquidationStatusCard({
 	onViewInStagedOperations,
 	queuedLiquidationOperation,
@@ -136,7 +137,7 @@ function renderQueuedLiquidationStatusCard({
 			<TransactionStatusCard
 				title={UI_STRINGS.liquidationModal.liquidationFailedTitle}
 				badge={<Badge tone='blocked'>{UI_STRINGS.liquidationModal.failedBadgeLabel}</Badge>}
-				detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? UI_STRINGS.liquidationModal.liquidationFailedDetail}
+				detail={getLiquidationExecutionFailureDetail(securityPoolOverviewResult?.stagedExecution?.errorMessage) ?? UI_STRINGS.liquidationModal.liquidationFailedDetail}
 				secondaryDetail={UI_STRINGS.liquidationModal.submitNewStagedOperationDetail}
 			/>
 		)
@@ -226,7 +227,9 @@ export function LiquidationModal({
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary,
 		liquidationAmount: liquidationAmountValue,
-		maxDebtToMove: hasUsableOraclePrice && computedLiquidationMaxAmount !== undefined && computedLiquidationMaxAmount > 0n ? computedLiquidationMaxAmount : undefined,
+		maxDebtToMove: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
+		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
+		securityMultiplier: selectedPool?.securityMultiplier,
 		targetVaultSummary,
 	})
 	const directLiquidationReason = (() => {

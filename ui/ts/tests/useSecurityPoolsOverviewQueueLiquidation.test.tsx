@@ -11,8 +11,12 @@ import { waitFor } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testUtils/securityPoolsOverviewDependencies.js'
 import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../hooks/useSecurityPoolsOverview.js'
+import type { GlobalTransactionPresentation } from '../types/components.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
+type HarnessOptions = {
+	onTransactionPresented?: (presentation: GlobalTransactionPresentation) => void
+}
 
 const WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 
@@ -24,13 +28,13 @@ function createDeferred<T>() {
 	return { promise, resolve }
 }
 
-function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void) {
+function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void, options: HarnessOptions = {}) {
 	return function SecurityPoolsOverviewHarness() {
 		const state = useSecurityPoolsOverview(
 			{
 				accountAddress: WALLET_ADDRESS,
 				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
+				onTransactionPresented: options.onTransactionPresented ?? (() => undefined),
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
@@ -241,6 +245,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
+
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -258,5 +263,57 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		await waitFor(() => {
 			expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toContain('fund the initial report and queue this liquidation')
 		})
+	})
+
+	test('expands compact staged liquidation failure reasons in overview feedback', async () => {
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
+			loadSecurityPoolPage: mock(async () => {
+				throw new Error('loadSecurityPoolPage should not be called in this test')
+			}),
+			queueSecurityPoolLiquidation: mock(async () => ({
+				action: 'queueLiquidation' as const,
+				hash: '0x03' as const,
+				securityPoolAddress: zeroAddress,
+				stagedExecution: {
+					errorMessage: 'No gain',
+					operation: 'liquidation' as const,
+					operationId: 3n,
+					success: false,
+				},
+			})),
+		})
+
+		const presentedTransactions: GlobalTransactionPresentation[] = []
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			{
+				onTransactionPresented: presentation => {
+					presentedTransactions.push(presentation)
+				},
+			},
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
+			requireHookState(hookState).setLiquidationAmount('1')
+			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+		})
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')
+		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toBe('This liquidation amount is too small to improve the target vault health after rounding.')
+		expect(presentedTransactions).toHaveLength(1)
+		expect(presentedTransactions[0]?.tone).toBe('error')
+		expect(presentedTransactions[0]?.title).toBe('Liquidation Failed')
+		expect(presentedTransactions[0]?.detail).toBe('This liquidation amount is too small to improve the target vault health after rounding.')
 	})
 })
