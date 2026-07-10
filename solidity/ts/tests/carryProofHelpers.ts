@@ -35,6 +35,8 @@ export const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, 
 export const hashCarryLeaf = (depositor: Address, outcome: bigint | number, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
 	keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, BigInt(outcome), amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
 
+export const computeForkContinuationParentDepositIndex = (escalationGameAddress: Address, outcome: bigint | number, depositIndex: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }], [escalationGameAddress, BigInt(outcome), depositIndex])))
+
 const buildZeroHashes = () => {
 	const zeroHashes: Hex[] = [zeroHash()]
 	for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {

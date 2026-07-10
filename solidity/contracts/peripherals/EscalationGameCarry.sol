@@ -8,7 +8,6 @@ import {
 	CarriedDepositProof,
 	CarryLeafView,
 	Deposit,
-	FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX,
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
 	Node,
 	NULLIFIER_DEPTH,
@@ -229,8 +228,12 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		return matches >= 2;
 	}
 
-	function _getStableLocalParentDepositIndex(uint256 depositIndex) internal view returns (uint256) {
-		return forkContinuation ? FORK_CONTINUATION_LOCAL_DEPOSIT_INDEX_PREFIX | depositIndex : depositIndex;
+	function _getStableLocalParentDepositIndex(
+		uint8 outcomeIndex,
+		uint256 depositIndex
+	) internal view returns (uint256) {
+		if (!forkContinuation) return depositIndex;
+		return uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)));
 	}
 
 	function _appendLocalCarryLeafToCurrentSnapshot(OutcomeState storage state, uint256 nodeId) internal {
@@ -385,7 +388,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		address depositor
 	) private {
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(depositIndex);
+		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
 		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotal -= amount;
