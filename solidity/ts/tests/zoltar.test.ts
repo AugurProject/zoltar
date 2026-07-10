@@ -67,6 +67,36 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await getZoltarForkBurnDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor, 'fork burn divisor mismatch')
 	})
 
+	test('child theoretical supply subtracts only the permanent fork haircut', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'child theoretical maximum supply',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+
+		const parentSupplyBeforeFork = await getUniverseTheoreticalSupply(client, genesisUniverse)
+		const forkThreshold = parentSupplyBeforeFork / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const permanentHaircut = forkThreshold / DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+
+		const outcomeIndex = 1n
+		await deployChild(client, genesisUniverse, outcomeIndex)
+		const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
+		const expectedMaximumSupply = parentSupplyBeforeFork - permanentHaircut
+		assert.strictEqual(await getUniverseTheoreticalSupply(client, childUniverseId), expectedMaximumSupply, 'child theoretical maximum should retain the initiator migration credit and subtract only the permanent haircut')
+		assert.strictEqual(await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
+	})
+
 	test('constructor rejects invalid fork divisors', async () => {
 		const zoltarQuestionDataAddress = await client.readContract({
 			abi: Zoltar_Zoltar.abi,

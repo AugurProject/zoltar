@@ -132,8 +132,11 @@ contract Zoltar {
 		uint256 forkThreshold = getForkThreshold(universeId);
 		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
 		universeTheoreticalSupplies[universeId] -= forkThreshold;
-		childUniverseTheoreticalSupplySnapshots[universeId] = universeTheoreticalSupplies[universeId];
 		uint256 migrationRepBalance = forkThreshold - forkThreshold / forkBurnDivisor;
+		// The child maximum retains the initiator's credited migration REP. Only the
+		// uncredited haircut is permanently absent from every child universe.
+		childUniverseTheoreticalSupplySnapshots[universeId] =
+			universeTheoreticalSupplies[universeId] + migrationRepBalance;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalance = migrationRepBalance;
 		emit UniverseForked(
 			msg.sender,
