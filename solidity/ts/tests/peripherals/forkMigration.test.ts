@@ -211,7 +211,7 @@ describe('Peripherals: fork migration', () => {
 
 			const { forkData: forkDataBeforeStrayRep } = await setupOwnForkWithEscrow()
 			await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
-			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Pool already forked/)
+			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Already forked/)
 
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
@@ -1356,7 +1356,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
 
 			await mockWindow.setTime(migrationDeadline + 1n)
-			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /migration window closed/i)
+			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
 		test('createChildUniverse allows the exact own-fork migration deadline and rejects one second later', async () => {
@@ -1376,7 +1376,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
 
 			await mockWindow.setTime(migrationDeadline + 1n)
-			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /migration window closed/i)
+			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
 		test('migrateRepToZoltar should fund an already-created child pool with the unlocked vault REP in own-fork mode', async () => {
@@ -1414,7 +1414,7 @@ describe('Peripherals: fork migration', () => {
 			const migrationDeadline = (await mockWindow.getTime()) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline + 1n)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /migration window closed/i)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /(Migration closed|Own-fork window closed)/i)
 		})
 
 		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
@@ -1450,7 +1450,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child migration over/)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child not migrating/)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {

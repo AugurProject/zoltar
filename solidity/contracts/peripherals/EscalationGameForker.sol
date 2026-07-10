@@ -36,7 +36,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		if (ownFork) {
 			child = _getOrDeployChildPool(parent, uint8(outcomeIndex));
 			migrationProxy = migrationProxyByPool[parent];
-			require(address(migrationProxy) != address(0x0), 'Migration proxy missing');
+			require(address(migrationProxy) != address(0x0), 'Proxy missing');
 			require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 			require(
 				block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
@@ -243,7 +243,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	) private returns (ISecurityPool child) {
 		child = childrenByPoolAndOutcome[parent][childOutcomeIndex];
 		if (address(child) != address(0x0)) {
-			require(child.systemState() == SystemState.ForkMigration, 'Child migration over');
+			require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 			return child;
 		}
 		require(
@@ -260,7 +260,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		childEscalationGame = child.escalationGame();
 		migrationProxy = migrationProxyByPool[parent];
 		require(address(childEscalationGame) != address(0x0), 'Child game missing');
-		require(address(migrationProxy) != address(0x0), 'Migration proxy missing');
+		require(address(migrationProxy) != address(0x0), 'Proxy missing');
 	}
 
 	function _requireContinuationMigrationOpen(ISecurityPool child, EscalationGame childEscalationGame) private view {
@@ -271,7 +271,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 					child.awaitingForkContinuation() &&
 					childEscalationGame.forkContinuation() &&
 					childEscalationGame.forkResumedAt() == 0);
-		require(migrationOpen, 'Child migration over');
+		require(migrationOpen, 'Child not migrating');
 	}
 
 	function _exportUnresolvedRep(
