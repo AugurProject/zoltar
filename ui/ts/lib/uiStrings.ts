@@ -1,175 +1,391 @@
-type UiStringTemplateValue = string | number | bigint | boolean | null | undefined
+export type UiStringTemplateValue = string | number | bigint | boolean | null | undefined
+
+export const UI_STRING_ACTION = 'Action'
+export const UI_STRING_ACTIVE = 'Active'
+export const UI_STRING_AMOUNT = 'Amount'
+export const UI_STRING_ANNUAL_FEE = 'Annual Fee'
+export const UI_STRING_APPROVING_REP = 'Approving REP...'
+export const UI_STRING_BID_AMOUNT_ETH = 'Bid Amount (ETH)'
+export const UI_STRING_CANCEL = 'Cancel'
+export const UI_STRING_CHECK_BACK_NO_LATER_THAN = 'Check back no later than '
+export const UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE = 'Checking whether pool REP is already ready for the selected child universe.'
+export const UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED = 'Child universe already deployed.'
+export const UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED = 'Child universe not already deployed'
+export const UI_STRING_CHILD_UNIVERSES = 'Child Universes'
+export const UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED = 'Child universes are unavailable because this universe has not forked.'
+export const UI_STRING_CLEARING_PRICE = 'Clearing Price'
+export const UI_STRING_CLOSED = 'Closed'
+export const UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE = 'Connect a wallet before deploying a child universe.'
+export const UI_STRING_CONNECT_WALLET_TO_CONTINUE = 'Connect wallet to continue.'
+export const UI_STRING_COPIED = 'Copied'
+export const UI_STRING_CREATE_CHILD_UNIVERSE = 'Create child universe'
+export const UI_STRING_CREATE_CHILD_UNIVERSE_TITLE = 'Create Child Universe'
+export const UI_STRING_CREATE_QUESTION = 'Create Question'
+export const UI_STRING_CREATE_SECURITY_POOL = 'Create Security Pool'
+export const UI_STRING_DELETE_SAVE = 'Delete save'
+export const UI_STRING_DEPLOYED = 'Deployed'
+export const UI_STRING_DEPLOYING = 'Deploying...'
+export const UI_STRING_DEPLOYING_UNIVERSE = 'Deploying universe...'
+export const UI_STRING_DEPLOY_UNIVERSE = 'Deploy Universe'
+export const UI_STRING_DEPOSIT_REP = 'Deposit REP'
+export const UI_STRING_DISPUTE_REPORT = 'Dispute Report'
+export const UI_STRING_ENDS = 'Ends'
+export const UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO = 'Enter an amount greater than zero.'
+export const UI_STRING_ENTRY_DEPTH_PREFIX = 'Entry depth: '
+export const UI_STRING_ERROR = 'Error'
+export const UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL = 'Escalation deposit details are unavailable for this pool right now.'
+export const UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED = 'Escalation ended by timeout. The winner is computed from the current stakes.'
+export const UI_STRING_ESCALATION_METRICS = 'Escalation Metrics'
+export const UI_STRING_ESCROWED_REP = 'Escrowed REP'
+export const UI_STRING_ETH = 'ETH'
+export const UI_STRING_ETH_RAISED_PER_CAP = 'ETH Raised / Cap'
+export const UI_STRING_FAILED = 'Failed'
+export const UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES = 'Fork-carried escalation deposits can be settled after this child pool finalizes.'
+export const UI_STRING_FORKED = 'Forked'
+export const UI_STRING_FORK_THRESHOLD = 'Fork Threshold'
+export const UI_STRING_FORK_TIME = 'Fork Time'
+export const UI_STRING_FORK_TRIGGERED = 'Fork Triggered'
+export const UI_STRING_FORK_ZOLTAR = 'Fork Zoltar'
+export const UI_STRING_HEX_VALUE_PLACEHOLDER = '0x...'
+export const UI_STRING_INITIALLY_DEPOSITED_PREFIX = 'Initially deposited: '
+export const UI_STRING_INVALID = 'Invalid'
+export const UI_STRING_JSON_STATE = 'JSON state'
+export const UI_STRING_LIQUIDATION_EXECUTED = 'Liquidation Executed'
+export const UI_STRING_LIQUIDATION_SUBMITTED = 'Liquidation Submitted'
+export const UI_STRING_LOADED_DEPTH_ETH = 'Loaded Depth (ETH)'
+export const UI_STRING_LOADING = 'Loading'
+export const UI_STRING_LOADING_WITH_ELLIPSIS = 'Loading...'
+export const UI_STRING_LOADING_CURRENT_CHAIN_TIME = 'Loading current chain time.'
+export const UI_STRING_LOADING_ESCALATION_DEPOSITS = 'Loading escalation deposits.'
+export const UI_STRING_LOADING_UNIVERSE_DETAILS = 'Loading universe details.'
+export const UI_STRING_LOADING_VAULT = 'Loading vault...'
+export const UI_STRING_MANAGE_POOL = 'Manage Pool'
+export const UI_STRING_MAX = 'Max'
+export const UI_STRING_MAX_PREFIX = 'Max '
+export const UI_STRING_MIGRATE_REP = 'Migrate REP'
+export const UI_STRING_MIGRATE_SHARES = 'Migrate Shares'
+export const UI_STRING_MIGRATE_VAULT = 'Migrate Vault'
+export const UI_STRING_MIGRATING_VAULT = 'Migrating vault...'
+export const UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE = 'Migration timing is unavailable.'
+export const UI_STRING_MINT_COMPLETE_SETS = 'Mint Complete Sets'
+export const UI_STRING_MULTIPLIER = 'Multiplier'
+export const UI_STRING_NO = 'No'
+export const UI_STRING_NO_MATCHES = 'No matches'
+export const UI_STRING_NO_PREFIX = 'No '
+export const UI_STRING_NO_QUESTIONS = 'No questions'
+export const UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS = 'No REP collateral or security bond allowance remains to migrate for the connected wallet.'
+export const UI_STRING_NOT_FOUND = 'Not found'
+export const UI_STRING_NOT_STARTED = 'Not started'
+export const UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET = 'No unresolved parent escalation deposits remain for the connected wallet.'
+export const UI_STRING_OF_PREFIX = 'of '
+export const UI_STRING_OPEN = 'Open'
+export const UI_STRING_OPENING = 'Opening...'
+export const UI_STRING_OPEN_INTEREST_MINTED = 'Open Interest Minted'
+export const UI_STRING_OPEN_ORACLE_PRICE = 'Open Oracle Price'
+export const UI_STRING_OPEN_POOL = 'Open Pool'
+export const UI_STRING_OPERATIONAL = 'Operational'
+export const UI_STRING_OUTCOME = 'Outcome'
+export const UI_STRING_OUTCOME_INDEX = 'Outcome Index'
+export const UI_STRING_PAGE_NOT_FOUND = 'Page not found'
+export const UI_STRING_PENDING = 'Pending'
+export const UI_STRING_PERCENT = '%'
+export const UI_STRING_PLURAL_SUFFIX = 's'
+export const UI_STRING_POOL = 'Pool'
+export const UI_STRING_POOL_ADDRESS = 'Pool Address'
+export const UI_STRING_POOL_COLLATERALIZATION = 'Pool collateralization'
+export const UI_STRING_PREPARE_REP = 'Prepare REP'
+export const UI_STRING_PRICE_ETH_PER_REP = 'Price (ETH / REP)'
+export const UI_STRING_PRICE_VALID_UNTIL = 'Price Valid Until'
+export const UI_STRING_QUESTION = 'Question'
+export const UI_STRING_QUESTION_ID = 'Question ID'
+export const UI_STRING_QUEUE_LIQUIDATION = 'Queue Liquidation'
+export const UI_STRING_REDEEM_COMPLETE_SETS = 'Redeem Complete Sets'
+export const UI_STRING_REDEEM_RESOLVED_SHARES = 'Redeem Resolved Shares'
+export const UI_STRING_REFRESHING = 'Refreshing...'
+export const UI_STRING_REMOVE_CORRUPTED_SAVES = 'Remove corrupted saves'
+export const UI_STRING_REP = 'REP'
+export const UI_STRING_REP_COLLATERAL = 'REP Collateral'
+export const UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED = 'REP migration is unavailable because this universe has not forked.'
+export const UI_STRING_REPORTING_WORKFLOW = 'Reporting Workflow'
+export const UI_STRING_REPORT_OUTCOME = 'Report Outcome'
+export const UI_STRING_REP_PER_ETH = 'REP / ETH'
+export const UI_STRING_REP_PURCHASED = 'REP Purchased'
+export const UI_STRING_REPUTATION_TOKEN = 'Reputation Token'
+export const UI_STRING_REVIEW_LIQUIDATION = 'Review Liquidation'
+export const UI_STRING_SECURITY_BOND_ALLOWANCE = 'Security Bond Allowance'
+export const UI_STRING_SECURITY_MULTIPLIER = 'Security Multiplier'
+export const UI_STRING_SECURITY_POOL_ADDRESS = 'Security Pool Address'
+export const UI_STRING_SECURITY_POOLS = 'Security Pools'
+export const UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY = 'Select a child universe to deploy.'
+export const UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING = 'Select an outcome side above to enable reporting.'
+export const UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE = 'Select at least one deposit to settle or use Settle all for this side.'
+export const UI_STRING_SELECTED = 'Selected'
+export const UI_STRING_SELECTED_CHILD_UNIVERSE = 'Selected Child Universe'
+export const UI_STRING_SELECTED_VAULT_ADDRESS = 'Selected Vault Address'
+export const UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK = 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.'
+export const UI_STRING_SET_BOND_ALLOWANCE = 'Set Bond Allowance'
+export const UI_STRING_SETTLED = 'Settled'
+export const UI_STRING_SETTLE_ESCALATION_DEPOSITS = 'Settle Escalation Deposits'
+export const UI_STRING_SETTLE_FINALIZED_REFUNDS = 'Settle Finalized Refunds'
+export const UI_STRING_SETTLEMENT = 'Settlement'
+export const UI_STRING_SETTLE_REPORT = 'Settle Report'
+export const UI_STRING_SHOWING_PREFIX = 'Showing '
+export const UI_STRING_SPLIT_REP = 'Split REP'
+export const UI_STRING_STAGED_OPERATION = 'Staged Operation'
+export const UI_STRING_STARTING_TRUTH_AUCTION = 'Starting truth auction...'
+export const UI_STRING_STARTS = 'Starts'
+export const UI_STRING_START_TRUTH_AUCTION = 'Start Truth Auction'
+export const UI_STRING_STATUS = 'Status'
+export const UI_STRING_SUBMIT_BID = 'Submit Bid'
+export const UI_STRING_SUBMIT_INITIAL_REPORT = 'Submit Initial Report'
+export const UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING = 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.'
+export const UI_STRING_TARGET_VAULT = 'Target Vault'
+export const UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES = 'This amount is already fully split across the selected universes.'
+export const UI_STRING_THIS_VAULT_DOES_NOT_EXIST = 'This vault does not exist.'
+export const UI_STRING_TO_CONFIRM = ' to confirm '
+export const UI_STRING_TRIGGER_ZOLTAR_FORK = 'Trigger Zoltar Fork'
+export const UI_STRING_TRUTH_AUCTION = 'Truth Auction'
+export const UI_STRING_UNAVAILABLE = 'Unavailable'
+export const UI_STRING_UNFORKED = 'Unforked'
+export const UI_STRING_UNIVERSE = 'Universe'
+export const UI_STRING_UNIVERSE_IS_FORKED = 'Universe is forked'
+export const UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW = 'Unresolved escalation deposit details are unavailable for this pool right now.'
+export const UI_STRING_VAULTS = 'Vaults'
+export const UI_STRING_WALLET_CONNECTED = 'Wallet connected'
+export const UI_STRING_WETH = 'WETH'
+export const UI_STRING_WITHDRAW_REP = 'Withdraw REP'
+export const UI_STRING_WORTH_NOW_PREFIX = 'Worth now: '
+export const UI_STRING_YES = 'Yes'
+export const UI_STRING_ZERO_DECIMAL_PLACEHOLDER = '0.0'
+export const UI_STRING_ZOLTAR_IS_ALREADY_FORKED = 'Zoltar is already forked.'
+export const UI_STRING_APP_DOCUMENT_TITLE_SUFFIX = 'Zoltar + Augur Placeholder'
+export const UI_STRING_ANSWER_UNIT = 'Answer Unit'
+export const UI_STRING_ALREADY_FORKED = 'Already Forked'
+export const UI_STRING_CLAIM_FEES = 'Claim Fees'
+export const UI_STRING_CONNECT_WALLET = 'Connect wallet'
+export const UI_STRING_CONNECTING = 'Connecting...'
+export const UI_STRING_CREATE_POOL = 'Create Pool'
+export const UI_STRING_CLOSE = 'Close'
+export const UI_STRING_MANUAL_EXECUTION_TIMEOUT = 'Manual Execution Timeout'
+export const UI_STRING_DEPLOY = 'Deploy'
+export const UI_STRING_DISPUTE_AND_SWAP = 'Dispute & Swap'
+export const UI_STRING_DISPUTE_DELAY = 'Dispute Delay'
+export const UI_STRING_END_TIME = 'End Time'
+export const UI_STRING_ESCALATION_HALT = 'Escalation Halt'
+export const UI_STRING_FEE_PERCENTAGE = 'Fee Percentage'
+export const UI_STRING_GO_TO_GENESIS_UNIVERSE = 'Go to Genesis universe'
+export const UI_STRING_LIQUIDATE_VAULT = 'Liquidate Vault'
+export const UI_STRING_MARKETS = 'Markets'
+export const UI_STRING_MULTIPLIER_SUFFIX = 'x'
+export const UI_STRING_OUTCOMES = 'Outcomes'
+export const UI_STRING_NONE = 'None'
+export const UI_STRING_NOT_CHECKED = 'Not checked'
+export const UI_STRING_ORACLE_REPORTS = 'Oracle Reports'
+export const UI_STRING_PRICE = 'Price'
+export const UI_STRING_PROTOCOL_FEE = 'Protocol Fee'
+export const UI_STRING_QUESTION_TYPE = 'Question Type'
+export const UI_STRING_QUESTIONS_AND_MARKETS = 'Questions & Markets'
+export const UI_STRING_REFRESH = 'Refresh'
+export const UI_STRING_REFRESH_REP_PRICES = 'Refresh REP prices'
+export const UI_STRING_REFRESHING_WITHOUT_ELLIPSIS = 'Refreshing'
+export const UI_STRING_REPORT_DETAILS = 'Report Details'
+export const UI_STRING_REPORT_ID = 'Report ID'
+export const UI_STRING_REP_PER_ETH_COMPACT = 'REP/ETH'
+export const UI_STRING_RETURN_TO_BROWSE = 'Return to Browse'
+export const UI_STRING_SCALAR = 'Scalar'
+export const UI_STRING_SETTLEMENT_TIME = 'Settlement Time'
+export const UI_STRING_SETTLER_REWARD = 'Settler Reward'
+export const UI_STRING_SET_SECURITY_BOND_ALLOWANCE = 'Set Security Bond Allowance'
+export const UI_STRING_TOKEN_PAIR = 'Token Pair'
+export const UI_STRING_VIEW_IN_STAGED_OPERATIONS = 'View In Staged Operations'
+export const UI_STRING_WALLET_REP = 'Wallet REP'
+export const UI_STRING_WRONG_NETWORK = 'Wrong network'
+export const UI_STRING_EXECUTED = 'Executed'
+export const UI_STRING_STAGED_OPERATION_RETRY = 'Submit a new staged operation if you want to try again.'
+export const UI_STRING_TRANSACTION_STATE_UNAVAILABLE = 'The transaction succeeded, but the latest manager state is not available.'
+export const UI_STRING_WITHDRAW_ESCALATION_DEPOSITS = 'Withdraw escalation deposits before redeeming REP.'
+export const UI_STRING_MANUAL_QUEUED_OPERATION = 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
+
+export const UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL = (value0: UiStringTemplateValue) => `Add ${value0} REP to your migration balance from this universe, then split it across the selected universes.`
+export const UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE = (value0: UiStringTemplateValue) => `Checking whether pool REP has already been migrated for the ${value0} child universe.`
+export const UI_TEMPLATE_COMPLETED_SUCCESSFULLY = (value0: UiStringTemplateValue) => `${value0} completed successfully.`
+export const UI_TEMPLATE_ETH_PER_REP_VALUE = (value0: UiStringTemplateValue) => `${value0} ETH / REP`
+export const UI_TEMPLATE_LABEL_VALUE = (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0}: ${value1}`
+export const UI_TEMPLATE_PAIR_SLASH = (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0} / ${value1}`
+export const UI_TEMPLATE_REPORT_NUMBER_LABEL = (value0: UiStringTemplateValue) => `Report #${value0}`
+export const UI_TEMPLATE_TRANSACTION_SUBMITTED = (value0: UiStringTemplateValue) => `${value0} transaction submitted.`
+export const UI_TEMPLATE_WRAPPED_VALUE = (value0: UiStringTemplateValue) => `(${value0})`
 
 const SHARED_UI_STRINGS = {
-	action: 'Action',
-	active: 'Active',
-	amount: 'Amount',
-	annualFee: 'Annual Fee',
-	approvingRep: 'Approving REP...',
-	bidAmountEth: 'Bid Amount (ETH)',
-	cancel: 'Cancel',
-	checkBackNoLaterThan: 'Check back no later than ',
-	checkingWhetherPoolRepIsAlreadyReadyFor: 'Checking whether pool REP is already ready for the selected child universe.',
-	childUniverseAlreadyDeployed: 'Child universe already deployed.',
-	childUniverseNotAlreadyDeployed: 'Child universe not already deployed',
-	childUniverses: 'Child Universes',
-	childUniversesAreUnavailableBecauseThisUniverseHas: 'Child universes are unavailable because this universe has not forked.',
-	clearingPrice: 'Clearing Price',
-	closed: 'Closed',
-	connectAWalletBeforeDeployingAChildUniverse: 'Connect a wallet before deploying a child universe.',
-	connectWalletToContinue: 'Connect wallet to continue.',
-	copied: 'Copied',
-	createChildUniverse: 'Create child universe',
-	createChildUniverseTitle: 'Create Child Universe',
-	createQuestion: 'Create Question',
-	createSecurityPool: 'Create Security Pool',
-	deleteSave: 'Delete save',
-	deployed: 'Deployed',
-	deploying: 'Deploying...',
-	deployingUniverse: 'Deploying universe...',
-	deployUniverse: 'Deploy Universe',
-	depositRep: 'Deposit REP',
-	disputeReport: 'Dispute Report',
-	ends: 'Ends',
-	enterAnAmountGreaterThanZero: 'Enter an amount greater than zero.',
-	entryDepthPrefix: 'Entry depth: ',
-	error: 'Error',
-	escalationDepositDetailsAreUnavailableForThisPool: 'Escalation deposit details are unavailable for this pool right now.',
-	escalationEndedByTimeoutTheWinnerIsComputed: 'Escalation ended by timeout. The winner is computed from the current stakes.',
-	escalationMetrics: 'Escalation Metrics',
-	escrowedRep: 'Escrowed REP',
-	eth: 'ETH',
-	ethRaisedPerCap: 'ETH Raised / Cap',
-	failed: 'Failed',
-	forkCarriedEscalationDepositsCanBeSettledAfter: 'Fork-carried escalation deposits can be settled after this child pool finalizes.',
-	forked: 'Forked',
-	forkThreshold: 'Fork Threshold',
-	forkTime: 'Fork Time',
-	forkTriggered: 'Fork Triggered',
-	forkZoltar: 'Fork Zoltar',
-	hexValuePlaceholder: '0x...',
-	initiallyDepositedPrefix: 'Initially deposited: ',
-	invalid: 'Invalid',
-	jsonState: 'JSON state',
-	liquidationExecuted: 'Liquidation Executed',
-	liquidationSubmitted: 'Liquidation Submitted',
-	loadedDepthEth: 'Loaded Depth (ETH)',
-	loading: 'Loading',
-	loadingWithEllipsis: 'Loading...',
-	loadingCurrentChainTime: 'Loading current chain time.',
-	loadingEscalationDeposits: 'Loading escalation deposits.',
-	loadingUniverseDetails: 'Loading universe details.',
-	loadingVault: 'Loading vault...',
-	managePool: 'Manage Pool',
-	max: 'Max',
-	maxPrefix: 'Max ',
-	migrateRep: 'Migrate REP',
-	migrateShares: 'Migrate Shares',
-	migrateVault: 'Migrate Vault',
-	migratingVault: 'Migrating vault...',
-	migrationTimingIsUnavailable: 'Migration timing is unavailable.',
-	mintCompleteSets: 'Mint Complete Sets',
-	multiplier: 'Multiplier',
-	no: 'No',
-	noMatches: 'No matches',
-	noPrefix: 'No ',
-	noQuestions: 'No questions',
-	noRepCollateralOrSecurityBondAllowanceRemains: 'No REP collateral or security bond allowance remains to migrate for the connected wallet.',
-	notFound: 'Not found',
-	notStarted: 'Not started',
-	noUnresolvedParentEscalationDepositsRemainForThe: 'No unresolved parent escalation deposits remain for the connected wallet.',
-	ofPrefix: 'of ',
-	open: 'Open',
-	opening: 'Opening...',
-	openInterestMinted: 'Open Interest Minted',
-	openOraclePrice: 'Open Oracle Price',
-	openPool: 'Open Pool',
-	operational: 'Operational',
-	outcome: 'Outcome',
-	outcomeIndex: 'Outcome Index',
-	pageNotFound: 'Page not found',
-	pending: 'Pending',
-	percent: '%',
-	pluralSuffix: 's',
-	pool: 'Pool',
-	poolAddress: 'Pool Address',
-	poolCollateralization: 'Pool collateralization',
-	prepareRep: 'Prepare REP',
-	priceEthPerRep: 'Price (ETH / REP)',
-	priceValidUntil: 'Price Valid Until',
-	question: 'Question',
-	questionId: 'Question ID',
-	queueLiquidation: 'Queue Liquidation',
-	redeemCompleteSets: 'Redeem Complete Sets',
-	redeemResolvedShares: 'Redeem Resolved Shares',
-	refreshing: 'Refreshing...',
-	removeCorruptedSaves: 'Remove corrupted saves',
-	rep: 'REP',
-	repCollateral: 'REP Collateral',
-	repMigrationIsUnavailableBecauseThisUniverseHas: 'REP migration is unavailable because this universe has not forked.',
-	reportingWorkflow: 'Reporting Workflow',
-	reportOutcome: 'Report Outcome',
-	repPerEth: 'REP / ETH',
-	repPurchased: 'REP Purchased',
-	reputationToken: 'Reputation Token',
-	reviewLiquidation: 'Review Liquidation',
-	securityBondAllowance: 'Security Bond Allowance',
-	securityMultiplier: 'Security Multiplier',
-	securityPoolAddress: 'Security Pool Address',
-	securityPools: 'Security Pools',
-	selectAChildUniverseToDeploy: 'Select a child universe to deploy.',
-	selectAnOutcomeSideAboveToEnableReporting: 'Select an outcome side above to enable reporting.',
-	selectAtLeastOneDepositToSettleOr: 'Select at least one deposit to settle or use Settle all for this side.',
-	selected: 'Selected',
-	selectedChildUniverse: 'Selected Child Universe',
-	selectedVaultAddress: 'Selected Vault Address',
-	selectTheAnswerYouBelieveShouldFinalizeLock: 'Select the answer you believe should finalize, lock REP behind it, and return after finalization to settle deposits.',
-	setBondAllowance: 'Set Bond Allowance',
-	settled: 'Settled',
-	settleEscalationDeposits: 'Settle Escalation Deposits',
-	settleFinalizedRefunds: 'Settle Finalized Refunds',
-	settlement: 'Settlement',
-	settleReport: 'Settle Report',
-	showingPrefix: 'Showing ',
-	splitRep: 'Split REP',
-	stagedOperation: 'Staged Operation',
-	startingTruthAuction: 'Starting truth auction...',
-	starts: 'Starts',
-	startTruthAuction: 'Start Truth Auction',
-	status: 'Status',
-	submitBid: 'Submit Bid',
-	submitInitialReport: 'Submit Initial Report',
-	submittingABidLocksEthUntilSettlementLosing: 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.',
-	targetVault: 'Target Vault',
-	thisAmountIsAlreadyFullySplitAcrossThe: 'This amount is already fully split across the selected universes.',
-	thisVaultDoesNotExist: 'This vault does not exist.',
-	toConfirm: ' to confirm ',
-	triggerZoltarFork: 'Trigger Zoltar Fork',
-	truthAuction: 'Truth Auction',
-	unavailable: 'Unavailable',
-	unforked: 'Unforked',
-	universe: 'Universe',
-	universeIsForked: 'Universe is forked',
-	unresolvedEscalationDepositDetailsAreUnavailableForThis: 'Unresolved escalation deposit details are unavailable for this pool right now.',
-	vaults: 'Vaults',
-	walletConnected: 'Wallet connected',
-	weth: 'WETH',
-	withdrawRep: 'Withdraw REP',
-	worthNowPrefix: 'Worth now: ',
-	yes: 'Yes',
-	zeroDecimalPlaceholder: '0.0',
-	zoltarIsAlreadyForked: 'Zoltar is already forked.',
+	action: UI_STRING_ACTION,
+	active: UI_STRING_ACTIVE,
+	amount: UI_STRING_AMOUNT,
+	annualFee: UI_STRING_ANNUAL_FEE,
+	approvingRep: UI_STRING_APPROVING_REP,
+	bidAmountEth: UI_STRING_BID_AMOUNT_ETH,
+	cancel: UI_STRING_CANCEL,
+	checkBackNoLaterThan: UI_STRING_CHECK_BACK_NO_LATER_THAN,
+	checkingWhetherPoolRepIsAlreadyReadyFor: UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE,
+	childUniverseAlreadyDeployed: UI_STRING_CHILD_UNIVERSE_ALREADY_DEPLOYED,
+	childUniverseNotAlreadyDeployed: UI_STRING_CHILD_UNIVERSE_NOT_ALREADY_DEPLOYED,
+	childUniverses: UI_STRING_CHILD_UNIVERSES,
+	childUniversesAreUnavailableBecauseThisUniverseHas: UI_STRING_CHILD_UNIVERSES_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
+	clearingPrice: UI_STRING_CLEARING_PRICE,
+	closed: UI_STRING_CLOSED,
+	connectAWalletBeforeDeployingAChildUniverse: UI_STRING_CONNECT_A_WALLET_BEFORE_DEPLOYING_A_CHILD_UNIVERSE,
+	connectWalletToContinue: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
+	copied: UI_STRING_COPIED,
+	createChildUniverse: UI_STRING_CREATE_CHILD_UNIVERSE,
+	createChildUniverseTitle: UI_STRING_CREATE_CHILD_UNIVERSE_TITLE,
+	createQuestion: UI_STRING_CREATE_QUESTION,
+	createSecurityPool: UI_STRING_CREATE_SECURITY_POOL,
+	deleteSave: UI_STRING_DELETE_SAVE,
+	deployed: UI_STRING_DEPLOYED,
+	deploying: UI_STRING_DEPLOYING,
+	deployingUniverse: UI_STRING_DEPLOYING_UNIVERSE,
+	deployUniverse: UI_STRING_DEPLOY_UNIVERSE,
+	depositRep: UI_STRING_DEPOSIT_REP,
+	disputeReport: UI_STRING_DISPUTE_REPORT,
+	ends: UI_STRING_ENDS,
+	enterAnAmountGreaterThanZero: UI_STRING_ENTER_AN_AMOUNT_GREATER_THAN_ZERO,
+	entryDepthPrefix: UI_STRING_ENTRY_DEPTH_PREFIX,
+	error: UI_STRING_ERROR,
+	escalationDepositDetailsAreUnavailableForThisPool: UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL,
+	escalationEndedByTimeoutTheWinnerIsComputed: UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED,
+	escalationMetrics: UI_STRING_ESCALATION_METRICS,
+	escrowedRep: UI_STRING_ESCROWED_REP,
+	eth: UI_STRING_ETH,
+	ethRaisedPerCap: UI_STRING_ETH_RAISED_PER_CAP,
+	failed: UI_STRING_FAILED,
+	forkCarriedEscalationDepositsCanBeSettledAfter: UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES,
+	forked: UI_STRING_FORKED,
+	forkThreshold: UI_STRING_FORK_THRESHOLD,
+	forkTime: UI_STRING_FORK_TIME,
+	forkTriggered: UI_STRING_FORK_TRIGGERED,
+	forkZoltar: UI_STRING_FORK_ZOLTAR,
+	hexValuePlaceholder: UI_STRING_HEX_VALUE_PLACEHOLDER,
+	initiallyDepositedPrefix: UI_STRING_INITIALLY_DEPOSITED_PREFIX,
+	invalid: UI_STRING_INVALID,
+	jsonState: UI_STRING_JSON_STATE,
+	liquidationExecuted: UI_STRING_LIQUIDATION_EXECUTED,
+	liquidationSubmitted: UI_STRING_LIQUIDATION_SUBMITTED,
+	loadedDepthEth: UI_STRING_LOADED_DEPTH_ETH,
+	loading: UI_STRING_LOADING,
+	loadingWithEllipsis: UI_STRING_LOADING_WITH_ELLIPSIS,
+	loadingCurrentChainTime: UI_STRING_LOADING_CURRENT_CHAIN_TIME,
+	loadingEscalationDeposits: UI_STRING_LOADING_ESCALATION_DEPOSITS,
+	loadingUniverseDetails: UI_STRING_LOADING_UNIVERSE_DETAILS,
+	loadingVault: UI_STRING_LOADING_VAULT,
+	managePool: UI_STRING_MANAGE_POOL,
+	max: UI_STRING_MAX,
+	maxPrefix: UI_STRING_MAX_PREFIX,
+	migrateRep: UI_STRING_MIGRATE_REP,
+	migrateShares: UI_STRING_MIGRATE_SHARES,
+	migrateVault: UI_STRING_MIGRATE_VAULT,
+	migratingVault: UI_STRING_MIGRATING_VAULT,
+	migrationTimingIsUnavailable: UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE,
+	mintCompleteSets: UI_STRING_MINT_COMPLETE_SETS,
+	multiplier: UI_STRING_MULTIPLIER,
+	no: UI_STRING_NO,
+	noMatches: UI_STRING_NO_MATCHES,
+	noPrefix: UI_STRING_NO_PREFIX,
+	noQuestions: UI_STRING_NO_QUESTIONS,
+	noRepCollateralOrSecurityBondAllowanceRemains: UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS,
+	notFound: UI_STRING_NOT_FOUND,
+	notStarted: UI_STRING_NOT_STARTED,
+	noUnresolvedParentEscalationDepositsRemainForThe: UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET,
+	ofPrefix: UI_STRING_OF_PREFIX,
+	open: UI_STRING_OPEN,
+	opening: UI_STRING_OPENING,
+	openInterestMinted: UI_STRING_OPEN_INTEREST_MINTED,
+	openOraclePrice: UI_STRING_OPEN_ORACLE_PRICE,
+	openPool: UI_STRING_OPEN_POOL,
+	operational: UI_STRING_OPERATIONAL,
+	outcome: UI_STRING_OUTCOME,
+	outcomeIndex: UI_STRING_OUTCOME_INDEX,
+	pageNotFound: UI_STRING_PAGE_NOT_FOUND,
+	pending: UI_STRING_PENDING,
+	percent: UI_STRING_PERCENT,
+	pluralSuffix: UI_STRING_PLURAL_SUFFIX,
+	pool: UI_STRING_POOL,
+	poolAddress: UI_STRING_POOL_ADDRESS,
+	poolCollateralization: UI_STRING_POOL_COLLATERALIZATION,
+	prepareRep: UI_STRING_PREPARE_REP,
+	priceEthPerRep: UI_STRING_PRICE_ETH_PER_REP,
+	priceValidUntil: UI_STRING_PRICE_VALID_UNTIL,
+	question: UI_STRING_QUESTION,
+	questionId: UI_STRING_QUESTION_ID,
+	queueLiquidation: UI_STRING_QUEUE_LIQUIDATION,
+	redeemCompleteSets: UI_STRING_REDEEM_COMPLETE_SETS,
+	redeemResolvedShares: UI_STRING_REDEEM_RESOLVED_SHARES,
+	refreshing: UI_STRING_REFRESHING,
+	removeCorruptedSaves: UI_STRING_REMOVE_CORRUPTED_SAVES,
+	rep: UI_STRING_REP,
+	repCollateral: UI_STRING_REP_COLLATERAL,
+	repMigrationIsUnavailableBecauseThisUniverseHas: UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
+	reportingWorkflow: UI_STRING_REPORTING_WORKFLOW,
+	reportOutcome: UI_STRING_REPORT_OUTCOME,
+	repPerEth: UI_STRING_REP_PER_ETH,
+	repPurchased: UI_STRING_REP_PURCHASED,
+	reputationToken: UI_STRING_REPUTATION_TOKEN,
+	reviewLiquidation: UI_STRING_REVIEW_LIQUIDATION,
+	securityBondAllowance: UI_STRING_SECURITY_BOND_ALLOWANCE,
+	securityMultiplier: UI_STRING_SECURITY_MULTIPLIER,
+	securityPoolAddress: UI_STRING_SECURITY_POOL_ADDRESS,
+	securityPools: UI_STRING_SECURITY_POOLS,
+	selectAChildUniverseToDeploy: UI_STRING_SELECT_A_CHILD_UNIVERSE_TO_DEPLOY,
+	selectAnOutcomeSideAboveToEnableReporting: UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING,
+	selectAtLeastOneDepositToSettleOr: UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_SETTLE_OR_USE_SETTLE_ALL_FOR_THIS_SIDE,
+	selected: UI_STRING_SELECTED,
+	selectedChildUniverse: UI_STRING_SELECTED_CHILD_UNIVERSE,
+	selectedVaultAddress: UI_STRING_SELECTED_VAULT_ADDRESS,
+	selectTheAnswerYouBelieveShouldFinalizeLock: UI_STRING_SELECT_THE_ANSWER_YOU_BELIEVE_SHOULD_FINALIZE_LOCK,
+	setBondAllowance: UI_STRING_SET_BOND_ALLOWANCE,
+	settled: UI_STRING_SETTLED,
+	settleEscalationDeposits: UI_STRING_SETTLE_ESCALATION_DEPOSITS,
+	settleFinalizedRefunds: UI_STRING_SETTLE_FINALIZED_REFUNDS,
+	settlement: UI_STRING_SETTLEMENT,
+	settleReport: UI_STRING_SETTLE_REPORT,
+	showingPrefix: UI_STRING_SHOWING_PREFIX,
+	splitRep: UI_STRING_SPLIT_REP,
+	stagedOperation: UI_STRING_STAGED_OPERATION,
+	startingTruthAuction: UI_STRING_STARTING_TRUTH_AUCTION,
+	starts: UI_STRING_STARTS,
+	startTruthAuction: UI_STRING_START_TRUTH_AUCTION,
+	status: UI_STRING_STATUS,
+	submitBid: UI_STRING_SUBMIT_BID,
+	submitInitialReport: UI_STRING_SUBMIT_INITIAL_REPORT,
+	submittingABidLocksEthUntilSettlementLosing: UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING,
+	targetVault: UI_STRING_TARGET_VAULT,
+	thisAmountIsAlreadyFullySplitAcrossThe: UI_STRING_THIS_AMOUNT_IS_ALREADY_FULLY_SPLIT_ACROSS_SELECTED_UNIVERSES,
+	thisVaultDoesNotExist: UI_STRING_THIS_VAULT_DOES_NOT_EXIST,
+	toConfirm: UI_STRING_TO_CONFIRM,
+	triggerZoltarFork: UI_STRING_TRIGGER_ZOLTAR_FORK,
+	truthAuction: UI_STRING_TRUTH_AUCTION,
+	unavailable: UI_STRING_UNAVAILABLE,
+	unforked: UI_STRING_UNFORKED,
+	universe: UI_STRING_UNIVERSE,
+	universeIsForked: UI_STRING_UNIVERSE_IS_FORKED,
+	unresolvedEscalationDepositDetailsAreUnavailableForThis: UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
+	vaults: UI_STRING_VAULTS,
+	walletConnected: UI_STRING_WALLET_CONNECTED,
+	weth: UI_STRING_WETH,
+	withdrawRep: UI_STRING_WITHDRAW_REP,
+	worthNowPrefix: UI_STRING_WORTH_NOW_PREFIX,
+	yes: UI_STRING_YES,
+	zeroDecimalPlaceholder: UI_STRING_ZERO_DECIMAL_PLACEHOLDER,
+	zoltarIsAlreadyForked: UI_STRING_ZOLTAR_IS_ALREADY_FORKED,
 } as const
 const SHARED_UI_TEMPLATES = {
-	addRepToMigrationBalanceDetail: (value0: UiStringTemplateValue) => `Add ${value0} REP to your migration balance from this universe, then split it across the selected universes.`,
-	checkingPoolRepMigratedToChildUniverse: (value0: UiStringTemplateValue) => `Checking whether pool REP has already been migrated for the ${value0} child universe.`,
-	completedSuccessfully: (value0: UiStringTemplateValue) => `${value0} completed successfully.`,
-	ethPerRepValue: (value0: UiStringTemplateValue) => `${value0} ETH / REP`,
-	labelValue: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0}: ${value1}`,
-	pairSlash: (value0: UiStringTemplateValue, value1: UiStringTemplateValue) => `${value0} / ${value1}`,
-	reportNumberLabel: (value0: UiStringTemplateValue) => `Report #${value0}`,
-	transactionSubmitted: (value0: UiStringTemplateValue) => `${value0} transaction submitted.`,
-	wrappedValue: (value0: UiStringTemplateValue) => `(${value0})`,
+	addRepToMigrationBalanceDetail: UI_TEMPLATE_ADD_REP_TO_MIGRATION_BALANCE_DETAIL,
+	checkingPoolRepMigratedToChildUniverse: UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE,
+	completedSuccessfully: UI_TEMPLATE_COMPLETED_SUCCESSFULLY,
+	ethPerRepValue: UI_TEMPLATE_ETH_PER_REP_VALUE,
+	labelValue: UI_TEMPLATE_LABEL_VALUE,
+	pairSlash: UI_TEMPLATE_PAIR_SLASH,
+	reportNumberLabel: UI_TEMPLATE_REPORT_NUMBER_LABEL,
+	transactionSubmitted: UI_TEMPLATE_TRANSACTION_SUBMITTED,
+	wrappedValue: UI_TEMPLATE_WRAPPED_VALUE,
 } as const
 const SECURITY_VAULT_ACTION_IDS = {
 	claimFees: 'claim-fees',
@@ -177,81 +393,81 @@ const SECURITY_VAULT_ACTION_IDS = {
 	repExitRedeem: 'rep-exit-redeem',
 	repExitWithdraw: 'rep-exit-withdraw',
 } as const
-const APP_DOCUMENT_TITLE_SUFFIX = 'Zoltar + Augur Placeholder'
-const COMMON_ANSWER_UNIT_LABEL = 'Answer Unit'
-const COMMON_ALREADY_FORKED_LABEL = 'Already Forked'
-const COMMON_CLAIM_FEES_LABEL = 'Claim Fees'
-const COMMON_CONNECT_WALLET_LABEL = 'Connect wallet'
+const APP_DOCUMENT_TITLE_SUFFIX = UI_STRING_APP_DOCUMENT_TITLE_SUFFIX
+const COMMON_ANSWER_UNIT_LABEL = UI_STRING_ANSWER_UNIT
+const COMMON_ALREADY_FORKED_LABEL = UI_STRING_ALREADY_FORKED
+const COMMON_CLAIM_FEES_LABEL = UI_STRING_CLAIM_FEES
+const COMMON_CONNECT_WALLET_LABEL = UI_STRING_CONNECT_WALLET
 const COMMON_CONNECT_WALLET_TO_CONTINUE_DETAIL = SHARED_UI_STRINGS.connectWalletToContinue
-const COMMON_CONNECTING_LABEL = 'Connecting...'
+const COMMON_CONNECTING_LABEL = UI_STRING_CONNECTING
 const COMMON_CREATE_QUESTION_LABEL = SHARED_UI_STRINGS.createQuestion
-const COMMON_CREATE_POOL_LABEL = 'Create Pool'
-const COMMON_CLOSE_LABEL = 'Close'
-const COMMON_MANUAL_EXECUTION_TIMEOUT_LABEL = 'Manual Execution Timeout'
+const COMMON_CREATE_POOL_LABEL = UI_STRING_CREATE_POOL
+const COMMON_CLOSE_LABEL = UI_STRING_CLOSE
+const COMMON_MANUAL_EXECUTION_TIMEOUT_LABEL = UI_STRING_MANUAL_EXECUTION_TIMEOUT
 const COMMON_DEPOSIT_REP_LABEL = SHARED_UI_STRINGS.depositRep
-const COMMON_DEPLOY_LABEL = 'Deploy'
-const COMMON_DISPUTE_AND_SWAP_LABEL = 'Dispute & Swap'
-const COMMON_DISPUTE_DELAY_LABEL = 'Dispute Delay'
-const COMMON_END_TIME_LABEL = 'End Time'
-const COMMON_ESCALATION_HALT_LABEL = 'Escalation Halt'
-const COMMON_FEE_PERCENTAGE_LABEL = 'Fee Percentage'
+const COMMON_DEPLOY_LABEL = UI_STRING_DEPLOY
+const COMMON_DISPUTE_AND_SWAP_LABEL = UI_STRING_DISPUTE_AND_SWAP
+const COMMON_DISPUTE_DELAY_LABEL = UI_STRING_DISPUTE_DELAY
+const COMMON_END_TIME_LABEL = UI_STRING_END_TIME
+const COMMON_ESCALATION_HALT_LABEL = UI_STRING_ESCALATION_HALT
+const COMMON_FEE_PERCENTAGE_LABEL = UI_STRING_FEE_PERCENTAGE
 const COMMON_FORK_ZOLTAR_LABEL = SHARED_UI_STRINGS.forkZoltar
 const COMMON_FORKED_LABEL = SHARED_UI_STRINGS.forked
-const COMMON_GO_TO_GENESIS_UNIVERSE_LABEL = 'Go to Genesis universe'
+const COMMON_GO_TO_GENESIS_UNIVERSE_LABEL = UI_STRING_GO_TO_GENESIS_UNIVERSE
 const COMMON_HEX_VALUE_PLACEHOLDER = SHARED_UI_STRINGS.hexValuePlaceholder
-const COMMON_LIQUIDATE_VAULT_LABEL = 'Liquidate Vault'
+const COMMON_LIQUIDATE_VAULT_LABEL = UI_STRING_LIQUIDATE_VAULT
 const COMMON_LOADING_BADGE_LABEL = SHARED_UI_STRINGS.loading
 const COMMON_LOADING_LABEL = SHARED_UI_STRINGS.loadingWithEllipsis
-const COMMON_MARKETS_LABEL = 'Markets'
+const COMMON_MARKETS_LABEL = UI_STRING_MARKETS
 const COMMON_MIGRATE_REP_LABEL = SHARED_UI_STRINGS.migrateRep
 const COMMON_MULTIPLIER_LABEL = SHARED_UI_STRINGS.multiplier
-const COMMON_MULTIPLIER_SUFFIX = 'x'
-const COMMON_OUTCOMES_LABEL = 'Outcomes'
-const COMMON_NONE_LABEL = 'None'
-const COMMON_NOT_CHECKED_LABEL = 'Not checked'
+const COMMON_MULTIPLIER_SUFFIX = UI_STRING_MULTIPLIER_SUFFIX
+const COMMON_OUTCOMES_LABEL = UI_STRING_OUTCOMES
+const COMMON_NONE_LABEL = UI_STRING_NONE
+const COMMON_NOT_CHECKED_LABEL = UI_STRING_NOT_CHECKED
 const COMMON_NOT_FOUND_LABEL = SHARED_UI_STRINGS.notFound
-const COMMON_ORACLE_REPORTS_LABEL = 'Oracle Reports'
-const COMMON_PRICE_LABEL = 'Price'
-const COMMON_PROTOCOL_FEE_LABEL = 'Protocol Fee'
+const COMMON_ORACLE_REPORTS_LABEL = UI_STRING_ORACLE_REPORTS
+const COMMON_PRICE_LABEL = UI_STRING_PRICE
+const COMMON_PROTOCOL_FEE_LABEL = UI_STRING_PROTOCOL_FEE
 const COMMON_QUESTION_ID_LABEL = SHARED_UI_STRINGS.questionId
-const COMMON_QUESTION_TYPE_LABEL = 'Question Type'
-const COMMON_QUESTIONS_AND_MARKETS_LABEL = 'Questions & Markets'
-const COMMON_REFRESH_LABEL = 'Refresh'
-const COMMON_REFRESH_REP_PRICES_LABEL = 'Refresh REP prices'
-const COMMON_REFRESHING_LABEL = 'Refreshing'
-const COMMON_REPORT_DETAILS_LABEL = 'Report Details'
-const COMMON_REPORT_ID_LABEL = 'Report ID'
+const COMMON_QUESTION_TYPE_LABEL = UI_STRING_QUESTION_TYPE
+const COMMON_QUESTIONS_AND_MARKETS_LABEL = UI_STRING_QUESTIONS_AND_MARKETS
+const COMMON_REFRESH_LABEL = UI_STRING_REFRESH
+const COMMON_REFRESH_REP_PRICES_LABEL = UI_STRING_REFRESH_REP_PRICES
+const COMMON_REFRESHING_LABEL = UI_STRING_REFRESHING_WITHOUT_ELLIPSIS
+const COMMON_REPORT_DETAILS_LABEL = UI_STRING_REPORT_DETAILS
+const COMMON_REPORT_ID_LABEL = UI_STRING_REPORT_ID
 const COMMON_REP_LABEL = SHARED_UI_STRINGS.rep
-const COMMON_REP_PER_ETH_LABEL = 'REP/ETH'
-const COMMON_RETURN_TO_BROWSE_LABEL = 'Return to Browse'
-const COMMON_SCALAR_LABEL = 'Scalar'
+const COMMON_REP_PER_ETH_LABEL = UI_STRING_REP_PER_ETH_COMPACT
+const COMMON_RETURN_TO_BROWSE_LABEL = UI_STRING_RETURN_TO_BROWSE
+const COMMON_SCALAR_LABEL = UI_STRING_SCALAR
 const COMMON_SECURITY_MULTIPLIER_LABEL = SHARED_UI_STRINGS.securityMultiplier
 const COMMON_SECURITY_POOL_ADDRESS_LABEL = SHARED_UI_STRINGS.securityPoolAddress
 const COMMON_SECURITY_POOLS_LABEL = SHARED_UI_STRINGS.securityPools
 const COMMON_SET_BOND_ALLOWANCE_LABEL = SHARED_UI_STRINGS.setBondAllowance
 const COMMON_SETTLE_REPORT_LABEL = SHARED_UI_STRINGS.settleReport
 const COMMON_SETTLED_LABEL = SHARED_UI_STRINGS.settled
-const COMMON_SETTLEMENT_TIME_LABEL = 'Settlement Time'
-const COMMON_SETTLER_REWARD_LABEL = 'Settler Reward'
-const COMMON_SET_SECURITY_BOND_ALLOWANCE_LABEL = 'Set Security Bond Allowance'
+const COMMON_SETTLEMENT_TIME_LABEL = UI_STRING_SETTLEMENT_TIME
+const COMMON_SETTLER_REWARD_LABEL = UI_STRING_SETTLER_REWARD
+const COMMON_SET_SECURITY_BOND_ALLOWANCE_LABEL = UI_STRING_SET_SECURITY_BOND_ALLOWANCE
 const COMMON_STATUS_LABEL = SHARED_UI_STRINGS.status
 const COMMON_SUBMIT_INITIAL_REPORT_LABEL = SHARED_UI_STRINGS.submitInitialReport
-const COMMON_TOKEN_PAIR_LABEL = 'Token Pair'
+const COMMON_TOKEN_PAIR_LABEL = UI_STRING_TOKEN_PAIR
 const COMMON_UNAVAILABLE_LABEL = SHARED_UI_STRINGS.unavailable
 const COMMON_UNIVERSE_LABEL = SHARED_UI_STRINGS.universe
-const COMMON_VIEW_IN_STAGED_OPERATIONS_LABEL = 'View In Staged Operations'
-const COMMON_WALLET_REP_LABEL = 'Wallet REP'
-const COMMON_WRONG_NETWORK_LABEL = 'Wrong network'
+const COMMON_VIEW_IN_STAGED_OPERATIONS_LABEL = UI_STRING_VIEW_IN_STAGED_OPERATIONS
+const COMMON_WALLET_REP_LABEL = UI_STRING_WALLET_REP
+const COMMON_WRONG_NETWORK_LABEL = UI_STRING_WRONG_NETWORK
 const COMMON_YES_LABEL = SHARED_UI_STRINGS.yes
 const COMMON_NO_LABEL = SHARED_UI_STRINGS.no
 const COMMON_INVALID_LABEL = SHARED_UI_STRINGS.invalid
 const COMMON_AMOUNT_LABEL = SHARED_UI_STRINGS.amount
-const COMMON_EXECUTED_LABEL = 'Executed'
-const STAGED_OPERATION_RETRY_DETAIL = 'Submit a new staged operation if you want to try again.'
-const TRANSACTION_STATE_UNAVAILABLE_DETAIL = 'The transaction succeeded, but the latest manager state is not available.'
+const COMMON_EXECUTED_LABEL = UI_STRING_EXECUTED
+const STAGED_OPERATION_RETRY_DETAIL = UI_STRING_STAGED_OPERATION_RETRY
+const TRANSACTION_STATE_UNAVAILABLE_DETAIL = UI_STRING_TRANSACTION_STATE_UNAVAILABLE
 const REP_COLLATERAL_LABEL = SHARED_UI_STRINGS.repCollateral
-const WITHDRAW_ESCALATION_DEPOSITS_DETAIL = 'Withdraw escalation deposits before redeeming REP.'
-const MANUAL_QUEUED_OPERATION_DETAIL = 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
+const WITHDRAW_ESCALATION_DEPOSITS_DETAIL = UI_STRING_WITHDRAW_ESCALATION_DEPOSITS
+const MANUAL_QUEUED_OPERATION_DETAIL = UI_STRING_MANUAL_QUEUED_OPERATION
 export const CURATED_TSX_STRINGS = {
 	repPriceSource: {
 		mockTooltip: 'Uses the simulation REP/ETH mock price.',
