@@ -41,7 +41,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		depositor = deposit.depositor;
 		amount = deposit.amount;
 		_consumeEscrowedRepForVault(depositor, amount);
-		parentDepositIndex = _getStableLocalParentDepositIndex(depositIndex);
+		parentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
 	}
 
 	function withdrawDeposit(
@@ -214,7 +214,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		emit ClaimDeposit(
 			depositor,
 			outcome,
-			_getStableLocalParentDepositIndex(depositIndex),
+			_getStableLocalParentDepositIndex(uint8(outcome), depositIndex),
 			originalDepositAmount,
 			amountToWithdraw,
 			burnAmount,

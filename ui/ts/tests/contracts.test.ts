@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	buildForkCarriedEscalationProofs,
 	depositRepToSecurityPool,
@@ -42,6 +42,7 @@ const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
+const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
 
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
 type MockLoaderClient = Parameters<typeof loadAllSecurityPools>[0]
@@ -95,6 +96,20 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 		},
 		waitForTransactionReceipt: async () => ({ status: 'success' }),
 	}
+}
+
+function hashCarryLeafForTest(depositor: Address, outcome: bigint, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) {
+	return keccak256(encodeAbiParameters(carryLeafAbi, [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+}
+
+function hashCarryParentForTest(left: Hex, right: Hex) {
+	return keccak256(concatHex([left, right]))
+}
+
+function computeEmptyNullifierRootForTest() {
+	let currentHash = ('0x' + '00'.repeat(32)) as Hex
+	for (let depth = 1; depth < 64; depth += 1) currentHash = hashCarryParentForTest(currentHash, currentHash)
+	return currentHash
 }
 
 function asWriteClient(client: MockWriteClient): WriteClient {
@@ -1379,6 +1394,84 @@ describe('contracts helpers', () => {
 		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
+	})
+
+	test('buildForkCarriedEscalationProofs preserves recursive carry append order instead of sorting by parentDepositIndex', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
+		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
+		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
+		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
+		const inheritedLeaf = {
+			amount: 3n,
+			cumulativeAmount: 3n,
+			depositor,
+			parentDepositIndex: 9n,
+			sourceNodeId: 1n,
+		}
+		const childLocalLeaf = {
+			amount: 1n,
+			cumulativeAmount: 4n,
+			depositor,
+			parentDepositIndex: 1n,
+			sourceNodeId: 2n,
+		}
+		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amount, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmount, inheritedLeaf.sourceNodeId)
+		const childLocalLeafHash = hashCarryLeafForTest(childLocalLeaf.depositor, 1n, childLocalLeaf.amount, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmount, childLocalLeaf.sourceNodeId)
+		const parentCarryRoot = hashCarryParentForTest(inheritedLeafHash, childLocalLeafHash)
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return {
+						currentCarryRoot: parentCarryRoot,
+						currentLeafCount: 2n,
+						currentNullifierRoot: zeroHash,
+					}
+				}
+				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
+					return {
+						currentCarryRoot: zeroHash,
+						currentLeafCount: 0n,
+						currentNullifierRoot: emptyNullifierRoot,
+					}
+				}
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return {
+						currentCarryRoot: inheritedLeafHash,
+						currentLeafCount: 1n,
+						currentNullifierRoot: zeroHash,
+					}
+				}
+				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
+				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
+				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') {
+					return [[childLocalLeaf], 0n]
+				}
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') {
+					return [[inheritedLeaf], 0n]
+				}
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [9n, 1n])).resolves.toMatchObject([
+			{ leafIndex: 0n, parentDepositIndex: 9n },
+			{ leafIndex: 1n, parentDepositIndex: 1n },
+		])
 	})
 
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
