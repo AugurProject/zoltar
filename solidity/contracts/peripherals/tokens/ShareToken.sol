@@ -7,6 +7,7 @@ import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
+import '../SecurityPoolUtils.sol';
 import './ERC1155.sol';
 
 /**
@@ -20,10 +21,6 @@ contract ShareToken is ERC1155, IShareToken {
 	mapping(address => bool) authorized;
 	event Authorized(address indexed securityPool);
 	event Migrate(address migrator, uint256 fromId, uint256 toId, uint256 fromIdBalance);
-
-	function universeHasForked(uint248 universeId) internal view returns (bool) {
-		return zoltar.getForkTime(universeId) > 0;
-	}
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
@@ -154,7 +151,9 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external {
 		uint248 universeId = getUniverseId(fromId);
-		require(universeHasForked(universeId), 'ShareToken universe has not forked, so shares cannot migrate');
+		uint256 forkTime = zoltar.getForkTime(universeId);
+		require(forkTime > 0, 'ShareToken universe has not forked, so shares cannot migrate');
+		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME, 'ShareToken migration window closed');
 		require(targetOutcomeIndexes.length > 0, 'ShareToken migration requires at least one target outcome');
 
 		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
