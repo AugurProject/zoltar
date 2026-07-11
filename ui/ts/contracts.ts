@@ -1,4 +1,4 @@
-import { decodeEventLog, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { ORACLE_ASSUMED_REP_PER_ETH_PRICE } from '@zoltar/shared/oracleInitialReport'
@@ -779,7 +779,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 }
 
 async function getCoordinatorInitialReportAmount2(client: CoordinatorInitialReportClient, managerAddress: Address) {
-	const [exactToken1Report, lastPrice, reputationTokenAddress] = await Promise.all([
+	const [exactToken1Report, lastPrice, rawReputationTokenAddress] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -799,6 +799,7 @@ async function getCoordinatorInitialReportAmount2(client: CoordinatorInitialRepo
 			args: [],
 		}),
 	])
+	const reputationTokenAddress = getAddress(rawReputationTokenAddress)
 	if (lastPrice === 0n) {
 		try {
 			const quote = await loadOpenOracleInitialReportPrice(client, reputationTokenAddress, getWethAddress(), exactToken1Report)
@@ -816,7 +817,7 @@ async function getCoordinatorInitialReportAmount2(client: CoordinatorInitialRepo
 }
 
 export async function loadCoordinatorInitialReportFundingRequirement(client: CoordinatorInitialReportClient, managerAddress: Address, walletAddress: Address, initialReportAmount2?: bigint) {
-	const [reputationTokenAddress, currentWethBalance, resolvedInitialReportAmount2, exactToken1Report] = await Promise.all([
+	const [rawReputationTokenAddress, currentWethBalance, resolvedInitialReportAmount2, exactToken1Report] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -837,6 +838,7 @@ export async function loadCoordinatorInitialReportFundingRequirement(client: Coo
 			args: [],
 		}),
 	])
+	const reputationTokenAddress = getAddress(rawReputationTokenAddress)
 	const currentRepBalance = await client.readContract({
 		address: reputationTokenAddress,
 		abi: ABIS.mainnet.erc20,

@@ -1078,6 +1078,15 @@ describe('Peripherals: fork migration', () => {
 			const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
 			const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, securityMultiplier)
 
+			assert.deepStrictEqual(
+				await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])),
+				openInterestArray.map(x => x - feesOwed),
+				'Shares exist after fork',
+			)
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 
 			const getCurrentOpenInterestArray = async (): Promise<[bigint, bigint, bigint]> => {
@@ -1131,15 +1140,6 @@ describe('Peripherals: fork migration', () => {
 			if (yesAuctionTick !== undefined) {
 				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			}
-
-			assert.deepStrictEqual(
-				await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])),
-				openInterestArray.map(x => x - feesOwed),
-				'Shares exist after fork',
-			)
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 
 			const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
 			assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
@@ -1595,7 +1595,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
 
-			await mockWindow.setTime(migrationDeadline + 1n)
+			await mockWindow.setTime(migrationDeadline)
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
@@ -1615,8 +1615,29 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
 
-			await mockWindow.setTime(migrationDeadline + 1n)
+			await mockWindow.setTime(migrationDeadline)
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
+		})
+
+		test('migrateShares allows the exact migration deadline and rejects one second later', async () => {
+			const openInterestAmount = 5n * 10n ** 18n
+			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await triggerExternalForkForSecurityPool(undefined, 'share migration deadline source')
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
+
+			const migratedYesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const migratedYesBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, migratedYesUniverse, openInterestHolder.account.address)
+			assert.ok(ensureDefined(migratedYesBalances[1], 'migrated yes balance missing') > 0n, 'share migration should still succeed at the inclusive deadline')
+
+			await mockWindow.setTime(migrationDeadline)
+
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.No]), /migration window closed/i)
 		})
 
 		test('migrateRepToZoltar should fund an already-created child pool with the unlocked vault REP in own-fork mode', async () => {
