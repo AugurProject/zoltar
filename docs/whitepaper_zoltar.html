@@ -738,6 +738,12 @@
 						For scalar questions, there are no categorical labels to include, so the id is
 						determined from the scalar question fields alone.
 					</p>
+					<p>
+						Every call to <code>createQuestion</code> also requires
+						<code>endTime &gt;= startTime</code>. The contract rejects any question whose end
+						time is earlier than its start time before it reaches scalar or categorical
+						validation.
+					</p>
 
 					<h3>Categorical Questions</h3>
 					<p>
@@ -770,7 +776,7 @@
 						</div>
 						<div class="implementation-note">
 							<b>Scalar validity rule</b>
-							<p>The two 120-bit payout numerators must sum to <code>numTicks</code>; otherwise the answer is malformed, not invalid.</p>
+							<p>Bits <code>254...240</code> are reserved and must be zero. Any nonzero reserved bit, or any payout pair whose two 120-bit numerators fail to sum to <code>numTicks</code>, is malformed rather than invalid.</p>
 						</div>
 					</div>
 
@@ -794,8 +800,8 @@
 							<text class="svg-small" x="350" y="142" text-anchor="middle">first payout numerator</text>
 							<text class="svg-label" x="672" y="119" text-anchor="middle">bits 119...0</text>
 							<text class="svg-small" x="672" y="142" text-anchor="middle">second payout numerator</text>
-							<text class="svg-small" x="92" y="202">Unused high-order padding bits are not part</text>
-							<text class="svg-small" x="92" y="224">of this scalar payload.</text>
+							<text class="svg-small" x="92" y="202">Bits 254...240 are reserved and must be zero.</text>
+							<text class="svg-small" x="92" y="224">Nonzero reserved bits are malformed.</text>
 							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 138 184 V 246"></path>
 							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 350 184 V 246"></path>
 							<path class="svg-line" marker-end="url(#arrow-packed)" d="M 672 184 V 246"></path>
@@ -821,7 +827,7 @@
 							<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>
 							<span class="legend-item"><span class="legend-swatch blue"></span>Second payout</span>
 						</div>
-						<p class="diagram-caption"><span class="figure-label">Packed Scalar Answer</span>A scalar answer is easier to read as a namespace flag plus two payout fields: <code>0</code> means invalid namespace, while <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
+						<p class="diagram-caption"><span class="figure-label">Packed Scalar Answer</span>A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits <code>254...240</code> must be zero, <code>0</code> in bit <code>255</code> is the invalid namespace, and <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
 					</figure>
 
 					<p>
@@ -841,6 +847,12 @@
 						</math>
 						<p class="equation-caption"><span class="equation-label">Scalar Validity</span>A valid scalar answer must allocate all ticks across the two payout numerators.</p>
 					</div>
+					<p>
+						The all-zero word is the only canonical scalar <code>Invalid</code> value. Any
+						other word with the highest bit clear is malformed, and any word with a nonzero
+						reserved bit in <code>254...240</code> is malformed even if the payout fields would
+						otherwise decode cleanly.
+					</p>
 					<p>
 						At the helper and UI level, a scalar tick index named <code>tickIndex</code> is
 						encoded as:

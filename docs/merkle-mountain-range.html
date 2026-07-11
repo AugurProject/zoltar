@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Merkle Mountain Range Carry Proofs</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Merkle Mountain Range Carry Proofs</h1>
+				<p>
+					Placeholder uses a Merkle Mountain Range only for inherited escalation carry.
+					Parent escalation games export unresolved deposits into compact snapshots, and child
+					continuations later verify withdrawals against those snapshots without replaying the
+					full parent history onchain.
+				</p>
+				<p>
+					The hashing primitives live in <code>MerkleMountainRange.sol</code>. Snapshot
+					storage, proof structs, peak bounds, and replay protection live in
+					<code>EscalationGameTypes.sol</code>, <code>EscalationGameCarry.sol</code>, and
+					<code>EscalationGameProofVerifier.sol</code>.
+				</p>
+			</header>
+
+			<section id="leaf-shape">
+				<h2>Leaf Shape And Hash Order</h2>
+				<p>
+					Each leaf hashes one unresolved deposit with
+					<code>depositor</code>, <code>outcome</code>, <code>amount</code>,
+					<code>parentDepositIndex</code>, <code>cumulativeAmount</code>, and
+					<code>sourceNodeId</code>. Leaf hashes use <code>keccak256(abi.encode(...))</code>.
+					Parent hashes use <code>keccak256(abi.encodePacked(left, right))</code>.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Field</th>
+							<th>Why it is committed</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>depositor</code></td>
+							<td>Binds the proof to the beneficiary vault.</td>
+						</tr>
+						<tr>
+							<td><code>outcome</code></td>
+							<td>Separates invalid, yes, and no carry domains.</td>
+						</tr>
+						<tr>
+							<td><code>amount</code></td>
+							<td>Commits to the source principal.</td>
+						</tr>
+						<tr>
+							<td><code>parentDepositIndex</code></td>
+							<td>Provides the stable identity later consumed by nullifiers.</td>
+						</tr>
+						<tr>
+							<td><code>cumulativeAmount</code></td>
+							<td>Preserves payout-order prefix data.</td>
+						</tr>
+						<tr>
+							<td><code>sourceNodeId</code></td>
+							<td>Distinguishes otherwise identical leaves copied from different local nodes.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					Hash order matters. Internal nodes always hash <code>left</code> before
+					<code>right</code>, so proofs are position-sensitive inside each peak.
+				</p>
+			</section>
+
+			<section id="peaks">
+				<h2>Peaks And The 64-Peak Bound</h2>
+				<p>
+					The carry snapshot stores one peak per set bit in the leaf count. The system fixes
+					<code>MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64</code>, and carry initialization requires
+					each snapshot leaf count to be less than <code>2^64</code>.
+				</p>
+				<p>
+					That does not cap the snapshot at 64 leaves. It caps the number of peak positions.
+					Any leaf count from <code>0</code> up to but not including <code>2^64</code> is
+					valid because its binary decomposition fits inside 64 peak slots.
+				</p>
+				<figure class="diagram" id="fig-mmr-peaks" aria-labelledby="mmr-peaks-title">
+					<svg
+						viewBox="0 0 920 250"
+						role="img"
+						aria-labelledby="mmr-peaks-title mmr-peaks-desc"
+					>
+						<title id="mmr-peaks-title">Merkle Mountain Range peaks are determined by set bits in the leaf count</title>
+						<desc id="mmr-peaks-desc">A leaf count of thirteen is shown as binary one one zero one, corresponding to occupied peaks at heights zero, two, and three which are later bagged into one root.</desc>
+						<rect class="svg-box" x="44" y="52" width="260" height="140" rx="10"></rect>
+						<text class="svg-label" x="174" y="88" text-anchor="middle">leafCount = 13</text>
+						<text class="svg-small" x="174" y="116" text-anchor="middle">binary 1101</text>
+						<text class="svg-small" x="174" y="146" text-anchor="middle">set bits at heights 0, 2, 3</text>
+						<rect class="svg-gold" x="380" y="146" width="92" height="34" rx="8"></rect>
+						<rect class="svg-gold" x="504" y="112" width="92" height="68" rx="8"></rect>
+						<rect class="svg-gold" x="628" y="78" width="92" height="102" rx="8"></rect>
+						<text class="svg-label" x="426" y="168" text-anchor="middle">peak 0</text>
+						<text class="svg-label" x="550" y="152" text-anchor="middle">peak 2</text>
+						<text class="svg-label" x="674" y="136" text-anchor="middle">peak 3</text>
+						<text class="svg-small" x="550" y="46" text-anchor="middle">occupied peaks</text>
+						<path class="svg-line" d="M 720 128 H 806"></path>
+						<rect class="svg-blue" x="806" y="96" width="72" height="64" rx="8"></rect>
+						<text class="svg-label" x="842" y="135" text-anchor="middle">root</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">MMR Peaks</span>The occupied peak heights are exactly
+						the set bits in the snapshot leaf count. Those occupied peaks are later bagged
+						into one root.
+					</p>
+				</figure>
+				<p>
+					To form one root, the verifier collects occupied peaks in ascending height order and
+					then bags them from right to left with <code>bagPeaks()</code>.
+				</p>
+				<div class="equation" id="eq-mmr-peak-count-bound">
+					<math
+						display="block"
+						aria-label="snapshot leaf count must be less than two to the sixty fourth power"
+						data-source="snapshotLeafCount < 2^64"
+					>
+						<mrow>
+							<mi>snapshotLeafCount</mi>
+							<mo>&lt;</mo>
+							<msup><mn>2</mn><mn>64</mn></msup>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Carry Snapshot Bound</span>The 64-peak constant means
+						each inherited snapshot leaf count must fit below <code>2^64</code>.
+					</p>
+				</div>
+				<p>
+					Local carry appends behave like binary addition with carries: a new leaf merges
+					upward through occupied lower peaks until it finds the first empty peak slot. If that
+					upward carry would reach height <code>64</code>, the append reverts with
+					<code>MMR too tall</code>.
+				</p>
+			</section>
+
+			<section id="proofs">
+				<h2>Proof Structure</h2>
+				<p>
+					A carried-deposit proof has two parts. First it proves membership in the inherited
+					MMR snapshot for one outcome. Then it proves that the same
+					<code>parentDepositIndex</code> has not already been consumed in this continuation's
+					nullifier tree.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Component</th>
+							<th>Purpose</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>leafIndex</code>, <code>merkleMountainRangePeakIndex</code>, <code>merkleMountainRangeSiblings</code></td>
+							<td>Proves the carried deposit belongs to the inherited snapshot root for that outcome.</td>
+						</tr>
+						<tr>
+							<td><code>nullifierSiblings</code></td>
+							<td>Proves the nullifier leaf is still empty so the carried deposit cannot be replayed.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					The index semantics are stricter than the field names might suggest.
+					<code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the
+					ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the
+					leaf's offset inside that selected peak, so the verifier requires
+					<code>leafIndex &lt; 2^merkleMountainRangePeakIndex</code>. For example, if the full
+					snapshot has <code>13</code> leaves, its occupied peak heights are
+					<code>0</code>, <code>2</code>, and <code>3</code>. A proof for a leaf inside the
+					height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and a
+					peak-local <code>leafIndex</code> in <code>0...3</code>, not the leaf's global index
+					across all 13 leaves.
+				</p>
+				<p>
+					<code>merkleMountainRangeSiblings</code> is also ordered in two phases. The first
+					<code>merkleMountainRangePeakIndex</code> entries are the bottom-up Merkle siblings
+					inside the selected peak. The remaining entries are the other occupied peak roots in
+					ascending peak-height order, skipping the selected peak height. That exact ordering is
+					why the verifier checks
+					<code>merkleMountainRangeSiblings.length == peakHeight + peakCount - 1</code>.
+				</p>
+				<p>
+					The verifier requires
+					<code>merkleMountainRangeSiblings.length == peakHeight + peakCount - 1</code> and
+					<code>nullifierSiblings.length == NULLIFIER_DEPTH</code> with
+					<code>NULLIFIER_DEPTH = 64</code>.
+				</p>
+				<p>
+					Nullifier paths are keyed by
+					<code>uint256(keccak256(abi.encode(parentDepositIndex)))</code>, so the stable parent
+					deposit index is the replay-prevention identity.
+				</p>
+			</section>
+
+			<section id="snapshots">
+				<h2>Snapshots In Child Continuations</h2>
+				<p>
+					Each continuation outcome stores both an inherited snapshot baseline and a mutable
+					current state.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Field</th>
+							<th>Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>snapshotLeafCount</code> and <code>snapshotPeaks</code></td>
+							<td>The immutable inherited carry commitment.</td>
+						</tr>
+						<tr>
+							<td><code>currentLeafCount</code> and <code>currentPeaks</code></td>
+							<td>The descendant carry snapshot after inherited snapshot initialization plus local carry appends and local carry-leaf removal. Inherited proof consumption is tracked by <code>currentNullifierRoot</code> and unresolved totals rather than by mutating these peak fields directly.</td>
+						</tr>
+						<tr>
+							<td><code>inheritedUnresolvedTotal</code> and <code>localUnresolvedTotal</code></td>
+							<td>The principal totals the current carry state must still represent.</td>
+						</tr>
+						<tr>
+							<td><code>currentNullifierRoot</code></td>
+							<td>The replay-protection root after any carried proof has been consumed.</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					The continuation API exposes the current descendant carry snapshot through
+					<code>getForkCarrySnapshot()</code> and pages only local unresolved leaves through
+					<code>getCarryLeafPageByOutcome()</code>. The immutable inherited baseline remains in
+					<code>snapshotPeaks</code> and <code>snapshotLeafCount</code> inside outcome state,
+					while <code>getForkCarrySnapshot()</code> reports the current carry peaks, current
+					leaf counts, current totals, and current nullifier roots after local appends and
+					proof consumption.
+				</p>
+			</section>
+
+			<section id="sources">
+				<h2>Sources</h2>
+				<ul>
+					<li><a href="../solidity/contracts/peripherals/MerkleMountainRange.sol"><code>MerkleMountainRange.sol</code></a></li>
+					<li><a href="../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"><code>EscalationGameProofVerifier.sol</code></a></li>
+					<li><a href="../solidity/contracts/peripherals/EscalationGameCarry.sol"><code>EscalationGameCarry.sol</code></a></li>
+					<li><a href="../solidity/contracts/peripherals/EscalationGameTypes.sol"><code>EscalationGameTypes.sol</code></a></li>
+				</ul>
+			</section>
+		</main>
+	</body>
+</html>

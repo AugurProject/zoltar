@@ -513,6 +513,63 @@
 							<td>Understand how the local dispute contract is split across Solidity modules.</td>
 							<td><a href="./escalation-game-architecture.html">EscalationGame architecture</a></td>
 						</tr>
+						<tr>
+							<td>Decode the deployment progress bitmask and its 256-step limit.</td>
+							<td><a href="./deployment-status.html">Deployment Status Oracle</a></td>
+						</tr>
+						<tr>
+							<td>Understand carry-proof hashing, snapshot peaks, and nullifier replay protection.</td>
+							<td><a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a></td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<section id="supporting-contracts">
+				<h2>Supporting Contract Inventory</h2>
+				<p>
+					The whitepapers focus on protocol flow. The modules below round out the contract map
+					for readers who need the support-layer pieces named explicitly.
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Area</th>
+							<th>Named contracts and modules</th>
+							<th>Role</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>ERC-20 infrastructure</td>
+							<td><code>ERC20</code>, <code>IERC20</code>, <code>IERC20Metadata</code>, <code>Context</code>, <code>SafeERC20Ops</code>, <code>ReputationToken</code></td>
+							<td>REP token mechanics, token interfaces, and safe transfer wrappers.</td>
+						</tr>
+						<tr>
+							<td>ERC-1155 infrastructure</td>
+							<td><code>ERC1155</code>, <code>ShareToken</code>, <code>TokenId</code>, <code>IShareToken</code>, <code>IERC1155</code>, <code>IERC1155Receiver</code>, <code>IERC165</code></td>
+							<td>Outcome-share token storage, interface support, and token-id encoding.</td>
+						</tr>
+						<tr>
+							<td>Factories and deployers</td>
+							<td><code>EscalationGameFactory</code>, <code>SecurityPoolFactory</code>, <code>SecurityPoolDeployer</code>, <code>ShareTokenFactory</code>, <code>UniformPriceDualCapBatchAuctionFactory</code>, <code>PriceOracleManagerAndOperatorQueuerFactory</code></td>
+							<td>Deterministic deployment entrypoints for pool, token, oracle, escalation-game, and auction instances.</td>
+						</tr>
+						<tr>
+							<td>Migration delegates and storage modules</td>
+							<td><code>SecurityPoolMigrationProxy</code>, <code>SecurityPoolForker</code>, <code>SecurityPoolForkerBase</code>, <code>SecurityPoolForkerStorage</code>, <code>SecurityPoolForkerTypes</code>, <code>SecurityPoolForkerVaultMigrationBase</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code></td>
+							<td>Fork-time state routing, vault migration, child REP splitting, and stable migration identity.</td>
+						</tr>
+						<tr>
+							<td>Carry proof structure</td>
+							<td><code>MerkleMountainRange</code>, <code>EscalationGameTypes</code>, <code>EscalationGameState</code>, <code>EscalationGameCarry</code>, <code>EscalationGameProofVerifier</code></td>
+							<td>Proof structs, storage layout, inherited carry snapshots, and replay-resistant carried-deposit verification.</td>
+						</tr>
+						<tr>
+							<td>Deployment tracking</td>
+							<td><code>DeploymentStatusOracle</code></td>
+							<td>Mainnet deployment-step code-presence bitmap with one bit per configured address.</td>
+						</tr>
 					</tbody>
 				</table>
 			</section>
