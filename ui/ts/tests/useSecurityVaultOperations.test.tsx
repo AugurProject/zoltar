@@ -83,6 +83,14 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 		depositRepToSecurityPool: async () => {
 			throw new Error('depositRepToSecurityPool should not be called in this test')
 		},
+		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+			currentRepBalance: 1n,
+			currentWethBalance: 1n,
+			exactToken1Report: 1n,
+			initialReportAmount2: 1n,
+			reputationTokenAddress: REP_TOKEN_ADDRESS,
+			wethShortfall: 0n,
+		})),
 		loadErc20Balance: mock(async () => 0n),
 		loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
 		loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
@@ -278,6 +286,51 @@ describe('useSecurityVaultOperations', () => {
 		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
 	})
 
+	test('setSecurityBondAllowance blocks stale-price queueing when the wallet cannot fund the required initial REP report', async () => {
+		const queueOracleManagerOperation = mock(async () => ({
+			action: 'queueSetSecurityBondAllowance' as const,
+			hash: '0x03' as const,
+		}))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 10n ** 18n,
+			})),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 0n,
+				currentWethBalance: 0n,
+				exactToken1Report: 5n,
+				initialReportAmount2: 5n,
+				reputationTokenAddress: REP_TOKEN_ADDRESS,
+				wethShortfall: 5n,
+			})),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 1n })),
+			queueOracleManagerOperation,
+		})
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				securityBondAllowanceAmount: '1',
+				selectedVaultAddress: WALLET_ADDRESS,
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).setSecurityBondAllowance()
+		})
+
+		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+		await waitFor(() => {
+			expect(requireHookState(hookState).securityVaultFeedback?.status.detail).toContain('fund the initial report')
+		})
+	})
+
 	test('setSecurityBondAllowance can stage a fresh attached operation without a currently valid price', async () => {
 		const queueOracleManagerOperation = mock(async () => ({
 			action: 'queueSetSecurityBondAllowance' as const,
@@ -291,7 +344,14 @@ describe('useSecurityVaultOperations', () => {
 			depositRepToSecurityPool: mock(async () => {
 				throw new Error('depositRepToSecurityPool should not be called in this test')
 			}),
-			loadErc20Balance: mock(async () => 0n),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 10n,
+				currentWethBalance: 10n,
+				exactToken1Report: 10n,
+				initialReportAmount2: 10n,
+				reputationTokenAddress: REP_TOKEN_ADDRESS,
+				wethShortfall: 0n,
+			})),
 			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 10n })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
@@ -305,7 +365,7 @@ describe('useSecurityVaultOperations', () => {
 				throw new Error('updateSecurityVaultFees should not be called in this test')
 			}),
 			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 20n,
+				getBalance: async () => 30n,
 			})),
 			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
 		})
@@ -345,7 +405,14 @@ describe('useSecurityVaultOperations', () => {
 			depositRepToSecurityPool: mock(async () => {
 				throw new Error('depositRepToSecurityPool should not be called in this test')
 			}),
-			loadErc20Balance: mock(async () => 0n),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 10n,
+				currentWethBalance: 10n,
+				exactToken1Report: 10n,
+				initialReportAmount2: 10n,
+				reputationTokenAddress: REP_TOKEN_ADDRESS,
+				wethShortfall: 0n,
+			})),
 			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 10n })),
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 			queueOracleManagerOperation,
@@ -384,6 +451,52 @@ describe('useSecurityVaultOperations', () => {
 		})
 
 		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
+	})
+
+	test('withdrawRep blocks stale-price queueing when the wallet cannot fund the required initial REP report', async () => {
+		const queueOracleManagerOperation = mock(async () => ({
+			action: 'queueWithdrawRep' as const,
+			hash: '0x04b' as const,
+		}))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => 10n ** 18n,
+			})),
+			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
+				currentRepBalance: 0n,
+				currentWethBalance: 0n,
+				exactToken1Report: 5n,
+				initialReportAmount2: 5n,
+				reputationTokenAddress: REP_TOKEN_ADDRESS,
+				wethShortfall: 5n,
+			})),
+			loadOracleManagerDetails: mock(async () => createOracleManagerDetails({ isPriceValid: false, requestPriceEthCost: 1n })),
+			queueOracleManagerOperation,
+		})
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				repWithdrawAmount: '1',
+				selectedVaultAddress: WALLET_ADDRESS,
+				stagedOperationTimeoutMinutes: '5',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawRep()
+		})
+
+		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+		await waitFor(() => {
+			expect(requireHookState(hookState).securityVaultFeedback?.status.detail).toContain('fund the initial report')
+		})
 	})
 
 	test('withdrawRep skips wallet ETH balance reads for zero-cost immediate executions', async () => {
