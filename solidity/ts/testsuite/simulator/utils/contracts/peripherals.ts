@@ -13,6 +13,7 @@ import { getInfraContractAddresses } from './deployPeripherals'
 import { threeShareArrayToCash } from './securityPool'
 import { priceToClosestTick } from '../tickMath'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
+import { requireAddress } from '../utilities'
 
 export enum OperationType {
 	Liquidation = 0,
@@ -59,7 +60,7 @@ const getDefaultInitialReportAmount2 = async (client: ReadClient, priceOracleMan
 }
 
 const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, amount2: bigint) => {
-	const [exactToken1Report, reputationTokenAddress] = await Promise.all([
+	const [exactToken1Report, rawReputationTokenAddress] = await Promise.all([
 		getCoordinatorExactToken1Report(client, priceOracleManagerAndOperatorQueuer),
 		client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -68,6 +69,7 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 			args: [],
 		}),
 	])
+	const reputationTokenAddress = requireAddress(rawReputationTokenAddress, 'Oracle coordinator reputation token')
 	const wethBalance: bigint = await client.readContract({
 		abi: ERC20_APPROVE_ABI,
 		functionName: 'balanceOf',
