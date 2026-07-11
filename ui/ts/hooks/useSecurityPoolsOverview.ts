@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import { loadAllSecurityPools, loadOracleManagerQueueOperationEthValue, loadSecurityPoolPage, queueSecurityPoolLiquidation } from '../contracts.js'
+import { loadAllSecurityPools, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, loadOracleManagerQueueOperationEthValue, loadSecurityPoolPage, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -14,6 +14,7 @@ import { refreshWalletStateOnly } from '../lib/refreshState.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput, parseRepAmountInput } from '../lib/marketForm.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
+import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
@@ -44,6 +45,8 @@ export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOve
 	createConnectedReadClient: () => SecurityPoolsOverviewReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	loadAllSecurityPools: (options: LoadAllSecurityPoolsOptions) => Promise<ListedSecurityPool[]>
+	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
+	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadOracleManagerQueueOperationEthValue: (client: TWriteClient, managerAddress: Address) => Promise<bigint>
 	loadSecurityPoolPage: (pageIndex: number, pageSize: number, accountAddress: Address | undefined) => Promise<SecurityPoolPage>
 	queueSecurityPoolLiquidation: (client: TWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityPoolLiquidationQueueResult>
@@ -77,6 +80,8 @@ const defaultUseSecurityPoolsOverviewDependencies: UseSecurityPoolsOverviewDepen
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
 	loadAllSecurityPools: async options => await loadAllSecurityPools(createConnectedReadClient(), options),
+	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
+	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 	loadOracleManagerQueueOperationEthValue,
 	loadSecurityPoolPage: async (pageIndex, pageSize, accountAddress) => await loadSecurityPoolPage(createConnectedReadClient(), pageIndex, pageSize, accountAddress),
 	queueSecurityPoolLiquidation,
@@ -251,15 +256,27 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				async walletAddress => {
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
 					const amount = parseRepAmountInput(submittedLiquidation.amount, 'Liquidation amount')
-					const requiredEthValue = await dependencies.loadOracleManagerQueueOperationEthValue(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress)
+					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
+					const requiredEthValue = await dependencies.loadOracleManagerQueueOperationEthValue(writeClient, managerAddress)
 					const walletEthBalance = requiredEthValue === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					if (walletEthBalance !== undefined && walletEthBalance < requiredEthValue) throw new Error(`Need ${formatCurrencyBalance(requiredEthValue - walletEthBalance)} more ETH in this wallet to queue this liquidation.`)
+					if (requiredEthValue > 0n) {
+						const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
+						if (fundingRequirement.currentRepBalance < fundingRequirement.exactToken1Report) {
+							throw new Error(`Need ${formatCurrencyBalance(fundingRequirement.exactToken1Report - fundingRequirement.currentRepBalance)} more REP in this wallet to fund the initial report.`)
+						}
+						const managerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
+						const requiredEthWithWrap = addOpenOracleBountyBuffer(managerDetails.requestPriceEthCost) + fundingRequirement.wethShortfall
+						if (walletEthBalance !== undefined && walletEthBalance < requiredEthWithWrap) {
+							throw new Error(`Need ${formatCurrencyBalance(requiredEthWithWrap - walletEthBalance)} more ETH in this wallet to fund the initial report and queue this liquidation.`)
+						}
+					}
 					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')
 					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
 					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
 					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be at least 1 minute')
-					return await dependencies.queueSecurityPoolLiquidation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, targetVault, amount, validForSeconds)
+					return await dependencies.queueSecurityPoolLiquidation(writeClient, managerAddress, targetVault, amount, validForSeconds)
 				},
 				'Failed to queue liquidation',
 				async result => {

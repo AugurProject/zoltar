@@ -3,6 +3,7 @@ import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } fro
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize } from '../../testsuite/simulator/utils/contracts/auction'
+import { queueLiquidationAtForcedPrice } from '../../testsuite/simulator/utils/contracts/peripherals'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: truth auction', () => {
@@ -42,7 +43,6 @@ describe('Peripherals: truth auction', () => {
 		getQuestionEndDate,
 		OperationType,
 		participateAuction,
-		requestPriceIfNeededAndStageOperation,
 		tickToPrice,
 		QuestionOutcome,
 		SystemState,
@@ -1153,7 +1153,7 @@ describe('Peripherals: truth auction', () => {
 					},
 				})
 				await approveToken(liquidatorClient, childRepToken, getInfraContractAddresses().openOracle)
-				await requestPriceIfNeededAndStageOperation(liquidatorClient, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, amount)
+				await queueLiquidationAtForcedPrice(liquidatorClient, yesSecurityPool.priceOracleManagerAndOperatorQueuer, client.account.address, amount, forcedPrice)
 				await handleOracleReporting(liquidatorClient, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, forcedPrice)
 			}
 

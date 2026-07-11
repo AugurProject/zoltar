@@ -5,9 +5,9 @@ import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { deployUniformPriceDualCapBatchAuction } from '../testsuite/simulator/utils/contracts/auction'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { ORACLE_EXACT_TOKEN1_REPORT, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportAmount2 } from '../testsuite/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testsuite/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testsuite/simulator/utils/contracts/securityPoolForker'
@@ -34,6 +34,7 @@ const repDeposit = 1000n * 10n ** 18n
 const initialEscalationGameDeposit = 1n * 10n ** 18n
 const largeEscalationGameDeposit = 100n * 10n ** 18n
 const outcomes = ['Yes', 'No']
+const PRICE_PRECISION = 10n ** 18n
 
 describe('security regression coverage', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -266,13 +267,24 @@ describe('security regression coverage', () => {
 		await approveAndDepositRep(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
-		for (let index = 0; index < 4; index++) {
+		const forcedInitialReportAmount2 = (ORACLE_EXACT_TOKEN1_REPORT * PRICE_PRECISION) / forcedLiquidationPrice
+		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(
+			liquidator,
+			securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
+			OperationType.SetSecurityBondsAllowance,
+			liquidator.account.address,
+			1n,
+			5n * 60n,
+			forcedInitialReportAmount2 > 0n ? forcedInitialReportAmount2 : 1n,
+			await getRequestPriceEthCost(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
+		)
+		for (let index = 1; index < 4; index++) {
 			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidator.account.address, BigInt(index + 1))
 		}
 		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetAllowance)
 		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
+		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice, liquidator.account.address)
 		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
 		const staleExecutionHash = await executeStagedOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
 

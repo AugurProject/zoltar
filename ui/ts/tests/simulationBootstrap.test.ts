@@ -4,7 +4,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses } from '../simulation/bootstrap.js'
-import { type Address, getAddress, getCreateAddress, toHex } from '@zoltar/shared/ethereum'
+import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/shared/ethereum'
 
 const MOCK_PRIMARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a1')
 const MOCK_SECONDARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a2')
@@ -145,6 +145,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const managerByPool = new Map<Address, Address>()
 	const openOracleByManager = new Map<Address, Address>()
 	const managerToPool = new Map<Address, Address>()
+	const coordinatorExactToken1Report = 100n
+	const expectedInitialReportAmount2 = (coordinatorExactToken1Report * 10n ** 18n) / (3n * 10n ** 18n)
 	const repState = createRepTokenMockState()
 	const vaultAddressByPool: Record<Address, Address[]> = {}
 	if (scenario === 'security-pool') {
@@ -157,8 +159,12 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const repDeposits: Record<Address, Record<Address, bigint>> = {}
 	const securityBondAllowances: Record<Address, Record<Address, bigint>> = {}
 	const pendingOperations: Record<Address, { targetVault: Address; amount: bigint; operationId: bigint }> = {}
+	const pendingReportIds: Record<Address, bigint> = {}
+	type PendingReportMock = { currentAmount1: bigint; currentAmount2: bigint; currentReporter: Address; reportTimestamp: bigint; settlementTime: bigint }
+	const pendingReports: Record<string, PendingReportMock> = {}
 	let marketCount = 0
 	let securityPoolCount = 0
+	let nextPendingReportId = 1n
 
 	for (const poolAddress of poolAddresses) {
 		const [primaryVault, secondaryVault] = vaultAddressByPool[poolAddress] ?? []
@@ -202,6 +208,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			setSimulationCodeCalls: 0,
 		},
 		deploymentCodeRequests: [] as string[],
+		expectedInitialReportAmount2,
+		pendingReportSnapshots: [] as Array<{ managerAddress: Address; openOracleAddress: Address; reportId: bigint; currentReporter: Address; currentAmount2: bigint }>,
 	}
 	const seededReportDistribution = new Map<string, boolean>()
 	const getReportKey = (openOracleAddress: string, reportId: bigint) => `${openOracleAddress}-${reportId.toString()}`
@@ -225,6 +233,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		securityBondAllowances[ownerPool] ??= {}
 		securityBondAllowances[ownerPool][accountAddress] = operation.amount
 		delete pendingOperations[managerAddress]
+		delete pendingReportIds[managerAddress]
 	}
 
 	mock.module('../contracts.js', () => ({
@@ -391,7 +400,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			const pendingOperation = pendingOperations[managerAddress]
 			return {
 				callbackStateHash: pendingOperation === undefined ? undefined : (`0x${'11'.repeat(31)}aa` as `0x${string}`),
-				exactToken1Report: pendingOperation === undefined ? undefined : 100n,
+				exactToken1Report: coordinatorExactToken1Report,
 				isPriceValid: true,
 				lastPrice: 0n,
 				lastSettlementTimestamp: 1n,
@@ -409,7 +418,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				pendingOperationSlotId: pendingOperation === undefined ? 0n : 1n,
 				pendingSettlementOperationIds: pendingOperation === undefined ? [] : [1n],
 				pendingSettlementQueueCapacity: 4n,
-				pendingReportId: pendingOperation === undefined ? 0n : 1n,
+				pendingReportId: pendingReportIds[managerAddress] ?? 0n,
 				priceValidUntilTimestamp: 0n,
 				queuedOperationEthCost: 0n,
 				requestPriceEthCost: 0n,
@@ -420,8 +429,14 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		loadOpenOracleReportDetails: mock(async (_client: never, openOracleAddress: string, reportId: bigint) => {
 			state.callLog.loadOpenOracleReportDetails += 1
 			const reportKey = getReportKey(openOracleAddress, reportId)
+			const pendingReport = pendingReports[reportKey]
 			return {
+				currentAmount1: pendingReport?.currentAmount1 ?? 0n,
+				currentAmount2: pendingReport?.currentAmount2 ?? 0n,
+				currentReporter: pendingReport?.currentReporter ?? zeroAddress,
 				isDistributed: seededReportDistribution.get(reportKey) ?? reportId === 0n,
+				reportTimestamp: pendingReport?.reportTimestamp ?? 0n,
+				settlementTime: pendingReport?.settlementTime ?? 0n,
 			} as never
 		}),
 		loadReportingDetails: mock(async () => {
@@ -465,13 +480,33 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				universeId: 0n,
 			} as never
 		}),
-		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint) => {
+		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint, initialReportAmount2?: bigint) => {
 			state.callLog.queueOracleManagerOperation += 1
 			if (operation === 'setSecurityBondsAllowance') {
+				if (initialReportAmount2 !== expectedInitialReportAmount2) throw new Error(`Unexpected seeded initial report amount ${initialReportAmount2?.toString() ?? 'undefined'}`)
 				pendingOperations[managerAddress] = {
 					targetVault,
 					amount,
 					operationId: BigInt(Object.keys(pendingOperations).length + 1),
+				}
+				const reportId = nextPendingReportId
+				nextPendingReportId += 1n
+				pendingReportIds[managerAddress] = reportId
+				const reportOpenOracleAddress = openOracleByManager.get(managerAddress) ?? openOracleAddress
+				const reportKey = getReportKey(reportOpenOracleAddress, reportId)
+				state.pendingReportSnapshots.push({
+					managerAddress,
+					openOracleAddress: reportOpenOracleAddress,
+					reportId,
+					currentReporter: targetVault,
+					currentAmount2: initialReportAmount2,
+				})
+				pendingReports[reportKey] = {
+					currentAmount1: coordinatorExactToken1Report,
+					currentAmount2: initialReportAmount2,
+					currentReporter: targetVault,
+					reportTimestamp: SIMULATION_INITIAL_TIMESTAMP,
+					settlementTime: 1n,
 				}
 			}
 			return {
@@ -1006,7 +1041,7 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(state.callLog.loadAllSecurityPools).toBe(1)
 		expect(state.callLog.settleOracleReport).toBe(1)
-		expect(state.callLog.submitInitialOracleReport).toBe(1)
+		expect(state.callLog.submitInitialOracleReport).toBe(0)
 		expect(state.callLog.writeContract).toBe(1)
 		expect(contractWriteCalls).toContainEqual(
 			expect.objectContaining({
@@ -1039,12 +1074,15 @@ describe('simulation bootstrap', () => {
 
 		expect(state.callLog.createMarket).toBe(2)
 		expect(state.callLog.createSecurityPool).toBe(2)
-		expect(state.callLog.settleOracleReport).toBe(1)
-		expect(state.callLog.submitInitialOracleReport).toBe(2)
+		expect(state.callLog.settleOracleReport).toBe(4)
+		expect(state.callLog.submitInitialOracleReport).toBe(0)
 		expect(state.callLog.loadOpenOracleReportDetails).toBe(8)
 		expect(state.callLog.writeContract).toBe(4)
 		expect(state.callLog.queueOracleManagerOperation).toBe(4)
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
+		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.reportId.toString())).size).toBe(state.pendingReportSnapshots.length)
+		expect(state.pendingReportSnapshots.every(snapshot => snapshot.currentAmount2 === state.expectedInitialReportAmount2)).toBe(true)
+		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.currentReporter.toLowerCase())).size).toBeGreaterThan(1)
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 
