@@ -32,11 +32,12 @@
 					child pool may inherit the correct share balances, vault state, and
 					REP-backed obligations while still lacking enough ETH to reopen cleanly.
 					When that happens, the protocol sells child-universe REP for ETH through a
-					truth auction, applying the proceeds toward the collateral shortfall.
-					When demand reaches the ETH target, open-interest holders can be made
-					whole; weak demand can leave only a partial repair even though the auction
-					still clears the full REP cap. The auction repairs the pool's funding gap;
-					it does not determine which branch is true.
+					truth auction, using the proceeds to raise as much repair ETH as market
+					demand supports. Strong demand can fully restore the collateral shortfall;
+					when weak demand still produces a non-empty feasible winning prefix, the
+					auction clears the full REP cap at a lower synthetic price and can leave share
+					collateral below its pre-fork level. With no bids, it sells no REP. The auction
+					discovers that repair price; it does not determine which branch is true.
 				</p>
 
 				<p>
@@ -47,10 +48,14 @@
 					When finalization finds a non-empty winning prefix, weak demand does
 					not leave unsold REP behind. Instead, the auction fixes that winning
 					bid prefix, refunds lower bids, and still clears the full REP cap at
-					one synthetic uniform price. Placeholder runs this process through
+					one synthetic uniform price. A bidder at the minimum tick receives the full
+					REP cap only when it is the sole member of the finalized winning prefix. A
+					later qualifying bid can make the bidders share the cap, exclude the
+					minimum-tick bid, or move the auction into normal funded clearing during the
+					one-week auction. Placeholder runs this process through
 					the <code>UniformPriceDualCapBatchAuction</code> contract, then
 					writes winning claims back into vault state rather than paying out
-					simple token transfers, so bidders buy into the repaired child pool
+					simple token transfers, so bidders buy into the child pool
 					and its matching security-bond allowance instead of merely receiving
 					REP.
 				</p>
