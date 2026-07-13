@@ -1092,7 +1092,36 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
 	})
 
-	test('shows no executable debt before REP floor warnings when the target has no seizable REP above the floor', async () => {
+	test('allows full-close liquidation when the target only holds the minimum REP deposit', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 0n,
+				vaultAddress: defaultCallerVaultAddress,
+			}),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 61n * 10n ** 17n,
+			}),
+			liquidationAmount: '1',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 10n * 10n ** 18n,
+				securityBondAllowance: 1n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		expect(button.disabled).toBe(false)
+		expect(documentQueries.queryByText('No debt is executable for liquidation at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
+	})
+
+	test('allows full-close liquidation when the computed REP penalty exceeds the target vault balance', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1116,8 +1145,8 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
-		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('No debt is executable for liquidation at the current target-side bounds.')).not.toBeNull()
+		expect(button.disabled).toBe(false)
+		expect(documentQueries.queryByText('No debt is executable for liquidation at the current target-side bounds.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
 	})
 

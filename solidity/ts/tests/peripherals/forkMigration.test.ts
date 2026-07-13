@@ -460,6 +460,152 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, 0n, 'failed liquidation should not move debt to the liquidator')
 		})
 
+		test('liquidation can fully close a vault that only holds the minimum REP deposit', async () => {
+			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const minimumRepDeposit = 10n * 10n ** 18n
+			const minimumAllowance = 1n * 10n ** 18n
+			const allowanceCreationPrice = 6n * 10n ** 18n
+			const liquidationPrice = 61n * 10n ** 17n
+
+			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
+			await manipulatePriceOracleAndPerformOperation(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, targetClient.account.address, minimumAllowance, allowanceCreationPrice)
+
+			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+			await mockWindow.advanceTime(100000n)
+
+			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimBefore = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimBefore = await getVaultRepClaim(liquidatorClient.account.address)
+
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumAllowance, liquidationPrice)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+
+			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
+
+			strictEqualTypeSafe(targetVaultBefore.securityBondAllowance, minimumAllowance, 'setup should leave the target at the minimum allowance')
+			strictEqualTypeSafe(targetClaimBefore, minimumRepDeposit, 'setup should leave the target at the minimum REP deposit')
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'full-close liquidation should clear the minimum-size target debt')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'full-close liquidation should seize the targets remaining minimum REP')
+			strictEqualTypeSafe(targetClaimAfter, 0n, 'full-close liquidation should leave no vault REP behind on the closed target')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should absorb the full target allowance')
+			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, minimumRepDeposit, 'the liquidator should receive the targets full remaining REP when the vault is forced closed')
+		})
+
+		test('liquidation can fully close a minimum-size vault when the computed REP penalty exceeds the remaining REP', async () => {
+			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const minimumRepDeposit = 10n * 10n ** 18n
+			const minimumAllowance = 1n * 10n ** 18n
+			const allowanceCreationPrice = 6n * 10n ** 18n
+			const liquidationPrice = 10n * 10n ** 18n
+
+			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
+			await manipulatePriceOracleAndPerformOperation(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, targetClient.account.address, minimumAllowance, allowanceCreationPrice)
+
+			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+			await mockWindow.advanceTime(100000n)
+
+			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const liquidatorClaimBefore = await getVaultRepClaim(liquidatorClient.account.address)
+
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumAllowance, liquidationPrice)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+
+			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
+
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'full-close liquidation should still clear the target debt when the computed REP penalty exceeds the vault balance')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'full-close liquidation should not strand ownership when the computed REP penalty exceeds the vault balance')
+			strictEqualTypeSafe(targetClaimAfter, 0n, 'full-close liquidation should leave the target with no remaining vault REP when the computed REP penalty exceeds the vault balance')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should still absorb the full target allowance when the computed REP penalty exceeds the vault balance')
+			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, minimumRepDeposit, 'the liquidator should receive the full target REP when the computed REP penalty exceeds the vault balance')
+		})
+
+		test('queued liquidation can still fully close a minimum-size vault after the target tops up REP', async () => {
+			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const minimumRepDeposit = 10n * 10n ** 18n
+			const minimumAllowance = 1n * 10n ** 18n
+			const allowanceCreationPrice = 6n * 10n ** 18n
+			const liquidationPrice = 61n * 10n ** 17n
+			const extraRepAmount = 1n
+
+			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
+			await manipulatePriceOracleAndPerformOperation(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, targetClient.account.address, minimumAllowance, allowanceCreationPrice)
+
+			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+			await mockWindow.advanceTime(100000n)
+
+			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const liquidatorClaimBefore = await getVaultRepClaim(liquidatorClient.account.address)
+
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumAllowance, liquidationPrice)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, extraRepAmount)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+
+			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
+
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'queued full-close liquidation should still clear the target debt after a later REP top-up')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, 0n, 'queued full-close liquidation should consume the targets current ownership when leaving dust would otherwise revert')
+			strictEqualTypeSafe(targetClaimAfter, 0n, 'queued full-close liquidation should leave no vault REP behind after the target tops up REP')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + minimumAllowance, 'the liquidator should still absorb the full queued allowance after the target tops up REP')
+			strictEqualTypeSafe(liquidatorClaimAfter - liquidatorClaimBefore, minimumRepDeposit + extraRepAmount, 'the liquidator should receive the targets full current REP when the queued liquidation must force-close the vault')
+		})
+
+		test('queued minimum-vault liquidation is consumed when a later REP top-up removes the liquidation gain', async () => {
+			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const minimumRepDeposit = 10n * 10n ** 18n
+			const minimumAllowance = 1n * 10n ** 18n
+			const allowanceCreationPrice = 6n * 10n ** 18n
+			const liquidationPrice = 61n * 10n ** 17n
+			const extraRepAmount = 3n * 10n ** 18n
+
+			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
+			await manipulatePriceOracleAndPerformOperation(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, targetClient.account.address, minimumAllowance, allowanceCreationPrice)
+
+			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+			await mockWindow.advanceTime(100000n)
+
+			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimBefore = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimBefore = await getVaultRepClaim(liquidatorClient.account.address)
+
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumAllowance, liquidationPrice)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, extraRepAmount)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+
+			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
+			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimAfter = await getVaultRepClaim(targetClient.account.address)
+			const liquidatorClaimAfter = await getVaultRepClaim(liquidatorClient.account.address)
+
+			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'a later REP top-up that removes the liquidation gain should leave the target allowance unchanged')
+			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare + extraRepAmount * PRICE_PRECISION, 'a consumed queued liquidation should leave the target with the added ownership only')
+			strictEqualTypeSafe(targetClaimAfter, targetClaimBefore + extraRepAmount, 'a consumed queued liquidation should leave the extra REP on the target vault')
+			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a consumed queued liquidation should not move debt to the liquidator')
+			strictEqualTypeSafe(liquidatorClaimAfter, liquidatorClaimBefore, 'a consumed queued liquidation should not move REP to the liquidator')
+		})
+
 		test('liquidation leaves state unchanged when a smaller chunk would leave forbidden target debt dust', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -684,6 +830,37 @@ describe('Peripherals: fork migration', () => {
 			await redeemFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
 
 			strictEqualTypeSafe(await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool), 0n, 'pool fee accounting should fully clear once every credited vault fee is redeemed')
+		})
+
+		test('public vault fee checkpoints expose aggregate mismatch for fractional allowances', async () => {
+			const vaultClients = [client, createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)]
+			const allowancePerVault = (3n * 10n ** 18n) / 2n
+			for (const vaultClient of vaultClients) {
+				if (vaultClient.account.address !== client.account.address) {
+					await approveAndDepositRep(vaultClient, repDeposit, questionId)
+				}
+				await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, vaultClient.account.address, allowancePerVault)
+			}
+
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), BigInt(vaultClients.length) * allowancePerVault, 'test setup requires the allowance to be split across fractional minimum-sized vaults')
+
+			const openInterestAmount = 1n * 10n ** 9n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - 10n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			await mockWindow.advanceTime(1n)
+			for (const vaultClient of vaultClients) {
+				await updateVaultFees(client, securityPoolAddresses.securityPool, vaultClient.account.address)
+			}
+
+			const totalFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+			const vaults = await Promise.all(vaultClients.map(async vaultClient => await getSecurityVault(client, securityPoolAddresses.securityPool, vaultClient.account.address)))
+			const totalCreditedVaultFees = vaults.reduce((sum, vault) => sum + vault.unpaidEthFees, 0n)
+
+			assert.ok(totalFeesOwed > 0n, 'the accrual step should produce a positive aggregate fee liability in this setup')
+			assert.ok(totalCreditedVaultFees > 0n, 'fractional minimum-sized vaults should still receive some whole-wei fees in this setup')
+			assert.ok(totalFeesOwed > totalCreditedVaultFees, 'aggregate fee accounting should exceed the sum of synced vault fees after repeated public checkpointing on fractional minimum-sized allowances')
 		})
 
 		test('allowance handoff does not pay old fee residue to the new vault', async () => {
