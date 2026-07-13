@@ -216,7 +216,7 @@ describe('Peripherals: fork migration', () => {
 
 			const { forkData: forkDataBeforeStrayRep } = await setupOwnForkWithEscrow()
 			await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
-			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Already forked/)
+			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Forked/)
 
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
@@ -2055,6 +2055,24 @@ describe('Peripherals: fork migration', () => {
 			const childEthAfter = await getETHBalance(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(parentEthBefore - parentEthAfter, expectedCollateralTransfer, 'unlocked vault migration should transfer ETH collateral from parent to child')
 			strictEqualTypeSafe(childEthAfter - childEthBefore, expectedCollateralTransfer, 'unlocked vault migration should fund the child with the transferred ETH collateral')
+		})
+
+		test('directly forking the pool question preserves child branch semantics', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await forkUniverse(client, genesisUniverse, questionId)
+			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+			assert.strictEqual(forkData.ownFork, false, 'direct Zoltar fork should not use own-fork accounting')
+
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'matching-question child should resolve to its branch outcome')
 		})
 
 		test('migrateVault transfers unlocked REP collateral for own forks', async () => {

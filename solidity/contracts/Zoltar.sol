@@ -98,6 +98,10 @@ contract Zoltar {
 		return universe.forkTime;
 	}
 
+	function forkQuestionMatches(uint248 universeId, uint256 questionId) external view returns (bool) {
+		return universes[universeId].forkQuestionId == questionId;
+	}
+
 	function getRepToken(uint248 universeId) external view returns (ReputationToken) {
 		Universe memory universe = universes[universeId];
 		return universe.reputationToken;
