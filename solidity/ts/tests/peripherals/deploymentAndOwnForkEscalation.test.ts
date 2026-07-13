@@ -2,7 +2,8 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Abi, Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testsuite/simulator/utils/clients'
-import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { deployChild } from '../../testsuite/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: deployment and own-fork escalation', () => {
 	const fixture = usePeripheralsDeploymentAndOwnForkEscalationFixture()
@@ -153,6 +154,45 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const missingUniverseId = 999999n
 
 		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe is missing/)
+	})
+
+	test('reuses and authorizes the share token when sibling universes deploy the same market', async () => {
+		const forkQuestionData = {
+			...questionData,
+			title: `sibling share token source ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkQuestionId = getQuestionId(forkQuestionData, outcomes)
+		await createQuestion(client, forkQuestionData, outcomes)
+		await mockWindow.setTime(forkQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkQuestionId)
+		for (const outcome of [QuestionOutcome.Yes, QuestionOutcome.No]) {
+			await deployChild(client, genesisUniverse, BigInt(outcome))
+		}
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
+		await deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, noUniverse, questionId, securityMultiplier)
+
+		const yesPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), yesUniverse, questionId, securityMultiplier)
+		const noPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), noUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(yesPoolAddresses.shareToken, noPoolAddresses.shareToken, 'sibling markets should reuse their share token')
+		for (const [securityPool, universe] of [
+			[yesPoolAddresses.securityPool, yesUniverse],
+			[noPoolAddresses.securityPool, noUniverse],
+		] as const) {
+			await client.simulateContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: yesPoolAddresses.shareToken,
+				functionName: 'mintCompleteSets',
+				args: [universe, client.account.address, 1n],
+				account: securityPool,
+			})
+		}
+		assert.ok(await contractExists(client, yesPoolAddresses.securityPool), 'yes sibling security pool should deploy')
+		assert.ok(await contractExists(client, noPoolAddresses.securityPool), 'no sibling security pool should deploy')
 	})
 
 	test('origin security pool deployment derives protocol parameters for the first deployer', async () => {
