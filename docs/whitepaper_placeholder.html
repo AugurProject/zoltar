@@ -5363,21 +5363,21 @@
 						recursively along with Zoltar universes.
 					</p>
 					<p>
-						For example, suppose the Genesis universe contains two ended questions: “Did
-						Helsinki record a temperature of at least 30 °C on August 1, 2030?” and “Did
-						the Atlas protocol upgrade activate by July 1, 2031?” A security pool is still
-						escalating the Helsinki-temperature question. Before that escalation resolves,
+						For example, suppose Zoltar has two ended questions: “Did London record a
+						temperature of at least 30 °C on August 1, 2030?” and “Did the Atlas protocol
+						upgrade activate by July 1, 2031?” A security pool in the Genesis universe is
+						still escalating the London-temperature question. Before that escalation resolves,
 						a caller invokes <code>Zoltar.forkUniverse</code> with the unrelated, already
 						ended Atlas-upgrade question, causing Zoltar to fork the Genesis universe. Each
 						resulting child universe represents one possible answer to the Atlas-upgrade
-						question. The pool's unresolved Helsinki-temperature escalation migrates into
+						question. The pool's unresolved London-temperature escalation migrates into
 						selected child universes as separate paused continuation games, one in each
 						selected child universe. After a continuation resumes, it still disputes the
-						Helsinki-temperature question. If it reaches non-decision, a caller can invoke
+						London-temperature question. If it reaches non-decision, a caller can invoke
 						the security-pool fork path, causing Zoltar to fork that child universe again.
 						The first fork therefore creates branches for the possible answers to the
 						unrelated Atlas-upgrade question; the recursive fork creates branches for the
-						possible answers to the pool's original Helsinki-temperature question.
+						possible answers to the pool's original London-temperature question.
 					</p>
 					<figure class="diagram" id="fig-placeholder-recursive-continuation">
 						<svg
@@ -5389,10 +5389,11 @@
 								Recursive fork-continuation flow
 							</title>
 							<desc id="recursive-desc">
-								A caller initiates a Zoltar fork for a universe containing an unresolved
-								escalation, creating child continuation games. If a resumed continuation
-								reaches non-decision, a caller can invoke the security-pool fork path and
-								Zoltar forks that child universe again.
+								A caller invokes Zoltar to fork a universe while one of its security pools has
+								an unresolved escalation. Later, migration into selected child branches deploys child pools
+								and initializes paused continuation games. If a resumed continuation reaches
+								non-decision, a caller can invoke the security-pool fork path and Zoltar forks
+								that child universe again.
 							</desc>
 							<defs>
 								<marker
