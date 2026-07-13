@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Deployment Status Oracle</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Deployment Status Oracle</h1>
+				<p>
+					<code>DeploymentStatusOracle</code> is a deployment-progress helper. It does not
+					measure protocol readiness or initialization success. It only reports which
+					configured deployment-step addresses currently contain runtime bytecode.
+				</p>
+				<p>
+					The mainnet manifest lists this contract directly, so operators and frontends need a
+					precise explanation of the returned bitmask and the built-in 256-step ceiling.
+				</p>
+			</header>
+
+			<section id="mask">
+				<h2>What <code>getDeploymentMask()</code> Returns</h2>
+				<p>
+					The constructor stores one ordered <code>address[] deploymentAddresses</code>.
+					<code>getDeploymentMask()</code> loops over that array and checks
+					<code>deploymentAddresses[index].code.length</code>. When code exists, the oracle sets
+					bit <code>index</code> in the returned <code>uint256</code>.
+				</p>
+				<p>
+					This is a code-presence bitmap. A set bit means code exists at the configured
+					address. A clear bit means the address currently has no code. The oracle does not
+					verify constructor args, ownership wiring, or post-deployment setup.
+				</p>
+				<figure class="diagram" id="fig-deployment-mask" aria-labelledby="deployment-mask-title">
+					<svg
+						viewBox="0 0 920 220"
+						role="img"
+						aria-labelledby="deployment-mask-title deployment-mask-desc"
+					>
+						<title id="deployment-mask-title">Deployment mask maps ordered deployment steps to bits</title>
+						<desc id="deployment-mask-desc">A row of deployment steps on the left maps by index into bit positions in a uint256 mask on the right. Each step sets its bit only when code exists at that configured address.</desc>
+						<defs>
+							<marker
+								id="arrow-deployment-mask"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-blue" x="40" y="42" width="220" height="42" rx="8"></rect>
+						<rect class="svg-blue" x="40" y="94" width="220" height="42" rx="8"></rect>
+						<rect class="svg-blue" x="40" y="146" width="220" height="42" rx="8"></rect>
+						<text class="svg-label" x="150" y="69" text-anchor="middle">step 0</text>
+						<text class="svg-label" x="150" y="121" text-anchor="middle">step 1</text>
+						<text class="svg-label" x="150" y="173" text-anchor="middle">step 2</text>
+						<path class="svg-line" marker-end="url(#arrow-deployment-mask)" d="M 260 63 H 390"></path>
+						<path class="svg-line" marker-end="url(#arrow-deployment-mask)" d="M 260 115 H 390"></path>
+						<path class="svg-line" marker-end="url(#arrow-deployment-mask)" d="M 260 167 H 390"></path>
+						<rect class="svg-box" x="390" y="42" width="470" height="146" rx="10"></rect>
+						<rect class="svg-gold" x="420" y="84" width="90" height="62" rx="8"></rect>
+						<rect class="svg-gold" x="530" y="84" width="90" height="62" rx="8"></rect>
+						<rect class="svg-gold" x="640" y="84" width="90" height="62" rx="8"></rect>
+						<rect class="svg-box" x="750" y="84" width="80" height="62" rx="8"></rect>
+						<text class="svg-label" x="465" y="110" text-anchor="middle">bit 0</text>
+						<text class="svg-label" x="575" y="110" text-anchor="middle">bit 1</text>
+						<text class="svg-label" x="685" y="110" text-anchor="middle">bit 2</text>
+						<text class="svg-label" x="790" y="110" text-anchor="middle">...</text>
+						<text class="svg-small" x="465" y="132" text-anchor="middle">code?</text>
+						<text class="svg-small" x="575" y="132" text-anchor="middle">code?</text>
+						<text class="svg-small" x="685" y="132" text-anchor="middle">code?</text>
+						<text class="svg-small" x="625" y="62" text-anchor="middle">returned uint256</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Deployment Status Mask</span>Each configured deployment
+						step owns one bit position in the returned word. The oracle sets that bit only if
+						the step's address currently contains code.
+					</p>
+				</figure>
+				<div class="equation" id="eq-deployment-mask">
+					<math
+						display="block"
+						aria-label="deployed mask equals the sum over each configured address of code present at i times two to the i"
+						data-source="deployedMask = sum(codePresent(i) * 2^i)"
+					>
+						<mrow>
+							<mi>deployedMask</mi>
+							<mo>=</mo>
+							<munder>
+								<mo>&#x2211;</mo>
+								<mrow>
+									<mi>i</mi>
+									<mo>=</mo>
+									<mn>0</mn>
+								</mrow>
+							</munder>
+							<mrow>
+								<mi>codePresent</mi>
+								<mo>(</mo>
+								<mi>i</mi>
+								<mo>)</mo>
+								<mo>&#x22C5;</mo>
+								<msup><mn>2</mn><mi>i</mi></msup>
+							</mrow>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Deployment Bitmask</span>Each configured deployment
+						step contributes one bit position to the returned word.
+					</p>
+				</div>
+			</section>
+
+			<section id="ordering">
+				<h2>How Bits Map To Deployment Steps</h2>
+				<p>
+					Bit positions are array positions. Bit <code>0</code> maps to the first constructor
+					address, bit <code>1</code> to the second, and so on. Offchain decoding must use the
+					same ordered list that seeded the oracle.
+				</p>
+				<p>
+					The current UI and deployment helpers derive the constructor list from
+					<code>deploymentSteps</code> with one exception: the oracle does not include its own
+					address in its constructor array. The manifest still lists
+					<code>deploymentStatusOracle</code> as a deployment step, but the UI tracks that step
+					out-of-band and starts consuming mask bits from the remaining addresses.
+				</p>
+				<p>
+					With the current mainnet manifest, the low-order mask mapping therefore begins:
+				</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Bit</th>
+							<th>Mainnet step id</th>
+							<th>Label</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>0</code></td>
+							<td><code>proxyDeployer</code></td>
+							<td>Proxy Deployer</td>
+						</tr>
+						<tr>
+							<td><code>1</code></td>
+							<td><code>multicall3</code></td>
+							<td>Multicall3</td>
+						</tr>
+						<tr>
+							<td><code>2</code></td>
+							<td><code>uniformPriceDualCapBatchAuctionFactory</code></td>
+							<td>Uniform Price Dual Cap Batch Auction Factory</td>
+						</tr>
+						<tr>
+							<td><code>3</code></td>
+							<td><code>scalarOutcomes</code></td>
+							<td>Scalar Outcomes</td>
+						</tr>
+						<tr>
+							<td><code>4</code></td>
+							<td><code>securityPoolUtils</code></td>
+							<td>Security Pool Utils</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>
+					The same pattern continues through the remaining deployment-status step addresses:
+					<code>openOracle</code>, <code>zoltarQuestionData</code>, <code>zoltar</code>,
+					<code>shareTokenFactory</code>,
+					<code>priceOracleManagerAndOperatorQueuerFactory</code>,
+					<code>securityPoolForker</code>, <code>escalationGameFactory</code>, and
+					<code>securityPoolFactory</code>. If that constructor order changes, the bit meanings
+					change with it.
+				</p>
+				<p>
+					The manifest's <code>derivedContracts</code> list is separate. Those addresses are
+					not part of the deployment-status mask unless they also appear in the constructor
+					array.
+				</p>
+			</section>
+
+			<section id="limit">
+				<h2>Why The Cap Is 256 Steps</h2>
+				<p>
+					The constructor requires
+					<code>deploymentAddresses.length &lt;= uint256(type(uint8).max) + 1</code>, which is
+					<code>256</code>. The limit exists because the result is a single
+					<code>uint256</code>, and each tracked step consumes one bit.
+				</p>
+				<p>
+					Indices <code>0...255</code> are supported. A deployment process with more than
+					<code>256</code> tracked addresses must split status across multiple masks or use a
+					different representation.
+				</p>
+			</section>
+
+			<section id="sources">
+				<h2>Sources</h2>
+				<ul>
+					<li><a href="../solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a></li>
+					<li><a href="../ui/ts/contracts/deployment.ts"><code>ui/ts/contracts/deployment.ts</code></a> builds the constructor address list and decodes the returned mask for the UI.</li>
+					<li><a href="./mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a></li>
+				</ul>
+			</section>
+		</main>
+	</body>
+</html>

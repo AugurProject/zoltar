@@ -832,6 +832,37 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool), 0n, 'pool fee accounting should fully clear once every credited vault fee is redeemed')
 		})
 
+		test('public vault fee checkpoints expose aggregate mismatch for fractional allowances', async () => {
+			const vaultClients = [client, createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)]
+			const allowancePerVault = (3n * 10n ** 18n) / 2n
+			for (const vaultClient of vaultClients) {
+				if (vaultClient.account.address !== client.account.address) {
+					await approveAndDepositRep(vaultClient, repDeposit, questionId)
+				}
+				await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, vaultClient.account.address, allowancePerVault)
+			}
+
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), BigInt(vaultClients.length) * allowancePerVault, 'test setup requires the allowance to be split across fractional minimum-sized vaults')
+
+			const openInterestAmount = 1n * 10n ** 9n
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime - 10n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+			await mockWindow.advanceTime(1n)
+			for (const vaultClient of vaultClients) {
+				await updateVaultFees(client, securityPoolAddresses.securityPool, vaultClient.account.address)
+			}
+
+			const totalFeesOwed = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
+			const vaults = await Promise.all(vaultClients.map(async vaultClient => await getSecurityVault(client, securityPoolAddresses.securityPool, vaultClient.account.address)))
+			const totalCreditedVaultFees = vaults.reduce((sum, vault) => sum + vault.unpaidEthFees, 0n)
+
+			assert.ok(totalFeesOwed > 0n, 'the accrual step should produce a positive aggregate fee liability in this setup')
+			assert.ok(totalCreditedVaultFees > 0n, 'fractional minimum-sized vaults should still receive some whole-wei fees in this setup')
+			assert.ok(totalFeesOwed > totalCreditedVaultFees, 'aggregate fee accounting should exceed the sum of synced vault fees after repeated public checkpointing on fractional minimum-sized allowances')
+		})
+
 		test('allowance handoff does not pay old fee residue to the new vault', async () => {
 			const firstVaultAllowance = repDeposit / 4n + 1n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, firstVaultAllowance)

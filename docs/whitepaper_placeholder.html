@@ -4146,7 +4146,9 @@
 						Continuation withdrawals use Merkle Mountain Range proofs against
 						the inherited carry snapshot. Each accepted proof advances the
 						nullifier root, so a carried parent deposit cannot be replayed in
-						the child.
+						the child. The exact leaf fields, peak bagging order, proof-length
+						rules, and 64-peak bound are documented in
+						<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.
 					</p>
 					<p>
 						If an unrelated external Zoltar fork interrupts the local escalation
