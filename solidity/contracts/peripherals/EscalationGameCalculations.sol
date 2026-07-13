@@ -99,18 +99,49 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		} else {
 			outcome = _getStrictLeaderOrNone(invalidBalance, yesBalance, noBalance);
 		}
-		if (outcome == BinaryOutcomes.BinaryOutcome.None && block.timestamp > getEscalationGameEndDate()) {
-			ISecurityPool parent = securityPool.parent();
-			if (address(parent) != address(0x0)) {
-				bool ownFork = ISecurityPoolForker(securityPool.securityPoolForker()).isOwnFork(parent);
-				if (ownFork) {
-					BinaryOutcomes.BinaryOutcome forkOutcome = ISecurityPoolForker(securityPool.securityPoolForker())
-						.getQuestionOutcome(securityPool);
-					if (forkOutcome != BinaryOutcomes.BinaryOutcome.None) return forkOutcome;
-				}
-			}
+		if (
+			forkContinuation &&
+			outcome == BinaryOutcomes.BinaryOutcome.None &&
+			block.timestamp > getEscalationGameEndDate()
+		) {
+			BinaryOutcomes.BinaryOutcome forkOutcome = _getOwnForkOutcomeIfAvailable();
+			if (forkOutcome != BinaryOutcomes.BinaryOutcome.None) return forkOutcome;
 		}
 		return outcome;
+	}
+
+	function _getOwnForkOutcomeIfAvailable() private view returns (BinaryOutcomes.BinaryOutcome) {
+		ISecurityPool parent;
+		try securityPool.parent() returns (ISecurityPool parentPool) {
+			parent = parentPool;
+		} catch {
+			return BinaryOutcomes.BinaryOutcome.None;
+		}
+		if (address(parent) == address(0x0)) return BinaryOutcomes.BinaryOutcome.None;
+
+		address forkerAddress;
+		try securityPool.securityPoolForker() returns (address configuredForker) {
+			forkerAddress = configuredForker;
+		} catch {
+			return BinaryOutcomes.BinaryOutcome.None;
+		}
+		if (forkerAddress == address(0x0)) return BinaryOutcomes.BinaryOutcome.None;
+
+		bool ownFork;
+		try ISecurityPoolForker(forkerAddress).isOwnFork(parent) returns (bool parentOwnFork) {
+			ownFork = parentOwnFork;
+		} catch {
+			return BinaryOutcomes.BinaryOutcome.None;
+		}
+		if (!ownFork) return BinaryOutcomes.BinaryOutcome.None;
+
+		try ISecurityPoolForker(forkerAddress).getQuestionOutcome(securityPool) returns (
+			BinaryOutcomes.BinaryOutcome forkOutcome
+		) {
+			return forkOutcome;
+		} catch {
+			return BinaryOutcomes.BinaryOutcome.None;
+		}
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
