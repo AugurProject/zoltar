@@ -3,6 +3,8 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
+import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import {
 	ESCALATION_TIME_LENGTH,
 	EXCESS_REWARD_WINDOW_DIVISOR,
@@ -91,12 +93,24 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
 		uint256 currentTotalCost = totalCost();
 		if (_countBalancesAtLeast(invalidBalance, yesBalance, noBalance, currentTotalCost) >= 2) {
-			return BinaryOutcomes.BinaryOutcome.None;
+			outcome = BinaryOutcomes.BinaryOutcome.None;
+		} else if (_allOutcomeBalancesEmpty(invalidBalance, yesBalance, noBalance)) {
+			outcome = BinaryOutcomes.BinaryOutcome.Invalid;
+		} else {
+			outcome = _getStrictLeaderOrNone(invalidBalance, yesBalance, noBalance);
 		}
-		if (_allOutcomeBalancesEmpty(invalidBalance, yesBalance, noBalance)) {
-			return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (outcome == BinaryOutcomes.BinaryOutcome.None && block.timestamp > getEscalationGameEndDate()) {
+			ISecurityPool parent = securityPool.parent();
+			if (address(parent) != address(0x0)) {
+				bool ownFork = ISecurityPoolForker(securityPool.securityPoolForker()).isOwnFork(parent);
+				if (ownFork) {
+					BinaryOutcomes.BinaryOutcome forkOutcome = ISecurityPoolForker(securityPool.securityPoolForker())
+						.getQuestionOutcome(securityPool);
+					if (forkOutcome != BinaryOutcomes.BinaryOutcome.None) return forkOutcome;
+				}
+			}
 		}
-		return _getStrictLeaderOrNone(invalidBalance, yesBalance, noBalance);
+		return outcome;
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {

@@ -173,6 +173,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
+	function isOwnFork(ISecurityPool securityPool) external view returns (bool) {
+		return forkDataByPool[securityPool].ownFork;
+	}
+
 	function _unallocatedEscrowChildRep(
 		ISecurityPool securityPool,
 		SecurityPoolForkerForkData storage data
