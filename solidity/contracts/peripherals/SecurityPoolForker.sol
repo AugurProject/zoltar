@@ -386,7 +386,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	// migrates vault into outcome universe after fork
-	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) external {
+	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) public {
 		_delegateMigrationCall(
 			vaultMigrationDelegate,
 			abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.migrateVault, (securityPool, outcomeIndex))
@@ -399,6 +399,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 childOutcomeIndex
 	) external returns (bool moreToMigrate) {
 		require(msg.sender == vault, 'Vault');
+		if (block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME) {
+			migrateVault(securityPool, childOutcomeIndex);
+		}
 		bytes memory returnData = _delegateMigrationCall(
 			escalationGameForkerDelegate,
 			abi.encodeCall(

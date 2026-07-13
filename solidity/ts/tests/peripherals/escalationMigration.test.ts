@@ -331,6 +331,102 @@ describe('Peripherals: escalation migration', () => {
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Child not migrating/)
 	})
 
+	test('own-fork unresolved migration after the deadline only funds carried escrow', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const securityPoolAllowance = reportBond * 2n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultRepBeforeTopUp = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repDepositShare)
+		if (vaultRepBeforeTopUp < 3n * forkThreshold) {
+			await approveAndDepositRep(client, 3n * forkThreshold - vaultRepBeforeTopUp, questionId)
+		}
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const forkTime = await mockWindow.getTime()
+		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
+		const childVaultBefore = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childCollateralBefore = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		const parentCollateralBefore = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+
+		const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childCollateral = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		const parentCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(childVault.repDepositShare, 0n, 'late unresolved migration must not move ordinary vault ownership')
+		strictEqualTypeSafe(childVault.securityBondAllowance, 0n, 'late unresolved migration must not move ordinary bond allowance')
+		strictEqualTypeSafe(childVault.repDepositShare, childVaultBefore.repDepositShare, 'late unresolved migration must preserve child ownership')
+		strictEqualTypeSafe(childVault.securityBondAllowance, childVaultBefore.securityBondAllowance, 'late unresolved migration must preserve child allowance')
+		strictEqualTypeSafe(parentVault.repDepositShare, parentVaultBefore.repDepositShare, 'late unresolved migration must preserve parent ownership')
+		strictEqualTypeSafe(parentVault.securityBondAllowance, parentVaultBefore.securityBondAllowance, 'late unresolved migration must preserve parent allowance')
+		strictEqualTypeSafe(parentVault.unpaidEthFees, parentVaultBefore.unpaidEthFees, 'late unresolved migration must preserve parent unpaid fees')
+		strictEqualTypeSafe(parentVault.feeIndex, parentVaultBefore.feeIndex, 'late unresolved migration must preserve parent fee index')
+		strictEqualTypeSafe(childCollateral, childCollateralBefore, 'late unresolved migration must preserve child collateral')
+		strictEqualTypeSafe(parentCollateral, parentCollateralBefore, 'late unresolved migration must preserve parent collateral')
+		assert.ok(childVault.repInEscalationGame > 0n, 'late unresolved migration should still fund carried escrow')
+	})
+
+	test('external-fork unresolved migration after the deadline only funds carried escrow', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const securityPoolAllowance = reportBond * 2n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const externalForkQuestionData = {
+			...questionData,
+			title: 'late external-fork unresolved migration source',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const externalForkQuestionId = getQuestionId(externalForkQuestionData, outcomes)
+		await createQuestion(attackerClient, externalForkQuestionData, outcomes)
+		await mockWindow.setTime(externalForkQuestionData.endTime + 1n)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, externalForkQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const forkTime = await mockWindow.getTime()
+		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
+		const childVaultBefore = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childCollateralBefore = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		const parentCollateralBefore = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+
+		const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childCollateral = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		const parentCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(childVault.repDepositShare, 0n, 'late unresolved migration must not move ordinary vault ownership')
+		strictEqualTypeSafe(childVault.securityBondAllowance, 0n, 'late unresolved migration must not move ordinary bond allowance')
+		strictEqualTypeSafe(childVault.repDepositShare, childVaultBefore.repDepositShare, 'late unresolved migration must preserve child ownership')
+		strictEqualTypeSafe(childVault.securityBondAllowance, childVaultBefore.securityBondAllowance, 'late unresolved migration must preserve child allowance')
+		strictEqualTypeSafe(parentVault.repDepositShare, parentVaultBefore.repDepositShare, 'late unresolved migration must preserve parent ownership')
+		strictEqualTypeSafe(parentVault.securityBondAllowance, parentVaultBefore.securityBondAllowance, 'late unresolved migration must preserve parent allowance')
+		strictEqualTypeSafe(parentVault.unpaidEthFees, parentVaultBefore.unpaidEthFees, 'late unresolved migration must preserve parent unpaid fees')
+		strictEqualTypeSafe(parentVault.feeIndex, parentVaultBefore.feeIndex, 'late unresolved migration must preserve parent fee index')
+		strictEqualTypeSafe(childCollateral, childCollateralBefore, 'late unresolved migration must preserve child collateral')
+		strictEqualTypeSafe(parentCollateral, parentCollateralBefore, 'late unresolved migration must preserve parent collateral')
+		assert.ok(childVault.repInEscalationGame > 0n, 'late unresolved migration should still fund carried escrow')
+	})
+
 	test('migrateVaultWithUnresolvedEscalation requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
