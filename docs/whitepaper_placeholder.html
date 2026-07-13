@@ -5362,6 +5362,19 @@
 						games, so escalation does not end at a single fork; it can branch
 						recursively along with Zoltar universes.
 					</p>
+					<p>
+						For example, suppose a security pool is escalating the Market Weather
+						question in the Genesis universe. Before that escalation resolves, a caller
+						invokes <code>Zoltar.forkUniverse</code> with an unrelated ended Governance
+						Upgrade question, causing Zoltar to fork the Genesis universe. The pool's
+						unresolved Market Weather escalation migrates into
+						selected Governance Upgrade child universes as paused continuation games.
+						After one continuation resumes, it still disputes Market Weather. If it
+						reaches non-decision, a caller can invoke the security-pool fork path, causing
+						Zoltar to fork that Governance Upgrade child universe using Market Weather.
+						The first fork's branches encode Governance Upgrade outcomes; the recursive
+						fork's branches encode Market Weather outcomes.
+					</p>
 					<figure class="diagram" id="fig-placeholder-recursive-continuation">
 						<svg
 							viewBox="0 0 980 520"

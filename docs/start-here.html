@@ -33,11 +33,19 @@
 						source balance.
 					</p>
 					<p>
-						A normal market begins in one pool, forks only after sustained local
-						non-decision, and then resumes in whichever child branches users keep
-						using. That same sequence drives the rest of Placeholder: pool
-						creation, trading, escalation, fork migration, then repair or
-						redemption.
+						After sustained local non-decision, a caller can invoke the security-pool
+						fork path, which makes Zoltar fork the market's current universe. Before that
+						happens, a caller may use a different market's ended question to make Zoltar
+						fork that universe first; in that case, the
+						unresolved escalation migrates into selected child universes as paused
+						continuation games. Each continuation still disputes the original question
+						and, after it resumes, can reach non-decision. A caller can then invoke the
+						security-pool fork path, which forks that child universe using the original
+						question. The first fork's branches represent the
+						unrelated question's outcomes, while the recursive fork's branches represent
+						the original question's outcomes. That sequence drives the rest of
+						Placeholder: pool creation, trading, escalation, fork migration, then repair
+						or redemption.
 					</p>
 					<p>
 						Keep one distinction in mind throughout: Zoltar decides how
