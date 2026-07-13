@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../types/contractArtifact'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize } from '../../testsuite/simulator/utils/contracts/auction'
@@ -182,6 +182,37 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.setTime(auctionDeadline)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after the truth auction end boundary passes')
+		})
+
+		test('finalizeTruthAuction resets child fee accrual to activation time before installing collateral', async () => {
+			const { yesSecurityPool } = await setupStartedTruthAuction('child fee activation source')
+			const feeTimestampBeforeFinalize = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'lastUpdatedFeeAccumulator',
+				address: yesSecurityPool.securityPool,
+				args: [],
+			})
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			const finalizeHash = await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			const finalizeReceipt = await client.getTransactionReceipt({ hash: finalizeHash })
+			const finalizeBlock = await client.getBlock({ blockNumber: finalizeReceipt.blockNumber })
+			const collateralAfterFinalize = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const feeTimestampAfterFinalize = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'lastUpdatedFeeAccumulator',
+				address: yesSecurityPool.securityPool,
+				args: [],
+			})
+
+			strictEqualTypeSafe(feeTimestampAfterFinalize > feeTimestampBeforeFinalize, true, 'child fee timestamp should advance when auction finalization activates the pool')
+			strictEqualTypeSafe(feeTimestampAfterFinalize, finalizeBlock.timestamp, 'child fee timestamp should reset to the activation block time')
+			strictEqualTypeSafe(collateralAfterFinalize > 0n, true, 'setup should leave child collateral installed at finalization')
+
+			await mockWindow.advanceTime(1n)
+			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralAfterFinalize, 'first fee update after activation should not retroactively decay pre-activation collateral')
 		})
 
 		test('startTruthAuction skips auction startup when all REP is already migrated', async () => {

@@ -1012,9 +1012,13 @@ contract SecurityPool is ISecurityPool {
 
 	function setPoolFinancials(uint256 newCollateral, uint256 newTotalBondAllowance) external onlyForker {
 		require(newTotalBondAllowance >= newCollateral, 'Bond low');
+		// Child pools accrue no fees while migration and truth-auction accounting leave
+		// them without active collateral. Reset the fee clock before live collateral
+		// and allowance are installed so later updates start at activation time.
+		lastUpdatedFeeAccumulator = block.timestamp;
+		_clearFeeIndexRemainder();
 		completeSetCollateralAmount = newCollateral;
 		totalSecurityBondAllowance = newTotalBondAllowance;
-		_clearFeeIndexRemainder();
 		emit PoolFinancialsSet(completeSetCollateralAmount, totalSecurityBondAllowance);
 	}
 
