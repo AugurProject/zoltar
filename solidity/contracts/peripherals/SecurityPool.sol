@@ -714,9 +714,13 @@ contract SecurityPool is ISecurityPool {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		updateCollateralAmount();
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
-		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
-		uint256 ethValue = sharesToCash(amount);
-		shareTokenSupply -= amount;
+		(uint256 amount, uint256 remainingWinningShareSupply) = shareToken.burnTokenIdAndGetRemainingSupply(
+			tokenId,
+			msg.sender
+		);
+		uint256 winningShareSupply = remainingWinningShareSupply + amount;
+		uint256 ethValue = winningShareSupply == 0 ? 0 : (amount * completeSetCollateralAmount) / winningShareSupply;
+		shareTokenSupply = remainingWinningShareSupply;
 		completeSetCollateralAmount -= ethValue;
 		_sendEth(payable(msg.sender), ethValue);
 		emit RedeemShares(msg.sender, amount, ethValue, shareTokenSupply, completeSetCollateralAmount);

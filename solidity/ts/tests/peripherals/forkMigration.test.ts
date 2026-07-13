@@ -921,6 +921,57 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'share supply should be empty after all winning shares are redeemed')
 		})
 
+		test('redeemShares drains a child branch even when only part of the parent winning supply migrated', async () => {
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+			const firstHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const secondHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			await createCompleteSet(firstHolder, securityPoolAddresses.securityPool, 4n * 10n ** 18n)
+			await createCompleteSet(secondHolder, securityPoolAddresses.securityPool, 6n * 10n ** 18n)
+
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			await migrateShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
+				await mockWindow.advanceTime(7n * DAY + DAY)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			}
+
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after migration accounting settles')
+			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'own-fork yes child should resolve as yes')
+
+			const childCollateralBeforeRedemption = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const childShareSupplyBeforeRedemption = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+			const firstHolderChildShares = await balanceOfShares(firstHolder, yesSecurityPool.shareToken, yesUniverse, firstHolder.account.address)
+			const firstHolderWinningShares = ensureDefined(firstHolderChildShares[1], 'migrated yes child winning shares missing')
+			const secondHolderChildShares = await balanceOfShares(secondHolder, yesSecurityPool.shareToken, yesUniverse, secondHolder.account.address)
+
+			assert.ok(childCollateralBeforeRedemption > 0n, 'child branch should hold collateral before redemption')
+			assert.ok(childShareSupplyBeforeRedemption > firstHolderWinningShares, 'test setup requires stale parent nominal supply to exceed migrated winning shares')
+			strictEqualTypeSafe(ensureDefined(secondHolderChildShares[1], 'second holder yes child winning shares missing'), 0n, 'second holder should not have migrated winning shares into the child')
+
+			const firstHolderBalanceBeforeRedemption = await getETHBalance(client, firstHolder.account.address)
+			await redeemShares(firstHolder, yesSecurityPool.securityPool)
+			const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
+
+			strictEqualTypeSafe(firstHolderPayout, childCollateralBeforeRedemption, 'the migrated winning holder should be able to redeem the full child collateral')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child collateral should be fully drained after the only migrated winning holder redeems')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'resolved child share supply should collapse to the remaining winning supply')
+		})
+
 		test('redeemShares accrues open-interest fees before paying winning shares', async () => {
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -960,6 +1011,10 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should consume the remaining collateral')
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should consume the remaining share supply')
 			strictEqualTypeSafe(await sharesToCash(client, securityPoolAddresses.securityPool, winningShares), 0n, 'once winning supply is exhausted, leftover losing shares should no longer map to any cash value')
+
+			await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'repeat winning redemption should remain a no-op once collateral is exhausted')
+			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'repeat winning redemption should preserve zero resolved share supply')
 		})
 
 		test('redeemShares and redeemRep stay available after an unrelated late fork once the question has finalized', async () => {

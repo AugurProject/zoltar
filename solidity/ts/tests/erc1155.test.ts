@@ -300,7 +300,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 				await client.writeContract({
 					abi: peripherals_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
-					functionName: 'burnTokenId',
+					functionName: 'burnTokenIdAndGetRemainingSupply',
 					args: [yesTokenId, client.account.address],
 				}),
 		)
