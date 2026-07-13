@@ -74,9 +74,11 @@ describe('Peripherals: truth auction', () => {
 		getRepToken,
 		getSecurityVault,
 		getSystemState,
+		getTotalFeesOwedToVaults,
 		getTotalSecurityBondAllowance,
 		getVaultCount,
 		poolOwnershipToRep,
+		redeemFees,
 		redeemRep,
 		updateVaultFees,
 		peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -1270,14 +1272,14 @@ describe('Peripherals: truth auction', () => {
 		})
 
 		test('claimAuctionProceeds should add auctioned allowance on top of an existing migrated allowance', async () => {
-			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-			await approveAndDepositRep(attackerClient, repDeposit, questionId)
+			const unmigratedAllowanceHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(unmigratedAllowanceHolder, repDeposit, questionId)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
-			await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, attackerClient.account.address, securityPoolAllowance)
+			await manipulatePriceOracleAndPerformOperation(unmigratedAllowanceHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, unmigratedAllowanceHolder.account.address, securityPoolAllowance)
 
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
@@ -1362,6 +1364,70 @@ describe('Peripherals: truth auction', () => {
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			strictEqualTypeSafe(participantVault.feeIndex, migratedVaultBeforeClaim.feeIndex, 'newly auction-funded vaults should inherit the current child-pool fee index')
+		})
+
+		test('delayed winning-bid claims do not create unreachable fees in child pools', async () => {
+			const unmigratedAllowanceHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(unmigratedAllowanceHolder, repDeposit, questionId)
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await manipulatePriceOracleAndPerformOperation(unmigratedAllowanceHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, unmigratedAllowanceHolder.account.address, securityPoolAllowance)
+
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+			const openInterestAmount = 10n * 10n ** 18n
+			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+			await triggerExternalForkForSecurityPool(undefined, 'delayed-claim stranded-fee fork source')
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+
+			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
+			const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+			const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+			const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+			assert.ok(forkData.auctionedSecurityBondAllowance > 0n, 'test setup should leave unclaimed auction allowance in the child pool after finalization')
+			const feesOwedBeforeDelayedClaim = await getTotalFeesOwedToVaults(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(feesOwedBeforeDelayedClaim, 0n, 'child pools should start with zero fees owed here because they are created only after the parent question has already ended')
+
+			await mockWindow.advanceTime(DAY)
+			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
+
+			const migratedVaultAfterFeeSync = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			const participantVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
+			const totalFeesOwedAfterClaim = await getTotalFeesOwedToVaults(client, yesSecurityPool.securityPool)
+			const claimableFeesAfterClaim = migratedVaultAfterFeeSync.unpaidEthFees + participantVaultAfterClaim.unpaidEthFees
+
+			assert.ok(participantVaultAfterClaim.securityBondAllowance > 0n, 'delayed claimant should receive a nonzero share of the auctioned allowance')
+			strictEqualTypeSafe(totalFeesOwedAfterClaim, feesOwedBeforeDelayedClaim, 'child-pool fee accrual should stay frozen after truth-auction finalization even while auction proceeds remain unclaimed')
+			strictEqualTypeSafe(totalFeesOwedAfterClaim, claimableFeesAfterClaim, 'every child-pool fee liability should still map to a reachable vault balance after a delayed claim')
+
+			await redeemFees(client, yesSecurityPool.securityPool, client.account.address)
+			await redeemFees(auctionParticipant, yesSecurityPool.securityPool, auctionParticipant.account.address)
+
+			const totalFeesOwedAfterRedemption = await getTotalFeesOwedToVaults(client, yesSecurityPool.securityPool)
+
+			strictEqualTypeSafe(totalFeesOwedAfterRedemption, 0n, 'redeeming every reachable child-pool fee should fully clear pool fee liabilities')
 		})
 
 		test('claimAuctionProceeds allows a vault to claim winning bids across multiple calls', async () => {
