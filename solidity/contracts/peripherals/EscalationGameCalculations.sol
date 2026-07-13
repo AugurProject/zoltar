@@ -103,7 +103,8 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			ISecurityPool parent = securityPool.parent();
 			if (address(parent) != address(0x0)) {
 				ISecurityPoolForker forker = ISecurityPoolForker(securityPool.securityPoolForker());
-				if (forker.isOwnFork(parent)) {
+				(bool ownFork, , , , ) = forker.getOwnForkMigrationStatus(parent);
+				if (ownFork) {
 					BinaryOutcomes.BinaryOutcome forkOutcome = forker.getQuestionOutcome(securityPool);
 					if (forkOutcome != BinaryOutcomes.BinaryOutcome.None) outcome = forkOutcome;
 				}

@@ -6,7 +6,6 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuction.sol';
 
 interface ISecurityPoolForker {
-	function isOwnFork(ISecurityPool securityPool) external view returns (bool);
 	function getOwnForkRepBuckets(
 		ISecurityPool securityPool
 	) external view returns (uint256 vaultRepAtFork, uint256 unallocatedEscrowChildRep, uint256 escrowSourceRepAtFork);
