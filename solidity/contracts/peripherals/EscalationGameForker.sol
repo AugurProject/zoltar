@@ -29,7 +29,9 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		uint256[] calldata depositIndexes
 	) public {
 		EscalationGame escalationGame = parent.escalationGame();
-		require(address(escalationGame) != address(0x0), 'Parent game missing');
+		// A non-decision alone does not authorize forked escrow claims; the parent must be in fork migration.
+		// The existing error string keeps this delegate within the SecurityPoolForker initcode limit.
+		require(parent.systemState() == SystemState.PoolForked, 'Parent game missing');
 		require(escalationGame.nonDecisionTimestamp() > 0, 'Non-decision required');
 		bool ownFork = forkDataByPool[parent].ownFork;
 		ISecurityPool child;

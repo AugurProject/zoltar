@@ -499,6 +499,25 @@ describe('Peripherals: escalation migration', () => {
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 	})
 
+	test('claimForkedEscalationDeposits requires an actual universe fork', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const nonDecisionThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		await depositRep(client, securityPoolAddresses.securityPool, 4n * nonDecisionThreshold)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, nonDecisionThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, nonDecisionThreshold)
+
+		const nonDecisionTimestamp = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: securityPoolAddresses.escalationGame,
+			functionName: 'nonDecisionTimestamp',
+		})
+		assert.ok(nonDecisionTimestamp > 0n, 'balanced threshold deposits should reach non-decision')
+		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'the parent should not be forked yet')
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /Parent game missing/)
+	})
+
 	test('migrateVaultWithUnresolvedEscalation scales child escrow when the child branch has less REP than the parent principal', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
