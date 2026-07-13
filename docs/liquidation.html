@@ -105,6 +105,33 @@
 					Execution reuses that snapshot, so adding REP later cannot block the
 					pending liquidation.
 				</p>
+				<h3>Why Adding REP Cannot Cure a Pending Liquidation</h3>
+				<p>
+					Queueing preserves the liquidator's opportunity to execute using the
+					target's queue-time state, subject to the execution gates below. A later
+					REP deposit alone does not make that snapshot stale. Decreasing the
+					target's ownership or changing its allowance does. The pending
+					liquidation remains bounded by the allowance and ownership captured at
+					queue time, so a later REP deposit cannot increase the debt or REP that
+					the liquidator may move under that snapshot.
+				</p>
+				<p>
+					This rule preserves the incentive to pay for and trigger a fresh oracle
+					report. If a target could wait for someone else to fund price discovery,
+					then add REP and cancel the liquidation before settlement, vault owners
+					would have an incentive to keep less backing and use pending
+					liquidations as free warnings. Liquidators would bear the oracle cost
+					without a reliable chance to earn the liquidation bonus, so rational
+					liquidators could stop initiating the reports that make the system's
+					solvency checks live.
+				</p>
+				<p>
+					For vault owners, the practical consequence is that adding REP can
+					prevent or limit future liquidations, but it does not cancel a
+					liquidation that was validly queued already. Vaults should maintain
+					sufficient backing before an operation is staged rather than treating
+					the oracle settlement window as a cure period.
+				</p>
 				<h3>Execution Gates</h3>
 				<p>
 					The liquidatable-threshold inequality is necessary but not sufficient
