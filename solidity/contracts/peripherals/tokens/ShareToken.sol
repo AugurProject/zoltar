@@ -96,10 +96,14 @@ contract ShareToken is ERC1155, IShareToken {
 		_burnBatch(_owner, _tokenIds, _values);
 	}
 
-	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance) {
+	function burnTokenIdAndGetRemainingSupply(
+		uint256 _tokenId,
+		address _owner
+	) external returns (uint256 balance, uint256 remainingSupply) {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn this token id');
 		balance = balanceOf(_owner, _tokenId);
 		_burn(_owner, _tokenId, balance);
+		remainingSupply = totalSupply(_tokenId);
 	}
 
 	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
