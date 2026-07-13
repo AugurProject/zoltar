@@ -27,7 +27,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			snapshotLeafCountsInput,
 			snapshotCarryTotals,
 			snapshotCarryTotals,
-			snapshotNullifierRoots
+			snapshotNullifierRoots,
+			false
 		);
 	}
 
@@ -43,7 +44,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			snapshotLeafCountsInput,
 			snapshotCarryTotals,
 			snapshotResolutionBalances,
-			snapshotNullifierRoots
+			snapshotNullifierRoots,
+			false
 		);
 	}
 
@@ -102,6 +104,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function isForkCarryFundingComplete() external view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
+		if (branchLocalForkCarryAccounting && !branchLocalForkCarryFundingStarted) return false;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			if (state.forkedEscrowSourcePrincipalTotal < state.inheritedUnresolvedTotal) return false;
@@ -173,11 +176,17 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		uint256[3] memory snapshotLeafCountsInput,
 		uint256[3] memory snapshotCarryTotals,
 		uint256[3] memory snapshotResolutionBalances,
-		bytes32[3] memory snapshotNullifierRoots
+		bytes32[3] memory snapshotNullifierRoots,
+		bool branchLocalAccounting
 	) private {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
+		if (snapshotResolutionBalances[0] == type(uint256).max) {
+			branchLocalAccounting = true;
+			snapshotCarryTotals = [uint256(0), uint256(0), uint256(0)];
+			snapshotResolutionBalances = [uint256(0), uint256(0), uint256(0)];
+		}
 		// Defensive invariant: valid escalation-game state should never carry a positive tied leader below non-decision into a child snapshot.
 		require(!_hasInvalidTiedResolutionMaximum(snapshotResolutionBalances), 'Resolution tie');
 
@@ -207,7 +216,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
 			totalCarry += snapshotCarryTotals[outcomeIndex];
 		}
-		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
+		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0 || branchLocalAccounting;
+		branchLocalForkCarryAccounting = branchLocalAccounting;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
 	}
@@ -285,6 +295,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		deposit = selectedOutcomeState.deposits[depositIndex];
 		require(deposit.amount > 0, 'Deposit settled');
 		selectedOutcomeState.deposits[depositIndex].amount = 0;
+		selectedOutcomeState.balance -= deposit.amount;
 		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amount, deposit.depositor);
 	}
 
