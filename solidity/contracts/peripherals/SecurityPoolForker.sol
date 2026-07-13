@@ -453,7 +453,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		parentData = _getForkData(parent);
 		uint256 requiredRep = _getPoolAuctionableRepAtFork(parentData);
 		_delegateEnsureChildPoolRepSplit(parent, data.outcomeIndex, requiredRep);
-		// Keep this invariant guard data-free to stay below the EVM initcode limit.
+		// Keep this invariant guard data-free: a revert string exceeds the EVM initcode limit.
 		if (securityPool.repToken().balanceOf(address(securityPool)) < requiredRep) revert();
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;

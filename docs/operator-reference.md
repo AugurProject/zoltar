@@ -26,9 +26,11 @@ controls over the protocol.
 ## Launch Release Checklist
 
 Before tagging a launch release, run `bun run ui:build:prod` from a fresh
-dependency install and confirm the generated deployment manifest remains clean
-with `bun run check:mainnet-deployment`. Push the final `v*` tag only after the
-CI Gate succeeds on the same commit. The `Build and Push to IPFS` workflow must
+dependency install and run `bun run check:mainnet-deployment`. This command
+warns instead of failing when the generated deployment manifest is stale.
+Treat any stale-manifest warning as a release blocker until the manifest is
+intentionally refreshed with `bun ./scripts/check-mainnet-deployment.mts --write`.
+Push the final `v*` tag only after the CI Gate succeeds on the same commit. The `Build and Push to IPFS` workflow must
 succeed for that tag, and the resulting GitHub release must record the IPFS hash
 emitted from the published artifact.
 
