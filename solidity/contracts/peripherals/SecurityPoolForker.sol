@@ -341,15 +341,19 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
 					'Closed'
 				);
-				_delegateMigrationCall(
-					vaultMigrationDelegate,
-					abi.encodeCall(
-						SecurityPoolForkerVaultMigrationDelegate.ensureChildPoolRepSplit,
-						(securityPool, outcomeIndex, migrationAmount)
-					)
-				);
+				_delegateEnsureChildPoolRepSplit(securityPool, outcomeIndex, migrationAmount);
 			}
 		}
+	}
+
+	function _delegateEnsureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 amount) private {
+		_delegateMigrationCall(
+			vaultMigrationDelegate,
+			abi.encodeCall(
+				SecurityPoolForkerVaultMigrationDelegate.ensureChildPoolRepSplit,
+				(parent, outcomeIndex, amount)
+			)
+		);
 	}
 
 	function _delegateMigrationCall(address delegate, bytes memory callData) private returns (bytes memory returnData) {
@@ -439,11 +443,15 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 parentForkTime = zoltar.getForkTime(parent.universeId());
 		require(parentForkTime > 0 && block.timestamp > parentForkTime + SecurityPoolUtils.MIGRATION_TIME, 'Active');
 		data = _getForkData(securityPool);
+		parentData = _getForkData(parent);
+		uint256 requiredRep = _getPoolAuctionableRepAtFork(parentData);
+		_delegateEnsureChildPoolRepSplit(parent, data.outcomeIndex, requiredRep);
+		// Keep this invariant guard data-free to stay below the EVM initcode limit.
+		if (securityPool.repToken().balanceOf(address(securityPool)) < requiredRep) revert();
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
 		securityPool.setTotalShares(parent.shareTokenSupply());
-		parentData = _getForkData(parent);
 		parentCollateral =
 			parentData.ownFork ? parentData.ownForkCollateralAtFork : parent.completeSetCollateralAmount();
 	}
