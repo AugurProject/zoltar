@@ -7357,6 +7357,14 @@
 							<code>totalRepPurchased</code> stays zero, and every bid refunds.
 						</li>
 						<li>
+							Under weak demand, a lone qualifying bid can still be the only
+							valid winning prefix. In that case, the contract allocates the
+							full REP cap to that bidder pro rata by ETH at the synthetic
+							underfunded price, and the forker later maps that purchased REP
+							into the corresponding pool-ownership credit and auctioned
+							allowance share for the child branch.
+						</li>
+						<li>
 							Normal clearing carries division dust through
 							<code>clearingRemainder</code>; underfunded clearing reuses that
 							remainder while dividing the full REP cap across winning ETH.
@@ -7376,7 +7384,8 @@
 						price, and the winner set is the finalized tick prefix rather than
 						a standalone threshold-price cutoff. The adjustable example above
 						shows how weak demand can still sell the full REP cap once the
-						winner set is fixed.
+						winner set is fixed, including the case where that winner set is
+						only a minimum qualifying bid.
 					</div>
 					<p>
 						The <code>Binding condition</code> output reports one of four

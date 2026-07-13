@@ -32,9 +32,11 @@
 					child pool may inherit the correct share balances, vault state, and
 					REP-backed obligations while still lacking enough ETH to reopen cleanly.
 					When that happens, the protocol sells child-universe REP for ETH through a
-					truth auction, using the proceeds to restore the collateral shortfall and
-					make open-interest holders whole. The auction repairs the pool's funding
-					gap; it does not determine which branch is true.
+					truth auction, applying the proceeds toward the collateral shortfall.
+					When demand reaches the ETH target, open-interest holders can be made
+					whole; weak demand can leave only a partial repair even though the auction
+					still clears the full REP cap. The auction repairs the pool's funding gap;
+					it does not determine which branch is true.
 				</p>
 
 				<p>
@@ -159,7 +161,9 @@
 						</td>
 						<td>
 							Supplies ETH demand for the repair. The minimum bid is
-							<code>max(ethRaiseCap / 100000, 1 wei)</code>.
+							<code>max(ethRaiseCap / 100000, 1 wei)</code>. Under weak demand,
+							even a minimum qualifying bid can be enough to join the finalized
+							winner set that buys the full REP cap.
 						</td>
 					</tr>
 
@@ -289,6 +293,21 @@
 					REP cap bind at that lower tick, the contract does not stay
 					underfunded with a narrower winner set. It switches into the normal
 					funded-clearing branch at that lower tick instead.
+				</p>
+				<p>
+					This includes the extreme unattended-auction case. If the only
+					qualifying demand is a single minimum bid, and that bid still forms a
+					valid winning prefix, the auction intentionally allocates the entire
+					<code>maxRepBeingSold</code> amount to that winner at the synthetic
+					underfunded price. Finalization records the full
+					<code>totalRepPurchased</code> amount and the auction ownership
+					conversion rate. When
+					<code>SecurityPoolForker.claimAuctionProceeds</code> later settles the
+					winning bid, the forker maps that purchased REP into the
+					corresponding pool-ownership credit and auctioned allowance share for
+					the child branch. This mechanism prefers finalizing the auction path
+					with the available winning ETH and selling the committed REP cap,
+					rather than leaving the REP sale partially unsold.
 				</p>
 				<table>
 					<thead>
