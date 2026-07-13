@@ -192,9 +192,17 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
 	}
 
-	function _forkOccurredBeforeEscalationSettled(EscalationGame escalationGame) private view returns (bool) {
+	function _forkOccurredBeforeEscalationSettled(
+		EscalationGame escalationGame,
+		uint256 forkTime
+	) private view returns (bool) {
 		if (address(escalationGame) == address(0x0)) return false;
-		return escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None;
+		// SecurityPool.isOperational prevents creating or funding a game after the universe fork.
+		// The current unresolved check therefore preserves pre-existing non-decision games;
+		// a game finalized before the fork fails both this check and the fork-time end-date check.
+		return
+			escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None ||
+			escalationGame.getEscalationGameEndDate() >= forkTime;
 	}
 
 	function _getEscalationElapsedAtFork(
@@ -224,7 +232,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		EscalationGame escalationGame,
 		uint256 forkTime
 	) private {
-		if (!_forkOccurredBeforeEscalationSettled(escalationGame)) return;
+		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
 		data.unresolvedEscalationAtFork = true;
 		data.escalationStartBondAtFork = escalationGame.startBond();
 		data.escalationNonDecisionThresholdAtFork = escalationGame.nonDecisionThreshold();
@@ -245,8 +253,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		require(securityPool.systemState() != SystemState.PoolForked, 'Already forked');
 		require(securityPool.systemState() == SystemState.Operational, 'Not operational');
 		require(
-			address(escalationGame) == address(0x0) ||
-				escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None,
+			address(escalationGame) == address(0x0) || _forkOccurredBeforeEscalationSettled(escalationGame, forkTime),
 			'Resolved'
 		);
 		data = forkDataByPool[securityPool];
