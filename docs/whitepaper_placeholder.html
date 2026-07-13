@@ -376,7 +376,7 @@
 								operational again
 							</text>
 						</svg>
-						<p class="diagram-caption">
+						<p class="diagram-caption" data-liquidation-summary="normal-plus-full-close">
 							<span class="figure-label">Lifecycle Flow</span>Placeholder tries
 							to settle locally first. A fork is the recovery path when local
 							escalation reaches non-decision.
@@ -2138,32 +2138,48 @@
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Liquidation Transfer</span>Liquidation
-							moves snapshot-sized debt to the caller vault and seizes unlocked
-							target REP at the configured liquidation bonus.
+							moves snapshot-sized debt to the caller vault and normally seizes
+							unlocked target REP at the configured liquidation bonus. Full
+							target-debt closes can instead sweep current unlocked REP when the
+							fixed-bonus amount would consume all ownership or leave forbidden
+							REP dust.
 						</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-liquidation-transfer">
 						<math
 							display="block"
-							aria-label="rep to move equals the ceiling of debt moved times current REP per ETH price times one plus the liquidation bonus divided by price precision"
-							data-source="repToMove = ceil(debtToMove \cdot currentPrice \cdot (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION \cdot BPS_DENOMINATOR))"
+							aria-label="liquidation first computes the base fixed-bonus REP amount, then full target-debt closes can override the final REP seized when ownership rounding would otherwise leave forbidden REP dust"
+							data-source="computedRepToMove = ceil(debtToMove \cdot currentPrice \cdot (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION \cdot BPS_DENOMINATOR)); repToMove = currentTargetUnlockedRep on the full-close dust override branch; otherwise computedRepToMove"
 						>
-							<mrow>
-								<mi>repToMove</mi>
-								<mo>=</mo>
-								<mi>ceil</mi>
-								<mo>(</mo>
-								<mfrac>
-									<mrow><mi>debtToMove</mi><mo>&#x22C5;</mo><mi>currentPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
-									<mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
-								</mfrac>
-								<mo>)</mo>
-							</mrow>
+							<mtable>
+								<mtr>
+									<mtd><mi>computedRepToMove</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd>
+										<mi>ceil</mi>
+										<mo>(</mo>
+										<mfrac>
+											<mrow><mi>debtToMove</mi><mo>&#x22C5;</mo><mi>currentPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
+											<mrow><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
+										</mfrac>
+										<mo>)</mo>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>repToMove</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mtext>currentTargetUnlockedRep on the full-close dust override branch; otherwise computedRepToMove</mtext></mtd>
+								</mtr>
+							</mtable>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Liquidation Transfer</span>The caller
 							receives REP priced from the executed debt chunk plus the fixed
-							liquidation bonus.
+							liquidation bonus. When a liquidation clears the target's full
+							staged allowance and the fixed-bonus seizure would consume all
+							current unlocked REP or leave less than
+							<code>MIN_REP_DEPOSIT</code>, the contract instead seizes the
+							target's full current unlocked REP and force-closes the vault.
 						</p>
 					</div>
 					<p>
