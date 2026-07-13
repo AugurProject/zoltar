@@ -129,7 +129,7 @@ export async function writeMainnetDeploymentManifest(): Promise<void> {
 	await writeManifest(await loadComputedManifest())
 }
 
-export async function assertMainnetDeploymentManifestFresh(): Promise<void> {
+export async function warnIfMainnetDeploymentManifestStale(): Promise<void> {
 	const expectedManifest = await readManifest()
 	const computedManifest = await loadComputedManifest()
 	const expected = normalizeManifest(expectedManifest)
@@ -146,7 +146,7 @@ async function main() {
 		return
 	}
 
-	await assertMainnetDeploymentManifestFresh()
+	await warnIfMainnetDeploymentManifestStale()
 }
 
 const currentScriptPath = url.fileURLToPath(import.meta.url)
