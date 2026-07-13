@@ -575,12 +575,12 @@ contract SecurityPool is ISecurityPool {
 		}
 		if (
 			maxDebtToMove < snapshotTargetAllowance &&
-			snapshotTargetAllowance - maxDebtToMove < SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
+			snapshotTargetAllowance - maxDebtToMove <= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
 		) {
 			maxDebtToMove =
 				snapshotTargetAllowance > SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
 					? snapshotTargetAllowance - SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
-					: 0;
+					: snapshotTargetAllowance;
 		}
 		uint256 debtToMove = debtAmount > maxDebtToMove ? maxDebtToMove : debtAmount;
 		require(debtToMove > 0, 'No liq');
@@ -595,11 +595,21 @@ contract SecurityPool is ISecurityPool {
 		) {
 			repToMove += 1;
 		}
+		uint256 ownershipToMove = repToPoolOwnership(repToMove);
+		if (debtToMove == snapshotTargetAllowance) {
+			uint256 currentTargetOwnership = securityVaults[targetVaultAddress].poolOwnership;
+			if (
+				ownershipToMove >= currentTargetOwnership ||
+				poolOwnershipToRep(currentTargetOwnership - ownershipToMove) < SecurityPoolUtils.MIN_REP_DEPOSIT
+			) {
+				repToMove = poolOwnershipToRep(currentTargetOwnership);
+				ownershipToMove = currentTargetOwnership;
+			}
+		}
 		require(
 			debtToMove * securityMultiplier * repEthPrice > repToMove * SecurityPoolUtils.PRICE_PRECISION,
 			'No gain'
 		);
-		uint256 ownershipToMove = repToPoolOwnership(repToMove);
 		require(
 			(securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <=
 				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) *
@@ -669,7 +679,7 @@ contract SecurityPool is ISecurityPool {
 		);
 		_requirePoolAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice);
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, completeSetCollateralAmount);
-		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond minimum');
+		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond min');
 		_syncActiveVault(callerVault);
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount, totalSecurityBondAllowance);
 		updateRetentionRate();
@@ -768,7 +778,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
-		require(!awaitingForkContinuation, 'Awaiting fork continuation');
+		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'Question active');
