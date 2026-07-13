@@ -5363,17 +5363,21 @@
 						recursively along with Zoltar universes.
 					</p>
 					<p>
-						For example, suppose a security pool is escalating the Market Weather
-						question in the Genesis universe. Before that escalation resolves, a caller
-						invokes <code>Zoltar.forkUniverse</code> with an unrelated ended Governance
-						Upgrade question, causing Zoltar to fork the Genesis universe. The pool's
-						unresolved Market Weather escalation migrates into
-						selected Governance Upgrade child universes as paused continuation games.
-						After one continuation resumes, it still disputes Market Weather. If it
-						reaches non-decision, a caller can invoke the security-pool fork path, causing
-						Zoltar to fork that Governance Upgrade child universe using Market Weather.
-						The first fork's branches encode Governance Upgrade outcomes; the recursive
-						fork's branches encode Market Weather outcomes.
+						For example, suppose the Genesis universe contains two ended questions: “Did
+						Helsinki record a temperature of at least 30 °C on August 1, 2030?” and “Did
+						the Atlas protocol upgrade activate by July 1, 2031?” A security pool is still
+						escalating the Helsinki-temperature question. Before that escalation resolves,
+						a caller invokes <code>Zoltar.forkUniverse</code> with the unrelated, already
+						ended Atlas-upgrade question, causing Zoltar to fork the Genesis universe. Each
+						resulting child universe represents one possible answer to the Atlas-upgrade
+						question. The pool's unresolved Helsinki-temperature escalation migrates into
+						selected child universes as separate paused continuation games, one in each
+						selected child universe. After a continuation resumes, it still disputes the
+						Helsinki-temperature question. If it reaches non-decision, a caller can invoke
+						the security-pool fork path, causing Zoltar to fork that child universe again.
+						The first fork therefore creates branches for the possible answers to the
+						unrelated Atlas-upgrade question; the recursive fork creates branches for the
+						possible answers to the pool's original Helsinki-temperature question.
 					</p>
 					<figure class="diagram" id="fig-placeholder-recursive-continuation">
 						<svg
@@ -5385,8 +5389,10 @@
 								Recursive fork-continuation flow
 							</title>
 							<desc id="recursive-desc">
-								An unresolved escalation game can fork, initialize several child
-								continuation games, and those child games can fork again.
+								A caller initiates a Zoltar fork for a universe containing an unresolved
+								escalation, creating child continuation games. If a resumed continuation
+								reaches non-decision, a caller can invoke the security-pool fork path and
+								Zoltar forks that child universe again.
 							</desc>
 							<defs>
 								<marker
