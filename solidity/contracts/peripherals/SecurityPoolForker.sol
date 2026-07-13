@@ -192,9 +192,18 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
 	}
 
-	function _forkOccurredBeforeEscalationSettled(EscalationGame escalationGame) private view returns (bool) {
+	function _forkOccurredBeforeEscalationSettled(
+		EscalationGame escalationGame,
+		uint256 forkTime
+	) private view returns (bool) {
 		if (address(escalationGame) == address(0x0)) return false;
-		return escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None;
+		uint256 elapsedAtFork = _getEscalationElapsedAtFork(escalationGame, forkTime);
+		uint256 forkCost = elapsedAtFork == 0 ? 0 : escalationGame.computeIterativeAttritionCost(elapsedAtFork);
+		// After a universe fork, pool guards prevent escalation balance mutations. Attrition can
+		// only move a game from unresolved to its stable current resolution.
+		return
+			escalationGame.getBindingCapital() >= forkCost ||
+			escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	function _getEscalationElapsedAtFork(
@@ -224,7 +233,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		EscalationGame escalationGame,
 		uint256 forkTime
 	) private {
-		if (!_forkOccurredBeforeEscalationSettled(escalationGame)) return;
+		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
 		data.unresolvedEscalationAtFork = true;
 		data.escalationStartBondAtFork = escalationGame.startBond();
 		data.escalationNonDecisionThresholdAtFork = escalationGame.nonDecisionThreshold();
@@ -245,8 +254,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		require(securityPool.systemState() != SystemState.PoolForked, 'Already forked');
 		require(securityPool.systemState() == SystemState.Operational, 'Not operational');
 		require(
-			address(escalationGame) == address(0x0) ||
-				escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None,
+			address(escalationGame) == address(0x0) || _forkOccurredBeforeEscalationSettled(escalationGame, forkTime),
 			'Resolved'
 		);
 		data = forkDataByPool[securityPool];
