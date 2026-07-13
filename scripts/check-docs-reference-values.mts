@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
+const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/whitepaper_zoltar.html', 'utf8')
 const whitepaperPlaceholder = await readFile('docs/whitepaper_placeholder.html', 'utf8')
 const bytecodeSnapshot = readBytecodeSnapshot(await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8'))
@@ -18,6 +19,7 @@ assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - 
 assertContinuationIdentifierExplanation()
 assertZoltarForkDepths()
 assertCoordinatorRecoveryBranch()
+assertLiquidationFullCloseDocs()
 
 function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
@@ -69,6 +71,33 @@ function assertCoordinatorRecoveryBranch(): void {
 	]) {
 		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
+}
+
+function assertLiquidationFullCloseDocs(): void {
+	const normalizedLiquidation = liquidationHtml.replaceAll(/\s+/g, ' ')
+	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+
+	for (const documentedClaim of [
+		'repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? floor((snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0',
+		'targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt)',
+		'targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor',
+		'computedOwnershipToMove = repToPoolOwnership(computedRepToMove)',
+		'repToMove = debtToMove != snapshotTargetAllowanceEth ? computedRepToMove : computedOwnershipToMove >= currentTargetOwnership ? currentTargetUnlockedRep : poolOwnershipToRep(currentTargetOwnership - computedOwnershipToMove) < MIN_REP_DEPOSIT ? currentTargetUnlockedRep : computedRepToMove',
+	]) {
+		assert.ok(normalizedLiquidation.includes(documentedClaim), `Missing liquidation full-close documentation claim: ${documentedClaim}`)
+	}
+	for (const marker of ['data-liquidation-note="snapshot-queue-behavior"', 'data-liquidation-note="snapshot-cap-promotion"', 'data-liquidation-note="variable-legend"', 'data-liquidation-case="minimum-size-full-close"', 'data-liquidation-case="queued-topup-no-gain"']) {
+		assert.ok(liquidationHtml.includes(marker), `Missing liquidation documentation marker: ${marker}`)
+	}
+
+	for (const documentedClaim of ["When a liquidation clears the target's full staged allowance", 'would consume all current unlocked REP or leave less than <code>MIN_REP_DEPOSIT</code>', "the contract instead seizes the target's full current unlocked REP and force-closes the vault."]) {
+		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing whitepaper liquidation full-close documentation claim: ${documentedClaim}`)
+	}
+	assert.ok(
+		normalizedPlaceholder.includes('computedRepToMove = ceil(debtToMove \\cdot currentPrice \\cdot (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION \\cdot BPS_DENOMINATOR)); repToMove = currentTargetUnlockedRep on the full-close dust override branch; otherwise computedRepToMove'),
+		'whitepaper placeholder liquidation equation must mention the full-close override',
+	)
+	assert.ok(whitepaperPlaceholder.includes('data-liquidation-summary="normal-plus-full-close"'), 'whitepaper placeholder liquidation diagram caption must be tagged for the normal-path plus full-close summary')
 }
 
 function assertSimpleByteRow(label: string, expectedValue: string): void {

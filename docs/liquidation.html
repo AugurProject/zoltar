@@ -10,14 +10,14 @@
 		<main>
 			<header>
 				<h1>Liquidation Design</h1>
-				<p>
+				<p data-liquidation-note="snapshot-queue-behavior">
 					A liquidation moves unsafe security-bond allowance from an
 					undercollateralized target vault to a non-liquidatable liquidator
 					vault. Liquidation is punitive: it moves debt to the liquidator and
 					seizes unlocked REP from the target vault at a bonus-priced exchange
 					rate.
 				</p>
-				<p>
+				<p data-liquidation-note="snapshot-cap-promotion">
 					The purpose of liquidation is explicit: punish the vault that let its
 					backing fall below the required threshold, reward the liquidator that
 					takes on the unsafe debt, and move the system into a healthier state.
@@ -102,8 +102,38 @@
 				</div>
 				<p>
 					The contract snapshots the target vault when liquidation is queued.
-					Execution reuses that snapshot, so adding REP later cannot block the
-					pending liquidation.
+					Execution reuses that snapshot for the initial debt-cap and stale-data
+					checks, so adding REP later cannot make the liquidation stale by
+					itself. A later top-up can still make a full-close sweep fail the
+					strict <code>No gain</code> check if the current unlocked REP grows too
+					large relative to the queued debt.
+				</p>
+				<h3>Why Adding REP Cannot Cure a Pending Liquidation</h3>
+				<p>
+					Queueing preserves the liquidator's opportunity to execute using the
+					target's queue-time state, subject to the execution gates below. A later
+					REP deposit alone does not make that snapshot stale. Decreasing the
+					target's ownership or changing its allowance does. The pending
+					liquidation remains bounded by the allowance and ownership captured at
+					queue time, so a later REP deposit cannot increase the debt or REP that
+					the liquidator may move under that snapshot.
+				</p>
+				<p>
+					This rule preserves the incentive to pay for and trigger a fresh oracle
+					report. If a target could wait for someone else to fund price discovery,
+					then add REP and cancel the liquidation before settlement, vault owners
+					would have an incentive to keep less backing and use pending
+					liquidations as free warnings. Liquidators would bear the oracle cost
+					without a reliable chance to earn the liquidation bonus, so rational
+					liquidators could stop initiating the reports that make the system's
+					solvency checks live.
+				</p>
+				<p>
+					For vault owners, the practical consequence is that adding REP can
+					prevent or limit future liquidations, but it does not cancel a
+					liquidation that was validly queued already. Vaults should maintain
+					sufficient backing before an operation is staged rather than treating
+					the oracle settlement window as a cure period.
 				</p>
 				<h3>Execution Gates</h3>
 				<p>
@@ -177,10 +207,10 @@
 					</tbody>
 				</table>
 				<div class="equation" id="eq-liquidation-rep-penalty">
-					<math display="block" aria-label="rep seized equals ceiling of debt moved times REP per ETH price times one plus the liquidation bonus divided by price precision" data-source="repToMove = ceil(debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR))">
+					<math display="block" aria-label="liquidation first computes the fixed-bonus REP seizure and its ownership conversion, then applies an explicit full-close branch that sweeps all current unlocked target REP when the computed ownership move would consume all current ownership or leave less than the minimum REP deposit" data-source="computedRepToMove = ceil(debtToMove * currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION * BPS_DENOMINATOR)); computedOwnershipToMove = repToPoolOwnership(computedRepToMove); repToMove = debtToMove != snapshotTargetAllowanceEth ? computedRepToMove : computedOwnershipToMove >= currentTargetOwnership ? currentTargetUnlockedRep : poolOwnershipToRep(currentTargetOwnership - computedOwnershipToMove) < MIN_REP_DEPOSIT ? currentTargetUnlockedRep : computedRepToMove">
 						<mtable>
 							<mtr>
-								<mtd><mi>repToMove</mi></mtd>
+								<mtd><mi>computedRepToMove</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
 									<mi>ceil</mi>
@@ -192,36 +222,74 @@
 									<mo>)</mo>
 								</mtd>
 							</mtr>
+							<mtr>
+								<mtd><mi>computedOwnershipToMove</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>repToPoolOwnership</mi><mo>(</mo><mi>computedRepToMove</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>repToMove</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd>
+									<mi>if</mi><mo>&#xA0;</mo><mi>debtToMove</mi><mo>&#x2260;</mo><mi>snapshotTargetAllowanceEth</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>computedRepToMove</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>else if</mi><mo>&#xA0;</mo><mi>computedOwnershipToMove</mi><mo>&#x2265;</mo><mi>currentTargetOwnership</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>currentTargetUnlockedRep</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>else if</mi><mo>&#xA0;</mo><mi>poolOwnershipToRep</mi><mo>(</mo><mi>currentTargetOwnership</mi><mo>-</mo><mi>computedOwnershipToMove</mi><mo>)</mo><mo>&lt;</mo><mi>MIN_REP_DEPOSIT</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>currentTargetUnlockedRep</mi>
+									<mo>,</mo>
+									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mi>computedRepToMove</mi>
+								</mtd>
+							</mtr>
 						</mtable>
 					</math>
 						<p class="equation-caption">
 							<span class="equation-label">REP Penalty</span>The liquidator
-							receives REP worth the liquidated debt plus a bonus. This computed
-							<code>repToMove</code> is the penalty and event amount; the pool
-							moves the corresponding ownership units, so displayed REP claims can
-							differ by ownership-rounding dust.
+							normally receives REP worth the liquidated debt plus a bonus. When a
+							liquidation clears the target's entire staged allowance and the
+							ownership conversion of that fixed-bonus seizure would consume all
+							current target ownership or leave forbidden REP dust, the contract
+							instead seizes the target's full current unlocked REP. Sizing uses
+							the queued snapshot allowance, while the final full-close sweep uses
+							current target ownership. That override also applies if the target
+							topped up REP after queueing the liquidation.
 						</p>
 					</div>
 				<p>
-					The maximum executable debt chunk is bounded by the target's unlocked
-					REP. The contract will not liquidate away the last
-					<code>MIN_REP_DEPOSIT</code> unless a separate flow closes the vault
-					fully.
+					The contract first computes an initial REP-bound cap from the target's
+					queued snapshot REP, then applies the debt-floor clamp, and only after
+					that can a full-close liquidation sweep current ownership. Partial
+					liquidations preserve the target's final
+					<code>MIN_REP_DEPOSIT</code>, but a full-close liquidation may consume
+					all current unlocked REP when it also clears all staged target debt.
+				</p>
+				<p class="detail" data-liquidation-note="variable-legend">
+					Variable legend:
+					<code>snapshotTargetUnlockedRep</code> and
+					<code>snapshotTargetAllowanceEth</code> are the queued liquidation
+					inputs; <code>currentTargetOwnership</code> and
+					<code>currentTargetUnlockedRep</code> are read at execution time for
+					the final ownership sweep.
 				</p>
 				<div class="equation" id="eq-liquidation-dust-rounding">
-					<math display="block" aria-label="rep-bounded debt cap equals floor of target unlocked REP minus minimum REP deposit times price precision times basis-point denominator divided by current REP per ETH price times basis-point denominator plus liquidation bonus; target cap before debt floor equals the smaller of target allowance and that REP bound; target cap after debt floor clamps down again when the remainder would be forbidden target debt dust; debt to move equals the minimum of requested debt and the executable maximum" data-source="repBoundDebt = targetUnlockedRep > MIN_REP_DEPOSIT ? floor((targetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0; targetCapBeforeDebtFloor = min(targetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < targetAllowanceEth - targetCapBeforeDebtFloor < MIN_SECURITY_BOND_DEBT ? (targetAllowanceEth > MIN_SECURITY_BOND_DEBT ? targetAllowanceEth - MIN_SECURITY_BOND_DEBT : 0) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)">
+					<math display="block" aria-label="rep-bounded debt cap equals floor of snapshot target unlocked REP minus minimum REP deposit times price precision times basis-point denominator divided by current REP per ETH price times basis-point denominator plus liquidation bonus when the snapshot REP is above the minimum and zero otherwise; target cap before debt floor equals the smaller of the queued snapshot allowance and that REP bound; when the capped remainder is nonzero and at or below the debt floor, leave exactly the minimum debt floor if the queued snapshot allowance is above it, otherwise execute the whole minimum-sized allowance; debt to move equals the minimum of requested debt and the executable maximum" data-source="repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? floor((snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0; targetCapBeforeDebtFloor = min(snapshotTargetAllowanceEth, repBoundDebt); targetCapAfterDebtFloor = 0 < snapshotTargetAllowanceEth - targetCapBeforeDebtFloor <= MIN_SECURITY_BOND_DEBT ? (snapshotTargetAllowanceEth > MIN_SECURITY_BOND_DEBT ? snapshotTargetAllowanceEth - MIN_SECURITY_BOND_DEBT : snapshotTargetAllowanceEth) : targetCapBeforeDebtFloor; debtToMove = min(requestedDebt, targetCapAfterDebtFloor)">
 						<mtable>
 							<mtr>
 								<mtd><mi>repBoundDebt</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mi>if</mi><mo>&#xA0;</mo><mi>targetUnlockedRep</mi><mo>&gt;</mo><mi>MIN_REP_DEPOSIT</mi>
+									<mi>if</mi><mo>&#xA0;</mo><mi>snapshotTargetUnlockedRep</mi><mo>&gt;</mo><mi>MIN_REP_DEPOSIT</mi>
 									<mo>,</mo>
 									<mo>&#xA0;</mo>
 									<mi>floor</mi>
 									<mo>(</mo>
 									<mfrac>
-										<mrow><mo>(</mo><mi>targetUnlockedRep</mi><mo>-</mo><mi>MIN_REP_DEPOSIT</mi><mo>)</mo><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
+										<mrow><mo>(</mo><mi>snapshotTargetUnlockedRep</mi><mo>-</mo><mi>MIN_REP_DEPOSIT</mi><mo>)</mo><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mi>BPS_DENOMINATOR</mi></mrow>
 										<mrow><mi>currentRepPerEthPrice</mi><mo>&#x22C5;</mo><mo>(</mo><mi>BPS_DENOMINATOR</mi><mo>+</mo><mi>liquidationRepBonusBps</mi><mo>)</mo></mrow>
 									</mfrac>
 									<mo>)</mo>
@@ -231,16 +299,16 @@
 							<mtr>
 								<mtd><mi>targetCapBeforeDebtFloor</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>min</mi><mo>(</mo><mi>targetAllowanceEth</mi><mo>,</mo><mi>repBoundDebt</mi><mo>)</mo></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>snapshotTargetAllowanceEth</mi><mo>,</mo><mi>repBoundDebt</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>targetCapAfterDebtFloor</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mi>if</mi><mo>&#xA0;</mo><mn>0</mn><mo>&lt;</mo><mi>targetAllowanceEth</mi><mo>-</mo><mi>targetCapBeforeDebtFloor</mi><mo>&lt;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
+									<mi>if</mi><mo>&#xA0;</mo><mn>0</mn><mo>&lt;</mo><mi>snapshotTargetAllowanceEth</mi><mo>-</mo><mi>targetCapBeforeDebtFloor</mi><mo>&#x2264;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
 									<mo>,</mo>
-									<mo>&#xA0;</mo><mi>targetAllowanceEth</mi><mo>&gt;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
-									<mo>?</mo><mi>targetAllowanceEth</mi><mo>-</mo><mi>MIN_SECURITY_BOND_DEBT</mi><mo>:</mo><mn>0</mn>
+									<mo>&#xA0;</mo><mi>snapshotTargetAllowanceEth</mi><mo>&gt;</mo><mi>MIN_SECURITY_BOND_DEBT</mi>
+									<mo>?</mo><mi>snapshotTargetAllowanceEth</mi><mo>-</mo><mi>MIN_SECURITY_BOND_DEBT</mi><mo>:</mo><mi>snapshotTargetAllowanceEth</mi>
 									<mo>,</mo>
 									<mo>&#xA0;</mo><mi>else</mi><mo>&#xA0;</mo><mi>targetCapBeforeDebtFloor</mi>
 								</mtd>
@@ -254,8 +322,13 @@
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Executable Bound</span>The requested
-						debt chunk is capped by the target's unlocked REP and then checked
-						against the minimum debt floors.
+						debt chunk is capped by the target's queued snapshot REP and then
+						checked against the minimum debt floors. That final debt-floor clamp
+						leaves exactly <code>MIN_SECURITY_BOND_DEBT</code> when the target
+						allowance starts above the floor, but executes the whole allowance
+						when the target itself is already at the minimum-sized
+						<code>1 ETH</code> debt floor. The later full-close sweep can then
+						consume current target ownership.
 					</p>
 				</div>
 				<div class="equation" id="eq-liquidation-health-guard">
@@ -321,14 +394,14 @@
 				</p>
 				<table>
 					<thead>
-						<tr>
+						<tr data-liquidation-case="minimum-size-full-close">
 							<th>Case</th>
 							<th>Inputs</th>
 							<th>Result</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
+						<tr data-liquidation-case="queued-topup-no-gain">
 							<td>Penalty liquidation</td>
 							<td><code>targetUnlockedRep = 1000 REP</code>, <code>targetAllowanceEth = 75 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 10 REP/ETH</code></td>
 							<td>
@@ -371,6 +444,34 @@
 								non-zero allowance below <code>MIN_SECURITY_BOND_DEBT</code>, so
 								the pool rejects it. In that setup, no punitive liquidation chunk
 								is executable.
+							</td>
+						</tr>
+						<tr>
+							<td>Minimum-size full close</td>
+							<td><code>targetUnlockedRep = 10 REP</code>, <code>targetAllowanceEth = 1 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 6.1 REP/ETH</code></td>
+							<td>
+								The target is unsafe because
+								<code>1 * 2 * 6.1 = 12.2 REP</code> is above its
+								<code>10 REP</code> backing. The REP-bound chunk is
+								<code>0 ETH</code>, but the debt-floor clamp upgrades the
+								executable chunk to a full <code>1 ETH</code> close because the
+								remainder would be exactly
+								<code>MIN_SECURITY_BOND_DEBT</code>. The fixed-bonus penalty
+								would be <code>6.405 REP</code>, which would leave forbidden REP
+								dust, so the liquidation seizes the target's full
+								<code>10 REP</code> instead and closes the vault.
+							</td>
+						</tr>
+						<tr>
+							<td>Queued top-up can remove the gain</td>
+							<td><code>snapshotTargetUnlockedRep = 10 REP</code>, <code>snapshotTargetAllowanceEth = 1 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 6.1 REP/ETH</code>, target later adds <code>3 REP</code></td>
+							<td>
+								The staged debt still sizes from the <code>10 REP / 1 ETH</code>
+								snapshot, but the full-close sweep now evaluates the target's
+								current <code>13 REP</code> ownership. That would make
+								<code>1 * 2 * 6.1 = 12.2 REP</code> not strictly greater than the
+								seized <code>13 REP</code>, so the queued liquidation fails
+								<code>No gain</code> and is consumed without moving debt or REP.
 							</td>
 						</tr>
 					</tbody>
@@ -497,19 +598,26 @@
 			const MIN_REP_DEPOSIT = 10
 			const MIN_SECURITY_BOND_DEBT = 1
 
-			function getRepToMove(debt, price) {
+			function getComputedRepToMove(debt, price) {
 				return debt * price * (1 + LIQUIDATION_REP_BONUS)
+			}
+
+			function getRepToMove({ debtToMove, price, targetAllowance, targetUnlockedRep }) {
+				const computedRepToMove = getComputedRepToMove(debtToMove, price)
+				return debtToMove === targetAllowance && (computedRepToMove >= targetUnlockedRep || targetUnlockedRep - computedRepToMove < MIN_REP_DEPOSIT)
+					? targetUnlockedRep
+					: computedRepToMove
 			}
 
 			function getLiquidationCap({ debt, multiplier, price, rep }) {
 				if (multiplier <= 1) return 0
 				if (debt * multiplier * price <= rep) return 0
-				if (rep <= MIN_REP_DEPOSIT) return 0
-				let cap = (rep - MIN_REP_DEPOSIT) / (price * (1 + LIQUIDATION_REP_BONUS))
+				let cap = 0
+				if (rep > MIN_REP_DEPOSIT) cap = (rep - MIN_REP_DEPOSIT) / (price * (1 + LIQUIDATION_REP_BONUS))
 				if (cap > debt) cap = debt
 				const remaining = debt - cap
-				if (remaining > 0 && remaining < MIN_SECURITY_BOND_DEBT) cap = Math.max(0, debt - MIN_SECURITY_BOND_DEBT)
-				if (cap > 0 && cap * multiplier * price <= getRepToMove(cap, price)) return 0
+				if (remaining > 0 && remaining <= MIN_SECURITY_BOND_DEBT) cap = debt > MIN_SECURITY_BOND_DEBT ? debt - MIN_SECURITY_BOND_DEBT : debt
+				if (cap > 0 && cap * multiplier * price <= getRepToMove({ debtToMove: cap, price, targetAllowance: debt, targetUnlockedRep: rep })) return 0
 				return cap
 			}
 
@@ -522,7 +630,7 @@
 				const shortfall = Math.max(0, required - rep)
 				const cap = getLiquidationCap({ debt, multiplier, price, rep })
 				const postDebt = debt - cap
-				const repMoved = getRepToMove(cap, price)
+				const repMoved = getRepToMove({ debtToMove: cap, price, targetAllowance: debt, targetUnlockedRep: rep })
 
 				document.querySelector('[data-liquidation-value="rep"]').textContent = `${rep} REP`
 				document.querySelector('[data-liquidation-value="debt"]').textContent = `${debt} ETH`
@@ -549,7 +657,7 @@
 				const afterFirst = {
 					...base,
 					debt: base.debt - firstMoved,
-					rep: base.rep - getRepToMove(firstMoved, base.price),
+					rep: base.rep - getRepToMove({ debtToMove: firstMoved, price: base.price, targetAllowance: base.debt, targetUnlockedRep: base.rep }),
 				}
 				const secondMoved = applyCap(afterFirst, second)
 				const twoStepDebt = afterFirst.debt - secondMoved

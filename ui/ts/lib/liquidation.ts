@@ -15,6 +15,11 @@ function improvesTargetHealth(debtToMove: bigint, repToMove: bigint, repPerEthPr
 	return debtToMove * securityMultiplier * repPerEthPrice > repToMove * LIQUIDATION_PRICE_PRECISION
 }
 
+function getRepToMoveForLiquidation(debtToMove: bigint, repPerEthPrice: bigint, targetAllowance: bigint, targetRepDeposit: bigint) {
+	const computedRepToMove = getLiquidationRepToMove(debtToMove, repPerEthPrice)
+	return debtToMove === targetAllowance && (computedRepToMove >= targetRepDeposit || (targetRepDeposit > computedRepToMove && targetRepDeposit - computedRepToMove < MIN_REP_DEPOSIT)) ? targetRepDeposit : computedRepToMove
+}
+
 export function getLiquidationExecutionFailureDetail(errorMessage: string | undefined) {
 	switch (errorMessage) {
 		case 'Target safe':
@@ -51,8 +56,8 @@ export function getMaxLiquidationAmount({ repPerEthPrice, securityMultiplier, ta
 	}
 	if (maxDebtToMove > targetAllowance) maxDebtToMove = targetAllowance
 	const remainingAllowance = targetAllowance - maxDebtToMove
-	if (remainingAllowance !== 0n && remainingAllowance < MIN_SECURITY_BOND_DEBT) {
-		return targetAllowance > MIN_SECURITY_BOND_DEBT ? targetAllowance - MIN_SECURITY_BOND_DEBT : 0n
+	if (remainingAllowance !== 0n && remainingAllowance <= MIN_SECURITY_BOND_DEBT) {
+		return targetAllowance > MIN_SECURITY_BOND_DEBT ? targetAllowance - MIN_SECURITY_BOND_DEBT : targetAllowance
 	}
 	return maxDebtToMove
 }
@@ -104,7 +109,7 @@ export function simulateLiquidation({
 			targetVaultSummary,
 		}) ?? targetAllowance
 	const debtToMove = liquidationAmount < maxDebtToMove ? liquidationAmount : maxDebtToMove
-	const repToMove = getLiquidationRepToMove(debtToMove, repPerEthPrice)
+	const repToMove = getRepToMoveForLiquidation(debtToMove, repPerEthPrice, targetAllowance, targetRepDeposit)
 	const targetAfterRepDeposit = targetRepDeposit - repToMove
 	const targetAfterAllowance = targetAllowance - debtToMove
 	const callerAfterRepDeposit = callerRepDeposit + repToMove
@@ -159,7 +164,7 @@ export function getDeterministicLiquidationFailureReason({
 	const targetMaxDebtToMove = maxDebtToMove === undefined || maxDebtToMove > targetVaultSummary.securityBondAllowance ? targetVaultSummary.securityBondAllowance : maxDebtToMove
 	const debtToMove = liquidationAmount < targetMaxDebtToMove ? liquidationAmount : targetMaxDebtToMove
 	if (debtToMove <= 0n) return UI_STRINGS.liquidationModal.liquidationFailureNoExecutableDebtDetail
-	const repToMove = repPerEthPrice === undefined ? undefined : getLiquidationRepToMove(debtToMove, repPerEthPrice)
+	const repToMove = repPerEthPrice === undefined ? undefined : getRepToMoveForLiquidation(debtToMove, repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare)
 	const targetAfterAllowance = targetVaultSummary.securityBondAllowance - debtToMove
 	const targetAfterRepDeposit = repToMove === undefined ? undefined : targetVaultSummary.repDepositShare - repToMove
 	const callerAfterRepDeposit = (callerVaultSummary?.repDepositShare ?? 0n) + (repToMove ?? 0n)
