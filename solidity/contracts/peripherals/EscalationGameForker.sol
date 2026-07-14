@@ -152,6 +152,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		address vault,
 		uint256 childOutcomeIndex
 	) private returns (bool moreToMigrate) {
+		if (msg.sender != vault) revert();
 		parent.updateVaultFees(vault);
 		ISecurityPool child = _getOrDeployOwnForkMigrationChild(parent, childOutcomeIndex);
 		(uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) = _exportUnresolvedRep(
@@ -206,6 +207,11 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		);
 		_requireContinuationMigrationOpen(child, childEscalationGame);
 		bool childStillMigrating = child.systemState() == SystemState.ForkMigration;
+		// During the migration window this call may move the vault's ordinary child
+		// ownership, so only the vault may make it. Once the child is operational,
+		// anyone may force the remaining carry funding after the deadline; this
+		// prevents an unresolved depositor from pausing the continuation forever.
+		if (childStillMigrating) require(msg.sender == vault);
 		(uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) = _exportUnresolvedRep(
 			parentEscalationGame,
 			vault,

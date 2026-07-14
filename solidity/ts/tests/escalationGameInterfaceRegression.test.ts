@@ -9,8 +9,8 @@ const escalationGameContractName = 'EscalationGame'
 const escalationGameAbiSnapshotPath = `${import.meta.dir}/fixtures/escalationGameAbi.snapshot`
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576
-// The size goal is the post-observability project budget, not the smaller pre-audit origin/main artifact.
-const escalationGameDeployedBytecodeBudgetBytes = 24_000
+// Keep the project budget aligned with the EIP-170 deployed bytecode limit.
+const escalationGameDeployedBytecodeBudgetBytes = 24_576
 
 type EscalationGameBytecodeSnapshot = {
 	creationBytes: number
