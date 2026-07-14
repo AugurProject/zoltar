@@ -9,6 +9,7 @@ import {
 	loadAllSecurityPools,
 	loadEscalationDeposits,
 	loadForkAuctionDetails,
+	loadForkOutcomeMigrationSeedStatus,
 	loadOracleManagerDetails,
 	loadOpenOracleReportSummaries,
 	loadReportingDetails,
@@ -83,6 +84,7 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 		if (request.functionName === 'getVaultCount') return 0n
 		if (request.functionName === 'escalationGame') return escalationGameAddress
 		if (request.functionName === 'getDepositsByOutcomeLength') return 0n
+		if (request.functionName === 'hasPendingUnresolvedEscalationMigration') return false
 		if (request.functionName === 'hasUnexportedLocalDepositRefs') return false
 		if (request.functionName === 'hasUnexportedForkedEscrow') return false
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -131,6 +133,34 @@ function createMockLoaderClient({ getBlock, multicall, readContract }: { getBloc
 }
 
 describe('contracts helpers', () => {
+	test('loads zero-REP destination registration independently from token balances', async () => {
+		const migrationProxyAddress = getAddress('0x00000000000000000000000000000000000000d3')
+		const client = {
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'getChildUniverseId') return 2n
+				if (request.functionName === 'getMigrationProxyAddress') return migrationProxyAddress
+				if (request.functionName === 'isChildOutcomeRegistered') return true
+				if (request.functionName === 'getRepToken') return zeroAddress
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		}
+
+		await expect(
+			loadForkOutcomeMigrationSeedStatus(client, {
+				outcome: 'yes',
+				securityPoolAddress,
+				universeId: 1n,
+			}),
+		).resolves.toEqual({
+			childPoolRepBalance: 0n,
+			childRepToken: undefined,
+			childUniverseId: 2n,
+			migrationProxyAddress,
+			pendingProxyRepBalance: 0n,
+			registered: true,
+		})
+	})
+
 	test('migrateSharesFromUniverse sorts target outcomes before submission without deduplicating', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
@@ -1474,7 +1504,7 @@ describe('contracts helpers', () => {
 		])
 	})
 
-	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
+	test('migrateVaultWithUnresolvedEscalation does not encode a selectable child outcome', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(request => {
@@ -1482,7 +1512,7 @@ describe('contracts helpers', () => {
 			capturedTo = request.to
 		})
 
-		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, vaultAddress, 9n, 'no')
+		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, vaultAddress, 9n)
 
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
@@ -1490,18 +1520,40 @@ describe('contracts helpers', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		if (!Array.isArray(decodedCall.args) || decodedCall.args.length !== 3) throw new Error('Unexpected migrateVaultWithUnresolvedEscalation calldata')
+		if (!Array.isArray(decodedCall.args) || decodedCall.args.length !== 2) throw new Error('Unexpected migrateVaultWithUnresolvedEscalation calldata')
 		const decodedArgs = decodedCall.args
 		expect(decodedCall.functionName).toBe('migrateVaultWithUnresolvedEscalation')
 		expect(decodedArgs[0]).toBe(securityPoolAddress)
 		expect(decodedArgs[1]).toBe(vaultAddress)
-		expect(decodedArgs[2]).toBe(2n)
 		expect(result).toEqual({
 			action: 'migrateUnresolvedEscalation',
 			hash: transactionHash,
 			securityPoolAddress,
 			universeId: 9n,
 		})
+	})
+
+	test('migrateVaultWithUnresolvedEscalation follows the stored destination cursor until every child is funded', async () => {
+		let transactionCount = 0
+		let pendingReadCount = 0
+		const baseClient = createMockWriteClient(() => {
+			transactionCount += 1
+		})
+		const client = {
+			...baseClient,
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'hasPendingUnresolvedEscalationMigration') {
+					pendingReadCount += 1
+					return pendingReadCount === 1
+				}
+				return await baseClient.readContract(request as never)
+			}),
+		}
+
+		await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, vaultAddress, 9n)
+
+		expect(transactionCount).toBe(2)
+		expect(pendingReadCount).toBe(2)
 	})
 
 	test('migrateEscalationDeposits helper keeps deposit indexes as uint256 values', async () => {

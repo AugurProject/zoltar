@@ -453,7 +453,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('The migration window for these unresolved escalation deposits has closed')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('The owner-directed deposit migration window has closed; unresolved fork carry may still be funded from the fork workflow')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {

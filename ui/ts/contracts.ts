@@ -13,7 +13,6 @@ import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './lib/or
 import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
-	peripherals_EscalationGame_EscalationGame,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPool_SecurityPool,
@@ -997,18 +996,27 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		universeId: bigint
 	},
 ) {
-	const childUniverseId = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getChildUniverseId',
-		address: getZoltarAddress(),
-		args: [universeId, BigInt(getReportingOutcomeValue(outcome))],
-	})
-	const migrationProxyAddress = await client.readContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'getMigrationProxyAddress',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
-	})
+	const outcomeIndex = BigInt(getReportingOutcomeValue(outcome))
+	const [childUniverseId, migrationProxyAddress, registered] = await Promise.all([
+		client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getChildUniverseId',
+			address: getZoltarAddress(),
+			args: [universeId, outcomeIndex],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getMigrationProxyAddress',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'isChildOutcomeRegistered',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, outcomeIndex],
+		}),
+	])
 	const childRepToken = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getRepToken',
@@ -1022,7 +1030,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 			childUniverseId,
 			migrationProxyAddress,
 			pendingProxyRepBalance: 0n,
-			seeded: false,
+			registered,
 		}
 	}
 	const pendingProxyRepBalance = await client.readContract({
@@ -1047,7 +1055,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		childUniverseId,
 		migrationProxyAddress,
 		pendingProxyRepBalance,
-		seeded: pendingProxyRepBalance > 0n || childPoolRepBalance > 0n,
+		registered,
 	}
 }
 
@@ -1398,8 +1406,7 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 		}))
 	})
 }
-export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
-	const outcomeIndex = getReportingOutcomeValue(outcome)
+export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(client, 'migrateUnresolvedEscalation', securityPoolAddress, universeId, async () => {
 		let lastHash: Hash | undefined
 		for (let batchIndex = 0; batchIndex < UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT; batchIndex += 1) {
@@ -1407,7 +1414,7 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
+				args: [securityPoolAddress, vaultAddress],
 			}))
 			if (!(await hasPendingUnresolvedEscalationMigration(client, securityPoolAddress, vaultAddress))) return lastHash
 		}
@@ -1416,28 +1423,12 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 }
 
 async function hasPendingUnresolvedEscalationMigration(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddress: Address) {
-	const escalationGame = await client.readContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'escalationGame',
-		args: [],
+	return await client.readContract({
+		address: getInfraContractAddresses().securityPoolForker,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'hasPendingUnresolvedEscalationMigration',
+		args: [securityPoolAddress, vaultAddress],
 	})
-	if (sameAddress(escalationGame, zeroAddress)) return false
-	const [hasUnexportedLocalDepositRefs, hasUnexportedForkedEscrow] = await Promise.all([
-		client.readContract({
-			address: escalationGame,
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'hasUnexportedLocalDepositRefs',
-			args: [vaultAddress],
-		}),
-		client.readContract({
-			address: escalationGame,
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'hasUnexportedForkedEscrow',
-			args: [vaultAddress],
-		}),
-	])
-	return hasUnexportedLocalDepositRefs || hasUnexportedForkedEscrow
 }
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(

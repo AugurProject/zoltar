@@ -45,6 +45,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		forkZoltarWithOwnEscalationGame,
 		claimForkedEscalationDeposits,
 		migrateRepToZoltar,
+		migrateVault,
 		migrateVaultWithUnresolvedEscalation,
 		getEscalationGameOutcomeState,
 		forkUniverse,
@@ -445,11 +446,15 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const parentOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
 		const expectedUnlockedMigratedRep = parentOwnershipDenominator === 0n ? 0n : (parentVaultBeforeMigration.repDepositShare * parentForkBuckets.vaultRepAtFork) / parentOwnershipDenominator
 		const migratedRepBefore = await getMigratedRep(client, yesChildPool)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-		const migratedRepAfter = await getMigratedRep(client, yesChildPool)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
+		const migratedRepAfterEscalation = await getMigratedRep(client, yesChildPool)
 		const childEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
-		strictEqualTypeSafe(migratedRepAfter - migratedRepBefore, expectedUnlockedMigratedRep, 'own-fork unresolved migration should count only unlocked pool REP as migrated REP')
+		strictEqualTypeSafe(migratedRepAfterEscalation, migratedRepBefore, 'fork-wide escalation migration must not choose a child for ordinary vault REP')
 		assert.ok(childEscrow > 0n, 'own-fork unresolved migration should record child escalation escrow without preparation')
+
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const migratedRepAfterVault = await getMigratedRep(client, yesChildPool)
+		strictEqualTypeSafe(migratedRepAfterVault - migratedRepAfterEscalation, expectedUnlockedMigratedRep, 'ordinary vault migration should separately credit unlocked pool REP to the selected child')
 	})
 
 	test('own-fork unresolved escalation resolves to the selected child outcome after maximum escalation time', async () => {
@@ -464,7 +469,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
@@ -516,7 +521,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
@@ -562,7 +567,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			.find(log => log.eventName === 'ClaimForkedEscalationDepositsToWallet')
 		if (claimLog === undefined) throw new Error('ClaimForkedEscalationDepositsToWallet log missing')
 
-		const migrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const migrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
 		const migrationReceipt = await client.getTransactionReceipt({ hash: migrationHash })
 		const exportLog = migrationReceipt.logs
 			.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
@@ -606,8 +611,8 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
@@ -634,7 +639,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const parentNoOutcomeState = await getEscalationGameOutcomeState(client, parentEscalationGame, QuestionOutcome.No)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Invalid)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
 
 		const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
 		const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, securityMultiplier)
@@ -938,7 +943,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 				if (log === undefined) throw new Error('own-fork LocalDepositsExported log missing')
 				return log
 			}
-			const clientMigrationHash = await migrateVaultWithUnresolvedEscalation(client, scenarioPool, client.account.address, QuestionOutcome.Yes)
+			const clientMigrationHash = await migrateVaultWithUnresolvedEscalation(client, scenarioPool, client.account.address)
 			const noTransferExportLog = await decodeNoTransferLocalDepositsExported(clientMigrationHash)
 			strictEqualTypeSafe(noTransferExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'own-fork export log should identify the client vault')
 			strictEqualTypeSafe(noTransferExportLog.args.repReceiver.toLowerCase(), addressString(0n).toLowerCase(), 'own-fork export should not set a REP receiver')
@@ -946,7 +951,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			strictEqualTypeSafe(noTransferExportLog.args.principalToTransfer, clientYesEscalation + forkThreshold, 'own-fork export log should report the consumed unresolved principal')
 			strictEqualTypeSafe(noTransferExportLog.args.exportCursor, 2n, 'own-fork export log should expose the exhausted two-ref cursor')
 			strictEqualTypeSafe(noTransferExportLog.args.transferredRep, false, 'own-fork unresolved export should not transfer parent REP')
-			await migrateVaultWithUnresolvedEscalation(attackerClient, scenarioPool, attackerClient.account.address, QuestionOutcome.Yes)
+			await migrateVaultWithUnresolvedEscalation(attackerClient, scenarioPool, attackerClient.account.address)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesChildPool = getSecurityPoolAddresses(scenarioPool, yesUniverse, scenarioQuestionId, securityMultiplier).securityPool

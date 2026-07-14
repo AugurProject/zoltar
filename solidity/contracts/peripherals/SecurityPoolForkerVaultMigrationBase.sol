@@ -85,10 +85,15 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) {
 			require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
-			require(
-				block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-				'Migration closed'
-			);
+			if (registeredContinuationDeploymentByPool[parent]) {
+				require(childOutcomeRegisteredByPool[parent][outcomeIndex], 'Unregistered continuation');
+			} else {
+				require(!escalationMigrationStartedByPool[parent], 'Escalation destinations locked');
+				require(
+					block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+					'Migration closed'
+				);
+			}
 			uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 			if (address(zoltar.getRepToken(childUniverseId)) == address(0x0)) {
 				zoltar.deployChild(parent.universeId(), outcomeIndex);
@@ -113,6 +118,10 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			forkDataByPool[child].truthAuction = truthAuction;
 			trustedAuctionAddresses[address(truthAuction)] = true;
 			childrenByPoolAndOutcome[parent][outcomeIndex] = child;
+			if (!childOutcomeRegisteredByPool[parent][outcomeIndex]) {
+				childOutcomeRegisteredByPool[parent][outcomeIndex] = true;
+				childOutcomeIndexesByPool[parent].push(outcomeIndex);
+			}
 			parent.authorizeChildPool(child);
 			emit ChildPoolLinked(parent, outcomeIndex, child, truthAuction);
 

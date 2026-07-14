@@ -152,7 +152,7 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
 		onMigrateEscalationDeposits: (_outcome, _depositIndexes) => undefined,
-		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
+		onMigrateUnresolvedEscalation: () => undefined,
 		onMigrateRepToZoltar: _outcomes => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,

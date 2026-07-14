@@ -172,7 +172,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).unresolvedEscalationAtFork, true, 'the fork should preserve the unresolved escalation snapshot')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'delayed initialization should leave the child migration recoverable')
@@ -1652,6 +1652,16 @@ describe('Peripherals: fork migration', () => {
 			await forkUniverse(client, genesisUniverse, questionId)
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'isChildOutcomeRegistered',
+					address: getInfraContractAddresses().securityPoolForker,
+					args: [securityPoolAddresses.securityPool, BigInt(QuestionOutcome.Yes)],
+				}),
+				true,
+				'zero-REP child destination registration should remain observable',
+			)
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -1666,6 +1676,7 @@ describe('Peripherals: fork migration', () => {
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.No]), /closed/i, 'zero-migration-REP pools must not register a new destination after the deadline')
 		})
 	})
 
@@ -2002,7 +2013,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(poolBalance > 0n, 'migrateRepToZoltar should still split child REP at the inclusive migration deadline')
 		})
 
-		test('migrateRepToZoltar rejects once the child branch is already priced', async () => {
+		test('migrateRepToZoltar remains closed once a child branch reaches pricing', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -2015,7 +2026,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child closed/)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /closed/i)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {

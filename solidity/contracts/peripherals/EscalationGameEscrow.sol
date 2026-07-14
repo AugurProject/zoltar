@@ -27,12 +27,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		ForkedEscrowState storage state = _recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
 		OutcomeState storage outcomeStateForEscrow = outcomeState[uint8(outcome)];
 		if (forkCarrySnapshotRequiresForkedEscrow) {
-			if (
-				outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal == outcomeStateForEscrow.inheritedUnresolvedTotal
-			) {
-				outcomeStateForEscrow.balance += sourcePrincipal;
-				outcomeStateForEscrow.inheritedUnresolvedTotal += sourcePrincipal;
-			}
 			outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal += sourcePrincipal;
 		}
 		uint256 outcomeBalance = outcomeStateForEscrow.balance;
@@ -180,7 +174,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			if (depositIndex >= state.deposits.length) continue;
 			Deposit memory deposit = state.deposits[depositIndex];
 			if (deposit.amount == 0 || deposit.depositor != vault) continue;
-			Deposit memory consumedDeposit = _consumeLocalDeposit(outcomeIndex, depositIndex);
+			Deposit memory consumedDeposit = _consumeLocalDepositForForkExport(outcomeIndex, depositIndex);
 			state.balance -= consumedDeposit.amount;
 			principalToTransfer += consumedDeposit.amount;
 			principalByOutcome[outcomeIndex] += consumedDeposit.amount;

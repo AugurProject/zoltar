@@ -565,7 +565,7 @@ export function App() {
 						outcome,
 						...(depositIndexes === undefined ? {} : { depositIndexes }),
 					}),
-				onMigrateUnresolvedEscalation: selectedChildOutcome => void migrateUnresolvedEscalation(selectedChildOutcome),
+				onMigrateUnresolvedEscalation: vaultAddressInput => void migrateUnresolvedEscalation(vaultAddressInput),
 				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
 				onMigrateVault: () => void migrateVault(),
 				onRefundLosingBids: (securityPoolAddressOverride, selectedBids) => void refundLosingBids(securityPoolAddressOverride, selectedBids),

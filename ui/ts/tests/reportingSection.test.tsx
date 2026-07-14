@@ -1438,9 +1438,27 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('The migration window for these unresolved escalation deposits has closed.')).toBe(true)
+		expect(document.body.textContent?.includes('The owner-directed deposit migration window has closed; unresolved fork carry may still be funded from the fork workflow.')).toBe(true)
 		expect(document.body.textContent?.includes('must migrate in Fork & Migration')).toBe(false)
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
+	})
+
+	test('describes unresolved migration as all-child carry funding', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					forkAlreadyTriggered: true,
+					reportingDetails: createReportingDetails({
+						settlementState: 'migration-required',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('Continue in Fork & Migration to fund unresolved escalation carry in every registered child continuation.')).toBe(true)
+		expect(document.body.textContent?.includes('into a child universe')).toBe(false)
 	})
 
 	test('shows a Trigger Zoltar Fork action when non-decision blocks escalation deposits', async () => {

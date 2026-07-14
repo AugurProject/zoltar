@@ -2051,7 +2051,7 @@
 					</p>
 					<figure class="diagram" id="fig-placeholder-liquidation-transfer">
 						<svg
-							viewBox="0 0 920 330"
+							viewBox="0 0 920 390"
 							role="img"
 							aria-labelledby="liquidation-transfer-title liquidation-transfer-desc"
 						>
@@ -4103,12 +4103,12 @@
 								<tr>
 									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
 									<td>
-										An external fork interrupted unresolved local locks before
-										the game finalized.
+										An own fork or external fork interrupted unresolved local
+										locks before the game finalized.
 									</td>
 									<td>
-										One vault's unresolved locks, possibly across multiple
-										calls.
+										One vault's unresolved locks, copied into every registered
+										child continuation, possibly across multiple calls.
 									</td>
 								</tr>
 								<tr>
@@ -4138,9 +4138,12 @@
 						<code>withdrawForkedEscalationDeposits</code> are liveness helpers
 						that any caller can submit so long as every proof or deposit index
 						in the batch belongs to the same beneficiary vault. By contrast,
-						<code>claimForkedEscalationDeposits</code> and
-						<code>migrateVaultWithUnresolvedEscalation</code> require
-						<code>msg.sender</code> to be the affected vault.
+						<code>claimForkedEscalationDeposits</code> always requires the
+						affected vault. Unresolved escalation migration requires the
+						affected vault while the migration window is open. After an
+						external-fork deadline, any caller may fund a specified vault's
+						inherited carry; own-fork migration remains restricted to the
+						affected vault.
 					</p>
 					<p>
 						Continuation withdrawals use Merkle Mountain Range proofs against
@@ -4153,19 +4156,25 @@
 					<p>
 						If an unrelated external Zoltar fork interrupts the local escalation
 						game before it resolves, unresolved escalation deposits stop being
-						withdrawable on the parent pool. The vault owner must migrate all
-						remaining unresolved parent locks for the chosen child universe
-						through repeated
+						withdrawable on the parent pool. While the migration window is
+						open, the vault owner migrates all remaining unresolved parent locks
+							for every registered child continuation
+							through repeated
 						<code>migrateVaultWithUnresolvedEscalation</code> calls until the
-						function reports no more work. Each call pages only a bounded chunk
-						of unresolved export data, so large carry sets can require multiple
-						transactions. If the vault does not migrate in time, the unresolved
-						position remains locked in the parent escalation game and is no
-						longer withdrawable from the parent pool.
+						function reports no more work. A parent batch is exported once and
+						persisted while a destination cursor advances by one registered child
+						per transaction. Only after that batch reaches every child can the next
+						bounded parent batch be exported, so large carry or destination sets can require multiple
+							transactions. The call has no child-outcome argument: the parent REP
+							is locked once and Zoltar mints the same migrated amount into every
+							registered child universe. Ordinary vault ownership still chooses one
+							child through <code>migrateVault</code>. If the vault does not migrate
+							its escalation position in time, every child remains incompletely funded
+							until that escrow is force-migrated from the parent after the deadline.
 					</p>
 					<figure class="diagram" id="fig-placeholder-unresolved-migration">
 						<svg
-							viewBox="0 0 920 230"
+							viewBox="0 0 920 300"
 							role="img"
 							aria-labelledby="unresolved-migration-title unresolved-migration-desc"
 						>
@@ -4173,8 +4182,7 @@
 								Unresolved escalation migration
 							</title>
 							<desc id="unresolved-migration-desc">
-								External fork interruption moves unresolved parent escalation
-								locks through paged export into a child continuation game.
+									The fork freezes one parent MMR and carry snapshot. When each registered child is created, it initializes from that snapshot. The current destination page then supplies that child's independent escrow backing. A child resumes only after all inherited source principal is funded and that child is operational.
 							</desc>
 							<defs>
 								<marker
@@ -4189,42 +4197,52 @@
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
 								</marker>
 							</defs>
-							<rect class="svg-red" x="35" y="70" width="170" height="78" rx="10"></rect>
-							<text class="svg-label" x="120" y="101" text-anchor="middle">
-								Parent Game
+							<rect class="svg-red" x="35" y="35" width="200" height="78" rx="10"></rect>
+							<text class="svg-label" x="135" y="66" text-anchor="middle">
+								Parent Snapshot
 							</text>
-							<text class="svg-small" x="120" y="125" text-anchor="middle">
-								unresolved locks
+							<text class="svg-small" x="135" y="90" text-anchor="middle">
+								MMR and carry totals
 							</text>
-							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 205 109 H 280"></path>
-							<rect class="svg-gold" x="280" y="70" width="190" height="78" rx="10"></rect>
-							<text class="svg-label" x="375" y="101" text-anchor="middle">
-								Paged Export
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 235 74 H 300"></path>
+							<rect class="svg-blue" x="300" y="35" width="400" height="78" rx="10"></rect>
+							<text class="svg-label" x="500" y="66" text-anchor="middle">
+								Every Registered Child
 							</text>
-							<text class="svg-small" x="375" y="125" text-anchor="middle">
-								up to 64 refs
+							<text class="svg-small" x="500" y="90" text-anchor="middle">
+								identical MMR and carry baseline
 							</text>
-							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 470 109 H 545"></path>
-							<rect class="svg-blue" x="545" y="70" width="170" height="78" rx="10"></rect>
-							<text class="svg-label" x="630" y="101" text-anchor="middle">
-								Child Carry
+							<rect class="svg-gold" x="35" y="170" width="200" height="78" rx="10"></rect>
+							<text class="svg-label" x="135" y="201" text-anchor="middle">
+								Paged Vault Export
 							</text>
-							<text class="svg-small" x="630" y="125" text-anchor="middle">
-								MMR snapshot
+							<text class="svg-small" x="135" y="225" text-anchor="middle">
+								up to 64 refs per call
 							</text>
-							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 715 109 H 780"></path>
-							<rect class="svg-green" x="780" y="70" width="115" height="78" rx="10"></rect>
-							<text class="svg-label" x="838" y="101" text-anchor="middle">
-								Resume
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 235 209 H 280"></path>
+							<rect class="svg-blue" x="280" y="170" width="300" height="78" rx="10"></rect>
+							<text class="svg-label" x="430" y="201" text-anchor="middle">
+								Every Registered Child
 							</text>
-							<text class="svg-small" x="838" y="125" text-anchor="middle">
-								child game
+							<text class="svg-small" x="430" y="225" text-anchor="middle">
+								independent escrow backing
+							</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 580 209 H 625"></path>
+							<rect class="svg-green" x="625" y="170" width="270" height="78" rx="10"></rect>
+							<text class="svg-label" x="760" y="201" text-anchor="middle">
+								That Child Resumes
+							</text>
+							<text class="svg-small" x="760" y="225" text-anchor="middle">
+								full principal + operational
 							</text>
 						</svg>
 						<p class="diagram-caption">
-							<span class="figure-label">Unresolved Migration</span>Unresolved
-							parent locks are exported in bounded pages into child carry so the
-							continuation game can settle them later with proofs.
+							<span class="figure-label">Unresolved Migration</span>The fork freezes
+								one parent MMR and carry snapshot. When each registered child is created,
+								whether earlier or during its cursor page, that child initializes the same
+								snapshot. Its current destination page separately supplies independent forked
+								escrow backing. A child resumes only after all inherited source principal is
+								funded and that child becomes operational.
 						</p>
 					</figure>
 					<h3>Unresolved Escalation Migration Trace</h3>
@@ -4240,26 +4258,44 @@
 							</thead>
 							<tbody>
 								<tr>
-									<td>Snapshot interruption</td>
+									<td>Freeze parent snapshot</td>
 									<td><code>SecurityPoolForker</code></td>
-									<td>Records elapsed escalation time and unresolved outcome state.</td>
-									<td>The child continuation starts from the interrupted parent clock.</td>
+									<td>Records the unresolved flag, elapsed time, start bond, and threshold. The parent escalation game retains the canonical MMR and carry baseline.</td>
+									<td>The interruption parameters and preserved parent baseline define every child continuation.</td>
 								</tr>
 								<tr>
-									<td>Export parent refs</td>
+									<td>Export parent batch</td>
 									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
-									<td>Exports bounded batches of unresolved deposit references.</td>
-									<td>Large vault histories may require several transactions.</td>
+									<td>Exports one bounded batch of parent deposit references once.</td>
+									<td>The stored batch is reused for every registered destination.</td>
 								</tr>
 								<tr>
-									<td>Initialize child carry</td>
+									<td>Prepare current child</td>
 									<td>
 										<code>SecurityPool.initializeForkCarrySnapshotWithResolutionBalances</code>,
 										which forwards to
 										<code>EscalationGame.initializeForkCarrySnapshotWithResolutionBalances</code>.
 									</td>
-									<td>Materializes inherited carry peaks and totals.</td>
-									<td>Child games can verify parent deposits without copying every leaf immediately.</td>
+									<td>If the child does not exist, its cursor page creates it and reads <code>getForkCarrySnapshot</code> from the preserved parent baseline.</td>
+									<td>A previously created child already has the same snapshot; funding does not recreate or change it.</td>
+								</tr>
+								<tr>
+									<td>Fund current child</td>
+									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
+									<td>Supplies this destination's independent forked-escrow backing from the stored batch.</td>
+									<td>Each transaction handles at most one child destination; the vault never chooses it.</td>
+								</tr>
+								<tr>
+									<td>Advance destination cursor</td>
+									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
+									<td>Moves the stored cursor to the next registered child.</td>
+									<td>Repeated calls deliver the same batch to every registered destination.</td>
+								</tr>
+								<tr>
+									<td>Complete current batch</td>
+									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
+									<td>Clears the stored batch only after its cursor passes every registered child.</td>
+									<td>The next parent batch cannot be exported early.</td>
 								</tr>
 								<tr>
 									<td>Withdraw after child resolution</td>
@@ -4514,7 +4550,16 @@
 						<li>The parent pool enters fork mode.</li>
 						<li>
 							Anyone can call <code>createChildUniverse</code> to deploy a child
-							pool for a valid fork outcome.
+							pool for a valid fork outcome. Deployment also registers that outcome in
+							the all-child escalation destination set.
+						</li>
+						<li>
+							<code>migrateRepToZoltar</code> can explicitly register an outcome as a
+							child destination without deploying it yet and stages any available pool
+							REP. A registered child is therefore an outcome fixed by either explicit
+							registration or child deployment, even when the current migration amount is
+							zero. Both registration routes close at the eight-week deadline and as soon
+							as unresolved escalation migration begins.
 						</li>
 						<li>
 							Vault owners call <code>migrateVault</code> to move their own pool
@@ -4522,15 +4567,19 @@
 							external-fork escalation locks.
 						</li>
 						<li>
-							Vault owners with unresolved external-fork escalation locks call
-							<code>migrateVaultWithUnresolvedEscalation</code>, which can
-							require multiple calls before it returns that migration is
-							complete.
+							Unresolved locks from either fork type use
+							<code>migrateVaultWithUnresolvedEscalation</code>, which funds each
+							registered child's forked escrow against the identical frozen carry
+							snapshot established when that child was created. Each call advances at
+							most one child destination, so completing all children can require multiple
+							calls. During the migration window the affected vault calls it;
+							after an external-fork deadline any caller may name that vault,
+							while own-fork carry remains vault-authorized.
 						</li>
 						<li>
-							Vault owners claim winning own-fork escalation deposits through
-							<code>claimForkedEscalationDeposits</code>; the own-fork path is
-							open only during the parent migration window.
+							Resolved own-fork winners instead use
+							<code>claimForkedEscalationDeposits</code> to receive child REP in
+							their wallets before the parent migration window closes.
 						</li>
 						<li>
 							Parent collateral is partially transferred into child pools in
@@ -4544,10 +4593,12 @@
 					<p>
 						The migration API is not a single generic “fork migrator” role.
 						Child creation is permissionless, <code>migrateVault</code> always
-						acts on the caller’s own vault, and the unresolved-escalation and
-						own-fork-claim entry points require the affected vault as caller.
-						This matters for off-chain automation because a keeper can help with
-						liveness, but it cannot migrate or claim another vault’s locked REP.
+						acts on the caller’s own vault, and own-fork claims require the
+						affected vault. Unresolved escalation migration also requires the
+						affected vault during the migration window. After an external-fork
+						deadline, a keeper may name another vault and fund only its inherited
+						carry in every registered child; ordinary vault ownership remains
+						closed and cannot be redirected.
 					</p>
 					<h3>Fork Migration Contract Trace</h3>
 					<div class="table-wrap">
@@ -4567,12 +4618,18 @@
 									<td>Parent pool enters fork handling and snapshots auctionable REP.</td>
 									<td>Normal pool accounting stops before child migration begins.</td>
 								</tr>
-								<tr>
-									<td>Create child branch</td>
-									<td><code>createChildUniverse</code></td>
-									<td>Deploys or locates the child universe and child pool.</td>
-									<td>Child pools are lazy because not every branch may be used.</td>
-								</tr>
+							<tr>
+								<td>Create child branch</td>
+								<td><code>createChildUniverse</code></td>
+								<td>Deploys or locates the child universe and child pool, then registers that outcome in the all-child continuation set.</td>
+								<td>Child pools are lazy because not every branch may be used, but creating one commits it to fork-wide carry.</td>
+							</tr>
+							<tr>
+								<td>Register child destination</td>
+								<td><code>migrateRepToZoltar</code></td>
+								<td>Explicitly registers the outcome without requiring child deployment and stages any currently available pool REP; registration persists when that amount is zero.</td>
+								<td>Either registration route fixes membership in the all-child continuation set, which cannot expand after eight weeks or after unresolved carry migration starts.</td>
+							</tr>
 								<tr>
 									<td>Migrate vault</td>
 									<td><code>migrateVault</code></td>
@@ -4820,11 +4877,11 @@
 						</p>
 					</figure>
 					<div class="callout">
-						Unresolved external-fork escalation positions migrate with the vault
-						through
-						<code>migrateVaultWithUnresolvedEscalation</code>. The child
-						continuation game is paused during the migration window, then
-						resumes once the child pool becomes operational.
+							Unresolved external-fork escalation positions migrate separately from
+							ordinary vault ownership through
+							<code>migrateVaultWithUnresolvedEscalation</code>. Every registered child
+							continuation receives the full position and remains paused until its
+							complete inherited carry is backed and the child pool is operational.
 					</div>
 					<p>
 						During vault migration, the forker also ensures the child pool is
@@ -5310,11 +5367,13 @@
 					</div>
 					<p>
 						When a pool forks while its escalation game is unresolved, the
-						parent forker snapshots the unresolved game’s
+						parent forker records the unresolved flag,
 						<code>startBond</code>, <code>nonDecisionThreshold</code>, elapsed
-						escalation time, and per-outcome carry state. Each relevant child
-						pool can initialize its own paused fork-continuation escalation game
-						from that snapshot. The continuation preserves the parent live
+						escalation time, and related interruption parameters. The parent escalation
+						game retains the canonical MMR and per-outcome carry baseline. When each
+						registered child pool is created, it reads that parent baseline to
+						initialize its own paused fork-continuation escalation game. The
+						continuation preserves the parent live
 						<code>Invalid</code>, <code>Yes</code>, and <code>No</code>
 						balances, each unresolved deposit’s original outcome, stable parent
 						deposit index, payout ordering, and the remaining REP backing that
@@ -5333,25 +5392,31 @@
 					</p>
 					<ol>
 						<li>
-							The parent pool forks and snapshots unresolved escalation state.
+							The parent pool forks. Its forker records interruption parameters, while
+							the parent escalation game retains the canonical MMR and carry baseline.
 						</li>
 						<li>
-							Each selected child pool is created in a child universe and marks
-							itself as awaiting fork continuation.
+							The registered escalation destination set is fixed before unresolved
+							migration starts; a registered child pool need not exist yet.
 						</li>
 						<li>
-							Each created child initializes a paused continuation escalation
-							game from that snapshot.
+							For each destination cursor page, the child may already exist or that
+							page creates it. At creation, the child reads the preserved parent
+							baseline and initializes a paused continuation escalation game.
 						</li>
 						<li>
 							Affected vaults migrate unresolved parent locks through
 							<code>migrateVaultWithUnresolvedEscalation</code>; large carry
-							sets can require multiple calls.
+							or destination sets can require multiple calls. Each exported batch is
+							persisted, and the current page supplies one registered child's escrow backing
+							before advancing the cursor. The batch must reach every registered child
+							continuation. This is independent of the child selected for the vault's
+							ordinary pool ownership.
 						</li>
 						<li>
 							After the migration window and any required truth auction, the
-							child pool becomes operational, clears the wait marker, and
-							resumes the paused continuation game.
+							child pool becomes operational. It clears the wait marker and resumes
+							only after its forked escrow backs the complete inherited parent carry.
 						</li>
 					</ol>
 					<p>
@@ -5370,9 +5435,9 @@
 						a caller invokes <code>Zoltar.forkUniverse</code> with the unrelated, already
 						ended Atlas-upgrade question, causing Zoltar to fork the Genesis universe. Each
 						resulting child universe represents one possible answer to the Atlas-upgrade
-						question. The pool's unresolved London-temperature escalation migrates into
-						selected child universes as separate paused continuation games, one in each
-						selected child universe. After a continuation resumes, it still disputes the
+							question. The pool's unresolved London-temperature escalation is copied in
+							full into every registered child universe as a separate paused continuation
+							game. A vault cannot direct its escalation REP to only one branch. After a continuation resumes, it still disputes the
 						London-temperature question. If it reaches non-decision, a caller can invoke
 						the security-pool fork path, causing Zoltar to fork that child universe again.
 						The first fork therefore creates branches for the possible answers to the
@@ -5381,7 +5446,7 @@
 					</p>
 					<figure class="diagram" id="fig-placeholder-recursive-continuation">
 						<svg
-							viewBox="0 0 980 520"
+							viewBox="0 0 980 650"
 							role="img"
 							aria-labelledby="recursive-title recursive-desc"
 						>
@@ -5390,8 +5455,7 @@
 							</title>
 							<desc id="recursive-desc">
 								A caller invokes Zoltar to fork a universe while one of its security pools has
-								an unresolved escalation. Later, migration into selected child branches deploys child pools
-								and initializes paused continuation games. If a resumed continuation reaches
+								an unresolved escalation. The fork freezes the parent baseline; each registered child initializes that baseline when the child is created. Later, paged fork-wide migration independently funds each child's escrow backing. A child resumes only after its full inherited source principal is funded and it is operational. If a resumed continuation reaches
 								non-decision, a caller can invoke the security-pool fork path and Zoltar forks
 								that child universe again.
 							</desc>
@@ -5439,107 +5503,124 @@
 								Zoltar Fork
 							</text>
 							<text class="svg-small" x="490" y="230" text-anchor="middle">
-								carry snapshot + forked escrow
+								identical carry snapshot baseline
 							</text>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-recursive)"
-								d="M 350 215 C 265 225 207 252 176 296"
+								d="M 490 254 V 295"
+							></path>
+							<rect class="svg-gold" x="350" y="295" width="280" height="78" rx="10"></rect>
+							<text class="svg-label" x="490" y="326" text-anchor="middle">
+								Paged All-Child Funding
+							</text>
+							<text class="svg-small" x="490" y="349" text-anchor="middle">
+								independent escrow backing
+							</text>
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-recursive)"
+								d="M 350 334 C 265 344 207 371 176 415"
 							></path>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-recursive)"
-								d="M 490 254 V 296"
+								d="M 490 373 V 415"
 							></path>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-recursive)"
-								d="M 630 215 C 715 225 773 252 804 296"
+								d="M 630 334 C 715 344 773 371 804 415"
 							></path>
 							<rect
 								class="svg-blue"
 								x="72"
-								y="296"
+								y="415"
 								width="220"
 								height="92"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="182" y="328" text-anchor="middle">
+							<text class="svg-label" x="182" y="447" text-anchor="middle">
 								Invalid Child
 							</text>
-							<text class="svg-small" x="182" y="352" text-anchor="middle">
+							<text class="svg-small" x="182" y="471" text-anchor="middle">
 								paused continuation game
 							</text>
-							<text class="svg-micro" x="182" y="371" text-anchor="middle">
+							<text class="svg-micro" x="182" y="490" text-anchor="middle">
 								original deposit
 							</text>
-							<text class="svg-micro" x="182" y="386" text-anchor="middle">
+							<text class="svg-micro" x="182" y="505" text-anchor="middle">
 								outcomes preserved
 							</text>
 							<rect
 								class="svg-green"
 								x="380"
-								y="296"
+								y="415"
 								width="220"
 								height="92"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="490" y="328" text-anchor="middle">
+							<text class="svg-label" x="490" y="447" text-anchor="middle">
 								Yes Child
 							</text>
-							<text class="svg-small" x="490" y="352" text-anchor="middle">
+							<text class="svg-small" x="490" y="471" text-anchor="middle">
 								paused continuation game
 							</text>
-							<text class="svg-micro" x="490" y="373" text-anchor="middle">
-								migration window, then resume
+							<text class="svg-micro" x="490" y="490" text-anchor="middle">
+								full source principal + operational
+							</text>
+							<text class="svg-micro" x="490" y="505" text-anchor="middle">
+								then resume
 							</text>
 							<rect
 								class="svg-blue"
 								x="688"
-								y="296"
+								y="415"
 								width="220"
 								height="92"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="798" y="328" text-anchor="middle">
+							<text class="svg-label" x="798" y="447" text-anchor="middle">
 								No Child
 							</text>
-							<text class="svg-small" x="798" y="352" text-anchor="middle">
+							<text class="svg-small" x="798" y="471" text-anchor="middle">
 								paused continuation game
 							</text>
-							<text class="svg-micro" x="798" y="373" text-anchor="middle">
+							<text class="svg-micro" x="798" y="490" text-anchor="middle">
 								same inherited carry baseline
 							</text>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-recursive)"
-								d="M 490 388 V 426"
+								d="M 490 515 V 555"
 							></path>
 							<rect
 								class="svg-gold"
 								x="350"
-								y="426"
+								y="555"
 								width="280"
 								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="490" y="450" text-anchor="middle">
+							<text class="svg-label" x="490" y="579" text-anchor="middle">
 								Continuation
 							</text>
-							<text class="svg-label" x="490" y="470" text-anchor="middle">
+							<text class="svg-label" x="490" y="599" text-anchor="middle">
 								Can Fork Again
 							</text>
-							<text class="svg-small" x="490" y="489" text-anchor="middle">
+							<text class="svg-small" x="490" y="618" text-anchor="middle">
 								new snapshot combines
 							</text>
-							<text class="svg-small" x="490" y="506" text-anchor="middle">
+							<text class="svg-small" x="490" y="635" text-anchor="middle">
 								inherited carry + local carry
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Continuation</span>Each child
-							continuation game inherits the unresolved carry baseline. If a
-							child game later reaches non-decision, the carry can be exported
+							continuation game inherits the same snapshot baseline, while later paged
+							migration supplies independent escrow backing to every registered child.
+							Each child resumes only after full source-principal funding and operational
+							status. If a child game later reaches non-decision, the carry can be exported
 							again into the next fork generation.
 						</p>
 					</figure>
@@ -5553,8 +5634,7 @@
 								Continuation carry ingredients
 							</title>
 							<desc id="carry-detail-desc">
-								Inherited carry, local carry, and forked escrow combine into the
-								next fork snapshot.
+								Inherited carry and local carry combine into the next carry snapshot. Forked escrow follows a separate path into independently migrated backing for every registered child.
 							</desc>
 							<defs>
 								<marker
@@ -5600,57 +5680,65 @@
 							<rect
 								class="svg-red"
 								x="354"
-								y="130"
+								y="260"
 								width="220"
 								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="464" y="163" text-anchor="middle">
-								Forked Escrow
+							<text class="svg-label" x="464" y="293" text-anchor="middle">
+								Forked Escrow Export
 							</text>
-							<text class="svg-small" x="464" y="188" text-anchor="middle">
+							<text class="svg-small" x="464" y="318" text-anchor="middle">
 								child REP backing
 							</text>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-carry)"
-								d="M 264 111 C 300 111 326 150 354 150"
+								d="M 264 111 C 400 72 525 92 654 120"
 							></path>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-carry)"
-								d="M 264 231 C 310 226 334 204 354 184"
+								d="M 264 231 C 410 242 526 202 654 180"
 							></path>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-carry)"
-								d="M 574 171 H 654"
+								d="M 574 301 H 654"
 							></path>
 							<rect
 								class="svg-green"
 								x="654"
-								y="112"
+								y="85"
 								width="220"
 								height="118"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="764" y="151" text-anchor="middle">
+							<text class="svg-label" x="764" y="124" text-anchor="middle">
 								Next Snapshot
 							</text>
-							<text class="svg-small" x="764" y="176" text-anchor="middle">
+							<text class="svg-small" x="764" y="149" text-anchor="middle">
 								materialized carry tree
 							</text>
-							<text class="svg-small" x="764" y="198" text-anchor="middle">
+							<text class="svg-small" x="764" y="171" text-anchor="middle">
 								nullifiers preserve
 							</text>
-							<text class="svg-small" x="764" y="216" text-anchor="middle">
+							<text class="svg-small" x="764" y="189" text-anchor="middle">
 								spent proofs
+							</text>
+							<rect class="svg-blue" x="654" y="260" width="220" height="82" rx="10"></rect>
+							<text class="svg-label" x="764" y="293" text-anchor="middle">
+								Every Registered Child
+							</text>
+							<text class="svg-small" x="764" y="318" text-anchor="middle">
+								independent migrated backing
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Carry Snapshot</span>The continuation
-							game carries a proof baseline, tracks new local deposits, and
-							records escrow backing by original outcome.
+							game combines inherited and local carry into its next proof snapshot.
+							Forked escrow remains separate and is independently migrated as backing
+							for every registered child.
 						</p>
 					</figure>
 					<p>
@@ -5944,9 +6032,10 @@
 								<tr>
 									<td>Child continuation</td>
 									<td>
-										The preferred child receives forked escrow backing and
-										resumes with the inherited <code>20 REP</code> carry after
-										migration.
+										Every registered child receives the same inherited
+										<code>20 REP</code> carry and its own forked-escrow backing.
+										Each child resumes only after all inherited source principal is
+										funded and that child becomes operational.
 									</td>
 									<td>
 										Inherited carry is settled by proof, while new deposits are

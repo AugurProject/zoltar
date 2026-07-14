@@ -207,16 +207,20 @@
 						</tr>
 						<tr>
 							<td>Local deposit consumption</td>
-							<td>Settlement, claim, or export must zero the amount, mark the stable parent deposit index consumed, reduce unresolved totals, and update the current carry snapshot.</td>
+							<td>Settlement or claim zeros the amount, marks the stable parent deposit index consumed, reduces unresolved totals, and updates the live carry snapshot. Fork export also zeros the amount and reduces live unresolved totals, but preserves the pre-export peaks, leaf counts, nullifier root, and source total for child initialization.</td>
 						</tr>
 						<tr>
 							<td>Inherited settlement order</td>
 							<td>Proof-backed settlement consumes <code>inheritedUnresolvedTotal</code> first and only then uses local unresolved total for any remainder.</td>
 						</tr>
-						<tr>
-							<td>Forked escrow bounds</td>
-							<td>Forked escrow settlement releases child REP proportionally against source principal, and claimed counters never exceed recorded principal or child REP.</td>
-						</tr>
+							<tr>
+								<td>Forked escrow bounds</td>
+								<td>Forked escrow settlement releases child REP proportionally against source principal, and claimed counters never exceed recorded principal or child REP.</td>
+							</tr>
+							<tr>
+								<td>Fork-wide continuation</td>
+								<td>Every registered child continuation preserves the complete parent outcome balances and carry totals. Each parent vault batch is exported once, then a stored cursor sends it to one child destination per transaction before the next parent batch can be exported. A child cannot resume until all inherited source principal is funded.</td>
+							</tr>
 					</tbody>
 				</table>
 				<p>
@@ -287,19 +291,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>27,625</code> bytes</td>
+							<td><code>27,623</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>24,565</code> bytes</td>
+							<td><code>24,563</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>11</code> bytes below <code>24,576</code></td>
+							<td><code>13</code> bytes below <code>24,576</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>11</code> bytes below <code>24,576</code></td>
+							<td><code>13</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

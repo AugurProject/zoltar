@@ -814,6 +814,54 @@ describe('useForkAuctionOperations', () => {
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 	})
 
+	test('late unresolved escalation funding submits the specified vault without a child outcome', async () => {
+		const targetVaultAddress = getAddress('0x00000000000000000000000000000000000000f3')
+		const onTransactionFailed = mock(() => undefined)
+		const migrateVaultWithUnresolvedEscalation = mock(async (_client: unknown, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint) => {
+			expect(securityPoolAddress).toBe(SECURITY_POOL_ADDRESS)
+			expect(vaultAddress).toBe(targetVaultAddress)
+			expect(universeId).toBe(1n)
+			return createForkAuctionResult('migrateUnresolvedEscalation')
+		})
+		const dependencies = createForkAuctionOperationsDependencies({ migrateVaultWithUnresolvedEscalation })
+
+		let hookState: UseForkAuctionOperationsState | undefined
+		function Harness() {
+			hookState = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setForkAuctionForm(current => ({
+				...current,
+				securityPoolAddress: SECURITY_POOL_ADDRESS,
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).migrateUnresolvedEscalation(targetVaultAddress)
+		})
+
+		expect(migrateVaultWithUnresolvedEscalation).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('migrateUnresolvedEscalation')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
 	test('migrateVault snapshots the submitted outcome before details reload resolves', async () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fc')
 		const detailsReload = createDeferred<ForkAuctionDetails>()

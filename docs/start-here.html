@@ -36,10 +36,12 @@
 						After sustained local non-decision, a caller can invoke the security-pool
 						fork path, which makes Zoltar fork the market's current universe. Before that
 						happens, a caller may use a different market's ended question to make Zoltar
-						fork that universe first; in that case, the
-						unresolved escalation migrates into selected child universes as paused
-						continuation games. Each continuation still disputes the original question
-						and, after it resumes, can reach non-decision. A caller can then invoke the
+						fork that universe first; in that case, the fork freezes the unresolved
+						escalation state once. As each registered child
+						universe is created, its paused continuation game starts from that same state.
+						Bounded migration calls then fund every registered continuation against the same
+						frozen parent carry, without asking the vault to choose a child.
+						After it resumes, it can reach non-decision. A caller can then invoke the
 						security-pool fork path, which forks that child universe using the original
 						question. The first fork's branches represent the
 						unrelated question's outcomes, while the recursive fork's branches represent
@@ -409,7 +411,7 @@
 						</tr>
 						<tr>
 							<td>Fork path</td>
-							<td>If non-decision is reached, Zoltar forks and Placeholder migrates pool state into selected child pools.</td>
+							<td>If non-decision is reached, Zoltar forks. Ordinary vault ownership moves to each vault's selected child, while unresolved escalation carry and the complete parent escalation-game outcome and carry snapshot are preserved in every registered child.</td>
 							<td><code>Zoltar</code>, <code>SecurityPoolForker</code></td>
 							<td>The protocol preserves disagreement explicitly instead of forcing one branch.</td>
 						</tr>
@@ -463,7 +465,7 @@
 						<tr>
 							<td>Fork migration</td>
 							<td>Child universe, migration balance, migration proxy, child pool, carry snapshot.</td>
-							<td>A fork creates branches; Placeholder moves pool state into the selected branch.</td>
+							<td>A fork creates branches. Ordinary vault ownership moves to the vault's selected child, while unresolved escalation carry and the complete parent escalation-game outcome and carry snapshot are preserved in every registered child.</td>
 						</tr>
 						<tr>
 							<td>Auction repair</td>

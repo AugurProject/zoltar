@@ -93,13 +93,13 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
-export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address, childOutcome: bigint | QuestionOutcome) =>
+export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, vault, BigInt(childOutcome)],
+			args: [securityPoolAddress, vault],
 		}),
 	)
 

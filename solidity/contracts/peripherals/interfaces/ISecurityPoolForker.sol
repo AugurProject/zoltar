@@ -23,12 +23,16 @@ interface ISecurityPoolForker {
 		);
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external;
+	function isChildOutcomeRegistered(ISecurityPool securityPool, uint256 outcomeIndex) external view returns (bool);
+	function hasPendingUnresolvedEscalationMigration(
+		ISecurityPool securityPool,
+		address vault
+	) external view returns (bool);
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external;
 	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) external;
 	function migrateVaultWithUnresolvedEscalation(
 		ISecurityPool securityPool,
-		address vault,
-		uint256 childOutcomeIndex
+		address vault
 	) external returns (bool moreToMigrate);
 	function claimForkedEscalationDeposits(
 		ISecurityPool securityPool,

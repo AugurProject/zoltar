@@ -48,12 +48,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 			childEscalationGame.forkResumedAt() != 0
 		) return;
 		if (child.awaitingForkContinuation()) {
-			ISecurityPool parent = child.parent();
-			if (
-				address(parent) != address(0x0) &&
-				!forkDataByPool[parent].ownFork &&
-				!childEscalationGame.isForkCarryFundingComplete()
-			) {
+			if (!childEscalationGame.isForkCarryFundingComplete()) {
 				return;
 			}
 			child.setAwaitingForkContinuation(false);
@@ -80,7 +75,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 				inheritedCarryPeaks,
 				inheritedCarryLeafCounts,
 				inheritedCarryTotals,
-				[type(uint256).max, uint256(0), uint256(0)],
+				inheritedCarryTotals,
 				inheritedNullifierRoots
 			);
 		}

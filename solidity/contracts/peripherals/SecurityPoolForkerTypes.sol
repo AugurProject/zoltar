@@ -33,3 +33,12 @@ struct OwnForkChildRepAllocation {
 	uint256 vaultChildRepUsed;
 	uint256 escrowChildRepUsed;
 }
+
+struct PendingEscalationMigrationBatch {
+	uint256[3] sourcePrincipalByOutcome;
+	uint256[3] currentRepByOutcome;
+	uint256 totalCurrentRep;
+	uint256 nextChildIndex;
+	bool moreParentBatches;
+	bool active;
+}

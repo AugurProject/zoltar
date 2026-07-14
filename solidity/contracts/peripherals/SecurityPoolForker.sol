@@ -275,6 +275,21 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash)))));
 	}
 
+	function isChildOutcomeRegistered(ISecurityPool securityPool, uint256 outcomeIndex) external view returns (bool) {
+		return childOutcomeRegisteredByPool[securityPool][outcomeIndex];
+	}
+
+	function hasPendingUnresolvedEscalationMigration(
+		ISecurityPool securityPool,
+		address vault
+	) external returns (bool) {
+		bytes memory returnData = _delegateMigrationCall(
+			escalationGameForkerDelegate,
+			abi.encodeCall(EscalationGameForker.hasPendingUnresolvedEscalationMigration, (securityPool, vault))
+		);
+		return abi.decode(returnData, (bool));
+	}
+
 	// Lazily deploy one proxy per parent pool so that all Zoltar migration calls for
 	// that pool use a unique `msg.sender`. CREATE2 keeps the proxy address stable
 	// and predictable from the pool address before deployment.
@@ -336,22 +351,36 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[securityPool];
 		require(address(migrationProxy) != address(0x0), 'Proxy');
 		require(securityPool.systemState() == SystemState.PoolForked, 'Unforked');
+		require(
+			block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+			'Closed'
+		);
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		uint256 migrationAmount = data.ownFork ? data.vaultRepAtFork : data.auctionableRepAtFork;
-		if (migrationAmount > 0) {
-			for (uint256 index = 0; index < outcomeIndices.length; index++) {
-				uint256 outcomeIndex = outcomeIndices[index];
+		for (uint256 index = 0; index < outcomeIndices.length; index++) {
+			uint256 outcomeIndex = outcomeIndices[index];
+			_requireValidForkOutcome(securityPool, outcomeIndex);
+			if (!childOutcomeRegisteredByPool[securityPool][outcomeIndex]) {
+				require(!escalationMigrationStartedByPool[securityPool], 'Escalation destinations locked');
+				childOutcomeRegisteredByPool[securityPool][outcomeIndex] = true;
+				childOutcomeIndexesByPool[securityPool].push(outcomeIndex);
+			}
+			if (migrationAmount > 0) {
 				ISecurityPool child = childrenByPoolAndOutcome[securityPool][outcomeIndex];
 				if (address(child) != address(0x0)) {
 					require(child.systemState() == SystemState.ForkMigration, 'Child closed');
 				}
-				require(
-					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-					'Closed'
-				);
 				_delegateEnsureChildPoolRepSplit(securityPool, outcomeIndex, migrationAmount);
 			}
 		}
+	}
+
+	function _requireValidForkOutcome(ISecurityPool securityPool, uint256 outcomeIndex) private view {
+		(, uint256 forkQuestionId, , , ) = zoltar.universes(securityPool.universeId());
+		require(
+			!zoltar.zoltarQuestionData().isMalformedAnswerOption(forkQuestionId, outcomeIndex),
+			'Malformed outcome'
+		);
 	}
 
 	function _delegateEnsureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 amount) private {
@@ -407,21 +436,11 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function migrateVaultWithUnresolvedEscalation(
 		ISecurityPool securityPool,
-		address vault,
-		uint256 childOutcomeIndex
+		address vault
 	) external returns (bool moreToMigrate) {
-		if (
-			msg.sender == vault &&
-			block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME
-		) {
-			migrateVault(securityPool, childOutcomeIndex);
-		}
 		bytes memory returnData = _delegateMigrationCall(
 			escalationGameForkerDelegate,
-			abi.encodeCall(
-				EscalationGameForker.migrateVaultWithUnresolvedEscalation,
-				(securityPool, vault, childOutcomeIndex)
-			)
+			abi.encodeCall(EscalationGameForker.migrateVaultWithUnresolvedEscalation, (securityPool, vault))
 		);
 		return abi.decode(returnData, (bool));
 	}

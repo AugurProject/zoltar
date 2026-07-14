@@ -31,4 +31,19 @@ describe('transaction presentations', () => {
 		expect(intent.submittedTitle).toBe('Settle Finalized Refunds')
 		expect(intent.submittedDetail).toBe('Settle Finalized Refunds transaction submitted.')
 	})
+
+	test('attributes unresolved carry funding to the specified vault', () => {
+		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
+		expect(presentation.detail).toBe('All unresolved parent escalation locks for the specified vault were copied into every registered child continuation game.')
+		if (typeof presentation.detail !== 'string') throw new Error('Expected unresolved carry funding detail text')
+		expect(presentation.detail.includes('this wallet')).toBe(false)
+	})
+
+	test('describes zero-REP child registration without claiming REP moved', () => {
+		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateRepToZoltar'))
+		expect(presentation.detail).toBe('The child destination was registered; any available pool REP was staged for that child.')
+		if (typeof presentation.detail !== 'string') throw new Error('Expected child registration detail text')
+		expect(presentation.detail.includes('REP was migrated')).toBe(false)
+		expect(presentation.detail.includes('REP moved')).toBe(false)
+	})
 })
