@@ -105,12 +105,6 @@ interface ISecurityPool {
 		uint256 nonDecisionThreshold,
 		uint256 elapsedAtFork
 	) external;
-	function initializeForkCarrySnapshot(
-		bytes32[64][3] memory inheritedCarryPeaks,
-		uint256[3] memory inheritedCarryLeafCounts,
-		uint256[3] memory inheritedCarryTotals,
-		bytes32[3] memory inheritedNullifierRoots
-	) external;
 	function initializeForkCarrySnapshotWithResolutionBalances(
 		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,

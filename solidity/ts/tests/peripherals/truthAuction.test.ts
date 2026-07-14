@@ -170,6 +170,28 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should enter truth auction after the parent migration window closes')
 		})
 
+		test('startTruthAuction splits and sweeps the complete child REP inventory before pricing it', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+
+			await triggerExternalForkForSecurityPool(undefined, 'auction inventory funding fork source')
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+
+			const childBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool)
+			const auctionCap = await getMaxRepBeingSold(client, yesSecurityPool.truthAuction)
+			strictEqualTypeSafe(childBalance, parentForkData.auctionableRepAtFork, 'truth auction should fund the child with its complete accounting REP baseline')
+			assert.ok(auctionCap <= childBalance, 'truth auction cap should not exceed the child REP balance')
+		})
+
 		test('finalizeTruthAuction keeps the auction active at the exact end and finalizes one second later', async () => {
 			const { yesSecurityPool } = await setupStartedTruthAuction('truth auction finalization deadline source')
 			const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
