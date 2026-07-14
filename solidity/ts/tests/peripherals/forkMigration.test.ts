@@ -70,6 +70,8 @@ describe('Peripherals: fork migration', () => {
 		claimForkedEscalationDeposits,
 		migrateRepToZoltar,
 		migrateVault,
+		migrateVaultWithUnresolvedEscalation,
+		getForkedEscrowChildRepByOutcomeAndVault,
 		startTruthAuction,
 		forkUniverse,
 		getRepTokenAddress,
@@ -168,6 +170,14 @@ describe('Peripherals: fork migration', () => {
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'delayed initialization should enter fork mode')
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).unresolvedEscalationAtFork, true, 'the fork should preserve the unresolved escalation snapshot')
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'delayed initialization should leave the child migration recoverable')
+			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repInEscalationGame, 0n, 'unresolved migration should clear the parent escrow lock')
+			assert.ok((await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)) > 0n, 'unresolved migration should carry the escrow into the child continuation')
 		})
 
 		test('rejects delayed fork initialization for an escalation game resolved before the universe fork', async () => {
