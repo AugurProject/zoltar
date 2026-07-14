@@ -4,6 +4,7 @@ import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixtur
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
 import { queueLiquidationAtForcedPrice } from '../../testsuite/simulator/utils/contracts/peripherals'
+import { getQuestionResolution } from '../../testsuite/simulator/utils/contracts/escalationGame'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
 
@@ -137,6 +138,67 @@ describe('Peripherals: fork migration', () => {
 	})
 
 	describe('child universe and own-fork entry', () => {
+		test('allows delayed fork initialization for an escalation game unresolved at the universe fork', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+			const escalationGameEndDate = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getEscalationGameEndDate',
+				address: securityPoolAddresses.escalationGame,
+				args: [],
+			})
+			const forkTimeAtResolution = escalationGameEndDate
+			const forkSourceQuestionData = {
+				...questionData,
+				title: 'delayed initialization fork source',
+				endTime: forkTimeAtResolution - 1n,
+			}
+			const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+			await createQuestion(client, forkSourceQuestionData, outcomes)
+			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await mockWindow.setTime(forkTimeAtResolution - 1n)
+			await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
+
+			strictEqualTypeSafe((await getUniverseData(client, genesisUniverse)).forkTime, escalationGameEndDate, 'the external fork should occur exactly at escalation resolution')
+			await mockWindow.setTime(escalationGameEndDate + 1n)
+			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve after the universe fork')
+			strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'the local outcome should remain unavailable after a fork-time-unresolved escalation game')
+			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'delayed initialization should enter fork mode')
+			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).unresolvedEscalationAtFork, true, 'the fork should preserve the unresolved escalation snapshot')
+		})
+
+		test('rejects delayed fork initialization for an escalation game resolved before the universe fork', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+			const escalationGameEndDate = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getEscalationGameEndDate',
+				address: securityPoolAddresses.escalationGame,
+				args: [],
+			})
+			await mockWindow.setTime(escalationGameEndDate + 1n)
+			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve before the universe fork')
+
+			const forkSourceQuestionData = {
+				...questionData,
+				title: 'resolved before initialization fork source',
+				endTime: (await mockWindow.getTime()) + DAY,
+			}
+			const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+			await createQuestion(client, forkSourceQuestionData, outcomes)
+			await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
+
+			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Resolved/)
+			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'a pre-fork-resolved game should leave the pool operational')
+			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).unresolvedEscalationAtFork, false, 'a pre-fork-resolved game should not be snapshotted as unresolved')
+		})
+
 		test('create child universe test', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
