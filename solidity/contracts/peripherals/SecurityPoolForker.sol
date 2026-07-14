@@ -664,7 +664,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 leftoverProxyRep = rep.balanceOf(address(migrationProxy));
 		if (leftoverProxyRep > 0) migrationProxy.lockRep(leftoverProxyRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
-		require(forkTime > 0, 'No time');
+		require(forkTime > 0, 'Time');
 		_snapshotEscalationAtFork(data, escalationGame, forkTime);
 		uint256 auctionableRepAtFork = zoltar.getMigrationRepBalance(
 			address(migrationProxy),
@@ -798,7 +798,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			SecurityPoolForkerForkData storage parentData = _getForkData(parent);
 			SecurityPoolForkerForkData storage childData = _getForkData(securityPool);
 			if (parentData.forkQuestionMatchesPoolQuestion) {
-				require(childData.outcomeIndex <= uint256(BinaryOutcomes.BinaryOutcome.No), 'Bad outcome');
+				require(childData.outcomeIndex <= uint256(BinaryOutcomes.BinaryOutcome.No), 'Bad out');
 				return BinaryOutcomes.BinaryOutcome(childData.outcomeIndex);
 			}
 		}
@@ -815,6 +815,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	receive() external payable {
-		require(trustedAuctionAddresses[msg.sender], 'Trusted only');
+		require(trustedAuctionAddresses[msg.sender], 'Trusted');
 	}
 }
