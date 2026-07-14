@@ -154,7 +154,6 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		uint256 childOutcomeIndex
 	) private returns (bool moreToMigrate) {
 		if (msg.sender != vault) revert();
-		parent.updateVaultFees(vault);
 		ISecurityPool child = _getOrDeployOwnForkMigrationChild(parent, childOutcomeIndex);
 		(uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory currentRepByOutcome) = _exportUnresolvedRep(
 			parentEscalationGame,
@@ -180,7 +179,6 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		// from floor rounding remains unallocated as protocol residual.
 		_splitMigrationRepToChild(parent, childOutcomeIndex, childRepToTransfer, true, true);
 		migrationProxy.sweepChildRep(address(childEscalationGame), child.repToken(), childRepToTransfer);
-		_migrateVaultUnlockedState(parent, child, vault);
 		_recordForkedEscrowAndRefreshVault(
 			childEscalationGame,
 			child,
@@ -200,7 +198,6 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		address vault,
 		uint256 childOutcomeIndex
 	) private returns (bool moreToMigrate) {
-		parent.updateVaultFees(vault);
 		ISecurityPool child = _getOrDeployChildPool(parent, childOutcomeIndex);
 		(EscalationGame childEscalationGame, SecurityPoolMigrationProxy migrationProxy) = _loadChildEscalationAndProxy(
 			parent,
@@ -228,12 +225,6 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		migrationProxy.lockRep(childRepToTransfer);
 		_splitMigrationRepToChild(parent, childOutcomeIndex, childRepToTransfer, false, false);
 		migrationProxy.sweepChildRep(address(childEscalationGame), child.repToken(), childRepToTransfer);
-		// Once the child truth auction finalizes, ordinary vault migration is closed.
-		// Late continuation funding can add only the carried escalation escrow needed
-		// to resume the paused child continuation game.
-		if (childStillMigrating) {
-			_migrateVaultUnlockedState(parent, child, vault);
-		}
 		_recordForkedEscrowAndRefreshVault(
 			childEscalationGame,
 			child,
