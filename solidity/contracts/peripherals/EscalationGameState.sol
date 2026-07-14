@@ -38,8 +38,6 @@ abstract contract EscalationGameState {
 	mapping(address => uint256) internal unresolvedLocalDepositExportCursorByVault;
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
-	bool internal branchLocalForkCarryAccounting;
-	bool internal branchLocalForkCarryFundingStarted;
 
 	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event GameContinuedFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork);

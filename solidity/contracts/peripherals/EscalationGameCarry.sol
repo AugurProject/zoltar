@@ -16,22 +16,6 @@ import {
 } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCarry is EscalationGameCalculations {
-	function initializeForkCarrySnapshot(
-		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput,
-		uint256[3] memory snapshotLeafCountsInput,
-		uint256[3] memory snapshotCarryTotals,
-		bytes32[3] memory snapshotNullifierRoots
-	) external {
-		_initializeForkCarrySnapshot(
-			snapshotPeaksInput,
-			snapshotLeafCountsInput,
-			snapshotCarryTotals,
-			snapshotCarryTotals,
-			snapshotNullifierRoots,
-			false
-		);
-	}
-
 	function initializeForkCarrySnapshotWithResolutionBalances(
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput,
 		uint256[3] memory snapshotLeafCountsInput,
@@ -44,8 +28,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			snapshotLeafCountsInput,
 			snapshotCarryTotals,
 			snapshotResolutionBalances,
-			snapshotNullifierRoots,
-			false
+			snapshotNullifierRoots
 		);
 	}
 
@@ -104,7 +87,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function isForkCarryFundingComplete() external view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
-		if (branchLocalForkCarryAccounting && !branchLocalForkCarryFundingStarted) return false;
+		if (totalEscrowedRep == 0) return false;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			if (state.forkedEscrowSourcePrincipalTotal < state.inheritedUnresolvedTotal) return false;
@@ -176,14 +159,13 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		uint256[3] memory snapshotLeafCountsInput,
 		uint256[3] memory snapshotCarryTotals,
 		uint256[3] memory snapshotResolutionBalances,
-		bytes32[3] memory snapshotNullifierRoots,
-		bool branchLocalAccounting
+		bytes32[3] memory snapshotNullifierRoots
 	) private {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
-		if (snapshotResolutionBalances[0] == type(uint256).max) {
-			branchLocalAccounting = true;
+		bool branchLocalAccounting = snapshotResolutionBalances[0] == type(uint256).max;
+		if (branchLocalAccounting) {
 			snapshotCarryTotals = [uint256(0), uint256(0), uint256(0)];
 			snapshotResolutionBalances = [uint256(0), uint256(0), uint256(0)];
 		}
@@ -217,7 +199,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			totalCarry += snapshotCarryTotals[outcomeIndex];
 		}
 		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0 || branchLocalAccounting;
-		branchLocalForkCarryAccounting = branchLocalAccounting;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
 	}
@@ -295,7 +276,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		deposit = selectedOutcomeState.deposits[depositIndex];
 		require(deposit.amount > 0, 'Deposit settled');
 		selectedOutcomeState.deposits[depositIndex].amount = 0;
-		selectedOutcomeState.balance -= deposit.amount;
 		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amount, deposit.depositor);
 	}
 
