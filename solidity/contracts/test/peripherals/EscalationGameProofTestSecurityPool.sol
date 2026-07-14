@@ -63,9 +63,10 @@ contract EscalationGameProofTestSecurityPool {
 			ReputationToken rep = zoltar.getRepToken(universeId);
 			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
 		}
-		escalationGame.initializeForkCarrySnapshot(
+		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(
 			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
 			inheritedCarryTotals,
 			inheritedNullifierRoots
 		);

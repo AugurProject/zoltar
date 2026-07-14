@@ -888,21 +888,6 @@ contract SecurityPool is ISecurityPool {
 		emit EscalationGameSet(escalationGame);
 	}
 
-	function initializeForkCarrySnapshot(
-		bytes32[64][3] memory inheritedCarryPeaks,
-		uint256[3] memory inheritedCarryLeafCounts,
-		uint256[3] memory inheritedCarryTotals,
-		bytes32[3] memory inheritedNullifierRoots
-	) external onlyForker {
-		require(address(escalationGame) != address(0x0), 'Game missing');
-		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshot(
-			inheritedCarryPeaks,
-			inheritedCarryLeafCounts,
-			inheritedCarryTotals,
-			inheritedNullifierRoots
-		);
-	}
-
 	function initializeForkCarrySnapshotWithResolutionBalances(
 		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,
