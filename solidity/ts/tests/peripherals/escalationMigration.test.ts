@@ -911,7 +911,9 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should stop waiting once the last carried loser funds the continuation')
 		const childCostAtFunding = await getEscalationGameTotalCost(client, childEscalationGame)
-		strictEqualTypeSafe(childCostAtFunding, childCostAtResume, 'resuming the continuation should begin from the same frozen fork-time cost snapshot')
+		// The funding transaction resumes the game at its block timestamp, so a subsequent read may include one simulator second of accrual.
+		assert.ok(childCostAtFunding >= childCostAtResume, 'resuming the continuation should not reduce its frozen fork-time cost snapshot')
+		approximatelyEqual(childCostAtFunding, childCostAtResume, 100000000000000n, 'resuming the continuation should begin from the same frozen fork-time cost snapshot')
 
 		await mockWindow.advanceTime(DAY)
 		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtFunding, 'child continuation cost should advance again after the remaining carried funding arrives')
