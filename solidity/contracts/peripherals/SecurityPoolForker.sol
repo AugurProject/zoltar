@@ -409,7 +409,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		address vault,
 		uint256 childOutcomeIndex
 	) external returns (bool moreToMigrate) {
-		require(msg.sender == vault, 'Vault');
 		bytes memory returnData = _delegateMigrationCall(
 			escalationGameForkerDelegate,
 			abi.encodeCall(

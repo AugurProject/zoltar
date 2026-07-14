@@ -321,6 +321,8 @@ describe('Peripherals: escalation migration', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes))
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -331,7 +333,7 @@ describe('Peripherals: escalation migration', () => {
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Child not migrating/)
 	})
 
-	test('migrateVaultWithUnresolvedEscalation requires the vault owner to call it', async () => {
+	test('in-window external unresolved migration requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -625,7 +627,7 @@ describe('Peripherals: escalation migration', () => {
 		)
 	})
 
-	test('an unmigrated losing external-fork lock keeps the child paused until the losing vault funds its carry', async () => {
+	test('an unmigrated losing external-fork lock can be force-funded after the deadline', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -668,6 +670,7 @@ describe('Peripherals: escalation migration', () => {
 		}
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child branch should still become operational after the migration window')
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), true, 'the child should remain paused while the losing vault withholds its carry funding')
+		await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n * 10n ** 18n), /Fork await/)
 
 		let childResolution = await getQuestionResolution(client, childEscalationGame)
 		for (let days = 0; days < 14 && childResolution === QuestionOutcome.None; days += 1) {
@@ -691,8 +694,9 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, client.account.address), walletBalanceBeforeClaim, 'the honest winner should not receive child REP before the losing vault funds its carried lock')
 		strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)).repInEscalationGame, childVaultBeforeClaim.repInEscalationGame, 'the paused continuation should preserve the winner escrow while funding is incomplete')
 
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should resume once the losing vault finally migrates')
+		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should resume when a third party force-funds the losing carry after the deadline')
 
 		childResolution = await getQuestionResolution(client, childEscalationGame)
 		for (let days = 0; days < 14 && childResolution === QuestionOutcome.None; days += 1) {
@@ -907,7 +911,9 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should stop waiting once the last carried loser funds the continuation')
 		const childCostAtFunding = await getEscalationGameTotalCost(client, childEscalationGame)
-		strictEqualTypeSafe(childCostAtFunding, childCostAtResume, 'resuming the continuation should begin from the same frozen fork-time cost snapshot')
+		// The funding transaction resumes the game at its block timestamp, so a subsequent read may include one simulator second of accrual.
+		assert.ok(childCostAtFunding >= childCostAtResume, 'resuming the continuation should not reduce its frozen fork-time cost snapshot')
+		approximatelyEqual(childCostAtFunding, childCostAtResume, 100000000000000n, 'resuming the continuation should begin from the same frozen fork-time cost snapshot')
 
 		await mockWindow.advanceTime(DAY)
 		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtFunding, 'child continuation cost should advance again after the remaining carried funding arrives')
