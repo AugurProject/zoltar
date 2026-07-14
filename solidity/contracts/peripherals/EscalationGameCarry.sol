@@ -16,21 +16,6 @@ import {
 } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCarry is EscalationGameCalculations {
-	function initializeForkCarrySnapshot(
-		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput,
-		uint256[3] memory snapshotLeafCountsInput,
-		uint256[3] memory snapshotCarryTotals,
-		bytes32[3] memory snapshotNullifierRoots
-	) external {
-		_initializeForkCarrySnapshot(
-			snapshotPeaksInput,
-			snapshotLeafCountsInput,
-			snapshotCarryTotals,
-			snapshotCarryTotals,
-			snapshotNullifierRoots
-		);
-	}
-
 	function initializeForkCarrySnapshotWithResolutionBalances(
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory snapshotPeaksInput,
 		uint256[3] memory snapshotLeafCountsInput,
@@ -102,6 +87,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function isForkCarryFundingComplete() external view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
+		if (totalEscrowedRep == 0) return false;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			if (state.forkedEscrowSourcePrincipalTotal < state.inheritedUnresolvedTotal) return false;
@@ -178,6 +164,11 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
+		bool branchLocalAccounting = snapshotResolutionBalances[0] == type(uint256).max;
+		if (branchLocalAccounting) {
+			snapshotCarryTotals = [uint256(0), uint256(0), uint256(0)];
+			snapshotResolutionBalances = [uint256(0), uint256(0), uint256(0)];
+		}
 		// Defensive invariant: valid escalation-game state should never carry a positive tied leader below non-decision into a child snapshot.
 		require(!_hasInvalidTiedResolutionMaximum(snapshotResolutionBalances), 'Resolution tie');
 
@@ -207,7 +198,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
 			totalCarry += snapshotCarryTotals[outcomeIndex];
 		}
-		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
+		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0 || branchLocalAccounting;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
 	}

@@ -19,6 +19,10 @@ contract EscalationGameProofTestSecurityPool {
 		securityPoolForker = configuredSecurityPoolForker;
 	}
 
+	function parent() external pure returns (address) {
+		return address(0x0);
+	}
+
 	function setEscalationGame(EscalationGame game) external {
 		require(address(escalationGame) == address(0), 'Escalation game proof harness already has a configured game');
 		escalationGame = game;
@@ -59,9 +63,10 @@ contract EscalationGameProofTestSecurityPool {
 			ReputationToken rep = zoltar.getRepToken(universeId);
 			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
 		}
-		escalationGame.initializeForkCarrySnapshot(
+		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(
 			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
 			inheritedCarryTotals,
 			inheritedNullifierRoots
 		);

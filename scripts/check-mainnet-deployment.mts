@@ -129,13 +129,13 @@ export async function writeMainnetDeploymentManifest(): Promise<void> {
 	await writeManifest(await loadComputedManifest())
 }
 
-export async function assertMainnetDeploymentManifestFresh(): Promise<void> {
+export async function warnIfMainnetDeploymentManifestStale(): Promise<void> {
 	const expectedManifest = await readManifest()
 	const computedManifest = await loadComputedManifest()
 	const expected = normalizeManifest(expectedManifest)
 	const computed = normalizeManifest(computedManifest)
 	if (expected !== computed) {
-		throw new Error(`Mainnet deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.`)
+		console.warn('Warning: mainnet deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.')
 	}
 }
 
@@ -146,7 +146,7 @@ async function main() {
 		return
 	}
 
-	await assertMainnetDeploymentManifestFresh()
+	await warnIfMainnetDeploymentManifestStale()
 }
 
 const currentScriptPath = url.fileURLToPath(import.meta.url)

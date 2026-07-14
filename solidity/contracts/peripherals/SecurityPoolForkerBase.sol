@@ -76,12 +76,11 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 				uint256[3] memory inheritedCarryTotals,
 				bytes32[3] memory inheritedNullifierRoots
 			) = parentEscalationGame.getForkCarrySnapshot();
-			uint256[3] memory inheritedResolutionBalances = parentEscalationGame.getOutcomeBalances();
 			child.initializeForkCarrySnapshotWithResolutionBalances(
 				inheritedCarryPeaks,
 				inheritedCarryLeafCounts,
 				inheritedCarryTotals,
-				inheritedResolutionBalances,
+				[type(uint256).max, uint256(0), uint256(0)],
 				inheritedNullifierRoots
 			);
 		}

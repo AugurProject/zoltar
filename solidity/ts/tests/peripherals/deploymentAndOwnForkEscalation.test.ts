@@ -2,7 +2,11 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Abi, Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testsuite/simulator/utils/clients'
-import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { getQuestionResolution as readQuestionResolution } from '../../testsuite/simulator/utils/contracts/escalationGame'
+import { deployChild } from '../../testsuite/simulator/utils/contracts/zoltar'
+import { finalizeTruthAuction, startTruthAuction } from '../../testsuite/simulator/utils/contracts/securityPoolForker'
+import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 
 describe('Peripherals: deployment and own-fork escalation', () => {
 	const fixture = usePeripheralsDeploymentAndOwnForkEscalationFixture()
@@ -153,6 +157,45 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const missingUniverseId = 999999n
 
 		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe is missing/)
+	})
+
+	test('reuses and authorizes the share token when sibling universes deploy the same market', async () => {
+		const forkQuestionData = {
+			...questionData,
+			title: `sibling share token source ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkQuestionId = getQuestionId(forkQuestionData, outcomes)
+		await createQuestion(client, forkQuestionData, outcomes)
+		await mockWindow.setTime(forkQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkQuestionId)
+		for (const outcome of [QuestionOutcome.Yes, QuestionOutcome.No]) {
+			await deployChild(client, genesisUniverse, BigInt(outcome))
+		}
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
+		await deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, noUniverse, questionId, securityMultiplier)
+
+		const yesPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), yesUniverse, questionId, securityMultiplier)
+		const noPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), noUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(yesPoolAddresses.shareToken, noPoolAddresses.shareToken, 'sibling markets should reuse their share token')
+		for (const [securityPool, universe] of [
+			[yesPoolAddresses.securityPool, yesUniverse],
+			[noPoolAddresses.securityPool, noUniverse],
+		] as const) {
+			await client.simulateContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: yesPoolAddresses.shareToken,
+				functionName: 'mintCompleteSets',
+				args: [universe, client.account.address, 1n],
+				account: securityPool,
+			})
+		}
+		assert.ok(await contractExists(client, yesPoolAddresses.securityPool), 'yes sibling security pool should deploy')
+		assert.ok(await contractExists(client, noPoolAddresses.securityPool), 'no sibling security pool should deploy')
 	})
 
 	test('origin security pool deployment derives protocol parameters for the first deployer', async () => {
@@ -407,6 +450,61 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const childEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
 		strictEqualTypeSafe(migratedRepAfter - migratedRepBefore, expectedUnlockedMigratedRep, 'own-fork unresolved migration should count only unlocked pool REP as migrated REP')
 		assert.ok(childEscrow > 0n, 'own-fork unresolved migration should record child escalation escrow without preparation')
+	})
+
+	test('own-fork unresolved escalation resolves to the selected child outcome after maximum escalation time', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		if (vaultRep < 4n * forkThreshold) await approveAndDepositRep(client, 4n * forkThreshold - vaultRep, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesChildPool)
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesChildPool)
+		if ((await getSystemState(client, yesChildPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, yesChildPool)
+		const childEscalationEndDate = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getEscalationGameEndDate',
+			address: childEscalationGame,
+		})
+		await mockWindow.setTime(childEscalationEndDate + 1n)
+
+		strictEqualTypeSafe(await readQuestionResolution(client, childEscalationGame), QuestionOutcome.Yes, 'own-fork carried escrow should settle according to the selected child outcome instead of remaining tied forever')
+
+		const winningProof = await createCarryProof(client, await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool), {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 0n,
+			leafIndex: 0n,
+			merkleMountainRangePeakIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		})
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const walletRepBeforeClaim = await getERC20Balance(client, childRepToken, client.account.address)
+		await client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: yesChildPool,
+			functionName: 'withdrawForkedEscalationDeposits',
+			args: [QuestionOutcome.Yes, [winningProof]],
+		})
+		const childYesEscrow = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getForkedEscrowByVaultAndOutcome',
+			address: childEscalationGame,
+			args: [client.account.address, QuestionOutcome.Yes],
+		})
+		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) > walletRepBeforeClaim, 'own-fork carried winning proof should pay the selected child outcome')
+		strictEqualTypeSafe(childYesEscrow[3], childYesEscrow[2], 'own-fork carried winning proof should claim its child escrow')
 	})
 
 	test('own-fork unresolved migration still works after a prior own-fork claim reduces parent escrow', async () => {

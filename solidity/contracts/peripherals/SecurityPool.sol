@@ -691,8 +691,8 @@ contract SecurityPool is ISecurityPool {
 	function createCompleteSet() external payable isOperational {
 		// Child pools mint complete sets only after migration and truth-auction
 		// accounting have restored `SystemState.Operational`.
-		require(!isEscalationResolved(), 'Resolved');
-		require(msg.value > 0, 'Need ETH');
+		require(!awaitingForkContinuation, 'Fork await');
+		require(msg.value > 0 && !isEscalationResolved(), 'Resolved');
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
@@ -886,21 +886,6 @@ contract SecurityPool is ISecurityPool {
 			elapsedAtFork
 		);
 		emit EscalationGameSet(escalationGame);
-	}
-
-	function initializeForkCarrySnapshot(
-		bytes32[64][3] memory inheritedCarryPeaks,
-		uint256[3] memory inheritedCarryLeafCounts,
-		uint256[3] memory inheritedCarryTotals,
-		bytes32[3] memory inheritedNullifierRoots
-	) external onlyForker {
-		require(address(escalationGame) != address(0x0), 'Game missing');
-		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshot(
-			inheritedCarryPeaks,
-			inheritedCarryLeafCounts,
-			inheritedCarryTotals,
-			inheritedNullifierRoots
-		);
 	}
 
 	function initializeForkCarrySnapshotWithResolutionBalances(
