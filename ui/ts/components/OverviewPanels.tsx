@@ -1,3 +1,5 @@
+import * as appCopy from '../copy/app.js'
+import * as commonCopy from '../copy/common.js'
 import { RouteHeader } from './RouteHeader.js'
 import { AddressValue } from './AddressValue.js'
 import { Badge } from './Badge.js'
@@ -10,33 +12,6 @@ import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
-import {
-	UI_STRING_ADDRESS,
-	UI_STRING_AUGUR_PLACEHOLDER_OVERVIEW_PANELS_AUGUR_PLACEHOLDER_TITLE,
-	UI_STRING_CONNECT_WALLET,
-	UI_STRING_CONNECTED,
-	UI_STRING_CONNECTING,
-	UI_STRING_ETH,
-	UI_STRING_FORKED,
-	UI_STRING_GO_TO_GENESIS_UNIVERSE,
-	UI_STRING_NOT_CONNECTED,
-	UI_STRING_OPERATIONS,
-	UI_STRING_PARENT_UNIVERSE,
-	UI_STRING_READ_ONLY,
-	UI_STRING_REFRESH_REP_PRICES,
-	UI_STRING_REFRESHING_REP_PRICES,
-	UI_STRING_REP,
-	UI_STRING_REP_PER_ETH_COMPACT,
-	UI_STRING_REP_USDC,
-	UI_STRING_SIMULATION,
-	UI_STRING_SIMULATION_MODE_USES_BROWSER_LOCAL_CONTRACT_STATE_TRANSACTIONS_DO_NOT_AFFECT_A_PUBLIC_NETWORK,
-	UI_STRING_THIS_UNIVERSE_HAS_FORKED,
-	UI_STRING_UNIVERSE,
-	UI_STRING_USDC,
-	UI_STRING_WETH,
-	UI_STRING_WRONG_NETWORK_OVERVIEW_PANELS_WRONG_NETWORK_BADGE_LABEL,
-	UI_STRING_ZOLTAR_FORKED_ON,
-} from '../lib/uiStrings.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 export function OverviewPanels({
 	activeUniverseId,
@@ -79,22 +54,22 @@ export function OverviewPanels({
 	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {
-		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{UI_STRING_SIMULATION}</Badge>
-		if (hasWrongWalletNetwork) return <Badge tone='danger'>{UI_STRING_WRONG_NETWORK_OVERVIEW_PANELS_WRONG_NETWORK_BADGE_LABEL}</Badge>
-		if (accountState.address === undefined) return <Badge tone='pending'>{UI_STRING_READ_ONLY}</Badge>
-		return <Badge tone='ok'>{UI_STRING_CONNECTED}</Badge>
+		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
+		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.wrongNetworkBadgeLabel}</Badge>
+		if (accountState.address === undefined) return <Badge tone='pending'>{appCopy.readOnly}</Badge>
+		return <Badge tone='ok'>{appCopy.connected}</Badge>
 	})()
 	const environmentDescription = (() => {
-		if (isBrowserSimulationReadBackend) return UI_STRING_SIMULATION_MODE_USES_BROWSER_LOCAL_CONTRACT_STATE_TRANSACTIONS_DO_NOT_AFFECT_A_PUBLIC_NETWORK
+		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
 		return undefined
 	})()
 	const operationsHeaderDescription = (() => {
 		const forkDescription = (() => {
 			if (!universeHasForked) return undefined
-			if (universeForkTime === undefined) return UI_STRING_THIS_UNIVERSE_HAS_FORKED
+			if (universeForkTime === undefined) return appCopy.universeForkedDetail
 			return (
 				<>
-					{UI_STRING_ZOLTAR_FORKED_ON} <TimestampValue timestamp={universeForkTime} />.
+					{appCopy.zoltarForkedOn} <TimestampValue timestamp={universeForkTime} />.
 				</>
 			)
 		})()
@@ -113,45 +88,45 @@ export function OverviewPanels({
 					actions={
 						accountState.address === undefined ? (
 							<button className='secondary' type='button' onClick={onConnect} disabled={isConnectingWallet}>
-								{isConnectingWallet ? <LoadingText>{UI_STRING_CONNECTING}</LoadingText> : UI_STRING_CONNECT_WALLET}
+								{isConnectingWallet ? <LoadingText>{appCopy.connecting}</LoadingText> : commonCopy.connectWallet}
 							</button>
 						) : undefined
 					}
 					badge={
 						<span className='environment-badge-row'>
 							{environmentBadge}
-							{universeHasForked ? <Badge tone='warning'>{UI_STRING_FORKED}</Badge> : undefined}
+							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>
 					}
 					description={operationsHeaderDescription}
-					eyebrow={UI_STRING_OPERATIONS}
-					title={UI_STRING_AUGUR_PLACEHOLDER_OVERVIEW_PANELS_AUGUR_PLACEHOLDER_TITLE}
+					eyebrow={appCopy.operations}
+					title={appCopy.augurPlaceholderTitle}
 				/>
 				<DataGrid className='overview-inline-metrics' columns='auto'>
-					<MetricField className='overview-address-metric' label={UI_STRING_ADDRESS}>
+					<MetricField className='overview-address-metric' label={appCopy.address}>
 						{(() => {
 							if (isWalletAddressLoading)
 								return (
 									<span className='loading-value'>
 										<span className='spinner' aria-hidden='true' />
-										{UI_STRING_CONNECTING}
+										{appCopy.connecting}
 									</span>
 								)
-							if (accountState.address === undefined) return UI_STRING_NOT_CONNECTED
+							if (accountState.address === undefined) return appCopy.notConnected
 
 							return <AddressValue address={accountState.address} />
 						})()}
 					</MetricField>
 					{showAccountBalances ? (
 						<>
-							<MetricField label={UI_STRING_ETH}>
-								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={UI_STRING_ETH} compactWhenOverflow />
+							<MetricField label={commonCopy.eth}>
+								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={commonCopy.eth} compactWhenOverflow />
 							</MetricField>
-							<MetricField label={UI_STRING_WETH}>
-								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={UI_STRING_WETH} compactWhenOverflow />
+							<MetricField label={commonCopy.weth}>
+								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={commonCopy.weth} compactWhenOverflow />
 							</MetricField>
-							<MetricField label={UI_STRING_REP}>
-								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix={UI_STRING_REP} compactWhenOverflow />
+							<MetricField label={commonCopy.rep}>
+								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
 							</MetricField>
 						</>
 					) : undefined}
@@ -159,9 +134,9 @@ export function OverviewPanels({
 						label={
 							<span className='metric-label-with-action'>
 								<span>
-									{UI_STRING_REP_PER_ETH_COMPACT} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+									{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 								</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={UI_STRING_REFRESH_REP_PRICES} title={isRefreshingRepPrices ? UI_STRING_REFRESHING_REP_PRICES : UI_STRING_REFRESH_REP_PRICES}>
+								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
 									↻
 								</button>
 							</span>
@@ -172,15 +147,15 @@ export function OverviewPanels({
 					<MetricField
 						label={
 							<>
-								{UI_STRING_REP_USDC} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
+								{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
 							</>
 						}
 					>
-						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={UI_STRING_USDC} units={6} />
+						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />
 					</MetricField>
-					<MetricField label={UI_STRING_UNIVERSE}>{universeLabel}</MetricField>
+					<MetricField label={commonCopy.universe}>{universeLabel}</MetricField>
 					{shouldShowParentUniverse ? (
-						<MetricField label={UI_STRING_PARENT_UNIVERSE}>
+						<MetricField label={appCopy.parentUniverse}>
 							<UniverseLink universeId={parentUniverseId} />
 						</MetricField>
 					) : undefined}
@@ -191,7 +166,7 @@ export function OverviewPanels({
 						presentation={universePresentation}
 						actions={
 							<button className='secondary' onClick={onGoToGenesisUniverse}>
-								{UI_STRING_GO_TO_GENESIS_UNIVERSE}
+								{commonCopy.goToGenesisUniverse}
 							</button>
 						}
 					/>

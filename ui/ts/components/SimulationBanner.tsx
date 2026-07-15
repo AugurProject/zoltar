@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
@@ -12,76 +14,13 @@ import { OperationModal } from './OperationModal.js'
 import { TimestampValue } from './TimestampValue.js'
 import { Badge } from './Badge.js'
 import type { BadgeTone } from '../types/components.js'
-import {
-	UI_STRING_1_DAY,
-	UI_STRING_1_HOUR,
-	UI_STRING_1_MONTH,
-	UI_STRING_1_WEEK,
-	UI_STRING_1_YEAR,
-	UI_STRING_ACTIONS,
-	UI_STRING_ACTIVE,
-	UI_STRING_BLOCKCHAIN_TIME,
-	UI_STRING_BLOCKS,
-	UI_STRING_BOOTSTRAPPING,
-	UI_STRING_BROWSER_SIMULATION,
-	UI_STRING_BUILT_IN_SCENARIOS,
-	UI_STRING_BUILT_IN_SCENARIOS_CANNOT_BE_DELETED,
-	UI_STRING_CONTROLS,
-	UI_STRING_COPIED,
-	UI_STRING_COPY_JSON,
-	UI_STRING_DELETE_SAVE,
-	UI_STRING_DELETE_SAVED_SIMULATION_STATE,
-	UI_STRING_ERROR,
-	UI_STRING_EXPORT_NAME,
-	UI_STRING_EXPORT_SIMULATION_STATE,
-	UI_STRING_EXPORT_STATE,
-	UI_STRING_FAILED_TO_EXPORT_THE_CURRENT_SIMULATION_STATE,
-	UI_STRING_FAILED_TO_UPDATE_THE_SAVED_SIMULATION_STATE,
-	UI_STRING_IMPORT_AND_LOAD,
-	UI_STRING_IMPORT_SIMULATION_STATE,
-	UI_STRING_IMPORT_STATE,
-	UI_STRING_JSON_STATE,
-	UI_STRING_MINE_BLOCK,
-	UI_STRING_MINT_1_MILLION_REP,
-	UI_STRING_NO_CORRUPTED_SAVED_SIMULATION_STATES_WERE_FOUND,
-	UI_STRING_PREPARING_THE_SELECTED_SIMULATION_SCENARIO_IN_THE_BACKGROUND,
-	UI_STRING_QA_ACCOUNT,
-	UI_STRING_QA_CONTROLS_PRICES_AND_TIME_TRAVEL,
-	UI_STRING_QUERY_DELAY_MS,
-	UI_STRING_SIMULATION_CONTROL_HELP_TEXT,
-	UI_STRING_READY,
-	UI_STRING_REFRESH_EXPORT,
-	UI_STRING_REMOVE_CORRUPTED_SAVED_STATES,
-	UI_STRING_REMOVE_CORRUPTED_SAVES,
-	UI_STRING_REMOVE_SAVED_SIMULATION_STATE_ENTRIES_THAT_ARE_NO_LONGER_READABLE_FROM_BROWSER,
-	UI_STRING_REP_ETH_MOCK_PRICE,
-	UI_STRING_REP_USDC_MOCK_PRICE,
-	UI_STRING_RESET_SCENARIO,
-	UI_STRING_SAVE,
-	UI_STRING_SAVED_STATES,
-	UI_STRING_SAVE_SIMULATION_STATE,
-	UI_STRING_SAVE_STATE,
-	UI_STRING_SCENARIO,
-	UI_STRING_SIMULATION_MODE,
-	UI_STRING_SIMULATION_QA_ACCOUNT,
-	UI_STRING_SIMULATION_SCENARIO,
-	UI_STRING_STATE_NAME,
-	UI_STRING_TIME_TRAVEL,
-	UI_STRING_TRANSACTIONS,
-	UI_STRING_TRANSACTION_RECEIPT_DELAY_MS,
-	UI_STRING_USE_THESE_CONTROLS_FOR_REPEATABLE_MANUAL_UI_QA_WITHOUT_A_WALLET_EXTENSION,
-	UI_TEMPLATE_CUSTOM_STATE_VALUE_BASED_ON_VALUE_SAVED_VALUE,
-	UI_TEMPLATE_DELETE_SAVED_SIMULATION_STATE_DETAIL,
-	UI_TEMPLATE_QA_VALUE,
-	UI_TEMPLATE_SAVED_SIMULATION_STATE_VALUE_NO_LONGER_EXISTS,
-} from '../lib/uiStrings.js'
 
 const SIMULATION_TIME_PRESETS = [
-	{ label: UI_STRING_1_HOUR, seconds: 60n * 60n },
-	{ label: UI_STRING_1_DAY, seconds: 24n * 60n * 60n },
-	{ label: UI_STRING_1_WEEK, seconds: 7n * 24n * 60n * 60n },
-	{ label: UI_STRING_1_MONTH, seconds: 30n * 24n * 60n * 60n },
-	{ label: UI_STRING_1_YEAR, seconds: 365n * 24n * 60n * 60n },
+	{ label: simulationCopy.plus1Hour, seconds: 60n * 60n },
+	{ label: simulationCopy.plus1Day, seconds: 24n * 60n * 60n },
+	{ label: simulationCopy.plus1Week, seconds: 7n * 24n * 60n * 60n },
+	{ label: simulationCopy.plus1Month, seconds: 30n * 24n * 60n * 60n },
+	{ label: simulationCopy.plus1Year, seconds: 365n * 24n * 60n * 60n },
 ] as const
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
@@ -128,25 +67,25 @@ function hasSavedSimulationStateRoute() {
 }
 
 function getSimulationAccountOptionLabel(account: string) {
-	return UI_TEMPLATE_QA_VALUE(account)
+	return simulationCopy.formatQaValue(account)
 }
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
 	if (parameters.bootstrapError !== undefined) {
 		return {
 			badgeTone: 'blocked',
-			label: UI_STRING_ERROR,
+			label: commonCopy.error,
 		}
 	}
 	if (parameters.isBootstrapped) {
 		return {
 			badgeTone: 'ok',
-			label: UI_STRING_READY,
+			label: simulationCopy.ready,
 		}
 	}
 	return {
 		badgeTone: 'pending',
-		label: UI_STRING_BOOTSTRAPPING,
+		label: simulationCopy.bootstrapping,
 	}
 }
 
@@ -242,7 +181,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		try {
 			await work()
 		} catch (error) {
-			savedStateError.value = getErrorMessage(error, UI_STRING_FAILED_TO_UPDATE_THE_SAVED_SIMULATION_STATE)
+			savedStateError.value = getErrorMessage(error, simulationCopy.savedStateUpdateError)
 		} finally {
 			busy.value = false
 		}
@@ -271,14 +210,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		try {
 			exportStateText.value = await controller.exportState(nextName)
 		} catch (error) {
-			savedStateError.value = getErrorMessage(error, UI_STRING_FAILED_TO_EXPORT_THE_CURRENT_SIMULATION_STATE)
+			savedStateError.value = getErrorMessage(error, simulationCopy.stateExportError)
 		}
 	}
 
 	let scenarioDetail = bootstrapError.value
 	if (scenarioDetail === undefined) {
-		scenarioDetail =
-			currentSource.value.kind === 'saved-state' ? UI_TEMPLATE_CUSTOM_STATE_VALUE_BASED_ON_VALUE_SAVED_VALUE(currentSource.value.name, getSimulationScenarioLabel(currentSource.value.baseScenario), new Date(currentSource.value.savedAt).toLocaleString()) : getSimulationScenarioDescription(currentScenario.value)
+		scenarioDetail = currentSource.value.kind === 'saved-state' ? simulationCopy.formatSavedStateDetail(currentSource.value.name, getSimulationScenarioLabel(currentSource.value.baseScenario), new Date(currentSource.value.savedAt).toLocaleString()) : getSimulationScenarioDescription(currentScenario.value)
 	}
 	const scenarioStatus = getScenarioStatus({
 		bootstrapError: bootstrapError.value,
@@ -289,8 +227,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		<section className='panel contract-panel simulation-banner'>
 			<div className='contract-panel-header simulation-banner-header'>
 				<div>
-					<h2>{UI_STRING_SIMULATION_MODE}</h2>
-					<p className='detail'>{UI_STRING_BROWSER_SIMULATION}</p>
+					<h2>{simulationCopy.simulationMode}</h2>
+					<p className='detail'>{simulationCopy.browserSimulation}</p>
 				</div>
 			</div>
 			<div className='contract-list simulation-banner-list'>
@@ -298,14 +236,14 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					<div className='contract-copy'>
 						<div className='contract-topline'>
 							<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
-							<h3>{UI_STRING_SCENARIO}</h3>
+							<h3>{simulationCopy.scenario}</h3>
 						</div>
 						<p className='detail'>{scenarioDetail}</p>
 						{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 						{bootstrapError.value === undefined && isBootstrapping.value ? (
 							<p className='detail'>
 								<span className='spinner' aria-hidden='true' />
-								{bootstrapLabel.value ?? UI_STRING_PREPARING_THE_SELECTED_SIMULATION_SCENARIO_IN_THE_BACKGROUND}
+								{bootstrapLabel.value ?? simulationCopy.scenarioPreparationDetail}
 							</p>
 						) : undefined}
 						{isBootstrapping.value ? (
@@ -316,7 +254,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</div>
 					<select
 						className='simulation-control-select'
-						aria-label={UI_STRING_SIMULATION_SCENARIO}
+						aria-label={simulationCopy.simulationScenario}
 						value={currentSource.value.kind === 'saved-state' ? `saved:${currentSource.value.stateId}` : `scenario:${currentScenario.value}`}
 						disabled={busy.value || isBootstrapping.value}
 						onChange={event => {
@@ -332,7 +270,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}}
 					>
-						<optgroup label={UI_STRING_BUILT_IN_SCENARIOS}>
+						<optgroup label={simulationCopy.builtInScenarios}>
 							{SIMULATION_SCENARIOS.map(scenario => (
 								<option key={scenario} value={`scenario:${scenario}`}>
 									{getSimulationScenarioLabel(scenario)}
@@ -340,7 +278,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							))}
 						</optgroup>
 						{savedStateRecords.value.length === 0 ? undefined : (
-							<optgroup label={UI_STRING_SAVED_STATES}>
+							<optgroup label={simulationCopy.savedStates}>
 								{savedStateRecords.value.map(record => (
 									<option key={record.id} value={`saved:${record.id}`}>
 										{record.name}
@@ -353,13 +291,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<Badge tone='ok'>{UI_STRING_ACTIVE}</Badge>
-							<h3>{UI_STRING_QA_ACCOUNT}</h3>
+							<Badge tone='ok'>{commonCopy.active}</Badge>
+							<h3>{simulationCopy.qaAccount}</h3>
 						</div>
 					</div>
 					<select
 						className='simulation-control-select'
-						aria-label={UI_STRING_SIMULATION_QA_ACCOUNT}
+						aria-label={simulationCopy.simulationQaAccount}
 						value={selectedAccount.value}
 						disabled={busy.value || !isBootstrapped.value}
 						onChange={event => {
@@ -379,29 +317,29 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				</div>
 				<div className='simulation-banner-stats'>
 					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>{UI_STRING_BLOCKS}</span>
+						<span className='simulation-stat-label'>{simulationCopy.blocks}</span>
 						<strong>{blockCountSinceReset.value.toString()}</strong>
 					</div>
 					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>{UI_STRING_TRANSACTIONS}</span>
+						<span className='simulation-stat-label'>{simulationCopy.transactions}</span>
 						<strong>{transactionCountSinceReset.value.toString()}</strong>
 					</div>
 					<div className='simulation-stat-card simulation-stat-card-wide'>
-						<span className='simulation-stat-label'>{UI_STRING_BLOCKCHAIN_TIME}</span>
+						<span className='simulation-stat-label'>{simulationCopy.blockchainTime}</span>
 						<strong>
 							<TimestampValue currentTimestamp={currentTimestamp.value} timestamp={currentTimestamp.value} />
 						</strong>
 					</div>
 				</div>
 				<details className='simulation-advanced-controls'>
-					<summary>{UI_STRING_QA_CONTROLS_PRICES_AND_TIME_TRAVEL}</summary>
+					<summary>{simulationCopy.qaControlsPricesAndTimeTravel}</summary>
 					<div className='simulation-banner-controls'>
 						<div className='contract-copy'>
-							<h3>{UI_STRING_CONTROLS}</h3>
-							<p className='detail'>{UI_STRING_USE_THESE_CONTROLS_FOR_REPEATABLE_MANUAL_UI_QA_WITHOUT_A_WALLET_EXTENSION}</p>
+							<h3>{simulationCopy.controls}</h3>
+							<p className='detail'>{simulationCopy.manualQaDescription}</p>
 							<div className='simulation-delay-grid'>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{UI_STRING_QUERY_DELAY_MS}</span>
+									<span className='simulation-delay-label'>{simulationCopy.queryDelayMs}</span>
 									<input
 										className='simulation-control-input'
 										type='number'
@@ -419,7 +357,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{UI_STRING_REP_ETH_MOCK_PRICE}</span>
+									<span className='simulation-delay-label'>{simulationCopy.repEthMockPrice}</span>
 									<input
 										className='simulation-control-input'
 										type='text'
@@ -442,7 +380,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{UI_STRING_REP_USDC_MOCK_PRICE}</span>
+									<span className='simulation-delay-label'>{simulationCopy.repUsdcMockPrice}</span>
 									<input
 										className='simulation-control-input'
 										type='text'
@@ -465,7 +403,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{UI_STRING_TRANSACTION_RECEIPT_DELAY_MS}</span>
+									<span className='simulation-delay-label'>{simulationCopy.transactionReceiptDelayMs}</span>
 									<input
 										className='simulation-control-input'
 										type='number'
@@ -483,20 +421,20 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 									/>
 								</label>
 							</div>
-							<p className='detail'>{UI_STRING_SIMULATION_CONTROL_HELP_TEXT}</p>
+							<p className='detail'>{simulationCopy.simulationControlHelpText}</p>
 						</div>
 						<div className='simulation-control-groups'>
 							<div className='simulation-control-group'>
-								<span className='simulation-control-group-label'>{UI_STRING_ACTIONS}</span>
+								<span className='simulation-control-group-label'>{simulationCopy.actions}</span>
 								<div className='button-row simulation-button-row'>
 									<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
-										{UI_STRING_RESET_SCENARIO}
+										{simulationCopy.resetScenario}
 									</button>
 									<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
-										{UI_STRING_MINE_BLOCK}
+										{simulationCopy.mineBlock}
 									</button>
 									<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
-										{UI_STRING_MINT_1_MILLION_REP}
+										{simulationCopy.mint1MillionRep}
 									</button>
 									<button
 										className='secondary'
@@ -507,10 +445,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										}}
 										disabled={busy.value || !isBootstrapped.value}
 									>
-										{UI_STRING_SAVE_STATE}
+										{simulationCopy.saveState}
 									</button>
 									<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
-										{UI_STRING_EXPORT_STATE}
+										{simulationCopy.exportState}
 									</button>
 									<button
 										className='secondary'
@@ -521,7 +459,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										}}
 										disabled={busy.value}
 									>
-										{UI_STRING_IMPORT_STATE}
+										{simulationCopy.importState}
 									</button>
 									{savedStateStorageWarning.value === undefined ? undefined : (
 										<button
@@ -532,7 +470,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 											}}
 											disabled={busy.value}
 										>
-											{UI_STRING_REMOVE_CORRUPTED_SAVES}
+											{simulationCopy.removeCorruptedSaves}
 										</button>
 									)}
 									{currentSource.value.kind !== 'saved-state' ? undefined : (
@@ -544,13 +482,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 											}}
 											disabled={busy.value}
 										>
-											{UI_STRING_DELETE_SAVE}
+											{simulationCopy.deleteSave}
 										</button>
 									)}
 								</div>
 							</div>
 							<div className='simulation-control-group'>
-								<span className='simulation-control-group-label'>{UI_STRING_TIME_TRAVEL}</span>
+								<span className='simulation-control-group-label'>{simulationCopy.timeTravel}</span>
 								<div className='button-row simulation-button-row simulation-time-travel-row'>
 									{SIMULATION_TIME_PRESETS.map(preset => (
 										<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
@@ -563,9 +501,9 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</div>
 				</details>
 			</div>
-			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title={UI_STRING_SAVE_SIMULATION_STATE}>
+			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
 				<div className='field'>
-					<label htmlFor='simulation-save-name'>{UI_STRING_STATE_NAME}</label>
+					<label htmlFor='simulation-save-name'>{simulationCopy.stateName}</label>
 					<input id='simulation-save-name' className='simulation-control-input' type='text' value={saveName.value} onInput={event => (saveName.value = event.currentTarget.value)} />
 				</div>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
@@ -578,17 +516,17 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						{UI_STRING_SAVE}
+						{simulationCopy.save}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title={UI_STRING_EXPORT_SIMULATION_STATE}>
+			<OperationModal isOpen={modal.value === 'export'} onClose={closeModal} title={simulationCopy.exportSimulationState}>
 				<div className='field'>
-					<label htmlFor='simulation-export-name'>{UI_STRING_EXPORT_NAME}</label>
+					<label htmlFor='simulation-export-name'>{simulationCopy.exportName}</label>
 					<input id='simulation-export-name' className='simulation-control-input' type='text' value={exportName.value} onInput={event => (exportName.value = event.currentTarget.value)} />
 				</div>
 				<div className='field'>
-					<label htmlFor='simulation-export-json'>{UI_STRING_JSON_STATE}</label>
+					<label htmlFor='simulation-export-json'>{simulationCopy.jsonState}</label>
 					<textarea id='simulation-export-json' rows={14} value={exportStateText.value} readOnly />
 				</div>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
@@ -602,16 +540,16 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						{UI_STRING_REFRESH_EXPORT}
+						{simulationCopy.refreshExport}
 					</button>
 					<button type='button' className='secondary' disabled={exportStateText.value.trim() === ''} onClick={() => void copyText(exportStateText.value)}>
-						{copied.value ? UI_STRING_COPIED : UI_STRING_COPY_JSON}
+						{copied.value ? commonCopy.copied : simulationCopy.copyJson}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title={UI_STRING_IMPORT_SIMULATION_STATE}>
+			<OperationModal isOpen={modal.value === 'import'} onClose={closeModal} title={simulationCopy.importSimulationState}>
 				<div className='field'>
-					<label htmlFor='simulation-import-json'>{UI_STRING_JSON_STATE}</label>
+					<label htmlFor='simulation-import-json'>{simulationCopy.jsonState}</label>
 					<textarea id='simulation-import-json' rows={14} value={importStateText.value} onInput={event => (importStateText.value = event.currentTarget.value)} />
 				</div>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
@@ -624,12 +562,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						{UI_STRING_IMPORT_AND_LOAD}
+						{simulationCopy.importAndLoad}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title={UI_STRING_DELETE_SAVED_SIMULATION_STATE}>
-				<p className='detail'>{currentSource.value.kind === 'saved-state' ? UI_TEMPLATE_DELETE_SAVED_SIMULATION_STATE_DETAIL(currentSource.value.name) : UI_STRING_BUILT_IN_SCENARIOS_CANNOT_BE_DELETED}</p>
+			<OperationModal isOpen={modal.value === 'delete'} onClose={closeModal} title={simulationCopy.deleteSavedSimulationState}>
+				<p className='detail'>{currentSource.value.kind === 'saved-state' ? simulationCopy.formatDeleteSavedSimulationStateDetail(currentSource.value.name) : simulationCopy.builtInScenarioDeletionReason}</p>
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
 				<div className='actions'>
 					<button
@@ -639,7 +577,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 						onClick={() =>
 							void runNavigationControl(async () => {
 								if (currentSource.value.kind !== 'saved-state') return
-								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(UI_TEMPLATE_SAVED_SIMULATION_STATE_VALUE_NO_LONGER_EXISTS(currentSource.value.name))
+								if (!deleteSavedSimulationState(currentSource.value.stateId, savedStateStorage)) throw new Error(simulationCopy.formatMissingSavedStateError(currentSource.value.name))
 								const baseScenario = currentSource.value.baseScenario
 								reloadSavedStateRecords()
 								navigateToBuiltInScenario(baseScenario)
@@ -647,12 +585,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}
 					>
-						{UI_STRING_DELETE_SAVE}
+						{simulationCopy.deleteSave}
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title={UI_STRING_REMOVE_CORRUPTED_SAVED_STATES}>
-				<p className='detail'>{UI_STRING_REMOVE_SAVED_SIMULATION_STATE_ENTRIES_THAT_ARE_NO_LONGER_READABLE_FROM_BROWSER}</p>
+			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title={simulationCopy.removeCorruptedSavedStates}>
+				<p className='detail'>{simulationCopy.invalidSavedStateCleanupHint}</p>
 				{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 				{savedStateError.value === undefined ? undefined : <p className='detail'>{savedStateError.value}</p>}
 				<div className='actions'>
@@ -664,7 +602,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							savedStateStorageWarning.value = undefined
 							void runNavigationControl(async () => {
 								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
-								if (removedCount === 0) throw new Error(UI_STRING_NO_CORRUPTED_SAVED_SIMULATION_STATES_WERE_FOUND)
+								if (removedCount === 0) throw new Error(simulationCopy.corruptedSavesEmptyError)
 								clearSavedStateStorageWarning()
 								if (hasSavedSimulationStateRoute()) {
 									navigateToBuiltInScenario(currentScenario.value)
@@ -674,7 +612,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}}
 					>
-						{UI_STRING_REMOVE_CORRUPTED_SAVES}
+						{simulationCopy.removeCorruptedSaves}
 					</button>
 				</div>
 			</OperationModal>

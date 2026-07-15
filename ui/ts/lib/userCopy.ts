@@ -1,36 +1,9 @@
+import * as commonCopy from '../copy/common.js'
+import * as userMessagesCopy from '../copy/userMessages.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { assertNever } from './assert.js'
 import { getWrongNetworkMessage } from './network.js'
 import type { LoadableValueState } from './loadState.js'
-import {
-	UI_STRING_CHOOSE_A_UNIVERSE_TO_CONTINUE,
-	UI_STRING_CHOOSE_ANOTHER_UNIVERSE,
-	UI_STRING_CONNECT_WALLET,
-	UI_STRING_CONNECT_WALLET_TO_CONTINUE,
-	UI_STRING_CREATE_A_POOL_FROM_AN_EXACT_YES_NO_QUESTION_TO_ENABLE_SHARES_REPORTING_AND_VAULT_WORKFLOWS,
-	UI_STRING_GO_TO_GENESIS_UNIVERSE,
-	UI_STRING_INSTALL_OR_ENABLE_A_WALLET_TO_CONTINUE,
-	UI_STRING_LOAD_SECURITY_POOLS_TO_CHECK_WHAT_IS_AVAILABLE_IN_THIS_UNIVERSE,
-	UI_STRING_LOADING,
-	UI_STRING_LOADING_UNIVERSE_DETAILS,
-	UI_STRING_LOADING_WITH_ELLIPSIS,
-	UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER,
-	UI_STRING_NO_SECURITY_POOLS_ARE_AVAILABLE_IN_THIS_UNIVERSE,
-	UI_STRING_NONE,
-	UI_STRING_NOT_CHECKED,
-	UI_STRING_NOT_FOUND,
-	UI_STRING_OPEN_ONE_OF_THE_SECTIONS_BELOW,
-	UI_STRING_OR_TRY_ANOTHER_ID,
-	UI_STRING_PAGE_NOT_FOUND,
-	UI_STRING_QUESTIONS_USER_COPY_REPORT_QUESTION_NOUN,
-	UI_STRING_REFRESH,
-	UI_STRING_REFRESHING_POOLS,
-	UI_STRING_REPORTS,
-	UI_STRING_RETRIEVING,
-	UI_STRING_SWITCH_TO_ETHEREUM_MAINNET,
-	UI_STRING_TO_CHECK_THIS_ID,
-	UI_STRING_WRONG_NETWORK,
-} from './uiStrings.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'page_not_found' | 'load_failed'
 
@@ -46,7 +19,7 @@ export type UserMessagePresentation = {
 	placeholder?: string
 }
 
-const METRIC_PLACEHOLDER = UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
+const METRIC_PLACEHOLDER = commonCopy.metricUnavailablePlaceholder
 
 function createPresentation(key: UserMessageKey, presentation: Omit<UserMessagePresentation, 'key'>): UserMessagePresentation {
 	return { key, ...presentation }
@@ -56,9 +29,9 @@ export function getMetricPlaceholderPresentation(value: unknown, options?: { loa
 	if (value !== undefined) return undefined
 	if (options?.loading === true)
 		return createPresentation('loading', {
-			badgeLabel: UI_STRING_LOADING,
+			badgeLabel: commonCopy.loading,
 			badgeTone: 'pending',
-			placeholder: UI_STRING_LOADING_WITH_ELLIPSIS,
+			placeholder: commonCopy.loadingWithEllipsis,
 		})
 	return createPresentation('unavailable', {
 		placeholder: METRIC_PLACEHOLDER,
@@ -82,40 +55,40 @@ export function getPoolRegistryPresentation(
 		if (input.poolCount > 0) return undefined
 		if (input.isLoading)
 			return createPresentation('loading', {
-				badgeLabel: UI_STRING_LOADING,
+				badgeLabel: commonCopy.loading,
 				badgeTone: 'pending',
-				detail: UI_STRING_REFRESHING_POOLS,
+				detail: userMessagesCopy.refreshingPoolRegistryDetail,
 			})
 		if (!input.hasLoaded)
 			return createPresentation('not_checked', {
-				badgeLabel: UI_STRING_NOT_CHECKED,
+				badgeLabel: userMessagesCopy.notChecked,
 				badgeTone: 'muted',
-				detail: UI_STRING_LOAD_SECURITY_POOLS_TO_CHECK_WHAT_IS_AVAILABLE_IN_THIS_UNIVERSE,
+				detail: userMessagesCopy.uncheckedPoolRegistryDetail,
 			})
 		return createPresentation('empty', {
-			actionHint: UI_STRING_CREATE_A_POOL_FROM_AN_EXACT_YES_NO_QUESTION_TO_ENABLE_SHARES_REPORTING_AND_VAULT_WORKFLOWS,
-			badgeLabel: UI_STRING_NONE,
+			actionHint: userMessagesCopy.emptyPoolRegistryActionHint,
+			badgeLabel: commonCopy.none,
 			badgeTone: 'muted',
-			detail: UI_STRING_NO_SECURITY_POOLS_ARE_AVAILABLE_IN_THIS_UNIVERSE,
+			detail: userMessagesCopy.emptyPoolRegistryDetail,
 		})
 	}
 
 	switch (input.state) {
 		case 'loading':
 			return createPresentation('loading', {
-				badgeLabel: UI_STRING_LOADING,
+				badgeLabel: commonCopy.loading,
 				badgeTone: 'pending',
-				detail: UI_STRING_LOADING_WITH_ELLIPSIS,
+				detail: commonCopy.loadingWithEllipsis,
 				detailIsLoading: true,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				badgeLabel: UI_STRING_NOT_CHECKED,
+				badgeLabel: userMessagesCopy.notChecked,
 				badgeTone: 'muted',
 			})
 		case 'missing':
 			return createPresentation('not_found', {
-				badgeLabel: UI_STRING_NOT_FOUND,
+				badgeLabel: commonCopy.notFound,
 				badgeTone: 'blocked',
 			})
 		case 'ready':
@@ -129,22 +102,22 @@ export function getUniversePresentation(state: LoadableValueState) {
 	switch (state) {
 		case 'loading':
 			return createPresentation('loading', {
-				badgeLabel: UI_STRING_LOADING,
+				badgeLabel: commonCopy.loading,
 				badgeTone: 'pending',
-				detail: UI_STRING_LOADING_UNIVERSE_DETAILS,
+				detail: commonCopy.loadingUniverseDetails,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				badgeLabel: UI_STRING_NOT_CHECKED,
+				badgeLabel: userMessagesCopy.notChecked,
 				badgeTone: 'muted',
-				detail: UI_STRING_CHOOSE_A_UNIVERSE_TO_CONTINUE,
+				detail: userMessagesCopy.uncheckedUniverseDetail,
 			})
 		case 'missing':
 			return createPresentation('not_found', {
-				actionHint: UI_STRING_GO_TO_GENESIS_UNIVERSE,
-				badgeLabel: UI_STRING_NOT_FOUND,
+				actionHint: commonCopy.goToGenesisUniverse,
+				badgeLabel: commonCopy.notFound,
 				badgeTone: 'blocked',
-				detail: UI_STRING_CHOOSE_ANOTHER_UNIVERSE,
+				detail: userMessagesCopy.missingUniverseDetail,
 			})
 		case 'ready':
 			return undefined
@@ -159,45 +132,44 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWa
 
 	if (!walletAvailable)
 		return createPresentation('wallet_disconnected', {
-			badgeLabel: UI_STRING_CONNECT_WALLET,
+			badgeLabel: commonCopy.connectWallet,
 			badgeTone: 'blocked',
-			detail: UI_STRING_INSTALL_OR_ENABLE_A_WALLET_TO_CONTINUE,
+			detail: userMessagesCopy.walletInstallationRequired,
 		})
 	if (accountAddress === undefined)
 		return createPresentation('wallet_disconnected', {
-			badgeLabel: UI_STRING_CONNECT_WALLET,
+			badgeLabel: commonCopy.connectWallet,
 			badgeTone: 'blocked',
-			detail: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
+			detail: commonCopy.walletConnectionRequired,
 		})
 	if (!supportedChain)
 		return createPresentation('wrong_network', {
-			badgeLabel: UI_STRING_WRONG_NETWORK,
+			badgeLabel: userMessagesCopy.wrongNetwork,
 			badgeTone: 'blocked',
-			detail: getWrongNetworkMessage() ?? UI_STRING_SWITCH_TO_ETHEREUM_MAINNET,
+			detail: getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason,
 		})
 	return undefined
 }
 
 export function getReportPresentation({ kind, state }: { kind: 'question' | 'report'; state: LoadableValueState }) {
-	const noun = kind === 'question' ? UI_STRING_QUESTIONS_USER_COPY_REPORT_QUESTION_NOUN : UI_STRING_REPORTS
 	switch (state) {
 		case 'loading':
 			return createPresentation('loading', {
-				detail: UI_STRING_RETRIEVING,
+				detail: userMessagesCopy.retrieving,
 				detailIsLoading: true,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				actionHint: `${UI_STRING_REFRESH} ${noun}`,
-				badgeLabel: UI_STRING_NOT_CHECKED,
+				actionHint: userMessagesCopy.formatRefreshLookupAction(kind),
+				badgeLabel: userMessagesCopy.notChecked,
 				badgeTone: 'muted',
-				detail: `${UI_STRING_REFRESH} ${noun} ${UI_STRING_TO_CHECK_THIS_ID}`,
+				detail: userMessagesCopy.formatUncheckedLookupDetail(kind),
 			})
 		case 'missing':
 			return createPresentation('not_found', {
-				badgeLabel: UI_STRING_NOT_FOUND,
+				badgeLabel: commonCopy.notFound,
 				badgeTone: 'blocked',
-				detail: `${UI_STRING_REFRESH} ${noun} ${UI_STRING_OR_TRY_ANOTHER_ID}`,
+				detail: userMessagesCopy.formatMissingLookupDetail(kind),
 			})
 		case 'ready':
 			return undefined
@@ -208,8 +180,8 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 
 export function getPageNotFoundPresentation() {
 	return createPresentation('page_not_found', {
-		actionHint: UI_STRING_OPEN_ONE_OF_THE_SECTIONS_BELOW,
-		badgeLabel: UI_STRING_PAGE_NOT_FOUND,
+		actionHint: userMessagesCopy.pageNotFoundActionHint,
+		badgeLabel: commonCopy.pageNotFound,
 		badgeTone: 'blocked',
 	})
 }

@@ -68,7 +68,7 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Deployment in progress.')
-		expectTransactionButtonDisabled(document.body, 'Deploying...')
+		expectTransactionButtonDisabled(document.body, 'Deploying…')
 	})
 
 	test('shows the connect-wallet branch when account is missing', async () => {

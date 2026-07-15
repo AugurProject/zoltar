@@ -1,20 +1,10 @@
+import * as commonCopy from '../copy/common.js'
+import * as deploymentCopy from '../copy/deployment.js'
 import type { BadgeTone, DeploymentSectionProps } from '../types/components.js'
 import { Badge } from './Badge.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
-import {
-	UI_STRING_CAN_DEPLOY_NOW,
-	UI_STRING_CODE_FOUND_AT_EXPECTED_ADDRESS,
-	UI_STRING_CONNECT_WALLET_TO_CONTINUE,
-	UI_STRING_DEPLOY,
-	UI_STRING_DEPLOYED,
-	UI_STRING_DEPLOYING,
-	UI_STRING_DEPLOYMENT_IN_PROGRESS,
-	UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
-	UI_STRING_WAITING,
-	UI_TEMPLATE_WAITING_FOR_PREREQUISITE_DETAIL,
-} from '../lib/uiStrings.js'
 
 type StepStatus = {
 	badgeTone: BadgeTone
@@ -27,46 +17,46 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
-			detail: UI_STRING_CODE_FOUND_AT_EXPECTED_ADDRESS,
-			label: UI_STRING_DEPLOYED,
-			buttonLabel: UI_STRING_DEPLOYED,
+			detail: deploymentCopy.expectedCodeFoundStatus,
+			label: commonCopy.deployed,
+			buttonLabel: commonCopy.deployed,
 		}
 
 	if (isBusy)
 		return {
 			badgeTone: 'pending',
-			detail: UI_STRING_DEPLOYMENT_IN_PROGRESS,
-			label: UI_STRING_DEPLOYING,
-			buttonLabel: UI_STRING_DEPLOYING,
+			detail: deploymentCopy.deploymentRunningStatus,
+			label: deploymentCopy.deploying,
+			buttonLabel: deploymentCopy.deploying,
 		}
 
 	if (prerequisiteLabel === undefined) {
 		if (accountAddress === undefined)
 			return {
 				badgeTone: 'pending',
-				detail: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
-				label: UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
-				buttonLabel: UI_STRING_DEPLOY,
+				detail: commonCopy.walletConnectionRequired,
+				label: deploymentCopy.notDeployedBadgeLabel,
+				buttonLabel: commonCopy.deploy,
 			}
 		if (!isMainnet)
 			return {
 				badgeTone: 'pending',
-				label: UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
-				buttonLabel: UI_STRING_DEPLOY,
+				label: deploymentCopy.notDeployedBadgeLabel,
+				buttonLabel: commonCopy.deploy,
 			}
 		return {
 			badgeTone: 'pending',
-			detail: UI_STRING_CAN_DEPLOY_NOW,
-			label: UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
-			buttonLabel: UI_STRING_DEPLOY,
+			detail: deploymentCopy.deploymentReadyStatus,
+			label: deploymentCopy.notDeployedBadgeLabel,
+			buttonLabel: commonCopy.deploy,
 		}
 	}
 
 	return {
 		badgeTone: 'blocked',
-		detail: UI_TEMPLATE_WAITING_FOR_PREREQUISITE_DETAIL(prerequisiteLabel),
-		label: UI_STRING_WAITING,
-		buttonLabel: UI_STRING_DEPLOY,
+		detail: deploymentCopy.formatWaitingForPrerequisiteDetail(prerequisiteLabel),
+		label: deploymentCopy.waiting,
+		buttonLabel: commonCopy.deploy,
 	}
 }
 
@@ -97,7 +87,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRING_DEPLOYING} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>
 					)
 				})}

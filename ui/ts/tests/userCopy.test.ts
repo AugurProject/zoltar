@@ -27,7 +27,7 @@ void describe('user copy helpers', () => {
 		expect(getUniversePresentation('missing')?.key).toBe('not_found')
 		expect(getReportPresentation({ kind: 'question', state: 'unknown' })?.actionHint).toBe('Refresh questions')
 		expect(getReportPresentation({ kind: 'question', state: 'loading' })).toEqual({
-			detail: 'retrieving...',
+			detail: 'retrieving…',
 			detailIsLoading: true,
 			key: 'loading',
 		})
@@ -50,7 +50,7 @@ void describe('user copy helpers', () => {
 			badgeLabel: 'Loading',
 			badgeTone: 'pending',
 			key: 'loading',
-			placeholder: 'Loading...',
+			placeholder: 'Loading…',
 		})
 		expect(getMetricPlaceholderPresentation('value')).toBeUndefined()
 		expect(getMetricPlaceholderPresentation(undefined)).toEqual({
@@ -65,7 +65,7 @@ void describe('user copy helpers', () => {
 		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: true, mode: 'collection', poolCount: 0 })?.key).toBe('loading')
 		expect(getUniversePresentation('loading')?.key).toBe('loading')
 		expect(getUniversePresentation('ready')).toBeUndefined()
-		expect(getReportPresentation({ kind: 'report', state: 'loading' })?.detail).toBe('retrieving...')
+		expect(getReportPresentation({ kind: 'report', state: 'loading' })?.detail).toBe('retrieving…')
 		expect(getReportPresentation({ kind: 'report', state: 'ready' })).toBeUndefined()
 		expect(getPageNotFoundPresentation().key).toBe('page_not_found')
 	})

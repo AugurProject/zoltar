@@ -1,5 +1,5 @@
+import * as commonCopy from '../copy/common.js'
 import { CurrencyValue } from './CurrencyValue.js'
-import { UI_STRING_MAX, UI_STRING_UNLIMITED_APPROVAL } from '../lib/uiStrings.js'
 
 export const APPROVAL_MAX_DISPLAY_THRESHOLD = (1n << 200n) - 1n
 
@@ -28,8 +28,8 @@ export function ApprovedAmountValue({ className = '', copyable = true, decimals 
 
 	if (isApprovalAmountMaxDisplay(value))
 		return (
-			<span className={['currency-value', 'approval-max', toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} title={UI_STRING_UNLIMITED_APPROVAL}>
-				{UI_STRING_MAX}
+			<span className={['currency-value', 'approval-max', toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} title={commonCopy.unlimitedApproval}>
+				{commonCopy.max}
 			</span>
 		)
 

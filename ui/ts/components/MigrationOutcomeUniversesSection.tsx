@@ -1,8 +1,9 @@
+import * as commonCopy from '../copy/common.js'
+import * as zoltarCopy from '../copy/zoltar.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
-import { UI_STRING_ADD_ANOTHER_UNIVERSE, UI_STRING_ALREADY_MIGRATED, UI_STRING_NO_OUTCOME_UNIVERSES_AVAILABLE, UI_STRING_OUTCOME_UNIVERSES, UI_STRING_REP, UI_STRING_YOUR_BALANCE } from '../lib/uiStrings.js'
 
 type MigrationOutcomeUniversesSectionProps = {
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -43,15 +44,15 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 			badge={
 				isScalarFork ? (
 					<button className='quiet' type='button' onClick={onAddNextOutcome} disabled={disabled || !hasAddableOutcome}>
-						{UI_STRING_ADD_ANOTHER_UNIVERSE}
+						{zoltarCopy.addAnotherUniverse}
 					</button>
 				) : undefined
 			}
 			className='migration-outcome-section'
-			title={UI_STRING_OUTCOME_UNIVERSES}
+			title={zoltarCopy.outcomeUniverses}
 		>
 			{childUniverses.length === 0 ? (
-				<p className='detail'>{UI_STRING_NO_OUTCOME_UNIVERSES_AVAILABLE}</p>
+				<p className='detail'>{zoltarCopy.outcomeUniversesEmpty}</p>
 			) : (
 				<OutcomeSelectionList
 					items={childUniverses.map(child => {
@@ -62,15 +63,15 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 							details: (
 								<>
 									<span>
-										{UI_STRING_YOUR_BALANCE}{' '}
+										{zoltarCopy.walletBalanceLabel}{' '}
 										<strong>
-											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={UI_STRING_REP} />
+											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
 									<span>
-										{UI_STRING_ALREADY_MIGRATED}{' '}
+										{zoltarCopy.migratedBalanceLabel}{' '}
 										<strong>
-											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={UI_STRING_REP} /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={UI_STRING_REP} />
+											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
 								</>

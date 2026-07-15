@@ -239,7 +239,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateCheckRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Checking Duplicate...', 'Checking whether a pool already exists for this question and security multiplier.')
+		expectTransactionButtonDisabled(document.body, 'Checking Duplicate…', 'Checking whether a pool already exists for this question and security multiplier.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -252,7 +252,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = creatingRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Creating Pool...', 'Security pool creation is already in progress.')
+		expectTransactionButtonDisabled(document.body, 'Creating Pool…', 'Security pool creation is already in progress.')
 	})
 
 	test('renders duplicate and forked branch messaging and button labels', async () => {

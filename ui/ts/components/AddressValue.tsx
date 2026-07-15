@@ -1,9 +1,9 @@
+import * as commonCopy from '../copy/common.js'
 import { useSignalEffect } from '@preact/signals'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatAddress } from '../lib/addresses.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
-import { UI_STRING_COPIED, UI_TEMPLATE_COPY_ADDRESS_VALUE } from '../lib/uiStrings.js'
 
 type AddressValueProps = {
 	address: string | undefined
@@ -63,8 +63,8 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 	const displayValue = shouldShorten ? formatAddress(address) : address
 
 	return (
-		<button ref={buttonRef} type='button' className={`address-value copyable ${className}`} title={address} aria-label={UI_TEMPLATE_COPY_ADDRESS_VALUE(address)} onClick={() => copyText(address)}>
-			{copied.value ? UI_STRING_COPIED : displayValue}
+		<button ref={buttonRef} type='button' className={`address-value copyable ${className}`} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} onClick={() => copyText(address)}>
+			{copied.value ? commonCopy.copied : displayValue}
 			<span ref={measureRef} aria-hidden='true' className='address-value-measure'>
 				{address}
 			</span>

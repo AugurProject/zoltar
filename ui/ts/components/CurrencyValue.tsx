@@ -1,9 +1,10 @@
+import * as commonCopy from '../copy/common.js'
+import * as pricingCopy from '../copy/pricing.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatCompactCurrencyBalance, formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
-import { UI_STRING_COPIED, UI_STRING_LOADING_WITH_ELLIPSIS, UI_TEMPLATE_COPY_EXACT_CURRENCY_VALUE } from '../lib/uiStrings.js'
 
 type CurrencyValueProps = {
 	className?: string
@@ -68,7 +69,7 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 		}
 	}, [compactWhenOverflow, copiedValue, displayValue, value])
 
-	if (loading) return <LoadingText className={`currency-value loading ${className}`}>{UI_STRING_LOADING_WITH_ELLIPSIS}</LoadingText>
+	if (loading) return <LoadingText className={`currency-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</LoadingText>
 
 	if (value === undefined || exactValue === undefined || displayValue === undefined || compactDisplayValue === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
 
@@ -89,8 +90,8 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 
 	return (
 		<span className='currency-value-wrap'>
-			<button ref={buttonRef} type='button' className={valueClassName} title={exactTitle} aria-label={UI_TEMPLATE_COPY_EXACT_CURRENCY_VALUE(exactValue)} onClick={() => copyText(exactValue)}>
-				{copiedValue ? UI_STRING_COPIED : resolvedDisplayValue}
+			<button ref={buttonRef} type='button' className={valueClassName} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactValue)} onClick={() => copyText(exactValue)}>
+				{copiedValue ? commonCopy.copied : resolvedDisplayValue}
 			</button>
 			<span ref={measureRef} aria-hidden='true' className={measureClassName} />
 		</span>
