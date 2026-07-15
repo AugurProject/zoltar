@@ -41,7 +41,7 @@ Prefer spacing and dividers for simple grouping. Avoid decorative nesting and no
 
 ## Components and reuse
 
-Inspect `ui/ts/components` and the touched route before introducing a primitive or pattern.
+Inspect shared `ui/ts/components`, the relevant `ui/ts/features/*/components`, and the touched route before introducing a primitive or pattern.
 
 - Reuse a component when its semantic role, behavior, and accessibility match the need.
 - Adapt composition around the closest shared pattern when that preserves its meaning.
@@ -59,7 +59,7 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 - Keep related data near the actions it unlocks and action placement stable across state changes.
 - Avoid oversized empty panels and cramped control clusters.
 - Use serif display type only for route or hero headings, mono for labels/addresses/hashes/numbers, and sans-serif for body copy and controls.
-- Use semantic variables from `ui/css/index.css`; add a semantic token for a genuinely new role instead of a raw one-off color.
+- Use semantic variables from `ui/css/tokens.css`; add a semantic token for a genuinely new role instead of a raw one-off color.
 - Reserve stronger accent treatment for active, focused, or meaningful status states.
 - Keep gradients, glow, shine, and overlays subtle and mostly page-level.
 

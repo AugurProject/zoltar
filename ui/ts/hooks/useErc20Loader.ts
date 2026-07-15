@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { loadErc20Allowance, loadErc20Balance } from '../contracts.js'
+import { loadErc20Allowance, loadErc20Balance } from '../protocol/index.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'

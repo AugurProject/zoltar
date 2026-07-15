@@ -1,7 +1,7 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isAddress, isHex, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { parseBigIntInput, tryParseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement } from './tokenApproval.js'
+import { parseBigIntInput, tryParseBigIntInput } from './integerInput.js'
 
 export function tryParseAddressInput(value: string): Address | undefined {
 	const trimmed = value.trim()

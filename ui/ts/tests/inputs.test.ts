@@ -17,7 +17,6 @@ import {
 	resolveOptionalAddressInput,
 	resolveOptionalBigIntListInput,
 } from '../lib/inputs.js'
-import { parseOptionalRepAmountInput, parseRepAmountInput, parseTimestampInput } from '../lib/marketForm.js'
 
 void describe('input helpers', () => {
 	void test('parses and trims required address inputs', () => {
@@ -71,9 +70,6 @@ void describe('input helpers', () => {
 
 	void test('parseOptional functions cover whitespace and boundary behavior', () => {
 		expect(parseOptionalBigIntInput(' 3, 4 , ')).toBeUndefined()
-		expect(parseOptionalRepAmountInput('')).toBe(undefined)
-		expect(parseOptionalRepAmountInput('abc')).toBe(undefined)
-		expect(parseOptionalRepAmountInput('1.25')).toBe(1_250_000_000_000_000_000n)
 	})
 
 	void test('parses lists and report outcomes with boundary handling', () => {
@@ -98,8 +94,6 @@ void describe('input helpers', () => {
 	})
 
 	void test('resolves parsed amounts and shortages across branches', () => {
-		expect(parseRepAmountInput('2.5', 'REP amount')).toBe(2_500_000_000_000_000_000n)
-		expect(() => parseRepAmountInput('x', 'REP amount')).toThrow('REP amount must be a decimal number')
 		expect(balanceShortage(undefined, 5n)).toBe(undefined)
 		expect(balanceShortage(5n, undefined)).toBe(undefined)
 		expect(balanceShortage(5n, 5n)).toBe(0n)
@@ -108,10 +102,5 @@ void describe('input helpers', () => {
 		expect(approvalShortage(11n, 10n)).toBe(1n)
 		expect(approvalTargetAmount(11n, 10n)).toBe(11n)
 		expect(approvalTargetAmount(10n, 10n)).toBe(undefined)
-	})
-
-	void test('parses timestamps and exposes malformed errors', () => {
-		expect(parseTimestampInput('2025-01-01T00:00:00Z', 'Some time')).toBeGreaterThan(0n)
-		expect(() => parseTimestampInput('not-a-time', 'Some time')).toThrow('Some time is invalid')
 	})
 })

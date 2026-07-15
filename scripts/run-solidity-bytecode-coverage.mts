@@ -127,7 +127,7 @@ const writeCoverageSummary = async (summary: SolidityCoverageSummary): Promise<v
 const testShards = [
 	[
 		'solidity/ts/tests/erc1155.test.ts',
-		'solidity/ts/tests/escalationGame_forkThreshold.test.ts',
+		'solidity/ts/tests/escalationGameForkThreshold.test.ts',
 		'solidity/ts/tests/zoltar.test.ts',
 		'solidity/ts/tests/deploymentStatusOracle.test.ts',
 		'solidity/ts/tests/escalationGame.test.ts',

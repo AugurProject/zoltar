@@ -1,5 +1,5 @@
 import { test } from 'bun:test'
-import assert from '../testsuite/simulator/utils/assert'
+import assert from '../testSupport/simulator/utils/assert'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
 function getForkerStorageLayout(artifacts: Record<string, unknown>, sourcePath: string, contractName: string) {

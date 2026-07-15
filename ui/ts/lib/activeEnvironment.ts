@@ -1,6 +1,6 @@
 import type { ChainBackend } from './chainBackend.js'
 import { createInjectedBackend } from './chainBackend.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorMessage } from './errors.js'
 import type { NetworkProfile } from './networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'

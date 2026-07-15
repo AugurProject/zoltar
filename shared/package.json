@@ -43,6 +43,10 @@
 			"types": "./ts/truthAuctionTickMath.ts",
 			"default": "./js/truthAuctionTickMath.js"
 		},
+		"./sortStringArrayByKeccak": {
+			"types": "./ts/sortStringArrayByKeccak.ts",
+			"default": "./js/sortStringArrayByKeccak.js"
+		},
 		"./testing/scalarOutcomeParityFixtures": {
 			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
 			"default": "./js/testing/scalarOutcomeParityFixtures.js"

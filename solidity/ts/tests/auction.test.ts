@@ -1,9 +1,9 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
+import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { contractExists, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { encodeAbiParameters, keccak256, type Address } from '@zoltar/shared/ethereum'
 import {
 	computeClearing,
@@ -29,14 +29,14 @@ import {
 	withdrawBids,
 	getEthRaiseCap,
 	getEthRaised,
-} from '../testsuite/simulator/utils/contracts/auction'
-import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
-import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath'
-import assert from '../testsuite/simulator/utils/assert'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { getUniformPriceDualCapBatchAuctionAddress } from '../testsuite/simulator/utils/contracts/deployments'
-import { addressString } from '../testsuite/simulator/utils/bigint'
+} from '../testSupport/simulator/utils/contracts/auction'
+import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
+import assert from '../testSupport/simulator/utils/assert'
+import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
+import { addressString } from '../testSupport/simulator/utils/bigint'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 
 // ============ MODULE-LEVEL CONSTANTS ============

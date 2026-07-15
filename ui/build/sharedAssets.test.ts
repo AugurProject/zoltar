@@ -10,11 +10,11 @@ import { clearVendorOutput, vendor } from './vendor.mts'
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
 const uiRootPath = path.join(repositoryRootPath, 'ui')
-const uiContractsPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts.ts')
-const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deploymentHelpers.ts')
-const uiReportingDomainPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'reportingDomain.ts')
+const uiProtocolPaths = ['forks.ts', 'openOracle.ts', 'trading.ts'].map(fileName => path.join(repositoryRootPath, 'ui', 'ts', 'protocol', fileName))
+const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(repositoryRootPath, 'ui', 'ts', 'features', 'reporting', 'lib', 'reportingDomain.ts')
 const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'simulation', 'bootstrap.ts')
-const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'truthAuctionBook.ts')
+const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
 const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
 const uiWatchBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'watch.mts')
@@ -23,6 +23,7 @@ const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'i
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
+	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
 	'micro-eth-signer/advanced/abi.js': './vendor/micro-eth-signer/advanced/abi.js',
@@ -306,22 +307,22 @@ function getExportedNames(filePath: string, imports: Record<string, string>, exp
 }
 
 test('shared helper package imports resolve to browser-served shared outputs', () => {
-	const contractsSource = fs.readFileSync(uiContractsPath, 'utf8')
+	const protocolSource = uiProtocolPaths.map(protocolPath => fs.readFileSync(protocolPath, 'utf8')).join('\n')
 	const deploymentHelpersSource = fs.readFileSync(uiDeploymentHelpersPath, 'utf8')
 	const simulationBootstrapSource = fs.readFileSync(uiSimulationBootstrapPath, 'utf8')
 	const uiIndexHtml = fs.readFileSync(uiIndexHtmlPath, 'utf8')
 
-	expect(contractsSource).toContain("from './contracts/helpers.js'")
-	expect(contractsSource).toContain("from './contracts/deploymentHelpers.js'")
-	expect(contractsSource).toContain("from '@zoltar/shared/bigInt'")
+	expect(protocolSource).toContain("from './helpers.js'")
+	expect(protocolSource).toContain("from './deploymentHelpers.js'")
+	expect(protocolSource).toContain("from '@zoltar/shared/bigInt'")
 	expect(simulationBootstrapSource).toContain("from '@zoltar/shared/constants'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/oracleInitialReport'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/protocolConfig'")
-	expect(contractsSource).toContain("from '@zoltar/shared/ethereum'")
+	expect(protocolSource).toContain("from '@zoltar/shared/ethereum'")
 	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/shared/escalationMath'")
 	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/shared/truthAuctionTickMath'")
-	expect(contractsSource).not.toContain('./shared/bigInt.js')
+	expect(protocolSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
@@ -332,6 +333,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
 	expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
 

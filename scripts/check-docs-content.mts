@@ -181,8 +181,8 @@ assert.ok(
 	'definition pileup fixture should be detected',
 )
 
-const whitepaper = await Bun.file('docs/whitepaper_placeholder.html').text()
-const openOracleIntegration = await Bun.file('docs/openOracleIntegration.html').text()
+const whitepaper = await Bun.file('docs/placeholder-whitepaper.html').text()
+const openOracleIntegration = await Bun.file('docs/open-oracle-integration.html').text()
 const operatorReference = await Bun.file('docs/operator-reference.md').text()
 const escalationGameArchitecture = await Bun.file('docs/escalation-game-architecture.html').text()
 const startHere = await Bun.file('docs/start-here.html').text()

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, normalizeAnvilTransactionParams, validateLocalAnvilRpcUrl } from '../testsuite/simulator/AnvilWindowEthereum'
+import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, normalizeAnvilTransactionParams, validateLocalAnvilRpcUrl } from '../testSupport/simulator/AnvilWindowEthereum'
 
 type JsonRpcRequest = {
 	readonly id: number | string

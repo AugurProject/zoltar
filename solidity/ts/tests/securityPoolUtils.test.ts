@@ -1,10 +1,10 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
-import { strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)

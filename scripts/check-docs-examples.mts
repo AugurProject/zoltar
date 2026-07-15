@@ -192,9 +192,9 @@ async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourc
 }
 
 async function checkCollateralRepairExample(): Promise<void> {
-	const html = await readFile('docs/whitepaper_placeholder.html', 'utf8')
+	const html = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 	const window = new Window({
-		url: pathToFileURL('docs/whitepaper_placeholder.html').href,
+		url: pathToFileURL('docs/placeholder-whitepaper.html').href,
 	})
 	window.document.write(html)
 	window.document.close()
@@ -203,7 +203,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 		const script = window.document.querySelector('script:not([src])')
 		const scriptText = script?.textContent
 		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error('docs/whitepaper_placeholder.html is missing an inline collateral repair script')
+			throw new Error('docs/placeholder-whitepaper.html is missing an inline collateral repair script')
 		}
 
 		const runScript = new Function('window', 'document', scriptText)
@@ -211,7 +211,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 
 		const example = window.document.getElementById('collateral-repair-example')
 		if (example === null) {
-			throw new Error('docs/whitepaper_placeholder.html is missing #collateral-repair-example')
+			throw new Error('docs/placeholder-whitepaper.html is missing #collateral-repair-example')
 		}
 
 		const output = (name: string) => {
@@ -244,7 +244,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 }
 
 async function checkUnderfundedPrefixExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'underfunded-auction-example')
+	const example = await loadInteractiveExample('docs/placeholder-whitepaper.html', 'underfunded-auction-example')
 
 	try {
 		assertEqual(example.output('tickStatus'), 'inputs are consistent with a winning-prefix bid', 'underfunded prefix example default status')
@@ -267,7 +267,7 @@ async function checkUnderfundedPrefixExample(): Promise<void> {
 }
 
 async function checkResolutionEdgeExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'resolution-edge-example')
+	const example = await loadInteractiveExample('docs/placeholder-whitepaper.html', 'resolution-edge-example')
 
 	try {
 		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example default result')
@@ -302,7 +302,7 @@ async function checkResolutionEdgeExample(): Promise<void> {
 }
 
 async function checkPayoutRegionExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'payout-region-example')
+	const example = await loadInteractiveExample('docs/placeholder-whitepaper.html', 'payout-region-example')
 
 	try {
 		assertEqual(example.output('payoutState'), 'reachable ordinary winner state', 'payout region example default state')
@@ -322,7 +322,7 @@ async function checkPayoutRegionExample(): Promise<void> {
 }
 
 async function checkFixedExposureCostExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/openOracleIntegration.html', 'fixed-exposure-cost-example')
+	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'fixed-exposure-cost-example')
 
 	try {
 		assertEqual(example.output('fixedReportedPrice'), '2,431 REP/ETH', 'fixed exposure default reported price')
@@ -354,7 +354,7 @@ async function checkFixedExposureCostExample(): Promise<void> {
 }
 
 async function checkRollingLockCostExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/openOracleIntegration.html', 'rolling-lock-cost-example')
+	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'rolling-lock-cost-example')
 
 	try {
 		assertEqual(example.output('lockDisputeCount'), '179', 'rolling lock default dispute count')
@@ -436,7 +436,7 @@ const scenarios: AuctionExampleScenario[] = [
 		defaultAliceReceives: '1 REP',
 		defaultBobReceives: '1.33 REP',
 		defaultCarolReceives: '1.67 REP',
-		filePath: 'docs/whitepaper_placeholder.html',
+		filePath: 'docs/placeholder-whitepaper.html',
 		exampleId: 'auction-clearing-example',
 	},
 ]
@@ -450,7 +450,7 @@ for (const scenario of scenarios) {
 
 await checkSourceLabelsAndThresholdText('docs/auction-design.html', ['write("clearingMode", "underfunded synthetic uniform")', 'write("bindingCondition", "underfunded")', 'write("thresholdInputEth", formatEth(winningEth))', 'let winningEth = 0', 'winningEth = candidateWinningEth', 'accumulatedEth = winningEth'])
 
-await checkSourceLabelsAndThresholdText('docs/whitepaper_placeholder.html', [
+await checkSourceLabelsAndThresholdText('docs/placeholder-whitepaper.html', [
 	'const activeBids = bids.filter((bid) => bid.eth > 0)',
 	'context.write("clearingMode", "underfunded synthetic uniform")',
 	'context.write("bindingCondition", "underfunded")',
@@ -465,7 +465,7 @@ await checkPayoutRegionExample()
 await checkFixedExposureCostExample()
 await checkRollingLockCostExample()
 
-const openOracleHtml = await readFile('docs/openOracleIntegration.html', 'utf8')
+const openOracleHtml = await readFile('docs/open-oracle-integration.html', 'utf8')
 for (const equationId of ['eq-openoracle-fixed-report-cost', 'eq-openoracle-rolling-lock-cost']) {
 	assert.doesNotMatch(blockWithId(openOracleHtml, equationId), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, `${equationId} should use descriptive domain names instead of one-letter identifiers`)
 }
@@ -489,7 +489,7 @@ assert.match(
 	'operator reference should qualify underfunded dust handling with the no-winning-prefix sentinel',
 )
 
-const placeholderHtml = await readFile('docs/whitepaper_placeholder.html', 'utf8')
+const placeholderHtml = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 assert.doesNotMatch(placeholderHtml, /whether the tick qualifies/i, 'whitepaper underfunded widget should not present threshold-only winner membership')
 assert.doesNotMatch(placeholderHtml, /refunded below threshold/i, 'whitepaper underfunded widget should not present threshold-only refunds')
 assert.doesNotMatch(placeholderHtml, /below-threshold bids/i, 'whitepaper truth-auction math should not describe underfunded losers as threshold-filtered bids')

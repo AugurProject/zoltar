@@ -1,16 +1,16 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
-import { DAY, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { addressString } from '../testsuite/simulator/utils/bigint'
-import { contractExists, requireAddress, requireArray, requireBigInt, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { QuestionOutcome } from '../testsuite/simulator/types/types'
-import assert from '../testsuite/simulator/utils/assert'
-import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { contractExists, requireAddress, requireArray, requireBigInt, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import assert from '../testSupport/simulator/utils/assert'
+import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
+import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
@@ -20,7 +20,7 @@ import {
 	test_peripherals_FalseReturningERC20_FalseReturningERC20,
 	test_peripherals_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
 } from '../types/contractArtifact'
-import { getERC20Balance } from '../testsuite/simulator/utils/utilities'
+import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import { computeForkContinuationParentDepositIndex, createCarryProof as createCarryProofFromHelpers, hashCarryLeaf, hashParent, readCarryLeafHash as readCarryLeafHashFromHelpers, SparseNullifierTree } from './carryProofHelpers'
 

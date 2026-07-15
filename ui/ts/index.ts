@@ -1,5 +1,5 @@
 import { createElement, render } from 'preact'
-import { App } from './App.js'
+import { App } from './app/App.js'
 import { initializeActiveEnvironment } from './lib/activeEnvironment.js'
 
 void initializeActiveEnvironment()

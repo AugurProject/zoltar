@@ -13,7 +13,6 @@ solidity/ts/**/*.d.ts.map
 solidity/ts/**/*.js
 solidity/ts/**/*.js.map
 solidity/ts/types/contractArtifact.ts
-solidity/types/contractArtifact.ts
 ui/dist
 ui/js
 ui/vendor

@@ -14,7 +14,7 @@ const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
 const projectRoot = path.join(repositoryRoot, '..')
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
 const ignoredPathPrefixes = ['.git', 'node_modules', 'ui/node_modules', 'ui/dist', 'ui/vendor', 'ui/js', 'shared/js', 'solidity/artifacts', 'solidity/js', 'solidity/node_modules', 'coverage']
-const ignoredFiles = new Set(['solidity/ts/testsuite/simulator/types/wire-types.js'])
+const ignoredFiles = new Set(['solidity/ts/testSupport/simulator/types/wire-types.js'])
 
 function shouldIgnore(relativePath: string): boolean {
 	if (ignoredFiles.has(relativePath)) return true

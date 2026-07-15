@@ -1,5 +1,7 @@
 {
-	"description": "forklift",
+	"description": "Zoltar protocol operations interface",
+	"name": "@zoltar/ui",
+	"private": true,
 	"repository": {},
 	"license": "Unlicense",
 	"type": "module",

@@ -14,16 +14,15 @@ type TestShard = {
 }
 
 const repositoryRoot = process.cwd()
-const testRoots = ['scripts', 'solidity/ts', 'ui/build', 'ui/ts']
+const testRoots = ['scripts', 'shared/ts', 'solidity/ts', 'ui/build', 'ui/ts']
 const ignoredDirectoryNames = new Set(['node_modules', 'js', 'dist', 'vendor'])
 
 const knownFileWeights = new Map<string, number>([
 	['solidity/ts/tests/priceOracleSecurity.test.ts', 29],
-	['ui/ts/tests/activeEnvironment.test.ts', 90],
+	['ui/ts/tests/simulation/activeEnvironment.test.ts', 90],
 	['solidity/ts/tests/escalationGame.test.ts', 21],
 	['solidity/ts/tests/auction.test.ts', 11],
-	['ui/ts/tests/openOracleSection.integration.test.tsx', 8],
-	['ui/ts/tests/contracts.test.ts', 4],
+	['ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 8],
 	['solidity/ts/tests/peripherals/receiveGuards.test.ts', 2],
 ])
 
@@ -98,7 +97,10 @@ async function collectTestFiles(directoryPath: string): Promise<string[]> {
 
 async function getWeightedTestFiles() {
 	const files = (await Promise.all(testRoots.map(testRoot => collectTestFiles(path.join(repositoryRoot, testRoot))))).flat()
-	return [...new Set(files)]
+	const uniqueFiles = new Set(files)
+	const missingWeightedFiles = [...knownFileWeights.keys()].filter(filePath => !uniqueFiles.has(filePath))
+	if (missingWeightedFiles.length > 0) throw new Error(`Weighted test files were not discovered: ${missingWeightedFiles.join(', ')}`)
+	return [...uniqueFiles]
 		.map(
 			(filePath): WeightedTestFile => ({
 				filePath,

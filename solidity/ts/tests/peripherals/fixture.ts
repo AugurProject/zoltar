@@ -1,28 +1,28 @@
 import { beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
-import assert from '../../testsuite/simulator/utils/assert'
+import assert from '../../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import type { Abi, Address, Hash } from '@zoltar/shared/ethereum'
-import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
+import { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 // The solidity worktree can temporarily see a stale @zoltar/shared package through the shared node_modules link during refreshes.
 // Import the generated shared helper directly so this fixture stays stable across merge-validation runs.
 import { pickFixtureProperties } from '../../../../shared/js/testing/pickFixtureProperties.js'
-import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/clients'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
-import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testsuite/simulator/utils/utilities'
-import { addressString, rpow } from '../../testsuite/simulator/utils/bigint'
-import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStatusOracleAddress, getDeploymentStepAddresses, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../../testsuite/simulator/utils/contracts/deployPeripherals'
-import { createQuestion, getQuestionId } from '../../testsuite/simulator/utils/contracts/zoltarQuestionData'
+import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
+import { addressString, rpow } from '../../testSupport/simulator/utils/bigint'
+import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStatusOracleAddress, getDeploymentStepAddresses, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
+import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 
-import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testsuite/simulator/utils/contracts/peripherals'
-import { getScalarOutcomeIndex } from '../../testsuite/simulator/utils/contracts/scalarOutcome'
-import { tickToPrice } from '../../testsuite/simulator/utils/tickMath'
-import { QuestionOutcome } from '../../testsuite/simulator/types/types'
-import { SystemState } from '../../testsuite/simulator/types/peripheralTypes'
-import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
+import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { getScalarOutcomeIndex } from '../../testSupport/simulator/utils/contracts/scalarOutcome'
+import { tickToPrice } from '../../testSupport/simulator/utils/tickMath'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { SystemState } from '../../testSupport/simulator/types/peripheralTypes'
+import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import {
 	claimAuctionProceeds,
 	createChildUniverse,
@@ -41,10 +41,10 @@ import {
 	migrateVaultWithUnresolvedEscalation,
 	settleAuctionBids,
 	startTruthAuction,
-} from '../../testsuite/simulator/utils/contracts/securityPoolForker'
-import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../../testsuite/simulator/utils/contracts/zoltar'
-import { getTotalRepPurchased } from '../../testsuite/simulator/utils/contracts/auction'
+} from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getTotalRepPurchased } from '../../testSupport/simulator/utils/contracts/auction'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { createPeripheralsTruthAuctionScenarioHelpers } from './truthAuctionScenarioHelpers'
 import {
@@ -76,7 +76,7 @@ import {
 	updateCollateralAmount,
 	updateVaultFees,
 	withdrawFromEscalationGame,
-} from '../../testsuite/simulator/utils/contracts/securityPool'
+} from '../../testSupport/simulator/utils/contracts/securityPool'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,

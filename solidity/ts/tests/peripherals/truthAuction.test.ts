@@ -2,9 +2,9 @@ import { beforeEach, describe, test } from 'bun:test'
 import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
-import { getMaxRepBeingSold, getMinBidSize } from '../../testsuite/simulator/utils/contracts/auction'
-import { queueLiquidationAtForcedPrice } from '../../testsuite/simulator/utils/contracts/peripherals'
-import { getUniverseData } from '../../testsuite/simulator/utils/contracts/zoltar'
+import { getMaxRepBeingSold, getMinBidSize } from '../../testSupport/simulator/utils/contracts/auction'
+import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: truth auction', () => {
 	const fixture = usePeripheralsTruthAuctionFixture()

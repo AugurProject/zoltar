@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"experimentalScannerIgnores": ["solidity/ts/testsuite/simulator/types/wire-types.js"]
+		"experimentalScannerIgnores": ["solidity/ts/testSupport/simulator/types/wire-types.js"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -43,7 +43,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["solidity/ts/testsuite/simulator/types/wire-types.js"],
+			"includes": ["solidity/ts/testSupport/simulator/types/wire-types.js"],
 			"formatter": {
 				"enabled": false
 			},

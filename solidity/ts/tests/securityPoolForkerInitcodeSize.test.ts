@@ -1,5 +1,5 @@
 import { test } from 'bun:test'
-import assert from '../testsuite/simulator/utils/assert'
+import assert from '../testSupport/simulator/utils/assert'
 import { getContractOutput, getRecord, getString, loadContractsJson } from './contractArtifactHelpers'
 
 const eip3860InitcodeLimitBytes = 49_152

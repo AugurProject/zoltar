@@ -25,10 +25,10 @@ import {
 	settleOracleReport,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
-} from '../contracts.js'
+} from '../protocol/index.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
-import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
+import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'

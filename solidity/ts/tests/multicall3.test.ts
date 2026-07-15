@@ -1,11 +1,11 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import assert from '../testsuite/simulator/utils/assert'
+import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
+import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { peripherals_Multicall3_Multicall3 } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)

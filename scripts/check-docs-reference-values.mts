@@ -4,8 +4,8 @@ import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
-const zoltarWhitepaper = await readFile('docs/whitepaper_zoltar.html', 'utf8')
-const whitepaperPlaceholder = await readFile('docs/whitepaper_placeholder.html', 'utf8')
+const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
+const whitepaperPlaceholder = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 const bytecodeSnapshot = readBytecodeSnapshot(await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8'))
 const interfaceRegressionTest = await readFile('solidity/ts/tests/escalationGameInterfaceRegression.test.ts', 'utf8')
 

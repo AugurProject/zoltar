@@ -72,8 +72,8 @@ function normalizeManifest(manifest: MainnetDeploymentManifest) {
 }
 
 async function loadComputedManifest(): Promise<MainnetDeploymentManifest> {
-	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deployment.ts')
-	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'contracts', 'deploymentHelpers.ts')
+	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deployment.ts')
+	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deploymentHelpers.ts')
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 
 	try {
