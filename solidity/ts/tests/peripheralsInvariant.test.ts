@@ -1,14 +1,14 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import assert from '../testsuite/simulator/utils/assert'
+import assert from '../testSupport/simulator/utils/assert'
 import type { Address } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
-import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { addressString } from '../testsuite/simulator/utils/bigint'
-import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
+import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	executeStagedOperation,
 	getActiveStagedOperationCount,
@@ -23,9 +23,9 @@ import {
 	OperationType,
 	participateAuction,
 	requestPriceIfNeededAndStageOperationWithValue,
-} from '../testsuite/simulator/utils/contracts/peripherals'
-import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+} from '../testSupport/simulator/utils/contracts/peripherals'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
 import {
 	claimAuctionProceeds,
 	createChildUniverse,
@@ -39,7 +39,7 @@ import {
 	migrateVault,
 	migrateVaultWithUnresolvedEscalation,
 	startTruthAuction,
-} from '../testsuite/simulator/utils/contracts/securityPoolForker'
+} from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import {
 	createCompleteSet,
 	depositRep,
@@ -54,14 +54,14 @@ import {
 	getTotalSecurityBondAllowance,
 	poolOwnershipToRep,
 	redeemRep,
-} from '../testsuite/simulator/utils/contracts/securityPool'
-import { approveToken, contractExists, getChildUniverseId as deriveChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
-import { QuestionOutcome } from '../testsuite/simulator/types/types'
-import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
-import { ensureDefined, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
-import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaised, getTotalRepPurchased, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction'
-import { getUniformPriceDualCapBatchAuctionAddress } from '../testsuite/simulator/utils/contracts/deployments'
-import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
+} from '../testSupport/simulator/utils/contracts/securityPool'
+import { approveToken, contractExists, getChildUniverseId as deriveChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { SystemState } from '../testSupport/simulator/types/peripheralTypes'
+import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaised, getTotalRepPurchased, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
+import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
+import { tickToPrice } from '../testSupport/simulator/utils/tickMath'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

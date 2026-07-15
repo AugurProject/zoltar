@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs } from '../testsuite/simulator/anvilNode'
+import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs } from '../testSupport/simulator/anvilNode'
 
 test('getAnvilConnectionMode uses the platform default when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']

@@ -3,7 +3,6 @@
 /shared/js/** linguist-generated=true
 /solidity/artifacts/** linguist-generated=true
 /solidity/ts/types/contractArtifact.ts linguist-generated=true
-/solidity/types/contractArtifact.ts linguist-generated=true
 /ui/js/** linguist-generated=true
 /ui/ts/abis.ts linguist-generated=true
 /ui/ts/contractArtifact.ts linguist-generated=true

@@ -1,11 +1,11 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Abi, Address } from '@zoltar/shared/ethereum'
-import type { WriteClient } from '../../testsuite/simulator/utils/clients'
+import type { WriteClient } from '../../testSupport/simulator/utils/clients'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
-import { getQuestionResolution as readQuestionResolution } from '../../testsuite/simulator/utils/contracts/escalationGame'
-import { deployChild } from '../../testsuite/simulator/utils/contracts/zoltar'
-import { finalizeTruthAuction, startTruthAuction } from '../../testsuite/simulator/utils/contracts/securityPoolForker'
+import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { deployChild } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { finalizeTruthAuction, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 
 describe('Peripherals: deployment and own-fork escalation', () => {

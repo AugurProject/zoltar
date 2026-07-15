@@ -5,10 +5,15 @@ This repository contains two protocol layers:
 - `Zoltar`: the forkable oracle base layer
 - `Augur Placeholder`: the prediction-market application layer built on top of Zoltar
 
-The codebase is split into two main parts:
+The codebase is split into these main areas:
 
-- `solidity/` contains the contracts, tests, and generated contract artifacts
-- `ui/` contains the Preact frontend that reads from those contracts
+- `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
+- `ui/` contains the Preact frontend, organized by application shell, feature, and protocol-client boundaries
+- `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
+- `docs/` contains the published protocol documentation
+- `scripts/` contains repository-wide build, validation, and test orchestration
+
+Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-feature UI primitives remain in `components`, application composition belongs in `app`, and contract reads and writes belong in `protocol`.
 
 Protocol documentation lives in `docs/`:
 

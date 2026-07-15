@@ -133,6 +133,7 @@ export async function buildProductionBundle() {
 		buildProductionWorker(),
 		writeProductionIndexHtml(),
 		copyStaticAsset(path.join(UI_ROOT_PATH, 'css', 'index.css'), path.join(DIST_ROOT_PATH, 'css', 'index.css')),
+		copyStaticAsset(path.join(UI_ROOT_PATH, 'css', 'tokens.css'), path.join(DIST_ROOT_PATH, 'css', 'tokens.css')),
 		copyStaticAsset(path.join(UI_ROOT_PATH, 'favicon.ico'), path.join(DIST_ROOT_PATH, 'favicon.ico')),
 		copyStaticAsset(path.join(UI_ROOT_PATH, 'favicon.svg'), path.join(DIST_ROOT_PATH, 'favicon.svg')),
 	])

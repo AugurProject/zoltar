@@ -1,9 +1,9 @@
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { peripherals_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
-import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testsuite/simulator/anvilNode'
-import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testsuite/simulator/utils/contracts/deployPeripherals'
+import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
+import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	getOpenOracleExtraData,
 	getPendingReportId,
@@ -16,17 +16,17 @@ import {
 	requestPriceIfNeededAndStageOperation,
 	requestPriceIfNeededAndStageOperationWithInitialReportAmount2,
 	wrapWeth,
-} from './testsuite/simulator/utils/contracts/peripherals'
-import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testsuite/simulator/utils/contracts/securityPoolForker'
-import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRep, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testsuite/simulator/utils/contracts/securityPool'
-import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from './testsuite/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from './testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './testsuite/simulator/utils/constants'
-import { addressString } from './testsuite/simulator/utils/bigint'
-import { approveToken, getChildUniverseId, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from './testsuite/simulator/utils/utilities'
-import { QuestionOutcome } from './testsuite/simulator/types/types'
-import { createWriteClient, WriteClient, writeContractAndWait } from './testsuite/simulator/utils/clients'
+} from './testSupport/simulator/utils/contracts/peripherals'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testSupport/simulator/utils/contracts/securityPoolForker'
+import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRep, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testSupport/simulator/utils/contracts/securityPool'
+import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from './testSupport/simulator/utils/contracts/zoltar'
+import { createQuestion, getQuestionId } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './testSupport/simulator/utils/constants'
+import { addressString } from './testSupport/simulator/utils/bigint'
+import { approveToken, getChildUniverseId, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from './testSupport/simulator/utils/utilities'
+import { QuestionOutcome } from './testSupport/simulator/types/types'
+import { createWriteClient, WriteClient, writeContractAndWait } from './testSupport/simulator/utils/clients'
 
 const genesisUniverse = 0n
 const securityMultiplier = 2n

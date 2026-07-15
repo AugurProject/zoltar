@@ -15,8 +15,9 @@ const sharedRoot = path.join(repositoryRoot, 'shared')
 const sharedSourceRoot = path.join(sharedRoot, 'ts')
 const contractFreshnessCachePath = path.join(solidityRoot, 'artifacts', '.freshness-hash')
 const sharedFreshnessCachePath = path.join(sharedRoot, 'js', '.freshness-hash')
+const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifact.ts']
 
-const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(solidityRoot, 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
+const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
 const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'ui', 'build', 'projectArtifacts.mts')]
 const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
 
@@ -31,6 +32,15 @@ async function exists(filePath: string): Promise<boolean> {
 	} catch (error) {
 		if (!isMissingPathError(error)) throw error
 		return false
+	}
+}
+
+export async function removeDeprecatedContractArtifactOutputs(root = repositoryRoot): Promise<void> {
+	for (const relativePath of deprecatedContractArtifactRelativePaths) {
+		const deprecatedOutputPath = path.join(root, relativePath)
+		if (!(await exists(deprecatedOutputPath))) continue
+		await fs.rm(deprecatedOutputPath, { force: true })
+		console.log(`Removed deprecated generated contract artifact: ${relativePath}`)
 	}
 }
 
@@ -174,6 +184,7 @@ export async function ensureSharedBuildIsCurrent(): Promise<void> {
 }
 
 export async function ensureContractArtifactsAreCurrent(): Promise<void> {
+	await removeDeprecatedContractArtifactOutputs()
 	await ensureSharedBuildIsCurrent()
 	const regenerationReason = await getArtifactRegenerationReason()
 	if (regenerationReason === undefined) return
@@ -197,6 +208,7 @@ if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === curre
 	} else if (mode === '--sync-shared-freshness') {
 		await syncSharedFreshnessHash()
 	} else if (mode === '--sync-contract-freshness') {
+		await removeDeprecatedContractArtifactOutputs()
 		await syncContractFreshnessHash()
 	} else {
 		await ensureContractArtifactsAreCurrent()

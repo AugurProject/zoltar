@@ -1,5 +1,5 @@
 import { test } from 'bun:test'
-import assert from '../testsuite/simulator/utils/assert'
+import assert from '../testSupport/simulator/utils/assert'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { keccak256, type Hex } from '@zoltar/shared/ethereum'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'

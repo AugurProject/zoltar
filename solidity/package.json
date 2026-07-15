@@ -1,5 +1,7 @@
 {
 	"version": "1.0.0",
+	"name": "@zoltar/contracts",
+	"private": true,
 	"type": "module",
 	"description": "Zoltar Contracts",
 	"scripts": {
@@ -16,7 +18,7 @@
 	},
 	"keywords": [],
 	"author": "",
-	"license": "ISC",
+	"license": "Unlicense",
 	"dependencies": {
 		"@zoltar/shared": "file:../shared"
 	},

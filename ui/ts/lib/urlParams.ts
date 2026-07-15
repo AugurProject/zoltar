@@ -1,4 +1,4 @@
-import { tryParseBigIntInput } from './marketForm.js'
+import { tryParseBigIntInput } from './integerInput.js'
 
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUERY_PARAM = 'securityPool'

@@ -1,17 +1,17 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import assert from '../testsuite/simulator/utils/assert'
+import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/clients'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testsuite/simulator/utils/constants'
-import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
-import { approveToken, setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
-import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { handleOracleReporting } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { ORACLE_EXACT_TOKEN1_REPORT, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
+import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
+import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
+import { approveToken, setupTestAccounts, getETHBalance } from '../testSupport/simulator/utils/utilities'
+import { approveAndDepositRep } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { handleOracleReporting } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { ORACLE_EXACT_TOKEN1_REPORT, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import {
 	OperationType,
 	executeStagedOperation,
@@ -36,8 +36,8 @@ import {
 	requestPriceIfNeededAndStageOperationWithInitialReportAmount2,
 	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
-} from '../testsuite/simulator/utils/contracts/peripherals'
-import { depositRep, getSecurityVault } from '../testsuite/simulator/utils/contracts/securityPool'
+} from '../testSupport/simulator/utils/contracts/peripherals'
+import { depositRep, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 

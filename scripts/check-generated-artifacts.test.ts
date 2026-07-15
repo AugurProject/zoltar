@@ -18,7 +18,6 @@ const generatedFixtureFiles = [
 	'solidity/artifacts/.freshness-hash',
 	'solidity/.contract-hash.json',
 	'solidity/ts/types/contractArtifact.ts',
-	'solidity/types/contractArtifact.ts',
 	'ui/ts/abis.ts',
 	'ui/ts/contractArtifact.ts',
 	'ui/vendor/isows/native.js',

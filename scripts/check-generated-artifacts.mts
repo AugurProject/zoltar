@@ -21,9 +21,9 @@ export type GeneratedArtifactCheckOptions = {
 	runGit?: GitRunner
 }
 
-const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'solidity/types/contractArtifact.ts', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts']
+const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts']
 
-const generatedReviewPaths = ['shared/js', 'solidity/artifacts', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'solidity/types', 'ui/js', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts', 'ui/ts/deploymentArtifacts.ts', 'ui/ts/deploymentsArtifacts.ts', 'ui/vendor']
+const generatedReviewPaths = ['shared/js', 'solidity/artifacts', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/js', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts', 'ui/ts/deploymentArtifacts.ts', 'ui/ts/deploymentsArtifacts.ts', 'ui/vendor']
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)

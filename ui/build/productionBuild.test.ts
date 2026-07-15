@@ -15,6 +15,7 @@ const workerBundlePath = path.join(distAssetsPath, 'tevmWorker.worker.js')
 const workerSourceMapPath = path.join(distAssetsPath, 'tevmWorker.worker.js.map')
 const productionIndexPath = path.join(distRootPath, 'index.html')
 const productionCssPath = path.join(distRootPath, 'css', 'index.css')
+const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
 
 let server: Bun.Server | undefined
@@ -50,7 +51,7 @@ afterAll(() => {
 })
 
 test('production build emits the deployable artifact set', async () => {
-	const expectedPaths = [productionIndexPath, productionCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths]
+	const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths]
 
 	for (const expectedPath of expectedPaths) {
 		await expect(fs.access(expectedPath)).resolves.toBeNull()
@@ -87,7 +88,7 @@ test('production build can be served as static files', async () => {
 	}
 
 	const baseUrl = server.url.toString().replace(/\/$/, '')
-	const responses = await Promise.all([fetch(`${baseUrl}/`), fetch(`${baseUrl}/assets/app.js`), fetch(`${baseUrl}/assets/tevmWorker.worker.js`), fetch(`${baseUrl}/css/index.css`)])
+	const responses = await Promise.all([fetch(`${baseUrl}/`), fetch(`${baseUrl}/assets/app.js`), fetch(`${baseUrl}/assets/tevmWorker.worker.js`), fetch(`${baseUrl}/css/index.css`), fetch(`${baseUrl}/css/tokens.css`)])
 
 	for (const response of responses) {
 		expect(response.status).toBe(200)

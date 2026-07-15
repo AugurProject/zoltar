@@ -1,13 +1,13 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
-import assert from '../testsuite/simulator/utils/assert'
-import { addressString } from '../testsuite/simulator/utils/bigint'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
+import assert from '../testSupport/simulator/utils/assert'
+import { addressString } from '../testSupport/simulator/utils/bigint'
 import { decodeEventLog, encodeDeployData, hexToBytes } from '@zoltar/shared/ethereum'
 import {
 	addRepToMigrationBalance,
@@ -25,11 +25,11 @@ import {
 	getZoltarForkThresholdDivisor,
 	isZoltarDeployed,
 	splitMigrationRep,
-} from '../testsuite/simulator/utils/contracts/zoltar'
-import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { ensureDefined, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
+} from '../testSupport/simulator/utils/contracts/zoltar'
+import { createQuestion, getAnswerOptionName, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { ReputationToken_ReputationToken, test_peripherals_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
+import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
