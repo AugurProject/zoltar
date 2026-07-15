@@ -14,7 +14,7 @@ import type { OpenOracleReportDetails } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
-import { UI_STRINGS } from '../lib/uiStrings.js'
+import { UI_TEMPLATE_BROWSE_REPORTS_DESCRIPTION } from '../lib/uiStrings.js'
 
 const ETH = 10n ** 18n
 
@@ -323,7 +323,7 @@ describe('OpenOracleSection route create view', () => {
 	})
 
 	test('formats browse description with the shared page size', () => {
-		expect(UI_STRINGS.openOracleSection.browseReportsDescription('10')).toContain('10 reports')
+		expect(UI_TEMPLATE_BROWSE_REPORTS_DESCRIPTION('10')).toContain('10 reports')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {

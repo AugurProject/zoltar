@@ -72,7 +72,80 @@ import { useForkWorkflowSelectionState } from '../hooks/useForkWorkflowSelection
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '../types/contracts.js'
-import { UI_STRINGS } from '../lib/uiStrings.js'
+import {
+	UI_STRING_0,
+	UI_STRING_ADDITIONAL_POOL_ACTIONS,
+	UI_STRING_AMOUNT,
+	UI_STRING_AUTO_EXEC_PENDING,
+	UI_STRING_BUT_THE_APP_IS_CURRENTLY_SET_TO,
+	UI_STRING_DIRECTORY,
+	UI_STRING_ETH,
+	UI_STRING_EXECUTE_STAGED_OPERATION,
+	UI_STRING_EXECUTING_STAGED_OPERATION_SECURITY_POOL_WORKFLOW_SECTION_EXECUTING_STAGED_OPERATION_LABEL,
+	UI_STRING_HEX_VALUE_PLACEHOLDER,
+	UI_STRING_INITIATOR,
+	UI_STRING_INSPECT_THE_LIQUIDATION_QUOTE_TIMEOUT_AND_EXECUTION_PATH_BEFORE_QUEUEING_LIQUIDATION,
+	UI_STRING_LIQUIDATION,
+	UI_STRING_LOAD_STAGED_OPERATIONS,
+	UI_STRING_LOADING_VAULT,
+	UI_STRING_MANAGE_POOL,
+	UI_STRING_MANUAL_EXECUTION,
+	UI_STRING_NO_STAGED_OPERATIONS_ARE_CURRENTLY_QUEUED_FOR_THIS_POOL,
+	UI_STRING_NO_VAULTS_IN_THIS_POOL,
+	UI_STRING_NONE,
+	UI_STRING_NONE_QUEUED,
+	UI_STRING_NOT_FOUND,
+	UI_STRING_OPEN_ORACLE,
+	UI_STRING_OPEN_ORACLE_PRICE,
+	UI_STRING_OPERATION_ID,
+	UI_STRING_PARENT_POOL,
+	UI_STRING_PENDING_REQUEST,
+	UI_STRING_POOL_NOT_FOUND,
+	UI_STRING_PRIMARY_POOL_ACTIONS,
+	UI_STRING_QUESTION,
+	UI_STRING_REFRESH,
+	UI_STRING_REFRESH_ORACLE,
+	UI_STRING_REFRESH_POOL,
+	UI_STRING_REFRESH_STAGED_OPERATIONS,
+	UI_STRING_REFRESHING,
+	UI_STRING_REFRESHING_OPERATIONS,
+	UI_STRING_REFRESHING_ORACLE,
+	UI_STRING_REFRESHING_POOL,
+	UI_STRING_REPORTING_OPENS_AFTER_MARKET_END,
+	UI_STRING_REQUEST_COST,
+	UI_STRING_REQUEST_NEW_PRICE,
+	UI_STRING_REQUESTING_NEW_PRICE,
+	UI_STRING_REVIEW_LIQUIDATION,
+	UI_STRING_SECURITY_POOL_ADDRESS,
+	UI_STRING_SELECT_VAULT,
+	UI_STRING_SELECTED,
+	UI_STRING_SELECTED_POOL,
+	UI_STRING_SELECTED_POOL_VAULT_VIEWS,
+	UI_STRING_SELECTED_POOL_VIEWS,
+	UI_STRING_SELECTED_VAULT_ADDRESS,
+	UI_STRING_SET_BOND_ALLOWANCE,
+	UI_STRING_STAGED_OPERATION_ID,
+	UI_STRING_STAGED_OPERATIONS,
+	UI_STRING_STAGED_OPERATIONS_LIST,
+	UI_STRING_TARGET_VAULT,
+	UI_STRING_THIS_PARENT_POOL_IS_FORKED_CONTINUE_IN_FORK_AND_MIGRATION_FOR_MIGRATION_AND_SETTLEMENT,
+	UI_STRING_THIS_POOL_BELONGS_TO,
+	UI_STRING_THIS_POOL_DOES_NOT_EXIST,
+	UI_STRING_THIS_POOL_HAS_ALREADY_ENTERED_FORK_AND_MIGRATION,
+	UI_STRING_THIS_POOL_IS_CURRENTLY_OPERATIONAL_SO_FORK_AND_TRUTH_AUCTION_ACTIONS_ARE_READ_ONLY,
+	UI_STRING_THIS_POOL_IS_IN_FORK_MIGRATION_REPORTING_ACTIONS_UNLOCK_ONCE_THE_POOL_BECOMES_OPERATIONAL,
+	UI_STRING_THIS_POOL_IS_IN_TRUTH_AUCTION_REPORTING_ACTIONS_UNLOCK_ONCE_THE_POOL_BECOMES_OPERATIONAL,
+	UI_STRING_THIS_VAULT_DOES_NOT_EXIST,
+	UI_STRING_TRIGGERING_A_ZOLTAR_FORK_IS_NOT_AVAILABLE_IN_THE_CURRENT_POOL_STATE,
+	UI_STRING_TRY_ANOTHER_VAULT_ADDRESS,
+	UI_STRING_UNIVERSE_MISMATCH,
+	UI_STRING_VAULT_DIRECTORY,
+	UI_STRING_VAULT_OPERATIONS,
+	UI_STRING_WITHDRAW_REP,
+	UI_STRING_ZOLTAR_FORK_HAS_ALREADY_BEEN_TRIGGERED_FOR_THIS_POOL_CONTINUE_IN_FORK_AND_MIGRATION,
+	UI_TEMPLATE_PENDING_REPORT_LABEL,
+	UI_TEMPLATE_SHOWING_ACTIVE_STAGED_OPERATIONS_LABEL,
+} from '../lib/uiStrings.js'
 
 function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
 	if (selectedPool === undefined) return undefined
@@ -97,17 +170,17 @@ function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { fo
 function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAllowance' | 'withdrawRep') {
 	switch (operation) {
 		case 'liquidation':
-			return UI_STRINGS.securityPoolWorkflowSection.pendingOperationLiquidationLabel
+			return UI_STRING_LIQUIDATION
 		case 'withdrawRep':
-			return UI_STRINGS.securityPoolWorkflowSection.pendingOperationWithdrawRepLabel
+			return UI_STRING_WITHDRAW_REP
 		case 'setSecurityBondsAllowance':
-			return UI_STRINGS.securityPoolWorkflowSection.pendingOperationSetBondAllowanceLabel
+			return UI_STRING_SET_BOND_ALLOWANCE
 		default:
 			return assertNever(operation)
 	}
 }
 function getStagedOperationExecutionModeLabel(operationId: bigint, pendingSettlementOperationIds: bigint[]) {
-	return pendingSettlementOperationIds.includes(operationId) ? UI_STRINGS.securityPoolWorkflowSection.autoExecPendingLabel : UI_STRINGS.securityPoolWorkflowSection.manualExecutionLabel
+	return pendingSettlementOperationIds.includes(operationId) ? UI_STRING_AUTO_EXEC_PENDING : UI_STRING_MANUAL_EXECUTION
 }
 function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {
 	if (systemState === 'operational') return 'ok'
@@ -222,12 +295,12 @@ export function SecurityPoolWorkflowSection({
 	})
 	const triggerZoltarForkReason = (() => {
 		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolHasActualForkActivity) {
-			return UI_STRINGS.securityPoolWorkflowSection.triggerZoltarForkAlreadyTriggeredReason
+			return UI_STRING_ZOLTAR_FORK_HAS_ALREADY_BEEN_TRIGGERED_FOR_THIS_POOL_CONTINUE_IN_FORK_AND_MIGRATION
 		}
 		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolState !== 'operational') {
-			return UI_STRINGS.securityPoolWorkflowSection.triggerZoltarForkEnteredForkWorkflowReason
+			return UI_STRING_THIS_POOL_HAS_ALREADY_ENTERED_FORK_AND_MIGRATION
 		}
-		return UI_STRINGS.securityPoolWorkflowSection.triggerZoltarForkUnavailableReason
+		return UI_STRING_TRIGGERING_A_ZOLTAR_FORK_IS_NOT_AVAILABLE_IN_THE_CURRENT_POOL_STATE
 	})()
 	const triggerZoltarForkAvailability = {
 		disabled: !(selectedPoolReportingStage === 'forkTriggered' && !selectedPoolHasActualForkActivity && selectedPoolState === 'operational' && selectedPoolQuestionOutcome === 'none'),
@@ -239,11 +312,11 @@ export function SecurityPoolWorkflowSection({
 	})()
 	const selectedPoolForkWorkflowSystemState = selectedPoolLifecycleState === undefined || selectedPoolLifecycleState === 'ended' ? selectedPoolState : selectedPoolLifecycleState
 	const reportingLockedReason = (() => {
-		if (selectedPoolState === 'poolForked') return UI_STRINGS.securityPoolWorkflowSection.reportingLockedForkedReason
-		if (selectedPoolState === 'forkMigration') return UI_STRINGS.securityPoolWorkflowSection.reportingLockedForkMigrationReason
-		if (selectedPoolState === 'forkTruthAuction') return UI_STRINGS.securityPoolWorkflowSection.reportingLockedTruthAuctionReason
+		if (selectedPoolState === 'poolForked') return UI_STRING_THIS_PARENT_POOL_IS_FORKED_CONTINUE_IN_FORK_AND_MIGRATION_FOR_MIGRATION_AND_SETTLEMENT
+		if (selectedPoolState === 'forkMigration') return UI_STRING_THIS_POOL_IS_IN_FORK_MIGRATION_REPORTING_ACTIONS_UNLOCK_ONCE_THE_POOL_BECOMES_OPERATIONAL
+		if (selectedPoolState === 'forkTruthAuction') return UI_STRING_THIS_POOL_IS_IN_TRUTH_AUCTION_REPORTING_ACTIONS_UNLOCK_ONCE_THE_POOL_BECOMES_OPERATIONAL
 		if (reportingReady) return undefined
-		if (marketDetails === undefined) return UI_STRINGS.securityPoolWorkflowSection.reportingOpensAfterMarketEndReason
+		if (marketDetails === undefined) return UI_STRING_REPORTING_OPENS_AFTER_MARKET_END
 
 		return getReportingLockedUntilMessage(marketDetails.endTime, currentTimestamp)
 	})()
@@ -297,8 +370,8 @@ export function SecurityPoolWorkflowSection({
 				selectedPoolUniverseMismatch,
 			})
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
-		{ label: UI_STRINGS.securityPoolWorkflowSection.directoryViewLabel, value: 'browse-vaults' },
-		{ label: UI_STRINGS.securityPoolWorkflowSection.selectedViewLabel, value: 'selected-vault' },
+		{ label: UI_STRING_DIRECTORY, value: 'browse-vaults' },
+		{ label: UI_STRING_SELECTED, value: 'selected-vault' },
 	]
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
 	const currentPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({
@@ -396,10 +469,10 @@ export function SecurityPoolWorkflowSection({
 		if (securityVault.loadingSecurityVault)
 			return (
 				<p className='detail'>
-					<LoadingText>{UI_STRINGS.securityPoolWorkflowSection.loadingVaultDetail}</LoadingText>
+					<LoadingText>{UI_STRING_LOADING_VAULT}</LoadingText>
 				</p>
 			)
-		if (securityVault.securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: UI_STRINGS.securityPoolWorkflowSection.notFoundBadgeLabel, badgeTone: 'blocked', detail: UI_STRINGS.securityPoolWorkflowSection.tryAnotherVaultAddressDetail }} />
+		if (securityVault.securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: UI_STRING_NOT_FOUND, badgeTone: 'blocked', detail: UI_STRING_TRY_ANOTHER_VAULT_ADDRESS }} />
 
 		return undefined
 	})()
@@ -438,14 +511,14 @@ export function SecurityPoolWorkflowSection({
 						variant='hero'
 					>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
-							<MetricField label={UI_STRINGS.securityPoolWorkflowSection.parentPoolLabel}>
+							<MetricField label={UI_STRING_PARENT_POOL}>
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
 							</MetricField>
 						)}
 						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-							<MetricField label={UI_STRINGS.securityPoolWorkflowSection.pendingRequestLabel}>
+							<MetricField label={UI_STRING_PENDING_REQUEST}>
 								<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-									{UI_STRINGS.securityPoolWorkflowSection.pendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
+									{UI_TEMPLATE_PENDING_REPORT_LABEL(currentPoolOracleManagerDetails.pendingReportId.toString())}
 								</button>
 							</MetricField>
 						)}
@@ -459,24 +532,24 @@ export function SecurityPoolWorkflowSection({
 				<div className='selected-pool-context-overview'>
 					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
-							<MetricField label={UI_STRINGS.securityPoolWorkflowSection.parentPoolLabel}>
+							<MetricField label={UI_STRING_PARENT_POOL}>
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
 							</MetricField>
 						)}
-						<MetricField label={UI_STRINGS.securityPoolWorkflowSection.openOraclePriceLabel} valueTagName='span'>
+						<MetricField label={UI_STRING_OPEN_ORACLE_PRICE} valueTagName='span'>
 							<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 						</MetricField>
 						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-							<MetricField label={UI_STRINGS.securityPoolWorkflowSection.pendingRequestLabel}>
+							<MetricField label={UI_STRING_PENDING_REQUEST}>
 								<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-									{UI_STRINGS.securityPoolWorkflowSection.pendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
+									{UI_TEMPLATE_PENDING_REPORT_LABEL(currentPoolOracleManagerDetails.pendingReportId.toString())}
 								</button>
 							</MetricField>
 						)}
 					</SecurityPoolSummaryMetrics>
 				</div>
 				{marketDetails === undefined ? undefined : (
-					<SectionBlock headingLevel={3} title={UI_STRINGS.securityPoolWorkflowSection.questionTitle} variant='embedded'>
+					<SectionBlock headingLevel={3} title={UI_STRING_QUESTION} variant='embedded'>
 						<Question question={marketDetails} />
 					</SectionBlock>
 				)}
@@ -670,7 +743,7 @@ export function SecurityPoolWorkflowSection({
 		value: selectedPoolUiView,
 	}))
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRINGS.securityPoolWorkflowSection.selectedPoolTitle}>
+		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRING_SELECTED_POOL}>
 			<StickyObjectContext
 				{...(loadedSelectedPool === undefined || selectedPoolSummaryPool === undefined
 					? {}
@@ -693,13 +766,13 @@ export function SecurityPoolWorkflowSection({
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>
 						<LookupFieldRow
-							label={UI_STRINGS.securityPoolWorkflowSection.securityPoolAddressLabel}
+							label={UI_STRING_SECURITY_POOL_ADDRESS}
 							value={securityPoolAddress}
 							onInput={onSecurityPoolAddressChange}
-							placeholder={UI_STRINGS.common.hexValuePlaceholder}
+							placeholder={UI_STRING_HEX_VALUE_PLACEHOLDER}
 							action={
 								<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
-									{loadingSecurityPools ? <LoadingText>{UI_STRINGS.securityPoolWorkflowSection.refreshingPoolLabel}</LoadingText> : UI_STRINGS.securityPoolWorkflowSection.refreshPoolLabel}
+									{loadingSecurityPools ? <LoadingText>{UI_STRING_REFRESHING_POOL}</LoadingText> : UI_STRING_REFRESH_POOL}
 								</button>
 							}
 						/>
@@ -710,10 +783,9 @@ export function SecurityPoolWorkflowSection({
 			<ErrorNotice message={securityPoolOverviewError} />
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
-				<SectionBlock title={UI_STRINGS.securityPoolWorkflowSection.universeMismatchTitle} tone='critical'>
+				<SectionBlock title={UI_STRING_UNIVERSE_MISMATCH} tone='critical'>
 					<p className='detail'>
-						<span>{UI_STRINGS.securityPoolWorkflowSection.universeMismatchDetailPrefix}</span> <UniverseLink format='hex' universeId={selectedPool.universeId} /> <span>{UI_STRINGS.securityPoolWorkflowSection.universeMismatchDetailMiddle}</span> <span>{formatUniverseIdHex(activeUniverseId)}</span>.{' '}
-						<span>{UI_STRINGS.securityPoolWorkflowSection.universeMismatchDetailSuffix}</span>
+						<span>{UI_STRING_THIS_POOL_BELONGS_TO}</span> <UniverseLink format='hex' universeId={selectedPool.universeId} /> <span>{UI_STRING_BUT_THE_APP_IS_CURRENTLY_SET_TO}</span> <span>{formatUniverseIdHex(activeUniverseId)}</span>. <span>{UI_STRING_THIS_POOL_DOES_NOT_EXIST}</span>
 					</p>
 				</SectionBlock>
 			)}
@@ -722,11 +794,11 @@ export function SecurityPoolWorkflowSection({
 				<div className='selected-pool-workspace-grid'>
 					<div className='selected-pool-workflow-rail'>
 						<ViewTabs
-							ariaLabel={UI_STRINGS.securityPoolWorkflowSection.selectedPoolViewsAriaLabel}
+							ariaLabel={UI_STRING_SELECTED_POOL_VIEWS}
 							className='selected-pool-workflow-nav'
 							groups={[
-								{ ariaLabel: UI_STRINGS.securityPoolWorkflowSection.primaryPoolActionsAriaLabel, className: 'selected-pool-workflow-group', values: SELECTED_POOL_PRIMARY_VIEWS },
-								{ ariaLabel: UI_STRINGS.securityPoolWorkflowSection.additionalPoolActionsAriaLabel, className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
+								{ ariaLabel: UI_STRING_PRIMARY_POOL_ACTIONS, className: 'selected-pool-workflow-group', values: SELECTED_POOL_PRIMARY_VIEWS },
+								{ ariaLabel: UI_STRING_ADDITIONAL_POOL_ACTIONS, className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
 							]}
 							orientation='vertical'
 							size='compact'
@@ -738,7 +810,7 @@ export function SecurityPoolWorkflowSection({
 
 					<div className='selected-pool-workflow-content'>
 						{!showSelectedPoolWorkflowDetails ? (
-							<SectionBlock title={selectedPoolLookupState === 'missing' ? UI_STRINGS.securityPoolWorkflowSection.poolNotFoundTitle : UI_STRINGS.securityPoolWorkflowSection.managePoolTitle} variant='plain'>
+							<SectionBlock title={selectedPoolLookupState === 'missing' ? UI_STRING_POOL_NOT_FOUND : UI_STRING_MANAGE_POOL} variant='plain'>
 								{selectedPoolUniverseMismatch || selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
 							</SectionBlock>
 						) : (
@@ -747,23 +819,23 @@ export function SecurityPoolWorkflowSection({
 									<div className='workflow-stack vault-workspace'>
 										<SectionBlock
 											density='compact'
-											title={UI_STRINGS.securityPoolWorkflowSection.vaultOperationsTitle}
+											title={UI_STRING_VAULT_OPERATIONS}
 											variant='plain'
 											actions={
 												<div className='actions'>
-													<ViewTabs ariaLabel={UI_STRINGS.securityPoolWorkflowSection.selectedPoolVaultViewsAriaLabel} className='vault-content-switch' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
+													<ViewTabs ariaLabel={UI_STRING_SELECTED_POOL_VAULT_VIEWS} className='vault-content-switch' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
 												</div>
 											}
 										>
 											{selectedVaultLoadNotice}
 											<LookupFieldRow
-												label={UI_STRINGS.securityPoolWorkflowSection.selectedVaultAddressLabel}
+												label={UI_STRING_SELECTED_VAULT_ADDRESS}
 												value={selectedVaultAddressInput}
 												onInput={selectedVaultAddress => securityVault.onSecurityVaultFormChange({ selectedVaultAddress })}
-												placeholder={UI_STRINGS.common.hexValuePlaceholder}
+												placeholder={UI_STRING_HEX_VALUE_PLACEHOLDER}
 												action={
 													<button className='secondary' onClick={() => securityVault.onLoadSecurityVault()} disabled={securityVault.loadingSecurityVault}>
-														{securityVault.loadingSecurityVault ? <LoadingText>{UI_STRINGS.securityPoolWorkflowSection.refreshingVaultLabel}</LoadingText> : UI_STRINGS.common.refreshLabel}
+														{securityVault.loadingSecurityVault ? <LoadingText>{UI_STRING_REFRESHING}</LoadingText> : UI_STRING_REFRESH}
 													</button>
 												}
 											/>
@@ -782,7 +854,7 @@ export function SecurityPoolWorkflowSection({
 										</SectionBlock>
 
 										{vaultView === 'browse-vaults' ? (
-											<SectionBlock title={UI_STRINGS.securityPoolWorkflowSection.vaultDirectoryTitle} variant='embedded'>
+											<SectionBlock title={UI_STRING_VAULT_DIRECTORY} variant='embedded'>
 												<SecurityPoolVaultDirectory
 													emptyState={(() => {
 														if (selectedPool === undefined) {
@@ -791,7 +863,7 @@ export function SecurityPoolWorkflowSection({
 															return <StateHint presentation={selectedPoolBrowsePresentation} />
 														}
 
-														return <StateHint presentation={{ key: 'empty', badgeLabel: UI_STRINGS.securityPoolWorkflowSection.noneYetBadgeLabel, badgeTone: 'muted', detail: UI_STRINGS.securityPoolWorkflowSection.noVaultsInThisPoolDetail }} />
+														return <StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_NONE, badgeTone: 'muted', detail: UI_STRING_NO_VAULTS_IN_THIS_POOL }} />
 													})()}
 													pool={selectedPool}
 													renderActions={vault => {
@@ -806,20 +878,20 @@ export function SecurityPoolWorkflowSection({
 																		void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
 																	}}
 																>
-																	{UI_STRINGS.securityPoolWorkflowSection.selectVaultActionLabel}
+																	{UI_STRING_SELECT_VAULT}
 																</button>
 																<button
 																	className='secondary'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || !liquidationEnabled}
-																	title={UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationTitle}
+																	title={UI_STRING_REVIEW_LIQUIDATION}
 																>
-																	{UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationActionLabel}
+																	{UI_STRING_REVIEW_LIQUIDATION}
 																</button>
 															</div>
 														)
 													}}
-													renderBadge={vault => (selectedVaultAddress !== '' && sameCaseInsensitiveText(selectedVaultAddress, vault.vaultAddress) ? <Badge tone='ok'>{UI_STRINGS.securityPoolWorkflowSection.selectedBadgeLabel}</Badge> : undefined)}
+													renderBadge={vault => (selectedVaultAddress !== '' && sameCaseInsensitiveText(selectedVaultAddress, vault.vaultAddress) ? <Badge tone='ok'>{UI_STRING_SELECTED}</Badge> : undefined)}
 													repPerEthPrice={repPerEthPrice}
 													repPerEthSource={repPerEthSource}
 													repPerEthSourceUrl={repPerEthSourceUrl}
@@ -834,17 +906,17 @@ export function SecurityPoolWorkflowSection({
 														const canUseSelectedVaultActions = accountState.address !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isMainnet
 														const loadedVaultMissing = selectedVaultDetails !== undefined && !selectedVaultExistsOnchain
 														const liquidationBlocker = (() => {
-															if (loadedVaultMissing) return UI_STRINGS.securityPoolWorkflowSection.vaultMissingDetail
+															if (loadedVaultMissing) return UI_STRING_THIS_VAULT_DOES_NOT_EXIST
 															return undefined
 														})()
 
 														return {
-															actionLabel: UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationActionLabel,
+															actionLabel: UI_STRING_REVIEW_LIQUIDATION,
 															...(liquidationBlocker === undefined ? {} : { blocker: liquidationBlocker }),
-															description: UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationDescription,
+															description: UI_STRING_INSPECT_THE_LIQUIDATION_QUOTE_TIMEOUT_AND_EXECUTION_PATH_BEFORE_QUEUEING_LIQUIDATION,
 															key: 'liquidate-vault',
 															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
-															title: UI_STRINGS.securityPoolWorkflowSection.reviewLiquidationTitle,
+															title: UI_STRING_REVIEW_LIQUIDATION,
 															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
 																: {
@@ -896,7 +968,7 @@ export function SecurityPoolWorkflowSection({
 										currentStageView={currentForkStage}
 										currentTimestamp={currentTimestamp}
 										disabled={forkWorkflowDisabled}
-										disabledMessage={forkWorkflowDisabled ? UI_STRINGS.securityPoolWorkflowSection.forkAndTruthReadOnlyReason : undefined}
+										disabledMessage={forkWorkflowDisabled ? UI_STRING_THIS_POOL_IS_CURRENTLY_OPERATIONAL_SO_FORK_AND_TRUTH_AUCTION_ACTIONS_ARE_READ_ONLY : undefined}
 										embedInCard
 										forkAuctionDetails={currentForkAuctionDetails}
 										lifecycleStateOverride={selectedPoolLifecycleState}
@@ -916,9 +988,9 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title={UI_STRINGS.securityPoolWorkflowSection.stagedOperationsLabel} variant='plain'>
+									<SectionBlock density='compact' title={UI_STRING_STAGED_OPERATIONS} variant='plain'>
 										<ErrorNotice message={poolOracleManagerError} />
-										<SectionBlock density='compact' headingLevel={4} title={UI_STRINGS.securityPoolWorkflowSection.stagedOperationsListLabel} variant='embedded'>
+										<SectionBlock density='compact' headingLevel={4} title={UI_STRING_STAGED_OPERATIONS_LIST} variant='embedded'>
 											{stagedOperations.map(operation => (
 												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' variant='compact'>
 													<div className='entity-card-header'>
@@ -928,43 +1000,41 @@ export function SecurityPoolWorkflowSection({
 														</div>
 													</div>
 													<MetricGrid className='entity-card-body'>
-														<MetricField label={UI_STRINGS.securityPoolWorkflowSection.operationIdLabel}>{operation.operationId.toString()}</MetricField>
-														<MetricField label={UI_STRINGS.securityPoolWorkflowSection.initiatorLabel}>
+														<MetricField label={UI_STRING_OPERATION_ID}>{operation.operationId.toString()}</MetricField>
+														<MetricField label={UI_STRING_INITIATOR}>
 															<AddressValue address={operation.initiatorVault} />
 														</MetricField>
-														<MetricField label={UI_STRINGS.securityPoolWorkflowSection.targetVaultLabel}>
+														<MetricField label={UI_STRING_TARGET_VAULT}>
 															<AddressValue address={operation.targetVault} />
 														</MetricField>
-														<MetricField label={UI_STRINGS.securityPoolWorkflowSection.amountLabel}>
+														<MetricField label={UI_STRING_AMOUNT}>
 															<CurrencyValue value={operation.amount} />
 														</MetricField>
 													</MetricGrid>
 												</WarningSurface>
 											))}
-											{activeStagedOperationCount > BigInt(stagedOperations.length) ? <p className='detail'>{UI_STRINGS.securityPoolWorkflowSection.showingActiveStagedOperationsLabel(stagedOperations.length.toString(), activeStagedOperationCount.toString())}</p> : null}
-											{currentPoolOracleManagerDetails === undefined || stagedOperations.length > 0 ? null : (
-												<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRINGS.securityPoolWorkflowSection.noneQueuedBadgeLabel, badgeTone: 'muted', detail: UI_STRINGS.securityPoolWorkflowSection.noStagedOperationsQueuedDetail }} />
-											)}
+											{activeStagedOperationCount > BigInt(stagedOperations.length) ? <p className='detail'>{UI_TEMPLATE_SHOWING_ACTIVE_STAGED_OPERATIONS_LABEL(stagedOperations.length.toString(), activeStagedOperationCount.toString())}</p> : null}
+											{currentPoolOracleManagerDetails === undefined || stagedOperations.length > 0 ? null : <StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_NONE_QUEUED, badgeTone: 'muted', detail: UI_STRING_NO_STAGED_OPERATIONS_ARE_CURRENTLY_QUEUED_FOR_THIS_POOL }} />}
 										</SectionBlock>
 										{currentPoolOracleManagerDetails === undefined ? undefined : (
 											<label className='field'>
-												<span>{UI_STRINGS.securityPoolWorkflowSection.stagedOperationIdLabel}</span>
-												<FormInput value={manualPendingOperationId} onInput={event => setManualPendingOperationId(event.currentTarget.value)} placeholder={selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : UI_STRINGS.securityPoolWorkflowSection.stagedOperationIdPlaceholder} />
+												<span>{UI_STRING_STAGED_OPERATION_ID}</span>
+												<FormInput value={manualPendingOperationId} onInput={event => setManualPendingOperationId(event.currentTarget.value)} placeholder={selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : UI_STRING_0} />
 											</label>
 										)}
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
 												{(() => {
-													if (loadingPoolOracleManager) return <LoadingText>{UI_STRINGS.securityPoolWorkflowSection.refreshingOperationsLabel}</LoadingText>
-													if (currentPoolOracleManagerDetails === undefined) return UI_STRINGS.securityPoolWorkflowSection.loadStagedOperationsLabel
+													if (loadingPoolOracleManager) return <LoadingText>{UI_STRING_REFRESHING_OPERATIONS}</LoadingText>
+													if (currentPoolOracleManagerDetails === undefined) return UI_STRING_LOAD_STAGED_OPERATIONS
 
-													return UI_STRINGS.securityPoolWorkflowSection.refreshStagedOperationsLabel
+													return UI_STRING_REFRESH_STAGED_OPERATIONS
 												})()}
 											</button>
 											{currentPoolOracleManagerDetails === undefined ? undefined : (
 												<TransactionActionButton
-													idleLabel={UI_STRINGS.securityPoolWorkflowSection.executeStagedOperationLabel}
-													pendingLabel={UI_STRINGS.securityPoolWorkflowSection.executingStagedOperationLabel}
+													idleLabel={UI_STRING_EXECUTE_STAGED_OPERATION}
+													pendingLabel={UI_STRING_EXECUTING_STAGED_OPERATION_SECURITY_POOL_WORKFLOW_SECTION_EXECUTING_STAGED_OPERATION_LABEL}
 													onClick={() => {
 														if (resolvedPendingOperationId === undefined) return
 														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
@@ -982,9 +1052,9 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title={UI_STRINGS.securityPoolWorkflowSection.openOracleTitle} variant='plain'>
+									<SectionBlock density='compact' title={UI_STRING_OPEN_ORACLE} variant='plain'>
 										<MetricGrid>
-											<MetricField label={UI_STRINGS.securityPoolWorkflowSection.openOraclePriceLabel} valueTagName='span'>
+											<MetricField label={UI_STRING_OPEN_ORACLE_PRICE} valueTagName='span'>
 												<OpenOraclePriceValue
 													currentTimestamp={currentTimestamp}
 													lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
@@ -993,14 +1063,14 @@ export function SecurityPoolWorkflowSection({
 												/>
 											</MetricField>
 											{currentPoolOracleManagerDetails === undefined ? undefined : (
-												<MetricField label={UI_STRINGS.securityPoolWorkflowSection.requestCostLabel}>
-													<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix={UI_STRINGS.common.ethSuffix} />
+												<MetricField label={UI_STRING_REQUEST_COST}>
+													<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix={UI_STRING_ETH} />
 												</MetricField>
 											)}
 											{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-												<MetricField label={UI_STRINGS.securityPoolWorkflowSection.pendingRequestLabel}>
+												<MetricField label={UI_STRING_PENDING_REQUEST}>
 													<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-														{UI_STRINGS.securityPoolWorkflowSection.pendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
+														{UI_TEMPLATE_PENDING_REPORT_LABEL(currentPoolOracleManagerDetails.pendingReportId.toString())}
 													</button>
 												</MetricField>
 											)}
@@ -1008,11 +1078,11 @@ export function SecurityPoolWorkflowSection({
 										<ErrorNotice message={poolOracleManagerError} />
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-												{loadingPoolOracleManager ? <LoadingText>{UI_STRINGS.securityPoolWorkflowSection.refreshingOracleLabel}</LoadingText> : UI_STRINGS.securityPoolWorkflowSection.refreshOracleLabel}
+												{loadingPoolOracleManager ? <LoadingText>{UI_STRING_REFRESHING_ORACLE}</LoadingText> : UI_STRING_REFRESH_ORACLE}
 											</button>
 											<TransactionActionButton
-												idleLabel={UI_STRINGS.securityPoolWorkflowSection.requestNewPriceLabel}
-												pendingLabel={UI_STRINGS.securityPoolWorkflowSection.requestingNewPriceLabel}
+												idleLabel={UI_STRING_REQUEST_NEW_PRICE}
+												pendingLabel={UI_STRING_REQUESTING_NEW_PRICE}
 												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
 												pending={poolOracleActiveAction === 'requestPrice'}
 												tone='secondary'

@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ActionAvailability } from '../types/components.js'
-import { UI_STRINGS } from './uiStrings.js'
+import { UI_STRING_CONNECT_WALLET_TO_CONTINUE } from './uiStrings.js'
 
 type WalletMainnetGuardParameters = {
 	accountAddress: Address | string | undefined
@@ -20,7 +20,7 @@ type WalletMainnetGuardState = {
 }
 
 function getWalletRequiredReason(walletRequiredReason: string | undefined) {
-	return walletRequiredReason ?? UI_STRINGS.common.connectWalletToContinueDetail
+	return walletRequiredReason ?? UI_STRING_CONNECT_WALLET_TO_CONTINUE
 }
 
 export function getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason }: WalletMainnetGuardParameters): WalletMainnetGuardState {

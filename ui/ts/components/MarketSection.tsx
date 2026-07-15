@@ -8,7 +8,22 @@ import { OperationModal } from './OperationModal.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
-import { UI_STRINGS } from '../lib/uiStrings.js'
+import {
+	UI_STRING_FORK,
+	UI_STRING_FORK_ZOLTAR,
+	UI_STRING_FORKED,
+	UI_STRING_LOADING_WITH_ELLIPSIS,
+	UI_STRING_MARKETS,
+	UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER,
+	UI_STRING_OPEN_REP_MIGRATION,
+	UI_STRING_POST_FORK_ACTIONS,
+	UI_STRING_QUESTIONS,
+	UI_STRING_SELECTED_FORK_QUESTION_MARKET_SECTION_SELECTED_FORK_QUESTION_PREFIX,
+	UI_STRING_STATUS,
+	UI_STRING_THE_UNIVERSE_IS_FORKED_MIGRATION_IS_NOW_THE_PRIMARY_FOLLOW_UP_ACTION,
+	UI_STRING_UNFORKED,
+	UI_STRING_UNIVERSE,
+} from '../lib/uiStrings.js'
 import type { MarketSectionProps } from '../types/components.js'
 
 export function MarketSection({
@@ -74,7 +89,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title={UI_STRINGS.marketSection.marketsSectionTitle}>
+			<SectionBlock density='compact' title={UI_STRING_MARKETS}>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -89,16 +104,16 @@ export function MarketSection({
 				) : (
 					<DataGrid columns='auto'>
 						<div>
-							<p className='detail'>{UI_STRINGS.marketSection.universeLabel}</p>
-							<strong>{zoltarUniverse?.universeId.toString() ?? UI_STRINGS.common.loadingLabel}</strong>
+							<p className='detail'>{UI_STRING_UNIVERSE}</p>
+							<strong>{zoltarUniverse?.universeId.toString() ?? UI_STRING_LOADING_WITH_ELLIPSIS}</strong>
 						</div>
 						<div>
-							<p className='detail'>{UI_STRINGS.marketSection.statusLabel}</p>
-							<strong>{hasForked ? UI_STRINGS.marketSection.statusForkedLabel : UI_STRINGS.marketSection.statusUnforkedLabel}</strong>
+							<p className='detail'>{UI_STRING_STATUS}</p>
+							<strong>{hasForked ? UI_STRING_FORKED : UI_STRING_UNFORKED}</strong>
 						</div>
 						<div>
-							<p className='detail'>{UI_STRINGS.marketSection.questionsLabel}</p>
-							<strong>{zoltarQuestionCount?.toString() ?? UI_STRINGS.common.metricUnavailablePlaceholder}</strong>
+							<p className='detail'>{UI_STRING_QUESTIONS}</p>
+							<strong>{zoltarQuestionCount?.toString() ?? UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER}</strong>
 						</div>
 					</DataGrid>
 				)}
@@ -107,10 +122,10 @@ export function MarketSection({
 				{view === 'questions' ? (
 					<>
 						{hasForked ? (
-							<SectionBlock title={UI_STRINGS.marketSection.postForkActionsTitle} description={UI_STRINGS.marketSection.postForkActionsDescription}>
+							<SectionBlock title={UI_STRING_POST_FORK_ACTIONS} description={UI_STRING_THE_UNIVERSE_IS_FORKED_MIGRATION_IS_NOW_THE_PRIMARY_FOLLOW_UP_ACTION}>
 								<div className='actions'>
 									<button className='primary' type='button' onClick={() => onActiveViewChange('migrate')}>
-										{UI_STRINGS.marketSection.openRepMigrationLabel}
+										{UI_STRING_OPEN_REP_MIGRATION}
 									</button>
 								</div>
 							</SectionBlock>
@@ -153,19 +168,19 @@ export function MarketSection({
 
 				{view === 'fork' ? (
 					<>
-						<SectionBlock title={UI_STRINGS.marketSection.forkSectionTitle}>
+						<SectionBlock title={UI_STRING_FORK}>
 							<div className='actions'>
 								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
-									{UI_STRINGS.marketSection.forkActionLabel}
+									{UI_STRING_FORK_ZOLTAR}
 								</button>
 							</div>
 							{zoltarForkQuestionId.trim() === '' ? undefined : (
 								<p className='detail'>
-									{UI_STRINGS.marketSection.selectedForkQuestionPrefix} {zoltarForkQuestionId}
+									{UI_STRING_SELECTED_FORK_QUESTION_MARKET_SECTION_SELECTED_FORK_QUESTION_PREFIX} {zoltarForkQuestionId}
 								</p>
 							)}
 						</SectionBlock>
-						<OperationModal isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title={UI_STRINGS.marketSection.forkZoltarModalTitle}>
+						<OperationModal isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title={UI_STRING_FORK_ZOLTAR}>
 							<ForkZoltarSection
 								accountAddress={accountState.address}
 								hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}

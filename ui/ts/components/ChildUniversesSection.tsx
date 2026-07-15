@@ -4,7 +4,7 @@ import { EntityCard } from './EntityCard.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
-import { UI_STRINGS } from '../lib/uiStrings.js'
+import { UI_STRING_EXISTS, UI_STRING_NOT_DEPLOYED, UI_STRING_WORKING } from '../lib/uiStrings.js'
 import type { ActionAvailability } from '../types/components.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
@@ -30,7 +30,7 @@ type ChildUniversesSectionProps = {
 }
 
 export function ChildUniverseStatusBadge({ child }: { child: ZoltarChildUniverseSummary }) {
-	return <Badge tone={child.exists ? 'ok' : 'pending'}>{child.exists ? UI_STRINGS.childUniversesSection.existsLabel : UI_STRINGS.childUniversesSection.notDeployedLabel}</Badge>
+	return <Badge tone={child.exists ? 'ok' : 'pending'}>{child.exists ? UI_STRING_EXISTS : UI_STRING_NOT_DEPLOYED}</Badge>
 }
 
 export function ChildUniversesSection({ action, childUniverses, emptyMessage, headerSubtitle, headerTitle, renderBody, renderBadge, renderTitle }: ChildUniversesSectionProps) {
@@ -52,7 +52,7 @@ export function ChildUniversesSection({ action, childUniverses, emptyMessage, he
 									childAction === undefined ? undefined : (
 										<TransactionActionButton
 											idleLabel={childAction.label}
-											pendingLabel={childAction.pendingLabel ?? UI_STRINGS.childUniversesSection.workingLabel}
+											pendingLabel={childAction.pendingLabel ?? UI_STRING_WORKING}
 											onClick={childAction.onClick}
 											pending={childAction.pending === true}
 											tone={childAction.tone ?? 'secondary'}
