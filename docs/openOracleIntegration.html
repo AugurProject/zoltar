@@ -1206,6 +1206,399 @@
 				</p>
 			</section>
 
+			<section id="intentional-economic-tradeoffs">
+				<h2>Intentional Economic Tradeoffs</h2>
+				<p>
+					Two coordinator behaviors are deliberate. First, an accepted report
+					authorizes every otherwise-valid operation that can execute during the
+					five-minute price window; the coordinator does not debit a notional
+					exposure budget. Second, the caller who pays for a stale-price refresh
+					owns the staging lane until that report settles. A sequence of timely
+					disputes can extend both the report and that exclusivity.
+				</p>
+				<p>
+					These choices amortize one contestable report across pool activity and
+					prevent unrelated callers from attaching operations to someone else's
+					in-flight refresh. Their security boundary is economic contestability,
+					not one-to-one bonding against operation value or a maximum pending
+					duration. The calculators below make the resulting capital and flow
+					costs explicit.
+				</p>
+
+				<h3 id="fixed-report-unmetered-exposure">
+					Fixed Report Cost and Unmetered Exposure
+				</h3>
+				<p>
+					<code>reportRep</code> is the fixed REP-side report amount,
+					<code>referencePrice</code> is the reference REP-per-ETH price,
+					<code>reportedError</code> is the reported upward error, and
+					<code>outsideExposure</code> is the outside value that can react to the
+					accepted price. The sponsor reports
+					<code>reportedPrice = referencePrice · (1 + reportedError)</code> and
+					posts <code>reportRep / reportedPrice</code> WETH. The
+					REP and WETH are principal: OpenOracle returns both to the accepted
+					reporter at settlement. An undisputed report pays no percentage fee.
+				</p>
+				<div class="equation" id="eq-openoracle-fixed-report-cost">
+					<math
+						display="block"
+						aria-label="fixed report funding and accepted report cost"
+						data-source="reportedPrice = referencePrice \cdot (1 + reportedError); amount2 = reportRep / reportedPrice; reportCapital = reportRep / referencePrice + amount2; requestBounty = blockBaseFee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101; settlerReward = blockBaseFee \cdot 2 \cdot gasConsumedOpenOracleReportPrice; capitalCarry = (reportCapital + requestBounty) \cdot capitalRate \cdot settlementTime / year; externalSettlerCost = requestTransactionGasCost + capitalCarry + settlerReward; selfSettlerCost = requestTransactionGasCost + capitalCarry + settlementTransactionGasCost; exposureMultiple = outsideExposure / reportCapital"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>reportedPrice</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>referencePrice</mi><mo>&#x22C5;</mo><mo>(</mo><mn>1</mn><mo>+</mo><mi>reportedError</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>amount2</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>reportRep</mi><mo>/</mo><mi>reportedPrice</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>reportCapital</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>reportRep</mi><mo>/</mo><mi>referencePrice</mi><mo>+</mo><mi>reportRep</mi><mo>/</mo><mi>reportedPrice</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>externalSettlerCost</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>requestGas</mi><mo>+</mo><mi>capitalCarry</mi><mo>+</mo><mi>settlerReward</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>selfSettlerCost</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>requestGas</mi><mo>+</mo><mi>capitalCarry</mi><mo>+</mo><mi>settlementGas</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>exposureMultiple</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>outsideExposure</mi><mo>/</mo><mi>reportCapital</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Accepted Report Cost</span>The request
+						bounty and token position are funding requirements, not necessarily
+						losses. The initial reporter receives the bounty minus the settler
+						reward, and a self-settling sponsor also receives that reward.
+					</p>
+				</div>
+				<p>
+					The real-number defaults below use the market snapshot already stated
+					above: approximately <code>2,210 REP/ETH</code>,
+					<code>$1,750.34/ETH</code>, and <code>0.07 gwei</code> base fee. With
+					<code>259.332 REP</code>, a reported price ten percent high, and
+					<code>10,000 ETH</code> of outside exposure, the position is only about
+					<code>0.224 ETH</code>. This is intentional and means the exposure
+					multiple is about <code>44,638x</code>; increasing outside exposure
+					does not change the report or request cost.
+				</p>
+				<details class="interactive-example" id="fixed-exposure-cost-example" open>
+					<summary>Adjust fixed report cost and outside exposure</summary>
+					<div class="example-grid">
+						<label>
+							Outside exposure
+							<input type="range" min="100" max="100000" step="100" value="10000" data-example-input="outsideExposure" />
+							<span class="example-value" data-example-value="outsideExposure">10,000 ETH</span>
+						</label>
+						<label>
+							Fixed REP report
+							<input type="range" min="10" max="2000" step="0.001" value="259.332" data-example-input="fixedReportRep" />
+							<span class="example-value" data-example-value="fixedReportRep">259.332 REP</span>
+						</label>
+						<label>
+							Reference REP per ETH
+							<input type="range" min="100" max="5000" step="10" value="2210" data-example-input="fixedReferencePrice" />
+							<span class="example-value" data-example-value="fixedReferencePrice">2,210 REP/ETH</span>
+						</label>
+						<label>
+							Reported upward error
+							<input type="range" min="0" max="100" step="1" value="10" data-example-input="fixedReportedError" />
+							<span class="example-value" data-example-value="fixedReportedError">10%</span>
+						</label>
+						<label>
+							Settlement time
+							<input type="range" min="1" max="60" step="1" value="8" data-example-input="fixedSettlementMinutes" />
+							<span class="example-value" data-example-value="fixedSettlementMinutes">8 minutes</span>
+						</label>
+						<label>
+							Base fee
+							<input type="range" min="0.01" max="100" step="0.01" value="0.07" data-example-input="fixedBaseFeeGwei" />
+							<span class="example-value" data-example-value="fixedBaseFeeGwei">0.07 gwei</span>
+						</label>
+						<label>
+							Effective transaction gas price
+							<input type="range" min="0.01" max="200" step="0.01" value="0.1" data-example-input="fixedEffectiveGasPriceGwei" />
+							<span class="example-value" data-example-value="fixedEffectiveGasPriceGwei">0.10 gwei</span>
+						</label>
+						<label>
+							Request transaction gas
+							<input type="range" min="100000" max="1500000" step="10000" value="500000" data-example-input="fixedRequestGas" />
+							<span class="example-value" data-example-value="fixedRequestGas">500,000 gas</span>
+						</label>
+						<label>
+							Settlement transaction gas
+							<input type="range" min="100000" max="5000000" step="10000" value="500000" data-example-input="fixedSettlementGas" />
+							<span class="example-value" data-example-value="fixedSettlementGas">500,000 gas</span>
+						</label>
+						<label>
+							Annual capital rate
+							<input type="range" min="0" max="30" step="0.5" value="5" data-example-input="fixedCapitalRate" />
+							<span class="example-value" data-example-value="fixedCapitalRate">5.0%</span>
+						</label>
+						<label>
+							ETH price
+							<input type="range" min="500" max="10000" step="0.01" value="1750.34" data-example-input="fixedEthUsd" />
+							<span class="example-value" data-example-value="fixedEthUsd">$1,750.34/ETH</span>
+						</label>
+					</div>
+					<div class="example-output-grid">
+						<div><span>Reported price</span><output data-example-output="fixedReportedPrice">2,431 REP/ETH</output></div>
+						<div><span>WETH posted</span><output data-example-output="fixedWethPosted">0.106677 WETH</output></div>
+						<div><span>Report position capital</span><output data-example-output="fixedPositionCapital">0.224022 ETH</output></div>
+						<div><span>Request bounty locked</span><output data-example-output="fixedRequestBounty">0.001148 ETH</output></div>
+						<div><span>Opening funding plus request gas</span><output data-example-output="fixedFundingRequired">0.225220 ETH</output></div>
+						<div><span>Net cost, external settler</span><output data-example-output="fixedExternalCost">0.000064 ETH ($0.11)</output></div>
+						<div><span>Net cost, sponsor self-settles</span><output data-example-output="fixedSelfCost">0.000100 ETH ($0.18)</output></div>
+						<div><span>Exposure / report capital</span><output data-example-output="fixedExposureMultiple">44,638x</output></div>
+					</div>
+					<p class="detail">
+						The transaction-gas inputs are scenario estimates, not coordinator
+						constants. Block base fee determines the request bounty; effective gas
+						price includes any priority fee and determines transaction spend; the
+						calculator clamps it to at least the selected block base fee. The
+						net-cost outputs assume the report is not disputed and
+						the principal is returned. A wrong report faces dispute, price risk,
+						transaction-ordering risk, and possible outside losses; the attack model
+						below addresses that separate contestability boundary.
+					</p>
+				</details>
+
+				<h3 id="rolling-dispute-exclusivity">
+					Rolling Dispute Cost and Sponsor Exclusivity
+				</h3>
+				<p>
+					Only <code>pendingReportSponsor</code> can add operations while the
+					coordinator's report id is non-zero. Every valid dispute replaces the
+					current reporter and resets <code>reportTimestamp</code>, so the next
+					settlement opportunity moves forward by another
+					<code>settlementTime</code>. There is no coordinator-level absolute
+					deadline. This makes a rolling availability lock possible by design,
+					although every roll must win transaction inclusion before settlement
+					and satisfy OpenOracle's price and funding rules.
+				</p>
+				<p>
+					The lower-bound model assumes one economic actor controls the old and
+					new reporter addresses and uses token-one-side disputes. It alternates
+					reports between
+					<code>referencePrice · (1 + alternatingDeviation)</code> and
+					<code>referencePrice · (1 - alternatingDeviation)</code>, where
+					<code>alternatingDeviation</code> must be strictly greater
+					than <code>feeSum / (2 + feeSum)</code> to move outside the prior
+					report's fee boundary in both directions. Reporter fees
+					then move between attacker-controlled addresses and are not a net cost.
+					Protocol fees leave the attacker, gas is spent, and the current report
+					position remains locked. Independent reporters, volatile prices,
+					priority fees, or failed inclusion make the real cost higher.
+				</p>
+				<p>
+					Common ownership does not eliminate atomic funding requirements. For a
+					token-one-side roll, OpenOracle pulls the next REP position, the old REP
+					position, reporter fee, and protocol fee before returning twice the old
+					REP plus reporter fee to the previous reporter. The caller must therefore
+					have the full pulled REP balance and allowance at transaction start. A
+					roll that increases <code>amount2</code> also needs the positive WETH
+					difference. The calculator reports these transient requirements
+					separately from principal locked between transactions; it does not assume
+					flash liquidity.
+				</p>
+				<div class="equation" id="eq-openoracle-rolling-lock-cost">
+					<math
+						display="block"
+						aria-label="rolling dispute count, report escalation, and lower bound cost"
+						data-source="numberOfDisputes = max(0, ceil(lockDuration / settlementTime) - 1); nextReportRep = min(escalationHalt, floor(currentReportRep \cdot multiplier)) when currentReportRep < escalationHalt; nextReportRep = currentReportRep + oneAtomicRep after halt; protocolFeeRepAtStep = floor(currentReportRep \cdot protocolFeeUnits / feePrecision); protocolFeeCost = sum(protocolFeeRepAtStep) / referencePrice; reportedPriceAtStep = referencePrice \cdot (1 + (-1)^step \cdot alternatingDeviation); amount2AtStep = reportRepAtStep / reportedPriceAtStep; liquidRepForRoll = nextReportRep + currentReportRep + reporterFeeRepAtStep + protocolFeeRepAtStep; wethAddedForRoll = max(0, nextAmount2 - currentAmount2); disputeGasCost = numberOfDisputes \cdot disputeGasUnits \cdot effectiveGasPrice; capitalCarry = sum(reportCapitalAtStep \cdot capitalRate \cdot stepDuration / year) + requestBounty \cdot capitalRate \cdot lockDuration / year; rollingLockCost = openingGasCost + protocolFeeCost + disputeGasCost + capitalCarry + terminalSettlementGasCost"
+					>
+						<mtable>
+							<mtr>
+								<mtd><mi>numberOfDisputes</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>ceil</mi><mo>(</mo><mi>lockDuration</mi><mo>/</mo><mi>settlementTime</mi><mo>)</mo><mo>-</mo><mn>1</mn><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><msub><mi>reportRep</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>escalationHalt</mi><mo>,</mo><mi>floor</mi><mo>(</mo><mi>multiplier</mi><mo>&#x22C5;</mo><msub><mi>reportRep</mi><mi>i</mi></msub><mo>)</mo><mo>)</mo><mtext> before halt</mtext></mtd>
+							</mtr>
+							<mtr>
+								<mtd><msub><mi>reportRep</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><msub><mi>reportRep</mi><mi>i</mi></msub><mo>+</mo><mi>oneAtomicRep</mi><mtext> after halt</mtext></mtd>
+							</mtr>
+							<mtr>
+								<mtd><msub><mi>protocolFeeRep</mi><mi>i</mi></msub></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>floor</mi><mo>(</mo><msub><mi>reportRep</mi><mi>i</mi></msub><mo>&#x22C5;</mo><mi>protocolFeeUnits</mi><mo>/</mo><mi>feePrecision</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><msub><mi>liquidRep</mi><mi>i</mi></msub></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><msub><mi>reportRep</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>reportRep</mi><mi>i</mi></msub><mo>+</mo><msub><mi>reporterFeeRep</mi><mi>i</mi></msub><mo>+</mo><msub><mi>protocolFeeRep</mi><mi>i</mi></msub></mtd>
+							</mtr>
+							<mtr>
+								<mtd><msub><mi>wethAdded</mi><mi>i</mi></msub></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><msub><mi>amount2</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>-</mo><msub><mi>amount2</mi><mi>i</mi></msub><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>rollingLockCost</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>openingGas</mi><mo>+</mo><mi>protocolFees</mi><mo>+</mo><mi>disputeGas</mi><mo>+</mo><mi>capitalCarry</mi><mo>+</mo><mi>settlementGas</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Rolling Lock Lower Bound</span>Required
+						REP grows geometrically to <code>escalationHalt</code>. After the halt, each roll adds
+						one atomic REP, so peak capital becomes nearly flat while protocol fees
+						and gas make total cost grow approximately linearly with time.
+					</p>
+				</div>
+				<p>
+					The recurrence uses <code>lockDuration</code>,
+					<code>settlementTime</code>, atomic <code>reportRep</code> before each
+					roll, <code>multiplier</code>, <code>escalationHalt</code>, and
+					<code>oneAtomicRep</code>. <code>protocolFeeUnits</code> and
+					<code>reporterFeeUnits</code> use OpenOracle's
+					<code>feePrecision = 10,000,000</code>. Each fee is floored separately
+					before fees are summed and converted from REP to ETH.
+				</p>
+				<p>
+					At the real-number defaults, a 24-hour lock needs
+					<code>179</code> disputes: the opening report covers the first eight
+					minutes, then each dispute buys at most another eight minutes. Required
+					REP reaches the <code>2,593.32 REP</code> halt after 17 disputes and
+					ends at <code>2,593.320235756385072322 REP</code>. The lower-bound net
+					cost is about <code>1.983 ETH</code>, or <code>$3,471</code> at the
+					snapshot ETH price, of which roughly <code>1.977 ETH</code> is the
+					one-percent protocol fee paid across repeated token-one-side disputes.
+				</p>
+				<details class="interactive-example" id="rolling-lock-cost-example" open>
+					<summary>Adjust rolling dispute duration and cost</summary>
+					<div class="example-grid">
+						<label>
+							Lock duration
+							<input type="range" min="1" max="168" step="1" value="24" data-example-input="lockDurationHours" />
+							<span class="example-value" data-example-value="lockDurationHours">24 hours</span>
+						</label>
+						<label>
+							Settlement time
+							<input type="range" min="1" max="60" step="1" value="8" data-example-input="lockSettlementMinutes" />
+							<span class="example-value" data-example-value="lockSettlementMinutes">8 minutes</span>
+						</label>
+						<label>
+							Initial REP report
+							<input type="range" min="10" max="2000" step="0.001" value="259.332" data-example-input="lockInitialRep" />
+							<span class="example-value" data-example-value="lockInitialRep">259.332023575638507216 REP</span>
+						</label>
+						<label>
+							Dispute multiplier
+							<input type="range" min="1" max="2" step="0.01" value="1.15" data-example-input="lockMultiplier" />
+							<span class="example-value" data-example-value="lockMultiplier">1.15x</span>
+						</label>
+						<label>
+							Escalation halt multiple
+							<input type="range" min="1" max="20" step="1" value="10" data-example-input="lockHaltMultiple" />
+							<span class="example-value" data-example-value="lockHaltMultiple">10x</span>
+						</label>
+						<label>
+							Protocol fee
+							<input type="range" min="0" max="5" step="0.1" value="1" data-example-input="lockProtocolFee" />
+							<span class="example-value" data-example-value="lockProtocolFee">1.0%</span>
+						</label>
+						<label>
+							Alternating price deviation
+							<input type="range" min="0.1" max="20" step="0.1" value="1" data-example-input="lockPriceDeviation" />
+							<span class="example-value" data-example-value="lockPriceDeviation">1.0%</span>
+						</label>
+						<label>
+							Reference REP per ETH
+							<input type="range" min="100" max="5000" step="10" value="2210" data-example-input="lockReferencePrice" />
+							<span class="example-value" data-example-value="lockReferencePrice">2,210 REP/ETH</span>
+						</label>
+						<label>
+							Gas per dispute
+							<input type="range" min="100000" max="1000000" step="10000" value="300000" data-example-input="lockDisputeGas" />
+							<span class="example-value" data-example-value="lockDisputeGas">300,000 gas</span>
+						</label>
+						<label>
+							Block base fee
+							<input type="range" min="0.01" max="100" step="0.01" value="0.07" data-example-input="lockBaseFeeGwei" />
+							<span class="example-value" data-example-value="lockBaseFeeGwei">0.07 gwei</span>
+						</label>
+						<label>
+							Effective gas price
+							<input type="range" min="0.01" max="200" step="0.01" value="0.1" data-example-input="lockGasPriceGwei" />
+							<span class="example-value" data-example-value="lockGasPriceGwei">0.10 gwei</span>
+						</label>
+						<label>
+							Opening transaction gas
+							<input type="range" min="100000" max="1500000" step="10000" value="500000" data-example-input="lockOpeningGas" />
+							<span class="example-value" data-example-value="lockOpeningGas">500,000 gas</span>
+						</label>
+						<label>
+							Terminal settlement gas
+							<input type="range" min="100000" max="5000000" step="10000" value="500000" data-example-input="lockSettlementGas" />
+							<span class="example-value" data-example-value="lockSettlementGas">500,000 gas</span>
+						</label>
+						<label>
+							Annual capital rate
+							<input type="range" min="0" max="30" step="0.5" value="5" data-example-input="lockCapitalRate" />
+							<span class="example-value" data-example-value="lockCapitalRate">5.0%</span>
+						</label>
+						<label>
+							Estimated harm per hour
+							<input type="range" min="0" max="1000" step="10" value="100" data-example-input="lockHarmPerHour" />
+							<span class="example-value" data-example-value="lockHarmPerHour">100 ETH/hour</span>
+						</label>
+						<label>
+							ETH price
+							<input type="range" min="500" max="10000" step="0.01" value="1750.34" data-example-input="lockEthUsd" />
+							<span class="example-value" data-example-value="lockEthUsd">$1,750.34/ETH</span>
+						</label>
+					</div>
+					<div class="example-output-grid">
+						<div><span>Rolling disputes required</span><output data-example-output="lockDisputeCount">179</output></div>
+						<div><span>Final report size</span><output data-example-output="lockFinalReport">2,593.320235756385072322 REP</output></div>
+						<div><span>Alternating path validity</span><output data-example-output="lockPricePathValidity">valid; minimum deviation 0.55%</output></div>
+						<div><span>Peak principal locked between rolls</span><output data-example-output="lockPeakCapital">2.358749 ETH</output></div>
+						<div><span>Maximum liquid REP for one roll</span><output data-example-output="lockMaxLiquidRep">5,215.166994106090380438 REP</output></div>
+						<div><span>Maximum WETH added in one roll</span><output data-example-output="lockMaxWethAdded">0.142410 WETH</output></div>
+						<div><span>Exact cumulative protocol fee</span><output data-example-output="lockProtocolFeeRepExact">4,369.939338389373684113 REP</output></div>
+						<div><span>Protocol fees spent</span><output data-example-output="lockProtocolFeeCost">1.977348 ETH</output></div>
+						<div><span>Reporter fees moved internally</span><output data-example-output="lockReporterFeeTransfer">0.197735 ETH</output></div>
+						<div><span>Dispute gas spent</span><output data-example-output="lockDisputeGasCost">0.005370 ETH</output></div>
+						<div><span>Terminal settlement gas</span><output data-example-output="lockSettlementGasCost">0.000050 ETH</output></div>
+						<div><span>Capital carrying cost</span><output data-example-output="lockCapitalCarry">0.000303 ETH</output></div>
+						<div><span>Lower-bound total cost</span><output data-example-output="lockTotalCost">1.983121 ETH ($3,471)</output></div>
+						<div><span>Estimated outside harm</span><output data-example-output="lockOutsideHarm">2,400 ETH</output></div>
+						<div><span>Harm / attacker cost</span><output data-example-output="lockGriefRatio">1,211x</output></div>
+					</div>
+					<p class="detail">
+						The total assumes the
+						attacker eventually self-settles, recovering the request bounty and
+						current REP/WETH principal after paying the selected terminal settlement
+						gas. Block base fee determines the bounty; effective gas price determines
+						transaction spend and is clamped to at least the selected base fee. The
+						reporter-fee output uses the configured
+						<code>0.1%</code> and is excluded from net cost only because the model
+						assumes common ownership. The harm input is illustrative and has no
+						onchain meaning.
+					</p>
+				</details>
+			</section>
+
 			<section id="attack-model">
 				<h2>Attack Model and Defenses</h2>
 				<p>
@@ -2722,6 +3115,449 @@
 						start: maxExpectedMovePercent,
 					},
 				});
+			});
+			bindExample("#fixed-exposure-cost-example", (context) => {
+				const outsideExposure = Math.max(context.read("outsideExposure"), 0);
+				const reportRep = Math.max(context.read("fixedReportRep"), 0.000001);
+				const referencePrice = Math.max(
+					context.read("fixedReferencePrice"),
+					0.000001,
+				);
+				const reportedError = Math.max(
+					context.read("fixedReportedError") / 100,
+					0,
+				);
+				const settlementMinutes = Math.max(
+					context.read("fixedSettlementMinutes"),
+					0,
+				);
+				const baseFeeGwei = Math.max(context.read("fixedBaseFeeGwei"), 0);
+				const selectedEffectiveGasPriceGwei = Math.max(
+					context.read("fixedEffectiveGasPriceGwei"),
+					0,
+				);
+				const effectiveGasPriceGwei = Math.max(
+					selectedEffectiveGasPriceGwei,
+					baseFeeGwei,
+				);
+				const requestGasUnits = Math.max(context.read("fixedRequestGas"), 0);
+				const settlementGasUnits = Math.max(
+					context.read("fixedSettlementGas"),
+					0,
+				);
+				const capitalRate = Math.max(
+					context.read("fixedCapitalRate") / 100,
+					0,
+				);
+				const ethUsd = Math.max(context.read("fixedEthUsd"), 0);
+				const reportedPrice = referencePrice * (1 + reportedError);
+				const wethPosted = reportRep / reportedPrice;
+				const positionCapital = reportRep / referencePrice + wethPosted;
+				const baseFeeEthPerGas = baseFeeGwei * 1e-9;
+				const callbackGasLimit = 4_000_000;
+				const reportPriceGas = 100_000;
+				const requestBounty =
+					baseFeeEthPerGas *
+					4 *
+					(callbackGasLimit + reportPriceGas) +
+					101e-18;
+				const settlerReward = baseFeeEthPerGas * 2 * reportPriceGas;
+				const effectiveGasPriceEthPerGas = effectiveGasPriceGwei * 1e-9;
+				const requestGasCost =
+					requestGasUnits * effectiveGasPriceEthPerGas;
+				const settlementGasCost =
+					settlementGasUnits * effectiveGasPriceEthPerGas;
+				const capitalCarry =
+					(positionCapital + requestBounty) *
+					capitalRate *
+					(settlementMinutes / (365 * 24 * 60));
+				const externalSettlerCost =
+					requestGasCost + capitalCarry + settlerReward;
+				const selfSettlerCost =
+					requestGasCost + capitalCarry + settlementGasCost;
+				const fundingRequired =
+					positionCapital + requestBounty + requestGasCost;
+				const exposureMultiple =
+					positionCapital > 0
+						? outsideExposure / positionCapital
+						: Number.POSITIVE_INFINITY;
+				const formatEthPrecise = (value) => `${value.toFixed(6)} ETH`;
+				const formatEthWithUsd = (value) =>
+					`${value.toFixed(6)} ETH ($${(value * ethUsd).toFixed(2)})`;
+				context.writeValue(
+					"outsideExposure",
+					`${outsideExposure.toLocaleString()} ETH`,
+				);
+				context.writeValue("fixedReportRep", `${reportRep.toFixed(3)} REP`);
+				context.writeValue(
+					"fixedReferencePrice",
+					`${referencePrice.toLocaleString()} REP/ETH`,
+				);
+				context.writeValue(
+					"fixedReportedError",
+					`${(reportedError * 100).toFixed(0)}%`,
+				);
+				context.writeValue(
+					"fixedSettlementMinutes",
+					`${settlementMinutes.toFixed(0)} minutes`,
+				);
+				context.writeValue(
+					"fixedBaseFeeGwei",
+					`${baseFeeGwei.toFixed(2)} gwei`,
+				);
+				context.writeValue(
+					"fixedEffectiveGasPriceGwei",
+					selectedEffectiveGasPriceGwei < baseFeeGwei
+						? `${effectiveGasPriceGwei.toFixed(2)} gwei used; ${selectedEffectiveGasPriceGwei.toFixed(2)} selected`
+						: `${effectiveGasPriceGwei.toFixed(2)} gwei`,
+				);
+				context.writeValue(
+					"fixedSettlementGas",
+					`${settlementGasUnits.toLocaleString()} gas`,
+				);
+				context.writeValue(
+					"fixedRequestGas",
+					`${requestGasUnits.toLocaleString()} gas`,
+				);
+				context.writeValue(
+					"fixedCapitalRate",
+					`${(capitalRate * 100).toFixed(1)}%`,
+				);
+				context.writeValue(
+					"fixedEthUsd",
+					`$${ethUsd.toLocaleString()}/ETH`,
+				);
+				context.writeOutput(
+					"fixedReportedPrice",
+					`${reportedPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })} REP/ETH`,
+				);
+				context.writeOutput(
+					"fixedWethPosted",
+					`${wethPosted.toFixed(6)} WETH`,
+				);
+				context.writeOutput(
+					"fixedPositionCapital",
+					formatEthPrecise(positionCapital),
+				);
+				context.writeOutput(
+					"fixedRequestBounty",
+					formatEthPrecise(requestBounty),
+				);
+				context.writeOutput(
+					"fixedFundingRequired",
+					formatEthPrecise(fundingRequired),
+				);
+				context.writeOutput(
+					"fixedExternalCost",
+					formatEthWithUsd(externalSettlerCost),
+				);
+				context.writeOutput(
+					"fixedSelfCost",
+					formatEthWithUsd(selfSettlerCost),
+				);
+				context.writeOutput(
+					"fixedExposureMultiple",
+					Number.isFinite(exposureMultiple)
+						? `${exposureMultiple.toLocaleString(undefined, { maximumFractionDigits: 0 })}x`
+						: "unbounded",
+				);
+			});
+			bindExample("#rolling-lock-cost-example", (context) => {
+				const reportDisplayScale = 1_000_000n;
+				const weiPerDisplayUnit = 1_000_000_000_000n;
+				const atomicRepPerRep =
+					reportDisplayScale * weiPerDisplayUnit;
+				const toAtomicRep = (repValue) =>
+					BigInt(Math.round(repValue * Number(reportDisplayScale))) *
+					weiPerDisplayUnit;
+				const fromAtomicRep = (atomicValue) =>
+					Number(atomicValue) / Number(atomicRepPerRep);
+				const formatAtomicRep = (atomicValue) => {
+					const whole = atomicValue / atomicRepPerRep;
+					const fraction = atomicValue % atomicRepPerRep;
+					if (fraction === 0n) {
+						return `${whole.toLocaleString()} REP`;
+					}
+					return `${whole.toLocaleString()}.${fraction
+						.toString()
+						.padStart(18, "0")} REP`;
+				};
+				const lockDurationHours = Math.max(
+					context.read("lockDurationHours"),
+					0,
+				);
+				const settlementMinutes = Math.max(
+					context.read("lockSettlementMinutes"),
+					1,
+				);
+				const selectedInitialRep = Math.max(
+					context.read("lockInitialRep"),
+					0.000001,
+				);
+				const multiplier = Math.max(context.read("lockMultiplier"), 1);
+				const haltMultiple = Math.max(
+					Math.round(context.read("lockHaltMultiple")),
+					1,
+				);
+				const protocolFeeFraction = Math.max(
+					context.read("lockProtocolFee") / 100,
+					0,
+				);
+				const priceDeviationFraction = Math.max(
+					context.read("lockPriceDeviation") / 100,
+					0,
+				);
+				const referencePrice = Math.max(
+					context.read("lockReferencePrice"),
+					0.000001,
+				);
+				const disputeGasUnits = Math.max(context.read("lockDisputeGas"), 0);
+				const baseFeeGwei = Math.max(context.read("lockBaseFeeGwei"), 0);
+				const selectedGasPriceGwei = Math.max(
+					context.read("lockGasPriceGwei"),
+					0,
+				);
+				const gasPriceGwei = Math.max(selectedGasPriceGwei, baseFeeGwei);
+				const openingGasUnits = Math.max(context.read("lockOpeningGas"), 0);
+				const settlementGasUnits = Math.max(
+					context.read("lockSettlementGas"),
+					0,
+				);
+				const capitalRate = Math.max(
+					context.read("lockCapitalRate") / 100,
+					0,
+				);
+				const harmPerHour = Math.max(context.read("lockHarmPerHour"), 0);
+				const ethUsd = Math.max(context.read("lockEthUsd"), 0);
+				const lockDurationMinutes = lockDurationHours * 60;
+				const disputeCount = Math.max(
+					0,
+					Math.ceil(lockDurationMinutes / settlementMinutes) - 1,
+				);
+				const multiplierUnits = BigInt(Math.round(multiplier * 100));
+				const canonicalInitialRepAtomic = 259_332_023_575_638_507_216n;
+				const initialRepAtomic =
+					Math.abs(selectedInitialRep - 259.332) < 0.0000001
+						? canonicalInitialRepAtomic
+						: toAtomicRep(selectedInitialRep);
+				const haltAtomic = initialRepAtomic * BigInt(haltMultiple);
+				const reportSizes = [initialRepAtomic];
+				const protocolFeeUnits = BigInt(
+					Math.round(protocolFeeFraction * 10_000_000),
+				);
+				const reporterFeeUnits = 10_000n;
+				const feePrecision = 10_000_000n;
+				let protocolFeeRepAtomic = 0n;
+				let reporterFeeRepAtomic = 0n;
+				const protocolFeesByDispute = [];
+				const reporterFeesByDispute = [];
+				for (
+					let disputeIndex = 0;
+					disputeIndex < disputeCount;
+					disputeIndex += 1
+				) {
+					const currentRepAtomic = reportSizes[reportSizes.length - 1];
+					const protocolFeeAtStep =
+						(currentRepAtomic * protocolFeeUnits) / feePrecision;
+					const reporterFeeAtStep =
+						(currentRepAtomic * reporterFeeUnits) / feePrecision;
+					protocolFeeRepAtomic += protocolFeeAtStep;
+					reporterFeeRepAtomic += reporterFeeAtStep;
+					protocolFeesByDispute.push(protocolFeeAtStep);
+					reporterFeesByDispute.push(reporterFeeAtStep);
+					let nextRepAtomic;
+					if (currentRepAtomic < haltAtomic) {
+						nextRepAtomic = (currentRepAtomic * multiplierUnits) / 100n;
+						if (nextRepAtomic > haltAtomic) {
+							nextRepAtomic = haltAtomic;
+						}
+					} else {
+						nextRepAtomic = currentRepAtomic + 1n;
+					}
+					reportSizes.push(nextRepAtomic);
+				}
+				let capitalCarry = 0;
+				let peakCapital = 0;
+				let maxLiquidRepAtomic = 0n;
+				let maxWethAdded = 0;
+				const reportedPrices = reportSizes.map((_, reportIndex) =>
+					referencePrice *
+					(1 + (reportIndex % 2 === 0 ? priceDeviationFraction : -priceDeviationFraction)),
+				);
+				const amount2ByReport = reportSizes.map(
+					(reportSize, reportIndex) =>
+						fromAtomicRep(reportSize) / reportedPrices[reportIndex],
+				);
+				for (let reportIndex = 0; reportIndex < reportSizes.length; reportIndex += 1) {
+					const elapsedMinutes = reportIndex * settlementMinutes;
+					const remainingMinutes = Math.max(
+						lockDurationMinutes - elapsedMinutes,
+						0,
+					);
+					const stepMinutes = Math.min(settlementMinutes, remainingMinutes);
+					const reportCapital =
+						fromAtomicRep(reportSizes[reportIndex]) / referencePrice +
+						amount2ByReport[reportIndex];
+					peakCapital = Math.max(peakCapital, reportCapital);
+					capitalCarry +=
+						reportCapital *
+						capitalRate *
+						(stepMinutes / (365 * 24 * 60));
+					if (reportIndex < disputeCount) {
+						const liquidRepAtomic =
+							reportSizes[reportIndex + 1] +
+							reportSizes[reportIndex] +
+							protocolFeesByDispute[reportIndex] +
+							reporterFeesByDispute[reportIndex];
+						if (liquidRepAtomic > maxLiquidRepAtomic) {
+							maxLiquidRepAtomic = liquidRepAtomic;
+						}
+						maxWethAdded = Math.max(
+							maxWethAdded,
+							amount2ByReport[reportIndex + 1] - amount2ByReport[reportIndex],
+						);
+					}
+				}
+				const gasPriceEthPerGas = gasPriceGwei * 1e-9;
+				const baseFeeEthPerGas = baseFeeGwei * 1e-9;
+				const requestBounty =
+					baseFeeEthPerGas * 4 * (4_000_000 + 100_000) + 101e-18;
+				capitalCarry +=
+					requestBounty *
+					capitalRate *
+					(lockDurationHours / (365 * 24));
+				const protocolFeeCost =
+					fromAtomicRep(protocolFeeRepAtomic) / referencePrice;
+				const reporterFeeTransfer =
+					fromAtomicRep(reporterFeeRepAtomic) / referencePrice;
+				const disputeGasCost =
+					disputeCount * disputeGasUnits * gasPriceEthPerGas;
+				const openingGasCost = openingGasUnits * gasPriceEthPerGas;
+				const settlementGasCost = settlementGasUnits * gasPriceEthPerGas;
+				const totalCost =
+					openingGasCost +
+					protocolFeeCost +
+					disputeGasCost +
+					capitalCarry +
+					settlementGasCost;
+				const outsideHarm = harmPerHour * lockDurationHours;
+				const griefRatio =
+					totalCost > 0 ? outsideHarm / totalCost : Number.POSITIVE_INFINITY;
+				const finalReportAtomic = reportSizes[reportSizes.length - 1];
+				const feeBoundaryFraction = protocolFeeFraction + 0.001;
+				const minimumAlternatingDeviation =
+					feeBoundaryFraction / (2 + feeBoundaryFraction);
+				const pricePathIsValid =
+					priceDeviationFraction > minimumAlternatingDeviation;
+				context.writeValue(
+					"lockDurationHours",
+					`${lockDurationHours.toFixed(0)} hours`,
+				);
+				context.writeValue(
+					"lockSettlementMinutes",
+					`${settlementMinutes.toFixed(0)} minutes`,
+				);
+				context.writeValue("lockInitialRep", formatAtomicRep(initialRepAtomic));
+				context.writeValue("lockMultiplier", `${multiplier.toFixed(2)}x`);
+				context.writeValue("lockHaltMultiple", `${haltMultiple}x`);
+				context.writeValue(
+					"lockProtocolFee",
+					`${(protocolFeeFraction * 100).toFixed(1)}%`,
+				);
+				context.writeValue(
+					"lockPriceDeviation",
+					`${(priceDeviationFraction * 100).toFixed(1)}%`,
+				);
+				context.writeValue(
+					"lockReferencePrice",
+					`${referencePrice.toLocaleString()} REP/ETH`,
+				);
+				context.writeValue(
+					"lockDisputeGas",
+					`${disputeGasUnits.toLocaleString()} gas`,
+				);
+				context.writeValue(
+					"lockBaseFeeGwei",
+					`${baseFeeGwei.toFixed(2)} gwei`,
+				);
+				context.writeValue(
+					"lockGasPriceGwei",
+					selectedGasPriceGwei < baseFeeGwei
+						? `${gasPriceGwei.toFixed(2)} gwei used; ${selectedGasPriceGwei.toFixed(2)} selected`
+						: `${gasPriceGwei.toFixed(2)} gwei`,
+				);
+				context.writeValue(
+					"lockOpeningGas",
+					`${openingGasUnits.toLocaleString()} gas`,
+				);
+				context.writeValue(
+					"lockSettlementGas",
+					`${settlementGasUnits.toLocaleString()} gas`,
+				);
+				context.writeValue(
+					"lockCapitalRate",
+					`${(capitalRate * 100).toFixed(1)}%`,
+				);
+				context.writeValue(
+					"lockHarmPerHour",
+					`${harmPerHour.toLocaleString()} ETH/hour`,
+				);
+				context.writeValue(
+					"lockEthUsd",
+					`$${ethUsd.toLocaleString()}/ETH`,
+				);
+				context.writeOutput("lockDisputeCount", disputeCount.toLocaleString());
+				context.writeOutput("lockFinalReport", formatAtomicRep(finalReportAtomic));
+				context.writeOutput(
+					"lockPricePathValidity",
+					disputeCount === 0
+						? `not exercised; minimum deviation ${(minimumAlternatingDeviation * 100).toFixed(2)}%`
+						: `${pricePathIsValid ? "valid" : "invalid"}; minimum deviation ${(minimumAlternatingDeviation * 100).toFixed(2)}%`,
+				);
+				context.writeOutput("lockPeakCapital", `${peakCapital.toFixed(6)} ETH`);
+				context.writeOutput("lockMaxLiquidRep", formatAtomicRep(maxLiquidRepAtomic));
+				context.writeOutput(
+					"lockMaxWethAdded",
+					`${maxWethAdded.toFixed(6)} WETH`,
+				);
+				context.writeOutput(
+					"lockProtocolFeeRepExact",
+					formatAtomicRep(protocolFeeRepAtomic),
+				);
+				context.writeOutput(
+					"lockProtocolFeeCost",
+					`${protocolFeeCost.toFixed(6)} ETH`,
+				);
+				context.writeOutput(
+					"lockReporterFeeTransfer",
+					`${reporterFeeTransfer.toFixed(6)} ETH`,
+				);
+				context.writeOutput(
+					"lockDisputeGasCost",
+					`${disputeGasCost.toFixed(6)} ETH`,
+				);
+				context.writeOutput(
+					"lockSettlementGasCost",
+					`${settlementGasCost.toFixed(6)} ETH`,
+				);
+				context.writeOutput(
+					"lockCapitalCarry",
+					`${capitalCarry.toFixed(6)} ETH`,
+				);
+				context.writeOutput(
+					"lockTotalCost",
+					`${totalCost.toFixed(6)} ETH ($${(totalCost * ethUsd).toLocaleString(undefined, { maximumFractionDigits: 0 })})`,
+				);
+				context.writeOutput(
+					"lockOutsideHarm",
+					`${outsideHarm.toLocaleString()} ETH`,
+				);
+				context.writeOutput(
+					"lockGriefRatio",
+					Number.isFinite(griefRatio)
+						? `${griefRatio.toLocaleString(undefined, { maximumFractionDigits: 0 })}x`
+						: "unbounded at zero modeled cost",
+				);
 			});
 			bindExample("#binary-censorship-example", (context) => {
 				const honestPrice = Math.max(context.read("honestPrice"), 0.0001);
