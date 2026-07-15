@@ -125,6 +125,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
 		activateForkMode: ['external()'],
+		addFeeEligibleSecurityBondAllowance: ['external(uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
 		configureVault: ['external(address,uint256,uint256,uint256)'],
 		createCompleteSet: ['external()'],
@@ -340,12 +341,12 @@ const contractReferences: ContractReference[] = [
 				signals: '`PoolForkModeActivated`, continuation events, and `SystemStateSet`',
 			},
 			{
-				call: '`configureVault`, accounting setters, pool drains/transfers, and `authorizeChildPool`',
+				call: '`configureVault`, fee-eligibility and accounting setters, pool drains/transfers, and `authorizeChildPool`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'configureVault' }, { name: 'setOwnershipDenominator' }, { name: 'setTotalShares' }, { name: 'setPoolFinancials' }, { name: 'drainAllRep' }, { name: 'transferRep' }, { name: 'transferEth' }, { name: 'authorizeChildPool' }],
+				declarations: [{ name: 'configureVault' }, { name: 'addFeeEligibleSecurityBondAllowance' }, { name: 'setOwnershipDenominator' }, { name: 'setTotalShares' }, { name: 'setPoolFinancials' }, { name: 'drainAllRep' }, { name: 'transferRep' }, { name: 'transferEth' }, { name: 'authorizeChildPool' }],
 				effect: 'Configures migrated vault and pool state, authorizes children, and transfers migration assets.',
 				preconditions: 'Correct migration phase plus function-specific accounting and balance constraints.',
-				signals: 'Vault/configuration events and the corresponding token or ETH transfers',
+				signals: 'Vault/configuration events and the corresponding token or ETH transfers; `addFeeEligibleSecurityBondAllowance` has no dedicated event',
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
