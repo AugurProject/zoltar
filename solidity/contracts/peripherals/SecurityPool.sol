@@ -46,7 +46,7 @@ contract SecurityPool is ISecurityPool {
 	ISecurityPoolFactory public immutable securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
-	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
+	uint256 public completeSetCollateralAmount; // protocol-accounted ETH backing complete sets; raw balance can also contain fees or unsolicited surplus
 	uint256 public poolOwnershipDenominator;
 	uint256 public securityMultiplier;
 	uint256 public shareTokenSupply;
@@ -370,18 +370,9 @@ contract SecurityPool is ISecurityPool {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
-		_reconcileCollateralBalanceAfterFeeRedemption(fees);
 		_syncActiveVault(vault);
 		_sendEth(payable(vault), fees);
 		emit RedeemFees(vault, fees, totalFeesOwedToVaults);
-	}
-
-	function _reconcileCollateralBalanceAfterFeeRedemption(uint256 pendingFeePayout) internal {
-		uint256 balanceAfterPayout = address(this).balance - pendingFeePayout;
-		uint256 accountedBalance = completeSetCollateralAmount + unallocatedFeeReserve + totalFeesOwedToVaults;
-		if (balanceAfterPayout > accountedBalance) {
-			completeSetCollateralAmount += balanceAfterPayout - accountedBalance;
-		}
 	}
 
 	function _clearFeeIndexRemainder() internal {
