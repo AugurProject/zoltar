@@ -58,10 +58,14 @@ contract SecurityPool is ISecurityPool {
 	// This carry is always below PRICE_PRECISION, so any residual value left here at the
 	// end of accrual is strictly sub-wei and cannot strand whole ETH.
 	uint256 private totalFeesOwedRemainder;
+	uint256 private unallocatedFeeReserve;
+	uint256 private feeEligibleSecurityBondAllowance;
+	uint256 private uncheckpointedFeeEligibleAllowance;
 	uint256 public currentRetentionRate;
 	bool public awaitingForkContinuation;
 
 	mapping(address => SecurityVault) public securityVaults;
+	mapping(address => uint256) private vaultFeeRemainders;
 	address[] private vaults;
 	mapping(address => uint256) private vaultIndexesPlusOne;
 	// Active-vault paging is newest-first so UI previews remain stable after removals
@@ -292,25 +296,26 @@ contract SecurityPool is ISecurityPool {
 		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
-		if (totalSecurityBondAllowance == 0) {
+		if (feeEligibleSecurityBondAllowance == 0) {
 			_clearFeeIndexRemainder();
 			lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 			return;
 		}
 
-		uint256 newCompleteSetCollateralAmount =
-			(completeSetCollateralAmount *
-				SecurityPoolUtils.rpow(currentRetentionRate, timeDelta, SecurityPoolUtils.PRICE_PRECISION)) /
-				SecurityPoolUtils.PRICE_PRECISION;
-		uint256 delta = completeSetCollateralAmount - newCompleteSetCollateralAmount;
-		uint256 scaledFeeDelta = (delta * SecurityPoolUtils.PRICE_PRECISION) + feeIndexRemainder;
-		uint256 feeIndexDelta = scaledFeeDelta / totalSecurityBondAllowance;
-		feeIndexRemainder = scaledFeeDelta % totalSecurityBondAllowance;
+		uint256 feeIndexDelta;
+		uint256 creditedFees;
+		(feeIndexDelta, feeIndexRemainder, creditedFees, totalFeesOwedRemainder) = SecurityPoolUtils
+			.calculateFeeAccrual(
+				completeSetCollateralAmount,
+				currentRetentionRate,
+				timeDelta,
+				feeIndexRemainder,
+				feeEligibleSecurityBondAllowance,
+				totalFeesOwedRemainder
+			);
 		feeIndex += feeIndexDelta;
-		uint256 feesOwedDelta = (feeIndexDelta * totalSecurityBondAllowance) + totalFeesOwedRemainder;
-		uint256 creditedFees = feesOwedDelta / SecurityPoolUtils.PRICE_PRECISION;
-		totalFeesOwedToVaults += creditedFees;
-		totalFeesOwedRemainder = feesOwedDelta % SecurityPoolUtils.PRICE_PRECISION;
+		if (feeIndexDelta > 0) uncheckpointedFeeEligibleAllowance = feeEligibleSecurityBondAllowance;
+		unallocatedFeeReserve += creditedFees;
 		completeSetCollateralAmount -= creditedFees;
 		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 
@@ -332,13 +337,30 @@ contract SecurityPool is ISecurityPool {
 		emit PoolRetentionRateChanged(currentRetentionRate);
 	}
 
+	function totalAccruedFees() external view returns (uint256) {
+		return totalFeesOwedToVaults + unallocatedFeeReserve;
+	}
+
 	function updateVaultFees(address vault) public {
 		updateCollateralAmount();
-		uint256 fees =
-			(securityVaults[vault].securityBondAllowance * (feeIndex - securityVaults[vault].feeIndex)) /
-				SecurityPoolUtils.PRICE_PRECISION;
+		uint256 previousVaultFeeIndex = securityVaults[vault].feeIndex;
+		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(
+			securityVaults[vault].securityBondAllowance,
+			feeIndex - securityVaults[vault].feeIndex,
+			vaultFeeRemainders[vault]
+		);
+		vaultFeeRemainders[vault] = nextRemainder;
 		securityVaults[vault].feeIndex = feeIndex;
+		if (previousVaultFeeIndex != feeIndex) {
+			uncheckpointedFeeEligibleAllowance -= securityVaults[vault].securityBondAllowance;
+		}
+		unallocatedFeeReserve -= fees;
+		totalFeesOwedToVaults += fees;
 		securityVaults[vault].unpaidEthFees += fees;
+		if (uncheckpointedFeeEligibleAllowance == 0 && systemState == SystemState.PoolForked) {
+			completeSetCollateralAmount += unallocatedFeeReserve;
+			unallocatedFeeReserve = 0;
+		}
 		_syncActiveVault(vault);
 		emit UpdateVaultFees(vault, securityVaults[vault].feeIndex, securityVaults[vault].unpaidEthFees);
 	}
@@ -356,7 +378,7 @@ contract SecurityPool is ISecurityPool {
 
 	function _reconcileCollateralBalanceAfterFeeRedemption(uint256 pendingFeePayout) internal {
 		uint256 balanceAfterPayout = address(this).balance - pendingFeePayout;
-		uint256 accountedBalance = completeSetCollateralAmount + totalFeesOwedToVaults;
+		uint256 accountedBalance = completeSetCollateralAmount + unallocatedFeeReserve + totalFeesOwedToVaults;
 		if (balanceAfterPayout > accountedBalance) {
 			completeSetCollateralAmount += balanceAfterPayout - accountedBalance;
 		}
@@ -562,39 +584,13 @@ contract SecurityPool is ISecurityPool {
 			'Target safe'
 		);
 
-		uint256 maxDebtToMove = 0;
-		if (vaultsRepDeposit > SecurityPoolUtils.MIN_REP_DEPOSIT) {
-			maxDebtToMove =
-				((vaultsRepDeposit - SecurityPoolUtils.MIN_REP_DEPOSIT) *
-					SecurityPoolUtils.PRICE_PRECISION *
-					SecurityPoolUtils.BPS_DENOMINATOR) /
-				(repEthPrice * (SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS));
-			if (maxDebtToMove > snapshotTargetAllowance) {
-				maxDebtToMove = snapshotTargetAllowance;
-			}
-		}
-		if (
-			maxDebtToMove < snapshotTargetAllowance &&
-			snapshotTargetAllowance - maxDebtToMove <= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
-		) {
-			maxDebtToMove =
-				snapshotTargetAllowance > SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
-					? snapshotTargetAllowance - SecurityPoolUtils.MIN_SECURITY_BOND_DEBT
-					: snapshotTargetAllowance;
-		}
-		uint256 debtToMove = debtAmount > maxDebtToMove ? maxDebtToMove : debtAmount;
+		(uint256 debtToMove, uint256 repToMove) = SecurityPoolUtils.calculateLiquidationTransfer(
+			vaultsRepDeposit,
+			snapshotTargetAllowance,
+			debtAmount,
+			repEthPrice
+		);
 		require(debtToMove > 0, 'No liq');
-		uint256 repToMove =
-			(debtToMove *
-				repEthPrice *
-				(SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS)) /
-				(SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR);
-		if (
-			repToMove * SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR <
-			debtToMove * repEthPrice * (SecurityPoolUtils.BPS_DENOMINATOR + SecurityPoolUtils.LIQUIDATION_REP_BONUS_BPS)
-		) {
-			repToMove += 1;
-		}
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
 		if (debtToMove == snapshotTargetAllowance) {
 			uint256 currentTargetOwnership = securityVaults[targetVaultAddress].poolOwnership;
@@ -669,6 +665,8 @@ contract SecurityPool is ISecurityPool {
 		_clearFeeIndexRemainder();
 		totalSecurityBondAllowance += amount;
 		totalSecurityBondAllowance -= oldAllowance;
+		feeEligibleSecurityBondAllowance += amount;
+		feeEligibleSecurityBondAllowance -= oldAllowance;
 		securityVaults[callerVault].securityBondAllowance = amount;
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
@@ -868,7 +866,6 @@ contract SecurityPool is ISecurityPool {
 	function activateForkMode() external onlyForker {
 		systemState = SystemState.PoolForked;
 		updateCollateralAmount();
-		currentRetentionRate = 0;
 		uint256 repTransferred = repToken.balanceOf(address(this));
 		IERC20(address(repToken)).safeTransfer(msg.sender, repTransferred);
 		emit PoolForkModeActivated(repTransferred, currentRetentionRate, systemState);
@@ -944,6 +941,12 @@ contract SecurityPool is ISecurityPool {
 		);
 	}
 
+	function addFeeEligibleSecurityBondAllowance(uint256 amount) external onlyForker {
+		feeEligibleSecurityBondAllowance += amount;
+		require(feeEligibleSecurityBondAllowance <= totalSecurityBondAllowance, 'Fee allowance high');
+		_clearFeeIndexRemainder();
+	}
+
 	function _trackVault(address vault) private {
 		require(vault != address(0x0), 'Zero vault');
 		if (vaultIndexesPlusOne[vault] != 0) return;
@@ -1009,10 +1012,17 @@ contract SecurityPool is ISecurityPool {
 		emit ShareTokenSupplySet(shareTokenSupply);
 	}
 
-	function setPoolFinancials(uint256 newCollateral, uint256 newTotalBondAllowance) external onlyForker {
+	function setPoolFinancials(
+		uint256 newCollateral,
+		uint256 newTotalBondAllowance,
+		uint256 newFeeEligibleBondAllowance
+	) external onlyForker {
 		require(newTotalBondAllowance >= newCollateral, 'Bond low');
+		require(newFeeEligibleBondAllowance <= newTotalBondAllowance, 'Fee allowance high');
 		completeSetCollateralAmount = newCollateral;
 		totalSecurityBondAllowance = newTotalBondAllowance;
+		feeEligibleSecurityBondAllowance = newFeeEligibleBondAllowance;
+		lastUpdatedFeeAccumulator = block.timestamp;
 		_clearFeeIndexRemainder();
 		emit PoolFinancialsSet(completeSetCollateralAmount, totalSecurityBondAllowance);
 	}
@@ -1029,6 +1039,14 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function transferEth(address payable receiver, uint256 amount) external onlyForker {
+		uint256 feeLiabilities = totalFeesOwedToVaults + unallocatedFeeReserve;
+		require(
+			feeLiabilities <= address(this).balance &&
+				amount <= address(this).balance - feeLiabilities &&
+				amount <= completeSetCollateralAmount,
+			'Collateral low'
+		);
+		completeSetCollateralAmount -= amount;
 		_sendEth(receiver, amount);
 		emit PoolEthTransferred(receiver, amount);
 	}

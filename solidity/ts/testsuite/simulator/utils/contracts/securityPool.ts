@@ -311,6 +311,17 @@ export const getTotalFeesOwedToVaults = async (client: ReadClient, securityPoolA
 		'Total fees owed to vaults',
 	)
 
+export const getTotalAccruedFees = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'totalAccruedFees',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		'Total accrued fees',
+	)
+
 export const sharesToCash = async (client: ReadClient, securityPoolAddress: Address, completeSetAmount: bigint): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({

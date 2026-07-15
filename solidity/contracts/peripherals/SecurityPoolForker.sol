@@ -63,12 +63,12 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 vaultChildRepUsed,
 		uint256 escrowChildRepUsed
 	);
-	event OwnForkCollateralTransferred(
+	event ForkCollateralTransferred(
 		ISecurityPool parent,
 		ISecurityPool child,
 		uint256 childRepAmount,
-		uint256 ownForkMigratedRepCollateralized,
-		uint256 ownForkCollateralTransferred
+		uint256 migratedRepCollateralized,
+		uint256 collateralTransferred
 	);
 	event ClaimForkedEscalationDepositsToWallet(
 		ISecurityPool parent,
@@ -361,6 +361,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data.forkQuestionMatchesPoolQuestion = zoltar.forkQuestionMatches(universe, securityPool.questionId());
 		uint256 repBalanceBefore = rep.balanceOf(address(this));
 		securityPool.activateForkMode();
+		data.collateralAtFork = securityPool.completeSetCollateralAmount();
+		data.migratedRepCollateralized = 0;
+		data.collateralTransferred = 0;
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
 		uint256 previousMigrationBalance = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		uint256 repBalanceAfter = rep.balanceOf(address(this));
@@ -514,8 +517,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
 		securityPool.setTotalShares(parent.shareTokenSupply());
-		parentCollateral =
-			parentData.ownFork ? parentData.ownForkCollateralAtFork : parent.completeSetCollateralAmount();
+		parentCollateral = parentData.collateralAtFork;
 	}
 
 	function _startTruthAuctionOrFinalize(
@@ -612,11 +614,15 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolForkerForkData storage data
 	) private {
 		uint256 balance = address(securityPool).balance;
-		uint256 feesOwed = securityPool.totalFeesOwedToVaults();
-		uint256 collateralAmount = balance >= feesOwed ? balance - feesOwed : 0;
+		uint256 accruedFees = securityPool.totalAccruedFees();
+		uint256 collateralAmount = balance >= accruedFees ? balance - accruedFees : 0;
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		data.auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
-		securityPool.setPoolFinancials(collateralAmount, parentTotalSecurityBondAllowance);
+		securityPool.setPoolFinancials(
+			collateralAmount,
+			parentTotalSecurityBondAllowance,
+			data.migratedSecurityBondAllowance
+		);
 	}
 
 	function _finalizeOwnershipAfterAuction(
@@ -720,6 +726,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		if (leftoverProxyRep > 0) migrationProxy.lockRep(leftoverProxyRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 		require(forkTime > 0, 'Time');
+		// The universe fork extends the parent's fee horizon from the question end
+		// to the fork timestamp. Materialize that final interval before capturing
+		// collateral so the migration snapshot never includes fee-backed ETH.
+		securityPool.updateCollateralAmount();
 		_snapshotEscalationAtFork(securityPool, data, escalationGame, forkTime);
 		uint256 auctionableRepAtFork = zoltar.getMigrationRepBalance(
 			address(migrationProxy),
@@ -735,9 +745,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			escalationRepToFork
 		);
 		data.auctionableRepAtFork = auctionableRepAtFork;
-		data.ownForkCollateralAtFork = securityPool.completeSetCollateralAmount();
-		data.ownForkMigratedRepCollateralized = 0;
-		data.ownForkCollateralTransferred = 0;
+		data.collateralAtFork = securityPool.completeSetCollateralAmount();
+		data.migratedRepCollateralized = 0;
+		data.collateralTransferred = 0;
 		emit InitiateSecurityPoolFork(securityPool, data.auctionableRepAtFork, data.ownFork);
 	}
 
@@ -799,19 +809,20 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			nextClaimedAuctionPoolOwnership <= data.truthAuction.totalRepPurchased() * auctionPoolOwnershipPerRep,
 			'REP'
 		);
-		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
-			.securityVaults(vault);
 		uint256 newSecurityBondAllowance = _calculateAuctionedSecurityBondAllowance(data, amount);
 		data.claimedAuctionRepPurchased += amount;
 		data.claimedAuctionedSecurityBondAllowance += newSecurityBondAllowance;
 		data.claimedAuctionPoolOwnership = nextClaimedAuctionPoolOwnership;
-		uint256 nextFeeIndex = currentSecurityBondAllowance > 0 ? currentFeeIndex : securityPool.feeIndex();
+		securityPool.updateVaultFees(vault);
+		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
+			.securityVaults(vault);
 		securityPool.configureVault(
 			vault,
 			poolOwnership + poolOwnershipAmount,
 			currentSecurityBondAllowance + newSecurityBondAllowance,
-			nextFeeIndex
+			currentFeeIndex
 		);
+		securityPool.addFeeEligibleSecurityBondAllowance(newSecurityBondAllowance);
 		emit ClaimAuctionProceeds(
 			securityPool,
 			vault,
