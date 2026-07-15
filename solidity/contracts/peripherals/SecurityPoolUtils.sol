@@ -18,10 +18,6 @@ library SecurityPoolUtils {
 	uint256 constant MIN_SECURITY_BOND_DEBT = 1 ether; // 1 eth
 	uint256 constant MIN_REP_DEPOSIT = 10 ether; // 10 rep
 
-	function rpow(uint256 x, uint256 n, uint256 baseUnit) external pure returns (uint256 z) {
-		return _rpow(x, n, baseUnit);
-	}
-
 	function _rpow(uint256 x, uint256 n, uint256 baseUnit) private pure returns (uint256 z) {
 		z = n % 2 != 0 ? x : baseUnit;
 		for (n /= 2; n != 0; n /= 2) {
