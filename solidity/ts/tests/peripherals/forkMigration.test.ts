@@ -2,7 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/shared/ethereum'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
-import { getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getMigrationRepBalance, getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
@@ -140,6 +140,14 @@ describe('Peripherals: fork migration', () => {
 		questionId = fixture.questionId
 	})
 
+	const getMigrationProxyAddress = async () =>
+		await client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getMigrationProxyAddress',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddresses.securityPool],
+		})
+
 	const assertVaultMigrationPreservesParentFees = async (vaultClient: PeripheralsForkMigrationFixture['client'], migrate: () => Promise<void>) => {
 		const beforeMigrationSnapshot = await mockWindow.anvilSnapshot()
 		await updateVaultFees(vaultClient, securityPoolAddresses.securityPool, vaultClient.account.address)
@@ -162,6 +170,45 @@ describe('Peripherals: fork migration', () => {
 	}
 
 	describe('child universe and own-fork entry', () => {
+		for (const [label, prefundedRep] of [
+			['one wei', 1n],
+			['a large amount', repDeposit / 2n],
+		] as const) {
+			test(`external fork initiation ignores ${label} of REP sent to the undeployed migration proxy`, async () => {
+				const migrationProxyAddress = await getMigrationProxyAddress()
+				const parentRepToken = getRepTokenAddress(genesisUniverse)
+
+				assert.ok(!(await contractExists(client, migrationProxyAddress)), 'migration proxy should not exist before fork initiation')
+				await transferRepToAddress(client, migrationProxyAddress, prefundedRep)
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, migrationProxyAddress), prefundedRep, 'predicted proxy should hold the unsolicited REP before deployment')
+
+				await triggerExternalForkForSecurityPool(undefined, `prefunded proxy ${label}`)
+
+				const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+				strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'prefunding must not prevent the parent pool from entering fork mode')
+				assert.ok(await contractExists(client, migrationProxyAddress), 'migration proxy should deploy successfully despite the prefund')
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus')
+				strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), forkData.auctionableRepAtFork, 'unsolicited REP must not enter the pool migration ledger')
+			})
+		}
+
+		test('own fork initiation excludes REP sent to the undeployed migration proxy from fork accounting', async () => {
+			const migrationProxyAddress = await getMigrationProxyAddress()
+			const baselineSnapshot = await mockWindow.anvilSnapshot()
+			const baseline = await setupOwnForkWithEscrow()
+
+			await mockWindow.anvilRevert(baselineSnapshot)
+			const prefundedRep = repDeposit / 2n
+			await transferRepToAddress(client, migrationProxyAddress, prefundedRep)
+			const prefunded = await setupOwnForkWithEscrow()
+
+			strictEqualTypeSafe(prefunded.forkData.auctionableRepAtFork, baseline.forkData.auctionableRepAtFork, 'unsolicited REP must not increase own-fork auctionable REP')
+			strictEqualTypeSafe(prefunded.ownForkRepBuckets.vaultRepAtFork, baseline.ownForkRepBuckets.vaultRepAtFork, 'unsolicited REP must not increase vault migration backing')
+			strictEqualTypeSafe(prefunded.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, baseline.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, 'unsolicited REP must not increase escalation migration backing')
+			strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus after the own fork')
+			strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), prefunded.forkData.auctionableRepAtFork, 'unsolicited REP must not enter the own-fork migration ledger')
+		})
+
 		test('allows delayed fork initialization for an escalation game unresolved at the universe fork', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
