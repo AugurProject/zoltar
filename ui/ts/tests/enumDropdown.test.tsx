@@ -88,6 +88,7 @@ describe('EnumDropdown', () => {
 		})
 		const openedByKeyboard = documentQueries.getAllByRole('option')
 		expect(openedByKeyboard.length).toBe(2)
+		expect(document.activeElement).toBe(openedByKeyboard[0] as HTMLElement)
 
 		await act(() => {
 			fireEvent.keyDown(openedByKeyboard[0] as HTMLElement, { key: 'ArrowDown' })
@@ -98,6 +99,7 @@ describe('EnumDropdown', () => {
 			fireEvent.click(openedByKeyboard[1] as HTMLElement)
 		})
 		expect(changedValue).toBe('no')
+		expect(document.activeElement).toBe(trigger)
 
 		await act(() => {
 			fireEvent.click(trigger)
@@ -179,6 +181,7 @@ describe('EnumDropdown', () => {
 		})
 		expect(document.body.querySelectorAll('.enum-dropdown-option').length).toBe(0)
 		expect(changedValue).toBeUndefined()
+		expect(document.activeElement).toBe(trigger)
 	})
 
 	test('does not open when disabled', async () => {

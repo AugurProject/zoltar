@@ -90,7 +90,7 @@ describe('ViewTabs', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const tabs = within(document.body).getAllByRole('tab') as HTMLButtonElement[]
+		const tabs = within(document.body).getAllByRole('button') as HTMLButtonElement[]
 		const overviewTab = requireButton(tabs[0], 'overview')
 		expect(overviewTab).toBeDefined()
 
@@ -113,11 +113,15 @@ describe('ViewTabs', () => {
 	})
 
 	test('renders real links when href metadata is provided', async () => {
+		let selectedValue = 'overview'
 		const renderedComponent = await renderIntoDocument(
 			<ViewTabs
 				ariaLabel='Route Tabs'
+				semantics='navigation'
 				value='overview'
-				onChange={() => undefined}
+				onChange={value => {
+					selectedValue = value
+				}}
 				options={[
 					{ href: '#/overview', label: 'Overview', value: 'overview' },
 					{ href: '#/details', label: 'Details', value: 'details' },
@@ -126,9 +130,37 @@ describe('ViewTabs', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const overviewLink = within(document.body).getByRole('tab', { name: 'Overview' }) as HTMLAnchorElement
+		const overviewLink = within(document.body).getByRole('link', { name: 'Overview' }) as HTMLAnchorElement
 		expect(overviewLink.tagName).toBe('A')
 		expect(overviewLink.getAttribute('href')).toBe('#/overview')
+		expect(overviewLink.getAttribute('aria-current')).toBe('page')
+
+		const locationBeforeArrowKey = window.location.href
+		overviewLink.focus()
+		await act(() => {
+			fireEvent.keyDown(overviewLink, { key: 'ArrowRight' })
+		})
+
+		expect(selectedValue).toBe('overview')
+		expect(document.activeElement).toBe(overviewLink)
+		expect(window.location.href).toBe(locationBeforeArrowKey)
+
+		const preventNativeNavigation = (event: Event) => event.preventDefault()
+		document.body.addEventListener('click', preventNativeNavigation)
+		for (const clickInit of [{ altKey: true }, { button: 1 }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+			await act(() => {
+				fireEvent.click(overviewLink, clickInit)
+			})
+			expect(selectedValue).toBe('overview')
+			expect(window.location.href).toBe(locationBeforeArrowKey)
+		}
+
+		const detailsLink = within(document.body).getByRole('link', { name: 'Details' })
+		await act(() => {
+			fireEvent.click(detailsLink)
+		})
+		expect(selectedValue).toBe('details')
+		document.body.removeEventListener('click', preventNativeNavigation)
 	})
 
 	test('uses rendered grouped options for keyboard navigation', async () => {
@@ -153,9 +185,9 @@ describe('ViewTabs', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const overviewTab = within(document.body).getByRole('tab', { name: 'Overview' })
-		const reportsTab = within(document.body).getByRole('tab', { name: 'Reports' })
-		expect(within(document.body).queryByRole('tab', { name: 'Hidden' })).toBeNull()
+		const overviewTab = within(document.body).getByRole('button', { name: 'Overview' })
+		const reportsTab = within(document.body).getByRole('button', { name: 'Reports' })
+		expect(within(document.body).queryByRole('button', { name: 'Hidden' })).toBeNull()
 
 		overviewTab.focus()
 		await act(() => {
@@ -184,7 +216,7 @@ describe('ViewTabs', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const reportsTabs = within(document.body).getAllByRole('tab', { name: 'Reports' })
+		const reportsTabs = within(document.body).getAllByRole('button', { name: 'Reports' })
 		expect(reportsTabs).toHaveLength(1)
 	})
 })

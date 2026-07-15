@@ -1,6 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as marketCopy from '../copy/market.js'
 import { LoadingText } from './LoadingText.js'
+import { IdentifierValue } from './IdentifierValue.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { OutcomeChipRow } from './OutcomeChipRow.js'
@@ -20,6 +21,11 @@ type QuestionProps = {
 type QuestionSummaryField =
 	| {
 			kind: 'text'
+			label: string
+			value: string
+	  }
+	| {
+			kind: 'identifier'
 			label: string
 			value: string
 	  }
@@ -64,7 +70,7 @@ function getDisplayRange(question: MarketDetails) {
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
 		{ kind: 'text', label: marketCopy.questionType, value: getQuestionTypeLabel(question) },
-		{ kind: 'text', label: commonCopy.questionId, value: question.questionId },
+		{ kind: 'identifier', label: commonCopy.questionId, value: question.questionId },
 		{ kind: 'timestamp', label: marketCopy.created, value: question.createdAt },
 		{ kind: 'timestamp', label: marketCopy.endTime, value: question.endTime },
 		{ kind: 'text', label: marketCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') },
@@ -77,6 +83,12 @@ export function getQuestionSummaryFields(question: MarketDetails): QuestionSumma
 }
 
 function renderQuestionSummaryField(field: QuestionSummaryField) {
+	if (field.kind === 'identifier')
+		return (
+			<MetricField key={field.label} label={field.label}>
+				<IdentifierValue value={field.value} />
+			</MetricField>
+		)
 	if (field.kind === 'timestamp')
 		return (
 			<MetricField key={field.label} label={field.label}>
@@ -152,7 +164,9 @@ export function Question({ className = '', loading = false, question, showTitle 
 				<div className='question-preview-meta'>
 					<div className='question-preview-meta-item'>
 						<span className='question-preview-meta-label'>{commonCopy.questionId}</span>
-						<strong>{question.questionId}</strong>
+						<strong>
+							<IdentifierValue value={question.questionId} />
+						</strong>
 					</div>
 					{scalarFields.map(field => (
 						<div className='question-preview-meta-item' key={field.label}>

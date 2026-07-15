@@ -194,6 +194,16 @@ describe('SecurityPoolsOverviewSection', () => {
 		return poolCard
 	}
 
+	test('renders the complete question identifier in pool cards', async () => {
+		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
+		const pool = createSecurityPool({ marketDetails: createMarketDetails({ questionId }), questionId })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const identifier = within(document.body).getByRole('button', { name: `Copy identifier ${questionId}` })
+		expect(identifier.textContent).toBe(questionId)
+	})
+
 	test('does not render a local liquidation transaction notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection

@@ -3,6 +3,7 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { AddressValue } from './AddressValue.js'
+import { IdentifierValue } from './IdentifierValue.js'
 import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
@@ -318,7 +319,9 @@ export function SecurityPoolsOverviewSection({
 												<MetricField label={securityPoolCopy.managerAddress}>
 													<AddressValue address={pool.managerAddress} />
 												</MetricField>
-												<MetricField label={commonCopy.questionId}>{pool.questionId}</MetricField>
+												<MetricField label={commonCopy.questionId}>
+													<IdentifierValue value={pool.questionId} />
+												</MetricField>
 												<MetricField label={commonCopy.universe}>
 													<UniverseLink format='hex' universeId={pool.universeId} />
 												</MetricField>

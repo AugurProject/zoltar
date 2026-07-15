@@ -105,7 +105,7 @@ describe('SimulationBanner', () => {
 		}
 	})
 
-	test('labels the scenario and QA account selectors', async () => {
+	test('labels QA account options without truncating the selected address', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
 		const controller = createSimulationController()
@@ -119,7 +119,9 @@ describe('SimulationBanner', () => {
 			const accountOption = accountSelect.querySelector('option')
 			if (accountOption === null) throw new Error('Expected QA account option')
 			expect(accountOption.getAttribute('value')).toBe(controller.selectedAccount)
-			expect(accountOption.textContent).toBe(`QA ${controller.selectedAccount}`)
+			expect(accountOption.textContent).toBe('QA account 1')
+			expect(accountOption.textContent).not.toContain(controller.selectedAccount)
+			expect(documentQueries.getByText(controller.selectedAccount)).toBeTruthy()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
